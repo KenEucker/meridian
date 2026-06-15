@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a defect against expected Meridian behavior.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: traceability
+    attributes:
+      label: Expected behavior source
+      description: Link requirement IDs, technical spec sections, QA docs, or issue/PR context.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Steps, environment, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Logs, screenshots, exports, or failing checks.
+    validations:
+      required: false

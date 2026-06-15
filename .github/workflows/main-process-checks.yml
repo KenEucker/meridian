@@ -1,0 +1,57 @@
+name: main-process-checks
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate process docs
+        run: |
+          python scripts/process/validate_conventional_commits.py --event
+          python scripts/process/validate_traceability_matrix.py
+          python scripts/process/validate_qa_docs.py
+          python scripts/process/validate_repo_process.py --write-summary process-summary.md
+
+      - name: Validate Composer project if present
+        if: hashFiles('composer.json') != ''
+        run: composer validate --no-check-publish
+
+      - uses: actions/setup-node@v4
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: "22"
+
+      - name: Run detected Node checks
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          npm ci
+          for script in lint test typecheck build; do
+            if npm run | grep -E "^[[:space:]]+$script$" >/dev/null 2>&1; then
+              npm run "$script"
+            else
+              echo "No npm script '$script' found; skipping."
+            fi
+          done
+
+      - name: Upload process artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-process-artifacts
+          path: |
+            docs/process/traceability-matrix.md
+            docs/qa
+            process-summary.md

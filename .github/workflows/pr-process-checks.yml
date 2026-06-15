@@ -1,0 +1,52 @@
+name: pr-process-checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate PR body
+        run: python scripts/process/validate_pr_body.py
+
+      - name: Validate PR title
+        run: python scripts/process/validate_conventional_commits.py --event
+
+      - name: Validate process docs
+        run: |
+          python scripts/process/validate_traceability_matrix.py
+          python scripts/process/validate_qa_docs.py
+          python scripts/process/validate_repo_process.py
+
+      - name: Validate Composer project if present
+        if: hashFiles('composer.json') != ''
+        run: composer validate --no-check-publish
+
+      - uses: actions/setup-node@v4
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: "22"
+
+      - name: Run detected Node checks
+        if: hashFiles('package.json') != ''
+        shell: bash
+        run: |
+          npm ci
+          for script in lint test typecheck build; do
+            if npm run | grep -E "^[[:space:]]+$script$" >/dev/null 2>&1; then
+              npm run "$script"
+            else
+              echo "No npm script '$script' found; skipping."
+            fi
+          done

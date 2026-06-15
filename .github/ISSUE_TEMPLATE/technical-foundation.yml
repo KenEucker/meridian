@@ -1,0 +1,33 @@
+name: Technical foundation
+description: Implement architecture or development foundation from the technical spec.
+title: "[Foundation]: "
+labels: ["technical-foundation"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the foundation slice.
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Technical spec traceability
+      description: Reference sections such as Technical spec Section 28.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Define boot, validation, or architecture proof points.
+    validations:
+      required: true
+  - type: textarea
+    id: qa
+    attributes:
+      label: QA plan
+      description: Human verification steps and evidence.
+    validations:
+      required: true

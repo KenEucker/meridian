@@ -1,0 +1,26 @@
+name: Human QA
+description: Track manual QA scenarios and results.
+title: "[QA]: "
+labels: ["human-qa"]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Link the docs/qa scenario and describe what is being verified.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Development, standalone, central, onsite, mobile, or Electron.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result and evidence
+      description: Pass, fail, blocked, screenshots, logs, exports, or notes.
+    validations:
+      required: true

@@ -5,8 +5,8 @@
 **Draft:** 0.1  
 **Source documents:**
 
-- `meridian_requirements_document.md`
-- `meridian-technical-spec-draft-0.1.md`
+- `docs/meridian-requirements-document.md`
+- `docs/meridian-technical-spec.md`
 
 ---
 
@@ -425,16 +425,18 @@ docs/development-process
 
 ### 7.2 Commit style
 
-Use concise commit messages that name the changed behavior.
+Use Conventional Commit messages that name the changed behavior.
 
 Examples:
 
 ```text
-Add shift checkout action and hours record creation
-Enforce waiver eligibility for unscheduled shift additions
-Record audit entries for credential revocation
-Add human QA scenario for offline field reports
+feat(attendance): add shift checkout action
+fix(shifts): enforce waiver eligibility for unscheduled additions
+docs(qa): add human QA scenario for offline field reports
+ci(process): validate PR body sections
 ```
+
+See `docs/process/conventional-commits.md` for the accepted commit types and validation commands.
 
 ### 7.3 Server-side changes
 

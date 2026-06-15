@@ -1,0 +1,25 @@
+{
+  "name": "meridian",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open-source volunteer operations platform for events.",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "meridian": {
+    "python": ">=3.10"
+  },
+  "scripts": {
+    "process:traceability": "python scripts/process/validate_traceability_matrix.py",
+    "process:qa": "python scripts/process/validate_qa_docs.py",
+    "process:repo": "python scripts/process/validate_repo_process.py",
+    "process:pr-template": "python scripts/process/validate_pr_body.py --body-file .github/pull_request_template.md",
+    "commit:check": "python scripts/process/validate_conventional_commits.py",
+    "commit:check-example": "python scripts/process/validate_conventional_commits.py --message \"docs(process): validate commit format\"",
+    "process:check": "npm run process:traceability && npm run process:qa && npm run process:repo && npm run process:pr-template && npm run commit:check-example",
+    "check": "npm run process:check",
+    "test": "npm run process:check"
+  }
+}
