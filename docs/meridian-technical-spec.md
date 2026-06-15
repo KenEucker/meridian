@@ -1,0 +1,1917 @@
+# Meridian Technical Specification
+
+Draft: 0.1  
+Scope: Alpha 1 technical architecture and implementation direction  
+Status: Working draft
+
+---
+
+# 1. Purpose
+
+Meridian is a general-purpose, configurable volunteer operations platform for organizations and events. It is designed for field reliability, offline-capable operations, and trusted on-site coordination.
+
+Meridian supports organizations, events, departments, teams, volunteers, shifts, attendance, field reports, incidents, credentials, permissions, node sync, and administrative data repair.
+
+The primary Alpha 1 goal is to prove that Meridian can operate reliably in a real event environment where internet connectivity may be limited, intermittent, or unavailable.
+
+---
+
+# 2. Product and Architecture Principles
+
+## 2.1 Core principles
+
+Meridian prioritizes:
+
+1. Operational reliability.
+2. Offline-capable field use.
+3. Clear event authority during active event windows.
+4. Append-only operational history where appropriate.
+5. Strong auditability.
+6. Secure device and node trust.
+7. Practical deployment on inexpensive hardware.
+8. Open-source Meridian source code.
+9. Fast development toward a working MVP/Alpha 1.
+
+## 2.2 Platform posture
+
+Meridian should feel like a configurable platform, not a one-off app.
+
+However, Alpha 1 should avoid excessive modularity or framework abstraction that slows down delivery. The architecture should be a modular monolith, not a plugin platform.
+
+## 2.3 Open source posture
+
+Meridian source code should be open source from the start.
+
+PowerSync may be used as an external dependency and does not need to be shipped as part of Meridian’s source code. Meridian does not need to maintain a fully open-source alternate sync path for Alpha 1.
+
+---
+
+# 3. High-Level Architecture
+
+Meridian is composed of four major runtime surfaces:
+
+1. Server/admin application.
+2. Mobile/field application.
+3. Desktop on-site wrapper.
+4. Node-to-node synchronization layer.
+
+## 3.1 Server/admin application
+
+The server/admin application is a Laravel modular monolith with:
+
+- Laravel.
+- PostgreSQL.
+- Orchid admin panel.
+- OpenAPI-described API.
+- PowerSync service integration.
+- Node sync API.
+- Docker Compose deployment.
+
+The Laravel server remains the canonical writer to PostgreSQL. Clients do not directly mutate canonical tables. Device writes are submitted through Laravel validation and acceptance flows.
+
+## 3.2 Mobile/field application
+
+The field application is:
+
+- Vue.
+- Capacitor from day one.
+- Offline-capable.
+- PowerSync-backed.
+- Locally encrypted.
+- Device-signing capable.
+- Installable as a native-feeling application.
+
+The installed app is required for reliable on-site/offline operation where DNS or browser-trusted HTTPS cannot be guaranteed.
+
+## 3.3 Desktop on-site wrapper
+
+The on-site laptop uses an Electron desktop wrapper.
+
+The Electron wrapper:
+
+- Wraps the local Meridian web UI.
+- Is installable.
+- Runs fullscreen/kiosk-style by default.
+- Shows a health panel.
+- Shows server/node/sync status.
+- Auto-recovers if the local UI crashes.
+- Does not start or stop Docker Compose.
+- Does not include emergency export in Alpha 1.
+- Does not need to block accidental close in Alpha 1.
+
+## 3.4 Node-to-node sync
+
+Meridian supports multiple node roles:
+
+- `development`
+- `standalone`
+- `central`
+- `onsite`
+
+Central and on-site nodes synchronize using Meridian application-level operation sync, not raw database replication.
+
+PowerSync is used for server-to-device synchronization. Meridian node sync is separate from PowerSync.
+
+---
+
+# 4. Repository and Package Topology
+
+Meridian should live in a single monorepo.
+
+Proposed structure:
+
+```text
+meridian/
+  apps/
+    server/        Laravel + Orchid + API
+    mobile/        Vue + Capacitor
+    desktop/       Electron wrapper
+  packages/
+    shared-types/
+    openapi-client/
+  deploy/
+    docker/
+    caddy/
+    powersync/
+    dns/
+```
+
+Each target should produce a built distribution artifact:
+
+- Server Docker image / install bundle.
+- Mobile app package.
+- Electron desktop installer.
+- Deployment configuration bundle.
+
+OpenAPI should generate a TypeScript API client used by the Vue app, even though most operational data comes through PowerSync.
+
+---
+
+# 5. Server Stack
+
+## 5.1 Core server
+
+The server stack is:
+
+- Laravel.
+- PostgreSQL.
+- Orchid.
+- OpenAPI.
+- Docker Compose.
+- PowerSync service.
+- Caddy or equivalent reverse proxy.
+- DNS support for on-site deployments where Meridian controls DNS.
+
+## 5.2 Modular monolith boundaries
+
+Laravel modules should be organized by domain.
+
+Initial modules:
+
+```text
+Organizations
+Events
+Departments
+Teams
+Volunteers
+Users
+Memberships
+Roles
+Permissions
+Shifts
+Attendance
+FieldReports
+Incidents
+Credentials
+Devices
+SharedWorkstations
+NodeConfig
+NodeSync
+Audit
+SyncConflicts
+Files
+```
+
+This should be a lightweight modular monolith using folders and namespaces, not a heavy plugin system.
+
+Each domain module may own:
+
+- Migrations.
+- Models.
+- Policies.
+- Actions/services.
+- API endpoints.
+- Orchid screens.
+- Tests.
+
+Cross-module behavior should happen through explicit service/action classes rather than implicit event spaghetti.
+
+A central audit service should be used by all modules.
+
+OpenAPI endpoints should be grouped by module where practical.
+
+---
+
+# 6. Database and IDs
+
+## 6.1 Database
+
+Meridian uses PostgreSQL for central and on-site nodes.
+
+SQLite may be used locally by PowerSync on devices, but the canonical server database is PostgreSQL.
+
+## 6.2 IDs
+
+All externally referenced records use UUIDs as primary IDs.
+
+UUIDs are generated by the creating node or device before sync.
+
+Offline field reports receive a device-generated UUID before reaching any server.
+
+Attendance operations receive operation UUIDs generated on the device.
+
+Central preserves original on-site UUIDs forever.
+
+Records should store, where relevant:
+
+- `origin_node_id`
+- `origin_device_id`
+
+## 6.3 Timestamps
+
+Meridian stores operationally relevant timestamps.
+
+Where applicable:
+
+```text
+device_created_at
+device_submitted_at
+onsite_received_at
+central_received_at
+server_corrected_at
+created_at
+updated_at
+deleted_at
+```
+
+The UI normally displays event-local time.
+
+Each node should have a configured timezone.
+
+Meridian does not need proactive clock drift detection in Alpha 1. However, if a submitted timestamp is obviously invalid, impossible, or outside a sanity window, the server should:
+
+1. Accept the operation if otherwise valid.
+2. Store the raw timestamp in the audit trail.
+3. Use a corrected/interpreted event-local timestamp for operational display.
+4. Mark the timestamp as suspect.
+
+---
+
+# 7. Node Model
+
+## 7.1 Node roles
+
+A Meridian install has a declared node role:
+
+```text
+development
+standalone
+central
+onsite
+```
+
+A standalone node may later become a central node or an on-site node.
+
+Changing node mode requires God mode and a restart.
+
+An on-site node is bound to a single event. Changing the event binding on an on-site node is blocked once event data exists.
+
+## 7.2 Node naming
+
+Nodes should use domain-like names with periods and no spaces.
+
+Examples:
+
+```text
+juplaya.2027.onsite
+juplaya.central
+gerlach.test
+```
+
+## 7.3 Node configuration
+
+Node configuration is file-first, database-second.
+
+File config provides boot defaults. Database overrides allow some settings to change on the fly. God mode must show whether each config value came from:
+
+- file config
+- database override
+- runtime/default
+
+Node config may include:
+
+```text
+node_name
+node_role
+node_public_key
+node_private_key or key reference
+central_node_url, optional
+organization_id
+event_id
+PowerSync config
+hostname/domain, optional
+```
+
+Private keys do not need a separate secret volume for Alpha 1.
+
+Fresh standalone nodes generate a keypair immediately.
+
+Connecting to central requires a one-time pairing token created by central. Pairing tokens do not need quick expiry for Alpha 1. Pairing does not need special audit treatment beyond normal config/audit behavior.
+
+Changing the central node URL triggers a node-pairing recheck.
+
+Changing hostname or certificate settings requires setup validation before event mode resumes.
+
+## 7.4 Node setup
+
+Docker Compose should not ask questions directly.
+
+Docker Compose brings the system up. Setup happens through either:
+
+```text
+meridian setup
+```
+
+or a first-run web setup flow:
+
+```text
+https://localhost/setup
+```
+
+Setup should generate secrets if they are missing or still set to defaults, including:
+
+- Laravel `APP_KEY`.
+- Node keys.
+- Service secrets.
+
+Sample configs must contain fake values only.
+
+---
+
+# 8. Deployment and Networking
+
+## 8.1 Deployment model
+
+The same Docker Compose-based install should support:
+
+- Central node.
+- On-site node.
+- Standalone node.
+- Development node.
+
+An on-site install can connect to a central node and sync with it.
+
+An on-site node may also be configured standalone and later paired with central.
+
+## 8.2 Secure connection policy
+
+Meridian production/event mode must never use plain HTTP.
+
+Connection policy:
+
+```text
+1. Browser/PWA access requires browser-trusted HTTPS.
+2. Production/event mode never uses plain HTTP.
+3. Preferred on-site deployment includes a Meridian-controlled router/AP/DNS path.
+4. If network/DNS control is unavailable, the installed Capacitor app is the reliable client.
+5. The installed app may trust a locally discovered on-site node through Meridian node fingerprint/cert pinning.
+6. Direct IP/self-signed browser access is God-mode/emergency only, not normal volunteer workflow.
+```
+
+## 8.3 Preferred on-site networking model
+
+Preferred event deployment includes a small Meridian-controlled network kit:
+
+```text
+Meridian server laptop
++ small travel router / Wi-Fi AP
++ optional Ethernet switch
+```
+
+The router/AP provides:
+
+- Wi-Fi.
+- DHCP.
+- DNS.
+- Local resolution for the event hostname.
+
+Example:
+
+```text
+SSID: Meridian-Juplaya-2027
+DNS: juplaya-2027-onsite.example.org → 10.10.0.2
+```
+
+The on-site node uses a public-domain HTTPS certificate provisioned before the event.
+
+Example:
+
+```text
+https://juplaya-2027-onsite.example.org
+```
+
+During the event, local DNS resolves the public hostname to the on-site server’s LAN IP.
+
+## 8.4 Fallback connection model
+
+If Meridian does not control DNS/network hardware, browser/PWA access is not guaranteed.
+
+The installed Capacitor app should support:
+
+- Local discovery.
+- mDNS/IP discovery where available.
+- Node fingerprint trust.
+- Certificate pinning or app-level trust where needed.
+
+This fallback is the reliable path for on-site/offline operation without DNS control.
+
+## 8.5 Local discovery
+
+Local nodes should be discoverable.
+
+On-site nodes should support `.local` mDNS names, but `.local` names are not sufficient for browser-trusted HTTPS unless the client trusts the certificate. Therefore `.local` discovery is primarily useful for the installed app and admin/debug flows.
+
+## 8.6 HTTPS validation
+
+Setup must fail closed if HTTPS validation fails in event mode.
+
+PowerSync unavailability should also fail closed in event mode.
+
+Client event mode must fail closed if local encryption or device signing is unavailable.
+
+---
+
+# 9. PowerSync and Device Sync
+
+## 9.1 Chosen sync layer
+
+PowerSync is the chosen device sync layer for Alpha 1.
+
+PowerSync is an external dependency. Meridian does not need to ship PowerSync source code.
+
+## 9.2 Sync responsibility
+
+PowerSync handles:
+
+```text
+Meridian server ↔ user devices
+```
+
+Meridian node sync handles:
+
+```text
+central node ↔ on-site node
+```
+
+## 9.3 Client data model
+
+The device should cache as much authorized data as possible.
+
+Offline data may be stale, but stale authorized data is better than no data.
+
+Regular volunteers should cache:
+
+- Their own shifts.
+- Their department/team info.
+- Field report form.
+- Basic event info.
+- Their own submitted field reports.
+- Relevant readiness/sync state.
+
+Shift leads should additionally cache:
+
+- Assigned volunteers for teams/shifts they lead.
+- Check-in/check-out/no-show state for those teams/shifts.
+- Team roster.
+
+Department leads should additionally cache:
+
+- Department roster.
+- Department schedule.
+- Department attendance data.
+
+IC roles may cache:
+
+- Last viewed limited incident data.
+- Related field reports where permitted.
+
+Incidents should not be greedily synced.
+
+## 9.4 Offline write scope
+
+Alpha 1 offline writes include:
+
+- Field report creation.
+- Field report photo attachment sync.
+- Check-in.
+- Check-out.
+- Mark no-show.
+
+Incidents require server connection for creation.
+
+Field reports are finalized when submitted. There are no field report drafts.
+
+Failed sync actions remain recoverable.
+
+Normal users should see sync status unobtrusively. Advanced sync details are hidden behind advanced/debug/God mode.
+
+---
+
+# 10. Node-to-Node Sync
+
+## 10.1 Sync model
+
+Central and on-site sync is operation-based, not table-replication-based.
+
+Node operations are append-only.
+
+Receiver stores remote operations before applying them.
+
+Operations are idempotent; receiving the same operation multiple times is safe.
+
+Node sync is bidirectional, not push-only.
+
+For Alpha 1:
+
+- Exactly one central node.
+- Exactly one active on-site node per event.
+- Data model should allow multiple on-site nodes later.
+- Later, one on-site node may act as “acting central” for a local on-site cluster.
+
+## 10.2 Event authority
+
+Before the event starts:
+
+- Central prepares event data.
+- Central pushes event config/data to on-site.
+- On-site may receive updates until the event starts.
+
+During the active event window:
+
+- The on-site primary node is authoritative for event-scoped records.
+- Central is read-only for that event, except for data arriving from the on-site primary node.
+- Edits not from the on-site primary node are refused for event-scoped records.
+- Permission changes happen only on the on-site primary node.
+- On-site pushes changes back to central continuously when internet exists.
+- If internet disappears, on-site queues node operations and pushes later.
+
+After the event closes:
+
+- On-site should no longer edit event records.
+- Post-event corrections happen on central.
+- Post-event corrections may sync both ways as needed.
+
+## 10.3 Conflict policy
+
+Conflicts go to a sync conflict queue.
+
+Conflicts are:
+
+- Visible only in God mode.
+- Grouped by entity type.
+- Display both local and remote values.
+- Resolved by choosing either “accept on-site” or “accept central.”
+- Not manually corrected inside the conflict resolver.
+- Audited when resolved.
+
+Defaults:
+
+- Active event window + event-scoped records: accept on-site.
+- Central/global records: accept central.
+
+Unresolved conflicts should not block unrelated sync.
+
+Severe data conflicts should trigger an Electron health warning.
+
+Incidents and attached field reports may require ordered sync.
+
+## 10.4 Node operation schema
+
+Alpha 1 node operations use normalized operation fields and may also include payload JSON.
+
+Each operation should include:
+
+```text
+uuid
+origin_node_id
+target_node_id, optional
+actor_user_id
+actor_device_id, optional
+operation_type
+entity_type
+entity_id
+event_id, optional
+created_at
+sent_at
+received_at
+applied_at
+status
+signature
+hash
+payload_json, optional
+failure_reason, optional
+retry_count
+```
+
+Operation signatures cover normalized operation fields.
+
+Operations are signed with the node private key.
+
+Device-originated operations are signed by the originating device and then countersigned by the accepting node.
+
+---
+
+# 11. Authentication
+
+## 11.1 Providers
+
+Alpha 1 auth supports:
+
+- Email magic link.
+- Google OAuth.
+- Discord OAuth.
+
+There is no password login.
+
+God mode may also use the same providers.
+
+Every login resolves to a global user account by verified email.
+
+Google login requires verified email.
+
+Discord login requires verified email.
+
+If Discord and Google return the same verified email, they attach to the same Meridian user.
+
+If an auth provider does not return a verified email, login fails.
+
+OAuth provider linking happens only when connected to central/internet.
+
+Organization membership determines what the user can see after login.
+
+## 11.2 Offline authentication assumptions
+
+Users are expected to authenticate before the event while internet is available.
+
+Trusted sessions work offline for up to 6 weeks.
+
+Normal no-internet login is unsupported for regular personal devices in Alpha 1.
+
+The on-site node should cache enough verified identity/provider data from central before the event to validate returning users.
+
+Auth/trust should be shared from central to on-site nodes so users remain logged in across central/on-site operation where appropriate.
+
+## 11.3 Magic links
+
+On-site magic links do not require email sending in Alpha 1.
+
+God mode may generate/display short login URLs or codes.
+
+These are for assisted recovery or shared workstation login, not normal personal device trust.
+
+---
+
+# 12. Devices, Trust, and Encryption
+
+## 12.1 Device identity
+
+Every app install/browser profile generates a durable `device_id`.
+
+Device trust is per user/device pair.
+
+One physical device can support multiple trusted users.
+
+Switching users does not automatically wipe local event data.
+
+Logout does not require network access.
+
+“Wipe local data” works immediately from advanced settings.
+
+God mode can eventually revoke trusted devices.
+
+Device trust records should include:
+
+```text
+user_id
+device_id
+device_label
+platform
+first_trusted_at
+last_seen_at
+expires_at
+trusted_node_fingerprint
+device_public_key
+```
+
+## 12.2 Trust duration
+
+Device sessions are trusted for 6 weeks.
+
+Readiness does not expire automatically, but trust itself has a 6-week validity window.
+
+## 12.3 Local encryption
+
+Local data is encrypted.
+
+Local encryption unlocks automatically for a valid trusted user/device session.
+
+There is no separate Meridian PIN.
+
+Biometric/PIN unlock is not required and should not be added.
+
+The local encryption key is generated after successful login/trust.
+
+Wiping local data destroys the local encryption key.
+
+Encrypted data includes:
+
+- Field reports.
+- Field report photos.
+- Incident cache.
+- Shifts.
+- Rosters.
+- Event cache.
+- Session/user data.
+- Sync queue where practical.
+
+Offline/event mode fails closed if encryption is unavailable.
+
+Encryption status is part of readiness.
+
+## 12.4 Device signatures
+
+Each trusted device generates its own signing keypair.
+
+Device public key is registered with the server during device trust setup.
+
+Device-originated offline operations are signed by the device before sync.
+
+The server verifies the device signature before accepting the operation.
+
+The accepting node countersigns the operation with the node key.
+
+Both signatures are retained in the audit trail.
+
+Shared workstation sessions use the workstation device key plus active user session.
+
+Device private keys live in OS secure storage where supported.
+
+Browser/PWA mode supports device signatures only if secure key storage is available.
+
+Event mode fails closed if device signing is unavailable.
+
+---
+
+# 13. Shared Workstations
+
+## 13.1 Definition
+
+A shared workstation is a special kind of trusted device.
+
+Shared workstations are managed in God mode.
+
+Example names:
+
+```text
+onsite-command-1
+ic-desk-1
+radio-desk-1
+```
+
+The on-site Electron machine is the first trusted shared workstation for Alpha 1.
+
+## 13.2 Shared workstation login
+
+Electron supports shared workstation login mode.
+
+Known users can enter short login codes generated by God mode.
+
+Login codes are:
+
+- Scoped to one user.
+- Scoped to one event.
+- Usable only on trusted shared workstations.
+- Unable to create trusted personal device sessions.
+- Revocable by God mode.
+- Human-typable.
+- Rate-limited.
+- Valid for 6 weeks.
+- Audited when generated.
+- Minimally audited when used.
+- Not printable/exportable as event prep sheets.
+
+Raw login codes should not be logged.
+
+Failed login-code attempts are audited after a threshold.
+
+## 13.3 Shared workstation session behavior
+
+Shared workstation sessions last 12 hours or until the user explicitly ends the session.
+
+Users must explicitly end their session before switching users.
+
+The active user is shown prominently at all times.
+
+Permissions come entirely from the active user.
+
+Shared workstation local data remains encrypted at rest.
+
+When a session ends, active session data is wiped.
+
+If the Electron app restarts, the shared workstation session locks immediately.
+
+For MVP, shared workstation login is allowed only on the on-site server machine or on explicitly designated trusted shared workstations.
+
+---
+
+# 14. Readiness
+
+Readiness is tracked per user/device/event.
+
+Readiness is advisory only.
+
+Readiness is visible to the user.
+
+Readiness is not visible to organizers.
+
+Readiness does not expire automatically.
+
+The app should avoid nagging users.
+
+Readiness includes:
+
+```text
+logged in
+device trusted
+event selected
+local cache complete
+encryption active
+last sync completed
+trusted server known
+device signing available
+```
+
+Users are encouraged, but not required, to prepare their devices before the event.
+
+---
+
+# 15. Permissions
+
+## 15.1 Permission model
+
+Meridian permissions are primarily based on team membership, with roles granted inside organization/event/department/team contexts.
+
+Users may hold multiple roles at once.
+
+Role scopes include:
+
+```text
+organization role
+event role
+department role
+team role
+shift role
+```
+
+Alpha 1 effective permission levels include:
+
+```text
+volunteer
+shift_lead
+department_lead
+ic_lead
+ic_operator
+ic_viewer
+organizer
+god_mode
+```
+
+## 15.2 Role scoping
+
+- `god_mode` is global to a node.
+- `organizer` is event-scoped.
+- `department_lead` is department-scoped.
+- `shift_lead` is team-scoped, not shift-scoped.
+- `ic_lead`, `ic_operator`, and `ic_viewer` are event/team scoped through the IC permission model.
+
+Every permission decision should be explainable in the UI.
+
+Example:
+
+```text
+You can mark no-show because you are a shift lead for this team.
+```
+
+Denied actions should show a reason when possible.
+
+Permission changes are audit logged.
+
+Permission changes sync between central and on-site nodes.
+
+During the active event window, permission changes happen only on the on-site primary node.
+
+---
+
+# 16. Incident Command Permission Model
+
+## 16.1 IC capability model
+
+Incident Command is not a fixed department.
+
+For each event, a department may be selected to function as Incident Command.
+
+Examples:
+
+- Organizers department.
+- Producers department.
+- Ranger department.
+- Other event-specific department.
+
+Within the selected IC department, individual teams may be granted IC roles.
+
+IC access is therefore:
+
+```text
+event
++ selected IC department
++ team membership
++ team-granted IC role
+```
+
+Normal teams inside the IC department do not automatically receive IC visibility.
+
+## 16.2 IC roles
+
+Alpha 1 IC roles:
+
+```text
+ic_lead
+ic_operator
+ic_viewer
+```
+
+### ic_lead
+
+Can:
+
+- View incidents.
+- View all field reports for the event.
+- Download field report photos.
+- Close incidents.
+- Reopen incidents.
+- Add incident notes.
+- Link/unlink field reports from incidents.
+
+### ic_operator
+
+Can:
+
+- View incidents.
+- View all field reports for the event.
+- Close incidents.
+- Reopen incidents.
+- Add incident notes.
+- Link/unlink field reports from incidents.
+
+Cannot:
+
+- Download field report photos.
+
+### ic_viewer
+
+Can:
+
+- View incidents.
+- View all field reports for the event.
+
+Cannot:
+
+- Modify incidents.
+- Add notes.
+- Close/reopen incidents.
+- Download field report photos.
+
+---
+
+# 17. Field Reports
+
+## 17.1 Purpose
+
+Field reports are low-friction, offline-capable reports created by users in the field.
+
+Field reports are not incidents.
+
+Incidents require server connection and are managed by IC roles.
+
+Field reports can later be attached to incidents by IC roles.
+
+## 17.2 Offline behavior
+
+Field reports can be created offline.
+
+There are no draft field reports.
+
+Once submitted, a field report is finalized.
+
+Offline-created field reports look submitted immediately to the user, even if still pending sync.
+
+Failed field-report sync remains recoverable/exportable in advanced mode.
+
+## 17.3 Alpha 1 schema
+
+Alpha 1 field reports include:
+
+```text
+event
+department/team context if available
+body text
+picture attachments
+submitted_by
+device_submitted_at
+server_received_at
+origin_device_id
+origin_node_id
+sync_status
+```
+
+Field report body is a single text area.
+
+There are no field report categories/types in Alpha 1.
+
+GPS collection is excluded from Alpha 1.
+
+## 17.4 Immutability and appends
+
+The original field report body never changes.
+
+Field reports are immutable but can have append-only additions.
+
+Only the original submitter can append to their own field report.
+
+Elevated users can append only to their own field reports, not to other users’ field reports.
+
+Each append includes:
+
+```text
+timestamp
+author
+body text
+optional photos
+source device
+source node
+```
+
+Appends are immutable.
+
+Appends are visible as a timeline under the original field report.
+
+Appends share the same FRA number with timestamped entries.
+
+## 17.5 Field report numbering
+
+FRA numbers are event-specific.
+
+The first server that receives the field report assigns the FRA number.
+
+Offline-created reports show a temporary local number until synced.
+
+The local temporary number is clearly replaced by the FRA number after sync.
+
+Example:
+
+```text
+FRA-2027-000123
+```
+
+## 17.6 Field report visibility
+
+Default visibility:
+
+- Users see only their own field reports.
+- Department leads see only their own field reports.
+- Organizers see only their own field reports.
+- Shift leads do not automatically see field reports from their shifts.
+- IC roles can see all field reports for the event.
+- God mode can see all field reports on the node.
+
+Certain roles under the selected IC department may view all field reports if granted `ic_lead`, `ic_operator`, or `ic_viewer`.
+
+Field reports attached to incidents become visible within that incident only to users who can view the incident.
+
+The original field report submitter is not shown that their field report has been attached to an incident.
+
+---
+
+# 18. Field Report Photos and Attachments
+
+## 18.1 Capture and source
+
+Field report photos may come from:
+
+- Device camera.
+- Device files/gallery.
+
+## 18.2 Local handling
+
+Photos are stored locally encrypted until synced.
+
+Photo sync happens separately from the field report text record, but photos remain attached to the field report.
+
+A field report is considered locally submitted even if photos are still pending upload.
+
+The server may receive the field report record before its photos.
+
+## 18.3 Limits and processing
+
+Alpha 1 limits:
+
+```text
+max photos per field report: 2 total
+max compressed image dimensions: 2560 × 1900
+max compressed file size: 5 MB
+GIFs: unsupported
+multi-image phone photos: converted to a single image
+original full-resolution photos: not kept
+```
+
+All EXIF is stripped.
+
+GPS EXIF is stripped.
+
+Any image format a phone produces should be accepted where practical, then converted to Meridian’s supported stored format.
+
+## 18.4 Immutability
+
+Photos are immutable once attached.
+
+Append-only additions may add photos later, but the total maximum remains 2 photos per field report.
+
+Photo deletion/redaction is excluded from Alpha 1, including God-mode deletion/redaction.
+
+## 18.5 Server storage
+
+Alpha 1 stores uploaded photos on the server filesystem mounted as a Docker volume.
+
+S3/MinIO-compatible storage should be supported from the start or soon after, but filesystem volume storage is acceptable for Alpha 1.
+
+On-site and central nodes store their own file blobs.
+
+Photos do not sync down to user devices.
+
+Server UI previews images as server files.
+
+Filenames should be plain text and include event and upload timestamp.
+
+Example shape:
+
+```text
+EVENT-2027_FRA-2027-000123_2027-07-04T13-22-10Z_01.webp
+```
+
+No content-addressed filenames are required for Alpha 1.
+
+Attachment records should include checksums.
+
+File sync verifies checksums.
+
+Failed photo sync is recoverable in advanced sync details.
+
+## 18.6 Node sync and attachment visibility
+
+Node-to-node sync includes field report photos in Alpha 1.
+
+Metadata and blobs sync separately.
+
+A field report is considered synced to central once the text metadata arrives.
+
+Central may show:
+
+```text
+metadata received
+attachments pending
+```
+
+On-site retries missing photo blobs with rate limits and eventual failure.
+
+File sync failures are not shown in Electron health.
+
+Central may display field reports before photos arrive.
+
+Attachment downloads are available only to `ic_lead`.
+
+Other permitted users may view according to visibility rules, but only `ic_lead` may download.
+
+Image URLs are short-lived signed URLs, not public file paths.
+
+---
+
+# 19. Incidents
+
+## 19.1 Purpose
+
+Incidents are server-connected operational records managed by Incident Command roles.
+
+Incidents are not created from field reports automatically.
+
+Field reports may be linked to incidents later by IC roles.
+
+## 19.2 Offline behavior
+
+Incident creation requires active server connection.
+
+Incident creation is available only to elevated IC roles.
+
+Regular volunteers see no incident UI.
+
+Incidents should not be greedily synced to devices.
+
+Elevated users may read limited cached incidents offline.
+
+Alpha 1 incident cache rule:
+
+```text
+last 5 viewed incidents
+```
+
+Cached incidents flush on logout.
+
+Cached incidents flush after 6 weeks.
+
+Cached incidents are excluded from normal emergency exports.
+
+Related field reports for cached incidents may be cached where permitted.
+
+## 19.3 Incident visibility
+
+Incidents are visible only to IC roles.
+
+Not visible to:
+
+- Regular volunteers.
+- Shift leads outside IC.
+- Department leads outside IC.
+- Organizers unless their department/team is functioning as IC and they hold an IC role.
+
+Only teams granted IC roles get IC visibility.
+
+## 19.4 Incident creation
+
+Standalone incidents are allowed.
+
+Incidents are not created from field reports.
+
+Incident numbers are system-generated, event-specific, and chronological.
+
+Incident numbers are assigned by the on-site primary node during the event.
+
+Example:
+
+```text
+INC-2027-000042
+```
+
+## 19.5 Incident fields
+
+Alpha 1 incident fields are fixed.
+
+There is no separate summary field.
+
+Incident title is user-generated and editable.
+
+Incident body/history is append-only and accepts inline notes.
+
+Incident history/update body is a single text area per update.
+
+## 19.6 Incident statuses
+
+Internal statuses:
+
+```text
+open
+on_scene
+monitoring
+on_hold
+closed
+```
+
+Default status is `open`.
+
+`on_scene` means someone has accepted/responded to the incident.
+
+Status labels may become configurable later, but internal status names remain fixed.
+
+## 19.7 Incident edits and timeline
+
+Incident notes/history entries are append-only.
+
+Incident body/history is never edited directly.
+
+Incident title edits are allowed and create timeline entries.
+
+Example:
+
+```text
+title changed from "..." to "..."
+```
+
+Status changes create timeline entries.
+
+Status changes may include an optional note.
+
+Closing an incident requires a note stored as:
+
+```text
+reason: ...
+```
+
+Reopening a closed incident is allowed. Reopening does not require a reason, but the UI should present the option to provide one. If provided, it is stored as:
+
+```text
+reason: ...
+```
+
+Closed incidents can be reopened.
+
+## 19.8 Field report links
+
+Incident field-report links are append-only.
+
+IC leads and IC operators can link and unlink field reports from incidents.
+
+Link/unlink activity appears on the incident timeline only.
+
+Link/unlink activity does not appear to the original field report submitter.
+
+---
+
+# 20. Attendance
+
+## 20.1 Offline behavior
+
+Attendance operations can be created offline.
+
+Attendance operations are append-only.
+
+Attendance has a derived current state.
+
+Potential derived states:
+
+```text
+scheduled
+checked_in
+checked_out
+no_show
+excused
+corrected
+```
+
+## 20.2 Supported Alpha 1 operations
+
+Alpha 1 supports:
+
+- Check-in.
+- Check-out.
+- Mark no-show.
+
+Volunteer self check-in/out is excluded from Alpha 1.
+
+Shift leads can check volunteers in/out.
+
+Shift leads can mark no-show.
+
+Department leads may have broader attendance access for their department.
+
+## 20.3 Shift selection
+
+Check-in/check-out does not always require selecting a shift.
+
+The UI should provide the option to select a shift.
+
+If there is only one obvious/current shift, the UI should default to that shift.
+
+Check-out can happen after a shift and may not need to be attached to a shift.
+
+## 20.4 Shift lead workflows
+
+Shift leads see rosters for teams/shifts they lead with action buttons.
+
+Shift leads can check in a volunteer who is not assigned to the shift.
+
+This does not create a separate exception record in Alpha 1.
+
+No-show only applies after a shift has started.
+
+Check-out normally requires prior check-in.
+
+A shift lead or department lead can create a check-in and check-out at the same time if necessary.
+
+Offline check-out without known server-side check-in is accepted and reconciled later.
+
+Overlapping check-ins are allowed but should warn.
+
+Duplicate check-in is idempotent.
+
+Attendance operations do not include optional notes in Alpha 1.
+
+## 20.5 Attendance visibility
+
+Volunteers see their own attendance state.
+
+Shift leads see attendance for teams/shifts they lead.
+
+Department leads see attendance for their department.
+
+Organizers do not automatically see all attendance.
+
+God mode can directly edit attendance records.
+
+Direct attendance edits do not require a reason/comment.
+
+Direct attendance edits create before/after audit entries.
+
+The UI shows corrected attendance as normal, with history available only to elevated users.
+
+Duplicate/overlapping attendance warnings are visible to shift leads immediately.
+
+Attendance conflicts from offline devices go to the sync conflict queue.
+
+---
+
+# 21. Admin, Orchid, and God Mode
+
+## 21.1 Orchid purpose
+
+Orchid provides the trusted admin/god-mode data administration interface.
+
+The user-facing operational workflows are separate from Orchid.
+
+## 21.2 Alpha 1 Orchid screens
+
+Alpha 1 Orchid should include screens for:
+
+```text
+Organizations
+Events
+Departments
+Teams
+Users
+Memberships
+Roles/permissions
+Shifts
+Attendance
+Field reports
+Field report attachments
+Incidents
+Devices
+Shared workstations
+Node config
+Node pairing
+Node sync status
+Audit log
+Sync conflicts
+```
+
+List screens should have search/filtering in Alpha 1.
+
+CSV import/export is included in Alpha 1.
+
+Spreadsheet import/export should focus first on:
+
+- Users.
+- Teams.
+- Shifts.
+- Assignments.
+
+## 21.3 God mode
+
+God mode is node-global.
+
+God mode users may directly edit:
+
+- Users.
+- Teams.
+- Shifts.
+- Incidents.
+- Attendance.
+
+Orchid cannot directly edit finalized field report original body.
+
+Orchid does not provide field report append/redaction workflows in Alpha 1.
+
+Orchid does not allow attachment redaction/deletion in Alpha 1.
+
+Dangerous Orchid actions require reason/comment.
+
+All direct edits create audit entries where appropriate.
+
+Attendance direct edits create before/after audit entries.
+
+## 21.4 God mode and config
+
+God mode can edit database config overrides.
+
+God mode can see config source:
+
+```text
+file config
+database override
+runtime/default
+```
+
+God mode manages:
+
+- Node configuration.
+- Trusted shared workstations.
+- Login codes.
+- Sync conflicts.
+- Device revocation eventually.
+- Node pairing.
+- Dangerous admin operations.
+
+---
+
+# 22. Audit Log
+
+Every meaningful change should be attributable to a user and timestamped.
+
+Audit entries should capture:
+
+- Actor user.
+- Actor device, if applicable.
+- Actor node.
+- Action.
+- Entity type.
+- Entity ID.
+- Before/after values where relevant.
+- Timestamp.
+- Reason/comment where required.
+- Source context.
+- Signature metadata where relevant.
+
+Audit applies to:
+
+- Permission changes.
+- Auth/device trust events.
+- Shared workstation login code generation/use.
+- Node pairing/config changes.
+- Attendance direct edits.
+- Dangerous Orchid actions.
+- Sync conflict resolution.
+- Incident status/title/link changes.
+- Node operation acceptance/rejection.
+- Failed sync thresholds.
+
+Field reports preserve immutable original body and append-only additions.
+
+---
+
+# 23. Forms and Configuration
+
+## 23.1 Alpha 1 fixed forms
+
+Field report form fields are fixed for Alpha 1.
+
+Incident form fields are fixed for Alpha 1.
+
+Field report body is a single text area.
+
+Incident history/update body is a single text area.
+
+Photo attachment limits are fixed globally for Alpha 1.
+
+Configurable form structure is excluded from Alpha 1.
+
+## 23.2 Later configuration
+
+Organizations may later configure:
+
+- Field report form text/help labels.
+- Incident status labels.
+
+Internal status names remain fixed even if labels become configurable.
+
+---
+
+# 24. Electron Wrapper
+
+## 24.1 Purpose
+
+Electron provides the on-site command-center shell.
+
+It wraps the local Meridian web UI.
+
+It does not own server process management in Alpha 1.
+
+## 24.2 Distribution
+
+Electron should be distributed as an installable app for the on-site laptop.
+
+It should default to fullscreen/kiosk mode.
+
+It should hide browser chrome and navigation.
+
+It should auto-reopen/recover if the local UI crashes.
+
+It does not need to prevent accidental close in Alpha 1.
+
+## 24.3 Health panel
+
+Electron should show:
+
+```text
+local node name
+node role
+event name
+sync status
+PowerSync status
+connected devices
+local discovery status
+certificate/HTTPS status
+server version
+expected app version
+```
+
+Node sync failures appear in Electron health.
+
+Severe data sync conflicts appear in Electron health.
+
+File sync failures do not appear in Electron health.
+
+Electron warns if the local server version does not match the expected app version.
+
+---
+
+# 25. Packaging, Releases, and Environments
+
+## 25.1 Environments
+
+Alpha 1 environments:
+
+```text
+development
+standalone
+central
+onsite
+```
+
+## 25.2 Production/event safeguards
+
+Production/event modes:
+
+- Disable dev auth completely.
+- Refuse to boot with default secrets.
+- Generate APP_KEY, node keys, and service secrets if missing or default.
+- Use sample configs with fake values only.
+- Run database migrations automatically, with backup warnings first.
+- Fail closed if HTTPS validation fails in event mode.
+- Fail closed if PowerSync is unavailable in event mode.
+- Fail closed if local encryption or device signing is unavailable on the client.
+
+Config schema version mismatches do not block startup in Alpha 1.
+
+## 25.3 Versioning
+
+Alpha 1 produces versioned builds.
+
+Version metadata includes:
+
+- Docker image tags.
+- Mobile app version.
+- Electron app version.
+- Config schema version.
+
+Node pairing rejects incompatible major versions.
+
+Client apps warn when server version is incompatible.
+
+Electron warns if local server version does not match the expected app version.
+
+---
+
+# 26. Alpha 1 Scope
+
+Alpha 1 includes:
+
+```text
+Laravel + Orchid + PostgreSQL
+Docker Compose deployment
+PowerSync
+Vue + Capacitor field app
+Electron desktop wrapper
+real auth
+device trust
+device signatures
+node signatures
+local encryption
+readiness checklist
+offline field reports
+field report photo attachments
+check-in/check-out/no-show
+online-only incidents
+IC roles
+central/on-site node pairing
+bidirectional node sync
+sync conflict queue
+audit log
+CSV/spreadsheet import/export
+versioned builds
+deployment config bundles
+```
+
+## 26.1 Alpha 1 acceptance target
+
+Alpha 1 should prove:
+
+1. A central node can configure an event.
+2. An on-site node can pair with central.
+3. Event data can sync to the on-site node before the event.
+4. A user can authenticate and trust a device.
+5. The device can cache authorized event data.
+6. Local encryption and device signing are active.
+7. The user can create a field report offline with photos.
+8. The field report appears submitted immediately on the device.
+9. The device reconnects and syncs the field report to the on-site node.
+10. The on-site node accepts and countersigns the operation.
+11. The on-site node syncs the field report metadata and photos to central when internet is available.
+12. The field report is visible in Orchid according to permission rules.
+13. A shift lead can check volunteers in/out and mark no-show.
+14. IC roles can create and manage incidents online.
+15. Sync conflicts appear in God mode and do not block unrelated sync.
+16. Electron displays node health and sync status.
+
+Alpha 1 does not need to prove app-store distribution.
+
+Alpha 1 does not need to work on an actual phone to be considered initially complete, though mobile validation remains important.
+
+---
+
+# 27. Alpha 1 Exclusions
+
+Alpha 1 excludes:
+
+```text
+SMS
+push notifications
+native app-store distribution
+volunteer self check-in/out
+GPS collection
+configurable form structure
+automatic organizer visibility into all attendance
+God-mode field report body edits
+field report attachment deletion/redaction
+photo sync down to user devices
+field report categories/types
+field report drafts
+incident creation while offline
+generic plugin system
+full multi-on-site-node implementation
+USB/server snapshot restore workflows
+automatic backups to USB/second disk
+app-store distribution
+biometric/PIN local unlock
+password login
+```
+
+---
+
+# 28. Implementation Order
+
+Alpha 1 should be built in ordered slices even though the milestone is end-to-end.
+
+Recommended order:
+
+```text
+1. Monorepo scaffold
+2. Laravel + PostgreSQL + Orchid
+3. Docker Compose deploy path
+4. Electron wrapper shell
+5. Auth providers
+6. Node config and setup flow
+7. Node keys, pairing, and roles
+8. PowerSync service
+9. Vue + Capacitor app shell
+10. Device trust
+11. Device signing
+12. Local encryption
+13. Readiness checklist
+14. Offline field report text
+15. Field report photo attachments
+16. Check-in/check-out/no-show
+17. Incidents online-only
+18. IC permission model
+19. Central/on-site bidirectional node sync
+20. Sync conflict queue
+21. HTTPS/cert/discovery validation
+22. Audit log hardening
+23. CSV/spreadsheet import/export
+24. Build/distribution packages
+```
+
+Electron comes early because the on-site laptop experience is part of Alpha 1.
+
+Incidents come after field reports and attendance.
+
+Local encryption and device signing must be implemented before offline event-mode writes are allowed.
+
+Fake/dev auth is allowed only in development mode, never Alpha 1 production/event mode.
+
+---
+
+# 29. Open Questions / Future Decisions
+
+The following areas may need later detail:
+
+1. Exact PowerSync schema and sync rules.
+2. Exact Laravel module folder structure.
+3. Exact OpenAPI generation package.
+4. Exact file storage abstraction and S3/MinIO transition plan.
+5. Exact crypto implementation for Capacitor secure storage.
+6. Exact browser/PWA limitations for secure key storage.
+7. Exact local discovery implementation.
+8. Exact Caddy/DNS configuration for on-site router/AP deployments.
+9. Exact spreadsheet import formats.
+10. Exact audit log table schema.
+11. Exact node operation payload JSON strategy.
+12. Exact conflict resolver UI.
+13. Exact readiness UI.
+14. Exact shared workstation session UI.
+15. Exact IC incident dashboard UI.
+16. Exact attendance reconciliation rules.
+17. Exact photo conversion pipeline.
+18. Exact deployment bundle format.
+19. Post-Alpha 1 multi-on-site-node architecture.
+20. Post-Alpha 1 backups and restore workflows.
+
+---
+
+# 30. Glossary
+
+## Central node
+
+A Meridian server that acts as the main organizational/event coordination node outside the event field environment.
+
+## On-site node
+
+A Meridian server deployed at an event. During the active event window, it is authoritative for event-scoped operational records.
+
+## Standalone node
+
+A Meridian server that is not currently paired with central and is operating independently.
+
+## Acting central
+
+A future multi-on-site-node concept where one on-site node coordinates other on-site nodes locally.
+
+## God mode
+
+A node-global elevated permission mode for trusted administrators who can perform dangerous actions, repair data, manage node config, and resolve sync conflicts.
+
+## Field report
+
+An immutable, low-friction report submitted by a user. It may be created offline. It is not an incident.
+
+## Incident
+
+An IC-managed operational record requiring server connection. Incidents are visible only to IC roles.
+
+## IC department
+
+An event-selected department that functions as Incident Command for that event.
+
+## IC role
+
+A team-granted incident command role within the selected IC department, such as `ic_lead`, `ic_operator`, or `ic_viewer`.
+
+## Shared workstation
+
+A trusted device intended for multiple users, such as the on-site Electron command center or an IC desk workstation.
+
+## Device trust
+
+A trusted relationship between a user and a specific device, valid for 6 weeks.
+
+## Device signature
+
+A cryptographic signature created by a trusted device for device-originated operations.
+
+## Node signature
+
+A cryptographic signature created by a Meridian node for accepted or synced operations.
+
+## PowerSync
+
+The external sync dependency used for server-to-device local database synchronization.
+
+## Node sync
+
+Meridian’s application-level operation sync between central and on-site nodes.
