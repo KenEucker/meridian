@@ -13,6 +13,8 @@ This specification defines the UI expectations for Meridian IMS surfaces, includ
 
 IMS screens should feel more serious and restricted than normal volunteer and shift surfaces, but they must remain fast, clear, and usable.
 
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP IMS routes, statuses, priority labels, Field Report lifecycle, permission predicates, and offline rules are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+
 ---
 
 ## 2. IMS Design Posture
@@ -25,6 +27,8 @@ IMS surfaces should communicate:
 - priority and attention;
 - quick correction of routine mistakes;
 - auditability without clutter.
+
+Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC permissions for the event's configured IC department.
 
 The seriousness of IMS should come from clarity, permissions, auditability, and visual restraint, not artificial friction.
 
@@ -59,7 +63,7 @@ IMS may include:
 - incident list;
 - incident detail;
 - incident create/edit;
-- field report create/edit;
+- field report submission;
 - field report detail;
 - incident timeline;
 - incident history drawer;
@@ -102,6 +106,12 @@ Required content:
 
 On non-touch devices, incident lists should be table-first. On touch and kiosk devices, they should become card-first.
 
+Use the shared `surfaceMode` contract to select table-first, card-first, mobile, kiosk, or dense treatments:
+
+```ts
+surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+```
+
 ---
 
 ## 7. Incident Detail
@@ -137,7 +147,7 @@ Required behavior:
 - validation remains clear;
 - destructive changes require confirmation.
 
-Incident notes are edited as plain text. Markdown formatting may be supported while editing, but formatting should not render until after submission.
+Incident notes are edited as plain text. Markdown formatting may be supported while editing, but formatting should not render until after submission. Incident body/history entries are append-only after posting.
 
 ---
 
@@ -145,15 +155,18 @@ Incident notes are edited as plain text. Markdown formatting may be supported wh
 
 Field Reports should carry IMS seriousness.
 
-Field Report forms should:
+Field Report submission forms should:
 
 - use the same general form language as incident forms;
 - avoid decorative treatment;
 - show event and department context where relevant;
-- support attachment or linking to incidents when allowed;
-- use explicit Save and Cancel unless the report is part of the incident autosave surface.
+- use explicit Submit and Cancel;
+- finalize the Field Report on submit;
+- avoid autosave and drafts;
+- avoid normal in-place edit behavior after submission;
+- allow authors to view their own submitted Field Reports.
 
-Attaching a Field Report may be a routine operational action when easy to correct.
+Corrections must be append-only, audit-aware, or represented as follow-up notes where allowed. IC users may attach Field Reports to incidents when permitted. Attaching or unlinking a Field Report is audit-aware and should appear in the incident timeline.
 
 ---
 
@@ -171,6 +184,14 @@ Priority must not be confused with:
 
 Incident status labels must use canonical system names.
 
+Dashboard/widget attention, IMS priority, and incident state are separate:
+
+- dashboard attention controls how strongly the UI draws attention;
+- IMS priority describes operational seriousness;
+- incident state describes workflow state.
+
+MVP incident states are Open, On Scene, Monitoring, On Hold, and Closed. Provisional MVP IMS priority labels are Routine, Important, Serious, and Critical; these are product-reviewable.
+
 ---
 
 ## 11. Actions
@@ -187,6 +208,8 @@ Destructive or high-impact IMS actions require `ConfirmationDialog`, including:
 - restricted-state changes that cannot be easily corrected.
 
 Action labels must use specific verbs.
+
+Field Report original submissions must not expose Edit, Save, or autosave actions after submission.
 
 ---
 
@@ -221,6 +244,8 @@ IMS records may be visible only to appropriate roles.
 
 Command palette, search, dashboard widgets, and direct routes must all respect IMS permissions.
 
+IC access is granted through the event's configured IC department and IC roles such as IC Viewer, IC Operator, and IC Lead. Department Lead or Organizer access alone is insufficient.
+
 Restricted access behavior:
 
 - default volunteers receive simple restricted-access messaging;
@@ -243,6 +268,8 @@ Affected IMS screens should:
 
 Incident autosave failures should be visible without destroying the user's current typing flow.
 
+Incidents require server connection for creation in MVP. Field Report creation may work offline and appears submitted immediately with queued sync state when applicable.
+
 ---
 
 ## 15. Accessibility
@@ -256,7 +283,9 @@ IMS-specific checks:
 - timelines are keyboard navigable;
 - notes can be edited without mouse;
 - autosave state is perceivable;
-- dark mode preserves serious-state readability.
+- dark mode preserves serious-state readability;
+- Field Report original body is viewable but not editable after submission;
+- Field Report append/correction affordances are audit-aware.
 
 ---
 
@@ -269,13 +298,15 @@ Review IMS UI changes for:
 - priority/status distinction;
 - role and permission behavior;
 - autosave behavior on incident create/edit;
+- Field Report submit/finalize behavior;
 - destructive confirmations;
 - audit and history placement;
 - offline and sync behavior;
 - keyboard navigation;
 - visible focus;
 - light and dark mode;
-- touch and kiosk behavior where relevant.
+- touch and kiosk behavior where relevant;
+- `surfaceMode` behavior.
 
 ---
 
@@ -283,11 +314,7 @@ Review IMS UI changes for:
 
 Future versions should define:
 
-- canonical incident status list;
-- canonical priority scale;
-- exact field report lifecycle;
-- incident dashboard widget inventory;
+- final product-reviewed IMS priority labels;
 - restricted-state visual mapping;
 - audit event taxonomy;
-- IMS command palette result rules.
-
+- detailed IMS command palette result ordering.

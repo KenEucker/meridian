@@ -13,6 +13,8 @@ This guide defines how Meridian should behave on trusted shared workstations and
 
 Kiosk mode is not a separate product. It is a constrained Meridian operating context.
 
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP kiosk routes, surface modes, authentication rules, offline labels, and permission behavior are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+
 ---
 
 ## 2. Field Assumptions
@@ -53,7 +55,9 @@ The kiosk dashboard should:
 
 ## 4. Authentication and Re-authentication
 
-Kiosk and shared workstation authentication should support PIN-like re-authentication for on-site use.
+For MVP, central authentication continues to use approved external providers and magic-link/session behavior. There is no separate Meridian PIN credential.
+
+PIN-like re-authentication, if implemented later, is only a local trusted-workstation convenience for already-provisioned users. It must not become an independent central credential.
 
 Expected behavior:
 
@@ -64,20 +68,28 @@ Expected behavior:
 - timeout behavior returns to a safe kiosk surface;
 - central access continues to use provider login and magic link authentication.
 
-The UI should make the difference between trusted workstation state and individual user authority clear.
+Trusted workstation state and individual user authority are separate:
+
+- trusted workstation state can permit kiosk surfaces;
+- individual user authority controls actions and record access;
+- privileged actions may require re-authentication;
+- timeout returns to a safe kiosk surface.
 
 ---
 
 ## 5. Self Check-in Rules
 
-Volunteers should not self check-in or self check-out unless they are department leads or shift leads.
+Default volunteers do not self check-in or self check-out in MVP.
 
 Kiosk check-in surfaces must:
 
 - enforce role rules;
 - avoid presenting unavailable self-service actions to default volunteers;
 - provide staff-mediated check-in flows where appropriate;
-- make corrective actions available to authorized users.
+- make corrective actions available to authorized users;
+- allow department leads and shift leads to perform check-in/check-out actions where authorized.
+
+Future self-service check-in must be a deliberate product decision and permission-controlled.
 
 ---
 
@@ -96,6 +108,14 @@ Touch layouts should:
 - preserve keyboard access for attached keyboards.
 
 Touch adaptation should consider device capability and operating context, not only viewport width.
+
+Use the shared surface mode contract for layout decisions:
+
+```ts
+surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+```
+
+Screen width, pointer capability, device configuration, kiosk state, trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
 
 ---
 
@@ -155,11 +175,13 @@ Kiosk mode must make relevant connectivity state visible without creating noise.
 
 Kiosk surfaces should distinguish:
 
-- offline but usable;
-- local node reachable;
-- central unreachable;
-- sync conflict;
-- sync failed.
+- Online;
+- Offline but usable;
+- Local node reachable;
+- Central unreachable;
+- Queued;
+- Sync conflict;
+- Sync failed.
 
 Unavailable actions should be hidden or disabled honestly. Queued actions should be visible to the user or role that needs to trust them.
 
@@ -182,7 +204,7 @@ Kiosk command palette results must be limited by:
 - permissions;
 - operational window.
 
-Admin routes and sensitive records should not appear unless the current user and workstation state allow them.
+Admin routes and sensitive records should not appear unless the current user and workstation state allow them. IMS records must not appear unless the user has IC permissions for the event's configured IC department.
 
 ---
 
@@ -245,11 +267,13 @@ Check:
 - touch card layout;
 - bottom action bar behavior;
 - user switching;
-- PIN-like re-authentication paths;
+- local trusted-workstation re-authentication paths, if implemented;
 - self check-in restrictions;
 - offline and queued action behavior;
 - accidental action recovery;
 - keyboard operation with attached keyboard.
+
+Exact privacy timeout durations are an open product decision and should be configurable, not hard-coded.
 
 ---
 
@@ -259,9 +283,7 @@ Future versions should define:
 
 - supported kiosk hardware profiles;
 - timeout durations;
-- PIN policy;
+- whether any post-MVP local re-authentication convenience is needed;
 - scanner and printer interaction details;
 - exact touch target recommendations;
-- local node status language;
-- kiosk dashboard widget inventory.
-
+- supported scanner/printer status language.

@@ -11,7 +11,9 @@ Purpose: Provide a practical accessibility and field-usability checklist for Mer
 
 This checklist turns Meridian's accessibility principles into reviewable criteria. It applies to all UI work, including dashboards, forms, tables, touch surfaces, kiosk mode, IMS, and admin screens.
 
-Meridian should follow WCAG 2.2 or the project-approved successor standard as its baseline.
+Meridian should follow WCAG 2.2 AA unless the project approves a successor target.
+
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP route, component, status, permission, widget, offline, kiosk, and surface mode contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -27,7 +29,16 @@ Every UI PR must be reviewed for:
 - form error summaries;
 - permission and disabled/hidden action clarity;
 - light and dark mode contrast;
-- touch and field usability when relevant.
+- touch and field usability when relevant;
+- correct behavior for the active `surfaceMode`.
+
+Surface mode must be treated as an explicit implementation input:
+
+```ts
+surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+```
+
+Screen width, pointer capability, device profile, kiosk/trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
 
 ---
 
@@ -110,7 +121,8 @@ Check that:
 - submit-time validation exists;
 - blur validation does not steal focus or interrupt typing;
 - screen readers can identify invalid fields;
-- Save and Cancel behavior is clear;
+- Save/Submit and Cancel behavior is clear;
+- Field Reports use Submit and Cancel, finalize on submit, and do not expose drafts or normal in-place editing after submission;
 - only incident create/edit uses autosave.
 
 ---
@@ -125,7 +137,8 @@ Check that:
 - status cells expose readable text, not only pills or color;
 - dense mode preserves labels and focus states;
 - horizontal overflow is manageable on smaller screens;
-- table-first layouts switch to touch-appropriate layouts on touch surfaces where needed.
+- table-first layouts switch to touch-appropriate layouts on touch surfaces where needed;
+- `surfaceMode` is used to decide table-first, card-first, kiosk, mobile, or dense treatment rather than viewport width alone.
 
 ---
 
@@ -134,6 +147,7 @@ Check that:
 Check that:
 
 - touch targets are practical for field use;
+- exact MVP touch target dimensions remain an open product/design decision; until then, changed touch surfaces must be manually checked for reliable tap accuracy on expected hardware;
 - controls are spaced to reduce mis-taps;
 - visible labels remain available;
 - card status is readable without relying on color;
@@ -151,6 +165,7 @@ Check that:
 - results are grouped by type;
 - unavailable actions are hidden;
 - permissions, organization, event, department, role, and kiosk state are respected;
+- IMS results are hidden unless the user has IC permissions for the event's configured IC department;
 - keyboard navigation through results is clear;
 - shortcuts are visible except in dense mode;
 - focus returns to the triggering context after dismissal.
@@ -190,6 +205,7 @@ Check that:
 
 - default volunteers do not see confusing admin-only actions;
 - elevated users receive useful permission explanations where appropriate;
+- organizer role alone does not grant access to IMS incidents or restricted IMS surfaces;
 - restricted pages have clear titles and next steps;
 - hidden actions do not break keyboard flow;
 - disabled controls explain why they are disabled when explanation is useful.
@@ -204,6 +220,7 @@ Check that:
 - controls remain usable with gloves where practical;
 - text is readable at expected workstation distance;
 - user switching and re-authentication paths are clear;
+- trusted workstation state is visually distinct from individual user authority;
 - self check-in restrictions are enforced and understandable;
 - admin complexity is hidden by default;
 - command palette results are kiosk-appropriate.
@@ -219,7 +236,9 @@ Check that:
 - timelines expose meaningful operational entries clearly;
 - routine audit entries can be expanded without cluttering the main view;
 - autosave status is perceivable without interrupting note entry;
-- plain text incident notes remain readable and editable.
+- plain text incident notes remain readable and editable;
+- Field Report original body is not editable after submission;
+- Field Report corrections, where allowed, are append-only and audit-aware.
 
 ---
 
@@ -238,16 +257,28 @@ Before merging UI work, reviewers should manually verify:
 - destructive action confirmation;
 - offline state behavior when relevant.
 
+Minimum MVP manual QA matrix for UI changes:
+
+| Area | Required check |
+|---|---|
+| Keyboard | Complete the changed primary task without a mouse. |
+| Focus | Focus indicator remains visible in light and dark mode and is not hidden by sticky bars. |
+| Forms | Blocking validation shows field errors and a top-level summary. |
+| Screen reader labels | New or changed controls expose useful accessible names. |
+| Surface mode | Verify affected `desktop`, `touch`, `mobile`, `kiosk`, or `dense` modes where relevant. |
+| Permissions | Verify default volunteer denial and elevated-user explanation where applicable. |
+| Offline/sync | Verify contextual state and queued/failed behavior where relevant. |
+
+Automated accessibility tooling is not yet configured in this documentation set. Until CI tooling is selected, PRs must include manual accessibility review notes.
+
 ---
 
 ## 18. Open Questions
 
 Future versions should define:
 
-- project-approved WCAG conformance target;
-- required automated accessibility tooling;
+- exact automated accessibility tooling and CI command;
 - screen-reader/browser support matrix;
 - minimum manual QA device set;
 - exact touch target guidance for field hardware;
 - accessibility acceptance criteria for each major component.
-

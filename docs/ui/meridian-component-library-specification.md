@@ -13,6 +13,17 @@ This specification defines the required Meridian component library concepts, com
 
 Component names are framework-neutral. They may be implemented in Blade, Livewire, Vue, React, or another approved stack, but their behavior and semantics should remain consistent.
 
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP route, status, permission, widget, offline, kiosk, and component implementation contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+
+For MVP, Meridian is Laravel-first and server-rendered-first:
+
+- preferred implementation is Laravel Blade components;
+- Livewire or Alpine should be used only where interactivity requires client-side state;
+- client-side behavior must progressively enhance server-rendered HTML;
+- required context, status, permission, and offline information must not exist only in client-side state;
+- PowerSync/offline state should be passed through documented view-model inputs, not ad hoc component checks;
+- framework-neutral component names remain the design contract, while MVP code should expose stable Blade component APIs.
+
 ---
 
 ## 2. Component Principles
@@ -49,6 +60,16 @@ The component library must expose semantic tokens for:
 - typography.
 
 Light and dark mode must use the same semantic token names.
+
+Initial MVP token names are defined in `docs/ui/meridian-ui-implementation-contract.md`. Component CSS must use those semantic names, including:
+
+- `--m-surface-app`, `--m-surface-base`, `--m-surface-raised`, `--m-surface-overlay`;
+- `--m-text-primary`, `--m-text-secondary`, `--m-text-muted`, `--m-text-inverse`;
+- `--m-border-default`, `--m-border-strong`, `--m-border-subtle`;
+- `--m-action-primary-bg`, `--m-action-secondary-bg`, `--m-action-destructive-bg`;
+- `--m-focus-ring`;
+- `--m-status-*`, `--m-attention-*`, and `--m-department-accent`;
+- `--m-space-*`, `--m-radius-*`, `--m-shadow-*`, and `--m-text-*`.
 
 ---
 
@@ -108,6 +129,8 @@ Required shortcuts:
 
 Results must respect organization, event, department, role, permissions, and kiosk state.
 
+IMS command results must not appear unless the user has the required IC role for the event's configured IC department.
+
 ---
 
 ## 5. Identity and Status Components
@@ -151,6 +174,8 @@ Severity indicators must distinguish:
 - restricted or security-sensitive state.
 
 IMS priority labels must not be confused with normal statuses.
+
+Use `SeverityIndicator` for dashboard attention or IMS priority only. Use `StatusPill` for workflow/status values.
 
 ---
 
@@ -347,9 +372,44 @@ Components must account for:
 
 Touch adaptations should be based on capability and surface context, not screen width alone.
 
+Components that change density or layout must accept or derive the shared surface mode contract:
+
+```ts
+surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+```
+
+Equivalent PHP enum, string, or view-model naming is acceptable. Screen width, pointer capability, device configuration, trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
+
 ---
 
-## 12. Governance
+## 12. Component API Quick Contracts
+
+These compact contracts are the minimum shape future code-generation tasks should preserve. More detailed examples live in `docs/ui/meridian-ui-implementation-contract.md`.
+
+| Component | Purpose | Inputs | Slots/content | Required behavior |
+|---|---|---|---|---|
+| `AppTopBar` | Global shell bar | `homeUrl`, `department`, `user`, `commandPaletteEnabled`, `surfaceMode` | optional user/session controls | Home logo, command palette trigger, department context; never org/event switcher. |
+| `ContextBar` | Operating scope display | `organization`, `event`, `department`, `roleContext`, `syncState`, `kioskState`, `surfaceMode` | optional extra context | Shows scope only where it affects decisions; collapses without hiding required state. |
+| `ActionBar` | Bottom current-screen actions | `surfaceMode`, `sticky`, `safeArea`, `disabledReason` | primary and secondary actions | Reachable on touch/kiosk, respects safe areas, does not cover required content. |
+| `CommandPalette` | Command/navigation overlay | `results`, `roleContext`, `scope`, `kioskState`, `surfaceMode` | grouped result rows | `Ctrl+K`, `Cmd+K`, `/`; filters by permissions and hides unauthorized IMS results. |
+| `DepartmentBadge` | Department identity | `department`, `showLogo`, `showAccent`, `size` | optional label override | Uses logo/icon/lettermark and small accent; accessible name includes department. |
+| `StatusPill` | Canonical status | `family`, `status`, `size`, `icon` | none | Visible text matches canonical label; state is not color-only. |
+| `SeverityIndicator` | Attention or IMS priority | `kind`, `value`, `label` | optional description | Keeps dashboard attention distinct from IMS priority and incident state. |
+| `DataTable` | Dense record list | `columns`, `rows`, `surfaceMode`, `emptyMessage`, `permissions` | filters/actions | Headers, keyboard row actions, loading/empty/error states, paired touch fallback. |
+| `TouchCard` | Touch record/task card | `record`, `status`, `actions`, `surfaceMode` | summary/details/actions | Large labeled actions, no hover-only controls, inline correction where appropriate. |
+| `MetricCard` | Operational metric | `label`, `value`, `scope`, `attention`, `freshness`, `href` | optional detail | Must support decision, action, or reassurance; shows freshness when stale risk matters. |
+| `PriorityFeed` | Mobile/compact dashboard feed | `items`, `roleContext`, `surfaceMode` | feed item template | Orders by attention and role relevance; preserves source context and quiet states. |
+| `Field` | Form field wrapper | `name`, `label`, `required`, `error`, `hint` | form control | Programmatic label/error association and required marker. |
+| `FormSummary` | Blocking validation summary | `errors`, `heading`, `focusOnMount` | optional actions | Lists errors and links/moves focus to fields where possible. |
+| `AutosaveStatus` | Incident autosave state | `state`, `lastSavedAt`, `repairHref` | optional message | Allowed only for incident create/edit; states are `saved`, `saving`, `failed`, `offline_queued`. |
+| `ConfirmationDialog` | Destructive/high-impact confirmation | `title`, `impact`, `confirmLabel`, `variant` | explanation/actions | Focus-trapped modal; confirming action uses a specific verb. |
+| `HistoryDrawer` | Audit/history panel | `entries`, `defaultExpanded`, `surfaceMode` | timeline rows | Keyboard operable; hides routine field-change entries by default. |
+| `OfflineBanner` | Contextual sync status | `state`, `scope`, `queuedCount`, `repairHref` | optional detail | Uses approved connectivity labels; appears only where state affects current work. |
+| `Toast` | Brief routine feedback | `variant`, `message`, `timeout` | optional action | Not for destructive confirmation, blocking error, or essential disappearing info. |
+
+---
+
+## 13. Governance
 
 New reusable components must be added to this specification or the operating guide before becoming common patterns.
 
@@ -366,14 +426,12 @@ Components that duplicate existing patterns should be rejected during review unl
 
 ---
 
-## 13. Open Questions
+## 14. Open Questions
 
 Future versions should define:
 
-- exact token names and CSS variable contract;
-- component API examples for the chosen frontend stack;
 - screenshot examples;
 - Storybook or equivalent documentation expectations;
 - automated accessibility test coverage;
-- full status and severity visual mapping.
-
+- exact Blade component file naming conventions;
+- full status and severity visual mapping beyond the MVP contract.

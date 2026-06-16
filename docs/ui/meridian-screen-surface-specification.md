@@ -13,6 +13,8 @@ This specification translates the Meridian UI Operating Guide into screen-level 
 
 This document does not replace the operating guide. When there is ambiguity, the operating guide governs.
 
+Detailed MVP route names, screen IDs, component APIs, status enums, permission predicates, dashboard widgets, offline states, and kiosk contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+
 ---
 
 ## 2. Surface Categories
@@ -33,6 +35,8 @@ Meridian screens should generally fit one of these surface categories:
 
 Every new screen should identify its category during design and review.
 
+Every MVP screen should map to a stable screen ID and Laravel route/view target from `docs/ui/meridian-ui-implementation-contract.md`, or explicitly document the new screen ID when extending the inventory.
+
 ---
 
 ## 3. Required Screen Context
@@ -51,6 +55,14 @@ Relevant context may include:
 - offline or sync state.
 
 The context may appear in the `AppTopBar`, `ContextBar`, local heading area, status strip, or an inline control. It must not be hidden only in a menu when it changes user decisions.
+
+Screen view models should include the active surface mode:
+
+```ts
+surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+```
+
+Equivalent PHP/Blade naming is acceptable. Screen width, pointer capability, device configuration, kiosk/trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
 
 ---
 
@@ -104,6 +116,8 @@ Dashboards must not show metrics only because the data exists. Every widget shou
 
 On mobile, dashboard widgets should collapse into a single priority feed.
 
+Organizer dashboards must not expose IMS incidents, restricted Field Reports, active incident counts, high-priority incidents, on-scene incidents, monitoring incidents, or IMS-specific alerts unless the user also has IC permissions for the event's configured IC department.
+
 ---
 
 ## 7. Department Work Surfaces
@@ -116,7 +130,7 @@ Department screens should include:
 - event and operations-window context where relevant;
 - department-scoped actions;
 - role-aware visibility;
-- direct access to related rosters, shifts, deployments, reports, and incidents when permitted.
+- direct access to related rosters, shifts, deployments, reports, and IMS surfaces only when permitted.
 
 Department accent color may be used as a small identifier. It must not become a department-specific theme.
 
@@ -125,6 +139,8 @@ Department accent color may be used as a small identifier. It must not become a 
 ## 8. Roster and Shift Board Surfaces
 
 Roster and shift board screens must adapt to device capability.
+
+Use `surfaceMode` rather than viewport width alone to choose table-first, card-first, mobile, kiosk, or dense treatments.
 
 On non-touch desktop and laptop devices:
 
@@ -195,6 +211,8 @@ Required form behavior:
 
 The incident create/edit screen is the only autosaving form. Routine operational changes may save immediately when the result is easy to correct.
 
+Field Reports are submitted, not saved as drafts. Field Report submission surfaces use Submit and Cancel, finalize on submit, do not autosave, and do not expose normal in-place editing after submission. Corrections, where allowed, are append-only and audit-aware.
+
 ---
 
 ## 12. Reports and Review Surfaces
@@ -259,6 +277,8 @@ Screens must be role-aware from the beginning.
 
 Default volunteers should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
 
+Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC permissions for the event's configured IC department.
+
 Permission-denied screens should be direct and calm:
 
 - default volunteers: restricted access;
@@ -285,6 +305,8 @@ Every new or changed screen should be reviewed for:
 - offline and sync behavior where relevant;
 - canonical status language;
 - empty, loading, error, and success states.
+- route/screen ID alignment with the implementation contract;
+- `surfaceMode` behavior.
 
 ---
 
@@ -292,11 +314,8 @@ Every new or changed screen should be reviewed for:
 
 The following items require future product or implementation decisions:
 
-- exact route map;
-- canonical screen inventory;
 - detailed per-role home widget assignments;
 - full status-to-visual mapping;
 - breakpoint-specific layouts;
 - report export formats;
 - admin configuration screen hierarchy.
-
