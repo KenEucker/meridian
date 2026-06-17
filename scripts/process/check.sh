@@ -22,7 +22,25 @@ $PYTHON scripts/process/validate_conventional_commits.py --message "docs(process
 if [ -f composer.json ]; then
   composer validate --no-check-publish
 else
-  echo "No composer.json found; skipping Composer checks."
+  echo "No root composer.json found; skipping root Composer checks."
+fi
+
+if [ -f apps/server/composer.json ]; then
+  (cd apps/server && composer validate --no-check-publish)
+  if [ -f apps/server/vendor/autoload.php ]; then
+    (
+      cd apps/server
+      [ -f .env ] || cp .env.example .env
+      if ! grep -qE '^APP_KEY=base64:' .env; then
+        php artisan key:generate --ansi
+      fi
+      php artisan test
+    )
+  else
+    echo "No apps/server/vendor/autoload.php found; run 'composer install' in apps/server to enable Laravel tests."
+  fi
+else
+  echo "No apps/server/composer.json found; skipping server Composer checks."
 fi
 
 if [ -f package.json ]; then
