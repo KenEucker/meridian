@@ -29,6 +29,24 @@ jobs:
         if: hashFiles('composer.json') != ''
         run: composer validate --no-check-publish
 
+      - name: Set up PHP for server app
+        if: hashFiles('apps/server/composer.json') != ''
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: mbstring, dom, xml, ctype, bcmath, fileinfo, tokenizer, pdo, sqlite3, pdo_sqlite
+          coverage: none
+
+      - name: Validate and test Laravel server
+        if: hashFiles('apps/server/composer.json') != ''
+        working-directory: apps/server
+        run: |
+          composer validate --no-check-publish
+          composer install --no-interaction --no-progress --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test
+
       - uses: actions/setup-node@v4
         if: hashFiles('package.json') != ''
         with:

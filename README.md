@@ -60,13 +60,13 @@ deploy/
   dns/           DNS configuration for on-site deployments
 ```
 
-These directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
+`apps/server` now contains a Laravel framework scaffold (see [apps/server/README.md](apps/server/README.md)). The remaining directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
 
 ## Developer Boot Path
 
-Meridian is currently an empty scaffold with process checks and documented future application locations. There is no Laravel server, Vue field app, Electron wrapper, Docker Compose stack, database, seed data, or product service to start yet.
+Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its default test suite, but it contains no Meridian product behavior yet. The Vue field app, Electron wrapper, Docker Compose stack, PostgreSQL configuration, seed data, and product services are added in later Alpha 1 tasks.
 
-For the current scaffold, a fresh checkout should be able to run the process validators only.
+For the repository as a whole, a fresh checkout should be able to run the process validators. The server app additionally supports the Laravel boot/test commands documented in [apps/server/README.md](apps/server/README.md).
 
 ### Prerequisites
 
@@ -107,7 +107,7 @@ For the full fresh-checkout QA path, run the POSIX process script from Git Bash 
 scripts/process/check.sh
 ```
 
-The script validates the process scaffold, skips Composer checks until `composer.json` exists, installs Node dependencies when `package.json` exists, and runs only the Node scripts that are currently defined.
+The script validates the process scaffold, validates the `apps/server` Composer project and runs its Laravel tests when server dependencies are installed, skips root Composer checks until a root `composer.json` exists, installs Node dependencies when `package.json` exists, and runs only the Node scripts that are currently defined.
 
 Individual checks are also available:
 
