@@ -10,6 +10,10 @@
 
 <!-- Key implementation decisions, boundaries, and anything intentionally deferred. -->
 
+# Technology Baseline
+
+<!-- Confirm docs/meridian-technology-baseline.md was reviewed. List dependency/runtime/tool changes, affected lockfiles/CI/setup, approval notes, rollback notes, or "No dependency or technology baseline changes." -->
+
 # Data Model / Migration Notes
 
 <!-- Schema changes, migrations, data preservation, rollback considerations, or "None." -->

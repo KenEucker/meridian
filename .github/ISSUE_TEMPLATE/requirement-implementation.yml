@@ -30,6 +30,13 @@ body:
     validations:
       required: true
   - type: textarea
+    id: technology_baseline
+    attributes:
+      label: Technology baseline impact
+      description: Confirm docs/meridian-technology-baseline.md was reviewed. List proposed dependency/runtime/tool changes or write "None."
+    validations:
+      required: true
+  - type: textarea
     id: tests
     attributes:
       label: Tests and QA

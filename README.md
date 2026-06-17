@@ -25,9 +25,11 @@ The current source-of-truth documents are:
 
 - [Requirements document](docs/meridian-requirements-document.md)
 - [Technical specification](docs/meridian-technical-spec.md)
+- [Technology baseline](docs/meridian-technology-baseline.md)
 - [Development process](docs/process/meridian-development-process.md)
 
 Start with the development process before opening issues or pull requests. It defines how work should move from requirement to implementation, review, automated checks, and human QA.
+Before adding, replacing, or upgrading runtimes, packages, libraries, services, wrappers, test tools, or package managers, read the technology baseline and ask for human approval if the change is not already approved there.
 
 ## Development Process
 

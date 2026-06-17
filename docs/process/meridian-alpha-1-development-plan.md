@@ -31,6 +31,7 @@ Work must stay inside the scope described by these documents.
 
 - `docs/meridian-requirements-document.md`
 - `docs/meridian-technical-spec.md`
+- `docs/meridian-technology-baseline.md`
 - `docs/db/meridian-data-model-and-api-specification.md`
 
 ### UI and UX
@@ -69,6 +70,7 @@ Work must stay inside the scope described by these documents.
 6. A task must update `docs/process/traceability-matrix.md` when it closes or materially advances a requirement/spec section.
 7. A task must not implement deferred or explicit non-goal scope from the requirements, technical spec, or data/API spec.
 8. A task that discovers missing requirements must stop at discovery/design unless the source document is updated through the normal process.
+9. A task must follow `docs/meridian-technology-baseline.md`; proposed dependencies or technology/version changes outside that baseline must be decided by a human and added to the baseline before implementation.
 
 ---
 

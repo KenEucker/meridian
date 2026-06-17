@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REQUIRED_FILES = [
+    "docs/meridian-technology-baseline.md",
     "docs/process/meridian-development-process.md",
     "docs/process/traceability-matrix.md",
     "docs/process/github-branch-protection.md",

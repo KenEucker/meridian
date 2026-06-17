@@ -12,6 +12,7 @@ REQUIRED_SECTIONS = [
     "Summary",
     "Traceability",
     "Implementation Notes",
+    "Technology Baseline",
     "Data Model / Migration Notes",
     "Permission Notes",
     "Offline / Sync Notes",

@@ -7,6 +7,7 @@
 
 - `docs/meridian-requirements-document.md`
 - `docs/meridian-technical-spec.md`
+- `docs/meridian-technology-baseline.md`
 
 ---
 
@@ -30,7 +31,7 @@ This process is designed for human developers, AI-assisted development, and huma
 
 ## 2. Source of Truth
 
-Meridian development should be grounded in two source documents.
+Meridian development should be grounded in the project source documents.
 
 ### 2.1 Requirements document
 
@@ -60,7 +61,7 @@ When implementation structure conflicts with the technical specification, the te
 
 ### 2.3 Development process document
 
-This document does not replace either source document.
+This document does not replace the requirements document, technical specification, or technology baseline.
 
 It answers:
 
@@ -70,6 +71,18 @@ It answers:
 - How do we formulate a PR?
 - How do we verify that the work meets the acceptance criteria?
 - How does a human reviewer check the result?
+
+### 2.4 Technology baseline
+
+The technology baseline defines the approved runtimes, frameworks, package managers, libraries, services, version constraints, and dependency-change policy.
+
+Use:
+
+- `docs/meridian-technology-baseline.md`
+
+When an implementation decision conflicts with the technology baseline, the technology baseline wins unless a human-approved baseline update is made before or alongside the implementation.
+
+AI coding agents and human contributors must not introduce, replace, or upgrade runtimes, package managers, libraries, services, desktop/mobile wrappers, authentication systems, UI frameworks, component libraries, or test runners outside this baseline without first asking for a decision and recording the approved change in the baseline.
 
 ---
 
@@ -328,6 +341,20 @@ Before coding, answer:
 - Does this touch PowerSync?
 - Does this affect exports?
 - Does this require migration or seed data?
+
+### Step 4a: Check the technology baseline
+
+Before coding or changing dependency manifests, read `docs/meridian-technology-baseline.md`.
+
+If the slice needs a runtime, package manager, framework, library, service, wrapper, authentication system, component library, or test runner that is not already approved there:
+
+- stop before implementation;
+- document the proposed dependency or version change;
+- answer the dependency approval checklist from the technology baseline;
+- ask the project owner to decide;
+- update the technology baseline with the accepted decision before using the dependency.
+
+Do not make implicit LLM-chosen dependency decisions inside feature work.
 
 ### Step 5: Implement the smallest complete path
 
@@ -1395,6 +1422,8 @@ A work item is ready for implementation when it has:
 ```md
 - [ ] Clear summary.
 - [ ] Source requirement IDs or technical spec sections.
+- [ ] Technology baseline reviewed.
+- [ ] Dependency impact documented as "none" or proposed baseline update.
 - [ ] Work item type.
 - [ ] Acceptance criteria.
 - [ ] Actor/role definitions.
@@ -1417,6 +1446,7 @@ A work item is done when:
 ```md
 - [ ] Acceptance criteria are met.
 - [ ] Source requirements are still accurately represented.
+- [ ] Technology baseline was followed, or a human-approved baseline update is included.
 - [ ] Automated tests cover the main success path.
 - [ ] Automated tests cover important denial/failure paths.
 - [ ] Permission-sensitive behavior has policy tests.
@@ -1723,6 +1753,7 @@ Meridian can use AI-assisted implementation, but AI output must be reviewed as u
 
 Every AI implementation prompt should include:
 
+- instruction to read `docs/meridian-technology-baseline.md` before coding;
 - source requirement IDs;
 - relevant technical spec sections;
 - existing file paths;
@@ -1730,6 +1761,7 @@ Every AI implementation prompt should include:
 - out-of-scope list;
 - expected tests;
 - instruction not to silently broaden scope.
+- instruction to stop and ask before adding, replacing, or upgrading dependencies or approved technology choices outside the baseline.
 
 ### 18.2 AI output review
 
