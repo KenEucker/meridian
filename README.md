@@ -6,7 +6,7 @@ Meridian is an open-source volunteer operations platform for events.
 
 It is designed for organizations that recruit, approve, coordinate, schedule, credential, track, and report on volunteer work across events and departments. Meridian models volunteer operations, not employment, payroll, HR, or personnel management.
 
-Meridian is currently in early project scaffolding. The repository contains requirements, technical direction, and development-process guardrails. Product behavior has not been implemented yet.
+Meridian is currently in early Alpha 1 scaffolding. The repository contains requirements, technical direction, development-process guardrails, and the initial Laravel server application scaffold. Product behavior has not been implemented yet.
 
 ## What Meridian Is For
 
@@ -60,13 +60,13 @@ deploy/
   dns/           DNS configuration for on-site deployments
 ```
 
-These directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
+These directories are placeholders until their later Alpha 1 tasks add application or deployment behavior, except `apps/server`, which now contains the initial Laravel scaffold.
 
 ## Developer Boot Path
 
-Meridian is currently an empty scaffold with process checks and documented future application locations. There is no Laravel server, Vue field app, Electron wrapper, Docker Compose stack, database, seed data, or product service to start yet.
+Meridian currently has process checks and an initial Laravel server scaffold. There is no PostgreSQL development configuration, Orchid admin surface, Vue field app, Electron wrapper, Docker Compose stack, Meridian database schema, seed data, or product service to start yet.
 
-For the current scaffold, a fresh checkout should be able to run the process validators only.
+For the current scaffold, a fresh checkout should be able to run the process validators and the default Laravel server tests.
 
 ### Prerequisites
 
@@ -74,6 +74,8 @@ Use the approved development baseline:
 
 - Node.js 24.x with Corepack enabled.
 - pnpm 11.x through Corepack, as declared by `package.json`.
+- PHP 8.5.x.
+- Composer 2.10.x.
 - Python 3.10 or newer for process validators.
 - Git Bash on Windows, or any POSIX shell on Linux/macOS, for `scripts/process/check.sh`.
 
@@ -87,6 +89,15 @@ Install the current Node workspace dependencies from the lockfile:
 
 ```bash
 corepack pnpm install --frozen-lockfile
+```
+
+Install the Laravel server dependencies from the committed lockfile:
+
+```bash
+cd apps/server
+composer install
+corepack pnpm install --frozen-lockfile
+cd ../..
 ```
 
 ### Quick Local Check
@@ -107,7 +118,7 @@ For the full fresh-checkout QA path, run the POSIX process script from Git Bash 
 scripts/process/check.sh
 ```
 
-The script validates the process scaffold, skips Composer checks until `composer.json` exists, installs Node dependencies when `package.json` exists, and runs only the Node scripts that are currently defined.
+The script validates the process scaffold, validates the server Composer project, runs Laravel tests when server Composer dependencies are installed, installs Node dependencies when `package.json` exists, and runs only the Node scripts that are currently defined.
 
 Individual checks are also available:
 
@@ -119,7 +130,15 @@ corepack pnpm run process:pr-template
 corepack pnpm run commit:check -- --message "docs(process): update README"
 ```
 
-The validators use the Python standard library. Composer and product-service checks are designed to become active as later Alpha 1 tasks add those project files and bootable services.
+Server checks are also available from `apps/server`:
+
+```bash
+composer validate --no-check-publish
+php artisan test
+corepack pnpm run build
+```
+
+The process validators use the Python standard library. PostgreSQL, Orchid, and product-service boot checks are designed to become active as later Alpha 1 tasks add those project files and bootable services.
 
 ## License
 

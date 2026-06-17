@@ -33,8 +33,30 @@ jobs:
         if: hashFiles('composer.json') != ''
         run: composer validate --no-check-publish
 
+      - uses: shivammathur/setup-php@v2
+        if: hashFiles('apps/server/composer.json') != ''
+        with:
+          php-version: "8.5"
+          tools: composer:2.10
+          coverage: none
+
+      - name: Validate server Composer project
+        if: hashFiles('apps/server/composer.json') != ''
+        working-directory: apps/server
+        run: composer validate --no-check-publish
+
+      - name: Install server Composer dependencies
+        if: hashFiles('apps/server/composer.json') != ''
+        working-directory: apps/server
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run server Laravel tests
+        if: hashFiles('apps/server/composer.json') != ''
+        working-directory: apps/server
+        run: php artisan test
+
       - uses: actions/setup-node@v4
-        if: hashFiles('package.json') != ''
+        if: hashFiles('package.json', 'apps/server/package.json') != ''
         with:
           node-version: "24"
 
@@ -50,3 +72,11 @@ jobs:
               echo "No pnpm script '$script' found; skipping."
             fi
           done
+
+      - name: Run server Node build
+        if: hashFiles('apps/server/package.json') != ''
+        working-directory: apps/server
+        shell: bash
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm run build

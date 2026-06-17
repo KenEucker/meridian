@@ -22,7 +22,25 @@ $PYTHON scripts/process/validate_conventional_commits.py --message "docs(process
 if [ -f composer.json ]; then
   composer validate --no-check-publish
 else
-  echo "No composer.json found; skipping Composer checks."
+  echo "No root composer.json found; skipping root Composer checks."
+fi
+
+if [ -f apps/server/composer.json ]; then
+  (cd apps/server && composer validate --no-check-publish)
+  if [ -f apps/server/vendor/autoload.php ]; then
+    (cd apps/server && php artisan test)
+  else
+    echo "No apps/server/vendor/autoload.php found; skipping Laravel tests until Composer dependencies are installed."
+  fi
+else
+  echo "No apps/server/composer.json found; skipping server Composer checks."
+fi
+
+if [ -f apps/server/package.json ]; then
+  (cd apps/server && corepack pnpm install --frozen-lockfile)
+  (cd apps/server && corepack pnpm run build)
+else
+  echo "No apps/server/package.json found; skipping server Node checks."
 fi
 
 if [ -f package.json ]; then
