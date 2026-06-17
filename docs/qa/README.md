@@ -19,3 +19,5 @@ Run the local process checks before opening a PR:
 ```bash
 scripts/process/check.sh
 ```
+
+On Windows, open Git Bash in the repository and run this command there so the same POSIX script is used across Windows, Linux, and macOS. Do not use Windows PowerShell, `cmd.exe`, or the WSL `bash.exe` shim for this check.

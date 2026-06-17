@@ -1908,13 +1908,19 @@ Human QA:
 
 ---
 
-## 21. First Recommended Next Steps
+## 21. After the Process Baseline
 
-1. Add this document to the repo under `docs/process/development-process.md`.
-2. Add `docs/process/traceability-matrix.md`.
-3. Add issue and PR templates under `.github/ISSUE_TEMPLATE/` and `.github/pull_request_template.md`.
-4. Create seed personas and seed event data.
-5. Open the first foundation issue: `Monorepo scaffold`.
-6. Open the second foundation issue: `Laravel + PostgreSQL + Orchid boot path`.
-7. Create the first QA script: `QA-BOOT-01-fresh-checkout-boots.md`.
-8. Begin implementation in the Alpha 1 order from the technical specification.
+The milestone-0 process baseline is represented by:
+
+- repository topology placeholders under `apps/`, `packages/`, and `deploy/`;
+- process validators under `scripts/process/`;
+- issue and PR templates under `.github/`;
+- CI workflows under `.github/workflows/`;
+- `docs/process/traceability-matrix.md`;
+- `docs/qa/QA-BOOT-01-fresh-checkout-boots.md`;
+- `docs/process/meridian-alpha-1-development-plan.md`;
+- `docs/process/codex-alpha-task-prompt.md`.
+
+After milestone 0, select the next PR-sized task from `docs/process/meridian-alpha-1-development-plan.md`. For Codex or another LLM, use `docs/process/codex-alpha-task-prompt.md` and provide exactly one task ID plus any course-correction notes.
+
+Do not ask an implementation agent to infer the next slice from this document alone. The Alpha 1 development plan is the current task sequence.

@@ -28,7 +28,7 @@ Add the first server boot path for Laravel, PostgreSQL, and Orchid without imple
 
 - `composer validate --no-check-publish`
 - Initial Laravel test command once scaffolded
-- `scripts/process/check.sh`
+- `scripts/process/check.sh` from Git Bash on Windows, or any POSIX shell on Linux/macOS.
 
 ## Human QA
 

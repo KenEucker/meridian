@@ -70,6 +70,12 @@ Run the process checks before opening a pull request:
 corepack pnpm run check
 ```
 
+For the full fresh-checkout QA path, run the POSIX process script from Git Bash on Windows or any POSIX shell on Linux/macOS:
+
+```bash
+scripts/process/check.sh
+```
+
 Individual checks are also available:
 
 ```bash

@@ -26,11 +26,10 @@ else
 fi
 
 if [ -f package.json ]; then
-  corepack enable
-  pnpm install --frozen-lockfile
+  corepack pnpm install --frozen-lockfile
   for script in lint test typecheck build; do
     if node -e "const scripts = require('./package.json').scripts || {}; process.exit(Object.prototype.hasOwnProperty.call(scripts, process.argv[1]) ? 0 : 1)" "$script"; then
-      pnpm run "$script"
+      corepack pnpm run "$script"
     else
       echo "No pnpm script '$script' found; skipping."
     fi

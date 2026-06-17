@@ -24,7 +24,7 @@ Create the initial Meridian monorepo structure without implementing product beha
 
 ## Automated tests
 
-- `scripts/process/check.sh`
+- `scripts/process/check.sh` from Git Bash on Windows, or any POSIX shell on Linux/macOS.
 
 ## Human QA
 

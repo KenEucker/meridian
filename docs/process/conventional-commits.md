@@ -56,6 +56,6 @@ npm run commit:check -- --message "docs(process): add commit policy"
 GitHub Actions validate:
 
 - pull request titles on PRs;
-- pushed commit messages on `main`.
+- pushed commit messages on `production`.
 
 Generated merge commits such as `Merge pull request #123 ...` are ignored by the validator because they are produced by GitHub rather than written by contributors.
