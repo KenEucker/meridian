@@ -6,8 +6,8 @@ Verify that a fresh Meridian checkout can run the current process checks and, on
 
 ## Requirements covered
 
-- Technical spec: Section 28 Implementation Order
-- Technical spec: Section 26.1 Alpha 1 acceptance target
+- Technical spec: Section 29 Implementation Order
+- Technical spec: Section 27.1 Alpha 1 acceptance target
 
 ## Environment
 

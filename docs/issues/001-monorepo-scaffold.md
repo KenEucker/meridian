@@ -7,7 +7,7 @@ Technical foundation
 ## Traceability
 
 - Technical spec: Section 4 Repository and Package Topology
-- Technical spec: Section 28 Implementation Order
+- Technical spec: Section 29 Implementation Order
 
 ## Summary
 
