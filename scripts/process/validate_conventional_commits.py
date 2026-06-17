@@ -94,7 +94,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--message", action="append", help="Commit message text to validate.")
     parser.add_argument("--message-file", action="append", help="File containing a commit message.")
-    parser.add_argument("--range", dest="commit_range", help="Git commit range to validate, such as origin/main..HEAD.")
+    parser.add_argument("--range", dest="commit_range", help="Git commit range to validate, such as origin/production..HEAD.")
     parser.add_argument("--event", action="store_true", help="Read PR title or pushed commits from GITHUB_EVENT_PATH.")
     args = parser.parse_args()
 

@@ -93,7 +93,7 @@ Run the smallest useful checks first, then broader checks when available and rel
 Use existing repository commands and scripts. Prefer:
 
 - targeted automated tests for changed code;
-- `scripts/process/check.sh` for process/doc-only changes when available;
+- `scripts/process/check.sh` from Git Bash on Windows, or any POSIX shell on Linux/macOS, for process/doc-only changes when available. On Windows, open Git Bash in the repository; do not use PowerShell, `cmd.exe`, or the WSL `bash.exe` shim for this check;
 - lint/type/build checks for touched frontend code;
 - migration, API, sync, or export checks when those surfaces change.
 

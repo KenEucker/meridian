@@ -25,7 +25,7 @@ Document the GitHub branch protection settings required after the CI process bas
 
 ## Automated tests
 
-- `scripts/process/check.sh`
+- `scripts/process/check.sh` from Git Bash on Windows, or any POSIX shell on Linux/macOS.
 
 ## Human QA
 

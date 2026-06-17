@@ -28,7 +28,7 @@ Verify that a fresh Meridian checkout can run the current process checks and, on
 ## Steps
 
 1. Clone the repository.
-2. Run `scripts/process/check.sh`.
+2. On Windows, open Git Bash in the repository and run `scripts/process/check.sh`. On Linux/macOS, run `scripts/process/check.sh` from any POSIX shell.
 3. If `composer.json` exists, confirm Composer validation runs.
 4. If `package.json` exists, confirm detected Node scripts run.
 5. After product scaffolding exists, follow the project boot instructions and confirm the documented local services start.
