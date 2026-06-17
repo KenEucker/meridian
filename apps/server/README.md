@@ -3,13 +3,16 @@
 The Laravel application that will host the Meridian API, Orchid admin, and node
 sync surfaces (Technical spec sections 3.1 and 5.1).
 
-This slice (`M1.2`) configures PostgreSQL as the development database and
-documents the connection setup. PostgreSQL is the canonical Meridian server
-database (data/API specification section 3.1). There are still no Meridian
-product models, workflows, permissions, sync behavior, or admin screens yet.
-The following arrive in later Alpha 1 tasks:
+This slice (`M1.3`) installs the Orchid admin platform and exposes a
+development admin route (technical spec sections 5.1 and 22.1). Orchid provides
+the trusted admin/god-mode data administration interface; the volunteer-facing
+operational workflows are separate from Orchid and arrive in later milestones.
+PostgreSQL remains the canonical Meridian server database (data/API
+specification section 3.1). There are still no Meridian product models,
+workflows, permissions, sync behavior, or domain admin screens yet — only
+Orchid's stock account-administration screens (users, roles, profile) ship in
+this slice. The following arrive in later Alpha 1 tasks:
 
-- Orchid install and development admin route — `M1.3`.
 - Health/version endpoint for Electron — `M1.4`.
 - Server boot QA update — `M1.5`.
 
@@ -19,6 +22,7 @@ This app follows `docs/meridian-technology-baseline.md`:
 
 - PHP `>=8.5 <8.6` target (PHP 8.4.x is the documented temporary local fallback).
 - `laravel/framework` `^13.0`.
+- `orchid/platform` `^14.0` for the admin/god-mode interface.
 - PostgreSQL `18.x` as the canonical server database.
 - Composer-managed dependencies with a committed `composer.lock`.
 
@@ -27,6 +31,8 @@ This app follows `docs/meridian-technology-baseline.md`:
 - PHP 8.5.x (8.4.x is an accepted temporary local fallback).
 - The PHP `pdo_pgsql` extension (bundled with most PHP builds; required for the
   development database).
+- The PHP `gd` extension (bundled with most PHP builds; required by Orchid for
+  image attachment handling).
 - Composer 2.x.
 - A reachable PostgreSQL 18.x instance for local development.
 - The SQLite PHP extension (bundled with most PHP builds), used by the automated
@@ -79,9 +85,32 @@ php artisan migrate
 php artisan serve
 ```
 
-`php artisan migrate` runs the default Laravel migrations against PostgreSQL and
-should report each migration as `DONE`. `php artisan serve` exposes the scaffold
-welcome page at the printed local URL.
+`composer install` republishes Orchid's front-end assets to
+`public/vendor/orchid` (via the `orchid:publish` post-autoload step), so the
+admin UI is styled after a fresh checkout. `php artisan migrate` runs the
+default Laravel migrations plus the published Orchid migrations against
+PostgreSQL and should report each migration as `DONE`. `php artisan serve`
+exposes the scaffold welcome page at the printed local URL.
+
+## Orchid admin
+
+Orchid is mounted under the `/admin` route prefix (configurable with
+`PLATFORM_PREFIX`). After booting the server:
+
+- visit `/admin/login` to load the admin login screen;
+- visit `/admin` to reach the dashboard (unauthenticated visitors are redirected
+  to the login screen).
+
+Create a development admin user with Orchid's command:
+
+```bash
+php artisan orchid:admin "Admin" admin@example.com password
+```
+
+> Orchid is the admin/god-mode surface only. Real Meridian authentication
+> (external providers, magic link) and the volunteer-facing operational UI are
+> implemented in later milestones; this slice only proves the admin route is
+> reachable.
 
 ## Tests
 
@@ -104,4 +133,7 @@ PostgreSQL remains the canonical development and server database.
 ## Notes
 
 `vendor/` and `.env` are intentionally not committed. The committed
-`.env.example` documents the default development configuration.
+`.env.example` documents the default development configuration. Orchid's
+published front-end assets under `public/vendor/` are also not committed; they
+are regenerated from the locked `orchid/platform` package on every
+`composer install`.
