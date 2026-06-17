@@ -19,6 +19,14 @@ The user request must name:
 
 ## Governing Documents
 
+Before creating a task branch or making changes:
+
+- Start from the `production` branch.
+- Pull the latest `production` from `origin` with a fast-forward-only update.
+- Confirm the worktree is clean.
+- Create a fresh task branch from the updated `production` branch.
+- If the branch switch, pull, or clean-worktree check cannot be completed safely, stop and report the blocker before editing files.
+
 Before implementation, read the selected task and all relevant governing docs.
 
 Always read:
