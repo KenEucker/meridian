@@ -15,8 +15,8 @@ REQUIRED_COLUMNS = [
     "Notes",
 ]
 REQUIRED_ROWS = [
-    "Technical spec: Section 28 Implementation Order",
-    "Technical spec: Section 26.1 Alpha 1 acceptance target",
+    "Technical spec: Section 29 Implementation Order",
+    "Technical spec: Section 27.1 Alpha 1 acceptance target",
     "ORG-001",
     "ORG-002",
     "TEAM-002",

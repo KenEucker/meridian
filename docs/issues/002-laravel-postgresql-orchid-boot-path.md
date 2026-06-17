@@ -8,8 +8,8 @@ Technical foundation
 
 - Technical spec: Section 5 Server Stack
 - Technical spec: Section 21 Admin, Orchid, and God Mode
-- Technical spec: Section 26.1 Alpha 1 acceptance target
-- Technical spec: Section 28 Implementation Order
+- Technical spec: Section 27.1 Alpha 1 acceptance target
+- Technical spec: Section 29 Implementation Order
 
 ## Summary
 

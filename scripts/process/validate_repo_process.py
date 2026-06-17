@@ -32,6 +32,18 @@ REQUIRED_FILES = [
     "docs/issues/003-ci-baseline.md",
 ]
 
+REQUIRED_DIRECTORIES = [
+    "apps/server",
+    "apps/mobile",
+    "apps/desktop",
+    "packages/shared-types",
+    "packages/openapi-client",
+    "deploy/docker",
+    "deploy/caddy",
+    "deploy/powersync",
+    "deploy/dns",
+]
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,10 +51,13 @@ def main():
     args = parser.parse_args()
 
     missing = [path for path in REQUIRED_FILES if not Path(path).exists()]
-    if missing:
+    missing_dirs = [path for path in REQUIRED_DIRECTORIES if not Path(path).is_dir()]
+    if missing or missing_dirs:
         print("Repository process validation failed:")
         for path in missing:
             print(f"- Missing {path}. Create the required process scaffold file.")
+        for path in missing_dirs:
+            print(f"- Missing {path}. Create the required monorepo scaffold directory.")
         return 1
 
     if args.write_summary:
@@ -57,6 +72,9 @@ def main():
                     "",
                     "Validated scaffold files:",
                     *[f"- `{path}`" for path in REQUIRED_FILES],
+                    "",
+                    "Validated scaffold directories:",
+                    *[f"- `{path}`" for path in REQUIRED_DIRECTORIES],
                     "",
                 ]
             ),

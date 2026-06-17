@@ -6,7 +6,7 @@ Technical foundation
 
 ## Traceability
 
-- Technical spec: Section 28 Implementation Order
+- Technical spec: Section 29 Implementation Order
 - docs/process/meridian-development-process.md
 
 ## Summary

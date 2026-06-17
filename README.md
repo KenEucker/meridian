@@ -41,6 +41,27 @@ Meridian uses a traceable development workflow:
 - the traceability matrix lives at [docs/process/traceability-matrix.md](docs/process/traceability-matrix.md);
 - commit messages and PR titles use [Conventional Commits](docs/process/conventional-commits.md).
 
+## Repository Layout
+
+Meridian uses a monorepo layout aligned with the Alpha 1 technical specification:
+
+```text
+apps/
+  server/        Laravel, Orchid, and API application
+  mobile/        Vue and Capacitor field application
+  desktop/       Electron on-site workstation wrapper
+packages/
+  shared-types/  Shared TypeScript types
+  openapi-client/ Generated TypeScript API client
+deploy/
+  docker/        Docker and Docker Compose configuration
+  caddy/         Reverse proxy and certificate configuration
+  powersync/     PowerSync service configuration
+  dns/           DNS configuration for on-site deployments
+```
+
+These directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
+
 ## Local Validation
 
 Run the process checks before opening a pull request:
