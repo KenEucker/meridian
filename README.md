@@ -62,7 +62,34 @@ deploy/
 
 These directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
 
-## Local Validation
+## Developer Boot Path
+
+Meridian is currently an empty scaffold with process checks and documented future application locations. There is no Laravel server, Vue field app, Electron wrapper, Docker Compose stack, database, seed data, or product service to start yet.
+
+For the current scaffold, a fresh checkout should be able to run the process validators only.
+
+### Prerequisites
+
+Use the approved development baseline:
+
+- Node.js 24.x with Corepack enabled.
+- pnpm 11.x through Corepack, as declared by `package.json`.
+- Python 3.10 or newer for process validators.
+- Git Bash on Windows, or any POSIX shell on Linux/macOS, for `scripts/process/check.sh`.
+
+On a fresh checkout, enable Corepack if it is not already enabled:
+
+```bash
+corepack enable
+```
+
+Install the current Node workspace dependencies from the lockfile:
+
+```bash
+corepack pnpm install --frozen-lockfile
+```
+
+### Quick Local Check
 
 Run the process checks before opening a pull request:
 
@@ -70,11 +97,17 @@ Run the process checks before opening a pull request:
 corepack pnpm run check
 ```
 
+This runs the repository process validators through the Corepack-managed pnpm version declared in `package.json`.
+
+### Fresh-Checkout QA Check
+
 For the full fresh-checkout QA path, run the POSIX process script from Git Bash on Windows or any POSIX shell on Linux/macOS:
 
 ```bash
 scripts/process/check.sh
 ```
+
+The script validates the process scaffold, skips Composer checks until `composer.json` exists, installs Node dependencies when `package.json` exists, and runs only the Node scripts that are currently defined.
 
 Individual checks are also available:
 
@@ -86,7 +119,7 @@ corepack pnpm run process:pr-template
 corepack pnpm run commit:check -- --message "docs(process): update README"
 ```
 
-The validators use the Python standard library. Composer and Node project checks are designed to become active as those project files are added. JavaScript checks use the Corepack-managed pnpm version declared in `package.json`.
+The validators use the Python standard library. Composer and product-service checks are designed to become active as later Alpha 1 tasks add those project files and bootable services.
 
 ## License
 
