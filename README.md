@@ -46,20 +46,20 @@ Meridian uses a traceable development workflow:
 Run the process checks before opening a pull request:
 
 ```bash
-npm run check
+corepack pnpm run check
 ```
 
 Individual checks are also available:
 
 ```bash
-npm run process:traceability
-npm run process:qa
-npm run process:repo
-npm run process:pr-template
-npm run commit:check -- --message "docs(process): update README"
+corepack pnpm run process:traceability
+corepack pnpm run process:qa
+corepack pnpm run process:repo
+corepack pnpm run process:pr-template
+corepack pnpm run commit:check -- --message "docs(process): update README"
 ```
 
-The validators use the Python standard library. Composer and Node project checks are designed to become active as those project files are added.
+The validators use the Python standard library. Composer and Node project checks are designed to become active as those project files are added. JavaScript checks use the Corepack-managed pnpm version declared in `package.json`.
 
 ## License
 

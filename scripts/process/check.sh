@@ -26,12 +26,13 @@ else
 fi
 
 if [ -f package.json ]; then
-  npm ci
+  corepack enable
+  pnpm install --frozen-lockfile
   for script in lint test typecheck build; do
-    if npm run | grep -E "^[[:space:]]+$script$" >/dev/null 2>&1; then
-      npm run "$script"
+    if node -e "const scripts = require('./package.json').scripts || {}; process.exit(Object.prototype.hasOwnProperty.call(scripts, process.argv[1]) ? 0 : 1)" "$script"; then
+      pnpm run "$script"
     else
-      echo "No npm script '$script' found; skipping."
+      echo "No pnpm script '$script' found; skipping."
     fi
   done
 else
