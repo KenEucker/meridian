@@ -1,6 +1,6 @@
 # Meridian Dashboard Widget Specification
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Define how Meridian dashboard widgets should be selected, structured, prioritized, and reviewed.
@@ -13,7 +13,7 @@ This specification defines Meridian dashboard widget rules across volunteer, dep
 
 Dashboard widgets should help users understand what needs attention, what can be acted on, and what is currently okay.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP widget IDs, permissions, status labels, surface modes, and route destinations are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 widget IDs, permissions, status labels, surface modes, and route destinations are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -32,13 +32,13 @@ Widgets should be:
 
 Widgets must not exist only because data is available.
 
-Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, restricted Field Report review surfaces, incident counts, high-priority incidents, on-scene incidents, monitoring incidents, and IMS-specific alerts require appropriate IC permissions for the event's configured IC department.
+Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, restricted Field Report review surfaces, incident counts, serious incidents, on-scene incidents, monitoring incidents, and IMS-specific alerts require appropriate IC team membership for the event's configured IC department.
 
 ---
 
 ## 3. Widget Types
 
-Allowed MVP widget types:
+Allowed Alpha 1 widget types:
 
 - metric card;
 - action card;
@@ -84,23 +84,23 @@ Meridian dashboard widgets should use a standard attention scale:
 
 Attention must be communicated through label, structure, and iconography, not color alone.
 
-Dashboard attention describes how urgently the UI should draw attention to a condition. IMS priority describes the operational seriousness of an incident. Incident state describes workflow state. These three concepts must remain visually and textually distinct. Provisional MVP IMS priority labels are defined in the implementation contract and are product-reviewable.
+Dashboard attention describes how urgently the UI should draw attention to a condition. IMS priority describes the operational seriousness of an incident. Incident state describes workflow state. These three concepts must remain visually and textually distinct. Provisional Alpha 1 IMS priority labels are defined in the implementation contract and are product-reviewable.
 
 ---
 
 ## 6. Role-Based Widget Model
 
-Widgets are fixed by role for MVP.
+Widgets are fixed by role for Alpha 1.
 
-The fixed MVP inventory is summarized below. The implementation contract remains the source for exact widget IDs and route destinations.
+The fixed Alpha 1 inventory is summarized below. The implementation contract remains the source for exact widget IDs and route destinations.
 
 | Widget group | Widget IDs | Role visibility | Scope | Data source/model | Attention behavior | Quiet state | Offline/sync behavior | Primary destination |
 |---|---|---|---|---|---|---|---|---|
-| Volunteer | `volunteer.current_shift`, `volunteer.upcoming_shifts`, `volunteer.assigned_departments`, `volunteer.shift_alerts`, `volunteer.quiet_state` | authenticated volunteer | user/event/org | shifts, assignments, department memberships, alerts | shift alerts and current shifts outrank routine membership | No current shift; no upcoming shifts; nothing needs action | show stale/queued state only where it affects current work | my shifts, departments, alert source |
-| Department Lead | `dept.coverage_issues`, `dept.shift_readiness`, `dept.checkin_status`, `dept.unresolved_reports`, `dept.equipment_returns` | department lead or permitted shift lead | department/event | shifts, attendance, department reports, equipment | coverage/check-in issues can escalate to Warning | All scheduled shifts covered; no reports awaiting review | local/central status shown when department data may be stale | shifts, shift board, reports, equipment |
+| Volunteer | `volunteer.current_shift`, `volunteer.upcoming_shifts`, `volunteer.assigned_departments`, `volunteer.shift_alerts`, `volunteer.document_acknowledgments`, `volunteer.quiet_state` | authenticated volunteer | user/event/org/department | shifts, assignments, department memberships, alerts, acknowledgment requirements | shift alerts, current shifts, and required acknowledgments outrank routine membership | No current shift; no upcoming shifts; no documents need acknowledgment; nothing needs action | show stale/queued state only where it affects current work; acknowledgments require server connection | my shifts, departments, documents, alert source |
+| Department Lead | `dept.coverage_issues`, `dept.shift_readiness`, `dept.checkin_status`, `dept.training_readiness`, `dept.policy_readiness`, `dept.equipment_returns` | department lead or permitted shift lead | department/event | shifts, attendance, trainings, department documents, equipment | coverage/check-in issues can escalate to Warning | All scheduled shifts covered; required trainings complete; department documents current | local/central status shown when department data may be stale; policy edits blocked during active event window | shifts, shift board, trainings, documents, equipment |
 | Shift Lead | `shift.current_roster`, `shift.late_missing`, `shift.deployment_needs`, `shift.equipment_status` | shift lead | shift/department/event | roster, attendance operations, deployments, equipment | late/missing and deployment needs are attention items | No late or missing volunteers; equipment accounted for | attendance writes may be queued; show only to roles needing trust | shift board |
-| Organizer | `org.event_readiness`, `org.cross_dept_coverage`, `org.application_review`, `org.planning_tasks`, `org.operations_window` | organizer | organization/event | readiness, coverage summaries, applications, planning tasks | readiness gaps and applications awaiting review draw attention | Event readiness looks okay; no applications awaiting review | do not imply central truth when event data is stale | readiness, coverage, applications, event |
-| IC roles | `ic.active_incidents`, `ic.serious_incidents`, `ic.on_scene`, `ic.monitoring`, `ic.unresolved_field_reports` | IC viewer/operator/lead only | event/IC department | incidents, incident state, IMS priority, Field Reports | serious/high-priority and on-scene items can be Critical | No active incidents; no Field Reports awaiting IC review | incidents require server connection for creation; Field Reports may be queued | IMS dashboard, incidents, Field Reports |
+| Organizer | `org.event_readiness`, `org.cross_dept_coverage`, `org.application_review`, `org.policy_readiness`, `org.planning_tasks`, `org.operations_window` | organizer | organization/event | readiness, coverage summaries, applications, policies/procedures, planning tasks | readiness gaps, applications awaiting review, and required document gaps draw attention | Event readiness looks okay; no applications awaiting review; required documents current | do not imply central truth when event data is stale; policy edits blocked during active event window | readiness, coverage, applications, policies, event |
+| IC roles | `ic.active_incidents`, `ic.serious_incidents`, `ic.on_scene`, `ic.monitoring`, `ic.unresolved_field_reports` | IC viewer/operator/lead only | event/IC department | incidents, incident state, IMS priority, Field Reports | serious and on-scene items can be Critical | No active incidents; no Field Reports awaiting IC review | incidents require server connection for creation/editing; Field Reports may be queued | IMS dashboard, incidents, Field Reports |
 | Kiosk | `kiosk.current_tasks`, `kiosk.staff_checkin`, `kiosk.equipment_returns`, `kiosk.node_status`, `kiosk.switch_user` | trusted workstation plus user permissions | kiosk/event/department | operational tasks, attendance, equipment, node/sync state | current tasks and node/sync failures draw attention where actionable | No current kiosk tasks; local node reachable | show local node, central, queued, conflict, failed states where relevant | kiosk home, check-in, equipment, node status |
 
 ### 6.1 Volunteer
@@ -122,8 +122,8 @@ They may include:
 - department coverage issues;
 - check-in status;
 - shift readiness;
-- department alerts;
-- unresolved department reports.
+- training readiness;
+- department policy/procedure readiness.
 
 ### 6.3 Shift Lead
 
@@ -146,10 +146,10 @@ They may include:
 - event readiness;
 - cross-department coverage;
 - upcoming planning tasks;
-- reports requiring review;
+- policy/procedure readiness;
 - operations-window status.
 
-Organizer widgets must not surface IMS data unless the same user also has IC permissions.
+Organizer widgets must not surface IMS data unless the same user also has IC team-granted authority.
 
 ### 6.5 IC Lead
 
@@ -158,7 +158,7 @@ IC lead widgets should include event operations and department-relevant attentio
 They may include:
 
 - active incident counts;
-- high-importance incidents;
+- serious incidents;
 - monitoring incidents;
 - on-scene incidents;
 - unresolved field reports;
@@ -298,6 +298,7 @@ Examples:
 - All scheduled shifts covered.
 - No reports awaiting review.
 - No sync issues in this event.
+- Required documents current.
 
 Quiet states should be calm and concise. They should reassure rather than celebrate.
 
@@ -346,3 +347,4 @@ Future versions should define:
 - exact widget data freshness intervals;
 - chart component contract;
 - final product-reviewed IMS priority labels.
+- exact policy/procedure readiness scoring.

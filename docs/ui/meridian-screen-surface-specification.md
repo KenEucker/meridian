@@ -1,6 +1,6 @@
 # Meridian Screen Surface Specification
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Define the expected structure, behavior, and state model for Meridian application screens without specifying every route or field.
@@ -13,7 +13,7 @@ This specification translates the Meridian UI Operating Guide into screen-level 
 
 This document does not replace the operating guide. When there is ambiguity, the operating guide governs.
 
-Detailed MVP route names, screen IDs, component APIs, status enums, permission predicates, dashboard widgets, offline states, and kiosk contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+Detailed Alpha 1 route names, screen IDs, component APIs, status enums, permission predicates, dashboard widgets, offline states, and kiosk contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -30,12 +30,13 @@ Meridian screens should generally fit one of these surface categories:
 - create and edit form surfaces;
 - IMS surfaces;
 - kiosk and shared workstation surfaces;
+- policy, procedure, and fragment surfaces;
 - reports and review surfaces;
 - admin and configuration surfaces.
 
 Every new screen should identify its category during design and review.
 
-Every MVP screen should map to a stable screen ID and Laravel route/view target from `docs/ui/meridian-ui-implementation-contract.md`, or explicitly document the new screen ID when extending the inventory.
+Every Alpha 1 screen should map to a stable screen ID and route/view target from `docs/ui/meridian-ui-implementation-contract.md`, or explicitly document the new screen ID when extending the inventory.
 
 ---
 
@@ -116,7 +117,7 @@ Dashboards must not show metrics only because the data exists. Every widget shou
 
 On mobile, dashboard widgets should collapse into a single priority feed.
 
-Organizer dashboards must not expose IMS incidents, restricted Field Reports, active incident counts, high-priority incidents, on-scene incidents, monitoring incidents, or IMS-specific alerts unless the user also has IC permissions for the event's configured IC department.
+Organizer dashboards must not expose IMS incidents, restricted Field Reports, active incident counts, serious incidents, on-scene incidents, monitoring incidents, or IMS-specific alerts unless the user also has IC team-granted authority for the event's configured IC department.
 
 ---
 
@@ -130,7 +131,7 @@ Department screens should include:
 - event and operations-window context where relevant;
 - department-scoped actions;
 - role-aware visibility;
-- direct access to related rosters, shifts, deployments, reports, and IMS surfaces only when permitted.
+- direct access to related rosters, shifts, deployments, exports, department documents, and IMS surfaces only when permitted.
 
 Department accent color may be used as a small identifier. It must not become a department-specific theme.
 
@@ -213,6 +214,10 @@ The incident create/edit screen is the only autosaving form. Routine operational
 
 Field Reports are submitted, not saved as drafts. Field Report submission surfaces use Submit and Cancel, finalize on submit, do not autosave, and do not expose normal in-place editing after submission. Corrections, where allowed, are append-only and audit-aware.
 
+Policy and procedure document editors use explicit Save/Publish/Archive actions. Document viewers render sanitized Markdown with referenced fragment text inline. Fragment editors show referencing documents before saving changes that will bump published document versions.
+
+Policy/procedure acknowledgments occur during signup or training only in Alpha 1, require server connection, and must not be presented as direct shift-signup or credential-eligibility gates.
+
 ---
 
 ## 12. Reports and Review Surfaces
@@ -230,6 +235,8 @@ They may use:
 
 Reports should make event, organization, and date scope impossible to miss.
 
+Policy/procedure exports are a specialized document export surface. They must show document type, title, version, scope, and export timestamp, and they must render referenced fragment text inline.
+
 ---
 
 ## 13. Admin and Configuration Surfaces
@@ -239,6 +246,8 @@ Admin surfaces may expose more complex configuration and permission details than
 Admin screens may show disabled controls with explanations when that helps understanding. They must still use canonical statuses, standard components, semantic tokens, and confirmation dialogs for destructive changes.
 
 Admin surfaces must not become a separate design system.
+
+Orchid admin and god-mode surfaces must include policy documents, procedure documents, document fragments, document acknowledgments, node configuration, audit, and sync conflict review where authorized. Fragment edit screens must warn when changing a fragment will bump published referencing document versions.
 
 ---
 
@@ -269,6 +278,8 @@ Screens affected by offline state must:
 
 Advanced sync repair belongs in advanced mode only.
 
+Incident creation and editing are online-only in Alpha 1. Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show may be offline writes. Policy/procedure acknowledgments are online-only in Alpha 1.
+
 ---
 
 ## 16. Permission Behavior
@@ -277,7 +288,7 @@ Screens must be role-aware from the beginning.
 
 Default volunteers should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
 
-Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC permissions for the event's configured IC department.
+Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC team membership for the event's configured IC department.
 
 Permission-denied screens should be direct and calm:
 
@@ -304,6 +315,7 @@ Every new or changed screen should be reviewed for:
 - touch behavior where relevant;
 - offline and sync behavior where relevant;
 - canonical status language;
+- policy/procedure document rendering, fragment references, and acknowledgment placement where relevant;
 - empty, loading, error, and success states.
 - route/screen ID alignment with the implementation contract;
 - `surfaceMode` behavior.
@@ -319,3 +331,4 @@ The following items require future product or implementation decisions:
 - breakpoint-specific layouts;
 - report export formats;
 - admin configuration screen hierarchy.
+- exact policy/procedure editor fragment-token interaction details.

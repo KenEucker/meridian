@@ -1,6 +1,6 @@
 # Meridian Accessibility Checklist
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Provide a practical accessibility and field-usability checklist for Meridian UI design, implementation, and review.
@@ -9,11 +9,11 @@ Purpose: Provide a practical accessibility and field-usability checklist for Mer
 
 ## 1. Purpose
 
-This checklist turns Meridian's accessibility principles into reviewable criteria. It applies to all UI work, including dashboards, forms, tables, touch surfaces, kiosk mode, IMS, and admin screens.
+This checklist turns Meridian's accessibility principles into reviewable criteria. It applies to all UI work, including dashboards, forms, tables, touch surfaces, kiosk mode, IMS, policy/procedure documents, and admin screens.
 
 Meridian should follow WCAG 2.2 AA unless the project approves a successor target.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP route, component, status, permission, widget, offline, kiosk, and surface mode contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 route, component, status, permission, widget, offline, kiosk, and surface mode contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -30,6 +30,7 @@ Every UI PR must be reviewed for:
 - permission and disabled/hidden action clarity;
 - light and dark mode contrast;
 - touch and field usability when relevant;
+- policy/procedure document rendering, fragment references, and acknowledgment placement when relevant;
 - correct behavior for the active `surfaceMode`.
 
 Surface mode must be treated as an explicit implementation input:
@@ -79,7 +80,7 @@ Check that:
 - labels match the purpose of the control;
 - form labels are programmatically associated with fields;
 - status labels use canonical system names;
-- departments, roles, events, and organization context are named clearly;
+- departments, teams, effective roles, events, and organization context are named clearly;
 - dense mode does not remove required accessible names.
 
 ---
@@ -124,6 +125,8 @@ Check that:
 - Save/Submit and Cancel behavior is clear;
 - Field Reports use Submit and Cancel, finalize on submit, and do not expose drafts or normal in-place editing after submission;
 - only incident create/edit uses autosave.
+- incident create/edit clearly blocks when server connection is unavailable;
+- policy/procedure acknowledgments require server connection and clearly identify the document and version being acknowledged.
 
 ---
 
@@ -147,7 +150,7 @@ Check that:
 Check that:
 
 - touch targets are practical for field use;
-- exact MVP touch target dimensions remain an open product/design decision; until then, changed touch surfaces must be manually checked for reliable tap accuracy on expected hardware;
+- exact Alpha 1 touch target dimensions remain an open product/design decision; until then, changed touch surfaces must be manually checked for reliable tap accuracy on expected hardware;
 - controls are spaced to reduce mis-taps;
 - visible labels remain available;
 - card status is readable without relying on color;
@@ -164,8 +167,8 @@ Check that:
 - `Ctrl+K`, `Cmd+K`, and `/` behavior works as specified;
 - results are grouped by type;
 - unavailable actions are hidden;
-- permissions, organization, event, department, role, and kiosk state are respected;
-- IMS results are hidden unless the user has IC permissions for the event's configured IC department;
+- permissions, organization, event, department, effective role, team authority, and kiosk state are respected;
+- IMS results are hidden unless the user has IC team-granted authority for the event's configured IC department;
 - keyboard navigation through results is clear;
 - shortcuts are visible except in dense mode;
 - focus returns to the triggering context after dismissal.
@@ -196,6 +199,7 @@ Check that:
 - queued local actions are readable when shown;
 - sync failures do not interrupt unless the current action cannot continue;
 - sync state is not communicated only by color or animation.
+- offline-capable actions distinguish queued state from server-required blocked state.
 
 ---
 
@@ -206,6 +210,7 @@ Check that:
 - default volunteers do not see confusing admin-only actions;
 - elevated users receive useful permission explanations where appropriate;
 - organizer role alone does not grant access to IMS incidents or restricted IMS surfaces;
+- IC access depends on team-granted IC authority within the event's configured IC department;
 - restricted pages have clear titles and next steps;
 - hidden actions do not break keyboard flow;
 - disabled controls explain why they are disabled when explanation is useful.
@@ -242,7 +247,21 @@ Check that:
 
 ---
 
-## 17. Manual QA Checklist
+## 17. Policy and Procedure Accessibility
+
+Check that:
+
+- document type, title, scope, and version are perceivable;
+- rendered Markdown has semantic headings, lists, links, and code blocks;
+- fragment text rendered inline is readable as normal document text;
+- editor views expose fragment references, names, versions, and broken-reference errors;
+- acknowledgment controls identify the document and version being acknowledged;
+- acknowledgment controls are keyboard operable and do not rely on color alone;
+- PDF/Markdown export controls have accessible names and permission states.
+
+---
+
+## 18. Manual QA Checklist
 
 Before merging UI work, reviewers should manually verify:
 
@@ -257,7 +276,7 @@ Before merging UI work, reviewers should manually verify:
 - destructive action confirmation;
 - offline state behavior when relevant.
 
-Minimum MVP manual QA matrix for UI changes:
+Minimum Alpha 1 manual QA matrix for UI changes:
 
 | Area | Required check |
 |---|---|
@@ -268,12 +287,13 @@ Minimum MVP manual QA matrix for UI changes:
 | Surface mode | Verify affected `desktop`, `touch`, `mobile`, `kiosk`, or `dense` modes where relevant. |
 | Permissions | Verify default volunteer denial and elevated-user explanation where applicable. |
 | Offline/sync | Verify contextual state and queued/failed behavior where relevant. |
+| Documents | Verify policy/procedure render, fragment reference, and acknowledgment accessibility where relevant. |
 
 Automated accessibility tooling is not yet configured in this documentation set. Until CI tooling is selected, PRs must include manual accessibility review notes.
 
 ---
 
-## 18. Open Questions
+## 19. Open Questions
 
 Future versions should define:
 

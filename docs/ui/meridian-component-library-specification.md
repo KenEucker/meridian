@@ -1,6 +1,6 @@
 # Meridian Component Library Specification
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Define the framework-neutral component system Meridian implementations should share.
@@ -13,16 +13,16 @@ This specification defines the required Meridian component library concepts, com
 
 Component names are framework-neutral. They may be implemented in Blade, Livewire, Vue, React, or another approved stack, but their behavior and semantics should remain consistent.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP route, status, permission, widget, offline, kiosk, and component implementation contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 route, status, permission, widget, offline, kiosk, and component implementation contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
-For MVP, Meridian is Laravel-first and server-rendered-first:
+For Alpha 1, Meridian UI spans multiple runtimes:
 
-- preferred implementation is Laravel Blade components;
-- Livewire or Alpine should be used only where interactivity requires client-side state;
-- client-side behavior must progressively enhance server-rendered HTML;
+- Laravel/Orchid implements trusted admin and god-mode surfaces;
+- Vue/Capacitor implements the offline-capable field application;
+- Electron wraps the local Meridian web UI for on-site command-center use;
 - required context, status, permission, and offline information must not exist only in client-side state;
 - PowerSync/offline state should be passed through documented view-model inputs, not ad hoc component checks;
-- framework-neutral component names remain the design contract, while MVP code should expose stable Blade component APIs.
+- framework-neutral component names remain the design contract, while each runtime should expose stable local component APIs.
 
 ---
 
@@ -61,7 +61,7 @@ The component library must expose semantic tokens for:
 
 Light and dark mode must use the same semantic token names.
 
-Initial MVP token names are defined in `docs/ui/meridian-ui-implementation-contract.md`. Component CSS must use those semantic names, including:
+Initial Alpha 1 token names are defined in `docs/ui/meridian-ui-implementation-contract.md`. Component CSS must use those semantic names, including:
 
 - `--m-surface-app`, `--m-surface-base`, `--m-surface-raised`, `--m-surface-overlay`;
 - `--m-text-primary`, `--m-text-secondary`, `--m-text-muted`, `--m-text-inverse`;
@@ -262,13 +262,49 @@ Required behavior:
 
 ### 7.3 `AutosaveStatus`
 
-Used only for incident create/edit autosave.
+Used only for online incident create/edit autosave.
 
 Required behavior:
 
-- shows saved, saving, failed, or offline queued state;
+- shows saved, saving, failed, or blocked-offline state;
 - does not interrupt typing;
 - gives repair path when current work cannot continue.
+
+Incident creation and editing require server connection in Alpha 1, so this component must not imply that offline incident creation has been queued.
+
+### 7.4 `DocumentViewer`
+
+Renders policy/procedure documents.
+
+Required behavior:
+
+- shows document type, title, scope, and version;
+- renders sanitized Markdown;
+- renders referenced fragment text inline as normal document text;
+- supports offline reading from synced PowerSync data when the document is visible to the active user;
+- keeps scope and version perceivable without overwhelming the document content.
+
+### 7.5 `FragmentReference`
+
+Represents a reusable document fragment inside authoring surfaces.
+
+Required behavior:
+
+- displays human-friendly fragment name and current fragment version;
+- remains visible as a reference while editing;
+- exposes broken-reference state in a way that blocks publishing;
+- does not support nested fragments.
+
+### 7.6 `AcknowledgmentControl`
+
+Captures policy/procedure acknowledgment during signup or training.
+
+Required behavior:
+
+- requires server connection in Alpha 1;
+- clearly names the document and version being acknowledged;
+- records explicit user action;
+- does not appear as a direct shift-signup or credential gate.
 
 ---
 
@@ -401,7 +437,10 @@ These compact contracts are the minimum shape future code-generation tasks shoul
 | `PriorityFeed` | Mobile/compact dashboard feed | `items`, `roleContext`, `surfaceMode` | feed item template | Orders by attention and role relevance; preserves source context and quiet states. |
 | `Field` | Form field wrapper | `name`, `label`, `required`, `error`, `hint` | form control | Programmatic label/error association and required marker. |
 | `FormSummary` | Blocking validation summary | `errors`, `heading`, `focusOnMount` | optional actions | Lists errors and links/moves focus to fields where possible. |
-| `AutosaveStatus` | Incident autosave state | `state`, `lastSavedAt`, `repairHref` | optional message | Allowed only for incident create/edit; states are `saved`, `saving`, `failed`, `offline_queued`. |
+| `AutosaveStatus` | Incident autosave state | `state`, `lastSavedAt`, `repairHref` | optional message | Allowed only for online incident create/edit; states are `saved`, `saving`, `failed`, `blocked_offline`. |
+| `DocumentViewer` | Rendered policy/procedure document | `document`, `resolvedFragments`, `scope`, `version`, `surfaceMode` | document body/actions | Sanitized Markdown, fragments inline, type/scope/version visible. |
+| `FragmentReference` | Authoring-time fragment token | `fragment`, `version`, `state` | optional controls | Shows reference/version; broken references block publish; no nested fragments. |
+| `AcknowledgmentControl` | Signup/training acknowledgment | `document`, `version`, `scope`, `onlineState` | confirmation text/action | Online-only in Alpha 1; explicit user action; not a shift/credential gate. |
 | `ConfirmationDialog` | Destructive/high-impact confirmation | `title`, `impact`, `confirmLabel`, `variant` | explanation/actions | Focus-trapped modal; confirming action uses a specific verb. |
 | `HistoryDrawer` | Audit/history panel | `entries`, `defaultExpanded`, `surfaceMode` | timeline rows | Keyboard operable; hides routine field-change entries by default. |
 | `OfflineBanner` | Contextual sync status | `state`, `scope`, `queuedCount`, `repairHref` | optional detail | Uses approved connectivity labels; appears only where state affects current work. |
@@ -434,4 +473,4 @@ Future versions should define:
 - Storybook or equivalent documentation expectations;
 - automated accessibility test coverage;
 - exact Blade component file naming conventions;
-- full status and severity visual mapping beyond the MVP contract.
+- full status and severity visual mapping beyond the Alpha 1 contract.

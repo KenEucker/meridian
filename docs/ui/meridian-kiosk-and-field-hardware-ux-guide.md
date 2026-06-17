@@ -1,6 +1,6 @@
 # Meridian Kiosk and Field Hardware UX Guide
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Define Meridian UX expectations for kiosk mode, shared workstations, touch laptops, and field hardware.
@@ -13,7 +13,7 @@ This guide defines how Meridian should behave on trusted shared workstations and
 
 Kiosk mode is not a separate product. It is a constrained Meridian operating context.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP kiosk routes, surface modes, authentication rules, offline labels, and permission behavior are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 kiosk routes, surface modes, authentication rules, offline labels, and permission behavior are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -50,12 +50,13 @@ The kiosk dashboard should:
 - hide admin and navigation complexity by default;
 - expose only role-appropriate actions;
 - support command palette access with kiosk-safe results.
+- surface local node, PowerSync, HTTPS/certificate, connected-device, and version health only where relevant to the current user or trusted operator.
 
 ---
 
 ## 4. Authentication and Re-authentication
 
-For MVP, central authentication continues to use approved external providers and magic-link/session behavior. There is no separate Meridian PIN credential.
+For Alpha 1, central authentication continues to use email magic links, Google OAuth, and Discord OAuth. There is no separate Meridian PIN credential.
 
 PIN-like re-authentication, if implemented later, is only a local trusted-workstation convenience for already-provisioned users. It must not become an independent central credential.
 
@@ -79,7 +80,7 @@ Trusted workstation state and individual user authority are separate:
 
 ## 5. Self Check-in Rules
 
-Default volunteers do not self check-in or self check-out in MVP.
+Default volunteers do not self check-in or self check-out in Alpha 1.
 
 Kiosk check-in surfaces must:
 
@@ -187,6 +188,8 @@ Unavailable actions should be hidden or disabled honestly. Queued actions should
 
 Sync repair belongs in advanced mode only.
 
+Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show may queue offline in Alpha 1. Incident creation/editing and policy/procedure acknowledgments require server connection and should block with a clear explanation when unavailable.
+
 ---
 
 ## 11. Command Palette in Kiosk Mode
@@ -204,7 +207,7 @@ Kiosk command palette results must be limited by:
 - permissions;
 - operational window.
 
-Admin routes and sensitive records should not appear unless the current user and workstation state allow them. IMS records must not appear unless the user has IC permissions for the event's configured IC department.
+Admin routes and sensitive records should not appear unless the current user and workstation state allow them. IMS records must not appear unless the user has IC team-granted authority for the event's configured IC department.
 
 ---
 
@@ -218,6 +221,7 @@ Kiosk and field hardware may include:
 - printer;
 - badge reader;
 - local network node;
+- local discovery and HTTPS/certificate status;
 - poor or intermittent internet.
 
 Where hardware integration exists, the UI should expose device status only when it affects current work.
@@ -283,7 +287,7 @@ Future versions should define:
 
 - supported kiosk hardware profiles;
 - timeout durations;
-- whether any post-MVP local re-authentication convenience is needed;
+- whether any post-Alpha 1 local re-authentication convenience is needed;
 - scanner and printer interaction details;
 - exact touch target recommendations;
 - supported scanner/printer status language.

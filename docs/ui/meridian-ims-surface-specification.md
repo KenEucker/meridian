@@ -1,6 +1,6 @@
 # Meridian IMS Surface Specification
 
-Version: Draft 1  
+Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
 Purpose: Define the surface rules for Meridian Incident Management System screens.
@@ -13,7 +13,7 @@ This specification defines the UI expectations for Meridian IMS surfaces, includ
 
 IMS screens should feel more serious and restricted than normal volunteer and shift surfaces, but they must remain fast, clear, and usable.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic MVP IMS routes, statuses, priority labels, Field Report lifecycle, permission predicates, and offline rules are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 IMS routes, statuses, priority labels, Field Report lifecycle, permission predicates, and offline rules are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -28,7 +28,7 @@ IMS surfaces should communicate:
 - quick correction of routine mistakes;
 - auditability without clutter.
 
-Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC permissions for the event's configured IC department.
+Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC team membership for the event's configured IC department.
 
 The seriousness of IMS should come from clarity, permissions, auditability, and visual restraint, not artificial friction.
 
@@ -80,7 +80,7 @@ The IMS dashboard should prioritize attention items.
 Appropriate content includes:
 
 - active incident counts;
-- high-importance incidents;
+- serious incidents;
 - monitoring incidents;
 - on-scene incidents;
 - unresolved field reports;
@@ -143,11 +143,13 @@ Required behavior:
 - every change autosaves;
 - autosave status is visible but not interruptive;
 - failed autosave is visible;
-- offline queued changes are represented where relevant;
+- offline state blocks create/edit and preserves the current local form state where technically practical;
 - validation remains clear;
 - destructive changes require confirmation.
 
 Incident notes are edited as plain text. Markdown formatting may be supported while editing, but formatting should not render until after submission. Incident body/history entries are append-only after posting.
+
+Incident creation and editing require server connection in Alpha 1. IMS surfaces must not imply that offline incident creation has been queued.
 
 ---
 
@@ -190,7 +192,7 @@ Dashboard/widget attention, IMS priority, and incident state are separate:
 - IMS priority describes operational seriousness;
 - incident state describes workflow state.
 
-MVP incident states are Open, On Scene, Monitoring, On Hold, and Closed. Provisional MVP IMS priority labels are Routine, Important, Serious, and Critical; these are product-reviewable.
+Alpha 1 incident states are Open, On Scene, Monitoring, On Hold, and Closed. Provisional Alpha 1 IMS priority labels are Routine, Important, Serious, and Critical; these are product-reviewable.
 
 ---
 
@@ -240,11 +242,11 @@ Hidden entries should remain available through expansion or `HistoryDrawer`.
 
 ## 13. Permissions and Restricted Access
 
-IMS records may be visible only to appropriate roles.
+IMS records may be visible only to appropriate IC team-granted authority.
 
 Command palette, search, dashboard widgets, and direct routes must all respect IMS permissions.
 
-IC access is granted through the event's configured IC department and IC roles such as IC Viewer, IC Operator, and IC Lead. Department Lead or Organizer access alone is insufficient.
+IC access is granted through the event's configured IC department and team-granted IC authority such as IC Viewer, IC Operator, and IC Lead. Department Lead or Organizer access alone is insufficient.
 
 Restricted access behavior:
 
@@ -268,7 +270,7 @@ Affected IMS screens should:
 
 Incident autosave failures should be visible without destroying the user's current typing flow.
 
-Incidents require server connection for creation in MVP. Field Report creation may work offline and appears submitted immediately with queued sync state when applicable.
+Incidents require server connection for creation and editing in Alpha 1. Field Report creation may work offline and appears submitted immediately with queued sync state when applicable.
 
 ---
 
