@@ -4,8 +4,9 @@ This matrix links Meridian requirements and technical specification sections to 
 
 | Requirement / Spec Section | Status | Issue | PR | Automated tests | Human QA scenario | Notes |
 |---|---|---|---|---|---|---|
-| Technical spec: Section 28 Implementation Order | Not started | [001](../issues/001-monorepo-scaffold.md), [002](../issues/002-laravel-postgresql-orchid-boot-path.md), [003](../issues/003-ci-baseline.md) |  | Process validators | [QA-BOOT-01](../qa/QA-BOOT-01-fresh-checkout-boots.md) | Establish implementation order and first foundation slices. |
-| Technical spec: Section 26.1 Alpha 1 acceptance target | Not started | [002](../issues/002-laravel-postgresql-orchid-boot-path.md) |  | Pending product tests | [QA-BOOT-01](../qa/QA-BOOT-01-fresh-checkout-boots.md) | Alpha 1 proof target begins with bootable foundation. |
+| Technical spec: Section 4 Repository and Package Topology | In progress | [001](../issues/001-monorepo-scaffold.md) |  | Process validators | [QA-BOOT-01](../qa/QA-BOOT-01-fresh-checkout-boots.md) | Monorepo application, package, and deployment locations are established as placeholders without product behavior. |
+| Technical spec: Section 29 Implementation Order | In progress | [001](../issues/001-monorepo-scaffold.md), [002](../issues/002-laravel-postgresql-orchid-boot-path.md), [003](../issues/003-ci-baseline.md) |  | Process validators | [QA-BOOT-01](../qa/QA-BOOT-01-fresh-checkout-boots.md) | Establish implementation order and first foundation slices. |
+| Technical spec: Section 27.1 Alpha 1 acceptance target | Not started | [002](../issues/002-laravel-postgresql-orchid-boot-path.md) |  | Pending product tests | [QA-BOOT-01](../qa/QA-BOOT-01-fresh-checkout-boots.md) | Alpha 1 proof target begins with bootable foundation. |
 | ORG-001 | Not started |  |  | Pending product tests |  | Organizations produce events and manage volunteers. |
 | ORG-002 | Not started |  |  | Pending product tests |  | Organizations define departments. |
 | TEAM-002 | Not started |  |  | Pending product tests |  | Each department has a default team. |
