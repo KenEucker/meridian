@@ -1,8 +1,9 @@
 # Meridian Technical Specification
 
-Draft: 0.1  
+Draft: 0.2  
 Scope: Alpha 1 technical architecture and implementation direction  
-Status: Working draft
+Status: Working draft  
+Additive Update: Policies and Procedures technical architecture added.
 
 ---
 
@@ -10,7 +11,7 @@ Status: Working draft
 
 Meridian is a general-purpose, configurable volunteer operations platform for organizations and events. It is designed for field reliability, offline-capable operations, and trusted on-site coordination.
 
-Meridian supports organizations, events, departments, teams, volunteers, shifts, attendance, field reports, incidents, credentials, permissions, node sync, and administrative data repair.
+Meridian supports organizations, events, departments, teams, volunteers, shifts, attendance, field reports, incidents, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
 
 The primary Alpha 1 goal is to prove that Meridian can operate reliably in a real event environment where internet connectivity may be limited, intermittent, or unavailable.
 
@@ -31,6 +32,7 @@ Meridian prioritizes:
 7. Practical deployment on inexpensive hardware.
 8. Open-source Meridian source code.
 9. Fast development toward a working MVP/Alpha 1.
+10. Reusable governance content without duplicating common policy/procedure language.
 
 ## 2.2 Platform posture
 
@@ -183,6 +185,11 @@ Attendance
 FieldReports
 Incidents
 Credentials
+PolicyDocuments
+ProcedureDocuments
+DocumentFragments
+DocumentAcknowledgments
+DocumentExports
 Devices
 SharedWorkstations
 NodeConfig
@@ -486,6 +493,9 @@ Regular volunteers should cache:
 - Field report form.
 - Basic event info.
 - Their own submitted field reports.
+- Published policies/procedures visible to them.
+- Published fragments referenced by those visible documents.
+- Their policy/procedure acknowledgment status.
 - Relevant readiness/sync state.
 
 Shift leads should additionally cache:
@@ -499,6 +509,7 @@ Department leads should additionally cache:
 - Department roster.
 - Department schedule.
 - Department attendance data.
+- Draft, published, and archived policy/procedure documents and fragments they are allowed to maintain.
 
 IC roles may cache:
 
@@ -516,6 +527,8 @@ Alpha 1 offline writes include:
 - Check-in.
 - Check-out.
 - Mark no-show.
+
+Policy/procedure acknowledgments are not creatable offline in Alpha 1. Acknowledgments require server connection and are accepted through Laravel before they appear in synced state.
 
 Incidents require server connection for creation.
 
@@ -553,6 +566,7 @@ For Alpha 1:
 Before the event starts:
 
 - Central prepares event data.
+- Central prepares organization, department, and team governance content, including policies, procedures, fragments, and acknowledgment requirements.
 - Central pushes event config/data to on-site.
 - On-site may receive updates until the event starts.
 
@@ -562,6 +576,9 @@ During the active event window:
 - Central is read-only for that event, except for data arriving from the on-site primary node.
 - Edits not from the on-site primary node are refused for event-scoped records.
 - Permission changes happen only on the on-site primary node.
+- Policy/procedure document edits and fragment edits are blocked during the active event window.
+- Fragment changes during an active event are disallowed to avoid silent document version bumps mid-event.
+- Acknowledgments collected on-site during signup or training sync back to central.
 - On-site pushes changes back to central continuously when internet exists.
 - If internet disappears, on-site queues node operations and pushes later.
 
@@ -1447,15 +1464,354 @@ Attendance conflicts from offline devices go to the sync conflict queue.
 
 ---
 
-# 21. Admin, Orchid, and God Mode
 
-## 21.1 Orchid purpose
+# 21. Policies, Procedures, and Fragments
+
+## 21.1 Purpose
+
+Meridian supports governance documents used for human-readable policies and procedures.
+
+Policy and procedure documents are authored as Markdown and may include references to reusable text fragments.
+
+Examples include:
+
+- Organization behavioral agreements.
+- Department participation policies.
+- Team mission statements.
+- Shift lead procedures.
+- Radio checkout procedures.
+- Incident escalation procedures.
+
+Policies and procedures are separate product and domain types because they may diverge after MVP.
+
+## 21.2 Laravel modules
+
+Policies and Procedures are implemented as separate Laravel domain modules.
+
+Alpha 1 modules include:
+
+```text
+PolicyDocuments
+ProcedureDocuments
+DocumentFragments
+DocumentAcknowledgments
+DocumentExports
+```
+
+Policy documents and procedure documents should use separate domain modules and separate persistence models/tables rather than one shared document table.
+
+Fragments are shared by both policy and procedure documents.
+
+Acknowledgments use a shared acknowledgment table/model that can reference either a policy document or a procedure document.
+
+## 21.3 Document states and scope
+
+Policy and procedure document states are:
+
+```text
+draft
+published
+archived
+```
+
+There is no separate `active` state.
+
+Published documents are visible according to scope.
+
+Draft and archived documents are synced only to users who are allowed to edit or maintain them.
+
+Document scopes are:
+
+```text
+organization
+department
+team
+```
+
+Organization-scoped documents are maintained by organizers.
+
+Department-scoped documents are maintained by department leads.
+
+Team-scoped documents are maintained by team leads.
+
+Organizers cannot edit department documents merely by being organizers.
+
+Department leads and team leads can see policies/procedures within their department according to their leadership scope.
+
+Policy/procedure documents are not generally public-facing before login except as part of volunteer signup.
+
+## 21.4 Document versioning
+
+Policy and procedure documents use a two-part version number:
+
+```text
+document_revision.fragment_revision
+```
+
+The first number represents document changes.
+
+The second number represents fragment-driven changes.
+
+The first published version is:
+
+```text
+1.00
+```
+
+If a referenced fragment changes, the document version is bumped automatically:
+
+```text
+1.01
+```
+
+Document changes increment the document revision. The fragment revision counter is scoped to the current document revision and should reset to `00` when the document revision increments.
+
+Documents store the two version components separately as integers.
+
+Document and fragment versions are monotonically increasing.
+
+When a fragment changes, every published document that references it receives an automatic fragment-revision bump.
+
+Fragment-driven document version bumps should be performed by background jobs using Laravel’s available queue/job infrastructure.
+
+Background jobs may be introduced for this feature even if most of Alpha 1 avoids heavy background processing.
+
+If a document version has associated acknowledgments, Meridian must preserve enough rendered/source state to prove what document version was acknowledged.
+
+Rendered Markdown snapshots are required only for document versions that have associated acknowledgments.
+
+## 21.5 Fragment model
+
+A fragment is a reusable named Markdown text object.
+
+Fragments are scoped to:
+
+```text
+organization
+department
+team
+```
+
+Fragments do not have draft/published/archived lifecycle states in Alpha 1.
+
+Fragments have an auto-incrementing version that increments when the fragment changes.
+
+Fragments are Markdown only.
+
+Fragments may not contain references to other fragments.
+
+Nested fragments are prohibited.
+
+Fragment references always resolve to the latest fragment text.
+
+Documents cannot pin old fragment versions for display.
+
+When a published fragment changes, published documents that reference it update automatically through the document fragment-revision bump process.
+
+Documents do not require review or republication before updated fragment text appears.
+
+## 21.6 Fragment reference syntax
+
+Documents store fragment references using a custom Markdown token.
+
+Example:
+
+```md
+All volunteers agree to the following organization expectations:
+
+{{fragment:org-behavioral-agreement}}
+```
+
+Fragment references should use UUIDs internally.
+
+Editors should display human-friendly fragment names.
+
+When editing, the UI shows fragment references and the currently referenced fragment version.
+
+When viewing, the UI renders referenced fragment text inline as document text.
+
+Fragment references are validated before publish so broken references cannot be published.
+
+## 21.7 Markdown and rendering
+
+Policy documents, procedure documents, and fragments are authored as Markdown.
+
+Laravel APIs should send Markdown/source content as plain text. Rendering happens where the document is rendered.
+
+The Vue/Capacitor app may render synced Markdown locally through PowerSync-backed data for offline reliability.
+
+Laravel may render Markdown server-side for previews, PDF export, Markdown export with resolved fragments, and other server-generated artifacts.
+
+The supported Markdown subset is intentionally boring:
+
+- headings
+- paragraphs
+- lists
+- links
+- emphasis
+- blockquotes
+- code blocks
+
+Raw HTML is disallowed.
+
+Markdown must be sanitized before rendering.
+
+Fragment Markdown must be sanitized independently before inclusion.
+
+## 21.8 PowerSync behavior
+
+Policies/procedures and fragments should use PowerSync for offline reliability.
+
+Published documents visible to the active user are synced to the device.
+
+Published fragments referenced by synced documents are synced to the device.
+
+Draft and archived documents/fragments are excluded from normal device sync unless the user is a lead or maintainer allowed to edit that content.
+
+The mobile app includes a Policies & Procedures area.
+
+Visible documents are searchable by title only.
+
+Full-text search within document or fragment bodies is not included.
+
+The app shows document scope and version subtly, such as near the bottom of the document view.
+
+The app does not need to show a special notice that the document includes automatically updated fragments.
+
+Volunteers can see acknowledgment status for required documents.
+
+## 21.9 Acknowledgments
+
+Policy/procedure acknowledgments occur only during volunteer signup or training for Alpha 1.
+
+Acknowledgments are scoped to organization and department for Alpha 1.
+
+Acknowledgments are not modeled as direct shift signup gates.
+
+Acknowledgments are not modeled as direct credential eligibility gates.
+
+Acknowledgments are not creatable offline in Alpha 1.
+
+Acknowledgment creation requires server connection and is accepted through Laravel.
+
+Acknowledgment records store:
+
+```text
+user_id
+document_type
+document_id
+document_version
+scope_type
+scope_id
+acknowledged_at
+accepted_by_node_id
+```
+
+Acknowledgment records store only the document ID and document version, not the entire rendered text, unless the associated document version requires a preserved snapshot due to acknowledgment history.
+
+Acknowledgments are audit events as well as acknowledgment records.
+
+## 21.10 Node sync behavior
+
+Policies, procedures, fragments, versions, and acknowledgments sync between central and on-site nodes.
+
+Before event start, central is authoritative for organization, department, and team governance content.
+
+During the active event window, policy/procedure edits and fragment edits are blocked.
+
+Acknowledgments collected on-site during signup or training sync back to central.
+
+Fragment changes during active event mode are disallowed.
+
+## 21.11 Orchid admin behavior
+
+Orchid includes CRUD screens for:
+
+```text
+Policy documents
+Procedure documents
+Document fragments
+Document acknowledgments
+```
+
+Orchid does not require separate screens for document versions or fragment versions in Alpha 1.
+
+Orchid supports rendered preview with fragments inline.
+
+Fragment screens show which documents reference a fragment before editing.
+
+When a fragment edit affects published documents, Orchid warns:
+
+```text
+Editing this fragment will bump versions for N published documents.
+```
+
+Dangerous document actions require reason/comment.
+
+## 21.12 Exports
+
+Markdown export returns document Markdown with fragment references resolved inline.
+
+PDF export renders document content with fragment text inline.
+
+Exports include:
+
+- document type
+- document title
+- document version
+- scope
+- export timestamp
+
+Exports are generated server-side by Laravel.
+
+Export/print events are audited.
+
+Policy/procedure packet assembly is post-Alpha 1.
+
+When implemented later, packet assembly should be stored as an ordered list of document IDs.
+
+## 21.13 Search
+
+Alpha 1 supports title search only.
+
+Meridian does not need full-text search within policy/procedure documents or fragments.
+
+PostgreSQL full-text search is not required for this feature in Alpha 1.
+
+## 21.14 Alpha 1 vertical slice
+
+Alpha 1 includes the Policies and Procedures feature.
+
+The minimum vertical slice is:
+
+1. Create a fragment.
+2. Create a policy document.
+3. Create a procedure document.
+4. Reference a fragment from a policy/procedure document.
+5. Publish a document.
+6. View a rendered document with fragment text inline.
+7. Acknowledge a required document during signup or training.
+8. Export a document as Markdown with fragments resolved inline.
+9. Export a document as PDF with fragments rendered inline.
+10. Sync published visible documents and referenced fragments to the on-site node.
+11. Sync visible published documents and fragments to devices through PowerSync.
+12. Sync acknowledgments from on-site to central.
+
+Policy/procedure packets are post-Alpha 1.
+
+Full-text search is not included.
+
+---
+
+# 22. Admin, Orchid, and God Mode
+
+## 22.1 Orchid purpose
 
 Orchid provides the trusted admin/god-mode data administration interface.
 
 The user-facing operational workflows are separate from Orchid.
 
-## 21.2 Alpha 1 Orchid screens
+## 22.2 Alpha 1 Orchid screens
 
 Alpha 1 Orchid should include screens for:
 
@@ -1472,6 +1828,10 @@ Attendance
 Field reports
 Field report attachments
 Incidents
+Policy documents
+Procedure documents
+Document fragments
+Document acknowledgments
 Devices
 Shared workstations
 Node config
@@ -1492,7 +1852,7 @@ Spreadsheet import/export should focus first on:
 - Shifts.
 - Assignments.
 
-## 21.3 God mode
+## 22.3 God mode
 
 God mode is node-global.
 
@@ -1512,11 +1872,21 @@ Orchid does not allow attachment redaction/deletion in Alpha 1.
 
 Dangerous Orchid actions require reason/comment.
 
+Policy/procedure and fragment screens must support rendered preview, title search/filtering, and clear scope display.
+
+Fragment screens must show which documents reference a fragment before editing.
+
+Fragment edit screens must warn when editing the fragment will bump versions for published referencing documents.
+
+Alpha 1 does not require separate Orchid CRUD screens for document versions or fragment versions.
+
+Policy/procedure packet assembly is post-Alpha 1.
+
 All direct edits create audit entries where appropriate.
 
 Attendance direct edits create before/after audit entries.
 
-## 21.4 God mode and config
+## 22.4 God mode and config
 
 God mode can edit database config overrides.
 
@@ -1540,7 +1910,7 @@ God mode manages:
 
 ---
 
-# 22. Audit Log
+# 23. Audit Log
 
 Every meaningful change should be attributable to a user and timestamped.
 
@@ -1570,14 +1940,20 @@ Audit applies to:
 - Incident status/title/link changes.
 - Node operation acceptance/rejection.
 - Failed sync thresholds.
+- Policy/procedure publish, archive, and document version changes.
+- Fragment edits and fragment version changes.
+- Policy/procedure acknowledgments.
+- Policy/procedure export and print events.
+
+Automatic document version bumps caused by fragment changes do not need separate audit entries beyond the audited fragment edit and resulting document version metadata.
 
 Field reports preserve immutable original body and append-only additions.
 
 ---
 
-# 23. Forms and Configuration
+# 24. Forms and Configuration
 
-## 23.1 Alpha 1 fixed forms
+## 24.1 Alpha 1 fixed forms
 
 Field report form fields are fixed for Alpha 1.
 
@@ -1589,9 +1965,11 @@ Incident history/update body is a single text area.
 
 Photo attachment limits are fixed globally for Alpha 1.
 
+Policy/procedure document structure is fixed to Markdown text plus fragment reference tokens.
+
 Configurable form structure is excluded from Alpha 1.
 
-## 23.2 Later configuration
+## 24.2 Later configuration
 
 Organizations may later configure:
 
@@ -1602,9 +1980,9 @@ Internal status names remain fixed even if labels become configurable.
 
 ---
 
-# 24. Electron Wrapper
+# 25. Electron Wrapper
 
-## 24.1 Purpose
+## 25.1 Purpose
 
 Electron provides the on-site command-center shell.
 
@@ -1612,7 +1990,7 @@ It wraps the local Meridian web UI.
 
 It does not own server process management in Alpha 1.
 
-## 24.2 Distribution
+## 25.2 Distribution
 
 Electron should be distributed as an installable app for the on-site laptop.
 
@@ -1624,7 +2002,7 @@ It should auto-reopen/recover if the local UI crashes.
 
 It does not need to prevent accidental close in Alpha 1.
 
-## 24.3 Health panel
+## 25.3 Health panel
 
 Electron should show:
 
@@ -1651,9 +2029,9 @@ Electron warns if the local server version does not match the expected app versi
 
 ---
 
-# 25. Packaging, Releases, and Environments
+# 26. Packaging, Releases, and Environments
 
-## 25.1 Environments
+## 26.1 Environments
 
 Alpha 1 environments:
 
@@ -1664,7 +2042,7 @@ central
 onsite
 ```
 
-## 25.2 Production/event safeguards
+## 26.2 Production/event safeguards
 
 Production/event modes:
 
@@ -1679,7 +2057,7 @@ Production/event modes:
 
 Config schema version mismatches do not block startup in Alpha 1.
 
-## 25.3 Versioning
+## 26.3 Versioning
 
 Alpha 1 produces versioned builds.
 
@@ -1698,7 +2076,7 @@ Electron warns if local server version does not match the expected app version.
 
 ---
 
-# 26. Alpha 1 Scope
+# 27. Alpha 1 Scope
 
 Alpha 1 includes:
 
@@ -1719,6 +2097,11 @@ field report photo attachments
 check-in/check-out/no-show
 online-only incidents
 IC roles
+policy documents
+procedure documents
+reusable document fragments
+policy/procedure acknowledgments during signup or training
+policy/procedure Markdown and PDF export
 central/on-site node pairing
 bidirectional node sync
 sync conflict queue
@@ -1728,7 +2111,7 @@ versioned builds
 deployment config bundles
 ```
 
-## 26.1 Alpha 1 acceptance target
+## 27.1 Alpha 1 acceptance target
 
 Alpha 1 should prove:
 
@@ -1746,8 +2129,14 @@ Alpha 1 should prove:
 12. The field report is visible in Orchid according to permission rules.
 13. A shift lead can check volunteers in/out and mark no-show.
 14. IC roles can create and manage incidents online.
-15. Sync conflicts appear in God mode and do not block unrelated sync.
-16. Electron displays node health and sync status.
+15. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.
+16. A user can view visible published policies/procedures offline from synced PowerSync data.
+17. A user can acknowledge a required policy/procedure document during signup or training while connected to the server.
+18. The acknowledgment stores document ID and document version.
+19. A fragment edit automatically bumps the fragment-revision component of published referencing documents.
+20. Markdown and PDF exports render fragment text inline and include document version/export timestamp.
+21. Sync conflicts appear in God mode and do not block unrelated sync.
+22. Electron displays node health and sync status.
 
 Alpha 1 does not need to prove app-store distribution.
 
@@ -1755,7 +2144,7 @@ Alpha 1 does not need to work on an actual phone to be considered initially comp
 
 ---
 
-# 27. Alpha 1 Exclusions
+# 28. Alpha 1 Exclusions
 
 Alpha 1 excludes:
 
@@ -1772,6 +2161,9 @@ field report attachment deletion/redaction
 photo sync down to user devices
 field report categories/types
 field report drafts
+policy/procedure acknowledgments while offline
+policy/procedure packet assembly
+full-text search within policy/procedure documents or fragments
 incident creation while offline
 generic plugin system
 full multi-on-site-node implementation
@@ -1784,7 +2176,7 @@ password login
 
 ---
 
-# 28. Implementation Order
+# 29. Implementation Order
 
 Alpha 1 should be built in ordered slices even though the milestone is end-to-end.
 
@@ -1804,17 +2196,20 @@ Recommended order:
 11. Device signing
 12. Local encryption
 13. Readiness checklist
-14. Offline field report text
-15. Field report photo attachments
-16. Check-in/check-out/no-show
-17. Incidents online-only
-18. IC permission model
-19. Central/on-site bidirectional node sync
-20. Sync conflict queue
-21. HTTPS/cert/discovery validation
-22. Audit log hardening
-23. CSV/spreadsheet import/export
-24. Build/distribution packages
+14. Policy/procedure and fragment modules
+15. Policy/procedure PowerSync rules
+16. Policy/procedure acknowledgments and exports
+17. Offline field report text
+18. Field report photo attachments
+19. Check-in/check-out/no-show
+20. Incidents online-only
+21. IC permission model
+22. Central/on-site bidirectional node sync
+23. Sync conflict queue
+24. HTTPS/cert/discovery validation
+25. Audit log hardening
+26. CSV/spreadsheet import/export
+27. Build/distribution packages
 ```
 
 Electron comes early because the on-site laptop experience is part of Alpha 1.
@@ -1827,7 +2222,7 @@ Fake/dev auth is allowed only in development mode, never Alpha 1 production/even
 
 ---
 
-# 29. Open Questions / Future Decisions
+# 30. Open Questions / Future Decisions
 
 The following areas may need later detail:
 
@@ -1849,12 +2244,17 @@ The following areas may need later detail:
 16. Exact attendance reconciliation rules.
 17. Exact photo conversion pipeline.
 18. Exact deployment bundle format.
-19. Post-Alpha 1 multi-on-site-node architecture.
-20. Post-Alpha 1 backups and restore workflows.
+19. Exact Markdown sanitizer/renderer libraries for Laravel and Vue/Capacitor.
+20. Exact custom fragment token grammar and editor UI.
+21. Exact snapshot strategy for acknowledged policy/procedure versions.
+22. Exact background job behavior for fragment-driven document version bumps.
+23. Exact acknowledgement flow placement in signup and training screens.
+24. Post-Alpha 1 multi-on-site-node architecture.
+25. Post-Alpha 1 backups and restore workflows.
 
 ---
 
-# 30. Glossary
+# 31. Glossary
 
 ## Central node
 
@@ -1907,6 +2307,22 @@ A cryptographic signature created by a trusted device for device-originated oper
 ## Node signature
 
 A cryptographic signature created by a Meridian node for accepted or synced operations.
+
+## Policy document
+
+A Markdown governance document describing expectations, rules, agreements, or organization/department/team policy. It may reference reusable fragments.
+
+## Procedure document
+
+A Markdown governance document describing operational procedures. It may reference reusable fragments.
+
+## Document fragment
+
+A reusable named Markdown text object referenced by policy and procedure documents. Fragments are versioned and cannot contain nested fragment references.
+
+## Policy/procedure acknowledgment
+
+A record that a user acknowledged a specific policy or procedure document version during signup or training.
 
 ## PowerSync
 

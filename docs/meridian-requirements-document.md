@@ -3,8 +3,10 @@
 **Project:** Meridian  
 **Type:** Open-source Volunteer Operations Platform  
 **Phase:** Discovery / Requirements Gathering  
-**Status:** Draft v0.1  
+**Status:** Draft v0.3  
 **Architecture:** Intentionally out of scope for this document
+**Additive Update:** Policies and Procedures requirements added in v0.2.
+**Additive Update:** Policies and Procedures discovery decisions incorporated in v0.3.
 
 ---
 
@@ -17,6 +19,8 @@ Meridian supports organizations that recruit, approve, coordinate, schedule, cre
 Meridian is not an HR system, payroll system, personnel file, or employee management platform.
 
 All operational users are understood to be volunteers, including organizers, department leads, shift leads, trainers, and incident users.
+
+Meridian also supports policies and procedures as human-readable documents that may include reusable text fragments defined at organization, department, or team scope.
 
 ---
 
@@ -104,6 +108,8 @@ Configurable areas include:
 - volunteer lifecycle durations
 - active/inactive/emeritus thresholds
 - event-specific Incident Command Department
+- policy/procedure documents
+- reusable policy/procedure fragments
 
 ### 2.6 Separation of Governance and Operations
 
@@ -179,6 +185,28 @@ The October MVP should support operational truth and export/reporting needs.
 It does not need to fully automate every real-world process.
 
 Where appropriate, the MVP may provide eligibility reporting and spreadsheet exports while allowing physical logistics to remain manual.
+
+### 2.11 Reusable Policy Text
+
+Meridian should support reusable policy and procedure text without forcing organizations, departments, and teams to duplicate common language manually.
+
+Reusable text should be defined as fragments and referenced from policy/procedure documents.
+
+Policy/procedure document content and fragment content should use Markdown only for MVP.
+
+Fragments should not contain references to other fragments.
+
+Nested fragments should not be supported.
+
+When a policy/procedure document is viewed, referenced fragment text should appear inline as normal document text.
+
+When a policy/procedure document is edited, fragment references should remain visible as references and should show the referenced fragment version.
+
+Policy/procedure documents should use the latest fragment text when rendered.
+
+When a fragment changes, documents that reference it should automatically render the updated fragment text.
+
+When an included fragment changes, the referencing document version should be bumped so acknowledgments can record the document version that was acknowledged.
 
 ---
 
@@ -979,6 +1007,144 @@ By default, only the Incident Command Department has access to incidents and fie
 
 Additional visibility requires explicit authorization.
 
+## 3.24 Policy Document
+
+A policy document is a human-readable document that describes organizational, departmental, or team expectations, rules, agreements, or governance practices.
+
+Policy documents may contain normal text and references to reusable fragments.
+
+Policy documents support Markdown content for MVP.
+
+Examples:
+
+- organization code of conduct
+- behavioral agreement
+- department participation policy
+- team mission statement reference
+- radio-use policy
+
+Policy documents may be scoped to:
+
+- organization
+- department
+- team
+
+Organization-level policy documents are visible to everyone in the organization when published, including organization volunteers who are not assigned to a current event.
+
+Department-level policy documents are visible to members of that department.
+
+Team-level policy documents are visible to members of that team, and to department leads and team leads within the department.
+
+Department leads and team leads may see all policy/procedure documents within their department according to their leadership scope.
+
+Policy/procedure documents should not be generally public before login, except as part of volunteer signup for an organization.
+
+Policy document states include:
+
+- Draft
+- Published
+- Archived
+
+Policy documents do not need a separate Active state.
+
+Draft documents are editable but not generally visible as active policy.
+
+Published documents are visible according to their scope.
+
+Archived documents are retained for history but are no longer active.
+
+Archived documents remain available for historical acknowledgment and export review.
+
+Policy documents are a distinct document type from procedure documents because policy and procedure behavior may diverge after MVP.
+
+## 3.25 Procedure Document
+
+A procedure document is a human-readable document that describes how operational work should be performed.
+
+Procedure documents may contain normal text and references to reusable fragments.
+
+Procedure documents support Markdown content for MVP.
+
+Examples:
+
+- shift lead check-in procedure
+- radio checkout procedure
+- field report procedure
+- incident escalation procedure
+- department opening or closing procedure
+
+Procedure documents share the same states, scoping, fragment behavior, visibility rules, and export behavior as policy documents.
+
+Procedure documents are a distinct document type from policy documents because policy and procedure behavior may diverge after MVP.
+
+## 3.26 Fragment
+
+A fragment is a reusable named group of text that can be referenced inside policy/procedure documents.
+
+Fragments allow common language to be reused without copying and pasting it into many documents.
+
+Fragments support Markdown content for MVP.
+
+Fragments do not contain references to other fragments.
+
+Nested fragments are not supported.
+
+Examples:
+
+- organization-level behavioral agreement
+- department-level radio expectations
+- team mission statement
+- standard safety language
+- standard reporting expectations
+
+Fragments may be scoped to:
+
+- organization
+- department
+- team
+
+Organization-level fragments may be referenced by policy/procedure documents below the organization scope.
+
+Department-level fragments may be referenced by documents within that department and its teams.
+
+Team-level fragments may be referenced by documents for that team.
+
+Fragments do not need Draft, Published, or Archived states for MVP.
+
+Fragments have an auto-incrementing version.
+
+A fragment version increments when the fragment changes.
+
+Fragment references are version-aware.
+
+Policy/procedure documents render the latest fragment text.
+
+When a fragment changes, documents that reference it automatically render the updated fragment text.
+
+Changing a fragment should bump the versions of policy/procedure documents that include it so acknowledgments can record the document version that was acknowledged.
+
+When editing a policy/procedure document, the editor should show the referenced fragment and its version.
+
+When viewing a policy/procedure document, the referenced fragment text should render inline as document text.
+
+## 3.27 Policy/Procedure Acknowledgment
+
+A policy/procedure acknowledgment records that a volunteer has acknowledged a policy or procedure document.
+
+Acknowledgments may be required during volunteer signup or as part of training.
+
+For MVP, acknowledgments are scoped to organization or department requirements.
+
+Policy/procedure acknowledgments should happen higher in the volunteer lifecycle than shift signup or credential issuance.
+
+Policy/procedure acknowledgments should not be modeled as direct shift-signup gates or credential-eligibility gates in MVP.
+
+Acknowledgments do not need to be re-required automatically when a document or included fragment changes.
+
+Acknowledgment records should store the document and document version that the volunteer acknowledged.
+
+Acknowledgment records do not need to store a rendered copy of the text the volunteer saw.
+
 ---
 
 # 4. User Roles
@@ -999,6 +1165,8 @@ Volunteers may:
 - submit field reports if authorized
 - view their own submitted field reports
 - earn hours and credits
+- view published policy/procedure documents visible to them
+- acknowledge required policy/procedure documents during signup or training when required
 
 Volunteers do not self-report hours in MVP.
 
@@ -1023,10 +1191,15 @@ Organizers may:
 - export organization/event-wide reports, excluding emergency contacts
 - revoke credentials
 - manage organization default credit policy
+- maintain organization-scoped policy/procedure documents
+- maintain organization-scoped fragments
+- publish organization-scoped policy/procedure documents and fragments
 
 Organizers do not have default access to emergency contacts.
 
 Organizers do not directly add volunteers to department event participation.
+
+Organizers cannot change department-scoped or team-scoped policy/procedure documents by default.
 
 Department leads manage their own volunteers.
 
@@ -1083,6 +1256,10 @@ Department Leads may:
 - view/export emergency contacts for volunteers in their department
 - check equipment in/out
 - manage department event participation
+- maintain department-scoped policy/procedure documents
+- maintain department-scoped fragments
+- publish department-scoped policy/procedure documents and fragments
+- view policy/procedure documents within their department
 
 Department Leads cannot override organization-level blocking status.
 
@@ -1106,7 +1283,23 @@ Team membership replaces the earlier concept of role assignment.
 
 ---
 
-## 4.7 Shift Lead
+## 4.7 Team Lead
+
+A Team Lead is a volunteer with leadership responsibility for a team within a department.
+
+Team Leads may:
+
+- view policies/procedures within their department
+- maintain team-scoped policy/procedure documents for their team
+- maintain team-scoped fragments for their team
+- help manage team-specific policy/procedure content
+- publish team-scoped policy/procedure documents and fragments
+
+Team Lead authority does not override Department Lead authority.
+
+---
+
+## 4.8 Shift Lead
 
 A Shift Lead manages live shift operations.
 
@@ -1130,7 +1323,7 @@ Shift Leads may not add volunteers to a department/team. If a volunteer is not a
 
 ---
 
-## 4.8 Trainer
+## 4.9 Trainer
 
 A Trainer is an authorized volunteer who records training completion.
 
@@ -1144,7 +1337,7 @@ Trainer authority may come through team membership or department assignment.
 
 ---
 
-## 4.9 Incident Command Department Lead
+## 4.10 Incident Command Department Lead
 
 An Incident Command Department Lead manages incident operations for an event.
 
@@ -1378,6 +1571,56 @@ Not required for October MVP:
 
 ---
 
+## 5.13 Policy/Procedure Authoring
+
+1. Authorized organizer, department lead, or team lead creates a policy/procedure document.
+2. Author assigns the document to organization, department, or team scope.
+3. Author writes normal Markdown document text.
+4. Author references reusable fragments where appropriate.
+5. During editing, fragment references show the referenced fragment version.
+6. Document remains Draft until published.
+7. Published document becomes visible according to its scope.
+8. Archived document remains retained for history but is no longer active.
+9. Organization-scoped documents are published by organizers.
+10. Department-scoped documents are published by department leads.
+11. Team-scoped documents are published by team leads.
+12. Organizers cannot change department-scoped documents by default.
+
+## 5.14 Fragment Reuse
+
+1. Authorized maintainer creates a reusable Markdown fragment.
+2. Fragment is scoped to organization, department, or team.
+3. Policy/procedure authors reference the fragment from documents within the allowed scope.
+4. When editing the document, the reference and fragment version are visible.
+5. When viewing the document, the latest fragment text appears inline as normal text.
+6. When a fragment changes, its version increments automatically.
+7. When a fragment changes, documents referencing it automatically use the latest fragment text.
+8. When a fragment changes, referencing document versions are bumped.
+9. Nested fragments are not supported.
+
+## 5.15 Policy/Procedure Acknowledgment
+
+1. Organization or department defines a policy/procedure acknowledgment requirement for MVP.
+2. Volunteer encounters the required acknowledgment during volunteer signup or training.
+3. Volunteer acknowledges the document.
+4. Meridian records the acknowledgment.
+5. The acknowledgment record stores the document and version acknowledged.
+6. Meridian does not need to store the full rendered text the volunteer saw.
+7. Acknowledgment is not modeled as a direct shift signup gate or credential eligibility gate in MVP.
+8. Acknowledgment is not required anywhere outside signup or training for MVP.
+9. Acknowledgment does not need to be automatically re-required when a document or included fragment changes.
+
+## 5.16 Policy/Procedure Export
+
+1. Authorized user selects one or more visible policy/procedure documents.
+2. Meridian exports or prints the documents as PDF or Markdown.
+3. A department may manually assemble and export a policy/procedure packet containing multiple documents.
+4. Rendered exports show fragment text inline.
+5. Policy/procedure packet exports include document contents only.
+6. Policy/procedure packet exports do not include volunteer acknowledgment status.
+
+---
+
 # 6. MVP Scope
 
 ## 6.1 MVP Target
@@ -1468,6 +1711,29 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - waiver expiration
 - no training waivers
 - no signed document storage
+
+### Policies and Procedures
+
+- policy/procedure documents
+- separate policy and procedure document types
+- Markdown-only document content for MVP
+- document states: Draft, Published, Archived
+- no separate Active document state
+- organization, department, and team scope
+- organization and department acknowledgment scope for MVP
+- reusable Markdown text fragments
+- no nested fragments
+- fragment version auto-increment on change
+- latest fragment text used when rendering documents
+- referencing document version bumped when included fragments change
+- fragment references visible while editing
+- fragment text rendered inline while viewing
+- policy/procedure acknowledgment during volunteer signup or training
+- acknowledgment records store document and version only
+- PDF export/print
+- Markdown export
+- manually assembled policy/procedure packets
+- policy/procedure search for volunteers
 
 ### Shifts
 
@@ -1593,6 +1859,15 @@ The following are not required for October MVP:
 - free-floating hours outside shifts
 - deployment movement history
 - training waiver/equivalency modeling
+- general public policy/procedure browsing outside organization volunteer signup
+- policy/procedure acknowledgments as direct shift signup gates
+- policy/procedure acknowledgments as direct credential eligibility gates
+- policy/procedure acknowledgments outside signup or training for MVP
+- team-scoped policy/procedure acknowledgments for MVP
+- nested fragments
+- rich policy/procedure formatting beyond Markdown for MVP
+- automatic policy/procedure packet assembly
+- policy/procedure packet exports that include volunteer acknowledgment status
 
 ---
 
@@ -2358,6 +2633,226 @@ Incident spreadsheet export is not required for October MVP.
 
 ---
 
+## 7.15 Policy, Procedure, and Fragment Requirements
+
+### POL-001
+
+Meridian shall support policy documents.
+
+### POL-002
+
+Meridian shall support procedure documents.
+
+### POL-003
+
+Policy/procedure documents shall support organization, department, and team scope.
+
+### POL-004
+
+Policy/procedure document states shall include Draft, Published, and Archived.
+
+### POL-005
+
+Draft policy/procedure documents shall be editable by authorized maintainers.
+
+### POL-006
+
+Published policy/procedure documents shall be visible according to their scope.
+
+### POL-007
+
+Archived policy/procedure documents shall be retained for history but shall not be treated as active.
+
+### POL-008
+
+Organization-level policy/procedure documents shall be visible to everyone in the organization.
+
+### POL-009
+
+Department-level policy/procedure documents shall be visible to members of the department.
+
+### POL-010
+
+Team-level policy/procedure documents shall be visible to members of the team.
+
+### POL-011
+
+Department leads and team leads shall be able to see policies/procedures within their department.
+
+### POL-012
+
+Policy/procedure documents shall not be generally public-facing before login except as part of volunteer signup for an organization.
+
+### POL-013
+
+Meridian shall support reusable text fragments for policy/procedure documents.
+
+### POL-014
+
+Fragments shall support organization, department, and team scope.
+
+### POL-015
+
+Organization-level fragments shall be maintained by organizers.
+
+### POL-016
+
+Department-level fragments shall be maintained by department leads.
+
+### POL-017
+
+Team-level fragments shall be maintained by team leads.
+
+### POL-018
+
+Policy/procedure documents shall support references to fragments.
+
+### POL-019
+
+Fragment references shall be version-aware.
+
+### POL-020
+
+When editing a policy/procedure document, Meridian shall show fragment references and the referenced fragment version.
+
+### POL-021
+
+When viewing a policy/procedure document, Meridian shall render referenced fragment text inline as document text.
+
+### POL-022
+
+Meridian shall support policy/procedure acknowledgments.
+
+### POL-023
+
+Policy/procedure acknowledgments may occur during volunteer signup.
+
+### POL-024
+
+Policy/procedure acknowledgments may occur as part of training.
+
+### POL-025
+
+Policy/procedure acknowledgments shall not be modeled as direct shift signup gates in MVP.
+
+### POL-026
+
+Policy/procedure acknowledgments shall not be modeled as direct credential eligibility gates in MVP.
+
+### POL-027
+
+Meridian shall support PDF print/export for policy/procedure documents.
+
+### POL-028
+
+Meridian shall support Markdown export for policy/procedure documents.
+
+### POL-029
+
+Meridian shall support exporting policy/procedure packets containing multiple documents.
+
+### POL-030
+
+Policy/procedure exports shall render referenced fragment text inline.
+
+### POL-031
+
+Policy/procedure documents shall not have a separate Active state.
+
+### POL-032
+
+Policy documents and procedure documents shall be separate document types.
+
+### POL-033
+
+Policy/procedure document content shall support Markdown only for MVP.
+
+### POL-034
+
+Fragment content shall support Markdown only for MVP.
+
+### POL-035
+
+Fragments shall not reference other fragments.
+
+### POL-036
+
+Nested fragments shall not be supported.
+
+### POL-037
+
+Fragments shall not require Draft, Published, or Archived states for MVP.
+
+### POL-038
+
+Fragments shall have an auto-incrementing version that increments when fragment text changes.
+
+### POL-039
+
+Policy/procedure documents shall use the latest fragment text when rendered.
+
+### POL-040
+
+When a fragment changes, policy/procedure documents that reference it shall automatically render the updated fragment text.
+
+### POL-041
+
+When an included fragment changes, the referencing policy/procedure document version shall be bumped.
+
+### POL-042
+
+Acknowledgment records shall store the acknowledged document and document version.
+
+### POL-043
+
+Acknowledgment records shall not be required to store the rendered text the volunteer saw.
+
+### POL-044
+
+Policy/procedure acknowledgments shall not need to be automatically re-required after a document or included fragment changes.
+
+### POL-045
+
+Policy/procedure acknowledgments shall be limited to volunteer signup and training for MVP.
+
+### POL-046
+
+Policy/procedure acknowledgment requirements shall support organization and department scope for MVP.
+
+### POL-047
+
+Organization-scoped policy/procedure documents and fragments shall be published or maintained by organizers.
+
+### POL-048
+
+Organizers shall not change department-scoped or team-scoped policy/procedure documents by default.
+
+### POL-049
+
+Department-scoped policy/procedure documents and fragments shall be published or maintained by department leads.
+
+### POL-050
+
+Team-scoped policy/procedure documents and fragments shall be published or maintained by team leads.
+
+### POL-051
+
+Archived policy/procedure documents and fragment versions shall remain available for historical acknowledgment and export review.
+
+### POL-052
+
+Policy/procedure packets shall be manually assembled for MVP.
+
+### POL-053
+
+Policy/procedure packet exports shall include document contents only and shall not include volunteer acknowledgment status.
+
+### POL-054
+
+Policy/procedure documents shall be searchable by volunteers according to visibility permissions.
+
+---
+
 # 8. Deferred / Future Scope
 
 The following concepts are acknowledged but deferred beyond October MVP:
@@ -2416,6 +2911,17 @@ MVP only requires training completion, expiration, prerequisites, and import/man
 Future versions may support more granular team-based permission management.
 
 MVP should avoid free-floating permissions and keep authority tied to organization, department, and team membership.
+
+## Advanced Policy and Procedure Configuration
+
+Future versions may support:
+
+- configurable policy/procedure form structure
+- team-scoped acknowledgment requirements
+- richer formatting beyond Markdown
+- automatic packet assembly by scope or onboarding path
+- acknowledgment status included in administrative exports
+- behavior divergence between policy documents and procedure documents
 
 ---
 
