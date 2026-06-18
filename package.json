@@ -25,6 +25,7 @@
     "server:validate": "composer --working-dir=apps/server validate --no-check-publish",
     "server:env": "php -r \"file_exists('apps/server/.env') || copy('apps/server/.env.example', 'apps/server/.env');\"",
     "server:key": "php apps/server/artisan key:generate",
+    "server:user": "php artisan orchid:admin 'Admin' admin@example.com password",
     "server:setup": "corepack pnpm run server:env && corepack pnpm run server:key && corepack pnpm run server:migrate",
     "server:dev": "php apps/server/artisan serve",
     "server:logs": "node scripts/server/tail-laravel-log.mjs",
