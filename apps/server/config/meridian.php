@@ -41,6 +41,7 @@ return [
     'magic_link' => [
         'expires_minutes' => (int) env('MERIDIAN_MAGIC_LINK_EXPIRES_MINUTES', 15),
         'post_login_redirect' => env('MERIDIAN_MAGIC_LINK_REDIRECT', '/home'),
+        'allow_account_creation' => filter_var(env('MERIDIAN_MAGIC_LINK_ALLOW_ACCOUNT_CREATION', true), FILTER_VALIDATE_BOOL),
     ],
 
     /*
@@ -65,6 +66,16 @@ return [
             'token_url' => env('GOOGLE_OAUTH_TOKEN_URL', 'https://oauth2.googleapis.com/token'),
             'userinfo_url' => env('GOOGLE_OAUTH_USERINFO_URL', 'https://openidconnect.googleapis.com/v1/userinfo'),
             'scopes' => ['openid', 'email', 'profile'],
+        ],
+
+        'discord' => [
+            'client_id' => env('DISCORD_OAUTH_CLIENT_ID'),
+            'client_secret' => env('DISCORD_OAUTH_CLIENT_SECRET'),
+            'redirect_uri' => env('DISCORD_OAUTH_REDIRECT_URI'),
+            'authorize_url' => env('DISCORD_OAUTH_AUTHORIZE_URL', 'https://discord.com/oauth2/authorize'),
+            'token_url' => env('DISCORD_OAUTH_TOKEN_URL', 'https://discord.com/api/oauth2/token'),
+            'userinfo_url' => env('DISCORD_OAUTH_USERINFO_URL', 'https://discord.com/api/users/@me'),
+            'scopes' => ['identify', 'email'],
         ],
     ],
 

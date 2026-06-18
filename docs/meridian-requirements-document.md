@@ -2853,6 +2853,78 @@ Policy/procedure documents shall be searchable by volunteers according to visibi
 
 ---
 
+## 7.16 Authentication Requirements
+
+### AUTH-001
+
+Meridian shall support email magic-link login, Google OAuth login, and Discord OAuth login for Alpha 1.
+
+### AUTH-002
+
+Meridian shall not support internal username/password login for Alpha 1.
+
+### AUTH-003
+
+Magic-link login may create a user account only when system account creation for magic links is enabled.
+
+### AUTH-004
+
+Magic-link account creation shall default to enabled for Alpha 1 testing and development.
+
+### AUTH-005
+
+When magic-link account creation is disabled, a magic link for an unknown email shall fail without creating a user account.
+
+### AUTH-006
+
+Google and Discord login shall require a verified provider email.
+
+### AUTH-007
+
+A user may have one optional secondary email address in addition to their primary email address.
+
+### AUTH-008
+
+Primary and secondary email addresses shall be globally unique across users.
+
+### AUTH-009
+
+A secondary email address shall not be usable for login matching until verified.
+
+### AUTH-010
+
+Secondary email verification shall use the same signed magic-link mechanism as primary email verification.
+
+### AUTH-011
+
+Users may add or remove their own secondary email address.
+
+### AUTH-012
+
+Only God mode may change a user's primary email address.
+
+### AUTH-013
+
+God mode is trusted to mark a changed primary email address as verified.
+
+### AUTH-014
+
+Adding, verifying, and removing a secondary email address shall be audited.
+
+### AUTH-015
+
+Changing a primary email address shall be audited.
+
+### AUTH-016
+
+Google and Discord may authenticate against either a verified primary email address or a verified secondary email address.
+
+### AUTH-017
+
+Google or Discord provider linking through a secondary email shall require the already-authenticated user to explicitly start provider linking.
+
+---
+
 # 8. Deferred / Future Scope
 
 The following concepts are acknowledged but deferred beyond October MVP:

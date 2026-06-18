@@ -57,7 +57,10 @@ class MagicLinkService
             throw new InvalidArgumentException('A valid email address is required.');
         }
 
-        $user = $this->resolveUserForVerifiedEmail($normalizedEmail);
+        $user = $this->resolveUserForVerifiedEmail(
+            $normalizedEmail,
+            (bool) config('meridian.magic_link.allow_account_creation', true),
+        );
 
         if ($user->isDisabled()) {
             throw new DisabledUserException('This account is disabled.');
@@ -70,7 +73,7 @@ class MagicLinkService
         return $user;
     }
 
-    public function resolveUserForVerifiedEmail(string $normalizedEmail): User
+    public function resolveUserForVerifiedEmail(string $normalizedEmail, bool $allowAccountCreation = true): User
     {
         $existingUser = User::query()->where('email', $normalizedEmail)->first();
 
@@ -80,6 +83,10 @@ class MagicLinkService
             }
 
             return $existingUser;
+        }
+
+        if (! $allowAccountCreation) {
+            throw new AccountCreationDisabledException('Magic-link account creation is disabled.');
         }
 
         $user = User::query()->create([

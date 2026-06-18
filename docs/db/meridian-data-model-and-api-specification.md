@@ -727,6 +727,8 @@ Key fields:
 - `id`
 - `name`
 - `email`
+- `secondary_email`, nullable
+- `secondary_email_verified_at`, nullable
 - `current_volunteer_id`
 - `created_at`
 - `updated_at`
@@ -738,6 +740,17 @@ Relationships:
 - may link to one or more volunteer profiles
 - may have god-mode/admin direct roles where allowed
 - appears as actor in audit events and node operations
+
+Rules:
+
+- `email` is the primary email address.
+- `secondary_email` is optional and limited to one address per user.
+- Primary and secondary email addresses are globally unique across all users.
+- `secondary_email` is ignored for login matching until `secondary_email_verified_at` is set.
+- Users may add or remove their own secondary email address.
+- God mode may change `email` and is trusted to treat the new primary email as verified.
+- Magic-link account creation is controlled by a system setting and defaults to enabled for Alpha 1 testing and development.
+- Adding, verifying, or removing a secondary email address and changing a primary email address should create audit/history entries when the audit service is available.
 
 #### `auth_identities`
 

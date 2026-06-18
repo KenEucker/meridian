@@ -27,6 +27,7 @@ Verify that Meridian central authentication supports a verified-email magic-link
 
 - No seed data required.
 - For mail inspection in development, set `MAIL_MAILER=log` in `apps/server/.env`.
+- Leave `MERIDIAN_MAGIC_LINK_ALLOW_ACCOUNT_CREATION=true` for Alpha 1 testing when verifying first-time account creation.
 - Set `APP_URL=http://127.0.0.1:8000` in `apps/server/.env` so signed login links match the URL used by `pnpm run server:dev`.
 
 ## Steps
@@ -45,8 +46,9 @@ Verify that Meridian central authentication supports a verified-email magic-link
 - `/login` is reachable without authentication.
 - Submitting a valid email sends a login message and shows the confirmation screen.
 - The login link completes sign-in and redirects to `/home`.
-- A new user record and `auth_identities` row with provider `email` are created for first-time logins.
+- With `MERIDIAN_MAGIC_LINK_ALLOW_ACCOUNT_CREATION=true`, a new user record and `auth_identities` row with provider `email` are created for first-time logins.
 - Repeat login with the same email reuses the same user account.
+- With `MERIDIAN_MAGIC_LINK_ALLOW_ACCOUNT_CREATION=false`, a magic link for an unknown email does not create a user account and returns to `/login` with an error after verification.
 - Invalid or expired links do not create a session.
 
 ## Evidence to capture

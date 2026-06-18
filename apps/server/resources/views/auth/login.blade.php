@@ -32,6 +32,10 @@
         <p>
             <a href="{{ route('auth.google.redirect') }}">Continue with Google</a>
         </p>
+
+        <p>
+            <a href="{{ route('auth.discord.redirect') }}">Continue with Discord</a>
+        </p>
     </main>
 </body>
 </html>
