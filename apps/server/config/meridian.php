@@ -28,4 +28,19 @@ return [
 
     'config_schema_version' => (int) env('MERIDIAN_CONFIG_SCHEMA_VERSION', 1),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Magic Link Authentication
+    |--------------------------------------------------------------------------
+    |
+    | Email magic links are the primary passwordless login path for Alpha 1
+    | central authentication (technical spec section 11.1).
+    |
+    */
+
+    'magic_link' => [
+        'expires_minutes' => (int) env('MERIDIAN_MAGIC_LINK_EXPIRES_MINUTES', 15),
+        'post_login_redirect' => env('MERIDIAN_MAGIC_LINK_REDIRECT', '/home'),
+    ],
+
 ];
