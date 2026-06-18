@@ -16,8 +16,8 @@ return new class extends Migration
             $table->foreignId('organization_id')->constrained()->restrictOnDelete();
             $table->string('name');
             $table->string('slug');
-            $table->dateTimeTz('starts_at')->index();
-            $table->dateTimeTz('ends_at')->index();
+            $table->dateTimeTz('starts_at')->nullable()->index();
+            $table->dateTimeTz('ends_at')->nullable()->index();
             $table->string('timezone');
             $table->string('status', 64)->nullable()->index();
             $table->unsignedBigInteger('ic_department_id')->nullable()->index();

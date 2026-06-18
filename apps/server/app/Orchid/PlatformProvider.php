@@ -23,6 +23,7 @@ class PlatformProvider extends OrchidServiceProvider
         // surface so admin components draw from the same baseline as the field
         // app. The served file mirrors packages/ui-tokens/tokens.css.
         $dashboard->registerResource('stylesheets', asset('css/meridian-tokens.css'));
+        $dashboard->registerResource('scripts', asset('js/meridian-admin.js'));
     }
 
     /**
@@ -57,6 +58,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.organizations')
                 ->title(__('Operations')),
 
+            Menu::make(__('Events'))
+                ->icon('bs.calendar-event')
+                ->route('platform.events')
+                ->permission('platform.events'),
+
+            Menu::make(__('Departments'))
+                ->icon('bs.diagram-3')
+                ->route('platform.departments')
+                ->permission('platform.departments'),
+
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
                 ->route('platform.node.config')
@@ -90,7 +101,9 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.systems.users', __('Users')),
 
             ItemPermission::group(__('Operations'))
-                ->addPermission('platform.organizations', __('Organizations')),
+                ->addPermission('platform.organizations', __('Organizations'))
+                ->addPermission('platform.events', __('Events'))
+                ->addPermission('platform.departments', __('Departments')),
 
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.node.config', __('Node configuration')),

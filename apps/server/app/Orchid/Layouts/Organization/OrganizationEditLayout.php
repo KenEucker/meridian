@@ -20,6 +20,7 @@ class OrganizationEditLayout extends Rows
                 ->type('text')
                 ->max(255)
                 ->required()
+                ->set('data-meridian-slug-target', 'organization[slug]')
                 ->title(__('Name'))
                 ->placeholder(__('Idaho Burners')),
 

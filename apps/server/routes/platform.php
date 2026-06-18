@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Orchid\Screens\Department\DepartmentEditScreen;
+use App\Orchid\Screens\Department\DepartmentListScreen;
+use App\Orchid\Screens\Event\EventEditScreen;
+use App\Orchid\Screens\Event\EventListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
 use App\Orchid\Screens\Organization\OrganizationEditScreen;
 use App\Orchid\Screens\Organization\OrganizationListScreen;
@@ -98,6 +102,48 @@ Route::screen('organizations', OrganizationListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Organizations'), route('platform.organizations')));
+
+// Platform > Operations > Events > Event
+Route::screen('events/{event}/edit', EventEditScreen::class)
+    ->name('platform.events.edit')
+    ->breadcrumbs(fn (Trail $trail, $event) => $trail
+        ->parent('platform.events')
+        ->push($event->name, route('platform.events.edit', $event)));
+
+// Platform > Operations > Events > Create
+Route::screen('events/create', EventEditScreen::class)
+    ->name('platform.events.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.events')
+        ->push(__('Create'), route('platform.events.create')));
+
+// Platform > Operations > Events
+Route::screen('events', EventListScreen::class)
+    ->name('platform.events')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Events'), route('platform.events')));
+
+// Platform > Operations > Departments > Department
+Route::screen('departments/{department}/edit', DepartmentEditScreen::class)
+    ->name('platform.departments.edit')
+    ->breadcrumbs(fn (Trail $trail, $department) => $trail
+        ->parent('platform.departments')
+        ->push($department->name, route('platform.departments.edit', $department)));
+
+// Platform > Operations > Departments > Create
+Route::screen('departments/create', DepartmentEditScreen::class)
+    ->name('platform.departments.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.departments')
+        ->push(__('Create'), route('platform.departments.create')));
+
+// Platform > Operations > Departments
+Route::screen('departments', DepartmentListScreen::class)
+    ->name('platform.departments')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Departments'), route('platform.departments')));
 
 // Platform > God Mode > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)

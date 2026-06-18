@@ -79,6 +79,11 @@ class Organization extends Model
         return $this->hasMany(Event::class);
     }
 
+    public function departments(): HasMany
+    {
+        return $this->hasMany(Department::class);
+    }
+
     /**
      * @param  Builder<Organization>  $query
      * @return Builder<Organization>
