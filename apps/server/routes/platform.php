@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Orchid\Screens\Node\NodeConfigScreen;
+use App\Orchid\Screens\Organization\OrganizationEditScreen;
+use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
 use App\Orchid\Screens\Role\RoleListScreen;
@@ -75,6 +77,27 @@ Route::screen('roles', RoleListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Roles'), route('platform.systems.roles')));
+
+// Platform > Operations > Organizations > Organization
+Route::screen('organizations/{organization}/edit', OrganizationEditScreen::class)
+    ->name('platform.organizations.edit')
+    ->breadcrumbs(fn (Trail $trail, $organization) => $trail
+        ->parent('platform.organizations')
+        ->push($organization->name, route('platform.organizations.edit', $organization)));
+
+// Platform > Operations > Organizations > Create
+Route::screen('organizations/create', OrganizationEditScreen::class)
+    ->name('platform.organizations.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.organizations')
+        ->push(__('Create'), route('platform.organizations.create')));
+
+// Platform > Operations > Organizations
+Route::screen('organizations', OrganizationListScreen::class)
+    ->name('platform.organizations')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Organizations'), route('platform.organizations')));
 
 // Platform > God Mode > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)
