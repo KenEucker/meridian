@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\Auth\AccountCreationDisabledException;
 use App\Services\Auth\DisabledUserException;
 use App\Services\Auth\MagicLinkService;
 use Illuminate\Http\RedirectResponse;
@@ -11,9 +12,7 @@ use Illuminate\View\View;
 
 class MagicLinkController extends Controller
 {
-    public function __construct(private readonly MagicLinkService $magicLinks)
-    {
-    }
+    public function __construct(private readonly MagicLinkService $magicLinks) {}
 
     public function create(): View
     {
@@ -62,6 +61,10 @@ class MagicLinkController extends Controller
             return redirect()
                 ->route('login')
                 ->withErrors(['email' => 'This account is disabled.']);
+        } catch (AccountCreationDisabledException) {
+            return redirect()
+                ->route('login')
+                ->withErrors(['email' => 'This email cannot be used to sign in yet.']);
         } catch (\InvalidArgumentException) {
             abort(403);
         }

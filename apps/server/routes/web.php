@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\MagicLinkController;
@@ -23,6 +24,11 @@ Route::middleware('guest')->group(function (): void {
         ->name('auth.google.redirect');
     Route::get('login/google/callback', [GoogleOAuthController::class, 'callback'])
         ->name('auth.google.callback');
+    Route::get('login/discord', [DiscordOAuthController::class, 'redirect'])
+        ->middleware('throttle:10,1')
+        ->name('auth.discord.redirect');
+    Route::get('login/discord/callback', [DiscordOAuthController::class, 'callback'])
+        ->name('auth.discord.callback');
 });
 
 Route::middleware('auth')->group(function (): void {

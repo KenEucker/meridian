@@ -104,6 +104,25 @@ class MagicLinkAuthTest extends TestCase
         $this->assertTrue(Auth::user()->is($user));
     }
 
+    public function test_magic_link_user_creation_can_be_disabled(): void
+    {
+        config()->set('meridian.magic_link.allow_account_creation', false);
+
+        $email = 'new.disabled-creation@example.com';
+        $verificationUrl = app(MagicLinkService::class)->createVerificationUrl($email);
+
+        $response = $this->get($verificationUrl);
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => $email]);
+        $this->assertDatabaseMissing('auth_identities', [
+            'provider' => AuthIdentity::PROVIDER_EMAIL,
+            'provider_subject' => $email,
+        ]);
+    }
+
     public function test_valid_magic_link_logs_in_existing_user_and_syncs_email_identity(): void
     {
         $user = User::factory()->create([

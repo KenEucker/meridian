@@ -664,6 +664,8 @@ God mode may also use the same providers.
 
 Every login resolves to a global user account by verified email.
 
+Magic-link verification may create a user account only when the system setting for magic-link account creation is enabled. This setting defaults to enabled for Alpha 1 testing and development. When the setting is disabled, a magic link for an unknown email fails without creating a user account.
+
 Google login requires verified email.
 
 Discord login requires verified email.
@@ -673,6 +675,14 @@ If Discord and Google return the same verified email, they attach to the same Me
 If an auth provider does not return a verified email, login fails.
 
 OAuth provider linking happens only when connected to central/internet.
+
+Alpha 1 users may have one primary email address and one optional secondary email address. The secondary email is stored directly on the user record, must be globally unique across primary and secondary user emails, and must be verified by the same signed magic-link mechanism before it is usable for login matching.
+
+Users may add or remove their own secondary email address. God mode may change a user's primary email address and is trusted to mark the new primary email as verified.
+
+Google and Discord may authenticate against either the verified primary email or verified secondary email. A social provider may attach through a secondary email only when the already-authenticated user explicitly starts provider linking and that secondary email has already been verified.
+
+Adding, verifying, or removing a secondary email address and changing a primary email address are audit-sensitive account events.
 
 Organization membership determines what the user can see after login.
 
