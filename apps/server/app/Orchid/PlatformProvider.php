@@ -51,6 +51,12 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.systems.roles')
                 ->divider(),
 
+            Menu::make(__('Node Configuration'))
+                ->icon('bs.server')
+                ->route('platform.node.config')
+                ->permission('platform.node.config')
+                ->title(__('God Mode')),
+
             Menu::make('Documentation')
                 ->title('Docs')
                 ->icon('bs.box-arrow-up-right')
@@ -76,6 +82,9 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('System'))
                 ->addPermission('platform.systems.roles', __('Roles'))
                 ->addPermission('platform.systems.users', __('Users')),
+
+            ItemPermission::group(__('God Mode'))
+                ->addPermission('platform.node.config', __('Node configuration')),
         ];
     }
 }
