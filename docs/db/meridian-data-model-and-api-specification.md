@@ -409,6 +409,7 @@ Primary authority model:
 - event roles
 - department roles
 - team roles/grants
+- organizer roles granted through the configured Organizers Department
 - IC roles granted to teams inside the event-selected IC department
 
 Direct user roles are restricted to god-mode/admin repair needs. Department, event, shift, and IC exceptions should use contextual membership/grants rather than free-floating user permissions.
@@ -425,6 +426,7 @@ ic_lead
 ic_operator
 ic_viewer
 organizer
+lead_organizer
 god_mode
 ```
 
@@ -657,6 +659,7 @@ Key fields:
 - `id`
 - `name`
 - `slug`
+- `organizers_department_id`
 - `default_ic_department_id`
 - `default_credit_policy_id`
 - `active_inactive_threshold_years`
@@ -671,6 +674,7 @@ Relationships:
 
 - has many events
 - has many departments
+- belongs to Organizers Department
 - has many staff through organization staff records
 - has many policy documents
 - has many procedure documents
@@ -1074,6 +1078,7 @@ ic_lead
 ic_operator
 ic_viewer
 organizer
+lead_organizer
 god_mode
 ```
 
@@ -1117,6 +1122,8 @@ Key fields:
 Rules:
 
 - shift lead is team-scoped
+- organizer and lead organizer grants are organization-scoped and valid only for teams in the configured Organizers Department
+- lead organizer may be granted to any subset of the configured Organizers Department, including all members
 - IC roles are event/team-scoped through the selected IC department
 - authority should be explainable in UI
 
@@ -1929,6 +1936,7 @@ Rules:
 - organization-scoped policy documents are maintained by organizers
 - department-scoped policy documents are maintained by department leads
 - team-scoped policy documents are maintained by team leads
+- organizers can view all published policy documents across organization, department, and team scopes
 - organizers cannot edit department/team documents merely by being organizers
 
 ### 11.3 `procedure_documents`

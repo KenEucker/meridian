@@ -920,13 +920,15 @@ ic_lead
 ic_operator
 ic_viewer
 organizer
+lead_organizer
 god_mode
 ```
 
 ## 15.2 Role scoping
 
 - `god_mode` is global to a node.
-- `organizer` is event-scoped.
+- `organizer` is organization-scoped through the organization's configured Organizers Department.
+- `lead_organizer` is organization-scoped through the configured Organizers Department and may be granted to any subset of that department, including every department member.
 - `department_lead` is department-scoped.
 - `shift_lead` is team-scoped, not shift-scoped.
 - `ic_lead`, `ic_operator`, and `ic_viewer` are event/team scoped through the IC permission model.
@@ -956,6 +958,8 @@ During the active event window, permission changes happen only on the on-site pr
 Incident Command is not a fixed department.
 
 For each event, a department may be selected to function as Incident Command.
+
+This is separate from the organization's persistent Organizers Department. The same department may be selected for both purposes, but organizer authority alone does not grant IC access.
 
 Examples:
 
@@ -1547,6 +1551,10 @@ Team-scoped documents are maintained by team leads.
 Organizers cannot edit department documents merely by being organizers.
 
 Department leads and team leads can see policies/procedures within their department according to their leadership scope.
+
+Organizers can see all published policy/procedure documents across the organization, including department- and team-scoped documents, but this visibility does not grant edit or publish authority for those scopes.
+
+Draft and archived department/team documents sync only to maintainers for the relevant scope unless another explicit permission grants access.
 
 Policy/procedure documents are not generally public-facing before login except as part of staff signup.
 
@@ -2166,6 +2174,7 @@ staff self check-in/out
 GPS collection
 configurable form structure
 automatic organizer visibility into all attendance
+automatic organizer visibility into all incidents
 God-mode field report body edits
 field report attachment deletion/redaction
 photo sync down to user devices

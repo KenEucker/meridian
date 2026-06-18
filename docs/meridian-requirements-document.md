@@ -109,6 +109,7 @@ Configurable areas include:
 - credit policies
 - staff lifecycle durations
 - active/inactive/emeritus thresholds
+- organization-level Organizers Department
 - event-specific Incident Command Department
 - policy/procedure documents
 - reusable policy/procedure fragments
@@ -128,6 +129,7 @@ Organizations are responsible for:
 - department creation
 - organization-level status
 - organization-level policy
+- Organizers Department
 - default Incident Command Department
 - default credit policy
 
@@ -233,6 +235,7 @@ Organizations own or configure:
 - waivers
 - credit policies
 - incident taxonomies
+- Organizers Department
 - default Incident Command Department
 
 Organizations approve event applicants into the staff pool.
@@ -283,6 +286,14 @@ Departments manage staff pools across multiple events.
 A staff member may belong to multiple departments simultaneously.
 
 Department membership is persistent and not limited to one event.
+
+An organization defines one persistent Organizers Department.
+
+The Organizers Department does not change per event.
+
+Organizer authority comes from membership or grants within the configured Organizers Department, not from free-floating user permissions.
+
+Membership in the Organizers Department grants elevated governance authority but does not grant unrestricted visibility into all organization data.
 
 Departments manage:
 
@@ -497,6 +508,10 @@ A shift may have its own displayed title/function, but eligibility to work that 
 A shift does not require membership in multiple teams.
 
 System authority should not be granted as free-floating permissions. Authority should come through organization, department, or team membership.
+
+Organizer authority should come through the organization’s configured Organizers Department.
+
+Lead Organizer authority should be grantable within the configured Organizers Department rather than modeled as a direct user-only exception.
 
 ---
 
@@ -1039,6 +1054,12 @@ Team-level policy documents are visible to members of that team, and to departme
 
 Department leads and team leads may see all policy/procedure documents within their department according to their leadership scope.
 
+Organizers may see all published policy/procedure documents across the organization, including organization-, department-, and team-scoped documents.
+
+Organizer visibility into published policy/procedure documents is read-oriented governance visibility and does not grant maintenance authority over department- or team-scoped documents.
+
+Draft and archived department- or team-scoped policy/procedure documents remain visible only to maintainers for that scope unless another explicit permission grants access.
+
 Policy/procedure documents should not be generally public before login, except as part of staff signup for an organization.
 
 Policy document states include:
@@ -1178,6 +1199,8 @@ Staff do not self-report hours in MVP.
 
 An organizer manages organization-level governance.
 
+Organizer authority comes through the organization’s configured Organizers Department.
+
 Organizers may:
 
 - manage organization settings
@@ -1196,8 +1219,11 @@ Organizers may:
 - maintain organization-scoped policy/procedure documents
 - maintain organization-scoped fragments
 - publish organization-scoped policy/procedure documents and fragments
+- view all published policy/procedure documents in the organization
 
 Organizers do not have default access to emergency contacts.
+
+Organizers do not have default access to all incidents or all field reports.
 
 Organizers do not directly add staff to department event participation.
 
@@ -1211,7 +1237,11 @@ Department leads manage their own staff.
 
 A Lead Organizer is an organizer with authority over organizer membership.
 
+Lead Organizer authority should come through a role or grant within the configured Organizers Department.
+
 There may be multiple Lead Organizers.
+
+An organization may grant Lead Organizer authority to any subset of the Organizers Department, including all members of that department.
 
 Only Lead Organizers may remove organizers.
 
@@ -1903,27 +1933,43 @@ Events shall be able to override the default Incident Command Department.
 
 ### ORG-007
 
-Organizations shall define an organization default credit policy.
+Organizations shall define an Organizers Department.
 
 ### ORG-008
 
-Meridian shall not support department default credit policies.
+The Organizers Department shall be persistent at the organization level and shall not vary per event.
 
 ### ORG-009
 
-Only organizers shall change organization-level staff status.
+Organizations shall define an organization default credit policy.
 
 ### ORG-010
 
-Organizer removals shall be audited.
+Meridian shall not support department default credit policies.
 
 ### ORG-011
 
-Only Lead Organizers shall remove organizers.
+Only organizers shall change organization-level staff status.
 
 ### ORG-012
 
+Organizer removals shall be audited.
+
+### ORG-013
+
+Only Lead Organizers shall remove organizers.
+
+### ORG-014
+
 The final Lead Organizer shall not be removable.
+
+### ORG-015
+
+Membership in the Organizers Department shall not grant default access to all incidents or all field reports.
+
+### ORG-016
+
+Organizers shall be able to view all published policy/procedure documents in the organization.
 
 ---
 
@@ -2683,173 +2729,177 @@ Department leads and team leads shall be able to see policies/procedures within 
 
 ### POL-012
 
-Policy/procedure documents shall not be generally public-facing before login except as part of staff signup for an organization.
+Organizers shall be able to see all published policy/procedure documents across the organization.
 
 ### POL-013
 
-Meridian shall support reusable text fragments for policy/procedure documents.
+Policy/procedure documents shall not be generally public-facing before login except as part of staff signup for an organization.
 
 ### POL-014
 
-Fragments shall support organization, department, and team scope.
+Meridian shall support reusable text fragments for policy/procedure documents.
 
 ### POL-015
 
-Organization-level fragments shall be maintained by organizers.
+Fragments shall support organization, department, and team scope.
 
 ### POL-016
 
-Department-level fragments shall be maintained by department leads.
+Organization-level fragments shall be maintained by organizers.
 
 ### POL-017
 
-Team-level fragments shall be maintained by team leads.
+Department-level fragments shall be maintained by department leads.
 
 ### POL-018
 
-Policy/procedure documents shall support references to fragments.
+Team-level fragments shall be maintained by team leads.
 
 ### POL-019
 
-Fragment references shall be version-aware.
+Policy/procedure documents shall support references to fragments.
 
 ### POL-020
 
-When editing a policy/procedure document, Meridian shall show fragment references and the referenced fragment version.
+Fragment references shall be version-aware.
 
 ### POL-021
 
-When viewing a policy/procedure document, Meridian shall render referenced fragment text inline as document text.
+When editing a policy/procedure document, Meridian shall show fragment references and the referenced fragment version.
 
 ### POL-022
 
-Meridian shall support policy/procedure acknowledgments.
+When viewing a policy/procedure document, Meridian shall render referenced fragment text inline as document text.
 
 ### POL-023
 
-Policy/procedure acknowledgments may occur during staff signup.
+Meridian shall support policy/procedure acknowledgments.
 
 ### POL-024
 
-Policy/procedure acknowledgments may occur as part of training.
+Policy/procedure acknowledgments may occur during staff signup.
 
 ### POL-025
 
-Policy/procedure acknowledgments shall not be modeled as direct shift signup gates in MVP.
+Policy/procedure acknowledgments may occur as part of training.
 
 ### POL-026
 
-Policy/procedure acknowledgments shall not be modeled as direct credential eligibility gates in MVP.
+Policy/procedure acknowledgments shall not be modeled as direct shift signup gates in MVP.
 
 ### POL-027
 
-Meridian shall support PDF print/export for policy/procedure documents.
+Policy/procedure acknowledgments shall not be modeled as direct credential eligibility gates in MVP.
 
 ### POL-028
 
-Meridian shall support Markdown export for policy/procedure documents.
+Meridian shall support PDF print/export for policy/procedure documents.
 
 ### POL-029
 
-Meridian shall support exporting policy/procedure packets containing multiple documents.
+Meridian shall support Markdown export for policy/procedure documents.
 
 ### POL-030
 
-Policy/procedure exports shall render referenced fragment text inline.
+Meridian shall support exporting policy/procedure packets containing multiple documents.
 
 ### POL-031
 
-Policy/procedure documents shall not have a separate Active state.
+Policy/procedure exports shall render referenced fragment text inline.
 
 ### POL-032
 
-Policy documents and procedure documents shall be separate document types.
+Policy/procedure documents shall not have a separate Active state.
 
 ### POL-033
 
-Policy/procedure document content shall support Markdown only for MVP.
+Policy documents and procedure documents shall be separate document types.
 
 ### POL-034
 
-Fragment content shall support Markdown only for MVP.
+Policy/procedure document content shall support Markdown only for MVP.
 
 ### POL-035
 
-Fragments shall not reference other fragments.
+Fragment content shall support Markdown only for MVP.
 
 ### POL-036
 
-Nested fragments shall not be supported.
+Fragments shall not reference other fragments.
 
 ### POL-037
 
-Fragments shall not require Draft, Published, or Archived states for MVP.
+Nested fragments shall not be supported.
 
 ### POL-038
 
-Fragments shall have an auto-incrementing version that increments when fragment text changes.
+Fragments shall not require Draft, Published, or Archived states for MVP.
 
 ### POL-039
 
-Policy/procedure documents shall use the latest fragment text when rendered.
+Fragments shall have an auto-incrementing version that increments when fragment text changes.
 
 ### POL-040
 
-When a fragment changes, policy/procedure documents that reference it shall automatically render the updated fragment text.
+Policy/procedure documents shall use the latest fragment text when rendered.
 
 ### POL-041
 
-When an included fragment changes, the referencing policy/procedure document version shall be bumped.
+When a fragment changes, policy/procedure documents that reference it shall automatically render the updated fragment text.
 
 ### POL-042
 
-Acknowledgment records shall store the acknowledged document and document version.
+When an included fragment changes, the referencing policy/procedure document version shall be bumped.
 
 ### POL-043
 
-Acknowledgment records shall not be required to store the rendered text the staff saw.
+Acknowledgment records shall store the acknowledged document and document version.
 
 ### POL-044
 
-Policy/procedure acknowledgments shall not need to be automatically re-required after a document or included fragment changes.
+Acknowledgment records shall not be required to store the rendered text the staff saw.
 
 ### POL-045
 
-Policy/procedure acknowledgments shall be limited to staff signup and training for MVP.
+Policy/procedure acknowledgments shall not need to be automatically re-required after a document or included fragment changes.
 
 ### POL-046
 
-Policy/procedure acknowledgment requirements shall support organization and department scope for MVP.
+Policy/procedure acknowledgments shall be limited to staff signup and training for MVP.
 
 ### POL-047
 
-Organization-scoped policy/procedure documents and fragments shall be published or maintained by organizers.
+Policy/procedure acknowledgment requirements shall support organization and department scope for MVP.
 
 ### POL-048
 
-Organizers shall not change department-scoped or team-scoped policy/procedure documents by default.
+Organization-scoped policy/procedure documents and fragments shall be published or maintained by organizers.
 
 ### POL-049
 
-Department-scoped policy/procedure documents and fragments shall be published or maintained by department leads.
+Organizers shall not change department-scoped or team-scoped policy/procedure documents by default.
 
 ### POL-050
 
-Team-scoped policy/procedure documents and fragments shall be published or maintained by team leads.
+Department-scoped policy/procedure documents and fragments shall be published or maintained by department leads.
 
 ### POL-051
 
-Archived policy/procedure documents and fragment versions shall remain available for historical acknowledgment and export review.
+Team-scoped policy/procedure documents and fragments shall be published or maintained by team leads.
 
 ### POL-052
 
-Policy/procedure packets shall be manually assembled for MVP.
+Archived policy/procedure documents and fragment versions shall remain available for historical acknowledgment and export review.
 
 ### POL-053
 
-Policy/procedure packet exports shall include document contents only and shall not include staff acknowledgment status.
+Policy/procedure packets shall be manually assembled for MVP.
 
 ### POL-054
+
+Policy/procedure packet exports shall include document contents only and shall not include staff acknowledgment status.
+
+### POL-055
 
 Policy/procedure documents shall be searchable by staff according to visibility permissions.
 

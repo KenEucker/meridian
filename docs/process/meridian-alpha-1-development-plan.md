@@ -174,14 +174,14 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M4.1 Organizations | Add organization model, migration, Orchid list/detail scaffold. | ORG-001, ORG-002; data/API 10.1 | Model/feature tests |
+| M4.1 Organizations | Add organization model, migration, Orchid list/detail scaffold, including default IC and organizers department settings. | ORG-001, ORG-002, ORG-005, ORG-007; data/API 10.1 | Model/feature tests |
 | M4.2 Events | Add event model with timezone and active window fields. | Requirements 3.2; data/API 10.2 | Model tests |
 | M4.3 Departments | Add department model and organization relationship. | ORG-002; requirements 3.3 | Model tests |
 | M4.4 Teams and default team | Add teams, default team creation, archive behavior. | TEAM-001 through TEAM-006; data/API 10.6 | Team domain tests |
 | M4.5 Staff | Add staff profile and organization staff records. | VOL-001 through VOL-005; data/API 10.4 | Model/validation tests |
 | M4.6 Department/team memberships | Enforce department membership requiring at least one team. | VOL-006; TEAM-002; data/API 10.6 | Domain tests |
 | M4.7 Status model | Add organization and department status transitions. | STAT-001 through STAT-011 | Status tests |
-| M4.8 Permission catalog | Add permission roles, permissions, role permissions, and team grants. | TEAM-009, TEAM-010; data/API 10.7 | Policy tests |
+| M4.8 Permission catalog | Add permission roles, permissions, role permissions, and team grants, including organizer grants through the configured organizers department. | TEAM-009, TEAM-010; ORG-015, ORG-016; data/API 10.7 | Policy tests |
 | M4.9 Audit service baseline | Add reusable audit event write path. | Requirements 2.4; technical spec section 23; data/API 8, 14.1 | Audit unit tests |
 | M4.10 Seed personas | Add development seed organization, event, departments, teams, and personas. | Development process section 13.3 | Seed smoke test |
 
@@ -219,17 +219,17 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M6.1 Policy document model | Add policy documents with state, scope, versions, Markdown source. | POL-001, POL-003, POL-004, POL-031, POL-033; data/API 11.2 | Model tests |
-| M6.2 Procedure document model | Add procedure documents mirroring policy rules. | POL-002, POL-032; data/API 11.3 | Model tests |
-| M6.3 Fragment model | Add document fragments and auto-incrementing version. | POL-013 through POL-017, POL-037, POL-038; data/API 11.5 | Model/domain tests |
-| M6.4 Fragment reference parser | Store and validate fragment references; block broken references. | POL-018 through POL-021, POL-035, POL-036; data/API 11.6 | Parser/domain tests |
-| M6.5 Rendered document viewer | Render sanitized Markdown with fragments inline. | POL-021, POL-033, POL-034, POL-039, POL-040 | UI/component tests |
-| M6.6 Fragment-driven version bump | Bump published referencing document fragment revision when fragment changes. | POL-038 through POL-041; data/API 11.7 | Domain/job tests |
+| M6.1 Policy document model | Add policy documents with state, scope, versions, Markdown source. | POL-001, POL-003, POL-004, POL-032, POL-034; data/API 11.2 | Model tests |
+| M6.2 Procedure document model | Add procedure documents mirroring policy rules. | POL-002, POL-033; data/API 11.3 | Model tests |
+| M6.3 Fragment model | Add document fragments and auto-incrementing version. | POL-014 through POL-018, POL-038, POL-039; data/API 11.5 | Model/domain tests |
+| M6.4 Fragment reference parser | Store and validate fragment references; block broken references. | POL-019 through POL-022, POL-036, POL-037; data/API 11.6 | Parser/domain tests |
+| M6.5 Rendered document viewer | Render sanitized Markdown with fragments inline. | POL-022, POL-034, POL-035, POL-040, POL-041 | UI/component tests |
+| M6.6 Fragment-driven version bump | Bump published referencing document fragment revision when fragment changes. | POL-039 through POL-042; data/API 11.7 | Domain/job tests |
 | M6.7 Orchid document admin | Add Orchid screens for policies, procedures, fragments, and preview. | Technical spec 21.11, 22.2 | Feature/UI tests |
 | M6.8 Reference impact warning | Warn before fragment edits that affect published documents. | Technical spec 21.11; UI contract 17.3 | UI test/manual QA |
-| M6.9 Acknowledgment requirements | Add organization/department scoped signup/training requirements. | POL-022 through POL-026, POL-045, POL-046 | Domain tests |
-| M6.10 Online acknowledgment action | Record document acknowledgment with document version while connected. | POL-042 through POL-044; technical spec 21.9 | Feature tests |
-| M6.11 Markdown/PDF document export | Export document as Markdown/PDF with fragments inline. | POL-027 through POL-030; data/API 11.11 | Export tests/sample |
+| M6.9 Acknowledgment requirements | Add organization/department scoped signup/training requirements. | POL-023 through POL-027, POL-046, POL-047 | Domain tests |
+| M6.10 Online acknowledgment action | Record document acknowledgment with document version while connected. | POL-043 through POL-045; technical spec 21.9 | Feature tests |
+| M6.11 Markdown/PDF document export | Export document as Markdown/PDF with fragments inline. | POL-028 through POL-031; data/API 11.11 | Export tests/sample |
 | M6.12 Policy QA script | Add `QA-POL-01-policy-procedure-fragment-acknowledgment.md`. | QA README; UI accessibility checklist | Human QA script |
 
 **QA gate:** A lead can create a fragment, create policy/procedure documents, publish, view rendered content, acknowledge during signup/training, and export Markdown/PDF.
