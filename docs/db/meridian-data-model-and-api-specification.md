@@ -297,15 +297,15 @@ Examples:
 POST /api/commands/submit-application
 POST /api/commands/approve-application
 POST /api/commands/reject-application
-POST /api/commands/assign-volunteer-to-department
-POST /api/commands/assign-volunteer-to-team
-POST /api/commands/remove-volunteer-from-team
-POST /api/commands/assign-volunteer-to-event
+POST /api/commands/assign-staff-to-department
+POST /api/commands/assign-staff-to-team
+POST /api/commands/remove-staff-from-team
+POST /api/commands/assign-staff-to-event
 POST /api/commands/create-shift
-POST /api/commands/assign-volunteer-to-shift
-POST /api/commands/remove-volunteer-from-shift
-POST /api/commands/check-in-volunteer
-POST /api/commands/check-out-volunteer
+POST /api/commands/assign-staff-to-shift
+POST /api/commands/remove-staff-from-shift
+POST /api/commands/check-in-staff
+POST /api/commands/check-out-staff
 POST /api/commands/mark-no-show
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
@@ -393,7 +393,7 @@ Laravel policies, gates, middleware, command handlers, and domain services enfor
 - Field Report visibility
 - policy/procedure visibility
 - document acknowledgment
-- volunteer status changes
+- staff status changes
 - department/team/event assignment
 - attendance operations
 - equipment operations
@@ -418,7 +418,7 @@ Direct user roles are restricted to god-mode/admin repair needs. Department, eve
 Alpha 1 effective permission levels include:
 
 ```text
-volunteer
+staff
 shift_lead
 department_lead
 ic_lead
@@ -467,7 +467,7 @@ UI hiding is not sufficient.
 
 Devices cache authorized data.
 
-Regular volunteers may cache:
+Regular staff may cache:
 
 - their own shifts
 - their department/team info
@@ -481,7 +481,7 @@ Regular volunteers may cache:
 
 Shift leads may additionally cache:
 
-- assigned volunteers for teams/shifts they lead
+- assigned staff for teams/shifts they lead
 - check-in/check-out/no-show state for those teams/shifts
 - team roster
 
@@ -526,7 +526,7 @@ The following data is server-only or restricted unless explicitly included in an
 - global admin configuration
 - full audit archives
 - sensitive DNS/removal details except where needed for enforcement
-- volunteer emergency contact data except on trusted devices for users authorized to access it
+- staff emergency contact data except on trusted devices for users authorized to access it
 - permission administration records except where needed for local authorization decisions
 
 ### 7.4 Node Sync
@@ -614,7 +614,7 @@ Meridian's Alpha 1 data model is organized into these domains:
 1. Organizations
 2. Events
 3. Users and authentication
-4. Volunteers
+4. Staff
 5. Applications
 6. Departments
 7. Teams
@@ -650,7 +650,7 @@ Meridian's Alpha 1 data model is organized into these domains:
 
 #### `organizations`
 
-Represents a volunteer-producing organization.
+Represents an organization that manages staff.
 
 Key fields:
 
@@ -671,7 +671,7 @@ Relationships:
 
 - has many events
 - has many departments
-- has many volunteers through organization volunteer records
+- has many staff through organization staff records
 - has many policy documents
 - has many procedure documents
 - has many document fragments
@@ -729,7 +729,7 @@ Key fields:
 - `email`
 - `secondary_email`, nullable
 - `secondary_email_verified_at`, nullable
-- `current_volunteer_id`
+- `current_staff_id`
 - `created_at`
 - `updated_at`
 - `disabled_at`
@@ -737,7 +737,7 @@ Key fields:
 Relationships:
 
 - has many auth identities
-- may link to one or more volunteer profiles
+- may link to one or more staff profiles
 - may have god-mode/admin direct roles where allowed
 - appears as actor in audit events and node operations
 
@@ -777,11 +777,11 @@ There is no password login.
 
 ---
 
-### 10.4 Volunteers
+### 10.4 Staff
 
-#### `volunteers`
+#### `staff`
 
-Represents a person volunteering with one or more organizations.
+Represents a person working with one or more organizations.
 
 Key fields:
 
@@ -810,7 +810,7 @@ Rules:
 Relationships:
 
 - may link to one or more users
-- has organization volunteer status records
+- has organization staff status records
 - has department memberships
 - has team memberships
 - has event assignments
@@ -819,15 +819,15 @@ Relationships:
 - may submit Field Reports
 - may be associated with incidents
 
-#### `organization_volunteers`
+#### `organization_staff`
 
-Represents a volunteer's status within an organization.
+Represents a staff member's status within an organization.
 
 Key fields:
 
 - `id`
 - `organization_id`
-- `volunteer_id`
+- `staff_id`
 - `status`
 - `status_reason`
 - `status_changed_at`
@@ -867,7 +867,7 @@ Key fields:
 - `id`
 - `event_id`
 - `organization_id`
-- `volunteer_id`, nullable until matched/created
+- `staff_id`, nullable until matched/created
 - `applicant_email`
 - `applicant_legal_name`
 - `status`
@@ -894,7 +894,7 @@ Rules:
 
 - applicants apply to events, not directly to departments
 - approval happens at the organization level
-- approved applicants become organization-level prospective volunteers
+- approved applicants become organization-level prospective staff
 - department/team assignment happens after organization approval
 - approved applications may be rescinded before team assignment
 - applications cannot be rescinded after team assignment
@@ -953,8 +953,8 @@ Rules:
 
 - every department has a default team
 - departments may rename their default team
-- volunteers cannot belong to a department without belonging to at least one team
-- volunteers may belong to multiple teams
+- staff cannot belong to a department without belonging to at least one team
+- staff may belong to multiple teams
 - teams are persistent across events
 - archived teams remain visible in historical records
 - historical worked shifts preserve the team/function name used at the time
@@ -970,13 +970,13 @@ Relationships:
 
 #### `department_memberships`
 
-Represents a volunteer's persistent membership in a department.
+Represents a staff member's persistent membership in a department.
 
 Key fields:
 
 - `id`
 - `department_id`
-- `volunteer_id`
+- `staff_id`
 - `status`
 - `status_reason`
 - `created_at`
@@ -1002,13 +1002,13 @@ Rules:
 
 #### `team_memberships`
 
-Represents a volunteer's membership in a team.
+Represents a staff member's membership in a team.
 
 Key fields:
 
 - `id`
 - `team_id`
-- `volunteer_id`
+- `staff_id`
 - `department_membership_id`
 - `membership_role`, optional display/use value such as member or lead
 - `created_at`
@@ -1033,15 +1033,15 @@ Key fields:
 - `created_at`
 - `archived_at`
 
-#### `event_volunteer_assignments`
+#### `event_staff_assignments`
 
-Represents a volunteer assigned to an event.
+Represents a staff member assigned to an event.
 
 Key fields:
 
 - `id`
 - `event_id`
-- `volunteer_id`
+- `staff_id`
 - `organization_id`
 - `created_at`
 - `updated_at`
@@ -1067,7 +1067,7 @@ Key fields:
 Examples:
 
 ```text
-volunteer
+staff
 shift_lead
 department_lead
 ic_lead
@@ -1174,13 +1174,13 @@ Key fields:
 
 #### `training_completions`
 
-Represents a volunteer's completed training.
+Represents a staff member's completed training.
 
 Key fields:
 
 - `id`
 - `training_id`
-- `volunteer_id`
+- `staff_id`
 - `completed_at`
 - `expires_at`
 - `recorded_by_user_id`
@@ -1223,7 +1223,7 @@ Key fields:
 
 - `id`
 - `waiver_id`
-- `volunteer_id`
+- `staff_id`
 - `completed_at`
 - `expires_at`
 - `recorded_by_user_id`
@@ -1235,7 +1235,7 @@ Key fields:
 
 #### `shifts`
 
-Represents a planned block of volunteer coverage for a department.
+Represents a planned block of staff coverage for a department.
 
 Key fields:
 
@@ -1293,7 +1293,7 @@ Key fields:
 
 - `id`
 - `shift_id`
-- `volunteer_id`
+- `staff_id`
 - `assigned_by_user_id`, nullable for self-signup
 - `assignment_status`
 - `created_at`
@@ -1304,7 +1304,7 @@ Rules:
 
 - shift signup is planned coverage, not actual hours
 - lead removal from shifts is allowed
-- unscheduled work can create an assignment during operations if the volunteer satisfies eligibility
+- unscheduled work can create an assignment during operations if the staff member satisfies eligibility
 
 ---
 
@@ -1323,7 +1323,7 @@ Key fields:
 - `team_id`, nullable
 - `shift_id`, nullable until reconciled if not selected at operation time
 - `shift_assignment_id`, nullable
-- `volunteer_id`
+- `staff_id`
 - `operation_type`
 - `device_created_at`
 - `server_received_at`
@@ -1351,7 +1351,7 @@ Rules:
 
 #### `attendance_records`
 
-Represents derived/current attendance state for a volunteer/shift.
+Represents derived/current attendance state for a staff member/shift.
 
 Key fields:
 
@@ -1360,7 +1360,7 @@ Key fields:
 - `department_id`
 - `shift_id`
 - `shift_assignment_id`, nullable
-- `volunteer_id`
+- `staff_id`
 - `current_state`
 - `checked_in_at`
 - `checked_out_at`
@@ -1390,7 +1390,7 @@ Key fields:
 - `event_id`
 - `department_id`
 - `shift_id`
-- `volunteer_id`
+- `staff_id`
 - `attendance_record_id`
 - `actual_started_at`
 - `actual_ended_at`
@@ -1405,12 +1405,12 @@ Key fields:
 Rules:
 
 - hours are distinct from scheduled shifts
-- hours always belong to an event, department, shift, and volunteer
+- hours always belong to an event, department, shift, and staff
 - no free-floating hours exist in MVP
 - checkout creates hours
 - shift/department leads may correct hours during the correction grace period
 - hours freeze after the grace period
-- volunteers do not self-report hours in MVP
+- staff do not self-report hours in MVP
 
 ---
 
@@ -1424,7 +1424,7 @@ Key fields:
 
 - `id`
 - `event_id`
-- `volunteer_id`
+- `staff_id`
 - `status`
 - `status_reason`
 - `changed_by_user_id`
@@ -1442,7 +1442,7 @@ revoked
 
 Rules:
 
-- at most one credential per volunteer per event
+- at most one credential per staff member per event
 - credential is not a physical item
 - physical items are provisions or external workflows
 - credential eligibility requires at least one signed-up shift, required waivers, age requirements, no organization blocking status, and no department Ineligible status for worked departments
@@ -1485,7 +1485,7 @@ Key fields:
 - `event_id`
 - `department_id`
 - `shift_id`
-- `volunteer_id`
+- `staff_id`
 - `hours_worked_id`
 - `credit_policy_id`
 - `entry_type`
@@ -1538,14 +1538,14 @@ damaged
 
 #### `equipment_checkouts`
 
-Represents equipment checked out to an individual volunteer.
+Represents equipment checked out to an individual staff member.
 
 Key fields:
 
 - `id`
 - `equipment_item_id`
 - `event_id`
-- `volunteer_id`
+- `staff_id`
 - `shift_id`, nullable
 - `checked_out_at`
 - `checked_out_by_user_id`
@@ -1558,7 +1558,7 @@ Key fields:
 Rules:
 
 - MVP tracking is visible/manual
-- checkout/check-in is to individual volunteers
+- checkout/check-in is to individual staff members
 - equipment does not need to be tied to a shift for MVP
 - department-to-department allotments and full custody chains are out of scope
 
@@ -1568,7 +1568,7 @@ Rules:
 
 #### `deployments`
 
-Represents a current assignment/location option for a volunteer during a shift.
+Represents a current assignment/location option for a staff member during a shift.
 
 Key fields:
 
@@ -1592,7 +1592,7 @@ Key fields:
 - `event_id`
 - `department_id`
 - `shift_id`
-- `volunteer_id`
+- `staff_id`
 - `deployment_id`
 - `assigned_by_user_id`
 - `assigned_at`
@@ -1618,7 +1618,7 @@ Key fields:
 - `department_id`, nullable
 - `team_id`, nullable
 - `submitted_by_user_id`
-- `volunteer_id`
+- `staff_id`
 - `fra_number`, nullable until server/node assignment
 - `temporary_local_number`, nullable
 - `body`
@@ -1757,15 +1757,15 @@ Rules:
 - when a Field Report is attached, Field Report content is copied into incident notes
 - when removed from an incident, the incident history shows that relationship as stricken
 
-#### `incident_volunteers`
+#### `incident_staff`
 
-Links involved/responding volunteers to incidents.
+Links involved/responding staff to incidents.
 
 Key fields:
 
 - `id`
 - `incident_id`
-- `volunteer_id`
+- `staff_id`
 - `relationship_label`
 - `created_at`
 
@@ -1972,7 +1972,7 @@ Visibility:
 - department-scoped published documents are visible to members of that department
 - team-scoped published documents are visible to members of that team
 - department leads and team leads may see policies/procedures within their department according to leadership scope
-- documents are not generally public-facing before login except as part of volunteer signup for an organization
+- documents are not generally public-facing before login except as part of staff signup for an organization
 
 ### 11.5 `document_fragments`
 
@@ -2110,7 +2110,7 @@ Key fields:
 
 - `id`
 - `user_id`
-- `volunteer_id`, nullable/reporting convenience
+- `staff_id`, nullable/reporting convenience
 - `document_type`
 - `document_id`
 - `document_revision`
@@ -2408,7 +2408,7 @@ Hours must always be tied to:
 - event
 - department
 - shift
-- volunteer
+- staff
 - actual start time
 - actual end time
 

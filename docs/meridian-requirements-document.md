@@ -14,11 +14,13 @@
 
 Meridian is an open-source volunteer operations platform for events.
 
-Meridian supports organizations that recruit, approve, coordinate, schedule, credential, track, and report on volunteer work across events and departments.
+Meridian supports organizations that recruit, approve, coordinate, schedule, credential, track, and report on staff work across events and departments.
 
 Meridian is not an HR system, payroll system, personnel file, or employee management platform.
 
-All operational users are understood to be volunteers, including organizers, department leads, shift leads, trainers, and incident users.
+All operational users are referred to as Staff, including organizers, department leads, shift leads, trainers, and incident users.
+
+Staff may include unpaid volunteers and paid personnel. Meridian tracks participation, eligibility, credentials, hours, credits, and operational history, but payment, wages, payroll, and employment status remain outside Meridian's scope.
 
 Meridian also supports policies and procedures as human-readable documents that may include reusable text fragments defined at organization, department, or team scope.
 
@@ -26,13 +28,13 @@ Meridian also supports policies and procedures as human-readable documents that 
 
 ## 2. Core Principles
 
-### 2.1 Volunteers Managing Volunteers
+### 2.1 Staff Managing Staff
 
 Meridian models volunteer operations, not employment.
 
 The platform should avoid employee/payroll/HR framing and instead support:
 
-- volunteer status
+- staff status
 - department participation
 - team membership
 - training completion
@@ -85,7 +87,7 @@ Important changes should preserve history, including:
 - incident notes
 - stricken incident content
 - field report attachment/removal
-- volunteer status changes
+- staff status changes
 - organizer removals
 - credential revocations
 - hour corrections
@@ -105,7 +107,7 @@ Configurable areas include:
 - waivers
 - shift eligibility
 - credit policies
-- volunteer lifecycle durations
+- staff lifecycle durations
 - active/inactive/emeritus thresholds
 - event-specific Incident Command Department
 - policy/procedure documents
@@ -122,7 +124,7 @@ Organizations are responsible for:
 - organization settings
 - permissions
 - organizer management
-- volunteer approval
+- staff approval
 - department creation
 - organization-level status
 - organization-level policy
@@ -131,7 +133,7 @@ Organizations are responsible for:
 
 Departments are responsible for:
 
-- department volunteer pools
+- department staff pools
 - department status
 - teams
 - trainings
@@ -139,19 +141,19 @@ Departments are responsible for:
 - shift operations
 - deployment/location assignments
 - department-scoped exports
-- department volunteer emergency contacts
+- department staff emergency contacts
 
 ### 2.7 Organization Status Supersedes Department Status
 
-Volunteers have both organization-level status and department-level status.
+Staff have both organization-level status and department-level status.
 
 Organization status is always stronger.
 
 A department cannot override an organization-level blocking status.
 
-### 2.8 Persistent Volunteer History
+### 2.8 Persistent Staff History
 
-Volunteer history persists across events.
+Staff history persists across events.
 
 Meridian should preserve:
 
@@ -174,9 +176,9 @@ Actual hours represent work performed.
 
 Meridian must track both.
 
-A volunteer may work different hours than scheduled.
+A staff member may work different hours than scheduled.
 
-A volunteer may be added to a shift during operations, provided they satisfy eligibility requirements.
+A staff member may be added to a shift during operations, provided they satisfy eligibility requirements.
 
 ### 2.10 MVP Pragmatism
 
@@ -214,7 +216,7 @@ When an included fragment changes, the referencing document version should be bu
 
 ## 3.1 Organization
 
-An organization produces events and manages volunteers.
+An organization produces events and manages staff.
 
 Example:
 
@@ -223,7 +225,7 @@ Example:
 Organizations own or configure:
 
 - departments
-- volunteers
+- staff
 - organizers
 - policies
 - events
@@ -233,9 +235,9 @@ Organizations own or configure:
 - incident taxonomies
 - default Incident Command Department
 
-Organizations approve event applicants into the volunteer pool.
+Organizations approve event applicants into the staff pool.
 
-Organizations define organization-level volunteer status.
+Organizations define organization-level staff status.
 
 ---
 
@@ -276,15 +278,15 @@ Examples:
 - DPW
 - LNT
 
-Departments manage volunteer pools across multiple events.
+Departments manage staff pools across multiple events.
 
-A volunteer may belong to multiple departments simultaneously.
+A staff member may belong to multiple departments simultaneously.
 
 Department membership is persistent and not limited to one event.
 
 Departments manage:
 
-- department volunteer status
+- department staff status
 - teams
 - trainings
 - shifts
@@ -293,27 +295,27 @@ Departments manage:
 - deployment/location assignments
 - hours worked for the department
 - department-scoped exports
-- emergency contact access for their volunteers
+- emergency contact access for their staff
 
 Departments may participate in one or more events.
 
-A department may add its volunteers to an event without requiring a new event application, provided the volunteer is already approved and active enough to participate.
+A department may add its staff to an event without requiring a new event application, provided each staff member is already approved and active enough to participate.
 
 ---
 
-## 3.4 Volunteer
+## 3.4 Staff
 
-A volunteer is a person known to an organization and approved, prospective, active, inactive, emeritus, retired, or blocked from participation.
+A staff member is a person known to an organization and approved, prospective, active, inactive, emeritus, retired, or blocked from participation.
 
-All Meridian users are volunteers.
+All Meridian users are staff.
 
-A volunteer may belong to:
+A staff member may belong to:
 
 - multiple organizations
 - multiple departments
 - multiple teams within a department
 
-A volunteer has:
+A staff member has:
 
 - organization-level status
 - department-level status per department
@@ -325,7 +327,7 @@ A volunteer has:
 - credits earned
 - credential eligibility history
 
-Required volunteer profile fields include:
+Required staff profile fields include:
 
 - legal name
 - email
@@ -336,7 +338,7 @@ Required volunteer profile fields include:
 - city/state
 - age/date of birth
 
-The term `handle` refers to the volunteer’s operational/radio handle. Meridian does not separately model playa name, callsign, Ranger name, or radio name.
+The term `handle` refers to the staff member's operational/radio handle. Meridian does not separately model playa name, callsign, Ranger name, or radio name.
 
 ---
 
@@ -357,33 +359,33 @@ Organization statuses include:
 
 A newly approved applicant becomes Prospective.
 
-A Prospective volunteer has been approved at the organization level but has not yet completed the steps required to become Active.
+A Prospective staff member has been approved at the organization level but has not yet completed the steps required to become Active.
 
 Prospective status lasts for a configurable number of years.
 
-After that period, the volunteer becomes Inactive and must reapply.
+After that period, the staff member becomes Inactive and must reapply.
 
 ### Active
 
-An Active volunteer is currently eligible to participate in the organization, subject to department/team/training/waiver/shift rules.
+An Active staff member is currently eligible to participate in the organization, subject to department/team/training/waiver/shift rules.
 
-Working for any department should prevent a volunteer from becoming inactive at the organization level.
+Working for any department should prevent a staff member from becoming inactive at the organization level.
 
 ### Inactive
 
-Inactive means the volunteer is not currently active but is not blocked from future participation.
+Inactive means the staff member is not currently active but is not blocked from future participation.
 
-Inactive volunteers may reapply.
+Inactive staff may reapply.
 
 ### Emeritus
 
-Emeritus means the volunteer is no longer expected to perform regular duties but may still listen in, advise, or contribute if asked.
+Emeritus means the staff member is no longer expected to perform regular duties but may still listen in, advise, or contribute if asked.
 
 Emeritus is similar to contract-basis participation.
 
 ### Retired
 
-Retired means the volunteer is no longer working in any capacity.
+Retired means the staff member is no longer working in any capacity.
 
 Retired is distinct from Emeritus.
 
@@ -418,33 +420,33 @@ Department statuses include:
 
 ### Department Prospective
 
-A volunteer may be Prospective within a department until required department/team trainings are complete.
+A staff member may be Prospective within a department until required department/team trainings are complete.
 
-If the department has no required trainings, the volunteer becomes Active after department assignment.
+If the department has no required trainings, the staff member becomes Active after department assignment.
 
 ### Department Active
 
-A volunteer is Active in a department after satisfying the department’s activation requirements.
+A staff member is Active in a department after satisfying the department’s activation requirements.
 
 ### Department Inactive
 
-Inactive means the volunteer is not currently on the team for that department, but may still volunteer elsewhere.
+Inactive means the staff member is not currently on the team for that department, but may still work elsewhere.
 
 ### Department Ineligible
 
-Ineligible means the volunteer may not work for that department unless restored by a department lead.
+Ineligible means the staff member may not work for that department unless restored by a department lead.
 
 Ineligible is department-specific and indefinite until changed.
 
-Ineligible does not prevent volunteering for other departments.
+Ineligible does not prevent working for other departments.
 
 ### Department Emeritus
 
-A department Emeritus volunteer may advise, listen in, or contribute if asked but has no standing obligation.
+A department Emeritus staff may advise, listen in, or contribute if asked but has no standing obligation.
 
 ### Department Retired
 
-A department Retired volunteer is no longer working in that department in any capacity.
+A department Retired staff member is no longer working in that department in any capacity.
 
 Department status is changed by department leads only.
 
@@ -478,9 +480,9 @@ Every department has a default team.
 
 Departments may rename their default team.
 
-Volunteers cannot belong to a department without belonging to at least one team.
+Staff cannot belong to a department without belonging to at least one team.
 
-A volunteer may belong to multiple teams.
+A staff member may belong to multiple teams.
 
 Teams are persistent across events.
 
@@ -522,11 +524,11 @@ Trainings may:
 
 Trainings cannot be waived.
 
-If an authorized person determines that a volunteer satisfies a training requirement, they record the training as complete.
+If an authorized person determines that a staff member satisfies a training requirement, they record the training as complete.
 
 Meridian does not separately model waivers/equivalencies for trainings in MVP.
 
-A volunteer cannot sign up for or be added to a shift if required training is incomplete.
+A staff member cannot sign up for or be added to a shift if required training is incomplete.
 
 ---
 
@@ -549,7 +551,7 @@ Waiver completion may gate:
 - event check-in
 - credential issuance
 
-A volunteer cannot be added to a shift if required waivers are incomplete.
+A staff member cannot be added to a shift if required waivers are incomplete.
 
 If a required waiver expires after shift signup but before the event, credential eligibility becomes blocked until the waiver is completed again.
 
@@ -578,7 +580,7 @@ Only the applicant may withdraw their own application.
 
 Approval happens at the organization level.
 
-An approved applicant becomes a Prospective volunteer.
+An approved applicant becomes a Prospective staff member.
 
 Department assignment happens after organization approval.
 
@@ -586,15 +588,15 @@ An approved application may be rescinded before team assignment.
 
 If an approved application is rescinded before team assignment, the person becomes Inactive.
 
-Once a volunteer is assigned to a team, the application can no longer be rescinded. Future changes are handled through volunteer and department status.
+Once a staff member is assigned to a team, the application can no longer be rescinded. Future changes are handled through staff and department status.
 
-Existing active volunteers may apply to events to signal interest, but active volunteers can also be added to future events by department leads without submitting a new application.
+Existing active staff may apply to events to signal interest, but active staff can also be added to future events by department leads without submitting a new application.
 
 ---
 
 ## 3.11 Shift
 
-A shift is a planned block of volunteer coverage for a department.
+A shift is a planned block of staff coverage for a department.
 
 A shift defines:
 
@@ -614,27 +616,27 @@ Shifts answer:
 
 > Who should be working?
 
-Shift signup is immediate when the volunteer is eligible.
+Shift signup is immediate when the staff member is eligible.
 
 Shifts may become full.
 
-Volunteers may remove themselves from shifts before schedule lock/cutoff rules apply.
+Staff may remove themselves from shifts before schedule lock/cutoff rules apply.
 
 Departments may lock schedules after a configured cutoff date.
 
-Department leads may remove volunteers from shifts.
+Department leads may remove staff from shifts.
 
 Shift overlap is discouraged and should warn the user rather than hard-blocking by default.
 
 Leads may assign overlapping shifts with elevated authority.
 
-A volunteer may be added to a shift during operations if they satisfy all eligibility rules.
+A staff member may be added to a shift during operations if they satisfy all eligibility rules.
 
 ---
 
 ## 3.12 Shift Signup
 
-Shift signup is the planned assignment of a volunteer to a shift.
+Shift signup is the planned assignment of a staff member to a shift.
 
 Shift signup determines planned coverage and credential eligibility.
 
@@ -652,11 +654,11 @@ Eligibility may depend on:
 - signup availability dates
 - schedule lock rules
 
-A volunteer may not sign up for a shift before required training is complete.
+A staff member may not sign up for a shift before required training is complete.
 
-A volunteer may not sign up for a shift before required waivers are complete.
+A staff member may not sign up for a shift before required waivers are complete.
 
-A volunteer may not be added to a shift if department-level status is Ineligible.
+A staff member may not be added to a shift if department-level status is Ineligible.
 
 ---
 
@@ -666,9 +668,9 @@ Check-in records the start of actual shift participation.
 
 Check-out records the end of actual shift participation.
 
-Volunteers may check in before the scheduled start time.
+Staff may check in before the scheduled start time.
 
-Volunteers may check out after the scheduled end time.
+Staff may check out after the scheduled end time.
 
 Check-out creates the actual hours record.
 
@@ -680,7 +682,7 @@ Shift leads and department leads may correct hours after check-out during the or
 
 ## 3.14 Hours Worked
 
-Hours worked represent actual volunteer participation.
+Hours worked represent actual staff participation.
 
 Hours worked are distinct from scheduled hours.
 
@@ -689,7 +691,7 @@ Hours must always be associated with:
 - an event
 - a department
 - a shift
-- a volunteer
+- a staff member
 - actual start time
 - actual end time
 
@@ -701,7 +703,7 @@ Setup, teardown, standby, emergency coverage, or unscheduled labor must be repre
 
 Hours are recorded by shift leads or department leads.
 
-Volunteers do not self-report hours in MVP.
+Staff do not self-report hours in MVP.
 
 Hours may be corrected during the organization-wide post-event grace period.
 
@@ -711,7 +713,7 @@ After the grace period closes, hours are frozen.
 
 ## 3.15 Credits
 
-Credits are value earned through volunteer service.
+Credits are value earned through staff service.
 
 Credits are derived from finalized hours worked.
 
@@ -719,7 +721,7 @@ Credits are calculated after the organization-wide correction grace period close
 
 Credits are frozen after calculation.
 
-Credits belong to volunteers and are associated with the department and shift work that produced them.
+Credits belong to staff and are associated with the department and shift work that produced them.
 
 Credits are calculated using:
 
@@ -748,9 +750,9 @@ A credential is not a ticket, wristband, laminate, parking pass, meal pog, or T-
 
 Those are provisions or external operational workarounds.
 
-A credential is more than entry permission. It represents approval to participate as a volunteer for the event.
+A credential is more than entry permission. It represents approval to participate as a staff member for the event.
 
-A volunteer may have only one event credential per event.
+A staff member may have only one event credential per event.
 
 That credential may be based on shifts for one department or multiple departments.
 
@@ -762,7 +764,7 @@ Credential eligibility requires:
 - no organization-level blocking status
 - no department-level Ineligible status for the department being worked
 
-Working an unscheduled shift does not retroactively make a volunteer credential-eligible.
+Working an unscheduled shift does not retroactively make a staff member credential-eligible.
 
 Credential states include:
 
@@ -772,11 +774,11 @@ Credential states include:
 
 ### Eligible
 
-The volunteer currently satisfies credential requirements.
+The staff currently satisfies credential requirements.
 
 ### Blocked
 
-The volunteer no longer satisfies credential requirements.
+The staff no longer satisfies credential requirements.
 
 Examples:
 
@@ -819,7 +821,7 @@ Examples:
 
 Provisions are distinct from credentials.
 
-A volunteer may earn a future benefit without being credentialed for the current event.
+A staff member may earn a future benefit without being credentialed for the current event.
 
 Provision eligibility may be based on:
 
@@ -846,8 +848,8 @@ For MVP, equipment tracking is visible/manual and limited.
 
 MVP equipment tracking supports:
 
-- checkout to individual volunteers
-- check-in from individual volunteers
+- checkout to individual staff members
+- check-in from individual staff members
 - visibility on the Shift Lead Board
 - manual correction when physical handoffs happen outside the system
 
@@ -871,17 +873,17 @@ Equipment does not need to be tied to a shift for MVP.
 
 ## 3.19 Deployment / Location
 
-A deployment or location is the current assignment of a volunteer during a shift.
+A deployment or location is the current assignment of a staff member during a shift.
 
 Deployments answer:
 
-> Where are volunteers currently assigned?
+> Where are staff currently assigned?
 
 For MVP, deployment tracking only needs to show the current deployment/location assignment.
 
-Shift leads may assign and update a volunteer’s current deployment/location from the Shift Lead Board.
+Shift leads may assign and update a staff member's current deployment/location from the Shift Lead Board.
 
-Volunteers may be moved between deployments/locations during a shift.
+Staff may be moved between deployments/locations during a shift.
 
 MVP does not need to preserve deployment movement history.
 
@@ -891,7 +893,7 @@ Future versions may preserve full deployment history.
 
 ## 3.20 Field Report
 
-A field report is a single-perspective operational report written by an authorized volunteer.
+A field report is a single-perspective operational report written by an authorized staff.
 
 A field report contains:
 
@@ -907,7 +909,7 @@ Field reports are visible to:
 - the author
 - the event’s Incident Command Department
 
-Field reports are not visible to non-IC department leads by default, even if their volunteers authored them.
+Field reports are not visible to non-IC department leads by default, even if their staff authored them.
 
 Field reports cannot be edited.
 
@@ -941,7 +943,7 @@ Incident fields include:
 - state
 - started timestamp
 - summary
-- involved volunteers
+- involved staff
 - incident types
 - location
 - attached field reports
@@ -1029,7 +1031,7 @@ Policy documents may be scoped to:
 - department
 - team
 
-Organization-level policy documents are visible to everyone in the organization when published, including organization volunteers who are not assigned to a current event.
+Organization-level policy documents are visible to everyone in the organization when published, including organization staff who are not assigned to a current event.
 
 Department-level policy documents are visible to members of that department.
 
@@ -1037,7 +1039,7 @@ Team-level policy documents are visible to members of that team, and to departme
 
 Department leads and team leads may see all policy/procedure documents within their department according to their leadership scope.
 
-Policy/procedure documents should not be generally public before login, except as part of volunteer signup for an organization.
+Policy/procedure documents should not be generally public before login, except as part of staff signup for an organization.
 
 Policy document states include:
 
@@ -1129,31 +1131,31 @@ When viewing a policy/procedure document, the referenced fragment text should re
 
 ## 3.27 Policy/Procedure Acknowledgment
 
-A policy/procedure acknowledgment records that a volunteer has acknowledged a policy or procedure document.
+A policy/procedure acknowledgment records that a staff member has acknowledged a policy or procedure document.
 
-Acknowledgments may be required during volunteer signup or as part of training.
+Acknowledgments may be required during staff signup or as part of training.
 
 For MVP, acknowledgments are scoped to organization or department requirements.
 
-Policy/procedure acknowledgments should happen higher in the volunteer lifecycle than shift signup or credential issuance.
+Policy/procedure acknowledgments should happen higher in the staff lifecycle than shift signup or credential issuance.
 
 Policy/procedure acknowledgments should not be modeled as direct shift-signup gates or credential-eligibility gates in MVP.
 
 Acknowledgments do not need to be re-required automatically when a document or included fragment changes.
 
-Acknowledgment records should store the document and document version that the volunteer acknowledged.
+Acknowledgment records should store the document and document version that the staff acknowledged.
 
-Acknowledgment records do not need to store a rendered copy of the text the volunteer saw.
+Acknowledgment records do not need to store a rendered copy of the text the staff saw.
 
 ---
 
 # 4. User Roles
 
-## 4.1 Volunteer
+## 4.1 Staff
 
-A volunteer participates in events and departments.
+A staff member participates in events and departments.
 
-Volunteers may:
+Staff may:
 
 - apply to events
 - complete waivers
@@ -1168,7 +1170,7 @@ Volunteers may:
 - view published policy/procedure documents visible to them
 - acknowledge required policy/procedure documents during signup or training when required
 
-Volunteers do not self-report hours in MVP.
+Staff do not self-report hours in MVP.
 
 ---
 
@@ -1183,7 +1185,7 @@ Organizers may:
 - reject event applications
 - defer event applications
 - rescind approved applications before team assignment
-- manage organization-level volunteer status
+- manage organization-level staff status
 - change DNS status
 - configure organization-level policies
 - create departments
@@ -1197,11 +1199,11 @@ Organizers may:
 
 Organizers do not have default access to emergency contacts.
 
-Organizers do not directly add volunteers to department event participation.
+Organizers do not directly add staff to department event participation.
 
 Organizers cannot change department-scoped or team-scoped policy/procedure documents by default.
 
-Department leads manage their own volunteers.
+Department leads manage their own staff.
 
 ---
 
@@ -1221,11 +1223,11 @@ Additional anti-malicious-removal safeguards are out of scope for MVP.
 
 ---
 
-## 4.4 Volunteer Coordinator
+## 4.4 Staff Coordinator
 
-A Volunteer Coordinator manages volunteer applications and approval workflows.
+A Staff Coordinator manages staff applications and approval workflows.
 
-Volunteer Coordinator responsibilities may include:
+Staff Coordinator responsibilities may include:
 
 - reviewing submitted applications
 - approving applications
@@ -1234,26 +1236,26 @@ Volunteer Coordinator responsibilities may include:
 - coordinating applicant intake
 - supporting department assignment after approval
 
-Volunteer Coordinators operate at the organization level.
+Staff Coordinators operate at the organization level.
 
 ---
 
 ## 4.5 Department Lead
 
-A Department Lead manages a department’s volunteers and operations.
+A Department Lead manages a department’s staff and operations.
 
 Department Leads may:
 
-- manage department volunteer status
-- assign volunteers to the department
-- assign volunteers to teams
+- manage department staff status
+- assign staff to the department
+- assign staff to teams
 - reject approved applicants for their department
 - manage department trainings
 - manage shifts
-- remove volunteers from shifts
+- remove staff from shifts
 - correct hours during the grace period
 - export department-scoped reports
-- view/export emergency contacts for volunteers in their department
+- view/export emergency contacts for staff in their department
 - check equipment in/out
 - manage department event participation
 - maintain department-scoped policy/procedure documents
@@ -1269,7 +1271,7 @@ Department Leads cannot access field reports or incidents unless they are part o
 
 ## 4.6 Team Member
 
-A Team Member is a volunteer assigned to a team within a department.
+A Team Member is a staff member assigned to a team within a department.
 
 Team membership may grant:
 
@@ -1285,7 +1287,7 @@ Team membership replaces the earlier concept of role assignment.
 
 ## 4.7 Team Lead
 
-A Team Lead is a volunteer with leadership responsibility for a team within a department.
+A Team Lead is a staff member with leadership responsibility for a team within a department.
 
 Team Leads may:
 
@@ -1306,31 +1308,31 @@ A Shift Lead manages live shift operations.
 Shift Leads may:
 
 - view current shift roster
-- check volunteers in
-- check volunteers out
+- check staff in
+- check staff out
 - edit actual start/end time during check-out
 - correct hours during the grace period
 - assign deployment/location
-- move volunteers between deployments/locations
-- view checked-in volunteers
+- move staff between deployments/locations
+- view checked-in staff
 - view equipment checked out
 - check equipment in/out to individuals
-- add eligible unscheduled volunteers to a shift
+- add eligible unscheduled staff to a shift
 - access field report shortcut
 - access incident shortcut
 
-Shift Leads may not add volunteers to a department/team. If a volunteer is not already in the relevant department/team, a Department Lead must add them first.
+Shift Leads may not add staff to a department/team. If a staff member is not already in the relevant department/team, a Department Lead must add them first.
 
 ---
 
 ## 4.9 Trainer
 
-A Trainer is an authorized volunteer who records training completion.
+A Trainer is an authorized staff who records training completion.
 
 Trainers may:
 
 - run trainings
-- mark volunteers as passed/completed
+- mark staff as passed/completed
 - import training completion by spreadsheet, if supported
 
 Trainer authority may come through team membership or department assignment.
@@ -1380,7 +1382,7 @@ IC Department Leads are the only users who may print incident PDFs.
 2. Application collects legal name and email unless the applicant already has a login.
 3. Application may also collect required profile/contact fields.
 4. If applicant email matches DNS, application is auto-rejected without automatic notice.
-5. Volunteer Coordinator or Organizer reviews application.
+5. Staff Coordinator or Organizer reviews application.
 6. Application becomes one of:
    - Approved
    - Rejected
@@ -1390,27 +1392,27 @@ IC Department Leads are the only users who may print incident PDFs.
 7. If approved, applicant becomes Prospective at the organization level.
 8. Approved applicant may be assigned to departments.
 9. Department leads decide whether to accept the approved applicant into their department.
-10. Department/team/training process determines when the volunteer becomes Active.
+10. Department/team/training process determines when the staff member becomes Active.
 
 ---
 
 ## 5.3 Department Onboarding
 
-1. Approved volunteer enters Prospective status.
-2. Department Lead assigns volunteer to a department.
-3. Volunteer must be assigned to at least one team.
+1. Approved staff enters Prospective status.
+2. Department Lead assigns staff to a department.
+3. Staff must be assigned to at least one team.
 4. Department/team requirements are evaluated.
 5. Required trainings are assigned or completed.
 6. Required waivers are completed where applicable.
-7. If the department has required trainings, the volunteer becomes Active after completing them.
-8. If the department has no required trainings, the volunteer becomes Active after department assignment.
-9. Volunteer may then sign up for eligible shifts.
+7. If the department has required trainings, the staff member becomes Active after completing them.
+8. If the department has no required trainings, the staff member becomes Active after department assignment.
+9. Staff may then sign up for eligible shifts.
 
 ---
 
 ## 5.4 Team Assignment
 
-1. Department Lead assigns volunteer to one or more teams.
+1. Department Lead assigns staff to one or more teams.
 2. Team membership grants shift eligibility and any associated system authority.
 3. Team membership may impose training or waiver requirements.
 4. Archived teams remain visible for historical records.
@@ -1420,7 +1422,7 @@ IC Department Leads are the only users who may print incident PDFs.
 
 ## 5.5 Shift Signup
 
-1. Volunteer views available shifts.
+1. Staff views available shifts.
 2. System checks:
    - organization status
    - department status
@@ -1431,11 +1433,11 @@ IC Department Leads are the only users who may print incident PDFs.
    - capacity
    - signup window
    - schedule locks
-3. Eligible volunteer signs up.
+3. Eligible staff signs up.
 4. Signup is immediate.
 5. If shift is full, signup is unavailable.
-6. Volunteer may change schedule before cutoff.
-7. Lead may remove volunteer from shift if necessary.
+6. Staff may change schedule before cutoff.
+7. Lead may remove staff from shift if necessary.
 8. Overlapping shifts produce warnings, not default hard blocks.
 9. Elevated lead permissions may allow overlap assignment.
 
@@ -1443,14 +1445,14 @@ IC Department Leads are the only users who may print incident PDFs.
 
 ## 5.6 Credential Eligibility
 
-1. Volunteer signs up for at least one shift.
+1. Staff signs up for at least one shift.
 2. System checks credential requirements:
    - at least one signed-up shift
    - required waivers complete
    - age requirements satisfied
    - no organization-level blocking status
    - no department-level Ineligible status
-3. If requirements are satisfied, volunteer becomes credential-eligible.
+3. If requirements are satisfied, the staff member becomes credential-eligible.
 4. If requirements later fail, credential becomes Blocked.
 5. If organizers or IC department leads manually revoke, credential becomes Revoked.
 6. If credential is revoked, future shifts are removed where possible.
@@ -1462,17 +1464,17 @@ For MVP, Meridian provides credential eligibility reporting, not physical creden
 
 ## 5.7 Shift Operations
 
-1. Volunteer arrives for shift.
+1. A staff member arrives for shift.
 2. Shift Lead opens Shift Lead Board.
 3. Shift Lead views roster.
-4. Shift Lead checks volunteer in.
-5. Shift Lead may add eligible unscheduled volunteer to the shift.
+4. Shift Lead checks staff in.
+5. Shift Lead may add eligible unscheduled staff to the shift.
 6. Shift Lead assigns deployment/location.
-7. Shift Lead checks out equipment to individual volunteers if needed.
+7. Shift Lead checks out equipment to individual staff members if needed.
 8. Shift work occurs.
-9. Volunteer may move between deployments/locations.
+9. Staff may move between deployments/locations.
 10. Shift Lead updates current deployment/location.
-11. Shift Lead checks volunteer out.
+11. Shift Lead checks staff out.
 12. Check-out creates actual hours record.
 13. Shift Lead may edit actual start/end time during check-out.
 14. Equipment is checked back in.
@@ -1483,24 +1485,24 @@ For MVP, Meridian provides credential eligibility reporting, not physical creden
 
 ## 5.8 Unscheduled Shift Work
 
-1. Volunteer shows up or is needed for a shift without prior signup.
-2. Shift Lead or Department Lead attempts to add volunteer to shift.
+1. A staff member shows up or is needed for a shift without prior signup.
+2. Shift Lead or Department Lead attempts to add staff to shift.
 3. System checks:
-   - volunteer belongs to relevant department/team
+   - staff member belongs to relevant department/team
    - required training complete
    - required waiver complete
    - status allows participation
-4. If eligible, volunteer is added to shift.
-5. Volunteer may check in/out and earn hours.
+4. If eligible, the staff member is added to shift.
+5. The staff member may check in/out and earn hours.
 6. Unscheduled work does not retroactively grant credential eligibility.
 
-If the volunteer is not in the relevant department/team, a Department Lead must add them first.
+If the staff member is not in the relevant department/team, a Department Lead must add them first.
 
 ---
 
 ## 5.9 Hours and Credits
 
-1. Shift Lead checks volunteer out.
+1. Shift Lead checks staff out.
 2. Check-out creates hours record using actual start/end time.
 3. Shift Lead or Department Lead may correct hours during grace period.
 4. Grace period closes.
@@ -1515,7 +1517,7 @@ If the volunteer is not in the relevant department/team, a Department Lead must 
 
 ## 5.10 Field Report Creation
 
-1. Authorized volunteer creates a field report.
+1. An authorized staff member creates a field report.
 2. Field report records event, author, and report text.
 3. Field report is visible to author and IC department.
 4. Field report may exist independently.
@@ -1529,7 +1531,7 @@ If the volunteer is not in the relevant department/team, a Department Lead must 
 
 1. IC department creates incident.
 2. Incident receives IMS number.
-3. Incident state, summary, type, location, tags, involved volunteers, notes, and attachments are managed.
+3. Incident state, summary, type, location, tags, involved staff, notes, and attachments are managed.
 4. IC department attaches field reports where relevant.
 5. Field report content is copied into incident notes.
 6. Later field report additions are copied into associated incidents.
@@ -1549,7 +1551,7 @@ MVP exports include:
 
 - credential eligibility
 - shift rosters
-- volunteer contact lists
+- staff contact lists
 - hours worked
 - credits earned
 
@@ -1559,7 +1561,7 @@ Department leads may export department-scoped reports.
 
 Shift roster exports exclude phone numbers and emergency contacts.
 
-Department volunteer contact exports may include phone numbers and emergency contacts.
+Department staff contact exports may include phone numbers and emergency contacts.
 
 Organizer exports do not include emergency contacts.
 
@@ -1601,11 +1603,11 @@ Not required for October MVP:
 ## 5.15 Policy/Procedure Acknowledgment
 
 1. Organization or department defines a policy/procedure acknowledgment requirement for MVP.
-2. Volunteer encounters the required acknowledgment during volunteer signup or training.
-3. Volunteer acknowledges the document.
+2. Staff encounters the required acknowledgment during staff signup or training.
+3. Staff acknowledges the document.
 4. Meridian records the acknowledgment.
 5. The acknowledgment record stores the document and version acknowledged.
-6. Meridian does not need to store the full rendered text the volunteer saw.
+6. Meridian does not need to store the full rendered text the staff saw.
 7. Acknowledgment is not modeled as a direct shift signup gate or credential eligibility gate in MVP.
 8. Acknowledgment is not required anywhere outside signup or training for MVP.
 9. Acknowledgment does not need to be automatically re-required when a document or included fragment changes.
@@ -1617,7 +1619,7 @@ Not required for October MVP:
 3. A department may manually assemble and export a policy/procedure packet containing multiple documents.
 4. Rendered exports show fragment text inline.
 5. Policy/procedure packet exports include document contents only.
-6. Policy/procedure packet exports do not include volunteer acknowledgment status.
+6. Policy/procedure packet exports do not include staff acknowledgment status.
 
 ---
 
@@ -1631,8 +1633,8 @@ The MVP should provide enough functionality to support real event operations whi
 
 The MVP should prioritize:
 
-- volunteer application intake
-- volunteer approval
+- staff application intake
+- staff approval
 - department/team assignment
 - shift eligibility
 - shift signup
@@ -1650,8 +1652,8 @@ The MVP should prioritize:
 
 Priority operational screens:
 
-1. Volunteer Application
-2. Volunteer Coordination
+1. Staff Application
+2. Staff Coordination
 3. Shift Lead Board
 4. Incident List / Incident Editor
 5. Field Report Creation
@@ -1662,7 +1664,7 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 
 ## 6.3 MVP In Scope
 
-### Volunteer Intake
+### Staff Intake
 
 - event applications
 - DNS auto-rejection by email
@@ -1670,9 +1672,9 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - applicant withdrawal
 - organization approval
 - rescission before team assignment
-- Prospective volunteer creation
+- Prospective staff member creation
 
-### Volunteer Profile
+### Staff Profile
 
 - legal name
 - email
@@ -1728,12 +1730,12 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - referencing document version bumped when included fragments change
 - fragment references visible while editing
 - fragment text rendered inline while viewing
-- policy/procedure acknowledgment during volunteer signup or training
+- policy/procedure acknowledgment during staff signup or training
 - acknowledgment records store document and version only
 - PDF export/print
 - Markdown export
 - manually assembled policy/procedure packets
-- policy/procedure search for volunteers
+- policy/procedure search for staff
 
 ### Shifts
 
@@ -1751,7 +1753,7 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 
 ### Credential Eligibility
 
-- one event credential per volunteer per event
+- one event credential per staff member per event
 - Eligible / Blocked / Revoked states
 - automatic eligibility determination
 - blocked when requirements fail
@@ -1767,9 +1769,9 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - actual start/end time
 - hour creation
 - hour correction during grace period
-- add eligible unscheduled volunteer
+- add eligible unscheduled staff
 - current deployment/location assignment
-- move volunteer between locations
+- move staff between locations
 - equipment checked out
 - equipment checkout/check-in to individuals
 - field report shortcut
@@ -1832,7 +1834,7 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 
 - credential eligibility export
 - shift roster export
-- volunteer contact list export
+- staff contact list export
 - hours worked export
 - credits earned export
 
@@ -1854,12 +1856,12 @@ The following are not required for October MVP:
 - full organizer removal safeguards beyond Lead Organizer + audit
 - payroll
 - HR/personnel notes
-- volunteer self-reported hours
+- staff self-reported hours
 - free-floating permissions outside org/department/team membership
 - free-floating hours outside shifts
 - deployment movement history
 - training waiver/equivalency modeling
-- general public policy/procedure browsing outside organization volunteer signup
+- general public policy/procedure browsing outside organization staff signup
 - policy/procedure acknowledgments as direct shift signup gates
 - policy/procedure acknowledgments as direct credential eligibility gates
 - policy/procedure acknowledgments outside signup or training for MVP
@@ -1867,7 +1869,7 @@ The following are not required for October MVP:
 - nested fragments
 - rich policy/procedure formatting beyond Markdown for MVP
 - automatic policy/procedure packet assembly
-- policy/procedure packet exports that include volunteer acknowledgment status
+- policy/procedure packet exports that include staff acknowledgment status
 
 ---
 
@@ -1877,7 +1879,7 @@ The following are not required for October MVP:
 
 ### ORG-001
 
-Meridian shall support organizations that produce events and manage volunteers.
+Meridian shall support organizations that produce events and manage staff.
 
 ### ORG-002
 
@@ -1885,7 +1887,7 @@ Organizations shall define departments.
 
 ### ORG-003
 
-Organizations shall define organization-level volunteer statuses.
+Organizations shall define organization-level staff statuses.
 
 ### ORG-004
 
@@ -1909,7 +1911,7 @@ Meridian shall not support department default credit policies.
 
 ### ORG-009
 
-Only organizers shall change organization-level volunteer status.
+Only organizers shall change organization-level staff status.
 
 ### ORG-010
 
@@ -1925,35 +1927,35 @@ The final Lead Organizer shall not be removable.
 
 ---
 
-## 7.2 Volunteer Requirements
+## 7.2 Staff Requirements
 
 ### VOL-001
 
-Meridian shall treat all operational users as volunteers.
+Meridian shall treat all operational users as staff.
 
 ### VOL-002
 
-Volunteers shall have organization-level status.
+Staff shall have organization-level status.
 
 ### VOL-003
 
-Volunteers shall have department-level status per department.
+Staff shall have department-level status per department.
 
 ### VOL-004
 
-A volunteer may belong to multiple departments.
+A staff member may belong to multiple departments.
 
 ### VOL-005
 
-A volunteer may belong to multiple teams.
+A staff member may belong to multiple teams.
 
 ### VOL-006
 
-A volunteer shall not belong to a department without belonging to at least one team.
+A staff member shall not belong to a department without belonging to at least one team.
 
 ### VOL-007
 
-Meridian shall preserve volunteer history across events.
+Meridian shall preserve staff history across events.
 
 ### VOL-008
 
@@ -1961,11 +1963,11 @@ Meridian shall require legal name and email for applicants unless they already h
 
 ### VOL-009
 
-Volunteer profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth.
+Staff profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth.
 
 ### VOL-010
 
-Handle shall refer to the volunteer’s radio/operational handle.
+Handle shall refer to the staff member's radio/operational handle.
 
 ### VOL-011
 
@@ -1973,7 +1975,7 @@ Organizers shall not have default access to emergency contacts.
 
 ### VOL-012
 
-Department leads shall have access to emergency contacts for volunteers in their department.
+Department leads shall have access to emergency contacts for staff in their department.
 
 ---
 
@@ -2013,11 +2015,11 @@ Ineligible shall be indefinite until changed by a department lead.
 
 ### STAT-009
 
-Working for any department shall prevent a volunteer from going inactive at the organization level.
+Working for any department shall prevent a staff member from going inactive at the organization level.
 
 ### STAT-010
 
-Prospective volunteers shall become Active after completing required trainings, or after department assignment if no trainings are required.
+Prospective staff members shall become Active after completing required trainings, or after department assignment if no trainings are required.
 
 ### STAT-011
 
@@ -2049,7 +2051,7 @@ Approval shall occur at the organization level.
 
 ### APP-006
 
-Approved applicants shall become Prospective volunteers.
+Approved applicants shall become Prospective staff members.
 
 ### APP-007
 
@@ -2145,7 +2147,7 @@ Meridian shall not model training waivers in MVP.
 
 ### TRAIN-008
 
-A volunteer shall not sign up for or be added to a shift without required training completion.
+A staff member shall not sign up for or be added to a shift without required training completion.
 
 ### WAIVER-001
 
@@ -2165,7 +2167,7 @@ Meridian shall not store signed waiver document contents.
 
 ### WAIVER-005
 
-A volunteer shall not sign up for or be added to a shift without required waiver completion.
+A staff member shall not sign up for or be added to a shift without required waiver completion.
 
 ### WAIVER-006
 
@@ -2221,11 +2223,11 @@ Shift signup shall be immediate when eligibility requirements are satisfied.
 
 ### SHIFT-012
 
-Full shifts shall not allow additional volunteer self-signup.
+Full shifts shall not allow additional staff self-signup.
 
 ### SHIFT-013
 
-Leads may remove volunteers from shifts.
+Leads may remove staff from shifts.
 
 ### SHIFT-014
 
@@ -2253,7 +2255,7 @@ A credential shall not represent a physical item.
 
 ### CRED-003
 
-A volunteer shall have at most one credential per event.
+A staff member shall have at most one credential per event.
 
 ### CRED-004
 
@@ -2309,15 +2311,15 @@ The Shift Lead Board shall show the current shift roster.
 
 ### SLB-002
 
-The Shift Lead Board shall show checked-in volunteers.
+The Shift Lead Board shall show checked-in staff.
 
 ### SLB-003
 
-The Shift Lead Board shall allow volunteer check-in.
+The Shift Lead Board shall allow staff check-in.
 
 ### SLB-004
 
-The Shift Lead Board shall allow volunteer check-out.
+The Shift Lead Board shall allow staff check-out.
 
 ### SLB-005
 
@@ -2333,7 +2335,7 @@ Shift leads shall be able to correct hours during the correction grace period.
 
 ### SLB-008
 
-The Shift Lead Board shall allow eligible unscheduled volunteers to be added to a shift.
+The Shift Lead Board shall allow eligible unscheduled staff to be added to a shift.
 
 ### SLB-009
 
@@ -2341,7 +2343,7 @@ The Shift Lead Board shall allow deployment/location assignment.
 
 ### SLB-010
 
-The Shift Lead Board shall allow volunteers to be moved between deployments/locations.
+The Shift Lead Board shall allow staff to be moved between deployments/locations.
 
 ### SLB-011
 
@@ -2349,7 +2351,7 @@ The Shift Lead Board shall show equipment checked out.
 
 ### SLB-012
 
-The Shift Lead Board shall support equipment checkout/check-in to individual volunteers.
+The Shift Lead Board shall support equipment checkout/check-in to individual staff members.
 
 ### SLB-013
 
@@ -2421,7 +2423,7 @@ Credits earned export shall include calculation basis.
 
 ### FR-001
 
-Authorized volunteers may create field reports.
+Authorized staff members may create field reports.
 
 ### FR-002
 
@@ -2505,7 +2507,7 @@ Incidents shall support configurable types.
 
 ### INC-007
 
-Incidents shall support summary, started timestamp, location, tags, notes, attachments, linked incidents, and involved volunteers.
+Incidents shall support summary, started timestamp, location, tags, notes, attachments, linked incidents, and involved staff.
 
 ### INC-008
 
@@ -2553,11 +2555,11 @@ MVP equipment tracking shall be visible/manual.
 
 ### EQUIP-002
 
-MVP equipment tracking shall support checkout to individual volunteers.
+MVP equipment tracking shall support checkout to individual staff members.
 
 ### EQUIP-003
 
-MVP equipment tracking shall support check-in from individual volunteers.
+MVP equipment tracking shall support check-in from individual staff members.
 
 ### EQUIP-004
 
@@ -2589,7 +2591,7 @@ MVP shall support shift roster export.
 
 ### REPORT-003
 
-MVP shall support volunteer contact list export.
+MVP shall support staff contact list export.
 
 ### REPORT-004
 
@@ -2613,7 +2615,7 @@ Shift roster exports shall exclude phone numbers and emergency contacts.
 
 ### REPORT-009
 
-Department volunteer contact exports may include phone numbers and emergency contacts.
+Department staff contact exports may include phone numbers and emergency contacts.
 
 ### REPORT-010
 
@@ -2681,7 +2683,7 @@ Department leads and team leads shall be able to see policies/procedures within 
 
 ### POL-012
 
-Policy/procedure documents shall not be generally public-facing before login except as part of volunteer signup for an organization.
+Policy/procedure documents shall not be generally public-facing before login except as part of staff signup for an organization.
 
 ### POL-013
 
@@ -2725,7 +2727,7 @@ Meridian shall support policy/procedure acknowledgments.
 
 ### POL-023
 
-Policy/procedure acknowledgments may occur during volunteer signup.
+Policy/procedure acknowledgments may occur during staff signup.
 
 ### POL-024
 
@@ -2805,7 +2807,7 @@ Acknowledgment records shall store the acknowledged document and document versio
 
 ### POL-043
 
-Acknowledgment records shall not be required to store the rendered text the volunteer saw.
+Acknowledgment records shall not be required to store the rendered text the staff saw.
 
 ### POL-044
 
@@ -2813,7 +2815,7 @@ Policy/procedure acknowledgments shall not need to be automatically re-required 
 
 ### POL-045
 
-Policy/procedure acknowledgments shall be limited to volunteer signup and training for MVP.
+Policy/procedure acknowledgments shall be limited to staff signup and training for MVP.
 
 ### POL-046
 
@@ -2845,11 +2847,11 @@ Policy/procedure packets shall be manually assembled for MVP.
 
 ### POL-053
 
-Policy/procedure packet exports shall include document contents only and shall not include volunteer acknowledgment status.
+Policy/procedure packet exports shall include document contents only and shall not include staff acknowledgment status.
 
 ### POL-054
 
-Policy/procedure documents shall be searchable by volunteers according to visibility permissions.
+Policy/procedure documents shall be searchable by staff according to visibility permissions.
 
 ---
 

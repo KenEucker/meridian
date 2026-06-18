@@ -11,7 +11,7 @@ Purpose: Define the surface rules for Meridian Incident Management System screen
 
 This specification defines the UI expectations for Meridian IMS surfaces, including incident lists, incident detail, incident create/edit, field reports, timelines, notes, priority labels, permissions, audit access, and offline behavior.
 
-IMS screens should feel more serious and restricted than normal volunteer and shift surfaces, but they must remain fast, clear, and usable.
+IMS screens should feel more serious and restricted than normal staff and shift surfaces, but they must remain fast, clear, and usable.
 
 When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 IMS routes, statuses, priority labels, Field Report lifecycle, permission predicates, and offline rules are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
@@ -179,7 +179,7 @@ IMS priority labels must be visually distinct from normal statuses.
 Priority must not be confused with:
 
 - incident state;
-- volunteer status;
+- staff status;
 - credential status;
 - shift attendance flags;
 - department identity.
@@ -250,7 +250,7 @@ IC access is granted through the event's configured IC department and team-grant
 
 Restricted access behavior:
 
-- default volunteers receive simple restricted-access messaging;
+- default staff receive simple restricted-access messaging;
 - elevated users may see required role information when helpful;
 - kiosk mode should return to a safe kiosk surface when appropriate.
 

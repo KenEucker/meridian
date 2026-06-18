@@ -213,8 +213,8 @@ Implements a user workflow that crosses several requirements.
 
 Examples:
 
-- Volunteer applies to an event and becomes Prospective after approval;
-- Shift lead checks a volunteer in/out and creates actual hours;
+- Staff applies to an event and becomes Prospective after approval;
+- Shift lead checks a staff member in/out and creates actual hours;
 - Offline field report syncs from device to on-site to central.
 
 ### 4.4 Admin/God mode support
@@ -311,7 +311,7 @@ Choose one coherent slice from the requirements or Alpha 1 implementation order.
 
 A good slice can be described in one sentence:
 
-> A shift lead can check out a volunteer and create an actual hours record.
+> A shift lead can check out a staff member and create an actual hours record.
 
 Poor slice:
 
@@ -485,8 +485,8 @@ Avoid hiding cross-domain behavior in model observers unless there is a strong r
 
 ```text
 ApproveApplicationAction
-AssignVolunteerToTeamAction
-CheckVolunteerOutAction
+AssignStaffToTeamAction
+CheckStaffOutAction
 CalculateCreditsAction
 AttachFieldReportToIncidentAction
 RevokeCredentialAction
@@ -609,7 +609,7 @@ Export/import PRs should include:
 - test fixture;
 - human QA export sample.
 
-For example, organizer exports must not include emergency contacts, while department volunteer contact exports may include emergency contacts for that department.
+For example, organizer exports must not include emergency contacts, while department staff contact exports may include emergency contacts for that department.
 
 ---
 
@@ -644,28 +644,28 @@ Source:
 Actors:
 - Shift Lead
 - Department Lead
-- Volunteer
+- Staff
 
 Preconditions:
 - Event exists.
 - Department exists.
 - Team exists.
-- Volunteer is assigned to the department and eligible team.
+- Staff is assigned to the department and eligible team.
 - Shift requires Training A and Waiver B.
 
 Scenarios:
 
-1. Eligible scheduled volunteer may be checked in.
-   - Given the volunteer has completed Training A
-   - And the volunteer has completed Waiver B
-   - And the volunteer is assigned to the eligible team
-   - When the Shift Lead checks the volunteer in
+1. Eligible scheduled staff may be checked in.
+   - Given the staff member has completed Training A
+   - And the staff member has completed Waiver B
+   - And the staff member is assigned to the eligible team
+   - When the Shift Lead checks the staff member in
    - Then an attendance operation is recorded
-   - And the volunteer appears as checked in on the Shift Lead Board
+   - And the staff member appears as checked in on the Shift Lead Board
 
-2. Ineligible unscheduled volunteer may not be added.
-   - Given the volunteer has not completed Training A
-   - When the Shift Lead attempts to add the volunteer to the shift
+2. Ineligible unscheduled staff may not be added.
+   - Given the staff member has not completed Training A
+   - When the Shift Lead attempts to add the staff member to the shift
    - Then the action is denied
    - And the denial explains that required training is incomplete
    - And no attendance record is created
@@ -740,7 +740,7 @@ Source:
 - Technical spec: Sections 9.4, 17.2, 17.3, 26.1
 
 Actors:
-- Authorized volunteer
+- Authorized staff member
 - IC role
 - God mode user
 
@@ -754,7 +754,7 @@ Preconditions:
 
 Scenarios:
 
-1. Authorized volunteer submits a field report offline.
+1. Authorized staff member submits a field report offline.
    - Given the user is authorized to create field reports
    - And the device is offline
    - When the user submits field report body text
@@ -804,24 +804,24 @@ Source:
 Actors:
 - Shift Lead
 - Department Lead
-- Volunteer
+- Staff
 
 Preconditions:
-- Volunteer is assigned to a shift.
+- Staff is assigned to a shift.
 - Shift Lead has authority for the relevant team.
-- Volunteer has been checked in.
+- Staff has been checked in.
 
 Scenarios:
 
-1. Shift Lead checks out volunteer.
-   - Given the volunteer is checked in
-   - When the Shift Lead checks the volunteer out
+1. Shift Lead checks out staff.
+   - Given the staff member is checked in
+   - When the Shift Lead checks the staff member out
    - Then an attendance operation is recorded
    - And an hours worked record is created
-   - And the hours record references event, department, shift, volunteer, actual start time, and actual end time
+   - And the hours record references event, department, shift, staff, actual start time, and actual end time
 
 2. Shift Lead edits actual checkout time during checkout.
-   - Given the volunteer forgot to check out on time
+   - Given the staff member forgot to check out on time
    - When the Shift Lead enters a corrected actual end time
    - Then the hours record uses the corrected actual end time
    - And the correction is visible in history/audit according to the implementation design
@@ -850,24 +850,24 @@ Source:
 - Requirements: `CRED-003`, `CRED-004`, `CRED-009`, `CRED-010`, `SHIFT-013`
 
 Actors:
-- Volunteer
+- Staff
 - Department Lead
 - Organizer
 
 Preconditions:
-- Volunteer has one event credential in Eligible state.
-- Volunteer has exactly one signed-up future shift.
+- Staff has one event credential in Eligible state.
+- Staff has exactly one signed-up future shift.
 
 Scenarios:
 
 1. Removing the final shift blocks credential.
-   - Given the Department Lead removes the volunteer from the final future shift
+   - Given the Department Lead removes the staff member from the final future shift
    - When credential eligibility recalculates
    - Then the credential state becomes Blocked
    - And the blocked reason includes no signed-up shifts
 
 2. Completed hours are preserved.
-   - Given the volunteer has completed shifts and recorded hours
+   - Given the staff member has completed shifts and recorded hours
    - When future shifts are removed
    - Then completed shifts and recorded hours remain visible and unchanged
 
@@ -1157,7 +1157,7 @@ Use for Laravel endpoint behavior.
 
 Examples:
 
-- application approval creates Prospective volunteer;
+- application approval creates Prospective staff records;
 - DNS application auto-rejection;
 - shift signup eligibility;
 - check-out creates hours;
@@ -1171,7 +1171,7 @@ Examples:
 
 - organizer cannot view emergency contacts by default;
 - department lead can view emergency contacts for own department;
-- non-IC department lead cannot view field reports authored by their volunteers;
+- non-IC department lead cannot view field reports authored by their staff;
 - `ic_viewer` can view but not modify incidents;
 - only organizer/IC lead can revoke credential.
 
@@ -1249,7 +1249,7 @@ Suggested seed personas:
 
 | Persona | Role |
 |---|---|
-| Vera Volunteer | regular volunteer |
+| Vera Staff | regular staff |
 | Sam Shiftlead | shift lead for Dirt team |
 | Dana Departmentlead | department lead for Rangers |
 | Olive Organizer | organizer |
@@ -1258,8 +1258,8 @@ Suggested seed personas:
 | Ivy ICViewer | IC viewer |
 | Gwen Godmode | God mode user |
 | Debbie DNS | Do Not Staff person |
-| Pat Prospective | prospective volunteer |
-| Ira Ineligible | department-ineligible volunteer |
+| Pat Prospective | prospective staff |
+| Ira Ineligible | department-ineligible staff |
 
 Suggested seed domains:
 
@@ -1537,7 +1537,7 @@ Slices:
 2. Events.
 3. Departments.
 4. Teams and default teams.
-5. Volunteer profiles.
+5. Staff profiles.
 6. Memberships.
 7. Organization and department statuses.
 8. Role/permission scaffolding.
@@ -1545,14 +1545,14 @@ Slices:
 
 Acceptance evidence:
 
-- volunteers can belong to multiple departments and teams;
+- staff can belong to multiple departments and teams;
 - a department membership cannot exist without team membership;
 - organization blocking status supersedes department status;
 - permission decisions are explainable in tests or UI.
 
 ### 17.5 Application and onboarding milestone
 
-Goal: support volunteer intake and approval.
+Goal: support staff intake and approval.
 
 Slices:
 
@@ -1560,7 +1560,7 @@ Slices:
 2. DNS auto-rejection.
 3. Application status transitions.
 4. Organization approval.
-5. Prospective volunteer creation.
+5. Prospective staff record creation.
 6. Department assignment.
 7. Team assignment.
 8. Rescind before team assignment.
@@ -1591,7 +1591,7 @@ Slices:
 
 Acceptance evidence:
 
-- eligible volunteer can sign up immediately;
+- eligible staff members can sign up immediately;
 - missing training/waiver blocks signup;
 - full shift blocks self-signup;
 - overlap warns by default;
@@ -1657,14 +1657,14 @@ Slices:
 4. No-show.
 5. Actual hours creation.
 6. Correct hours during grace period.
-7. Add eligible unscheduled volunteer.
+7. Add eligible unscheduled staff.
 8. Deployment/location current assignment.
 9. Equipment checkout/check-in.
 10. Offline attendance operations.
 
 Acceptance evidence:
 
-- shift lead can check in/out assigned volunteer;
+- shift lead can check in/out assigned staff members;
 - check-out creates actual hours;
 - no free-floating hours exist;
 - missing required training/waiver blocks unscheduled addition;
@@ -1727,7 +1727,7 @@ Slices:
 
 1. Credential eligibility export.
 2. Shift roster export.
-3. Volunteer contact export.
+3. Staff contact export.
 4. Hours worked export.
 5. Credits earned export.
 6. CSV/spreadsheet import for users/teams/shifts/assignments.
@@ -1738,7 +1738,7 @@ Slices:
 Acceptance evidence:
 
 - organizer exports exclude emergency contacts;
-- department contact exports may include emergency contacts for department volunteers;
+- department contact exports may include emergency contacts for department staff;
 - credits export includes calculation basis;
 - build versions are visible;
 - install/deployment can be followed by a human tester.
@@ -1803,7 +1803,7 @@ A requirements change is needed when product behavior changes.
 Examples:
 
 - allowing organizers to see all emergency contacts;
-- allowing volunteer self-reported hours;
+- allowing staff self-reported hours;
 - making incidents available outside IC;
 - changing field reports from immutable to editable.
 

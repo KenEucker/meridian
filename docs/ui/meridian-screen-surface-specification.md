@@ -241,7 +241,7 @@ Policy/procedure exports are a specialized document export surface. They must sh
 
 ## 13. Admin and Configuration Surfaces
 
-Admin surfaces may expose more complex configuration and permission details than volunteer-facing surfaces.
+Admin surfaces may expose more complex configuration and permission details than staff-facing surfaces.
 
 Admin screens may show disabled controls with explanations when that helps understanding. They must still use canonical statuses, standard components, semantic tokens, and confirmation dialogs for destructive changes.
 
@@ -286,13 +286,13 @@ Incident creation and editing are online-only in Alpha 1. Field Report creation,
 
 Screens must be role-aware from the beginning.
 
-Default volunteers should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
+Default staff should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
 
 Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC team membership for the event's configured IC department.
 
 Permission-denied screens should be direct and calm:
 
-- default volunteers: restricted access;
+- default staff: restricted access;
 - elevated users: role or permission required when useful;
 - kiosk mode: return to safe kiosk surface when appropriate.
 

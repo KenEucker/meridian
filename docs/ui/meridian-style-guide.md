@@ -13,9 +13,9 @@ Last updated: 2026-06-17
 
 **Meridian is a Volunteer Operations Platform.**
 
-Meridian helps organizations bring in volunteers and manage their contribution lifecycle: application, approval, training, qualifications, department assignment, shift signup, shift operations, field reporting, incident coordination, assets, policies, and post-event records.
+Meridian helps organizations bring in staff and manage their contribution lifecycle: application, approval, training, qualifications, department assignment, shift signup, shift operations, field reporting, incident coordination, assets, policies, and post-event records.
 
-Meridian is more than scheduling software. It is a shared operational center that allows volunteers, department leads, organizers, and incident teams to contribute to the same trusted source of truth.
+Meridian is more than scheduling software. It is a shared operational center that allows staff, department leads, organizers, and incident teams to contribute to the same trusted source of truth.
 
 ### 1.2 Brand Thesis
 
@@ -35,19 +35,19 @@ Meridian helps volunteer organizations know:
 
 #### Shared Center
 
-Meridian gives everyone a common operational reference point. It is not command from above; it is a shared center that volunteers, leads, and incident teams can orient around together.
+Meridian gives everyone a common operational reference point. It is not command from above; it is a shared center that staff, leads, and incident teams can orient around together.
 
 #### Coordinated Contribution
 
-The platform turns individual volunteer actions into organized collective effort. Applications, trainings, shifts, field reports, incidents, policies, and deployments all become part of the same operational map.
+The platform turns individual staff member actions into organized collective effort. Applications, trainings, shifts, field reports, incidents, policies, and deployments all become part of the same operational map.
 
 #### Field-Ready Trust
 
-Meridian should feel useful in real field conditions: dusty laptops, check-in kiosks, spotty internet, late-night operations, shared workstations, rotating volunteers, and a mix of experienced leads and first-time contributors.
+Meridian should feel useful in real field conditions: dusty laptops, check-in kiosks, spotty internet, late-night operations, shared workstations, rotating staff, and a mix of experienced leads and first-time contributors.
 
 #### Public-Good Software
 
-Meridian should feel like open-source public infrastructure for volunteer organizations. It should not feel proprietary, extractive, corporate, or like a Silicon Valley SaaS product trying to “disrupt” volunteer management.
+Meridian should feel like open-source public infrastructure for volunteer organizations. It should not feel proprietary, extractive, corporate, or like a Silicon Valley SaaS product trying to “disrupt” staff management.
 
 #### Warm Structure
 
@@ -89,7 +89,7 @@ Meridian’s voice should be clear, practical, and calm.
 
 Use language that sounds like:
 
-- A capable volunteer lead explaining what is happening.
+- A capable staff lead explaining what is happening.
 - A field operations board that helps people act without panic.
 - A project maintained by people who understand the work.
 
@@ -105,12 +105,12 @@ Avoid language that sounds like:
 
 | Avoid | Use Instead |
 | --- | --- |
-| Command center for mission-critical deployment | Shared operations view for volunteer teams |
-| Workforce optimization | Volunteer coordination |
+| Command center for mission-critical deployment | Shared operations view for staff teams |
+| Workforce optimization | Staff coordination |
 | Personnel command | Shift and deployment management |
 | Mission control | Operations dashboard |
 | Incident response domination | Incident coordination |
-| Leverage human capital | Support volunteer contributions |
+| Leverage human capital | Support staff contributions |
 
 ---
 
@@ -122,7 +122,7 @@ The Meridian mark is a **soft hexagonal field emblem** built around a central hu
 
 The mark represents:
 
-- Multiple volunteers and departments contributing to one shared source of truth.
+- Multiple staff and departments contributing to one shared source of truth.
 - A field-ready participation badge rather than a command insignia.
 - Operational coordination without police, military, or emergency-service symbolism.
 - A shared center rather than a top-down hierarchy.
@@ -147,7 +147,7 @@ The center represents Meridian as a shared source of truth. It is a point of con
 
 #### Radiating Paths
 
-The paths suggest volunteer activity, department work, incident input, field reports, shifts, and operations all flowing into a shared center.
+The paths suggest staff activity, department work, incident input, field reports, shifts, and operations all flowing into a shared center.
 
 #### Earth + Signal Palette
 
@@ -168,7 +168,7 @@ The logo system should include:
    Used for app icons, favicons, GitHub avatar, social avatar, and small UI surfaces.
 
 3. **Patch / badge version**  
-   Used for stickers, shirts, documentation headers, volunteer-facing swag, and event materials.
+   Used for stickers, shirts, documentation headers, staff-facing swag, and event materials.
 
 4. **Monochrome mark**  
    Used when color reproduction is limited.
@@ -238,7 +238,7 @@ The prior blue/cyan/teal identity should be retired for primary brand usage. Mer
 | --- | --- | --- | --- |
 | `brand.charcoal` | Field Charcoal | `#263039` | Primary text, dark UI surfaces, monochrome logo |
 | `brand.slate` | Weathered Slate | `#405665` | Secondary brand tone, panels, supporting icon segments |
-| `brand.sage` | Field Sage | `#71836D` | Volunteer/community tone, calm status accents |
+| `brand.sage` | Field Sage | `#71836D` | Staff/community tone, calm status accents |
 | `brand.tan` | Dust Tan | `#B89263` | Warm neutral, backgrounds, badge elements |
 | `brand.canvas` | Canvas | `#EFE8DA` | Warm page background, documentation surfaces |
 | `brand.signal` | Signal Amber | `#D9822B` | Primary brand accent, calls to action, logo highlight |
@@ -334,7 +334,7 @@ Acceptable qualities:
 - Rounded but not bubbly.
 - Geometric but not sterile.
 - Strong enough for a GitHub README and website header.
-- Friendly enough for a volunteer T-shirt.
+- Friendly enough for a staff T-shirt.
 
 Avoid:
 
@@ -364,7 +364,7 @@ UI text should be calm, direct, and action-oriented.
 
 Examples:
 
-- “Check in volunteer”
+- “Check in staff”
 - “Move to deployment”
 - “Attach field report”
 - “Sync pending”
@@ -422,7 +422,7 @@ Appropriate texture uses:
 - Patch/sticker versions
 - Documentation cover graphics
 - Social images
-- Volunteer-facing swag
+- Staff-facing swag
 
 Avoid texture in:
 
@@ -442,12 +442,12 @@ Preferred:
 - Simple field diagrams
 - Map-like path systems
 - Modular operational blocks
-- Abstract volunteer/team nodes
+- Abstract staff/team nodes
 - Soft geometric compositions
 
 Avoid:
 
-- Cartoon volunteers
+- Cartoon staff
 - Corporate people illustrations
 - Emergency-service scenes
 - Overly literal command-center imagery
@@ -486,7 +486,7 @@ Brand icons may use the logo palette and slightly more detail than UI icons, but
 
 ### 8.1 Photography Should Show
 
-- Real volunteers
+- Real staff
 - Check-in stations
 - Field operations desks
 - Radios, binders, kiosks, maps, and laptops
@@ -578,7 +578,7 @@ Use stronger brand expression in:
 - Documentation covers
 - Onboarding
 - Kiosk idle screen
-- Volunteer-facing success confirmations
+- Staff-facing success confirmations
 
 Use lighter brand expression in:
 
@@ -760,7 +760,7 @@ The badge/patch version may be used for:
 - Stickers
 - Shirts
 - Event signage
-- Volunteer onboarding sheets
+- Staff onboarding sheets
 - Printed quick-start cards
 - Laptop stickers
 
@@ -853,7 +853,7 @@ When implementing UI:
 
 When prompting an LLM to generate Meridian visuals, include:
 
-> Meridian is open-source public-good software for volunteer operations. It should feel field-ready, communal, cooperative, warm, useful, and trustworthy. The brand uses a soft hexagonal field emblem with a central hub and radiating paths, representing coordinated volunteer contribution around a shared source of truth. It should avoid military, police, emergency-service, corporate SaaS, startup, compass rose, shield, map pin, and generic monogram imagery. Use an earth + signal palette with canvas neutrals, charcoal, slate, sage, dust tan, and signal amber.
+> Meridian is open-source public-good software for volunteer operations. It should feel field-ready, communal, cooperative, warm, useful, and trustworthy. The brand uses a soft hexagonal field emblem with a central hub and radiating paths, representing coordinated staff contribution around a shared source of truth. It should avoid military, police, emergency-service, corporate SaaS, startup, compass rose, shield, map pin, and generic monogram imagery. Use an earth + signal palette with canvas neutrals, charcoal, slate, sage, dust tan, and signal amber.
 
 ---
 

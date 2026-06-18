@@ -146,11 +146,11 @@ Audit history matters, but it should not overwhelm active work. History should u
 
 Incident timelines should hide routine field-change audit entries unless the user expands them.
 
-Policy/procedure version history, acknowledgment history, export history, and fragment-driven version bumps should be visible to authorized maintainers without cluttering volunteer reading surfaces.
+Policy/procedure version history, acknowledgment history, export history, and fragment-driven version bumps should be visible to authorized maintainers without cluttering staff reading surfaces.
 
 ### 5.6 Governance without HR framing
 
-Policies, procedures, waivers, trainings, and acknowledgments should be presented as volunteer governance and operational readiness, not as employee compliance management.
+Policies, procedures, waivers, trainings, and acknowledgments should be presented as staff governance and operational readiness, not as employee compliance management.
 
 Use direct operational language. Avoid HR/personnel-file framing.
 
@@ -310,19 +310,19 @@ Incident and Field Report surfaces still use a more serious and restricted inter
 
 ## 9. Role-Aware Home and Dashboard Model
 
-### 9.1 Volunteer home
+### 9.1 Staff home
 
-A regular volunteer should see departments they are assigned to as prominent icons or cards.
+A regular staff member should see departments they are assigned to as prominent icons or cards.
 
-If the event is currently within its operations window and the volunteer is signed up for shifts, the volunteer’s schedule should appear below the department icons.
+If the event is currently within its operations window and the staff member is signed up for shifts, the staff member's schedule should appear below the department icons.
 
-Volunteers should also see required policy/procedure acknowledgments where relevant to signup or training. These should be presented as readiness or onboarding work, not as shift or credential blockers.
+Staff should also see required policy/procedure acknowledgments where relevant to signup or training. These should be presented as readiness or onboarding work, not as shift or credential blockers.
 
 ### 9.2 Department lead home
 
 A department lead should see department-relevant dashboard widgets first.
 
-Below those widgets, the department lead should see the same general structure as a volunteer: assigned departments and current event schedule.
+Below those widgets, the department lead should see the same general structure as a staff member: assigned departments and current event schedule.
 
 Department leads may also see department-scoped policy/procedure maintenance tasks, fragment warnings, draft documents, and required acknowledgment configuration where applicable.
 
@@ -369,7 +369,7 @@ Quiet states are desirable. Examples include “No active incidents” or “All
 
 On mobile, dashboard widgets should collapse into a single priority feed.
 
-Volunteers may see both department-membership alerts and shift-related alerts.
+Staff may see both department-membership alerts and shift-related alerts.
 
 Policy/procedure widgets should focus on required reading, acknowledgments, draft/publish work, fragment impacts, and export actions. They should not dominate active event operational dashboards unless there is a required action.
 
@@ -434,7 +434,7 @@ Central access should use provider login and magic link authentication.
 
 ### 11.3 Self check-in
 
-Volunteers should not self check-in or self check-out unless they are department leads or shift leads.
+Staff should not self check-in or self check-out unless they are department leads or shift leads.
 
 ### 11.4 Field assumptions
 
@@ -562,7 +562,7 @@ A teach mode toggle may expose more explanatory guidance for users who need help
 
 Policy/procedure reading surfaces should prioritize readability over density.
 
-Document lists may use compact tables for maintainers and cards/lists for volunteers. Document bodies should use a readable line length, clear headings, and restrained metadata.
+Document lists may use compact tables for maintainers and cards/lists for staff. Document bodies should use a readable line length, clear headings, and restrained metadata.
 
 ---
 
@@ -655,7 +655,7 @@ Charts may be used in dashboards where they clarify attention or operational rea
 
 IMS screens should favor lists, timelines, and tables over charts or visual widgets.
 
-Policy/procedure surfaces should generally avoid charts unless showing maintainer/admin summaries. Volunteer-facing document reading surfaces should not use charts as decoration.
+Policy/procedure surfaces should generally avoid charts unless showing maintainer/admin summaries. Staff-facing document reading surfaces should not use charts as decoration.
 
 ---
 
@@ -700,7 +700,7 @@ The scale should distinguish routine information, attention needed, warning, cri
 
 IMS priority labels should be visually distinct from normal statuses.
 
-Priority labels should not be confused with incident state, volunteer status, credential status, or shift attendance flags.
+Priority labels should not be confused with incident state, staff status, credential status, or shift attendance flags.
 
 ### 16.6 Status visuals
 
@@ -795,11 +795,11 @@ Permission-denied behavior depends on the user type.
 
 For elevated users, the page may explain which role is required.
 
-For default volunteers, the page should simply indicate that access is restricted.
+For default staff, the page should simply indicate that access is restricted.
 
 ### 18.3 Operational terminology
 
-Volunteer-facing UI should not hide operational or administrative terminology where that terminology is accurate and useful.
+Staff-facing UI should not hide operational or administrative terminology where that terminology is accurate and useful.
 
 Meridian should not over-simplify language in a way that makes operations less clear.
 
@@ -817,7 +817,7 @@ Department-scoped published documents are visible to members of the department.
 
 Team-scoped published documents are visible to members of the team, with leadership visibility according to department/team leadership scope.
 
-Policy/procedure documents should not be generally public-facing before login except as part of volunteer signup.
+Policy/procedure documents should not be generally public-facing before login except as part of staff signup.
 
 Organizers cannot edit department-scoped or team-scoped policy/procedure documents by default.
 
@@ -833,7 +833,7 @@ Maintainer actions should be visible only to users with scope-appropriate author
 
 ### 19.1 Visual tone
 
-IMS screens should feel more serious and restricted than normal volunteer and shift surfaces.
+IMS screens should feel more serious and restricted than normal staff and shift surfaces.
 
 They should use minimal color variation outside of status, priority, and restricted-state indicators.
 
@@ -907,11 +907,11 @@ Documents should be distinguishable by type:
 
 Policy and Procedure are separate types. Do not use a single generic “Document” label when the user needs to know which kind of document they are viewing or maintaining.
 
-Fragments are maintainer-facing reusable content. Regular volunteers should not browse fragments as separate content unless a future feature specifically requires it.
+Fragments are maintainer-facing reusable content. Regular staff should not browse fragments as separate content unless a future feature specifically requires it.
 
-### 20.3 Volunteer document list
+### 20.3 Staff document list
 
-The volunteer-facing document list should show visible published documents only.
+The staff-facing document list should show visible published documents only.
 
 The list should support title search only for Alpha 1.
 
@@ -973,7 +973,7 @@ Examples:
 2.00
 ```
 
-The version should be visible but not visually dominant on volunteer reading surfaces.
+The version should be visible but not visually dominant on staff reading surfaces.
 
 Maintainer surfaces should make version more prominent when it affects acknowledgment history, export history, or fragment-driven changes.
 
@@ -1045,7 +1045,7 @@ Fragments do not have Draft, Published, or Archived states in Alpha 1.
 
 ### 20.11 Acknowledgment surfaces
 
-Policy/procedure acknowledgments occur only during volunteer signup or training for Alpha 1.
+Policy/procedure acknowledgments occur only during staff signup or training for Alpha 1.
 
 Acknowledgment UI must show:
 
@@ -1063,7 +1063,7 @@ Acknowledgment creation requires server connection. If the server is unavailable
 
 Acknowledgment UI must not imply that acknowledgment is a direct shift-signup gate or credential-eligibility gate for Alpha 1.
 
-Volunteers may see acknowledgment status for required documents.
+Staff may see acknowledgment status for required documents.
 
 ### 20.12 Export surfaces
 
@@ -1081,7 +1081,7 @@ Exports should include:
 
 Export/print events are audit events.
 
-Policy/procedure packet assembly should remain feature-gated until the requirements/technical timing conflict is resolved. If packet export is implemented in Alpha 1, it should be a simple manual ordered selection flow and must not include volunteer acknowledgment status.
+Policy/procedure packet assembly should remain feature-gated until the requirements/technical timing conflict is resolved. If packet export is implemented in Alpha 1, it should be a simple manual ordered selection flow and must not include staff acknowledgment status.
 
 ### 20.13 Orchid/admin behavior
 
@@ -1243,7 +1243,7 @@ Subtle contextual banner for offline and sync-affected organization/event contex
 
 List/table pattern for visible policy/procedure documents.
 
-Volunteer-facing versions show published visible documents only. Maintainer versions may show Draft, Published, and Archived documents according to permissions.
+Staff-facing versions show published visible documents only. Maintainer versions may show Draft, Published, and Archived documents according to permissions.
 
 ### 23.14 `DocumentViewer`
 
@@ -1328,7 +1328,7 @@ LLM coding agents working on Meridian UI must follow these rules:
 9. Do not make destructive actions immediate.
 10. Do not create screen-specific visual systems that bypass semantic tokens.
 11. Do not use department accent colors as full theme overrides.
-12. Do not create separate volunteer-friendly labels for canonical statuses.
+12. Do not create separate staff-friendly labels for canonical statuses.
 13. Do not interrupt users for sync failures unless the current action cannot continue.
 14. Do not make kiosk/field surfaces mouse-only.
 15. Do not rely on color alone to communicate state.

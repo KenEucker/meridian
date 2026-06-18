@@ -11,7 +11,7 @@ Additive Update: Policies and Procedures technical architecture added.
 
 Meridian is a general-purpose, configurable volunteer operations platform for organizations and events. It is designed for field reliability, offline-capable operations, and trusted on-site coordination.
 
-Meridian supports organizations, events, departments, teams, volunteers, shifts, attendance, field reports, incidents, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
+Meridian supports organizations, events, departments, teams, staff, shifts, attendance, field reports, incidents, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
 
 The primary Alpha 1 goal is to prove that Meridian can operate reliably in a real event environment where internet connectivity may be limited, intermittent, or unavailable.
 
@@ -175,7 +175,7 @@ Organizations
 Events
 Departments
 Teams
-Volunteers
+Staff
 Users
 Memberships
 Roles
@@ -392,7 +392,7 @@ Connection policy:
 3. Preferred on-site deployment includes a Meridian-controlled router/AP/DNS path.
 4. If network/DNS control is unavailable, the installed Capacitor app is the reliable client.
 5. The installed app may trust a locally discovered on-site node through Meridian node fingerprint/cert pinning.
-6. Direct IP/self-signed browser access is God-mode/emergency only, not normal volunteer workflow.
+6. Direct IP/self-signed browser access is God-mode/emergency only, not normal staff workflow.
 ```
 
 ## 8.3 Preferred on-site networking model
@@ -486,7 +486,7 @@ The device should cache as much authorized data as possible.
 
 Offline data may be stale, but stale authorized data is better than no data.
 
-Regular volunteers should cache:
+Regular staff should cache:
 
 - Their own shifts.
 - Their department/team info.
@@ -500,7 +500,7 @@ Regular volunteers should cache:
 
 Shift leads should additionally cache:
 
-- Assigned volunteers for teams/shifts they lead.
+- Assigned staff for teams/shifts they lead.
 - Check-in/check-out/no-show state for those teams/shifts.
 - Team roster.
 
@@ -913,7 +913,7 @@ shift role
 Alpha 1 effective permission levels include:
 
 ```text
-volunteer
+staff
 shift_lead
 department_lead
 ic_lead
@@ -1258,7 +1258,7 @@ Incident creation requires active server connection.
 
 Incident creation is available only to elevated IC roles.
 
-Regular volunteers see no incident UI.
+Regular staff see no incident UI.
 
 Incidents should not be greedily synced to devices.
 
@@ -1284,7 +1284,7 @@ Incidents are visible only to IC roles.
 
 Not visible to:
 
-- Regular volunteers.
+- Regular staff.
 - Shift leads outside IC.
 - Department leads outside IC.
 - Organizers unless their department/team is functioning as IC and they hold an IC role.
@@ -1410,9 +1410,9 @@ Alpha 1 supports:
 - Check-out.
 - Mark no-show.
 
-Volunteer self check-in/out is excluded from Alpha 1.
+Staff self check-in/out is excluded from Alpha 1.
 
-Shift leads can check volunteers in/out.
+Shift leads can check staff in/out.
 
 Shift leads can mark no-show.
 
@@ -1432,7 +1432,7 @@ Check-out can happen after a shift and may not need to be attached to a shift.
 
 Shift leads see rosters for teams/shifts they lead with action buttons.
 
-Shift leads can check in a volunteer who is not assigned to the shift.
+Shift leads can check in a staff member who is not assigned to the shift.
 
 This does not create a separate exception record in Alpha 1.
 
@@ -1452,7 +1452,7 @@ Attendance operations do not include optional notes in Alpha 1.
 
 ## 20.5 Attendance visibility
 
-Volunteers see their own attendance state.
+Staff see their own attendance state.
 
 Shift leads see attendance for teams/shifts they lead.
 
@@ -1548,7 +1548,7 @@ Organizers cannot edit department documents merely by being organizers.
 
 Department leads and team leads can see policies/procedures within their department according to their leadership scope.
 
-Policy/procedure documents are not generally public-facing before login except as part of volunteer signup.
+Policy/procedure documents are not generally public-facing before login except as part of staff signup.
 
 ## 21.4 Document versioning
 
@@ -1627,7 +1627,7 @@ Documents store fragment references using a custom Markdown token.
 Example:
 
 ```md
-All volunteers agree to the following organization expectations:
+All staff agree to the following organization expectations:
 
 {{fragment:org-behavioral-agreement}}
 ```
@@ -1688,11 +1688,11 @@ The app shows document scope and version subtly, such as near the bottom of the 
 
 The app does not need to show a special notice that the document includes automatically updated fragments.
 
-Volunteers can see acknowledgment status for required documents.
+Staff can see acknowledgment status for required documents.
 
 ## 21.9 Acknowledgments
 
-Policy/procedure acknowledgments occur only during volunteer signup or training for Alpha 1.
+Policy/procedure acknowledgments occur only during staff signup or training for Alpha 1.
 
 Acknowledgments are scoped to organization and department for Alpha 1.
 
@@ -2137,7 +2137,7 @@ Alpha 1 should prove:
 10. The on-site node accepts and countersigns the operation.
 11. The on-site node syncs the field report metadata and photos to central when internet is available.
 12. The field report is visible in Orchid according to permission rules.
-13. A shift lead can check volunteers in/out and mark no-show.
+13. A shift lead can check staff in/out and mark no-show.
 14. IC roles can create and manage incidents online.
 15. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.
 16. A user can view visible published policies/procedures offline from synced PowerSync data.
@@ -2162,7 +2162,7 @@ Alpha 1 excludes:
 SMS
 push notifications
 native app-store distribution
-volunteer self check-in/out
+staff self check-in/out
 GPS collection
 configurable form structure
 automatic organizer visibility into all attendance

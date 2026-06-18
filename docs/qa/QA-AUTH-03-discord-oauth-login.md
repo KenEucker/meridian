@@ -20,7 +20,7 @@ Verify that Meridian central authentication supports Discord OAuth without passw
 
 ## Personas
 
-- Volunteer/applicant using a Discord account with a verified email
+- Staff/applicant using a Discord account with a verified email
 - Returning user with an existing Meridian account for the same verified email
 - Human reviewer
 

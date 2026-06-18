@@ -80,12 +80,12 @@ Trusted workstation state and individual user authority are separate:
 
 ## 5. Self Check-in Rules
 
-Default volunteers do not self check-in or self check-out in Alpha 1.
+Default staff do not self check-in or self check-out in Alpha 1.
 
 Kiosk check-in surfaces must:
 
 - enforce role rules;
-- avoid presenting unavailable self-service actions to default volunteers;
+- avoid presenting unavailable self-service actions to default staff;
 - provide staff-mediated check-in flows where appropriate;
 - make corrective actions available to authorized users;
 - allow department leads and shift leads to perform check-in/check-out actions where authorized.
