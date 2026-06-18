@@ -68,6 +68,11 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.departments')
                 ->permission('platform.departments'),
 
+            Menu::make(__('Teams'))
+                ->icon('bs.people-fill')
+                ->route('platform.teams')
+                ->permission('platform.teams'),
+
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
                 ->route('platform.node.config')
@@ -103,7 +108,8 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('Operations'))
                 ->addPermission('platform.organizations', __('Organizations'))
                 ->addPermission('platform.events', __('Events'))
-                ->addPermission('platform.departments', __('Departments')),
+                ->addPermission('platform.departments', __('Departments'))
+                ->addPermission('platform.teams', __('Teams')),
 
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.node.config', __('Node configuration')),

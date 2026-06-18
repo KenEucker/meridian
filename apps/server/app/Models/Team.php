@@ -2,35 +2,34 @@
 
 namespace App\Models;
 
-use Database\Factories\DepartmentFactory;
+use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
 use Orchid\Filters\Types\WhereDateStartEnd;
 use Orchid\Screen\AsSource;
 
-class Department extends Model
+class Team extends Model
 {
     use AsSource;
     use Filterable;
 
-    /** @use HasFactory<DepartmentFactory> */
+    /** @use HasFactory<TeamFactory> */
     use HasFactory;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
-        'organization_id',
+        'department_id',
         'name',
         'code',
         'description',
-        'default_team_id',
+        'is_default',
         'archived_at',
     ];
 
@@ -39,9 +38,10 @@ class Department extends Model
      */
     protected $allowedFilters = [
         'id' => Where::class,
-        'organization_id' => Where::class,
+        'department_id' => Where::class,
         'name' => Like::class,
         'code' => Like::class,
+        'is_default' => Where::class,
         'updated_at' => WhereDateStartEnd::class,
         'created_at' => WhereDateStartEnd::class,
     ];
@@ -51,9 +51,10 @@ class Department extends Model
      */
     protected $allowedSorts = [
         'id',
-        'organization_id',
+        'department_id',
         'name',
         'code',
+        'is_default',
         'updated_at',
         'created_at',
     ];
@@ -64,49 +65,19 @@ class Department extends Model
     protected function casts(): array
     {
         return [
-            'default_team_id' => 'integer',
+            'is_default' => 'boolean',
             'archived_at' => 'datetime',
         ];
     }
 
-    protected static function booted(): void
+    public function department(): BelongsTo
     {
-        static::created(function (Department $department): void {
-            if ($department->default_team_id !== null) {
-                return;
-            }
-
-            $defaultTeam = $department->teams()->create([
-                'name' => 'Default',
-                'code' => 'DEFAULT',
-                'description' => null,
-                'is_default' => true,
-            ]);
-
-            $department->forceFill([
-                'default_team_id' => $defaultTeam->id,
-            ])->saveQuietly();
-        });
-    }
-
-    public function organization(): BelongsTo
-    {
-        return $this->belongsTo(Organization::class);
-    }
-
-    public function defaultTeam(): BelongsTo
-    {
-        return $this->belongsTo(Team::class, 'default_team_id');
-    }
-
-    public function teams(): HasMany
-    {
-        return $this->hasMany(Team::class);
+        return $this->belongsTo(Department::class);
     }
 
     /**
-     * @param  Builder<Department>  $query
-     * @return Builder<Department>
+     * @param  Builder<Team>  $query
+     * @return Builder<Team>
      */
     public function scopeActive(Builder $query): Builder
     {

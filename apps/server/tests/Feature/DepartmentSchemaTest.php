@@ -64,19 +64,18 @@ class DepartmentSchemaTest extends TestCase
         ]);
     }
 
-    public function test_department_fields_and_default_team_placeholder_are_persisted(): void
+    public function test_department_fields_are_persisted(): void
     {
         $department = Department::factory()->create([
             'name' => 'Rangers',
             'code' => 'RANGERS',
             'description' => 'Field operations and volunteer support.',
-            'default_team_id' => 42,
         ]);
 
         $this->assertSame('Rangers', $department->name);
         $this->assertSame('RANGERS', $department->code);
         $this->assertSame('Field operations and volunteer support.', $department->description);
-        $this->assertSame(42, $department->default_team_id);
+        $this->assertNotNull($department->default_team_id);
     }
 
     public function test_active_scope_excludes_archived_departments(): void
