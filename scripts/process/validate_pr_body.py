@@ -26,7 +26,11 @@ REQUIRED_SECTIONS = [
 
 TRACE_RE = re.compile(
     r"\b(?:ORG|VOL|TEAM|SLB|FR|INC|SHIFT|APP|STAT|TRAIN|WAIVER|CRED|HOURS|CREDIT|EQUIP|REPORT)-\d{3}\b"
-    r"|Technical spec:\s*Section\s*\d+(?:\.\d+)?",
+    # "Technical spec:" label followed by a "Section X(.Y)" reference. The
+    # reference may sit on the same line or on a following (optionally
+    # bulleted) line, matching the canonical Traceability format in
+    # docs/process/meridian-development-process.md section 5.1.
+    r"|Technical spec:\s*(?:[-*+]\s*)?Section\s*\d+(?:\.\d+)?",
     re.IGNORECASE,
 )
 
