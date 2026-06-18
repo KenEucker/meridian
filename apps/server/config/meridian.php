@@ -43,4 +43,29 @@ return [
         'post_login_redirect' => env('MERIDIAN_MAGIC_LINK_REDIRECT', '/home'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | OAuth Authentication
+    |--------------------------------------------------------------------------
+    |
+    | Google and Discord OAuth are Alpha 1 external-provider login paths
+    | (technical spec section 11.1). Provider emails must be verified before
+    | they resolve to Meridian user accounts.
+    |
+    */
+
+    'oauth' => [
+        'post_login_redirect' => env('MERIDIAN_OAUTH_REDIRECT', '/home'),
+
+        'google' => [
+            'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
+            'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
+            'redirect_uri' => env('GOOGLE_OAUTH_REDIRECT_URI'),
+            'authorize_url' => env('GOOGLE_OAUTH_AUTHORIZE_URL', 'https://accounts.google.com/o/oauth2/v2/auth'),
+            'token_url' => env('GOOGLE_OAUTH_TOKEN_URL', 'https://oauth2.googleapis.com/token'),
+            'userinfo_url' => env('GOOGLE_OAUTH_USERINFO_URL', 'https://openidconnect.googleapis.com/v1/userinfo'),
+            'scopes' => ['openid', 'email', 'profile'],
+        ],
+    ],
+
 ];

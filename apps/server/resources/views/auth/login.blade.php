@@ -28,6 +28,10 @@
             <input id="email" name="email" type="email" value="{{ old('email') }}" required autocomplete="email">
             <button type="submit">Send login link</button>
         </form>
+
+        <p>
+            <a href="{{ route('auth.google.redirect') }}">Continue with Google</a>
+        </p>
     </main>
 </body>
 </html>
