@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name', 'Meridian') }}</title>
+    {{-- Shared Meridian semantic UI tokens (M2.5), mirrored from
+         packages/ui-tokens/tokens.css. --}}
+    <link rel="stylesheet" href="{{ asset('css/meridian-tokens.css') }}">
     <style>
         :root { color-scheme: light dark; }
         body {
@@ -12,18 +15,18 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
+            font-family: var(--m-font-body);
+            background: var(--m-surface-app);
+            color: var(--m-text-primary);
         }
         main {
             max-width: 40rem;
-            padding: 2rem;
+            padding: var(--m-space-8);
             text-align: center;
         }
-        h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
-        p { line-height: 1.6; color: #94a3b8; }
-        code { color: #cbd5e1; }
+        h1 { font-size: var(--m-text-xl); margin-bottom: var(--m-space-2); }
+        p { line-height: 1.6; color: var(--m-text-secondary); }
+        code { color: var(--m-text-primary); }
     </style>
 </head>
 <body>

@@ -29,18 +29,24 @@ import { RouterLink } from "vue-router";
 .app-shell__top-bar {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--m-shell-border, #d7dbe0);
+  padding: var(--m-space-3) var(--m-space-4);
+  background: var(--m-surface-raised);
+  border-bottom: 1px solid var(--m-border-default);
 }
 
 .app-shell__home {
   font-weight: 600;
   text-decoration: none;
-  color: inherit;
+  color: var(--m-text-primary);
+}
+
+.app-shell__home:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .app-shell__main {
   flex: 1;
-  padding: 1.5rem 1rem;
+  padding: var(--m-space-6) var(--m-space-4);
 }
 </style>

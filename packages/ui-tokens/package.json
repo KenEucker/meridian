@@ -1,0 +1,24 @@
+{
+  "name": "@meridian/ui-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Meridian shared semantic UI design tokens for field and admin surfaces.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "tokens.css"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0"
+  }
+}

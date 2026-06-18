@@ -19,7 +19,10 @@ class PlatformProvider extends OrchidServiceProvider
     {
         parent::boot($dashboard);
 
-        // ...
+        // Expose the shared Meridian semantic UI tokens (M2.5) on the admin
+        // surface so admin components draw from the same baseline as the field
+        // app. The served file mirrors packages/ui-tokens/tokens.css.
+        $dashboard->registerResource('stylesheets', asset('css/meridian-tokens.css'));
     }
 
     /**
