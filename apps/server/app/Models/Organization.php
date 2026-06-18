@@ -6,6 +6,7 @@ use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -15,8 +16,8 @@ use Orchid\Screen\AsSource;
 class Organization extends Model
 {
     use AsSource;
-
     use Filterable;
+
     /** @use HasFactory<OrganizationFactory> */
     use HasFactory;
 
@@ -71,6 +72,11 @@ class Organization extends Model
             'calendar_year_start_day' => 'integer',
             'archived_at' => 'datetime',
         ];
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
     }
 
     /**
