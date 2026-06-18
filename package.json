@@ -27,6 +27,7 @@
     "server:key": "php apps/server/artisan key:generate",
     "server:setup": "corepack pnpm run server:env && corepack pnpm run server:key && corepack pnpm run server:migrate",
     "server:dev": "php apps/server/artisan serve",
+    "server:logs": "node scripts/server/tail-laravel-log.mjs",
     "server:test": "php apps/server/artisan config:clear --ansi && php apps/server/artisan test",
     "server:artisan": "php apps/server/artisan",
     "server:migrate": "php apps/server/artisan migrate",
