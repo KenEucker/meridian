@@ -30,3 +30,10 @@ Homestead.json
 auth.json
 
 .DS_Store
+
+# Frontend app build output
+apps/*/dist/
+# Vue/TS incremental build info
+*.tsbuildinfo
+# Local pnpm content-addressable store fallback
+.pnpm-store/

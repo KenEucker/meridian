@@ -34,11 +34,15 @@ Exact patch versions are enforced by lockfiles and CI. This document defines the
 | Admin/back-office | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for admin/god-mode and generic data administration, not as the primary volunteer-facing UI. |
 | JavaScript runtime | Node.js 24 LTS | `24.x`; prefer current patched 24.x in CI | Do not move to Node 26 until it is LTS and Meridian compatibility is verified. |
 | JavaScript package manager | pnpm 11.x | Set `packageManager` in `package.json`; commit `pnpm-lock.yaml` | Use Corepack. Do not use npm or yarn for project installs unless explicitly approved. |
-| Frontend build tool | Vite 8.x | `vite:^8.0`, locked by pnpm | Used for Laravel asset builds. |
+| Frontend build tool | Vite 8.x | `vite:^8.0`, locked by pnpm | Used for Laravel asset builds and the Vue field app. Vue plugin via `@vitejs/plugin-vue:^6.0`. |
+| Field app framework | Vue 3.x | `vue:^3.5`, locked by pnpm | Volunteer-facing field/mobile application framework. Do not introduce a competing SPA framework. |
+| Field app router | Vue Router 4.x | `vue-router:^4.5`, locked by pnpm | Client-side routing for the Vue field app. |
+| Frontend language | TypeScript 5.x | `typescript:^5.7`, locked by pnpm | Used for the Vue field app and generated clients. Type-check Vue single-file components with `vue-tsc`. |
 | CSS framework | Tailwind CSS 4.3.x | `tailwindcss:^4.3`, locked by pnpm | Use Meridian semantic tokens and component rules on top of Tailwind. |
 | Desktop wrapper | Electron 42.x | Use latest compatible patched `42.x`; lock exact version | Used for installable on-site/kiosk workstation. Keep patched aggressively due to Chromium security updates. |
 | Mobile wrapper | Capacitor 8.x | `@capacitor/*:^8.0`, locked by pnpm | Used for installable mobile builds where needed. The PWA/browser experience must remain functional for MVP-critical workflows. |
 | PHP testing | Pest 4.x | `pestphp/pest:^4.0`, locked by Composer | Preferred PHP test runner. PHPUnit may remain as the underlying compatibility layer. |
+| JavaScript/Vue testing | Vitest 4.x | `vitest:^4.1`, locked by pnpm | Vite-native unit/component test runner for the field app. Use with `@vue/test-utils:^2.4` and a `jsdom` environment. |
 | PHP formatting | Laravel Pint 1.x | `laravel/pint:^1.0`, locked by Composer | Required in CI. |
 | PHP static analysis | PHPStan + Larastan current stable | Prefer maintained `larastan/larastan`, not abandoned package names | Required before merging once configured. |
 | Containers | Docker Compose current stable | Pin production-like images by major/minor or digest | Used for local, central, and on-site deployment profiles. |
