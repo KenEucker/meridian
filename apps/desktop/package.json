@@ -1,0 +1,20 @@
+{
+  "name": "@meridian/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Meridian Electron on-site workstation wrapper shell.",
+  "license": "AGPL-3.0-or-later",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron": "^42.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0"
+  }
+}

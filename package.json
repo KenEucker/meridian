@@ -21,8 +21,8 @@
     "commit:check-example": "python scripts/process/validate_conventional_commits.py --message \"docs(process): validate commit format\"",
     "process:check": "corepack pnpm run process:traceability && corepack pnpm run process:qa && corepack pnpm run process:repo && corepack pnpm run process:pr-template && corepack pnpm run commit:check-example",
     "check": "corepack pnpm run process:check",
-    "build": "corepack pnpm --filter @meridian/mobile run build",
-    "typecheck": "corepack pnpm --filter @meridian/mobile run typecheck",
-    "test": "corepack pnpm run process:check && corepack pnpm --filter @meridian/mobile run test"
+    "build": "corepack pnpm --filter @meridian/mobile --filter @meridian/desktop run build",
+    "typecheck": "corepack pnpm --filter @meridian/mobile --filter @meridian/desktop run typecheck",
+    "test": "corepack pnpm run process:check && corepack pnpm --filter @meridian/mobile --filter @meridian/desktop run test"
   }
 }

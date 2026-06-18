@@ -60,11 +60,11 @@ deploy/
   dns/           DNS configuration for on-site deployments
 ```
 
-`apps/server` now contains a Laravel framework scaffold (see [apps/server/README.md](apps/server/README.md)). The remaining directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
+`apps/server` contains a Laravel framework scaffold (see [apps/server/README.md](apps/server/README.md)), `apps/mobile` contains the Vue/Capacitor field app shell (see [apps/mobile/README.md](apps/mobile/README.md)), and `apps/desktop` contains the Electron on-site wrapper shell (see [apps/desktop/README.md](apps/desktop/README.md)). The `packages/` and `deploy/` directories are placeholders until their later Alpha 1 tasks add application or deployment behavior.
 
 ## Developer Boot Path
 
-Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its default test suite, but it contains no Meridian product behavior yet. The Vue field app, Electron wrapper, Docker Compose stack, PostgreSQL configuration, seed data, and product services are added in later Alpha 1 tasks.
+Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its default test suite, the `apps/mobile` Vue field app shell builds and runs its smoke tests, and the `apps/desktop` Electron wrapper shell builds and runs its unit tests, but none contain Meridian product behavior yet. The Docker Compose stack, PostgreSQL configuration, seed data, and product services are added in later Alpha 1 tasks.
 
 For the repository as a whole, a fresh checkout should be able to run the process validators. The server app additionally supports the Laravel boot/test commands documented in [apps/server/README.md](apps/server/README.md).
 
