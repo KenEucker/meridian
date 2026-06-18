@@ -178,7 +178,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M4.2 Events | Add event model with timezone and active window fields. | Requirements 3.2; data/API 10.2 | Model tests |
 | M4.3 Departments | Add department model and organization relationship. | ORG-002; requirements 3.3 | Model tests |
 | M4.4 Teams and default team | Add teams, default team creation, archive behavior. | TEAM-001 through TEAM-006; data/API 10.6 | Team domain tests |
-| M4.5 Volunteers | Add volunteer profile and organization volunteer records. | VOL-001 through VOL-005; data/API 10.4 | Model/validation tests |
+| M4.5 Staff | Add staff profile and organization staff records. | VOL-001 through VOL-005; data/API 10.4 | Model/validation tests |
 | M4.6 Department/team memberships | Enforce department membership requiring at least one team. | VOL-006; TEAM-002; data/API 10.6 | Domain tests |
 | M4.7 Status model | Add organization and department status transitions. | STAT-001 through STAT-011 | Status tests |
 | M4.8 Permission catalog | Add permission roles, permissions, role permissions, and team grants. | TEAM-009, TEAM-010; data/API 10.7 | Policy tests |
@@ -200,10 +200,10 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M5.1 Public application form | Add event application form and submitted state. | APP-001 through APP-004 | Feature/UI tests |
 | M5.2 Application review list | Add organizer application review list/detail. | APP-003, APP-005 | Feature tests |
 | M5.3 DNS auto-rejection | Reject DNS email applications without automatic notice. | APP-003; requirements 3.5 | Domain tests |
-| M5.4 Approve application | Approval creates Prospective organization volunteer. | APP-005, APP-006 | Feature/domain tests |
+| M5.4 Approve application | Approval creates Prospective organization staff. | APP-005, APP-006 | Feature/domain tests |
 | M5.5 Reject/defer/withdraw | Implement remaining application status transitions. | APP-003, APP-004 | Status tests |
-| M5.6 Assign to department | Organizer/lead assigns approved volunteer to department. | APP-007; requirements 5.3 | Policy/domain tests |
-| M5.7 Assign to team | Department/team lead assigns volunteer to team. | Requirements 5.4; TEAM-008, TEAM-009 | Policy/domain tests |
+| M5.6 Assign to department | Organizer/lead assigns approved staff to department. | APP-007; requirements 5.3 | Policy/domain tests |
+| M5.7 Assign to team | Department/team lead assigns staff to team. | Requirements 5.4; TEAM-008, TEAM-009 | Policy/domain tests |
 | M5.8 Rescind before team assignment | Allow rescind before team assignment and block after team assignment. | APP-008 through APP-010 | Domain tests |
 | M5.9 Onboarding QA script | Add `QA-APP-01-event-application-approval.md`. | QA README; development process | Human QA script validation |
 
@@ -248,7 +248,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M7.2 Waiver records | Add waivers and completion tracking without storing signed contents. | WAIVER-001 through WAIVER-004 | Model/domain tests |
 | M7.3 Shift model | Add shifts with event, department, time, title/function, team eligibility, capacity. | SHIFT-001 through SHIFT-004, SHIFT-007 | Model tests |
 | M7.4 Shift requirements | Add shift training/waiver requirements and signup date fields. | SHIFT-005, SHIFT-006, SHIFT-008 | Domain tests |
-| M7.5 Shift signup command | Eligible volunteer can sign up immediately. | SHIFT-011; requirements 3.12 | Feature/domain tests |
+| M7.5 Shift signup command | Eligible staff can sign up immediately. | SHIFT-011; requirements 3.12 | Feature/domain tests |
 | M7.6 Eligibility denials | Block missing training/waiver, ineligible department status, and full capacity. | TRAIN-008, WAIVER-005, SHIFT-012, SHIFT-016 | Domain/policy tests |
 | M7.7 Overlap warning | Warn on overlap by default and allow elevated assignment. | SHIFT-014, SHIFT-015 | Domain/UI tests |
 | M7.8 Schedule lock rules | Add configurable cutoff/lock behavior. | SHIFT-009, SHIFT-013 | Domain tests |
@@ -256,7 +256,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M7.10 Credential revocation | Restrict revocation and preserve completed shifts/hours. | CRED-011 through CRED-014 | Policy/domain tests |
 | M7.11 Shift/credential QA scripts | Add `QA-SHIFT-01-shift-signup-eligibility.md` and `QA-CRED-01-credential-eligibility.md`. | QA README | Human QA scripts |
 
-**QA gate:** A reviewer can configure training/waiver/shift eligibility, sign up an eligible volunteer, observe denials, and verify credential state.
+**QA gate:** A reviewer can configure training/waiver/shift eligibility, sign up an eligible staff member, observe denials, and verify credential state.
 
 ---
 
@@ -312,18 +312,18 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
 | M10.1 Shift Lead Board roster | Show current shift roster and checked-in state. | SLB-001, SLB-002 | UI/feature tests |
-| M10.2 Check-in operation | Shift lead checks volunteer in with operation record. | SLB-003; technical spec 20.2 | Domain/policy tests |
+| M10.2 Check-in operation | Shift lead checks staff in with operation record. | SLB-003; technical spec 20.2 | Domain/policy tests |
 | M10.3 Check-out and hours | Check-out creates actual hours with actual start/end. | SLB-004 through SLB-006; HOURS-001 through HOURS-006 | Domain tests |
 | M10.4 No-show operation | Shift lead marks no-show idempotently. | Technical spec 20.2 | Domain tests |
 | M10.5 Offline attendance queue | Check-in/check-out/no-show work offline and sync later. | Technical spec 20.1; data/API 7.2 | Sync/idempotency tests |
 | M10.6 Hours correction grace period | Allow corrections during grace period and freeze later. | HOURS-007, HOURS-008 | Domain/audit tests |
-| M10.7 Unscheduled eligible volunteer | Add eligible unscheduled volunteer during operations. | SLB-008; SHIFT-016 | Domain/UI tests |
+| M10.7 Unscheduled eligible staff member | Add an eligible unscheduled staff member during operations. | SLB-008; SHIFT-016 | Domain/UI tests |
 | M10.8 Deployment/location assignment | Assign and move current deployment/location. | SLB-009, SLB-010; data/API 10.14 | Domain/UI tests |
 | M10.9 Equipment checkout/check-in | Manual equipment workflows and states. | SLB-011, SLB-012; EQUIP-001 through EQUIP-005 | Domain/UI tests |
 | M10.10 Field report/incident shortcuts | Add shift board shortcuts without bypassing permissions. | SLB-013, SLB-014 | UI/policy tests |
 | M10.11 Attendance QA script | Add `QA-SLB-01-checkin-checkout-hours.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can run a shift, check volunteers in/out, create hours, mark no-show, assign deployments, and check equipment in/out.
+**QA gate:** A reviewer can run a shift, check staff in/out, create hours, mark no-show, assign deployments, and check equipment in/out.
 
 ---
 
@@ -385,7 +385,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 |---|---|---|---|
 | M13.1 Credential eligibility export | Export event credential eligibility. | REPORT-001; CRED requirements | Export test/sample |
 | M13.2 Shift roster export | Export shift roster excluding phone/emergency contacts. | REPORT-002, REPORT-008 | Export test/sample |
-| M13.3 Volunteer contact export | Department contact export may include permitted emergency contacts. | REPORT-003, REPORT-006 through REPORT-010 | Policy/export tests |
+| M13.3 Staff contact export | Department contact export may include permitted emergency contacts. | REPORT-003, REPORT-006 through REPORT-010 | Policy/export tests |
 | M13.4 Hours worked export | Export actual hours worked. | REPORT-004; HOURS requirements | Export test/sample |
 | M13.5 Credit calculation | Calculate credits after correction grace period. | CREDIT-001 through CREDIT-004 | Domain tests |
 | M13.6 Credits earned export | Export credits with calculation basis. | REPORT-005; CREDIT-005 | Export test/sample |
@@ -458,7 +458,7 @@ The following are acknowledged only as exclusions because the source documents d
 
 - SMS and push notifications.
 - Native app-store distribution.
-- Volunteer self check-in/out.
+- Staff self check-in/out.
 - GPS collection.
 - Configurable form structure.
 - Offline incident creation.

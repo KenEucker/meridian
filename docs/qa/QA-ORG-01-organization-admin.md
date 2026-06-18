@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Verify that an elevated Orchid user can view, create, and edit Meridian organization records without relying on event, department, team, volunteer, audit, API, or sync behavior that belongs to later Alpha 1 tasks.
+Verify that an elevated Orchid user can view, create, and edit Meridian organization records without relying on event, department, team, staff, audit, API, or sync behavior that belongs to later Alpha 1 tasks.
 
 ## Requirements covered
 
-- `ORG-001`: Meridian supports organizations that produce events and manage volunteers.
+- `ORG-001`: Meridian supports organizations that produce events and manage staff.
 - `ORG-002`: Organizations define departments.
 - Data/API spec section 10.1: `organizations`
 - Technical spec section 5.2: modular monolith boundaries
@@ -59,7 +59,7 @@ Verify that an elevated Orchid user can view, create, and edit Meridian organiza
 - Duplicate slugs are rejected.
 - No destructive delete action is present.
 - The user without `platform.organizations` is denied access.
-- No event, department, team, volunteer, API, audit-service, import/export, or sync behavior appears in this scaffold.
+- No event, department, team, staff, API, audit-service, import/export, or sync behavior appears in this scaffold.
 
 ## Evidence to capture
 
@@ -70,5 +70,5 @@ Verify that an elevated Orchid user can view, create, and edit Meridian organiza
 ## Failure notes
 
 - If a user without `platform.organizations` can access the screen, stop testing and file a blocking permission issue.
-- If organization creation requires an event, department, team, or volunteer record, stop testing and file a scope issue against M4.1.
+- If organization creation requires an event, department, team, or staff record, stop testing and file a scope issue against M4.1.
 - If a destructive delete action is available, stop testing and file a history-preservation issue.

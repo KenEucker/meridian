@@ -9,7 +9,7 @@ Purpose: Define how Meridian dashboard widgets should be selected, structured, p
 
 ## 1. Purpose
 
-This specification defines Meridian dashboard widget rules across volunteer, department lead, shift lead, organizer, IC lead, kiosk, and mobile contexts.
+This specification defines Meridian dashboard widget rules across staff, department lead, shift lead, organizer, IC lead, kiosk, and mobile contexts.
 
 Dashboard widgets should help users understand what needs attention, what can be acted on, and what is currently okay.
 
@@ -96,16 +96,16 @@ The fixed Alpha 1 inventory is summarized below. The implementation contract rem
 
 | Widget group | Widget IDs | Role visibility | Scope | Data source/model | Attention behavior | Quiet state | Offline/sync behavior | Primary destination |
 |---|---|---|---|---|---|---|---|---|
-| Volunteer | `volunteer.current_shift`, `volunteer.upcoming_shifts`, `volunteer.assigned_departments`, `volunteer.shift_alerts`, `volunteer.document_acknowledgments`, `volunteer.quiet_state` | authenticated volunteer | user/event/org/department | shifts, assignments, department memberships, alerts, acknowledgment requirements | shift alerts, current shifts, and required acknowledgments outrank routine membership | No current shift; no upcoming shifts; no documents need acknowledgment; nothing needs action | show stale/queued state only where it affects current work; acknowledgments require server connection | my shifts, departments, documents, alert source |
+| Staff | `staff.current_shift`, `staff.upcoming_shifts`, `staff.assigned_departments`, `staff.shift_alerts`, `staff.document_acknowledgments`, `staff.quiet_state` | authenticated staff | user/event/org/department | shifts, assignments, department memberships, alerts, acknowledgment requirements | shift alerts, current shifts, and required acknowledgments outrank routine membership | No current shift; no upcoming shifts; no documents need acknowledgment; nothing needs action | show stale/queued state only where it affects current work; acknowledgments require server connection | my shifts, departments, documents, alert source |
 | Department Lead | `dept.coverage_issues`, `dept.shift_readiness`, `dept.checkin_status`, `dept.training_readiness`, `dept.policy_readiness`, `dept.equipment_returns` | department lead or permitted shift lead | department/event | shifts, attendance, trainings, department documents, equipment | coverage/check-in issues can escalate to Warning | All scheduled shifts covered; required trainings complete; department documents current | local/central status shown when department data may be stale; policy edits blocked during active event window | shifts, shift board, trainings, documents, equipment |
-| Shift Lead | `shift.current_roster`, `shift.late_missing`, `shift.deployment_needs`, `shift.equipment_status` | shift lead | shift/department/event | roster, attendance operations, deployments, equipment | late/missing and deployment needs are attention items | No late or missing volunteers; equipment accounted for | attendance writes may be queued; show only to roles needing trust | shift board |
+| Shift Lead | `shift.current_roster`, `shift.late_missing`, `shift.deployment_needs`, `shift.equipment_status` | shift lead | shift/department/event | roster, attendance operations, deployments, equipment | late/missing and deployment needs are attention items | No late or missing staff; equipment accounted for | attendance writes may be queued; show only to roles needing trust | shift board |
 | Organizer | `org.event_readiness`, `org.cross_dept_coverage`, `org.application_review`, `org.policy_readiness`, `org.planning_tasks`, `org.operations_window` | organizer | organization/event | readiness, coverage summaries, applications, policies/procedures, planning tasks | readiness gaps, applications awaiting review, and required document gaps draw attention | Event readiness looks okay; no applications awaiting review; required documents current | do not imply central truth when event data is stale; policy edits blocked during active event window | readiness, coverage, applications, policies, event |
 | IC roles | `ic.active_incidents`, `ic.serious_incidents`, `ic.on_scene`, `ic.monitoring`, `ic.unresolved_field_reports` | IC viewer/operator/lead only | event/IC department | incidents, incident state, IMS priority, Field Reports | serious and on-scene items can be Critical | No active incidents; no Field Reports awaiting IC review | incidents require server connection for creation/editing; Field Reports may be queued | IMS dashboard, incidents, Field Reports |
 | Kiosk | `kiosk.current_tasks`, `kiosk.staff_checkin`, `kiosk.equipment_returns`, `kiosk.node_status`, `kiosk.switch_user` | trusted workstation plus user permissions | kiosk/event/department | operational tasks, attendance, equipment, node/sync state | current tasks and node/sync failures draw attention where actionable | No current kiosk tasks; local node reachable | show local node, central, queued, conflict, failed states where relevant | kiosk home, check-in, equipment, node status |
 
-### 6.1 Volunteer
+### 6.1 Staff
 
-Volunteer widgets may include:
+Staff widgets may include:
 
 - assigned departments;
 - upcoming or current shifts;
@@ -115,7 +115,7 @@ Volunteer widgets may include:
 
 ### 6.2 Department Lead
 
-Department lead widgets should appear before the general volunteer structure.
+Department lead widgets should appear before the general staff structure.
 
 They may include:
 
@@ -132,7 +132,7 @@ Shift lead widgets should surface through relevant department, shift, and operat
 They may include:
 
 - current shift roster;
-- late or missing volunteers;
+- late or missing staff;
 - deployment needs;
 - check-in corrections;
 - equipment return status.

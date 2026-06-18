@@ -62,7 +62,7 @@ All authenticated Meridian product screens must follow these rules:
 4. Organization and event switching must happen on Home or a dedicated context-switching surface.
 5. Show operating context when it changes what the user can see or do.
 6. Use canonical status names exactly.
-7. Hide unavailable actions for default volunteers unless the absence would be confusing.
+7. Hide unavailable actions for default staff unless the absence would be confusing.
 8. Use disabled actions with explanation mainly in admin or high-context surfaces.
 9. Destructive actions must use a confirmation dialog.
 10. Offline and sync state must appear only where it affects the current work.
@@ -239,9 +239,9 @@ Suggested result model:
 
 | Effective level | Scope | Summary |
 |---|---|---|
-| Volunteer | organization/event/department | Default user who may apply, view assigned work, sign up where eligible, submit Field Reports where permitted |
+| Staff | organization/event/department | Default user who may apply, view assigned work, sign up where eligible, submit Field Reports where permitted |
 | Shift Lead | department/event/shift | Runs shift board and operational shift workflows |
-| Department Lead | department/event | Manages department volunteers, teams, trainings, shifts, exports, deployments, and equipment workflows |
+| Department Lead | department/event | Manages department staff, teams, trainings, shifts, exports, deployments, and equipment workflows |
 | Organizer | organization/event | Manages organization/event setup, applications, departments, credentials, policies, and broad readiness |
 | IC Viewer | event IC department/team | Read-only IMS access |
 | IC Operator | event IC department/team | Create/edit/close IMS incidents and attach Field Reports where permitted |
@@ -253,7 +253,7 @@ Suggested result model:
 - Organizer role alone does not grant IMS incident access.
 - Department Lead role alone does not grant IMS incident access.
 - IC access is granted through team membership inside the event's configured IC department.
-- Default volunteers should not see admin-only actions.
+- Default staff should not see admin-only actions.
 - DNS status supersedes all other assignment and approval workflows.
 - Organization-level Do Not Staff supersedes all department status.
 - System authority should come through organization, department, or team membership; direct user roles are reserved for god-mode/admin repair needs.
@@ -264,18 +264,18 @@ Suggested result model:
 
 Use these labels exactly in UI unless the requirements document later changes them.
 
-### 9.1 Organization Volunteer Status
+### 9.1 Organization Staff Status
 
 | Canonical label | Notes |
 |---|---|
 | Prospective | Pre-activation state |
-| Active | Active organization volunteer, subject to department/team/training/waiver rules |
+| Active | Active organization staff, subject to department/team/training/waiver rules |
 | Inactive | Not currently active but not blocked from future participation |
 | Emeritus | No regular duty expectation but may advise or contribute by request |
 | Retired | No longer working |
 | Do Not Staff | Organization-wide blocking status; permanent unless changed by organizers |
 
-### 9.2 Department Volunteer Status
+### 9.2 Department Staff Status
 
 | Canonical label |
 |---|
@@ -309,10 +309,10 @@ Use these labels exactly in UI unless the requirements document later changes th
 
 | Canonical label | Notes |
 |---|---|
-| Late | Volunteer was late |
-| Checked In | Volunteer has started actual shift participation |
-| Checked Out | Volunteer has ended actual shift participation |
-| No Show | Volunteer did not attend expected shift |
+| Late | Staff was late |
+| Checked In | Staff has started actual shift participation |
+| Checked Out | Staff has ended actual shift participation |
+| No Show | Staff did not attend expected shift |
 
 ### 9.6 Equipment State
 
@@ -459,7 +459,7 @@ Purpose: Render canonical statuses.
 Inputs:
 
 - `status`: canonical label or enum value;
-- `family`: `organization-volunteer`, `department-volunteer`, `application`, `credential`, `shift-attendance`, `incident-state`;
+- `family`: `organization-staff`, `department-staff`, `application`, `credential`, `shift-attendance`, `incident-state`;
 - `size`: `sm` or `md`;
 - `icon`: `auto`, `none`, or explicit icon key.
 
@@ -527,7 +527,7 @@ Suggested Blade API:
     :columns="$columns"
     :rows="$rows"
     :surface-mode="$surfaceMode"
-    empty-message="No volunteers match these filters."
+    empty-message="No staff match these filters."
 />
 ```
 
@@ -633,7 +633,7 @@ Required structure:
 4. specific confirming action;
 5. cancel action.
 
-The confirming button must use a specific verb, such as `Delete incident`, `Remove volunteer`, or `Block credential`.
+The confirming button must use a specific verb, such as `Delete incident`, `Remove staff`, or `Block credential`.
 
 ### 11.12 HistoryDrawer
 
@@ -720,7 +720,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
-| `public.apply` | `public.events.apply` | Volunteer event application | Public or authenticated applicant |
+| `public.apply` | `public.events.apply` | Staff event application | Public or authenticated applicant |
 | `auth.login` | `login` | Provider/magic-link login entry | Public |
 | `auth.magic-link-sent` | `auth.magic-link.sent` | Login code sent confirmation | Public |
 | `auth.provider-callback` | framework route | External provider callback | Public/system |
@@ -735,19 +735,19 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `context.events` | `organizations.events.index` | Select event within organization | Authenticated with org access |
 | `context.departments` | `events.departments.index` | Enter available department spaces | Authenticated with event/dept access |
 
-### 12.3 Volunteer Screens
+### 12.3 Staff Screens
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
-| `volunteer.dashboard` | `volunteer.dashboard` | Volunteer task dashboard | Authenticated volunteer |
-| `volunteer.shifts` | `volunteer.shifts.index` | My shifts | Volunteer with event access |
-| `volunteer.shift-detail` | `volunteer.shifts.show` | Shift details | Assigned/eligible volunteer |
-| `volunteer.field-reports` | `volunteer.field-reports.index` | My Field Reports | Authenticated author |
-| `volunteer.field-report-create` | `volunteer.field-reports.create` | Submit Field Report | Volunteer with FR permission |
-| `volunteer.field-report-detail` | `volunteer.field-reports.show` | View submitted Field Report | Author or permitted reviewer |
-| `volunteer.documents` | `volunteer.documents.index` | Policies & Procedures library | Authenticated volunteer with visible documents |
-| `volunteer.document-detail` | `volunteer.documents.show` | Rendered policy/procedure document | Authenticated volunteer with document visibility |
-| `volunteer.document-acknowledgments` | `volunteer.documents.acknowledgments` | My required document acknowledgments | Authenticated volunteer |
+| `staff.dashboard` | `staff.dashboard` | Staff task dashboard | Authenticated staff |
+| `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
+| `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
+| `staff.field-reports` | `staff.field-reports.index` | My Field Reports | Authenticated author |
+| `staff.field-report-create` | `staff.field-reports.create` | Submit Field Report | Staff with FR permission |
+| `staff.field-report-detail` | `staff.field-reports.show` | View submitted Field Report | Author or permitted reviewer |
+| `staff.documents` | `staff.documents.index` | Policies & Procedures library | Authenticated staff with visible documents |
+| `staff.document-detail` | `staff.documents.show` | Rendered policy/procedure document | Authenticated staff with document visibility |
+| `staff.document-acknowledgments` | `staff.documents.acknowledgments` | My required document acknowledgments | Authenticated staff |
 
 ### 12.4 Department Screens
 
@@ -772,7 +772,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `shift-board.current` | `events.departments.shift-board.current` | Current shift board | Shift lead/department lead |
 | `shift-board.check-in` | `events.departments.shift-board.check-in` | Staff-mediated check-in | Shift lead/department lead |
 | `shift-board.check-out` | `events.departments.shift-board.check-out` | Staff-mediated check-out | Shift lead/department lead |
-| `shift-board.deployment-update` | `events.departments.shift-board.deployments.update` | Move volunteer/deployment | Shift lead/department lead |
+| `shift-board.deployment-update` | `events.departments.shift-board.deployments.update` | Move staff/deployment | Shift lead/department lead |
 | `shift-board.equipment-update` | `events.departments.shift-board.equipment.update` | Check equipment in/out | Shift lead/department lead |
 
 ### 12.6 Organizer Screens
@@ -782,7 +782,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `organizer.dashboard` | `organizer.dashboard` | Org/event readiness dashboard | Organizer |
 | `organizer.applications` | `organizer.applications.index` | Review applications | Organizer |
 | `organizer.application-detail` | `organizer.applications.show` | Application review detail | Organizer |
-| `organizer.volunteers` | `organizer.volunteers.index` | Org volunteer administration | Organizer |
+| `organizer.staff` | `organizer.staff.index` | Org staff administration | Organizer |
 | `organizer.events` | `organizer.events.index` | Event administration | Organizer |
 | `organizer.departments` | `organizer.departments.index` | Department administration | Organizer |
 | `organizer.credentials` | `organizer.credentials.index` | Event credential administration | Organizer |
@@ -835,16 +835,16 @@ Incident create/edit routes require active server connection in Alpha 1.
 
 ## 13. Dashboard Widget Inventory
 
-### 13.1 Volunteer Widgets
+### 13.1 Staff Widgets
 
 | Widget ID | Title | Scope | Permissions | Quiet state | Primary action |
 |---|---|---|---|---|---|
-| `volunteer.current_shift` | Current Shift | user/event | assigned or checked-in volunteer | No current shift | View shift |
-| `volunteer.upcoming_shifts` | Upcoming Shifts | user/event | authenticated volunteer | No upcoming shifts | View my shifts |
-| `volunteer.assigned_departments` | Assigned Departments | user/org/event | authenticated volunteer | No assigned departments | View departments |
-| `volunteer.shift_alerts` | Shift Alerts | user/event | authenticated volunteer | No shift alerts | View alert source |
-| `volunteer.document_acknowledgments` | Documents to Acknowledge | user/org/department | authenticated volunteer | No documents need acknowledgment | Review documents |
-| `volunteer.quiet_state` | Nothing Needs Action | user/event | authenticated volunteer | calm reassurance | None |
+| `staff.current_shift` | Current Shift | user/event | assigned or checked-in staff | No current shift | View shift |
+| `staff.upcoming_shifts` | Upcoming Shifts | user/event | authenticated staff | No upcoming shifts | View my shifts |
+| `staff.assigned_departments` | Assigned Departments | user/org/event | authenticated staff | No assigned departments | View departments |
+| `staff.shift_alerts` | Shift Alerts | user/event | authenticated staff | No shift alerts | View alert source |
+| `staff.document_acknowledgments` | Documents to Acknowledge | user/org/department | authenticated staff | No documents need acknowledgment | Review documents |
+| `staff.quiet_state` | Nothing Needs Action | user/event | authenticated staff | calm reassurance | None |
 
 ### 13.2 Department Lead Widgets
 
@@ -862,7 +862,7 @@ Incident create/edit routes require active server connection in Alpha 1.
 | Widget ID | Title | Scope | Permissions | Quiet state | Primary action |
 |---|---|---|---|---|---|
 | `shift.current_roster` | Current Roster | shift/department/event | shift lead | No current roster | Open shift board |
-| `shift.late_missing` | Late or Missing Volunteers | shift/department/event | shift lead | No late or missing volunteers | Review check-in |
+| `shift.late_missing` | Late or Missing Staff | shift/department/event | shift lead | No late or missing staff | Review check-in |
 | `shift.deployment_needs` | Deployment Needs | shift/department/event | shift lead | Deployments look okay | Manage deployments |
 | `shift.equipment_status` | Equipment Status | shift/department/event | shift lead | Equipment accounted for | Review equipment |
 
@@ -1059,7 +1059,7 @@ Documents and fragments may be scoped to organization, department, or team.
 - organization-scoped published documents are visible to everyone in the organization;
 - department-scoped published documents are visible to members of that department;
 - team-scoped published documents are visible to members of that team;
-- documents are not generally public-facing before login except as part of volunteer signup.
+- documents are not generally public-facing before login except as part of staff signup.
 
 ### 17.3 Authoring
 
@@ -1119,9 +1119,9 @@ Exact timeout durations are product decisions and should be configured, not hard
 
 Alpha 1 rule:
 
-- default volunteers do not self check-in or self check-out;
-- department leads and shift leads may check volunteers in/out where authorized;
-- unavailable self-service actions should not be shown to default volunteers;
+- default staff do not self check-in or self check-out;
+- department leads and shift leads may check staff in/out where authorized;
+- unavailable self-service actions should not be shown to default staff;
 - future self-service check-in must be a deliberate permission-controlled product decision.
 
 ---
@@ -1130,7 +1130,7 @@ Alpha 1 rule:
 
 Permission-denied surfaces must be calm and direct.
 
-### 19.1 Default Volunteers
+### 19.1 Default Staff
 
 Show simple restricted-access messaging. Do not expose internal permission details unless needed.
 

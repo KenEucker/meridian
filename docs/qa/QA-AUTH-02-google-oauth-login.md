@@ -20,7 +20,7 @@ Verify that Meridian central authentication supports Google OAuth without passwo
 
 ## Personas
 
-- Volunteer/applicant using a Google account with a verified email
+- Staff/applicant using a Google account with a verified email
 - Returning user with an existing Meridian account for the same verified email
 - Human reviewer
 

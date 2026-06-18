@@ -19,7 +19,7 @@ Verify that Meridian central authentication supports a verified-email magic-link
 
 ## Personas
 
-- Volunteer/applicant without an existing account
+- Staff/applicant without an existing account
 - Returning user with an existing Meridian account
 - Human reviewer
 

@@ -207,7 +207,7 @@ Check that:
 
 Check that:
 
-- default volunteers do not see confusing admin-only actions;
+- default staff do not see confusing admin-only actions;
 - elevated users receive useful permission explanations where appropriate;
 - organizer role alone does not grant access to IMS incidents or restricted IMS surfaces;
 - IC access depends on team-granted IC authority within the event's configured IC department;
@@ -285,7 +285,7 @@ Minimum Alpha 1 manual QA matrix for UI changes:
 | Forms | Blocking validation shows field errors and a top-level summary. |
 | Screen reader labels | New or changed controls expose useful accessible names. |
 | Surface mode | Verify affected `desktop`, `touch`, `mobile`, `kiosk`, or `dense` modes where relevant. |
-| Permissions | Verify default volunteer denial and elevated-user explanation where applicable. |
+| Permissions | Verify default staff denial and elevated-user explanation where applicable. |
 | Offline/sync | Verify contextual state and queued/failed behavior where relevant. |
 | Documents | Verify policy/procedure render, fragment reference, and acknowledgment accessibility where relevant. |
 

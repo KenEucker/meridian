@@ -31,11 +31,11 @@ Exact patch versions are enforced by lockfiles and CI. This document defines the
 | Database | PostgreSQL 18.x | Use current patched `18.x`; avoid floating `latest` tags | PostgreSQL is the canonical server database. Client-side SQLite exists only for offline sync/client state. |
 | Offline sync service | PowerSync Service 1.22.x | Prefer explicit Docker tag such as `journeyapps/powersync-service:1.22.0` until reviewed | Self-hosted sync service. PowerSync is sync infrastructure, not the source of business-rule truth. |
 | Offline sync web/client SDK | PowerSync JavaScript/Web Client SDK 1.38.x | Use latest compatible `1.38.x`; lock exact package version | Used for offline-first web/PWA/Electron client state. |
-| Admin/back-office | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for admin/god-mode and generic data administration, not as the primary volunteer-facing UI. |
+| Admin/back-office | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for admin/god-mode and generic data administration, not as the primary staff-facing UI. |
 | JavaScript runtime | Node.js 24 LTS | `24.x`; prefer current patched 24.x in CI | Do not move to Node 26 until it is LTS and Meridian compatibility is verified. |
 | JavaScript package manager | pnpm 11.x | Set `packageManager` in `package.json`; commit `pnpm-lock.yaml` | Use Corepack. Do not use npm or yarn for project installs unless explicitly approved. |
 | Frontend build tool | Vite 8.x | `vite:^8.0`, locked by pnpm | Used for Laravel asset builds and the Vue field app. Vue plugin via `@vitejs/plugin-vue:^6.0`. |
-| Field app framework | Vue 3.x | `vue:^3.5`, locked by pnpm | Volunteer-facing field/mobile application framework. Do not introduce a competing SPA framework. |
+| Field app framework | Vue 3.x | `vue:^3.5`, locked by pnpm | Staff-facing field/mobile application framework. Do not introduce a competing SPA framework. |
 | Field app router | Vue Router 4.x | `vue-router:^4.5`, locked by pnpm | Client-side routing for the Vue field app. |
 | Frontend language | TypeScript 5.x | `typescript:^5.7`, locked by pnpm | Used for the Vue field app and generated clients. Type-check Vue single-file components with `vue-tsc`. |
 | CSS framework | Tailwind CSS 4.3.x | `tailwindcss:^4.3`, locked by pnpm | Use Meridian semantic tokens and component rules on top of Tailwind. |
@@ -168,7 +168,7 @@ Any feature that affects event operations, shift boards, check-in/out, deploymen
 
 ### IMS and sensitive records require extra caution
 
-Incident records, DNS status, sensitive volunteer information, exports, and audit logs require strict permission checks and audit behavior.
+Incident records, DNS status, sensitive staff information, exports, and audit logs require strict permission checks and audit behavior.
 
 Dependencies that touch these areas must be conservative, well-maintained, and easy to inspect.
 
@@ -176,7 +176,7 @@ Dependencies that touch these areas must be conservative, well-maintained, and e
 
 Orchid is approved for internal administration and generic back-office workflows.
 
-Orchid should not define the primary volunteer-facing, department lead, shift board, kiosk, or IMS user experience unless explicitly approved by the UI specification.
+Orchid should not define the primary staff-facing, department lead, shift board, kiosk, or IMS user experience unless explicitly approved by the UI specification.
 
 ### Electron is for the on-site workstation
 
