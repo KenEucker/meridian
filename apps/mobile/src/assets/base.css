@@ -1,13 +1,7 @@
 /*
- * Minimal base styling for the field app shell.
- * Semantic design tokens (Meridian style guide / UI contract section 10)
- * are introduced in M2.5 "Shared UI tokens baseline".
+ * Base styling for the field app shell. Semantic design tokens are provided by
+ * the shared @meridian/ui-tokens baseline (M2.5), imported before this file.
  */
-:root {
-  --m-shell-border: #d7dbe0;
-  --m-shell-muted: #4a5159;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -19,11 +13,9 @@ body {
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: var(--m-font-body);
+  font-size: var(--m-text-md);
   line-height: 1.5;
+  background: var(--m-surface-app);
+  color: var(--m-text-primary);
 }

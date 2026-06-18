@@ -42,8 +42,11 @@
     "desktop:build": "corepack pnpm --filter @meridian/desktop run build",
     "desktop:typecheck": "corepack pnpm --filter @meridian/desktop run typecheck",
     "desktop:test": "corepack pnpm --filter @meridian/desktop run test",
+    "tokens:sync": "node -e \"require('fs').copyFileSync('packages/ui-tokens/tokens.css','apps/server/public/css/meridian-tokens.css')\"",
+    "tokens:typecheck": "corepack pnpm --filter @meridian/ui-tokens run typecheck",
+    "tokens:test": "corepack pnpm --filter @meridian/ui-tokens run test",
     "build": "corepack pnpm run mobile:build && corepack pnpm run desktop:build",
-    "typecheck": "corepack pnpm run mobile:typecheck && corepack pnpm run desktop:typecheck",
-    "test": "corepack pnpm run process:check && corepack pnpm run mobile:test && corepack pnpm run desktop:test"
+    "typecheck": "corepack pnpm run tokens:typecheck && corepack pnpm run mobile:typecheck && corepack pnpm run desktop:typecheck",
+    "test": "corepack pnpm run process:check && corepack pnpm run tokens:test && corepack pnpm run mobile:test && corepack pnpm run desktop:test"
   }
 }

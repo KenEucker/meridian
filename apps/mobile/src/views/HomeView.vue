@@ -19,12 +19,13 @@
 }
 
 .home__heading {
-  margin: 0 0 0.5rem;
-  font-size: 1.5rem;
+  margin: 0 0 var(--m-space-2);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-xl);
 }
 
 .home__lede {
   margin: 0;
-  color: var(--m-shell-muted, #4a5159);
+  color: var(--m-text-muted);
 }
 </style>

@@ -1,0 +1,189 @@
+/*
+ * Meridian shared semantic UI tokens (M2.5 "Shared UI tokens baseline").
+ *
+ * Single source of truth for the semantic design tokens shared by the field
+ * (Vue) and admin (Orchid) surfaces. Values trace to:
+ *   - docs/ui/meridian-ui-implementation-contract.md section 10 (canonical
+ *     --m-* token names) and section 9.9 (attention scale);
+ *   - docs/ui/meridian-component-library-specification.md section 3
+ *     (token requirements);
+ *   - docs/ui/meridian-style-guide.md sections 4 (color), 5 (typography),
+ *     10 (spacing/radius), 11 (status), 13 (accessibility).
+ *
+ * Rules:
+ *   - Components consume semantic --m-* tokens, never raw brand hex values.
+ *   - Brand colors and status/severity colors stay distinct.
+ *   - Light and dark mode reuse the same token names with different values.
+ *
+ * Dark mode applies automatically with the OS preference and can be forced
+ * with `data-theme="dark"` (or kept light with `data-theme="light"`).
+ *
+ * NOTE: This file is mirrored to apps/server/public/css/meridian-tokens.css so
+ * the Laravel/Orchid admin surface can serve it. Run `pnpm run tokens:sync`
+ * after editing; the @meridian/ui-tokens smoke test fails if the copies drift.
+ */
+
+:root {
+  /* Surfaces */
+  --m-surface-app: #f6f1e8;
+  --m-surface-base: #fffcf6;
+  --m-surface-raised: #ffffff;
+  --m-surface-overlay: #ffffff;
+
+  /* Text */
+  --m-text-primary: #151a1f;
+  --m-text-secondary: #405665;
+  --m-text-muted: #7a817a;
+  --m-text-inverse: #fffcf6;
+
+  /* Borders */
+  --m-border-default: #cfc5b4;
+  --m-border-strong: #a99e88;
+  --m-border-subtle: #ded6c8;
+
+  /* Actions */
+  --m-action-primary-bg: #d9822b;
+  --m-action-primary-text: #151a1f;
+  --m-action-secondary-bg: #405665;
+  --m-action-secondary-text: #fffcf6;
+  --m-action-destructive-bg: #c24135;
+  --m-action-destructive-text: #fffcf6;
+
+  /* Focus */
+  --m-focus-ring: #2b6cb0;
+
+  /* Status / severity */
+  --m-status-neutral: #405665;
+  --m-status-success: #2f855a;
+  --m-status-warning: #b7791f;
+  --m-status-danger: #c24135;
+  --m-status-restricted: #263039;
+
+  /* Dashboard attention scale (UI urgency, not incident seriousness) */
+  --m-attention-routine: #71836d;
+  --m-attention-attention: #2b6cb0;
+  --m-attention-warning: #b7791f;
+  --m-attention-critical: #c24135;
+  --m-attention-restricted: #263039;
+
+  /* Department accent (per-department override arrives with org model) */
+  --m-department-accent: #405665;
+
+  /* Spacing (8px-centered scale with 4px fine adjustment) */
+  --m-space-1: 0.25rem;
+  --m-space-2: 0.5rem;
+  --m-space-3: 0.75rem;
+  --m-space-4: 1rem;
+  --m-space-6: 1.5rem;
+  --m-space-8: 2rem;
+
+  /* Radius */
+  --m-radius-sm: 6px;
+  --m-radius-md: 10px;
+  --m-radius-lg: 14px;
+  --m-radius-pill: 999px;
+
+  /* Elevation */
+  --m-shadow-sm: 0 1px 2px rgba(21, 26, 31, 0.08);
+  --m-shadow-md: 0 4px 12px rgba(21, 26, 31, 0.12);
+  --m-shadow-overlay: 0 12px 32px rgba(21, 26, 31, 0.2);
+
+  /* Typography */
+  --m-font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --m-font-heading: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --m-text-xs: 0.75rem;
+  --m-text-sm: 0.875rem;
+  --m-text-md: 1rem;
+  --m-text-lg: 1.25rem;
+  --m-text-xl: 1.5rem;
+}
+
+/* Automatic dark mode: applies with the OS preference unless a theme is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --m-surface-app: #151a1f;
+    --m-surface-base: #1b222a;
+    --m-surface-raised: #232c35;
+    --m-surface-overlay: #2a343e;
+
+    --m-text-primary: #f6f1e8;
+    --m-text-secondary: #b7c0c8;
+    --m-text-muted: #8a929a;
+    --m-text-inverse: #151a1f;
+
+    --m-border-default: #384450;
+    --m-border-strong: #4a5765;
+    --m-border-subtle: #2a343e;
+
+    --m-action-primary-bg: #d9822b;
+    --m-action-primary-text: #151a1f;
+    --m-action-secondary-bg: #56707f;
+    --m-action-secondary-text: #fffcf6;
+    --m-action-destructive-bg: #d2554a;
+    --m-action-destructive-text: #151a1f;
+
+    --m-focus-ring: #5a9bd8;
+
+    --m-status-neutral: #9aa5ae;
+    --m-status-success: #48bb78;
+    --m-status-warning: #d69e2e;
+    --m-status-danger: #e06a5e;
+    --m-status-restricted: #cbd5e1;
+
+    --m-attention-routine: #8ba585;
+    --m-attention-attention: #5a9bd8;
+    --m-attention-warning: #d69e2e;
+    --m-attention-critical: #e06a5e;
+    --m-attention-restricted: #cbd5e1;
+
+    --m-department-accent: #7d98aa;
+
+    --m-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --m-shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Explicit dark theme opt-in (kiosk/user override, independent of OS). */
+[data-theme="dark"] {
+  --m-surface-app: #151a1f;
+  --m-surface-base: #1b222a;
+  --m-surface-raised: #232c35;
+  --m-surface-overlay: #2a343e;
+
+  --m-text-primary: #f6f1e8;
+  --m-text-secondary: #b7c0c8;
+  --m-text-muted: #8a929a;
+  --m-text-inverse: #151a1f;
+
+  --m-border-default: #384450;
+  --m-border-strong: #4a5765;
+  --m-border-subtle: #2a343e;
+
+  --m-action-primary-bg: #d9822b;
+  --m-action-primary-text: #151a1f;
+  --m-action-secondary-bg: #56707f;
+  --m-action-secondary-text: #fffcf6;
+  --m-action-destructive-bg: #d2554a;
+  --m-action-destructive-text: #151a1f;
+
+  --m-focus-ring: #5a9bd8;
+
+  --m-status-neutral: #9aa5ae;
+  --m-status-success: #48bb78;
+  --m-status-warning: #d69e2e;
+  --m-status-danger: #e06a5e;
+  --m-status-restricted: #cbd5e1;
+
+  --m-attention-routine: #8ba585;
+  --m-attention-attention: #5a9bd8;
+  --m-attention-warning: #d69e2e;
+  --m-attention-critical: #e06a5e;
+  --m-attention-restricted: #cbd5e1;
+
+  --m-department-accent: #7d98aa;
+
+  --m-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --m-shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
