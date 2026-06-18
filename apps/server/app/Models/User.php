@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
 use Orchid\Filters\Types\WhereDateStartEnd;
@@ -18,6 +19,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'current_volunteer_id',
+        'disabled_at',
     ];
 
     /**
@@ -39,6 +42,7 @@ class User extends Authenticatable
     protected $casts = [
         'permissions' => 'array',
         'email_verified_at' => 'datetime',
+        'disabled_at' => 'datetime',
     ];
 
     /**
@@ -66,4 +70,14 @@ class User extends Authenticatable
         'updated_at',
         'created_at',
     ];
+
+    public function authIdentities(): HasMany
+    {
+        return $this->hasMany(AuthIdentity::class);
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
+    }
 }
