@@ -49,6 +49,11 @@ class Device extends Model
         return $this->hasMany(DeviceTrust::class);
     }
 
+    public function sharedWorkstations(): HasMany
+    {
+        return $this->hasMany(SharedWorkstation::class);
+    }
+
     public function trustedUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'device_trusts')

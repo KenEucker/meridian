@@ -82,6 +82,16 @@ class User extends Authenticatable
         return $this->hasMany(DeviceTrust::class);
     }
 
+    public function sharedWorkstationLoginCodes(): HasMany
+    {
+        return $this->hasMany(SharedWorkstationLoginCode::class);
+    }
+
+    public function generatedSharedWorkstationLoginCodes(): HasMany
+    {
+        return $this->hasMany(SharedWorkstationLoginCode::class, 'generated_by_user_id');
+    }
+
     public function trustedDevices(): BelongsToMany
     {
         return $this->belongsToMany(Device::class, 'device_trusts')
