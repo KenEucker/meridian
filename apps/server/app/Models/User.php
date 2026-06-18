@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -74,6 +75,24 @@ class User extends Authenticatable
     public function authIdentities(): HasMany
     {
         return $this->hasMany(AuthIdentity::class);
+    }
+
+    public function deviceTrusts(): HasMany
+    {
+        return $this->hasMany(DeviceTrust::class);
+    }
+
+    public function trustedDevices(): BelongsToMany
+    {
+        return $this->belongsToMany(Device::class, 'device_trusts')
+            ->withPivot([
+                'trusted_node_fingerprint',
+                'first_trusted_at',
+                'last_seen_at',
+                'expires_at',
+                'revoked_at',
+            ])
+            ->withTimestamps();
     }
 
     public function isDisabled(): bool
