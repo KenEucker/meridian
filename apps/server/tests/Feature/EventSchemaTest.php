@@ -87,6 +87,21 @@ class EventSchemaTest extends TestCase
         );
     }
 
+    public function test_event_schedule_can_be_tbd(): void
+    {
+        $event = Event::factory()->create([
+            'starts_at' => null,
+            'ends_at' => null,
+            'active_event_window_starts_at' => null,
+            'active_event_window_ends_at' => null,
+        ]);
+
+        $this->assertNull($event->starts_at);
+        $this->assertNull($event->ends_at);
+        $this->assertNull($event->active_event_window_starts_at);
+        $this->assertNull($event->active_event_window_ends_at);
+    }
+
     public function test_active_scope_excludes_archived_events(): void
     {
         $activeEvent = Event::factory()->create();

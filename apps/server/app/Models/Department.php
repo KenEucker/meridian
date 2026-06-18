@@ -2,9 +2,8 @@
 
 namespace App\Models;
 
-use Database\Factories\EventFactory;
+use Database\Factories\DepartmentFactory;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,33 +13,23 @@ use Orchid\Filters\Types\Where;
 use Orchid\Filters\Types\WhereDateStartEnd;
 use Orchid\Screen\AsSource;
 
-class Event extends Model
+class Department extends Model
 {
     use AsSource;
     use Filterable;
 
-    /** @use HasFactory<EventFactory> */
-    use HasFactory, HasUuids;
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
+    /** @use HasFactory<DepartmentFactory> */
+    use HasFactory;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
-        'id',
         'organization_id',
         'name',
-        'slug',
-        'starts_at',
-        'ends_at',
-        'timezone',
-        'status',
-        'ic_department_id',
-        'active_event_window_starts_at',
-        'active_event_window_ends_at',
+        'code',
+        'description',
+        'default_team_id',
         'archived_at',
     ];
 
@@ -51,11 +40,7 @@ class Event extends Model
         'id' => Where::class,
         'organization_id' => Where::class,
         'name' => Like::class,
-        'slug' => Like::class,
-        'timezone' => Like::class,
-        'status' => Like::class,
-        'starts_at' => WhereDateStartEnd::class,
-        'ends_at' => WhereDateStartEnd::class,
+        'code' => Like::class,
         'updated_at' => WhereDateStartEnd::class,
         'created_at' => WhereDateStartEnd::class,
     ];
@@ -67,11 +52,7 @@ class Event extends Model
         'id',
         'organization_id',
         'name',
-        'slug',
-        'timezone',
-        'status',
-        'starts_at',
-        'ends_at',
+        'code',
         'updated_at',
         'created_at',
     ];
@@ -82,11 +63,7 @@ class Event extends Model
     protected function casts(): array
     {
         return [
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
-            'ic_department_id' => 'integer',
-            'active_event_window_starts_at' => 'datetime',
-            'active_event_window_ends_at' => 'datetime',
+            'default_team_id' => 'integer',
             'archived_at' => 'datetime',
         ];
     }
@@ -97,8 +74,8 @@ class Event extends Model
     }
 
     /**
-     * @param  Builder<Event>  $query
-     * @return Builder<Event>
+     * @param  Builder<Department>  $query
+     * @return Builder<Department>
      */
     public function scopeActive(Builder $query): Builder
     {

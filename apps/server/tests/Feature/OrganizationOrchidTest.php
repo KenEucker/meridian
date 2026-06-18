@@ -45,6 +45,8 @@ class OrganizationOrchidTest extends TestCase
         $response->assertSee('Edit Organization');
         $response->assertSee('Signal Camp');
         $response->assertSee('signal-camp');
+        $response->assertSee('meridian-admin.js');
+        $response->assertSee('data-meridian-slug-target="organization[slug]"', false);
         $response->assertSee('Save');
         $response->assertSee('Cancel');
     }
