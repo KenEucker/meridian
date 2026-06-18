@@ -12,6 +12,8 @@ use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
 use App\Orchid\Screens\Role\RoleListScreen;
+use App\Orchid\Screens\Team\TeamEditScreen;
+use App\Orchid\Screens\Team\TeamListScreen;
 use App\Orchid\Screens\User\UserEditScreen;
 use App\Orchid\Screens\User\UserListScreen;
 use App\Orchid\Screens\User\UserProfileScreen;
@@ -144,6 +146,27 @@ Route::screen('departments', DepartmentListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Departments'), route('platform.departments')));
+
+// Platform > Operations > Teams > Team
+Route::screen('teams/{team}/edit', TeamEditScreen::class)
+    ->name('platform.teams.edit')
+    ->breadcrumbs(fn (Trail $trail, $team) => $trail
+        ->parent('platform.teams')
+        ->push($team->name, route('platform.teams.edit', $team)));
+
+// Platform > Operations > Teams > Create
+Route::screen('teams/create', TeamEditScreen::class)
+    ->name('platform.teams.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.teams')
+        ->push(__('Create'), route('platform.teams.create')));
+
+// Platform > Operations > Teams
+Route::screen('teams', TeamListScreen::class)
+    ->name('platform.teams')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Teams'), route('platform.teams')));
 
 // Platform > God Mode > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)
