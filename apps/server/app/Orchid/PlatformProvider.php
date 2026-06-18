@@ -51,6 +51,12 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.systems.roles')
                 ->divider(),
 
+            Menu::make(__('Organizations'))
+                ->icon('bs.buildings')
+                ->route('platform.organizations')
+                ->permission('platform.organizations')
+                ->title(__('Operations')),
+
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
                 ->route('platform.node.config')
@@ -82,6 +88,9 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('System'))
                 ->addPermission('platform.systems.roles', __('Roles'))
                 ->addPermission('platform.systems.users', __('Users')),
+
+            ItemPermission::group(__('Operations'))
+                ->addPermission('platform.organizations', __('Organizations')),
 
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.node.config', __('Node configuration')),
