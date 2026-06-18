@@ -30,6 +30,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Node Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Node configuration is file-first, database-second. These file-backed
+    | values provide boot defaults; first-run setup and God mode may create
+    | database overrides that are surfaced with their source.
+    |
+    */
+
+    'node' => [
+        'name' => env('MERIDIAN_NODE_NAME'),
+        'role' => env('MERIDIAN_NODE_ROLE'),
+        'public_key' => env('MERIDIAN_NODE_PUBLIC_KEY'),
+        'private_key' => env('MERIDIAN_NODE_PRIVATE_KEY'),
+        'central_node_url' => env('MERIDIAN_CENTRAL_NODE_URL'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Magic Link Authentication
     |--------------------------------------------------------------------------
     |

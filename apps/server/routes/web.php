@@ -4,11 +4,15 @@ use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\MagicLinkController;
+use App\Http\Controllers\Setup\NodeSetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('setup', [NodeSetupController::class, 'show'])->name('setup.show');
+Route::post('setup', [NodeSetupController::class, 'store'])->name('setup.store');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('login', [MagicLinkController::class, 'create'])->name('login');
