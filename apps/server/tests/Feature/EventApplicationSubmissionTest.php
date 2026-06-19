@@ -30,8 +30,8 @@ class EventApplicationSubmissionTest extends TestCase
         $event = Event::factory()->for($organization)->create(['slug' => 'idaho-decompression-2026']);
 
         $this->assertSame(
-            'http://localhost/idaho-burners/idaho-decompression-2026/apply',
-            route('public.events.apply', $event->applyRouteParameters()),
+            '/idaho-burners/idaho-decompression-2026/apply',
+            parse_url(route('public.events.apply', $event->applyRouteParameters()), PHP_URL_PATH),
         );
 
         $this->get('/idaho-burners/idaho-decompression-2026/apply')->assertOk();
