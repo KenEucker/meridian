@@ -6,6 +6,8 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Staff;
 use App\Models\Team;
+use App\Models\User;
+use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -21,6 +23,7 @@ class DepartmentMembershipService
         iterable $teams,
         string $status = DepartmentMembership::STATUS_ACTIVE,
         ?string $statusReason = null,
+        ?User $changedBy = null,
     ): DepartmentMembership {
         $teams = collect($teams)->values();
 
@@ -38,7 +41,7 @@ class DepartmentMembershipService
             }
         });
 
-        return DB::transaction(function () use ($staff, $department, $teams, $status, $statusReason): DepartmentMembership {
+        return DB::transaction(function () use ($staff, $department, $teams, $status, $statusReason, $changedBy): DepartmentMembership {
             $departmentMembership = DepartmentMembership::query()->create([
                 'department_id' => $department->id,
                 'staff_id' => $staff->id,
@@ -53,6 +56,13 @@ class DepartmentMembershipService
                     'membership_role' => 'member',
                 ]);
             });
+
+            if ($status === DepartmentMembership::STATUS_ACTIVE) {
+                app(StaffStatusService::class)->activateProspectiveOrganizationStatusForDepartmentAssignment(
+                    $departmentMembership,
+                    $changedBy,
+                );
+            }
 
             return $departmentMembership->refresh()->load('teamMemberships.team');
         });
