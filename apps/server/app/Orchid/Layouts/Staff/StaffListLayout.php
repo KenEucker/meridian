@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Orchid\Layouts\Staff;
 
 use App\Models\Staff;
-use Illuminate\Support\Facades\Storage;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Components\Cells\DateTimeSplit;
 use Orchid\Screen\Fields\Input;
@@ -27,11 +26,13 @@ class StaffListLayout extends Table
         return [
             TD::make('profile_picture_path', __('Picture'))
                 ->render(function (Staff $staff): string {
-                    if ($staff->profile_picture_path === null) {
+                    $url = $staff->profilePictureUrl();
+
+                    if ($url === null) {
                         return (string) __('No picture');
                     }
 
-                    $url = e(Storage::disk('public')->url($staff->profile_picture_path));
+                    $url = e($url);
 
                     return "<img src=\"{$url}\" alt=\"\" style=\"width: 40px; height: 40px; object-fit: cover; border-radius: 999px;\">";
                 }),

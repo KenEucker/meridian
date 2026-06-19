@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -122,5 +123,18 @@ class Staff extends Model
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    public function profilePictureUrl(): ?string
+    {
+        if ($this->profile_picture_path === null || $this->profile_picture_path === '') {
+            return null;
+        }
+
+        if (str_starts_with($this->profile_picture_path, '/') || filter_var($this->profile_picture_path, FILTER_VALIDATE_URL) !== false) {
+            return $this->profile_picture_path;
+        }
+
+        return Storage::disk('public')->url($this->profile_picture_path);
     }
 }

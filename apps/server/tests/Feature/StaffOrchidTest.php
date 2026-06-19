@@ -25,7 +25,7 @@ class StaffOrchidTest extends TestCase
             'email' => 'signal@example.org',
             'city' => 'Boise',
             'state' => 'ID',
-            'profile_picture_path' => 'staff/profile-pictures/signal.webp',
+            'profile_picture_path' => '/storage/staff/profile-pictures/signal.webp',
         ]);
 
         $response = $this->actingAs($this->staffAdmin())->get(route('platform.staff'));
@@ -36,8 +36,24 @@ class StaffOrchidTest extends TestCase
         $response->assertSee('Signal');
         $response->assertSee('signal@example.org');
         $response->assertSee('Boise');
-        $response->assertSee('staff/profile-pictures/signal.webp');
+        $response->assertSee('src="/storage/staff/profile-pictures/signal.webp"', false);
+        $response->assertDontSee('/storage//storage/staff/profile-pictures/signal.webp', false);
         $response->assertDontSee('Organization Staff');
+    }
+
+    public function test_orchid_staff_list_resolves_legacy_storage_profile_picture_paths(): void
+    {
+        Staff::factory()->create([
+            'legal_name' => 'Jordan Reed',
+            'handle' => 'Signal',
+            'email' => 'signal@example.org',
+            'profile_picture_path' => 'staff/profile-pictures/signal.webp',
+        ]);
+
+        $response = $this->actingAs($this->staffAdmin())->get(route('platform.staff'));
+
+        $response->assertOk();
+        $response->assertSee('/storage/staff/profile-pictures/signal.webp', false);
     }
 
     public function test_orchid_staff_detail_displays_edit_scaffold(): void
