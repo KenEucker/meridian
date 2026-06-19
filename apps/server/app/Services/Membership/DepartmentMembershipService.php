@@ -18,7 +18,8 @@ class DepartmentMembershipService
      * Assign staff to a department using the department default team only.
      *
      * Alpha 1 department assignment (APP-007) satisfies VOL-006 with the
-     * structural default team; operational team assignment is delivered by M5.8.
+     * structural default team; operational team assignment is delivered by
+     * {@see TeamMembershipService::assignStaffToTeam}.
      */
     public function assignStaffWithDefaultTeam(
         Staff $staff,

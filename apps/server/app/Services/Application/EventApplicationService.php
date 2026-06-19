@@ -32,7 +32,8 @@ use Illuminate\Validation\ValidationException;
  * Reject/defer transitions are organizer/Staff Coordinator review actions.
  * Applicant-only withdrawal is enforced through {@see ApplicationApplicantAccess}.
  * Department assignment after approval is delivered by {@see assignToDepartment};
- * additional team assignment is delivered by M5.8.
+ * operational team assignment is delivered by
+ * {@see \App\Services\Membership\TeamMembershipService::assignStaffToTeam}.
  */
 class EventApplicationService
 {
