@@ -576,6 +576,25 @@ Long forms should generally be single-page.
 
 Forms should use consistent field layout, clear labels, predictable error placement, and a top-level error summary.
 
+#### Event application form (`public.apply`)
+
+The event application form uses fixed fields, not a configurable form builder.
+
+Fixed fields:
+
+- event name (read-only context)
+- legal name
+- email
+- optional department interest (multi-select checklist of eligible event-participating departments)
+
+Department interest behavior:
+
+- optional and non-binding; label and helper text state this clearly
+- empty selection means no preference / open to any; there is no explicit “No preference” option
+- hide the field when the event has no eligible participating departments
+- no team selection, no preference ranking, and no maximum-count messaging
+- do not prefill from existing department memberships for returning staff
+
 ### 14.2 Validation timing
 
 Validation should happen on blur where it makes sense.

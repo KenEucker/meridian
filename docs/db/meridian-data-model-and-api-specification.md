@@ -926,11 +926,85 @@ auto_rejected_dns
 Rules:
 
 - applicants apply to events, not directly to departments
+- optional department interest (APP-011) may be recorded at submission as a non-binding intake signal; it is not department assignment, membership, approval, or access
 - approval happens at the organization level
 - approved applicants become organization-level prospective staff
 - department/team assignment happens after organization approval
 - approved applications may be rescinded before team assignment
 - applications cannot be rescinded after team assignment
+
+#### `event_application_department_interests`
+
+Represents optional, unordered, non-binding department interest recorded with an event application.
+
+Key fields:
+
+- `id` (UUID)
+- `event_application_id`
+- `department_id`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- one department may appear at most once per application (unique on `event_application_id` + `department_id`)
+- no `preference_order` or ranking fields
+- interest records are preserved when a department is later archived, removed from the event, or renamed; review UI may show current department name with inactive or archived treatment
+- department interest does not create department membership, team membership, assignment, access, routing, or notifications
+
+Relationships:
+
+- belongs to `event_applications`
+- belongs to `departments`
+
+#### `POST /api/commands/submit-application`
+
+Submits an event application online. Department interest is captured as part of this command in Alpha 1 and has no separate offline or sync behavior.
+
+Request payload (domain fields):
+
+- `event_id` (required)
+- `applicant_legal_name` (required for public applicants; may be omitted when authenticated applicant identity is already known)
+- `applicant_email` (required for public applicants; may be omitted when authenticated applicant identity is already known)
+- `department_interest_ids` (optional): array of department UUIDs
+
+`department_interest_ids` validation:
+
+- optional; omitted or empty array means no preference
+- values must be unique within the array
+- each department must belong to the event’s organization
+- each department must be non-archived at submission time
+- each department must participate in the event through an active `event_department_assignments` row (or equivalent)
+- team IDs are not accepted
+- invalid values reject the entire submission with validation errors; do not partially submit
+
+Example request:
+
+```json
+{
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "applicant_legal_name": "Alex Applicant",
+  "applicant_email": "alex@example.com",
+  "department_interest_ids": [
+    "660e8400-e29b-41d4-a716-446655440001",
+    "660e8400-e29b-41d4-a716-446655440002"
+  ]
+}
+```
+
+Example response (abbreviated):
+
+```json
+{
+  "id": "770e8400-e29b-41d4-a716-446655440010",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "submitted",
+  "department_interests": [
+    { "department_id": "660e8400-e29b-41d4-a716-446655440001", "department_name": "Gate" },
+    { "department_id": "660e8400-e29b-41d4-a716-446655440002", "department_name": "Rangers" }
+  ]
+}
+```
 
 ---
 

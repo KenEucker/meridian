@@ -534,6 +534,8 @@ Alpha 1 offline writes include:
 
 Policy/procedure acknowledgments are not creatable offline in Alpha 1. Acknowledgments require server connection and are accepted through Laravel before they appear in synced state.
 
+Event application submission, including optional department interest, is online-only in Alpha 1. It has no special offline or sync behavior beyond normal application submission records.
+
 Incidents require server connection for creation.
 
 Field reports are finalized when submitted. There are no field report drafts.

@@ -587,6 +587,8 @@ An application is an event-specific intake record.
 
 People apply to events, not directly to departments.
 
+An application may optionally record **department interest**: a non-binding intake signal indicating which event-participating departments the applicant is open to working with. Department interest is not department assignment, not department membership, not approval, not access, not team selection, and not routing. Empty department interest means no preference (open to any). Department interest does not change the event-level nature of the application.
+
 Applications are operational signals.
 
 Applications do not directly alter department membership, team membership, shifts, or system access.
@@ -614,7 +616,7 @@ If an approved application is rescinded before team assignment, the person becom
 
 Once a staff member is assigned to a team, the application can no longer be rescinded. Future changes are handled through staff and department status.
 
-Existing active staff may apply to events to signal interest, but active staff can also be added to future events by department leads without submitting a new application.
+Existing active staff may apply to events to signal event participation interest, including optional department interest on the application form, but active staff can also be added to future events by department leads without submitting a new application. Returning or active staff department memberships are not prefilled as department interest.
 
 ---
 
@@ -1499,19 +1501,22 @@ IC Department Leads are the only users who may print incident PDFs.
 
 1. Applicant submits an event application.
 2. Application collects legal name and email unless the applicant already has a login.
-3. Application may also collect required profile/contact fields.
-4. If applicant email matches DNS, application is auto-rejected without automatic notice.
-5. Staff Coordinator or Organizer reviews application.
-6. Application becomes one of:
+3. Application may optionally collect department interest: zero or more unordered, non-binding signals for eligible event-participating departments. Omitted or empty selection means no preference. If no eligible participating departments exist for the event, the department interest field is hidden and submission proceeds normally.
+4. Application may also collect required profile/contact fields.
+5. If applicant email matches DNS, application is auto-rejected without automatic notice.
+6. Staff Coordinator or Organizer reviews application.
+7. Application becomes one of:
    - Approved
    - Rejected
    - Deferred
    - Withdrawn
    - Auto-rejected due to DNS
-7. If approved, applicant becomes Prospective at the organization level.
-8. Approved applicant may be assigned to departments.
-9. Department leads decide whether to accept the approved applicant into their department.
-10. Department/team/training process determines when the staff member becomes Active.
+8. If approved, applicant becomes Prospective at the organization level.
+9. Approved applicant may be assigned to departments.
+10. Department leads decide whether to accept the approved applicant into their department.
+11. Department/team/training process determines when the staff member becomes Active.
+
+Department interest recorded at submission is visible during review but does not affect approval, routing, notifications, assignment, membership, access, or applicant status.
 
 ---
 
@@ -2182,6 +2187,8 @@ Applications shall be event-specific.
 
 Applicants shall apply to events, not directly to departments.
 
+Optional department interest (APP-011) collected during application submission is a non-binding intake signal. It does not constitute applying to a department, department assignment, department membership, approval, access, or team selection.
+
 ### APP-003
 
 Application statuses shall include Submitted, Approved, Rejected, Deferred, Withdrawn, and Auto-rejected due to DNS.
@@ -2213,6 +2220,28 @@ If an approved application is rescinded before team assignment, the person shall
 ### APP-010
 
 Applications shall not be rescinded after team assignment.
+
+### APP-011
+
+Event application department interest shall be optional, collected during application submission, and stored as a non-binding intake signal separate from department assignment (APP-007), department membership, approval (APP-005), access, team selection, routing, notifications, exports, and special audit behavior.
+
+Rules:
+
+- Empty or omitted department interest means no preference (open to any). There is no explicit “No preference” option.
+- Applicants may select multiple department interests with no maximum and no preference order (no 1st/2nd/3rd behavior).
+- Eligible departments are non-archived departments belonging to the event’s organization that participate in the event through `event_department_assignments` (or equivalent event-department participation).
+- If no eligible participating departments exist for the event, the department interest field is hidden and submission proceeds normally.
+- Department interest is available to public and authenticated applicants on the event application form.
+- Returning or active staff department memberships shall not be prefilled as department interest.
+- Applicants shall not edit department interest after submit in Alpha 1.
+- Organizers shall not edit department interest during review in Alpha 1.
+- No separate withdraw/reapply workflow is introduced solely to change department interest.
+- Organizers and Staff Coordinators who can review applications shall see department interest. The organizer application list shall support filtering by department interest in Alpha 1.
+- Department leads may see read-only applications that expressed interest in their department before organization approval and before department assignment. This visibility does not grant review authority, approval authority, assignment authority, routing authority, notification behavior, or access to unrelated applications unless the user also has organizer or Staff Coordinator permissions.
+- Department interest shall not affect routing, notifications, approval, access, department membership, team membership, shifts, trainings, credentials, or applicant status.
+- Department interest shall not be included in exports in Alpha 1.
+- There is no “Other / not listed” option and no team interest or team selection on the application form.
+- If a department is archived, removed from the event, or renamed after applications are submitted, submitted interest records are preserved for review and history. UI may display the department’s current name when available and shall use inactive or archived treatment when applicable. Historical interest records are not deleted merely because the department is no longer eligible for new applications.
 
 ---
 
