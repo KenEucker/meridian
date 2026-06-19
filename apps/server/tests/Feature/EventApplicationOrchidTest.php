@@ -10,6 +10,7 @@ use App\Models\EventApplicationDepartmentInterest;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
+use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
@@ -85,9 +86,11 @@ class EventApplicationOrchidTest extends TestCase
         $response->assertSee('No department preference');
         $response->assertSee('Approval occurs at the organization level');
         $response->assertSee('Back');
+        $response->assertSee('Approve');
         $response->assertDontSee('Save');
-        $response->assertDontSee('Approve');
         $response->assertDontSee('Reject');
+        $response->assertDontSee('Defer');
+        $response->assertDontSee('Assign');
     }
 
     public function test_orchid_application_detail_shows_canonical_status_labels(): void
@@ -246,6 +249,71 @@ class EventApplicationOrchidTest extends TestCase
 
         $this->actingAs($user)->get(route('platform.applications'))->assertForbidden();
         $this->actingAs($user)->get(route('platform.applications.show', $application))->assertForbidden();
+    }
+
+    public function test_orchid_approve_action_approves_application_and_creates_prospective_status(): void
+    {
+        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $event = Event::factory()->for($organization)->create(['name' => 'Signal Camp 2026']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Morgan Approver',
+            'applicant_email' => 'Morgan.Approver@example.org',
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $reviewer = $this->applicationAdmin();
+
+        $response = $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($reviewer)
+            ->withoutFollowingRedirects()
+            ->method('approve');
+
+        $response->assertRedirect(route('platform.applications.show', $application));
+
+        $application->refresh();
+        $this->assertSame(EventApplication::STATUS_APPROVED, $application->status);
+        $this->assertSame($reviewer->id, $application->reviewed_by_user_id);
+        $this->assertNotNull($application->reviewed_at);
+
+        $this->assertDatabaseHas('staff', [
+            'id' => $application->staff_id,
+            'legal_name' => 'Morgan Approver',
+            'email' => 'morgan.approver@example.org',
+        ]);
+
+        $this->assertDatabaseHas('staff_organization_statuses', [
+            'organization_id' => $organization->id,
+            'staff_id' => $application->staff_id,
+            'status' => StaffOrganizationStatus::STATUS_PROSPECTIVE,
+            'status_changed_by_user_id' => $reviewer->id,
+        ]);
+    }
+
+    public function test_department_lead_read_only_visibility_cannot_approve_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Read Only Applicant',
+        ]);
+        $this->recordInterest($application, $department);
+        $departmentLead = $this->departmentLeadUserFor($department);
+
+        $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($departmentLead)
+            ->method('approve')
+            ->assertForbidden();
+
+        $this->assertSame(EventApplication::STATUS_SUBMITTED, $application->refresh()->status);
+        $this->assertNull($application->staff_id);
     }
 
     private function applicationAdmin(): User

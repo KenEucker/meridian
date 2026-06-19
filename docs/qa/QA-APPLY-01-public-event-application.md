@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, and submit an application that is recorded in the Submitted state or auto-rejected due to DNS when applicable. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), department lead read-only visibility where implemented, DNS auto-rejection without applicant notice, and verification that department interest does not create assignment or access side effects. Approval, withdrawal, and department/team assignment are delivered by later Milestone 5 tasks.
+Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, submit an application that is recorded in the Submitted state or auto-rejected due to DNS when applicable, and have a submitted application approved by an organizer/Staff Coordinator into Prospective organization-level staff status. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), approval, department lead read-only visibility where implemented, DNS auto-rejection without applicant notice, and verification that department interest and approval do not create department/team assignment or access side effects. Withdrawal and department/team assignment are delivered by later Milestone 5 tasks.
 
 ## Requirements covered
 
@@ -11,12 +11,13 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - `APP-003`
 - `APP-004`
 - `APP-005`
+- `APP-006`
 - `APP-011`
 - `STAT-006`
 - Requirements sections 3.10 and 5.2
 - Data/API spec sections 10.4 and 10.5 (`staff_organization_statuses`, `event_applications`, `event_application_department_interests`, `submit-application`)
 - UI implementation contract sections 8.2, 9.3 and 12.1, 12.6, 12.10 (`public.apply`, `organizer.applications`, `organizer.application-detail`)
-- Meridian Alpha 1 tasks M5.1, M5.2, M5.3, M5.4
+- Meridian Alpha 1 tasks M5.1, M5.2, M5.3, M5.4, M5.5
 
 ## Environment
 
@@ -28,7 +29,7 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 
 - Public applicant: an unauthenticated visitor with the application link.
 - Authenticated applicant: any signed-in user (for example, Vera Staff).
-- Organizer: an Orchid user with the `platform.applications` permission (for example, a development admin granted Applications access).
+- Organizer: an Orchid user with the `platform.applications` permission (for example, a development admin granted Applications access), able to approve submitted applications.
 - Department lead: a user who leads a department participating in the event (for read-only interest visibility checks when M5.3 is complete).
 
 ## Setup data
@@ -64,7 +65,7 @@ Verify that a public (or authenticated) applicant can open an event-specific app
      ```
 9. As the organizer, sign in to Orchid and open **Operations → Applications**.
 10. Confirm the submitted application appears with applicant name, email, event name, organization name, status **Submitted**, submitted timestamp, and a department interest empty state (for example, “No department preference” or “Open to any”).
-11. Open the application detail and confirm legal name, email, event, organization, status **Submitted**, submitted timestamp, department interest empty state, and the note that approval occurs at the organization level. Confirm there are no Approve, Reject, Defer, or Save actions on this screen.
+11. Open the application detail and confirm legal name, email, event, organization, status **Submitted**, submitted timestamp, department interest empty state, and the note that approval occurs at the organization level. Confirm the **Approve** action is visible to the organizer/Staff Coordinator. Confirm there are no Reject, Defer, Assign, or Save actions on this screen.
 12. Submit the form again for the same event using the same email (any letter case); confirm it is blocked with a duplicate message and no second row is created.
 13. Open `/{organization-slug}/{event-slug}/apply` for the archived event and confirm an "Applications closed" state with no usable form.
 14. Sign in as the authenticated applicant, open the apply form for the non-archived event, and confirm submission also succeeds.
@@ -94,6 +95,22 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 29. As a department lead without organizer/Staff Coordinator review permission, confirm the DNS auto-rejected application is not visible through interest-only read-only application visibility.
 30. Submit the same DNS email to an event in a different organization where that staff email does not have `do_not_staff` status; confirm it follows the normal non-DNS submission path for that organization.
 
+### E. Organization approval to Prospective (M5.5 / APP-005 / APP-006)
+
+31. As the organizer, open a normal **Submitted** application detail from **Operations → Applications**.
+32. Click **Approve** and confirm the action.
+33. Confirm the application detail returns with status **Approved**, a reviewed timestamp, the reviewer name, the decision reason, and the matched staff profile.
+34. Confirm a `staff` row exists for the applicant legal name and normalized email if no matching staff row existed before approval.
+35. Confirm a `staff_organization_statuses` row exists for the matched staff member and event organization with status `prospective`, `status_changed_at` set, and `status_changed_by_user_id` set to the approving user.
+   - From `apps/server`, run:
+     ```bash
+     php artisan tinker --execute="App\Models\EventApplication::query()->with(['staff.organizationStatuses','reviewedBy'])->latest('reviewed_at')->get(['id','staff_id','applicant_email','applicant_legal_name','status','reviewed_at','reviewed_by_user_id','decision_reason'])->each(fn (\$a) => print(\$a->toJson(JSON_PRETTY_PRINT).PHP_EOL));"
+     ```
+36. Confirm audit history contains an `event_application.approved` event and a staff organization status create/change event scoped to the organization and event.
+37. Confirm the approval did **not** create department membership, team membership, department assignment, event staff assignment, shift signup eligibility, training completion, credential eligibility, or notifications/routing.
+38. As a department lead without organizer/Staff Coordinator review permission, open a read-only interested application and confirm **Approve** is not visible. Confirm direct approve attempts are denied if tested.
+39. Confirm DNS auto-rejected, approved, rejected, deferred, or withdrawn applications cannot be approved from the review screen.
+
 ## Expected results
 
 - The public form is reachable without authentication and is scoped to one event (APP-001, APP-002).
@@ -107,10 +124,14 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Archived events show a closed state and never accept a submission.
 - Authenticated users can also submit; existing department memberships are not prefilled as interest (APP-011).
 - Organizers with `platform.applications` permission can list and inspect applications with canonical status labels, organization context, and department interest display/filter (APP-003, APP-005, APP-011).
+- Organizers with `platform.applications` permission can approve a submitted application at the organization level, changing the application to `approved`, linking/creating a staff profile, and creating or ensuring a Prospective organization-level staff status (APP-005, APP-006).
+- Application approval records reviewer/timestamp/decision reason and audit events for the application approval and staff organization status creation/change.
 - Department interest does not create assignment, membership, access, routing, or notification side effects (APP-011).
+- Application approval does not create department assignment, department membership, team membership, shifts, trainings, credentials, routing, exports, or notifications; those remain later workflow steps.
 - Department leads see only read-only interested applications when implemented; they gain no review authority from interest alone (APP-011).
 - DNS email applications are auto-rejected only for the matching organization and do not automatically notify the applicant (STAT-006).
 - DNS auto-rejected applications remain visible to organizers/Staff Coordinators for review history and are not exposed to department leads through interest-only visibility.
+- DNS auto-rejected and other non-submitted applications cannot be approved in M5.5.
 
 ## Evidence to capture
 
@@ -124,7 +145,11 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Screenshot of the closed state for the archived event.
 - Screenshot of the generic confirmation after DNS email submission, plus query output showing `auto_rejected_dns`.
 - Screenshot of organizer detail for the DNS auto-rejected application.
+- Screenshot of a submitted application detail showing the organizer **Approve** action.
+- Screenshot of the approved application detail showing status **Approved**, reviewer, reviewed timestamp, decision reason, and matched staff profile.
+- Query output showing the Prospective `staff_organization_statuses` row and related approval audit events.
 - Evidence that no membership/assignment/access side effects occurred after interest submission.
+- Evidence that no department/team assignment, membership, shift/training/credential, routing, export, or notification side effects occurred after approval.
 
 ## Failure notes
 
@@ -133,7 +158,10 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - If a non-DNS submission produces a status other than `submitted`, stop and report scope leakage; review decisions belong to M5.5/M5.6.
 - If a DNS email submission tells the applicant that they are DNS, Do Not Staff, rejected, auto-rejected, or blocked, stop and report because STAT-006 requires no automatic applicant notice.
 - If a DNS auto-rejected application is visible to a department lead only because department interest was selected, stop and report because DNS-sensitive status should remain with organizer/Staff Coordinator review.
+- If a DNS auto-rejected or otherwise non-submitted application can be approved, stop and report because M5.5 approval is limited to submitted applications.
+- If approval does not create or ensure Prospective organization-level staff status, stop and report because APP-006 is not satisfied.
+- If approval creates department/team membership, assignment, shift/training/credential state, routing, exports, or notifications, stop and report scope leakage because those belong to later tasks.
 - If the archived event still accepts submissions, stop and report because applications must not be created for events that are not accepting applications.
-- If Approve, Reject, Defer, Assign, or edit-interest actions appear on the review detail screen for users without the appropriate later-task permissions, stop and report scope leakage; decision actions belong to M5.5/M5.6 and assignment to M5.7/M5.8.
+- If Approve, Reject, Defer, Assign, or edit-interest actions appear on the review detail screen for users without the appropriate permission, stop and report scope leakage; approval belongs to organizer/Staff Coordinator review in M5.5, reject/defer to M5.6, and assignment to M5.7/M5.8.
 - If department interest creates department membership, team membership, credentials, shifts, trainings, routing, or notifications, stop and report scope leakage (APP-011).
 - If returning staff department memberships are prefilled as department interest, stop and report (APP-011).

@@ -7,11 +7,16 @@ namespace App\Orchid\Screens\Application;
 use App\Models\EventApplication;
 use App\Models\User;
 use App\Orchid\Layouts\Application\ApplicationDetailLayout;
+use App\Services\Application\ApplicationApprovalException;
 use App\Services\Application\ApplicationReviewAccess;
+use App\Services\Application\EventApplicationService;
+use Illuminate\Http\RedirectResponse;
 use Orchid\Screen\Action;
+use Orchid\Screen\Actions\Button;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Screen;
 use Orchid\Support\Facades\Layout;
+use Orchid\Support\Facades\Toast;
 
 class ApplicationDetailScreen extends Screen
 {
@@ -60,10 +65,21 @@ class ApplicationDetailScreen extends Screen
      */
     public function commandBar(): iterable
     {
+        $user = request()->user();
+        $canApprove = $user instanceof User
+            && $this->application?->isSubmitted() === true
+            && app(ApplicationReviewAccess::class)->canReviewApplications($user);
+
         return [
             Link::make(__('Back'))
                 ->icon('bs.arrow-left-circle')
                 ->route('platform.applications'),
+
+            Button::make(__('Approve'))
+                ->icon('bs.check-circle')
+                ->method('approve')
+                ->confirm(__('Approve this application at the organization level and create Prospective staff status?'))
+                ->canSee($canApprove),
         ];
     }
 
@@ -75,8 +91,24 @@ class ApplicationDetailScreen extends Screen
         return [
             Layout::block(ApplicationDetailLayout::class)
                 ->title(__('Application'))
-                ->description(__('Review applicant identity, event scope, and current status. Approval and rejection actions are delivered in later tasks.')),
+                ->description(__('Review applicant identity, event scope, and current status. Approval creates Prospective organization status; reject and defer actions are delivered in later tasks.')),
         ];
+    }
+
+    public function approve(EventApplication $application): RedirectResponse
+    {
+        $user = request()->user();
+        abort_unless($user instanceof User, 403);
+        abort_unless(app(ApplicationReviewAccess::class)->canReviewApplications($user), 403);
+
+        try {
+            app(EventApplicationService::class)->approve($application, $user);
+            Toast::info(__('Application was approved.'));
+        } catch (ApplicationApprovalException $exception) {
+            Toast::warning(__($exception->getMessage()));
+        }
+
+        return redirect()->route('platform.applications.show', $application);
     }
 
     private function formatTimestamp(?\DateTimeInterface $timestamp): string
