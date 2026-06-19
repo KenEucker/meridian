@@ -187,6 +187,7 @@ Recommended structure:
 
 - context and record title;
 - current status and primary metadata;
+- tag and Name Reference metadata where relevant;
 - primary actions in the `ActionBar`;
 - main content;
 - related records;
@@ -213,6 +214,8 @@ Required form behavior:
 The incident create/edit screen is the only autosaving form. Routine operational changes may save immediately when the result is easy to correct.
 
 Field Reports are submitted, not saved as drafts. Field Report submission surfaces use Submit and Cancel, finalize on submit, do not autosave, and do not expose normal in-place editing after submission. Corrections, where allowed, are append-only and audit-aware.
+
+Field Report entry must remain plain text. It must not show Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report views may highlight Name References when rendered.
 
 Policy and procedure document editors use explicit Save/Publish/Archive actions. Document viewers render sanitized Markdown with referenced fragment text inline. Fragment editors show referencing documents before saving changes that will bump published document versions.
 
@@ -280,6 +283,8 @@ Advanced sync repair belongs in advanced mode only.
 
 Incident creation and editing are online-only in Alpha 1. Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show may be offline writes. Policy/procedure acknowledgments are online-only in Alpha 1.
 
+Name References remain text-first during offline use. Source text syncs through the existing Incident note and Field Report sync behavior, and any local Name Reference index or highlight state must remain rebuildable from source text and bounded by the same permissions.
+
 ---
 
 ## 16. Permission Behavior
@@ -289,6 +294,8 @@ Screens must be role-aware from the beginning.
 Default staff should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
 
 Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC team membership for the event's configured IC department.
+
+Name References inherit visibility from their source Incident notes and Field Reports. Rendering, chips, clicks, and search results must not reveal unavailable records.
 
 Permission-denied screens should be direct and calm:
 

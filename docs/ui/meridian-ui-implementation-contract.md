@@ -217,6 +217,8 @@ Results must be filtered by:
 
 IMS results must not appear unless the user has the required IC role for the event's configured IC department.
 
+Name Reference searches and clicked Name Reference chips use normal permission-filtered search. They must search for the reference text without the `@` prefix and must not open a dedicated Name Reference profile/detail route.
+
 Suggested result model:
 
 ```php
@@ -914,6 +916,7 @@ Field Reports follow this Alpha 1 lifecycle:
 5. The submitted Field Report can be viewed by its author and permitted reviewers.
 6. Corrections are append-only and audit-aware; the original submission is not rewritten.
 7. IC users may attach Field Reports to incidents where permitted.
+8. Name References in the submitted body may be highlighted after submission.
 
 ### 14.2 Field Report UI Rules
 
@@ -924,6 +927,7 @@ Field Reports follow this Alpha 1 lifecycle:
 - Show event and department/team context.
 - Show submitted-by as system-set, not user-editable.
 - Attachments are images only.
+- Do not show Name Reference autocomplete, context menus, existing-reference suggestions, notifications, linked incident visibility, or cross-record expansion to the author.
 
 ### 14.3 Attachment Rules
 
@@ -963,6 +967,7 @@ Incident create/edit must support:
 - linked incidents;
 - notes;
 - tags derived from `#hashtags` in notes;
+- Name Reference chips derived from incident notes and attached Field Reports;
 - history/timeline.
 
 ### 15.2 Autosave
@@ -986,8 +991,21 @@ Autosave rules:
 - Notes are append-only once submitted.
 - Tags may be generated from hashtags in notes.
 - Removing a tag pill must not rewrite the original note.
+- Name References may be generated from `@name` markers in notes for rendering, chips, and normal search.
+- Removing or hiding a Name Reference chip must not rewrite the original note.
 
-### 15.4 Timeline and History
+### 15.4 Name References
+
+- Supported surfaces are Incident notes and Field Reports only.
+- Supported token characters after `@` are letters, numbers, hyphens, and underscores.
+- Whitespace or punctuation ends the token.
+- Matching and search are case-insensitive.
+- Incident-level chips include references from incident notes and attached Field Reports.
+- Chips appear near tags or incident metadata where appropriate and are visually distinct from `#tags`.
+- Clicking a chip runs normal permission-filtered search for the reference text without `@`.
+- Name References must not imply user mentions, notifications, volunteer profile links, alias merge behavior, canonical identity/entity records, or a dedicated detail page.
+
+### 15.5 Timeline and History
 
 Show by default:
 
@@ -1006,7 +1024,7 @@ Hide by default but make available:
 - low-signal metadata updates;
 - mechanical sync events.
 
-### 15.5 Deletion and Striking
+### 15.6 Deletion and Striking
 
 - Incident deletion requires reason.
 - Deleted incidents remain as stricken records.
@@ -1045,6 +1063,7 @@ Use these UI states consistently:
 - Staff profile picture upload, replace, and remove are online-only in Alpha 1.
 - Staff profile picture blobs sync lazily as accessed and should show a placeholder or pending image state while unavailable.
 - Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show are Alpha 1 offline writes.
+- Name Reference source text syncs through existing Incident note and Field Report behavior. Any local/server derived index is rebuildable from source text and must not widen offline visibility.
 
 ---
 

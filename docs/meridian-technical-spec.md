@@ -4,6 +4,7 @@ Draft: 0.2
 Scope: Alpha 1 technical architecture and implementation direction  
 Status: Working draft  
 Additive Update: Policies and Procedures technical architecture added.
+Additive Update: Name References technical behavior added for IMS notes and Field Reports.
 
 ---
 
@@ -11,7 +12,7 @@ Additive Update: Policies and Procedures technical architecture added.
 
 Meridian is a general-purpose, configurable volunteer operations platform for organizations and events. It is designed for field reliability, offline-capable operations, and trusted on-site coordination.
 
-Meridian supports organizations, events, departments, teams, staff, shifts, attendance, field reports, incidents, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
+Meridian supports organizations, events, departments, teams, staff, shifts, attendance, field reports, incidents, Name References in IMS text, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
 
 The primary Alpha 1 goal is to prove that Meridian can operate reliably in a real event environment where internet connectivity may be limited, intermittent, or unavailable.
 
@@ -515,8 +516,11 @@ IC roles may cache:
 
 - Last viewed limited incident data.
 - Related field reports where permitted.
+- Derived Name Reference tokens from cached Incident notes and related Field Reports, where permitted.
 
 Incidents should not be greedily synced.
+
+Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. PowerSync must not become the business-rule engine for Name Reference visibility or search authorization.
 
 ## 9.4 Offline write scope
 
@@ -1141,6 +1145,29 @@ Field reports attached to incidents become visible within that incident only to 
 
 The original field report submitter is not shown that their field report has been attached to an incident.
 
+## 17.7 Name References in Field Reports
+
+Field Report body text may contain Name References.
+
+A Name Reference starts with `@` and continues through letters, numbers, hyphens, and underscores until whitespace or punctuation.
+
+Examples:
+
+```text
+@bucket.        -> bucket
+@blue-hat       -> blue-hat
+@blue_hat       -> blue_hat
+@ranger bucket  -> ranger
+```
+
+Field Reports are parsed for Name References immediately after submission. The original body remains the source of truth.
+
+Name Reference extraction may update a rebuildable derived index for search, rendering/highlighting, incident summary chips, or permitted local/offline use.
+
+The derived index is not a person, alias, identity, entity, suspect, or volunteer profile model.
+
+Field Report authors may see highlighted Name References in their own submitted report text if the renderer supports it. Field Report entry must not provide autocomplete, context menus, suggestions of existing references, cross-record search expansion, linked incident visibility, or any additional permission because the author typed a Name Reference.
+
 ---
 
 # 18. Field Report Photos and Attachments
@@ -1324,6 +1351,8 @@ Cached incidents are excluded from normal emergency exports.
 
 Related field reports for cached incidents may be cached where permitted.
 
+Derived Name Reference tokens for cached incident notes and related Field Reports may be cached where permitted, but they remain rebuildable display/search artifacts and must not broaden offline visibility.
+
 ## 19.3 Incident visibility
 
 Incidents are visible only to IC roles.
@@ -1424,6 +1453,29 @@ IC leads and IC operators can link and unlink field reports from incidents.
 Link/unlink activity appears on the incident timeline only.
 
 Link/unlink activity does not appear to the original field report submitter.
+
+## 19.9 Name References on incidents
+
+Incident notes may contain Name References.
+
+Incident-level Name Reference chips include references extracted from:
+
+- the incident's own notes;
+- Field Reports attached to the incident.
+
+Name Reference chips should appear near existing incident tags or metadata areas where appropriate and should be visually distinct from `#tags`.
+
+Clicking a Name Reference runs a normal permission-filtered search for the reference text without the `@` prefix. It does not open a dedicated Name Reference profile/detail page and does not link to a volunteer profile.
+
+## 19.10 IMS Name Reference search
+
+Normal IMS search should find permitted records that include a searched name/reference string with or without the `@` operator when supported by the search implementation.
+
+Search is case-insensitive.
+
+Searching or clicking a Name Reference must not grant access to records the user could not otherwise view.
+
+Meridian must not create a separate global Name Reference search surface for Alpha 1. Command palette search may include permitted IMS records for IC roles where it already supports IMS records, but it must not create a Name Reference profile/detail system.
 
 ---
 
@@ -2009,6 +2061,8 @@ Automatic document version bumps caused by fragment changes do not need separate
 
 Field reports preserve immutable original body and append-only additions.
 
+Name Reference extraction, clicking, and searching do not require Name Reference-specific audit events. Existing read/view/search audit behavior applies where the relevant source record or surface already requires it.
+
 ---
 
 # 24. Forms and Configuration
@@ -2183,20 +2237,22 @@ Alpha 1 should prove:
 6. Local encryption and device signing are active.
 7. The user can create a field report offline with photos.
 8. The field report appears submitted immediately on the device.
-9. The device reconnects and syncs the field report to the on-site node.
-10. The on-site node accepts and countersigns the operation.
-11. The on-site node syncs the field report metadata and photos to central when internet is available.
-12. The field report is visible in Orchid according to permission rules.
-13. A shift lead can check staff in/out and mark no-show.
-14. IC roles can create and manage incidents online.
-15. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.
-16. A user can view visible published policies/procedures offline from synced PowerSync data.
-17. A user can acknowledge a required policy/procedure document during signup or training while connected to the server.
-18. The acknowledgment stores document ID and document version.
-19. A fragment edit automatically bumps the fragment-revision component of published referencing documents.
-20. Markdown and PDF exports render fragment text inline and include document version/export timestamp.
-21. Sync conflicts appear in God mode and do not block unrelated sync.
-22. Electron displays node health and sync status.
+9. Name References in the submitted Field Report body are preserved as source text and may be highlighted without adding autocomplete, suggestions, notifications, or permissions.
+10. The device reconnects and syncs the field report to the on-site node.
+11. The on-site node accepts and countersigns the operation.
+12. The on-site node syncs the field report metadata and photos to central when internet is available.
+13. The field report is visible in Orchid according to permission rules.
+14. A shift lead can check staff in/out and mark no-show.
+15. IC roles can create and manage incidents online.
+16. Permitted IC users can see incident-level Name Reference chips derived from incident notes and attached Field Reports, and clicking a chip runs normal permission-filtered search.
+17. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.
+18. A user can view visible published policies/procedures offline from synced PowerSync data.
+19. A user can acknowledge a required policy/procedure document during signup or training while connected to the server.
+20. The acknowledgment stores document ID and document version.
+21. A fragment edit automatically bumps the fragment-revision component of published referencing documents.
+22. Markdown and PDF exports render fragment text inline and include document version/export timestamp.
+23. Sync conflicts appear in God mode and do not block unrelated sync.
+24. Electron displays node health and sync status.
 
 Alpha 1 does not need to prove app-store distribution.
 
@@ -2226,6 +2282,7 @@ policy/procedure acknowledgments while offline
 policy/procedure packet assembly
 full-text search within policy/procedure documents or fragments
 incident creation while offline
+Name Reference autocomplete, notifications, alias merging, profile/detail pages, volunteer profile links, user mentions, and canonical person/entity records
 generic plugin system
 full multi-on-site-node implementation
 USB/server snapshot restore workflows

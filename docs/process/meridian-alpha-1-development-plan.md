@@ -285,7 +285,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 **Goal:** Support immutable offline field reports with photo attachments and restricted visibility.
 
-**Primary source docs:** Requirements sections 3.20, 5.10, 7.11; Technical spec sections 17, 18, 23, 27.1, 28; data/API sections 10.15, 10.17, 15.3; IMS/UI docs for field report surfaces.
+**Primary source docs:** Requirements sections 3.20, 3.21A, 5.10, 7.11, 7.12A; Technical spec sections 17, 18, 19.9, 19.10, 23, 27.1, 28; data/API sections 10.15, 10.16, 10.17, 15.3, 15.4A; IMS/UI docs for field report surfaces.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
@@ -295,11 +295,12 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M9.4 Field report author list/detail | Author can view own submitted reports. | FR-004; UI implementation contract 12.3 | UI tests |
 | M9.5 IC field report visibility | IC roles can view event field reports; non-IC leads cannot by default. | FR-005, FR-006; technical spec 17.6 | Policy tests |
 | M9.6 Append-only additions | Original author can append; original body remains immutable. | FR-007 through FR-009, FR-013 | Domain tests |
+| M9.6A Field report Name References | Parse submitted Field Report text and appends into a rebuildable derived Name Reference index without autocomplete, suggestions, notifications, or extra visibility. | NR-001 through NR-007, NR-011 through NR-014; technical spec 17.7 | Parser/search/policy tests |
 | M9.7 Photo capture limits | Enforce max 2 images, dimensions, size, no GIFs, EXIF strip. | Technical spec 18.3; data/API 10.17 | Processing tests |
 | M9.8 Photo sync and storage | Sync photos up, store server-side, restrict downloads. | Technical spec 18.5, 18.6 | Feature/security tests |
 | M9.9 Field report QA script | Add `QA-FR-01-offline-field-report.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can submit a field report offline, reconnect, see FRA assignment, verify immutability, and confirm IC-only visibility.
+**QA gate:** A reviewer can submit a field report offline, reconnect, see FRA assignment, verify immutability, confirm IC-only visibility, and verify Name References remain plain text for authors while parsing into permitted derived search/display behavior.
 
 ---
 
@@ -331,7 +332,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 **Goal:** Support online-only incident management for the configured Incident Command Department.
 
-**Primary source docs:** Requirements sections 3.21-3.23, 5.11, 7.12; Technical spec sections 16, 19, 23, 24, 27.1, 28; data/API sections 6.5, 10.16, 15.4; IMS surface specification; UI implementation contract section 15.
+**Primary source docs:** Requirements sections 3.21-3.23, 3.21A, 5.11, 7.12, 7.12A; Technical spec sections 16, 19, 23, 24, 27.1, 28; data/API sections 6.5, 10.16, 15.4, 15.4A; IMS surface specification; UI implementation contract section 15.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
@@ -341,13 +342,14 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M11.4 Online incident create | IC operator/lead creates incident only while connected. | Technical spec 19.2, 19.4 | Feature/policy tests |
 | M11.5 Incident list/detail | Build restricted incident list/detail surfaces. | IMS spec sections 5-7 | UI/policy tests |
 | M11.6 Incident timeline notes | Add append-only incident timeline entries. | INC-007, INC-014; data/API 10.16 | Domain tests |
+| M11.6A Incident Name References | Extract Name References from incident notes and attached Field Reports, render chips near tags, and wire chip clicks to normal permission-filtered search. | NR-001 through NR-014; technical spec 19.9, 19.10 | Parser/search/UI/policy tests |
 | M11.7 Incident status/title edits | Edit regardless of state; status affects filtering only. | INC-010 through INC-012 | Domain/UI tests |
 | M11.8 Link/unlink field report | Copy field report content into incident notes and strike relationship on removal. | FR-011 through FR-014; INC-014 | Domain tests |
 | M11.9 Incident attachments strike | Allow incident attachments to be stricken, not deleted. | INC-013; data/API 10.17 | Domain/security tests |
 | M11.10 Incident PDF print | IC leads print incidents to PDF. | INC-015 | Export test/sample |
 | M11.11 Incident QA script | Add `QA-INC-01-incident-management.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can verify IC-only incident access, create/edit incidents online, link field reports, and review history.
+**QA gate:** A reviewer can verify IC-only incident access, create/edit incidents online, link field reports, review history, and confirm Name Reference chips/search do not expose unauthorized incidents or Field Reports.
 
 ---
 

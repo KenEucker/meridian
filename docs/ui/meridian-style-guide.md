@@ -655,6 +655,8 @@ Use small chips with:
 - Muted background
 - Strong text contrast
 
+IMS Name Reference chips should follow metadata-chip restraint, remain visually distinct from `#tags`, and avoid treatment that suggests a user mention, notification, profile link, or identity record.
+
 Example tokens:
 
 ```css

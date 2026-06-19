@@ -46,6 +46,7 @@ Important alignment changes from earlier data-model drafts:
 8. Fragments are shared by policy and procedure documents.
 9. Policy/procedure acknowledgments use a shared model that can reference either document type.
 10. Policy/procedure packets are post-Alpha 1 and should not be modeled as an MVP packet entity.
+11. Name References are text-first markers in IMS notes and Field Reports with a rebuildable derived index for search/display, not canonical identity data.
 
 ---
 
@@ -113,6 +114,8 @@ PowerSync handles:
 PowerSync is not the business-rule engine.
 
 Device writes are accepted through Laravel validation and acceptance flows. Domain-sensitive writes should be represented as operations or commands, not blind row edits.
+
+Name Reference extraction may happen server-side, locally, or both, but any derived index remains rebuildable from authorized source text and must not become an authorization source.
 
 ### 3.5 Node Sync Responsibility
 
@@ -287,6 +290,8 @@ All read APIs return permission-filtered resources.
 
 Incident APIs must return data only to IC-authorized users.
 
+APIs may include derived Name Reference tokens or chips on permitted Field Report and Incident resources. There is no dedicated Name Reference detail API for Alpha 1.
+
 ### 5.2 Command / Operation API
 
 Domain-sensitive mutations use explicit commands or operation acceptance endpoints.
@@ -391,6 +396,7 @@ Laravel policies, gates, middleware, command handlers, and domain services enfor
 - exports
 - incident access
 - Field Report visibility
+- Name Reference visibility through source Incident notes and Field Reports
 - policy/procedure visibility
 - document acknowledgment
 - staff status changes
@@ -461,6 +467,8 @@ Incident rows must not sync to users/devices without IC access.
 
 UI hiding is not sufficient.
 
+Name References inherit source-record visibility. A derived Name Reference token must not sync to a user or device unless the user is allowed to receive the underlying Incident note or Field Report text that produced it.
+
 ---
 
 ## 7. Sync Model
@@ -498,8 +506,11 @@ IC roles may cache:
 
 - last viewed limited incident data
 - related Field Reports where permitted
+- derived Name Reference tokens from cached Incident notes and related Field Reports where permitted
 
 Incidents should not be greedily synced.
+
+Derived Name Reference caches must be rebuildable from source text and must not broaden offline access.
 
 ### 7.2 Alpha 1 Offline Writes
 
@@ -1660,6 +1671,7 @@ Rules:
 - Field Reports can be created offline
 - there are no draft Field Reports
 - original body never changes
+- Name References in `body` are parsed after submission as derived search/display artifacts
 - Field Reports are not editable
 - Field Reports are not stricken
 - Field Reports may exist independently
@@ -1690,6 +1702,7 @@ Rules:
 - only the original submitter may append to their own Field Report
 - elevated users can append only to their own Field Reports, not to other users' Field Reports
 - appends share the same FRA number with timestamped entries
+- Name References in append `body` are parsed after submission as derived search/display artifacts
 - when a Field Report is appended, only the added content is copied into associated incidents
 
 ---
@@ -1732,6 +1745,7 @@ Rules:
 - incidents are visible only to IC roles
 - incidents are not greedily synced to devices
 - elevated IC users may cache limited last-viewed incident data
+- incident-level Name Reference chips are derived from incident notes and attached Field Reports
 - incidents are not destroyed
 - incidents are not merged away
 - incidents may be edited regardless of status
@@ -1843,6 +1857,33 @@ Rules:
 
 - tags are extracted from hashtags in notes
 - removing a tag pill does not edit original notes
+
+#### Name Reference derived index
+
+Name References are extracted from Incident timeline entry bodies, Field Report bodies, and Field Report append bodies.
+
+The source text remains authoritative. The derived index may be represented in PostgreSQL, local SQLite, a search index, or a combination of those storage layers, but the exact physical storage shape is not mandated by this document.
+
+Derived entries should support:
+
+- normal permission-filtered search;
+- incident summary chips near tags;
+- rendering/highlighting support;
+- permitted offline/local-first search or display where the source text is synced.
+
+Rules:
+
+- the derived index is rebuildable from source text
+- derived tokens normalize case for search/matching
+- original typed casing may be preserved in rendered source text
+- supported tokens start with `@` and continue through letters, numbers, hyphens, and underscores
+- whitespace or punctuation ends a token
+- bracket syntax such as `@[Ranger Bucket]` is not supported for MVP
+- Field Reports are parsed immediately after submission
+- derived entries inherit source record visibility
+- derived entries must not create user mentions, notifications, autocomplete, alias merge behavior, profile links, canonical identity/entity records, or dedicated detail pages
+- clicking a Name Reference runs normal search for the reference text without the `@` prefix
+- no dedicated Name Reference API or management screen is required for Alpha 1
 
 ---
 
@@ -2416,6 +2457,7 @@ Rules:
 - conflict review is God-mode/Orchid-only for Alpha 1
 - conflict resolution is audited
 - severe data conflicts should trigger an Electron health warning
+- Name Reference extraction, clicking, and search do not create Name Reference-specific audit records beyond existing source-record read/view/search audit behavior where applicable
 
 ---
 
@@ -2453,6 +2495,12 @@ Only the original submitter may append.
 Incident creation is online-only for Alpha 1.
 
 Incident cache is limited and restricted to IC users.
+
+### 15.4A Name References Are Not Identity Data
+
+Name References are operational text markers and derived search/display artifacts.
+
+They must not be modeled as canonical people, aliases, identities, entities, suspects, volunteer profile links, notifications, or user mentions.
 
 ### 15.5 Policy/Procedure Alpha 1 Boundaries
 
@@ -2497,6 +2545,7 @@ The following implementation details may be refined later without changing the c
 13. Exact shared workstation session UI.
 14. Exact IC incident dashboard UI.
 15. Exact deployment bundle format.
+16. Exact physical storage shape for the rebuildable Name Reference derived index.
 
 ---
 
