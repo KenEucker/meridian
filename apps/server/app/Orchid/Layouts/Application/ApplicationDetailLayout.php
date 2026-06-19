@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Orchid\Layouts\Application;
 
-use App\Models\EventApplication;
 use Orchid\Screen\Field;
 use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Layouts\Rows;
@@ -37,6 +36,11 @@ class ApplicationDetailLayout extends Rows
             Input::make('status_label')
                 ->title(__('Status'))
                 ->readonly(),
+
+            Input::make('department_interest_display')
+                ->title(__('Department interest'))
+                ->readonly()
+                ->help(__('Non-binding intake signal only; not assignment, membership, access, routing, or team selection.')),
 
             Input::make('submitted_at_display')
                 ->title(__('Submitted'))

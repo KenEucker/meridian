@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Application;
 
 use App\Models\EventApplication;
+use App\Models\User;
 use App\Orchid\Layouts\Application\ApplicationDetailLayout;
+use App\Services\Application\ApplicationReviewAccess;
 use Orchid\Screen\Action;
 use Orchid\Screen\Actions\Link;
 use Orchid\Screen\Screen;
@@ -23,13 +25,18 @@ class ApplicationDetailScreen extends Screen
      */
     public function query(EventApplication $application): iterable
     {
-        $application->load(['event', 'organization', 'reviewedBy', 'staff']);
+        $user = request()->user();
+        abort_unless($user instanceof User, 403);
+
+        $application->load(['event', 'organization', 'reviewedBy', 'staff', 'departmentInterests']);
+        abort_unless(app(ApplicationReviewAccess::class)->canViewApplication($user, $application), 403);
 
         return [
             'application' => $application,
             'event_name' => $application->event?->name ?? __('Not configured'),
             'organization_name' => $application->organization?->name ?? __('Not configured'),
             'status_label' => $application->statusLabel(),
+            'department_interest_display' => $application->departmentInterestDisplay(),
             'submitted_at_display' => $this->formatTimestamp($application->submitted_at),
             'reviewed_at_display' => $this->formatTimestamp($application->reviewed_at),
             'reviewed_by_display' => $application->reviewedBy?->name ?? __('Not reviewed'),
@@ -46,16 +53,6 @@ class ApplicationDetailScreen extends Screen
     public function description(): ?string
     {
         return 'Organization-level application review detail.';
-    }
-
-    /**
-     * @return iterable<string>
-     */
-    public function permission(): ?iterable
-    {
-        return [
-            'platform.applications',
-        ];
     }
 
     /**

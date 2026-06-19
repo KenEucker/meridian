@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
@@ -99,6 +100,17 @@ class Event extends Model
     public function applications(): HasMany
     {
         return $this->hasMany(EventApplication::class);
+    }
+
+    public function departmentAssignments(): HasMany
+    {
+        return $this->hasMany(EventDepartmentAssignment::class);
+    }
+
+    public function participatingDepartments(): BelongsToMany
+    {
+        return $this->belongsToMany(Department::class, 'event_department_assignments')
+            ->withPivot(['id', 'archived_at']);
     }
 
     /**

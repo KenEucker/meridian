@@ -27,7 +27,10 @@ class EventApplicationController extends Controller
             return view('application.closed', ['event' => $event]);
         }
 
-        return view('application.apply', ['event' => $event]);
+        return view('application.apply', [
+            'event' => $event,
+            'eligibleDepartmentInterests' => $this->applications->eligibleDepartmentInterests($event),
+        ]);
     }
 
     public function store(Request $request, Organization $organization, Event $event): RedirectResponse
@@ -35,6 +38,8 @@ class EventApplicationController extends Controller
         $validated = $request->validate([
             'applicant_legal_name' => ['required', 'string', 'max:255'],
             'applicant_email' => ['required', 'string', 'email:rfc', 'max:255'],
+            'department_interest_ids' => ['sometimes', 'array'],
+            'department_interest_ids.*' => ['string', 'uuid', 'distinct'],
         ]);
 
         try {
@@ -43,6 +48,7 @@ class EventApplicationController extends Controller
                 $validated['applicant_legal_name'],
                 $validated['applicant_email'],
                 $request->user(),
+                $validated['department_interest_ids'] ?? [],
             );
         } catch (EventNotOpenForApplicationsException $exception) {
             return back()
