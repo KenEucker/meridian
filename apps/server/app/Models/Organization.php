@@ -6,6 +6,7 @@ use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
@@ -28,6 +29,7 @@ class Organization extends Model
     protected $fillable = [
         'name',
         'slug',
+        'organizers_department_id',
         'default_ic_department_id',
         'default_credit_policy_id',
         'active_inactive_threshold_years',
@@ -65,6 +67,7 @@ class Organization extends Model
     protected function casts(): array
     {
         return [
+            'organizers_department_id' => 'integer',
             'default_ic_department_id' => 'integer',
             'default_credit_policy_id' => 'integer',
             'active_inactive_threshold_years' => 'integer',
@@ -83,6 +86,11 @@ class Organization extends Model
     public function departments(): HasMany
     {
         return $this->hasMany(Department::class);
+    }
+
+    public function organizersDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'organizers_department_id');
     }
 
     public function staffOrganizationStatuses(): HasMany
