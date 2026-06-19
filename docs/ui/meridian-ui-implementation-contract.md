@@ -264,12 +264,12 @@ Suggested result model:
 
 Use these labels exactly in UI unless the requirements document later changes them.
 
-### 9.1 Organization Staff Status
+### 9.1 Staff Organization Status
 
 | Canonical label | Notes |
 |---|---|
 | Prospective | Pre-activation state |
-| Active | Active organization staff, subject to department/team/training/waiver rules |
+| Active | Active staff in the organization, subject to department/team/training/waiver rules |
 | Inactive | Not currently active but not blocked from future participation |
 | Emeritus | No regular duty expectation but may advise or contribute by request |
 | Retired | No longer working |
@@ -1042,6 +1042,8 @@ Use these UI states consistently:
 - Do not interrupt routine field work with sync noise.
 - Incident creation and editing are online-only in Alpha 1.
 - Policy/procedure acknowledgments are online-only in Alpha 1.
+- Staff profile picture upload, replace, and remove are online-only in Alpha 1.
+- Staff profile picture blobs sync lazily as accessed and should show a placeholder or pending image state while unavailable.
 - Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show are Alpha 1 offline writes.
 
 ---

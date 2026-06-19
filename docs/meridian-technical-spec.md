@@ -1246,6 +1246,48 @@ Image URLs are short-lived signed URLs, not public file paths.
 
 ---
 
+# 18A. Staff Profile Pictures
+
+## 18A.1 Ownership and eligibility
+
+Staff profile pictures are staff-owned profile media.
+
+Only the staff member may upload, replace, or remove the current picture on their own staff profile.
+
+The upload control is available only after the staff member has `active` organization-level staff status in at least one organization.
+
+Profile picture visibility follows staff profile visibility. A user who cannot view a staff profile cannot view that staff profile picture.
+
+## 18A.2 Limits and processing
+
+Alpha 1 staff profile picture limits:
+
+```text
+max current profile pictures per staff profile: 1
+supported upload formats: JPEG, PNG, WebP
+max original upload size: 10 MB
+max stored image dimensions: 1024 x 1024
+previous profile pictures after replace/remove: not preserved
+```
+
+Server-side processing resizes larger images down to fit within 1024 x 1024 while preserving aspect ratio.
+
+EXIF metadata is stripped before storage.
+
+## 18A.3 Storage and sync
+
+Alpha 1 stores staff profile pictures using the same approved server file storage approach as other uploaded image blobs.
+
+Profile picture metadata syncs separately from the image blob.
+
+Staff profile picture blobs sync lazily as they are accessed rather than proactively syncing every profile picture to every node or device.
+
+When metadata is present but the blob has not synced to the current node or device, the UI should show a placeholder or pending image state and retry blob fetch according to the file sync path.
+
+Profile picture upload, replace, and remove actions are online-required for Alpha 1.
+
+---
+
 # 19. Incidents
 
 ## 19.1 Purpose

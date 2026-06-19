@@ -87,6 +87,16 @@ class User extends Authenticatable
         return $this->hasMany(SharedWorkstationLoginCode::class);
     }
 
+    public function staffProfiles(): BelongsToMany
+    {
+        return $this->belongsToMany(Staff::class, 'staff_user')->withTimestamps();
+    }
+
+    public function staffOrganizationStatusChanges(): HasMany
+    {
+        return $this->hasMany(StaffOrganizationStatus::class, 'status_changed_by_user_id');
+    }
+
     public function generatedSharedWorkstationLoginCodes(): HasMany
     {
         return $this->hasMany(SharedWorkstationLoginCode::class, 'generated_by_user_id');

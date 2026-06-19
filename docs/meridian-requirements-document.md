@@ -338,7 +338,7 @@ A staff member has:
 - credits earned
 - credential eligibility history
 
-Required staff profile fields include:
+Staff profile fields include:
 
 - legal name
 - email
@@ -350,6 +350,14 @@ Required staff profile fields include:
 - age/date of birth
 
 The term `handle` refers to the staff member's operational/radio handle. Meridian does not separately model playa name, callsign, Ranger name, or radio name.
+
+After a staff member becomes Active in an organization, the staff member may upload, replace, or remove one current profile picture for their own staff profile.
+
+Staff profile pictures are visible only to people who can already view that staff profile.
+
+Meridian does not need to preserve previous staff profile pictures after replacement or removal.
+
+Staff records may be created with only legal name and email when full profile details are not available yet. Additional profile fields may be completed during onboarding or later profile maintenance.
 
 ---
 
@@ -1046,7 +1054,7 @@ Policy documents may be scoped to:
 - department
 - team
 
-Organization-level policy documents are visible to everyone in the organization when published, including organization staff who are not assigned to a current event.
+Organization-level policy documents are visible to everyone in the organization when published, including staff who are not assigned to a current event.
 
 Department-level policy documents are visible to members of that department.
 
@@ -1891,7 +1899,7 @@ The following are not required for October MVP:
 - free-floating hours outside shifts
 - deployment movement history
 - training waiver/equivalency modeling
-- general public policy/procedure browsing outside organization staff signup
+- general public policy/procedure browsing outside staff signup
 - policy/procedure acknowledgments as direct shift signup gates
 - policy/procedure acknowledgments as direct credential eligibility gates
 - policy/procedure acknowledgments outside signup or training for MVP
@@ -2009,7 +2017,7 @@ Meridian shall require legal name and email for applicants unless they already h
 
 ### VOL-009
 
-Staff profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth.
+Staff profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth, though only legal name and email are required when a staff record is first created.
 
 ### VOL-010
 
@@ -2022,6 +2030,12 @@ Organizers shall not have default access to emergency contacts.
 ### VOL-012
 
 Department leads shall have access to emergency contacts for staff in their department.
+
+### VOL-013
+
+Active staff may upload, replace, and remove one current picture on their own staff profile.
+
+Staff profile pictures shall be visible only to users who can already view that staff profile.
 
 ---
 

@@ -675,7 +675,7 @@ Relationships:
 - has many events
 - has many departments
 - belongs to Organizers Department
-- has many staff through organization staff records
+- has many staff through staff organization status records
 - has many policy documents
 - has many procedure documents
 - has many document fragments
@@ -801,6 +801,12 @@ Key fields:
 - `date_of_birth`
 - `emergency_contact_name`
 - `emergency_contact_phone`
+- `profile_picture_path`, nullable
+- `profile_picture_mime_type`, nullable
+- `profile_picture_size_bytes`, nullable
+- `profile_picture_width`, nullable
+- `profile_picture_height`, nullable
+- `profile_picture_uploaded_at`, nullable
 - `created_at`
 - `updated_at`
 - `archived_at`
@@ -810,11 +816,21 @@ Rules:
 - `handle` is the operational/radio handle.
 - `formerly_known_as` is a simple text field for Alpha 1.
 - Emergency contact data is server-only except on trusted devices for users authorized to access it.
+- Staff profile pictures are optional and store only the current picture.
+- Staff profile records require legal name and email at creation. Preferred name, handle, phone, city/state, date of birth, and emergency contact fields are nullable so records can be completed later.
+- Staff may upload, replace, or remove their own profile picture only after becoming `active` in at least one organization.
+- Replacing or removing a profile picture does not preserve previous image blobs for Alpha 1.
+- Staff profile picture uploads support JPEG, PNG, and WebP.
+- Staff profile picture uploads are limited to 10 MB before server processing.
+- Large profile pictures are resized so stored dimensions do not exceed 1024 x 1024 pixels.
+- Staff profile picture blobs sync lazily as they are accessed; metadata may sync before the image blob.
+- Missing profile picture blobs should render as a placeholder or pending image state until synced.
+- Profile picture visibility follows staff profile visibility.
 
 Relationships:
 
 - may link to one or more users
-- has organization staff status records
+- has staff organization status records
 - has department memberships
 - has team memberships
 - has event assignments
@@ -823,9 +839,11 @@ Relationships:
 - may submit Field Reports
 - may be associated with incidents
 
-#### `organization_staff`
+#### `staff_organization_statuses`
 
-Represents a staff member's status within an organization.
+Represents a staff member's organization-level status within one organization.
+
+This is an internal status record for a staff profile, not a separate kind of staff. Product UI should refer to Staff and staff organization status, not "organization staff" or "organizational staff."
 
 Key fields:
 
@@ -852,7 +870,7 @@ do_not_staff
 
 Rules:
 
-- organization status supersedes department status
+- organization-level staff status supersedes department status
 - `do_not_staff` prevents system access and participation
 - DNS is permanent unless changed by organizers
 - DNS applicants are auto-rejected without automatic notice

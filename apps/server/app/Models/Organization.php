@@ -6,6 +6,7 @@ use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
@@ -82,6 +83,23 @@ class Organization extends Model
     public function departments(): HasMany
     {
         return $this->hasMany(Department::class);
+    }
+
+    public function staffOrganizationStatuses(): HasMany
+    {
+        return $this->hasMany(StaffOrganizationStatus::class);
+    }
+
+    public function staff(): BelongsToMany
+    {
+        return $this->belongsToMany(Staff::class, 'staff_organization_statuses')
+            ->withPivot([
+                'status',
+                'status_reason',
+                'status_changed_at',
+                'status_changed_by_user_id',
+            ])
+            ->withTimestamps();
     }
 
     /**
