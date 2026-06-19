@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Orchid\Screens\Application\ApplicationDetailScreen;
+use App\Orchid\Screens\Application\ApplicationListScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
 use App\Orchid\Screens\Department\DepartmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
@@ -127,6 +129,20 @@ Route::screen('events', EventListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Events'), route('platform.events')));
+
+// Platform > Operations > Applications > Application
+Route::screen('applications/{application}', ApplicationDetailScreen::class)
+    ->name('platform.applications.show')
+    ->breadcrumbs(fn (Trail $trail, $application) => $trail
+        ->parent('platform.applications')
+        ->push($application->applicant_legal_name, route('platform.applications.show', $application)));
+
+// Platform > Operations > Applications
+Route::screen('applications', ApplicationListScreen::class)
+    ->name('platform.applications')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Applications'), route('platform.applications')));
 
 // Platform > Operations > Departments > Department
 Route::screen('departments/{department}/edit', DepartmentEditScreen::class)
