@@ -67,6 +67,11 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.events')
                 ->permission('platform.events'),
 
+            Menu::make(__('Applications'))
+                ->icon('bs.inbox')
+                ->route('platform.applications')
+                ->permission('platform.applications'),
+
             Menu::make(__('Departments'))
                 ->icon('bs.diagram-3')
                 ->route('platform.departments')
@@ -117,6 +122,7 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('Operations'))
                 ->addPermission('platform.organizations', __('Organizations'))
                 ->addPermission('platform.events', __('Events'))
+                ->addPermission('platform.applications', __('Applications'))
                 ->addPermission('platform.departments', __('Departments'))
                 ->addPermission('platform.teams', __('Teams'))
                 ->addPermission('platform.staff', __('Staff')),

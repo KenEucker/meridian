@@ -168,4 +168,9 @@ class EventApplication extends Model
     {
         return $this->status === self::STATUS_SUBMITTED;
     }
+
+    public function statusLabel(): string
+    {
+        return self::statusLabels()[$this->status] ?? $this->status;
+    }
 }
