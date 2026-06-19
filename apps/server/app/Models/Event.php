@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -95,6 +96,11 @@ class Event extends Model
         return $this->belongsTo(Organization::class);
     }
 
+    public function applications(): HasMany
+    {
+        return $this->hasMany(EventApplication::class);
+    }
+
     /**
      * @param  Builder<Event>  $query
      * @return Builder<Event>
@@ -107,5 +113,20 @@ class Event extends Model
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /**
+     * Route parameters for public apply routes ({organization:slug}/{event:slug}/apply).
+     *
+     * @return array{organization: Organization, event: self}
+     */
+    public function applyRouteParameters(): array
+    {
+        $this->loadMissing('organization');
+
+        return [
+            'organization' => $this->organization,
+            'event' => $this,
+        ];
     }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Event;
 use App\Models\Organization;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -38,6 +39,27 @@ class EventSchemaTest extends TestCase
         $event = Event::factory()->create();
 
         $this->assertTrue(Str::isUuid($event->id));
+    }
+
+    public function test_event_slug_is_unique_within_an_organization(): void
+    {
+        $organization = Organization::factory()->create();
+        Event::factory()->for($organization)->create(['slug' => 'shared-slug']);
+
+        $this->expectException(QueryException::class);
+
+        Event::factory()->for($organization)->create(['slug' => 'shared-slug']);
+    }
+
+    public function test_event_slug_may_repeat_across_organizations(): void
+    {
+        $firstOrganization = Organization::factory()->create();
+        $secondOrganization = Organization::factory()->create();
+
+        Event::factory()->for($firstOrganization)->create(['slug' => 'shared-slug']);
+        Event::factory()->for($secondOrganization)->create(['slug' => 'shared-slug']);
+
+        $this->assertSame(2, Event::query()->where('slug', 'shared-slug')->count());
     }
 
     public function test_event_belongs_to_organization_and_organization_has_many_events(): void
