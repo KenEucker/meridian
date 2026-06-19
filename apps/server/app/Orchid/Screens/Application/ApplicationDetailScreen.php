@@ -8,6 +8,7 @@ use App\Models\EventApplication;
 use App\Models\User;
 use App\Orchid\Layouts\Application\ApplicationDetailLayout;
 use App\Services\Application\ApplicationApprovalException;
+use App\Services\Application\ApplicationRescindException;
 use App\Services\Application\ApplicationReviewAccess;
 use App\Services\Application\ApplicationReviewException;
 use App\Services\Application\EventApplicationService;
@@ -70,6 +71,9 @@ class ApplicationDetailScreen extends Screen
         $canReview = $user instanceof User
             && $this->application?->isSubmitted() === true
             && app(ApplicationReviewAccess::class)->canReviewApplications($user);
+        $canRescind = $user instanceof User
+            && $this->application?->isApproved() === true
+            && app(ApplicationReviewAccess::class)->canReviewApplications($user);
 
         return [
             Link::make(__('Back'))
@@ -93,6 +97,12 @@ class ApplicationDetailScreen extends Screen
                 ->method('defer')
                 ->confirm(__('Defer this application for later review?'))
                 ->canSee($canReview),
+
+            Button::make(__('Rescind'))
+                ->icon('bs.exclamation-octagon')
+                ->method('rescind')
+                ->confirm(__('Rescind this approved application before team assignment and make the staff member Inactive?'))
+                ->canSee($canRescind),
         ];
     }
 
@@ -140,6 +150,22 @@ class ApplicationDetailScreen extends Screen
             fn (EventApplicationService $service, User $user) => $service->defer($application, $user),
             __('Application was deferred.'),
         );
+    }
+
+    public function rescind(EventApplication $application): RedirectResponse
+    {
+        $user = request()->user();
+        abort_unless($user instanceof User, 403);
+        abort_unless(app(ApplicationReviewAccess::class)->canReviewApplications($user), 403);
+
+        try {
+            app(EventApplicationService::class)->rescind($application, $user);
+            Toast::info(__('Application approval was rescinded.'));
+        } catch (ApplicationRescindException $exception) {
+            Toast::warning(__($exception->getMessage()));
+        }
+
+        return redirect()->route('platform.applications.show', $application);
     }
 
     /**
