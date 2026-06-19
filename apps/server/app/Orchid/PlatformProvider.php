@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Orchid;
 
+use App\Models\User;
 use Orchid\Platform\Dashboard;
 use Orchid\Platform\ItemPermission;
+use Orchid\Platform\Models\User as OrchidUser;
 use Orchid\Platform\OrchidServiceProvider;
 use Orchid\Screen\Actions\Menu;
 use Orchid\Support\Color;
@@ -17,6 +19,8 @@ class PlatformProvider extends OrchidServiceProvider
      */
     public function boot(Dashboard $dashboard): void
     {
+        Dashboard::useModel(OrchidUser::class, User::class);
+
         parent::boot($dashboard);
 
         // Expose the shared Meridian semantic UI tokens (M2.5) on the admin

@@ -27,6 +27,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'permissions',
         'current_volunteer_id',
         'disabled_at',
     ];
