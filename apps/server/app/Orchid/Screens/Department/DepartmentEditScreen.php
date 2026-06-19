@@ -87,7 +87,7 @@ class DepartmentEditScreen extends Screen
         $organizationId = $request->input('department.organization_id');
 
         $validated = $request->validate([
-            'department.organization_id' => ['required', 'integer', Rule::exists(Organization::class, 'id')],
+            'department.organization_id' => ['required', 'uuid', Rule::exists(Organization::class, 'id')],
             'department.name' => ['required', 'string', 'max:255'],
             'department.code' => [
                 'required',

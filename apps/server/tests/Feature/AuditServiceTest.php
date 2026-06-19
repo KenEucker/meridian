@@ -11,6 +11,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AuditServiceTest extends TestCase
@@ -25,11 +26,12 @@ class AuditServiceTest extends TestCase
         $user = User::factory()->create();
         $device = Device::factory()->create();
         $node = Node::factory()->create();
+        $entityId = (string) Str::uuid();
 
         $audit = (new AuditService)->record(
             action: 'organization.status.changed',
             entityType: 'staff_organization_status',
-            entityId: 42,
+            entityId: $entityId,
             actorUser: $user,
             actorDevice: $device,
             actorNode: $node,
@@ -47,7 +49,7 @@ class AuditServiceTest extends TestCase
             'id' => $audit->id,
             'action' => 'organization.status.changed',
             'entity_type' => 'staff_organization_status',
-            'entity_id' => '42',
+            'entity_id' => $entityId,
             'actor_user_id' => $user->id,
             'actor_device_id' => $device->id,
             'actor_node_id' => $node->id,
@@ -71,7 +73,7 @@ class AuditServiceTest extends TestCase
         $audit = (new AuditService)->record(
             action: 'permission.role.granted',
             entityType: 'team_grant',
-            entityId: 7,
+            entityId: (string) Str::uuid(),
         );
 
         $this->assertNull($audit->actor_user_id);
@@ -125,11 +127,15 @@ class AuditServiceTest extends TestCase
     {
         $service = new AuditService;
 
-        $service->record(action: 'a', entityType: 'incident', entityId: 1);
-        $service->record(action: 'b', entityType: 'incident', entityId: 1);
-        $service->record(action: 'c', entityType: 'incident', entityId: 2);
-        $service->record(action: 'd', entityType: 'field_report', entityId: 1);
+        $incidentId = (string) Str::uuid();
+        $otherIncidentId = (string) Str::uuid();
+        $fieldReportId = (string) Str::uuid();
 
-        $this->assertSame(2, AuditEvent::query()->forEntity('incident', 1)->count());
+        $service->record(action: 'a', entityType: 'incident', entityId: $incidentId);
+        $service->record(action: 'b', entityType: 'incident', entityId: $incidentId);
+        $service->record(action: 'c', entityType: 'incident', entityId: $otherIncidentId);
+        $service->record(action: 'd', entityType: 'field_report', entityId: $fieldReportId);
+
+        $this->assertSame(2, AuditEvent::query()->forEntity('incident', $incidentId)->count());
     }
 }

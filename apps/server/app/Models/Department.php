@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\DepartmentFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +21,11 @@ class Department extends Model
     use Filterable;
 
     /** @use HasFactory<DepartmentFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -64,7 +69,6 @@ class Department extends Model
     protected function casts(): array
     {
         return [
-            'default_team_id' => 'integer',
             'archived_at' => 'datetime',
         ];
     }

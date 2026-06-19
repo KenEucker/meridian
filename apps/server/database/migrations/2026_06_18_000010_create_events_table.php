@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('events', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignId('organization_id')->constrained()->restrictOnDelete();
+            $table->foreignUuid('organization_id')->constrained()->restrictOnDelete();
             $table->string('name');
             $table->string('slug');
             $table->dateTimeTz('starts_at')->nullable()->index();
             $table->dateTimeTz('ends_at')->nullable()->index();
             $table->string('timezone');
             $table->string('status', 64)->nullable()->index();
-            $table->unsignedBigInteger('ic_department_id')->nullable()->index();
+            $table->uuid('ic_department_id')->nullable()->index();
             $table->dateTimeTz('active_event_window_starts_at')->nullable()->index();
             $table->dateTimeTz('active_event_window_ends_at')->nullable()->index();
             $table->timestamps();

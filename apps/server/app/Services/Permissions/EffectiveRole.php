@@ -11,9 +11,9 @@ final readonly class EffectiveRole
     public function __construct(
         public string $roleCode,
         public string $roleName,
-        public int $teamId,
+        public string $teamId,
         public string $teamName,
-        public int $teamGrantId,
+        public string $teamGrantId,
         public ?string $eventId,
         public string $reason,
     ) {}

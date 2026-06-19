@@ -66,7 +66,7 @@ class TeamGrantService
             throw new InvalidArgumentException('Organizer roles require the organization to have a configured Organizers Department.');
         }
 
-        if ((int) $department->id !== (int) $organization->organizers_department_id) {
+        if ((string) $department->id !== (string) $organization->organizers_department_id) {
             throw new InvalidArgumentException('Organizer roles can only be granted to teams in the configured Organizers Department.');
         }
     }

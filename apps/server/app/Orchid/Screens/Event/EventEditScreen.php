@@ -96,7 +96,7 @@ class EventEditScreen extends Screen
         }
 
         $validated = $request->validate([
-            'event.organization_id' => ['required', 'integer', Rule::exists(Organization::class, 'id')],
+            'event.organization_id' => ['required', 'uuid', Rule::exists(Organization::class, 'id')],
             'event.name' => ['required', 'string', 'max:255'],
             'event.slug' => ['required', 'string', 'max:255', 'alpha_dash'],
             'event.timezone' => ['required', 'timezone'],

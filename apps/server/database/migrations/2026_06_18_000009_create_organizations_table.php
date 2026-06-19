@@ -12,11 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('organizations', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
             $table->string('name');
             $table->string('slug')->unique();
-            $table->unsignedBigInteger('default_ic_department_id')->nullable()->index();
-            $table->unsignedBigInteger('default_credit_policy_id')->nullable()->index();
+            $table->uuid('default_ic_department_id')->nullable()->index();
+            $table->uuid('default_credit_policy_id')->nullable()->index();
             $table->unsignedSmallInteger('active_inactive_threshold_years')->nullable();
             $table->unsignedSmallInteger('prospective_inactive_threshold_years')->nullable();
             $table->unsignedTinyInteger('calendar_year_start_month')->nullable();

@@ -12,12 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('node_config_values', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('node_id')->constrained()->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('node_id')->constrained()->cascadeOnDelete();
             $table->string('key');
             $table->json('value_json')->nullable();
             $table->string('source', 32);
-            $table->foreignId('updated_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignUuid('updated_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->unique(['node_id', 'key']);

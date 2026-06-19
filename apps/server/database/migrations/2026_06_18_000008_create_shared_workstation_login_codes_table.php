@@ -13,12 +13,12 @@ return new class extends Migration
     {
         Schema::create('shared_workstation_login_codes', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignId('user_id')->constrained()->restrictOnDelete();
+            $table->foreignUuid('user_id')->constrained()->restrictOnDelete();
             $table->uuid('event_id')->index();
             $table->foreignUuid('shared_workstation_id')->constrained('shared_workstations')->restrictOnDelete();
             $table->string('code_hash')->index();
             $table->timestamp('expires_at')->index();
-            $table->foreignId('generated_by_user_id')->constrained('users')->restrictOnDelete();
+            $table->foreignUuid('generated_by_user_id')->constrained('users')->restrictOnDelete();
             $table->timestamp('used_at')->nullable()->index();
             $table->timestamp('revoked_at')->nullable()->index();
             $table->timestamps();

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\StaffFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -21,7 +22,11 @@ class Staff extends Model
     use Filterable;
 
     /** @use HasFactory<StaffFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -91,7 +96,7 @@ class Staff extends Model
 
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'staff_user')->withTimestamps();
+        return $this->belongsToMany(User::class, 'staff_user')->using(StaffUser::class)->withTimestamps();
     }
 
     public function organizationStatuses(): HasMany

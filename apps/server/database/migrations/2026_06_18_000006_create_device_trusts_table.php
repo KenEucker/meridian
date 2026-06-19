@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('device_trusts', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignId('user_id')->constrained()->restrictOnDelete();
+            $table->foreignUuid('user_id')->constrained()->restrictOnDelete();
             $table->foreignUuid('device_id')->constrained('devices')->restrictOnDelete();
             $table->string('trusted_node_fingerprint');
             $table->timestamp('first_trusted_at')->index();

@@ -12,12 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('departments', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('organization_id')->constrained()->restrictOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('organization_id')->constrained()->restrictOnDelete();
             $table->string('name');
             $table->string('code');
             $table->text('description')->nullable();
-            $table->unsignedBigInteger('default_team_id')->nullable()->index();
+            $table->uuid('default_team_id')->nullable()->index();
             $table->timestamps();
             $table->timestamp('archived_at')->nullable()->index();
 

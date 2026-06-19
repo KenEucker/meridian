@@ -19,6 +19,6 @@ class DeviceTrustPolicy
 
     private function ownsTrust(User $user, DeviceTrust $deviceTrust): bool
     {
-        return (int) $deviceTrust->user_id === (int) $user->getKey();
+        return (string) $deviceTrust->user_id === (string) $user->getKey();
     }
 }

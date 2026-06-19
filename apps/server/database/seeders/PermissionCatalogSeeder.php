@@ -36,7 +36,7 @@ class PermissionCatalogSeeder extends Seeder
 
         foreach (PermissionCatalog::rolePermissions() as $roleCode => $permissionCodes) {
             $permissionIds = collect($permissionCodes)
-                ->map(fn (string $permissionCode): int => $permissions[$permissionCode]->id)
+                ->map(fn (string $permissionCode): string => $permissions[$permissionCode]->id)
                 ->all();
 
             $roles[$roleCode]->permissions()->sync($permissionIds);

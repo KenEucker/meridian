@@ -97,7 +97,7 @@ class TeamEditScreen extends Screen
         $departmentId = $request->input('team.department_id');
 
         $validated = $request->validate([
-            'team.department_id' => ['required', 'integer', Rule::exists(Department::class, 'id')],
+            'team.department_id' => ['required', 'uuid', Rule::exists(Department::class, 'id')],
             'team.name' => ['required', 'string', 'max:255'],
             'team.code' => [
                 'required',
