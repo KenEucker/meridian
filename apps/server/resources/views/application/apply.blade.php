@@ -43,6 +43,29 @@
                 autocomplete="email"
             >
 
+            @if ($eligibleDepartmentInterests->isNotEmpty())
+                <fieldset>
+                    <legend>Department interest</legend>
+                    <p id="department-interest-help">
+                        Optional and non-binding. Select any departments you are open to working with; leaving every option unchecked means no preference and is not an assignment or membership.
+                    </p>
+
+                    @foreach ($eligibleDepartmentInterests as $department)
+                        <div>
+                            <input
+                                id="department_interest_{{ $department->id }}"
+                                name="department_interest_ids[]"
+                                type="checkbox"
+                                value="{{ $department->id }}"
+                                aria-describedby="department-interest-help"
+                                @checked(in_array($department->id, old('department_interest_ids', []), true))
+                            >
+                            <label for="department_interest_{{ $department->id }}">{{ $department->name }}</label>
+                        </div>
+                    @endforeach
+                </fieldset>
+            @endif
+
             <button type="submit">Submit application</button>
         </form>
     </main>

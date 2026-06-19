@@ -47,6 +47,9 @@ class ApplicationListLayout extends Table
                 ->filter(Select::make()->options(EventApplication::statusLabels()))
                 ->render(fn (EventApplication $application) => $application->statusLabel()),
 
+            TD::make('department_interests', __('Department interest'))
+                ->render(fn (EventApplication $application) => $application->departmentInterestDisplay()),
+
             TD::make('submitted_at', __('Submitted'))
                 ->usingComponent(DateTimeSplit::class)
                 ->align(TD::ALIGN_RIGHT)

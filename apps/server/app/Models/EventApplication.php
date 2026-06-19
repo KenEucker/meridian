@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -155,6 +158,18 @@ class EventApplication extends Model
         return $this->belongsTo(User::class, 'reviewed_by_user_id');
     }
 
+    public function departmentInterestRecords(): HasMany
+    {
+        return $this->hasMany(EventApplicationDepartmentInterest::class);
+    }
+
+    public function departmentInterests(): BelongsToMany
+    {
+        return $this->belongsToMany(Department::class, 'event_application_department_interests')
+            ->withPivot(['id'])
+            ->withTimestamps();
+    }
+
     /**
      * @param  Builder<EventApplication>  $query
      * @return Builder<EventApplication>
@@ -172,5 +187,22 @@ class EventApplication extends Model
     public function statusLabel(): string
     {
         return self::statusLabels()[$this->status] ?? $this->status;
+    }
+
+    public function departmentInterestDisplay(): string
+    {
+        /** @var Collection<int, Department> $departments */
+        $departments = $this->relationLoaded('departmentInterests')
+            ? $this->departmentInterests
+            : $this->departmentInterests()->get();
+
+        if ($departments->isEmpty()) {
+            return 'No department preference';
+        }
+
+        return $departments
+            ->sortBy('name')
+            ->map(fn (Department $department): string => $department->name.($department->isArchived() ? ' (archived)' : ''))
+            ->implode(', ');
     }
 }

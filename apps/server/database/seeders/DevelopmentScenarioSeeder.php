@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Department;
 use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
@@ -30,9 +31,28 @@ class DevelopmentScenarioSeeder extends Seeder
             $organization = $this->seedOrganization();
             [$teamsByCode, $departmentsByCode] = $this->seedDepartmentsAndTeams($organization);
             $event = $this->seedEvent($organization, $departmentsByCode['ORGANIZERS']);
+            $this->seedEventDepartmentAssignments($event, $departmentsByCode);
             $this->seedPersonas($organization, $teamsByCode, $departmentsByCode);
             $this->seedTeamGrants($event, $teamsByCode, $departmentsByCode);
         });
+    }
+
+    /**
+     * @param  array<string, Department>  $departmentsByCode
+     */
+    private function seedEventDepartmentAssignments(Event $event, array $departmentsByCode): void
+    {
+        foreach ($departmentsByCode as $department) {
+            EventDepartmentAssignment::query()->updateOrCreate(
+                [
+                    'event_id' => $event->id,
+                    'department_id' => $department->id,
+                ],
+                [
+                    'archived_at' => null,
+                ],
+            );
+        }
     }
 
     private function seedOrganization(): Organization

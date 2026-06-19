@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
+use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\EventApplication;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
+use App\Models\Team;
+use App\Models\TeamMembership;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -60,16 +65,48 @@ class EventApplicationSubmissionTest extends TestCase
         $this->assertTrue($secondEvent->is($secondOrganization->events()->where('slug', 'summer-fest')->first()));
     }
 
-    public function test_form_does_not_offer_department_selection(): void
+    public function test_form_hides_department_interest_when_no_eligible_departments_exist(): void
     {
         $event = Event::factory()->create();
 
         $response = $this->get(route('public.events.apply', $event->applyRouteParameters()));
 
-        // APP-002: applicants apply to events, not directly to departments, so
-        // the public form must not offer a department selection control.
-        $response->assertDontSee('name="department', false);
+        $response->assertDontSee('Department interest');
+        $response->assertDontSee('department_interest_ids', false);
+        $response->assertDontSee('No preference');
+        $response->assertDontSee('name="team', false);
         $response->assertDontSee('<select', false);
+    }
+
+    public function test_form_shows_optional_department_interest_for_eligible_departments_only(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $gate = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $rangers = Department::factory()->for($organization)->create(['name' => 'Rangers']);
+        $unassigned = Department::factory()->for($organization)->create(['name' => 'DPW']);
+        $archived = Department::factory()->archived()->for($organization)->create(['name' => 'Archived Ops']);
+        $otherOrganizationDepartment = Department::factory()->create(['name' => 'Other Org']);
+
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $gate->id]);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $rangers->id]);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $archived->id]);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $otherOrganizationDepartment->id]);
+
+        $response = $this->get(route('public.events.apply', $event->applyRouteParameters()));
+
+        $response->assertOk();
+        $response->assertSee('Department interest');
+        $response->assertSee('Optional and non-binding');
+        $response->assertSee('leaving every option unchecked means no preference');
+        $response->assertSee('name="department_interest_ids[]"', false);
+        $response->assertSee('Gate');
+        $response->assertSee('Rangers');
+        $response->assertDontSee($unassigned->name);
+        $response->assertDontSee($archived->name);
+        $response->assertDontSee($otherOrganizationDepartment->name);
+        $response->assertDontSee('No preference option');
+        $response->assertDontSee('name="team', false);
     }
 
     public function test_submitting_valid_application_creates_a_submitted_record(): void
@@ -97,6 +134,7 @@ class EventApplicationSubmissionTest extends TestCase
         $this->assertNull($application->staff_id);
         $this->assertNull($application->reviewed_at);
         $this->assertNull($application->withdrawn_at);
+        $this->assertDatabaseCount('event_application_department_interests', 0);
     }
 
     public function test_submitted_confirmation_page_renders_after_submission(): void
@@ -196,6 +234,118 @@ class EventApplicationSubmissionTest extends TestCase
 
         $response->assertRedirect(route('public.events.apply.submitted', $event->applyRouteParameters()));
         $this->assertDatabaseCount('event_applications', 1);
+    }
+
+    public function test_submitting_multiple_department_interests_stores_unordered_interest_rows(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $gate = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $rangers = Department::factory()->for($organization)->create(['name' => 'Rangers']);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $gate->id]);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $rangers->id]);
+
+        $this->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+            'applicant_legal_name' => 'Taylor Signal',
+            'applicant_email' => 'taylor@example.com',
+            'department_interest_ids' => [$rangers->id, $gate->id],
+        ])->assertRedirect(route('public.events.apply.submitted', $event->applyRouteParameters()));
+
+        $application = EventApplication::query()->where('applicant_email', 'taylor@example.com')->firstOrFail();
+        $firstInterestSet = $application->departmentInterests()->pluck('departments.id')->sort()->values()->all();
+        $expectedInterestSet = collect([$gate->id, $rangers->id])->sort()->values()->all();
+
+        $this->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+            'applicant_legal_name' => 'Morgan Signal',
+            'applicant_email' => 'morgan@example.com',
+            'department_interest_ids' => [$gate->id, $rangers->id],
+        ])->assertRedirect(route('public.events.apply.submitted', $event->applyRouteParameters()));
+
+        $secondApplication = EventApplication::query()->where('applicant_email', 'morgan@example.com')->firstOrFail();
+        $secondInterestSet = $secondApplication->departmentInterests()->pluck('departments.id')->sort()->values()->all();
+
+        $this->assertSame($expectedInterestSet, $firstInterestSet);
+        $this->assertSame($firstInterestSet, $secondInterestSet);
+        $this->assertDatabaseCount('event_application_department_interests', 4);
+    }
+
+    public function test_duplicate_department_interest_ids_reject_submission_without_partial_records(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create();
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $department->id]);
+
+        $response = $this->from(route('public.events.apply', $event->applyRouteParameters()))
+            ->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+                'applicant_legal_name' => 'Invalid Interest',
+                'applicant_email' => 'invalid@example.com',
+                'department_interest_ids' => [$department->id, $department->id],
+            ]);
+
+        $response->assertRedirect(route('public.events.apply', $event->applyRouteParameters()));
+        $response->assertSessionHasErrors('department_interest_ids.1');
+        $this->assertDatabaseCount('event_applications', 0);
+        $this->assertDatabaseCount('event_application_department_interests', 0);
+    }
+
+    public function test_invalid_department_interest_ids_reject_submission_without_partial_records(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $eligibleDepartment = Department::factory()->for($organization)->create();
+        $archivedDepartment = Department::factory()->archived()->for($organization)->create();
+        $unassignedDepartment = Department::factory()->for($organization)->create();
+        $otherOrganizationDepartment = Department::factory()->create();
+        $removedDepartment = Department::factory()->for($organization)->create();
+        $team = Team::factory()->for($eligibleDepartment)->create();
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $eligibleDepartment->id]);
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $archivedDepartment->id]);
+        EventDepartmentAssignment::factory()->archived()->create(['event_id' => $event->id, 'department_id' => $removedDepartment->id]);
+
+        foreach ([
+            'archived@example.com' => $archivedDepartment->id,
+            'unassigned@example.com' => $unassignedDepartment->id,
+            'other-org@example.com' => $otherOrganizationDepartment->id,
+            'removed@example.com' => $removedDepartment->id,
+            'team@example.com' => $team->id,
+        ] as $email => $invalidId) {
+            $response = $this->from(route('public.events.apply', $event->applyRouteParameters()))
+                ->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+                    'applicant_legal_name' => 'Invalid Interest',
+                    'applicant_email' => $email,
+                    'department_interest_ids' => [$invalidId],
+                ]);
+
+            $response->assertRedirect(route('public.events.apply', $event->applyRouteParameters()));
+            $response->assertSessionHasErrors('department_interest_ids');
+        }
+
+        $this->assertDatabaseCount('event_applications', 0);
+        $this->assertDatabaseCount('event_application_department_interests', 0);
+    }
+
+    public function test_department_interest_submission_has_no_membership_assignment_or_access_side_effects(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create();
+        EventDepartmentAssignment::factory()->create(['event_id' => $event->id, 'department_id' => $department->id]);
+
+        $this->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+            'applicant_legal_name' => 'No Side Effect',
+            'applicant_email' => 'no-side-effect@example.com',
+            'department_interest_ids' => [$department->id],
+        ])->assertRedirect(route('public.events.apply.submitted', $event->applyRouteParameters()));
+
+        $application = EventApplication::query()->firstOrFail();
+
+        $this->assertSame(EventApplication::STATUS_SUBMITTED, $application->status);
+        $this->assertNull($application->staff_id);
+        $this->assertDatabaseCount('department_memberships', 0);
+        $this->assertDatabaseCount('team_memberships', 0);
+        $this->assertSame(0, DepartmentMembership::query()->count());
+        $this->assertSame(0, TeamMembership::query()->count());
     }
 
     public function test_event_slug_under_wrong_organization_returns_not_found(): void

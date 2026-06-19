@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Department;
 use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
@@ -54,6 +55,10 @@ class DevelopmentScenarioSeedTest extends TestCase
         );
 
         $this->assertSame(4, Department::query()->where('organization_id', $organization->id)->count());
+        $this->assertSame(4, EventDepartmentAssignment::query()
+            ->active()
+            ->where('event_id', $event->id)
+            ->count());
 
         $this->assertCount(11, User::query()->where('email', 'like', '%@idaho-burners.test')->get());
         $this->assertCount(11, Staff::query()->where('email', 'like', '%@idaho-burners.test')->get());
