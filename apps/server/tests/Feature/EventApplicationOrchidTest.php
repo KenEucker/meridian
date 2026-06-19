@@ -87,9 +87,9 @@ class EventApplicationOrchidTest extends TestCase
         $response->assertSee('Approval occurs at the organization level');
         $response->assertSee('Back');
         $response->assertSee('Approve');
+        $response->assertSee('Reject');
+        $response->assertSee('Defer');
         $response->assertDontSee('Save');
-        $response->assertDontSee('Reject');
-        $response->assertDontSee('Defer');
         $response->assertDontSee('Assign');
     }
 
@@ -314,6 +314,84 @@ class EventApplicationOrchidTest extends TestCase
 
         $this->assertSame(EventApplication::STATUS_SUBMITTED, $application->refresh()->status);
         $this->assertNull($application->staff_id);
+    }
+
+    public function test_orchid_reject_action_rejects_submitted_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $reviewer = $this->applicationAdmin();
+
+        $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($reviewer)
+            ->withoutFollowingRedirects()
+            ->method('reject')
+            ->assertRedirect(route('platform.applications.show', $application));
+
+        $application->refresh();
+        $this->assertSame(EventApplication::STATUS_REJECTED, $application->status);
+        $this->assertSame($reviewer->id, $application->reviewed_by_user_id);
+    }
+
+    public function test_orchid_defer_action_defers_submitted_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $reviewer = $this->applicationAdmin();
+
+        $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($reviewer)
+            ->withoutFollowingRedirects()
+            ->method('defer')
+            ->assertRedirect(route('platform.applications.show', $application));
+
+        $application->refresh();
+        $this->assertSame(EventApplication::STATUS_DEFERRED, $application->status);
+        $this->assertSame($reviewer->id, $application->reviewed_by_user_id);
+    }
+
+    public function test_department_lead_read_only_visibility_cannot_reject_or_defer_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Read Only Applicant',
+        ]);
+        $this->recordInterest($application, $department);
+        $departmentLead = $this->departmentLeadUserFor($department);
+
+        $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($departmentLead)
+            ->method('reject')
+            ->assertForbidden();
+
+        $this->screen('platform.applications.show', [
+            'application' => $application->id,
+        ])
+            ->actingAs($departmentLead)
+            ->method('defer')
+            ->assertForbidden();
+
+        $this->assertSame(EventApplication::STATUS_SUBMITTED, $application->refresh()->status);
     }
 
     private function applicationAdmin(): User

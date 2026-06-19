@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Application;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Models\EventApplication;
 use App\Models\Organization;
+use App\Services\Application\ApplicationApplicantAccess;
 use App\Services\Application\DuplicateApplicationException;
 use App\Services\Application\EventApplicationService;
 use App\Services\Application\EventNotOpenForApplicationsException;
+use App\Services\Application\ApplicationWithdrawalException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -43,7 +46,7 @@ class EventApplicationController extends Controller
         ]);
 
         try {
-            $this->applications->submit(
+            $application = $this->applications->submit(
                 $event,
                 $validated['applicant_legal_name'],
                 $validated['applicant_email'],
@@ -62,7 +65,8 @@ class EventApplicationController extends Controller
 
         return redirect()
             ->route('public.events.apply.submitted', $event->applyRouteParameters())
-            ->with('application_submitted', true);
+            ->with('application_submitted', true)
+            ->with('submitted_application_id', $application->id);
     }
 
     public function submitted(Request $request, Organization $organization, Event $event): View|RedirectResponse
@@ -71,6 +75,56 @@ class EventApplicationController extends Controller
             return redirect()->route('public.events.apply', $event->applyRouteParameters());
         }
 
-        return view('application.submitted', ['event' => $event]);
+        $application = null;
+        $submittedApplicationId = $request->session()->get('submitted_application_id');
+
+        if (is_string($submittedApplicationId) && $submittedApplicationId !== '') {
+            $application = EventApplication::query()
+                ->whereKey($submittedApplicationId)
+                ->where('event_id', $event->id)
+                ->first();
+        }
+
+        $canWithdraw = $application instanceof EventApplication
+            && app(ApplicationApplicantAccess::class)->canWithdrawApplication(
+                $request->user(),
+                $application,
+                $submittedApplicationId,
+            );
+
+        return view('application.submitted', [
+            'event' => $event,
+            'application' => $application,
+            'canWithdraw' => $canWithdraw,
+            'withdrawn' => $request->session()->get('application_withdrawn') === true,
+        ]);
+    }
+
+    public function withdraw(
+        Request $request,
+        Organization $organization,
+        Event $event,
+        EventApplication $application,
+    ): RedirectResponse {
+        abort_unless($application->event_id === $event->id, 404);
+
+        $submittedApplicationId = $request->session()->get('submitted_application_id');
+        abort_unless(app(ApplicationApplicantAccess::class)->canWithdrawApplication(
+            $request->user(),
+            $application,
+            is_string($submittedApplicationId) ? $submittedApplicationId : null,
+        ), 403);
+
+        try {
+            $this->applications->withdraw($application, $request->user());
+        } catch (ApplicationWithdrawalException $exception) {
+            return back()->withErrors(['withdraw' => $exception->getMessage()]);
+        }
+
+        return redirect()
+            ->route('public.events.apply.submitted', $event->applyRouteParameters())
+            ->with('application_submitted', true)
+            ->with('submitted_application_id', $application->id)
+            ->with('application_withdrawn', true);
     }
 }
