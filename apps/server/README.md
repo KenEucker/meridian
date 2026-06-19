@@ -82,8 +82,26 @@ composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate
+php artisan db:seed
 php artisan serve
 ```
+
+`php artisan db:seed` (or `migrate:fresh --seed`) loads the permission catalog and
+the development scenario from development process section 13.3:
+
+- Organization: **Idaho Burners**
+- Event: **Idaho Decompression 2026**
+- Departments: Organizers, Rangers, Gate, DPW
+- Named teams: Command, Dirt, Operator, Logistics
+- Personas: Vera Staff, Sam Shiftlead, Dana Departmentlead, Olive Organizer,
+  Ingrid ICLead, Omar ICOperator, Ivy ICViewer, Gwen Godmode, Debbie DNS,
+  Pat Prospective, and Ira Ineligible
+
+Each persona has a linked user and staff record at
+`{persona}@idaho-burners.test` (for example `vera.staff@idaho-burners.test`)
+with the development password `password`. Gwen Godmode is seeded without a
+`god_mode` grant because node-scoped direct user roles remain deferred to a
+later task.
 
 `composer install` republishes Orchid's front-end assets to
 `public/vendor/orchid` (via the `orchid:publish` post-autoload step), so the
