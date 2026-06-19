@@ -4,6 +4,7 @@ namespace App\Services\Application;
 
 use App\Models\AuditEvent;
 use App\Models\Department;
+use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\EventApplication;
 use App\Models\EventApplicationDepartmentInterest;
@@ -11,6 +12,7 @@ use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Membership\DepartmentMembershipService;
 use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -29,13 +31,16 @@ use Illuminate\Validation\ValidationException;
  * level and creates or ensures Prospective staff status (APP-005, APP-006).
  * Reject/defer transitions are organizer/Staff Coordinator review actions.
  * Applicant-only withdrawal is enforced through {@see ApplicationApplicantAccess}.
- * Department/team assignment is delivered by later Milestone 5 tasks.
+ * Department assignment after approval is delivered by {@see assignToDepartment};
+ * additional team assignment is delivered by M5.8.
  */
 class EventApplicationService
 {
     public function __construct(
         private readonly AuditService $audit,
         private readonly StaffStatusService $staffStatuses,
+        private readonly DepartmentMembershipService $departmentMemberships,
+        private readonly DepartmentAssignmentAccess $departmentAssignmentAccess,
     ) {}
 
     /**
@@ -244,6 +249,88 @@ class EventApplicationService
     }
 
     /**
+     * Assign an approved applicant to a department after organization approval.
+     *
+     * @throws DepartmentAssignmentException when assignment is not permitted or valid
+     */
+    public function assignToDepartment(
+        EventApplication $application,
+        Department $department,
+        User $assigner,
+    ): DepartmentMembership {
+        if (! $this->departmentAssignmentAccess->canAssignToDepartment($assigner, $application, $department)) {
+            throw new DepartmentAssignmentException('You are not authorized to assign this applicant to the selected department.');
+        }
+
+        return DB::transaction(function () use ($application, $department, $assigner): DepartmentMembership {
+            /** @var EventApplication $application */
+            $application = EventApplication::query()
+                ->with(['event', 'organization', 'staff'])
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $application->isApproved() || $application->staff_id === null) {
+                throw new DepartmentAssignmentException('Only approved applications with a linked staff profile can be assigned to a department.');
+            }
+
+            $department = Department::query()
+                ->with('defaultTeam')
+                ->whereKey($department->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertDepartmentEligibleForAssignment($application, $department);
+
+            $staff = $application->staff;
+            if ($staff === null) {
+                throw new DepartmentAssignmentException('Only approved applications with a linked staff profile can be assigned to a department.');
+            }
+
+            $organizationStatus = StaffOrganizationStatus::query()
+                ->where('organization_id', $application->organization_id)
+                ->where('staff_id', $staff->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($organizationStatus?->status === StaffOrganizationStatus::STATUS_DO_NOT_STAFF) {
+                throw new DepartmentAssignmentException('Do Not Staff records cannot be assigned to departments.');
+            }
+
+            if (DepartmentMembership::query()
+                ->active()
+                ->where('department_id', $department->id)
+                ->where('staff_id', $staff->id)
+                ->exists()) {
+                throw new DepartmentAssignmentException('This staff member is already assigned to the selected department.');
+            }
+
+            $reason = 'Assigned to '.$department->name.' after approval for '.$application->event?->name.'.';
+            $departmentMembership = $this->departmentMemberships->assignStaffWithDefaultTeam(
+                $staff,
+                $department,
+                $assigner,
+                $reason,
+            );
+
+            $this->audit->recordForEntity(
+                entity: $departmentMembership,
+                action: 'department_membership.assigned_from_application',
+                actorUser: $assigner,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                departmentId: $department->id,
+                before: null,
+                after: $this->departmentMembershipAuditSnapshot($departmentMembership),
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+
+            return $departmentMembership->load('teamMemberships.team');
+        });
+    }
+
+    /**
      * Eligible department interests are active departments in the event's
      * organization with an active event-department participation row (APP-011).
      *
@@ -447,6 +534,51 @@ class EventApplicationService
             'decision_reason' => $application->decision_reason,
             'withdrawn_at' => $application->withdrawn_at?->toISOString(),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function departmentMembershipAuditSnapshot(DepartmentMembership $departmentMembership): array
+    {
+        return [
+            'department_id' => $departmentMembership->department_id,
+            'staff_id' => $departmentMembership->staff_id,
+            'status' => $departmentMembership->status,
+            'status_reason' => $departmentMembership->status_reason,
+            'team_ids' => $departmentMembership->relationLoaded('teamMemberships')
+                ? $departmentMembership->teamMemberships->pluck('team_id')->all()
+                : $departmentMembership->teamMemberships()->pluck('team_id')->all(),
+        ];
+    }
+
+    /**
+     * @throws DepartmentAssignmentException
+     */
+    private function assertDepartmentEligibleForAssignment(
+        EventApplication $application,
+        Department $department,
+    ): void {
+        if ($department->isArchived()) {
+            throw new DepartmentAssignmentException('Archived departments cannot receive new assignments.');
+        }
+
+        if ((string) $department->organization_id !== (string) $application->organization_id) {
+            throw new DepartmentAssignmentException('The selected department must belong to the application organization.');
+        }
+
+        $participates = $department->eventAssignments()
+            ->active()
+            ->where('event_id', $application->event_id)
+            ->exists();
+
+        if (! $participates) {
+            throw new DepartmentAssignmentException('The selected department must participate in this event.');
+        }
+
+        if ($department->defaultTeam === null) {
+            throw new DepartmentAssignmentException('The selected department must have a default team before assignment.');
+        }
     }
 
     /**

@@ -15,6 +15,34 @@ use InvalidArgumentException;
 class DepartmentMembershipService
 {
     /**
+     * Assign staff to a department using the department default team only.
+     *
+     * Alpha 1 department assignment (APP-007) satisfies VOL-006 with the
+     * structural default team; operational team assignment is delivered by M5.8.
+     */
+    public function assignStaffWithDefaultTeam(
+        Staff $staff,
+        Department $department,
+        ?User $assignedBy = null,
+        ?string $statusReason = null,
+    ): DepartmentMembership {
+        $department->loadMissing('defaultTeam');
+
+        if ($department->defaultTeam === null) {
+            throw new InvalidArgumentException('Department must have a default team before assignment.');
+        }
+
+        return $this->createWithTeams(
+            $staff,
+            $department,
+            [$department->defaultTeam],
+            DepartmentMembership::STATUS_ACTIVE,
+            $statusReason ?? 'Assigned to department after application approval.',
+            $assignedBy,
+        );
+    }
+
+    /**
      * @param  iterable<int, Team>|Collection<int, Team>  $teams
      */
     public function createWithTeams(
