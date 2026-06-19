@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Database\Factories\OrganizationFactory;
+use Database\Factories\StaffFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,26 +14,35 @@ use Orchid\Filters\Types\Where;
 use Orchid\Filters\Types\WhereDateStartEnd;
 use Orchid\Screen\AsSource;
 
-class Organization extends Model
+class Staff extends Model
 {
     use AsSource;
     use Filterable;
 
-    /** @use HasFactory<OrganizationFactory> */
+    /** @use HasFactory<StaffFactory> */
     use HasFactory;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
-        'name',
-        'slug',
-        'default_ic_department_id',
-        'default_credit_policy_id',
-        'active_inactive_threshold_years',
-        'prospective_inactive_threshold_years',
-        'calendar_year_start_month',
-        'calendar_year_start_day',
+        'legal_name',
+        'preferred_name',
+        'handle',
+        'formerly_known_as',
+        'email',
+        'phone',
+        'city',
+        'state',
+        'date_of_birth',
+        'emergency_contact_name',
+        'emergency_contact_phone',
+        'profile_picture_path',
+        'profile_picture_mime_type',
+        'profile_picture_size_bytes',
+        'profile_picture_width',
+        'profile_picture_height',
+        'profile_picture_uploaded_at',
         'archived_at',
     ];
 
@@ -42,8 +51,12 @@ class Organization extends Model
      */
     protected $allowedFilters = [
         'id' => Where::class,
-        'name' => Like::class,
-        'slug' => Like::class,
+        'legal_name' => Like::class,
+        'preferred_name' => Like::class,
+        'handle' => Like::class,
+        'email' => Like::class,
+        'city' => Like::class,
+        'state' => Like::class,
         'updated_at' => WhereDateStartEnd::class,
         'created_at' => WhereDateStartEnd::class,
     ];
@@ -53,8 +66,12 @@ class Organization extends Model
      */
     protected $allowedSorts = [
         'id',
-        'name',
-        'slug',
+        'legal_name',
+        'preferred_name',
+        'handle',
+        'email',
+        'city',
+        'state',
         'updated_at',
         'created_at',
     ];
@@ -65,34 +82,25 @@ class Organization extends Model
     protected function casts(): array
     {
         return [
-            'default_ic_department_id' => 'integer',
-            'default_credit_policy_id' => 'integer',
-            'active_inactive_threshold_years' => 'integer',
-            'prospective_inactive_threshold_years' => 'integer',
-            'calendar_year_start_month' => 'integer',
-            'calendar_year_start_day' => 'integer',
+            'date_of_birth' => 'date',
+            'profile_picture_uploaded_at' => 'datetime',
             'archived_at' => 'datetime',
         ];
     }
 
-    public function events(): HasMany
+    public function users(): BelongsToMany
     {
-        return $this->hasMany(Event::class);
+        return $this->belongsToMany(User::class, 'staff_user')->withTimestamps();
     }
 
-    public function departments(): HasMany
-    {
-        return $this->hasMany(Department::class);
-    }
-
-    public function staffOrganizationStatuses(): HasMany
+    public function organizationStatuses(): HasMany
     {
         return $this->hasMany(StaffOrganizationStatus::class);
     }
 
-    public function staff(): BelongsToMany
+    public function organizations(): BelongsToMany
     {
-        return $this->belongsToMany(Staff::class, 'staff_organization_statuses')
+        return $this->belongsToMany(Organization::class, 'staff_organization_statuses')
             ->withPivot([
                 'status',
                 'status_reason',
@@ -103,8 +111,8 @@ class Organization extends Model
     }
 
     /**
-     * @param  Builder<Organization>  $query
-     * @return Builder<Organization>
+     * @param  Builder<Staff>  $query
+     * @return Builder<Staff>
      */
     public function scopeActive(Builder $query): Builder
     {

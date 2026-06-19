@@ -178,7 +178,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M4.2 Events | Add event model with timezone and active window fields. | Requirements 3.2; data/API 10.2 | Model tests |
 | M4.3 Departments | Add department model and organization relationship. | ORG-002; requirements 3.3 | Model tests |
 | M4.4 Teams and default team | Add teams, default team creation, archive behavior. | TEAM-001 through TEAM-006; data/API 10.6 | Team domain tests |
-| M4.5 Staff | Add staff profile and organization staff records. | VOL-001 through VOL-005; data/API 10.4 | Model/validation tests |
+| M4.5 Staff | Add staff profile and staff organization status records. | VOL-001 through VOL-005; data/API 10.4 | Model/validation tests |
 | M4.6 Department/team memberships | Enforce department membership requiring at least one team. | VOL-006; TEAM-002; data/API 10.6 | Domain tests |
 | M4.7 Status model | Add organization and department status transitions. | STAT-001 through STAT-011 | Status tests |
 | M4.8 Permission catalog | Add permission roles, permissions, role permissions, and team grants, including organizer grants through the configured organizers department. | TEAM-009, TEAM-010; ORG-015, ORG-016; data/API 10.7 | Policy tests |
@@ -200,7 +200,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M5.1 Public application form | Add event application form and submitted state. | APP-001 through APP-004 | Feature/UI tests |
 | M5.2 Application review list | Add organizer application review list/detail. | APP-003, APP-005 | Feature tests |
 | M5.3 DNS auto-rejection | Reject DNS email applications without automatic notice. | APP-003; requirements 3.5 | Domain tests |
-| M5.4 Approve application | Approval creates Prospective organization staff. | APP-005, APP-006 | Feature/domain tests |
+| M5.4 Approve application | Approval creates Prospective staff organization status. | APP-005, APP-006 | Feature/domain tests |
 | M5.5 Reject/defer/withdraw | Implement remaining application status transitions. | APP-003, APP-004 | Status tests |
 | M5.6 Assign to department | Organizer/lead assigns approved staff to department. | APP-007; requirements 5.3 | Policy/domain tests |
 | M5.7 Assign to team | Department/team lead assigns staff to team. | Requirements 5.4; TEAM-008, TEAM-009 | Policy/domain tests |
