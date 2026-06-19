@@ -28,6 +28,10 @@ Route::post('{organization:slug}/{event:slug}/apply', [EventApplicationControlle
 Route::get('{organization:slug}/{event:slug}/apply/submitted', [EventApplicationController::class, 'submitted'])
     ->scopeBindings()
     ->name('public.events.apply.submitted');
+Route::post('{organization:slug}/{event:slug}/apply/{application}/withdraw', [EventApplicationController::class, 'withdraw'])
+    ->middleware('throttle:10,1')
+    ->scopeBindings()
+    ->name('public.events.apply.withdraw');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('login', [MagicLinkController::class, 'create'])->name('login');

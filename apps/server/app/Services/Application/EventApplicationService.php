@@ -27,8 +27,9 @@ use Illuminate\Validation\ValidationException;
  * organization Do Not Staff record (STAT-006). Applicants apply to an event,
  * not to a department (APP-001, APP-002). Approval happens at the organization
  * level and creates or ensures Prospective staff status (APP-005, APP-006).
- * Reject/defer, applicant-only withdrawal, and department/team assignment are
- * delivered by their owning tasks in Milestone 5.
+ * Reject/defer transitions are organizer/Staff Coordinator review actions.
+ * Applicant-only withdrawal is enforced through {@see ApplicationApplicantAccess}.
+ * Department/team assignment is delivered by later Milestone 5 tasks.
  */
 class EventApplicationService
 {
@@ -149,6 +150,96 @@ class EventApplicationService
             return $application
                 ->load(['event', 'organization', 'reviewedBy', 'staff', 'departmentInterests'])
                 ->setRelation('staff', $staff);
+        });
+    }
+
+    /**
+     * Reject a submitted application at the organization level.
+     *
+     * @throws ApplicationReviewException when the application is not rejectable
+     */
+    public function reject(
+        EventApplication $application,
+        User $reviewer,
+        ?string $decisionReason = null,
+    ): EventApplication {
+        return $this->transitionReviewDecision(
+            application: $application,
+            reviewer: $reviewer,
+            status: EventApplication::STATUS_REJECTED,
+            auditAction: 'event_application.rejected',
+            defaultReason: 'Rejected at the organization level.',
+            decisionReason: $decisionReason,
+        );
+    }
+
+    /**
+     * Defer a submitted application at the organization level.
+     *
+     * @throws ApplicationReviewException when the application is not deferrable
+     */
+    public function defer(
+        EventApplication $application,
+        User $reviewer,
+        ?string $decisionReason = null,
+    ): EventApplication {
+        return $this->transitionReviewDecision(
+            application: $application,
+            reviewer: $reviewer,
+            status: EventApplication::STATUS_DEFERRED,
+            auditAction: 'event_application.deferred',
+            defaultReason: 'Deferred at the organization level.',
+            decisionReason: $decisionReason,
+        );
+    }
+
+    /**
+     * Withdraw a submitted application on behalf of the applicant.
+     *
+     * @throws ApplicationWithdrawalException when the application is not withdrawable
+     */
+    public function withdraw(
+        EventApplication $application,
+        ?User $applicant = null,
+        ?string $decisionReason = null,
+    ): EventApplication {
+        return DB::transaction(function () use ($application, $applicant, $decisionReason): EventApplication {
+            /** @var EventApplication $application */
+            $application = EventApplication::query()
+                ->with(['event', 'organization'])
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $application->isSubmitted()) {
+                throw new ApplicationWithdrawalException('Only submitted applications can be withdrawn.');
+            }
+
+            $withdrawnAt = now();
+            $reason = $decisionReason ?: 'Withdrawn by the applicant.';
+            $applicationBefore = $this->applicationAuditSnapshot($application);
+
+            $application->forceFill([
+                'status' => EventApplication::STATUS_WITHDRAWN,
+                'withdrawn_at' => $withdrawnAt,
+                'decision_reason' => $reason,
+            ])->save();
+
+            $applicationAfter = $this->applicationAuditSnapshot($application->refresh());
+
+            $this->audit->recordForEntity(
+                entity: $application,
+                action: 'event_application.withdrawn',
+                actorUser: $applicant,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                before: $applicationBefore,
+                after: $applicationAfter,
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_WEB,
+            );
+
+            return $application->load(['event', 'organization', 'departmentInterests']);
         });
     }
 
@@ -285,6 +376,65 @@ class EventApplicationService
     }
 
     /**
+     * @throws ApplicationReviewException
+     */
+    private function transitionReviewDecision(
+        EventApplication $application,
+        User $reviewer,
+        string $status,
+        string $auditAction,
+        string $defaultReason,
+        ?string $decisionReason = null,
+    ): EventApplication {
+        return DB::transaction(function () use (
+            $application,
+            $reviewer,
+            $status,
+            $auditAction,
+            $defaultReason,
+            $decisionReason,
+        ): EventApplication {
+            /** @var EventApplication $application */
+            $application = EventApplication::query()
+                ->with(['event', 'organization'])
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $application->isSubmitted()) {
+                throw new ApplicationReviewException('Only submitted applications can be reviewed.');
+            }
+
+            $reviewedAt = now();
+            $reason = $decisionReason ?: $defaultReason;
+            $applicationBefore = $this->applicationAuditSnapshot($application);
+
+            $application->forceFill([
+                'status' => $status,
+                'reviewed_at' => $reviewedAt,
+                'reviewed_by_user_id' => $reviewer->id,
+                'decision_reason' => $reason,
+            ])->save();
+
+            $applicationAfter = $this->applicationAuditSnapshot($application->refresh());
+
+            $this->audit->recordForEntity(
+                entity: $application,
+                action: $auditAction,
+                actorUser: $reviewer,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                before: $applicationBefore,
+                after: $applicationAfter,
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+
+            return $application->load(['event', 'organization', 'reviewedBy', 'departmentInterests']);
+        });
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function applicationAuditSnapshot(EventApplication $application): array
@@ -295,6 +445,7 @@ class EventApplicationService
             'reviewed_at' => $application->reviewed_at?->toISOString(),
             'reviewed_by_user_id' => $application->reviewed_by_user_id,
             'decision_reason' => $application->decision_reason,
+            'withdrawn_at' => $application->withdrawn_at?->toISOString(),
         ];
     }
 

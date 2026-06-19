@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Orchid\Layouts\Application\ApplicationDetailLayout;
 use App\Services\Application\ApplicationApprovalException;
 use App\Services\Application\ApplicationReviewAccess;
+use App\Services\Application\ApplicationReviewException;
 use App\Services\Application\EventApplicationService;
 use Illuminate\Http\RedirectResponse;
 use Orchid\Screen\Action;
@@ -66,7 +67,7 @@ class ApplicationDetailScreen extends Screen
     public function commandBar(): iterable
     {
         $user = request()->user();
-        $canApprove = $user instanceof User
+        $canReview = $user instanceof User
             && $this->application?->isSubmitted() === true
             && app(ApplicationReviewAccess::class)->canReviewApplications($user);
 
@@ -79,7 +80,19 @@ class ApplicationDetailScreen extends Screen
                 ->icon('bs.check-circle')
                 ->method('approve')
                 ->confirm(__('Approve this application at the organization level and create Prospective staff status?'))
-                ->canSee($canApprove),
+                ->canSee($canReview),
+
+            Button::make(__('Reject'))
+                ->icon('bs.x-circle')
+                ->method('reject')
+                ->confirm(__('Reject this application at the organization level?'))
+                ->canSee($canReview),
+
+            Button::make(__('Defer'))
+                ->icon('bs.pause-circle')
+                ->method('defer')
+                ->confirm(__('Defer this application for later review?'))
+                ->canSee($canReview),
         ];
     }
 
@@ -91,7 +104,7 @@ class ApplicationDetailScreen extends Screen
         return [
             Layout::block(ApplicationDetailLayout::class)
                 ->title(__('Application'))
-                ->description(__('Review applicant identity, event scope, and current status. Approval creates Prospective organization status; reject and defer actions are delivered in later tasks.')),
+                ->description(__('Review applicant identity, event scope, and current status. Approval creates Prospective organization status; reject and defer change review status without creating staff access.')),
         ];
     }
 
@@ -105,6 +118,46 @@ class ApplicationDetailScreen extends Screen
             app(EventApplicationService::class)->approve($application, $user);
             Toast::info(__('Application was approved.'));
         } catch (ApplicationApprovalException $exception) {
+            Toast::warning(__($exception->getMessage()));
+        }
+
+        return redirect()->route('platform.applications.show', $application);
+    }
+
+    public function reject(EventApplication $application): RedirectResponse
+    {
+        return $this->reviewDecision(
+            $application,
+            fn (EventApplicationService $service, User $user) => $service->reject($application, $user),
+            __('Application was rejected.'),
+        );
+    }
+
+    public function defer(EventApplication $application): RedirectResponse
+    {
+        return $this->reviewDecision(
+            $application,
+            fn (EventApplicationService $service, User $user) => $service->defer($application, $user),
+            __('Application was deferred.'),
+        );
+    }
+
+    /**
+     * @param  callable(EventApplicationService, User): EventApplication  $action
+     */
+    private function reviewDecision(
+        EventApplication $application,
+        callable $action,
+        string $successMessage,
+    ): RedirectResponse {
+        $user = request()->user();
+        abort_unless($user instanceof User, 403);
+        abort_unless(app(ApplicationReviewAccess::class)->canReviewApplications($user), 403);
+
+        try {
+            $action(app(EventApplicationService::class), $user);
+            Toast::info($successMessage);
+        } catch (ApplicationReviewException $exception) {
             Toast::warning(__($exception->getMessage()));
         }
 
