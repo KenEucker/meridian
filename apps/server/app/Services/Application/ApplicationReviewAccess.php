@@ -30,6 +30,10 @@ class ApplicationReviewAccess
             return false;
         }
 
+        if (! $application->isSubmitted()) {
+            return false;
+        }
+
         return $application->departmentInterests()
             ->whereIn('departments.id', $departmentIds)
             ->exists();
@@ -51,8 +55,10 @@ class ApplicationReviewAccess
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereHas('departmentInterests', fn (Builder $interestQuery) => $interestQuery
-            ->whereIn('departments.id', $departmentIds));
+        return $query
+            ->where('status', EventApplication::STATUS_SUBMITTED)
+            ->whereHas('departmentInterests', fn (Builder $interestQuery) => $interestQuery
+                ->whereIn('departments.id', $departmentIds));
     }
 
     public function hasDepartmentLeadVisibility(User $user): bool

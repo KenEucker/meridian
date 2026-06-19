@@ -8,6 +8,8 @@ use App\Models\Event;
 use App\Models\EventApplication;
 use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
+use App\Models\Staff;
+use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
@@ -135,6 +137,83 @@ class EventApplicationSubmissionTest extends TestCase
         $this->assertNull($application->reviewed_at);
         $this->assertNull($application->withdrawn_at);
         $this->assertDatabaseCount('event_application_department_interests', 0);
+    }
+
+    public function test_dns_staff_email_auto_rejects_without_applicant_notice(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create();
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+        ]);
+        $staff = Staff::factory()->create(['email' => 'dns.case@example.com']);
+        StaffOrganizationStatus::factory()
+            ->for($organization)
+            ->for($staff)
+            ->create(['status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF]);
+
+        $response = $this->followingRedirects()
+            ->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+                'applicant_legal_name' => 'DNS Case',
+                'applicant_email' => 'DNS.Case@Example.com',
+                'department_interest_ids' => [$department->id],
+            ]);
+
+        $response->assertOk();
+        $response->assertSee('Application submitted');
+        $response->assertSee('has been received');
+        $response->assertDontSee('Auto-rejected');
+        $response->assertDontSee('DNS');
+
+        $application = EventApplication::query()->firstOrFail();
+
+        $this->assertSame($event->id, $application->event_id);
+        $this->assertSame($organization->id, $application->organization_id);
+        $this->assertSame('dns.case@example.com', $application->applicant_email);
+        $this->assertSame(EventApplication::STATUS_AUTO_REJECTED_DNS, $application->status);
+        $this->assertNotNull($application->submitted_at);
+        $this->assertNotNull($application->reviewed_at);
+        $this->assertNull($application->reviewed_by_user_id);
+        $this->assertSame(
+            'Applicant email matched an organization Do Not Staff status.',
+            $application->decision_reason,
+        );
+        $this->assertNull($application->staff_id);
+        $this->assertNull($application->withdrawn_at);
+        $this->assertDatabaseHas('event_application_department_interests', [
+            'event_application_id' => $application->id,
+            'department_id' => $department->id,
+        ]);
+        $this->assertDatabaseCount('department_memberships', 0);
+        $this->assertDatabaseCount('team_memberships', 0);
+    }
+
+    public function test_dns_email_matching_is_scoped_to_the_event_organization(): void
+    {
+        $dnsOrganization = Organization::factory()->create();
+        $otherOrganization = Organization::factory()->create();
+        $event = Event::factory()->for($otherOrganization)->create();
+        $staff = Staff::factory()->create(['email' => 'scoped.dns@example.com']);
+        StaffOrganizationStatus::factory()
+            ->for($dnsOrganization)
+            ->for($staff)
+            ->create(['status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF]);
+
+        $response = $this->post(route('public.events.apply.store', $event->applyRouteParameters()), [
+            'applicant_legal_name' => 'Scoped Applicant',
+            'applicant_email' => 'scoped.dns@example.com',
+        ]);
+
+        $response->assertRedirect(route('public.events.apply.submitted', $event->applyRouteParameters()));
+
+        $this->assertDatabaseHas('event_applications', [
+            'event_id' => $event->id,
+            'organization_id' => $otherOrganization->id,
+            'applicant_email' => 'scoped.dns@example.com',
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
     }
 
     public function test_submitted_confirmation_page_renders_after_submission(): void

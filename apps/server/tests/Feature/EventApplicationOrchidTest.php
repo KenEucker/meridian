@@ -203,6 +203,37 @@ class EventApplicationOrchidTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_department_lead_interest_visibility_excludes_dns_auto_rejected_applications(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'DNS Applicant',
+            'status' => EventApplication::STATUS_AUTO_REJECTED_DNS,
+            'reviewed_at' => now(),
+            'decision_reason' => 'Applicant email matched an organization Do Not Staff status.',
+        ]);
+        $this->recordInterest($application, $department);
+        $departmentLead = $this->departmentLeadUserFor($department);
+
+        $leadListResponse = $this->actingAs($departmentLead)->get(route('platform.applications'));
+        $leadListResponse->assertOk();
+        $leadListResponse->assertDontSee('DNS Applicant');
+
+        $this->actingAs($departmentLead)
+            ->get(route('platform.applications.show', $application))
+            ->assertForbidden();
+
+        $reviewerResponse = $this->actingAs($this->applicationAdmin())
+            ->get(route('platform.applications.show', $application));
+        $reviewerResponse->assertOk();
+        $reviewerResponse->assertSee('DNS Applicant');
+        $reviewerResponse->assertSee('Auto-rejected due to DNS');
+    }
+
     public function test_orchid_application_screens_require_permission(): void
     {
         $user = User::factory()->create([
