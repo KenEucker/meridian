@@ -15,6 +15,7 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\Application\EventApplicationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Orchid\Support\Testing\ScreenTesting;
 use Tests\TestCase;
@@ -89,6 +90,7 @@ class EventApplicationOrchidTest extends TestCase
         $response->assertSee('Approve');
         $response->assertSee('Reject');
         $response->assertSee('Defer');
+        $response->assertDontSee('Rescind');
         $response->assertDontSee('Save');
         $response->assertDontSee('Assign');
     }
@@ -292,6 +294,64 @@ class EventApplicationOrchidTest extends TestCase
         ]);
     }
 
+    public function test_orchid_application_detail_shows_rescind_for_approved_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create(['name' => 'Signal Camp 2026']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Morgan Rescind',
+            'applicant_email' => 'morgan.rescind@example.org',
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $reviewer = $this->applicationAdmin();
+        $approved = app(EventApplicationService::class)->approve($application, $reviewer);
+
+        $response = $this->actingAs($reviewer)->get(route('platform.applications.show', $approved));
+
+        $response->assertOk();
+        $response->assertSee('Approved');
+        $response->assertSee('Rescind');
+        $response->assertDontSee('Reject');
+        $response->assertDontSee('Defer');
+    }
+
+    public function test_orchid_rescind_action_rescinds_approved_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Morgan Rescind',
+            'applicant_email' => 'morgan.rescind@example.org',
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $reviewer = $this->applicationAdmin();
+        $approved = app(EventApplicationService::class)->approve($application, $reviewer);
+
+        $this->screen('platform.applications.show', [
+            'application' => $approved->id,
+        ])
+            ->actingAs($reviewer)
+            ->withoutFollowingRedirects()
+            ->method('rescind')
+            ->assertRedirect(route('platform.applications.show', $approved));
+
+        $approved->refresh();
+        $this->assertSame(EventApplication::STATUS_WITHDRAWN, $approved->status);
+        $this->assertNotNull($approved->withdrawn_at);
+        $this->assertSame($reviewer->id, $approved->reviewed_by_user_id);
+
+        $this->assertDatabaseHas('staff_organization_statuses', [
+            'organization_id' => $organization->id,
+            'staff_id' => $approved->staff_id,
+            'status' => StaffOrganizationStatus::STATUS_INACTIVE,
+            'status_changed_by_user_id' => $reviewer->id,
+        ]);
+    }
+
     public function test_department_lead_read_only_visibility_cannot_approve_application(): void
     {
         $organization = Organization::factory()->create();
@@ -392,6 +452,34 @@ class EventApplicationOrchidTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(EventApplication::STATUS_SUBMITTED, $application->refresh()->status);
+    }
+
+    public function test_department_lead_read_only_visibility_cannot_rescind_application(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $application = EventApplication::factory()->create([
+            'event_id' => $event->id,
+            'organization_id' => $organization->id,
+            'applicant_legal_name' => 'Read Only Applicant',
+            'applicant_email' => 'read.only@example.org',
+            'status' => EventApplication::STATUS_SUBMITTED,
+        ]);
+        $this->recordInterest($application, $department);
+        $reviewer = $this->applicationAdmin();
+        $approved = app(EventApplicationService::class)->approve($application, $reviewer);
+        $departmentLead = $this->departmentLeadUserFor($department);
+
+        $this->screen('platform.applications.show', [
+            'application' => $approved->id,
+        ])
+            ->actingAs($departmentLead)
+            ->method('rescind')
+            ->assertForbidden();
+
+        $this->assertSame(EventApplication::STATUS_APPROVED, $approved->refresh()->status);
+        $this->assertNull($approved->withdrawn_at);
     }
 
     private function applicationAdmin(): User

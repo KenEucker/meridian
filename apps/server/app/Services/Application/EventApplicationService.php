@@ -10,9 +10,11 @@ use App\Models\EventApplication;
 use App\Models\EventApplicationDepartmentInterest;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
+use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Membership\DepartmentMembershipService;
+use App\Services\Membership\TeamMembershipService;
 use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -31,9 +33,11 @@ use Illuminate\Validation\ValidationException;
  * level and creates or ensures Prospective staff status (APP-005, APP-006).
  * Reject/defer transitions are organizer/Staff Coordinator review actions.
  * Applicant-only withdrawal is enforced through {@see ApplicationApplicantAccess}.
+ * Approved applications may be rescinded before operational team assignment
+ * (APP-008 through APP-010).
  * Department assignment after approval is delivered by {@see assignToDepartment};
  * operational team assignment is delivered by
- * {@see \App\Services\Membership\TeamMembershipService::assignStaffToTeam}.
+ * {@see TeamMembershipService::assignStaffToTeam}.
  */
 class EventApplicationService
 {
@@ -246,6 +250,75 @@ class EventApplicationService
             );
 
             return $application->load(['event', 'organization', 'departmentInterests']);
+        });
+    }
+
+    /**
+     * Rescind an approved application before operational team assignment.
+     *
+     * The canonical application status set has no separate rescinded state, so
+     * rescission terminates the approval as Withdrawn while retaining reviewer
+     * metadata, decision reason, and explicit rescind audit history.
+     *
+     * @throws ApplicationRescindException when the application is not rescindable
+     */
+    public function rescind(
+        EventApplication $application,
+        User $reviewer,
+        ?string $decisionReason = null,
+    ): EventApplication {
+        return DB::transaction(function () use ($application, $reviewer, $decisionReason): EventApplication {
+            /** @var EventApplication $application */
+            $application = EventApplication::query()
+                ->with(['event', 'organization', 'staff'])
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $application->isApproved() || $application->staff_id === null) {
+                throw new ApplicationRescindException('Only approved applications with a linked staff profile can be rescinded.');
+            }
+
+            $staff = $application->staff;
+
+            if ($staff === null) {
+                throw new ApplicationRescindException('Only approved applications with a linked staff profile can be rescinded.');
+            }
+
+            if ($this->hasOperationalTeamAssignment($application)) {
+                throw new ApplicationRescindException('Applications cannot be rescinded after team assignment.');
+            }
+
+            $rescindedAt = now();
+            $reason = $decisionReason ?: 'Rescinded before team assignment.';
+            $applicationBefore = $this->applicationAuditSnapshot($application);
+
+            $this->inactivateDefaultOnlyDepartmentMemberships($application, $reviewer, $reason);
+            $this->ensureInactiveOrganizationStatus($application, $reviewer, $rescindedAt, $reason);
+
+            $application->forceFill([
+                'status' => EventApplication::STATUS_WITHDRAWN,
+                'reviewed_at' => $rescindedAt,
+                'reviewed_by_user_id' => $reviewer->id,
+                'decision_reason' => $reason,
+                'withdrawn_at' => $rescindedAt,
+            ])->save();
+
+            $applicationAfter = $this->applicationAuditSnapshot($application->refresh());
+
+            $this->audit->recordForEntity(
+                entity: $application,
+                action: 'event_application.rescinded',
+                actorUser: $reviewer,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                before: $applicationBefore,
+                after: $applicationAfter,
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+
+            return $application->load(['event', 'organization', 'reviewedBy', 'staff', 'departmentInterests']);
         });
     }
 
@@ -551,6 +624,129 @@ class EventApplicationService
                 ? $departmentMembership->teamMemberships->pluck('team_id')->all()
                 : $departmentMembership->teamMemberships()->pluck('team_id')->all(),
         ];
+    }
+
+    private function hasOperationalTeamAssignment(EventApplication $application): bool
+    {
+        if ($application->staff_id === null) {
+            return false;
+        }
+
+        return TeamMembership::query()
+            ->join('teams', 'teams.id', '=', 'team_memberships.team_id')
+            ->join('departments', 'departments.id', '=', 'teams.department_id')
+            ->where('team_memberships.staff_id', $application->staff_id)
+            ->where('departments.organization_id', $application->organization_id)
+            ->whereColumn('teams.id', '!=', 'departments.default_team_id')
+            ->exists();
+    }
+
+    private function inactivateDefaultOnlyDepartmentMemberships(
+        EventApplication $application,
+        User $reviewer,
+        string $reason,
+    ): void {
+        if ($application->staff_id === null) {
+            return;
+        }
+
+        $memberships = DepartmentMembership::query()
+            ->with(['department', 'teamMemberships.team'])
+            ->where('staff_id', $application->staff_id)
+            ->where('status', DepartmentMembership::STATUS_ACTIVE)
+            ->whereNull('archived_at')
+            ->whereHas('department', fn ($query) => $query
+                ->where('organization_id', $application->organization_id))
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($memberships as $membership) {
+            $before = $this->departmentMembershipAuditSnapshot($membership);
+            $updated = $this->staffStatuses->transitionDepartmentStatus(
+                $membership,
+                DepartmentMembership::STATUS_INACTIVE,
+                $reason,
+            )->load(['department', 'teamMemberships.team']);
+
+            $this->audit->recordForEntity(
+                entity: $updated,
+                action: 'department_membership.inactivated_from_application_rescind',
+                actorUser: $reviewer,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                departmentId: $updated->department_id,
+                before: $before,
+                after: $this->departmentMembershipAuditSnapshot($updated),
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+        }
+    }
+
+    private function ensureInactiveOrganizationStatus(
+        EventApplication $application,
+        User $reviewer,
+        \DateTimeInterface $changedAt,
+        string $reason,
+    ): StaffOrganizationStatus {
+        $statusRecord = StaffOrganizationStatus::query()
+            ->where('organization_id', $application->organization_id)
+            ->where('staff_id', $application->staff_id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($statusRecord === null) {
+            $statusRecord = StaffOrganizationStatus::query()->create([
+                'organization_id' => $application->organization_id,
+                'staff_id' => $application->staff_id,
+                'status' => StaffOrganizationStatus::STATUS_INACTIVE,
+                'status_reason' => $reason,
+                'status_changed_at' => $changedAt,
+                'status_changed_by_user_id' => $reviewer->id,
+            ]);
+
+            $this->audit->recordForEntity(
+                entity: $statusRecord,
+                action: 'staff_organization_status.created',
+                actorUser: $reviewer,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                before: null,
+                after: $this->statusAuditSnapshot($statusRecord),
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+
+            return $statusRecord;
+        }
+
+        $before = $this->statusAuditSnapshot($statusRecord);
+
+        $statusRecord = $this->staffStatuses->transitionOrganizationStatus(
+            $statusRecord,
+            StaffOrganizationStatus::STATUS_INACTIVE,
+            $reason,
+            $reviewer,
+            Carbon::instance($changedAt),
+        );
+
+        $after = $this->statusAuditSnapshot($statusRecord);
+
+        if ($before !== $after) {
+            $this->audit->recordForEntity(
+                entity: $statusRecord,
+                action: 'staff_organization_status.changed',
+                actorUser: $reviewer,
+                organizationId: $application->organization_id,
+                eventId: $application->event_id,
+                before: $before,
+                after: $after,
+                reason: $reason,
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+        }
+
+        return $statusRecord;
     }
 
     /**

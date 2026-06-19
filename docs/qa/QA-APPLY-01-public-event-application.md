@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, submit an application that is recorded in the Submitted state or auto-rejected due to DNS when applicable, have a submitted application approved by an organizer/Staff Coordinator into Prospective organization-level staff status, and have remaining review/applicant status transitions (reject, defer, withdraw) behave correctly. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), approval, reject/defer review actions, applicant-only withdrawal, department lead read-only visibility where implemented, DNS auto-rejection without applicant notice, and verification that department interest and status transitions do not create department/team assignment or access side effects. Department/team assignment is delivered by later Milestone 5 tasks.
+Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, submit an application that is recorded in the Submitted state or auto-rejected due to DNS when applicable, have a submitted application approved by an organizer/Staff Coordinator into Prospective organization-level staff status, and have remaining review/applicant status transitions (reject, defer, withdraw, rescind) behave correctly. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), approval, reject/defer review actions, applicant-only withdrawal, organizer/Staff Coordinator rescind before team assignment, department lead read-only visibility where implemented, DNS auto-rejection without applicant notice, and verification that department interest and status transitions do not create unintended department/team assignment or access side effects. Department/team assignment UI coverage remains with later Milestone 5 QA work.
 
 ## Requirements covered
 
@@ -12,12 +12,15 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - `APP-004`
 - `APP-005`
 - `APP-006`
+- `APP-008`
+- `APP-009`
+- `APP-010`
 - `APP-011`
 - `STAT-006`
 - Requirements sections 3.10 and 5.2
 - Data/API spec sections 10.4 and 10.5 (`staff_organization_statuses`, `event_applications`, `event_application_department_interests`, `submit-application`)
 - UI implementation contract sections 8.2, 9.3 and 12.1, 12.6, 12.10 (`public.apply`, `organizer.applications`, `organizer.application-detail`)
-- Meridian Alpha 1 tasks M5.1, M5.2, M5.3, M5.4, M5.5, M5.6
+- Meridian Alpha 1 tasks M5.1, M5.2, M5.3, M5.4, M5.5, M5.6, M5.9
 
 ## Environment
 
@@ -122,6 +125,14 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 46. Confirm rejected, deferred, and withdrawn applications do not show Approve, Reject, or Defer actions on the review detail screen.
 47. After a rejected, deferred, or withdrawn application, confirm the same event/email may submit a new application when no other Submitted application exists for that event/email pair.
 
+### G. Rescind before team assignment (M5.9 / APP-008 through APP-010)
+
+48. As the organizer, approve a fresh Submitted application and open its detail screen before assigning it to a department or team. Confirm **Rescind** is visible and Approve/Reject/Defer are not visible.
+49. Click **Rescind** and confirm the action. Confirm the application status is `withdrawn`, `withdrawn_at` is set, reviewer fields identify the rescinding organizer, the decision reason indicates rescind before team assignment, and the linked staff organization status is `inactive`.
+50. Approve another application, assign it to a department only, and confirm the only team membership is the department default team. Click **Rescind** and confirm the application is withdrawn, the staff organization status is `inactive`, the department membership is `inactive`, and the default team membership remains as history.
+51. Approve another application, assign it to a department, then assign a non-default operational team. Attempt **Rescind** and confirm the action is blocked with no application status change, no `withdrawn_at`, no staff organization status change, and no `event_application.rescinded` audit event.
+52. As a department lead without organizer/Staff Coordinator review permission, confirm **Rescind** is not visible on any read-only application view. Confirm direct rescind attempts are denied if tested.
+
 ## Expected results
 
 - The public form is reachable without authentication and is scoped to one event (APP-001, APP-002).
@@ -146,6 +157,10 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Organizers with `platform.applications` permission can reject or defer submitted applications at the organization level without creating staff access (APP-003).
 - Applicants can withdraw only their own submitted applications; organizers and unrelated users cannot withdraw on their behalf (APP-004).
 - Reject/defer/withdraw transitions record audit history and do not create department assignment, department membership, team membership, shifts, trainings, credentials, routing, exports, or notifications.
+- Organizers with `platform.applications` permission can rescind Approved applications before operational team assignment (APP-008).
+- Rescind before team assignment changes the application to the existing terminal `withdrawn` status, records reviewer metadata and `withdrawn_at`, inactivates the linked staff organization status, and records audit history (APP-009).
+- Default-team-only department membership created during department assignment remains rescindable; rescind inactivates that department membership while preserving membership history.
+- Rescind is blocked after any non-default team assignment history and leaves the application, staff organization status, department membership, and audit history unchanged (APP-010).
 
 ## Evidence to capture
 
@@ -164,6 +179,9 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Query output showing the Prospective `staff_organization_statuses` row and related approval audit events.
 - Screenshot of submitted confirmation showing **Withdraw application**, plus query output showing `withdrawn`.
 - Screenshot of rejected and deferred application detail screens with reviewer metadata.
+- Screenshot of approved application detail showing **Rescind**, plus query output showing rescind changed the application to `withdrawn` and staff organization status to `inactive`.
+- Query output or screenshot showing default-team-only department membership inactivated after rescind.
+- Screenshot or test evidence showing rescind blocked after non-default team assignment.
 - Evidence that no membership/assignment/access side effects occurred after interest submission.
 - Evidence that no department/team assignment, membership, shift/training/credential, routing, export, or notification side effects occurred after approval.
 
@@ -181,5 +199,8 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - If Approve, Reject, Defer, Assign, or edit-interest actions appear on the review detail screen for users without the appropriate permission, stop and report scope leakage; approval/reject/defer belong to organizer/Staff Coordinator review, and assignment to M5.7/M5.8.
 - If an organizer or unrelated user can withdraw an application on behalf of an applicant, stop and report because APP-004 requires applicant-only withdrawal.
 - If reject/defer/withdraw creates staff access, Prospective organization status, department/team membership, assignment, shift/training/credential state, routing, exports, or notifications, stop and report scope leakage.
+- If an approved application can be rescinded after non-default team assignment, stop and report because APP-010 requires rescind to be blocked after team assignment.
+- If rescind before team assignment does not make the linked staff member Inactive, stop and report because APP-009 requires the person to become Inactive.
+- If rescind deletes membership history instead of preserving records through status/history, stop and report scope leakage because Meridian preserves operational history.
 - If department interest creates department membership, team membership, credentials, shifts, trainings, routing, or notifications, stop and report scope leakage (APP-011).
 - If returning staff department memberships are prefilled as department interest, stop and report (APP-011).
