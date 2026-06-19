@@ -8,7 +8,7 @@
 <body>
     <main>
         <h1>Application submitted</h1>
-        <p>Your application to {{ $event->name }} has been submitted and is awaiting review.</p>
+        <p>Your application to {{ $event->name }} has been received.</p>
     </main>
 </body>
 </html>

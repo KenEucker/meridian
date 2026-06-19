@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, and submit an application that is recorded in the Submitted state. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), department lead read-only visibility where implemented, and verification that department interest does not create assignment or access side effects. Approval, DNS auto-rejection, withdrawal, and department/team assignment are delivered by later Milestone 5 tasks.
+Verify that a public (or authenticated) applicant can open an event-specific application form, optionally record non-binding department interest, and submit an application that is recorded in the Submitted state or auto-rejected due to DNS when applicable. This script covers submission, organizer/Staff Coordinator review list/detail (including department interest display and filtering), department lead read-only visibility where implemented, DNS auto-rejection without applicant notice, and verification that department interest does not create assignment or access side effects. Approval, withdrawal, and department/team assignment are delivered by later Milestone 5 tasks.
 
 ## Requirements covered
 
@@ -12,10 +12,11 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - `APP-004`
 - `APP-005`
 - `APP-011`
+- `STAT-006`
 - Requirements sections 3.10 and 5.2
-- Data/API spec section 10.5 (`event_applications`, `event_application_department_interests`, `submit-application`)
-- UI implementation contract sections 9.3 and 12.1, 12.6, 12.10 (`public.apply`, `organizer.applications`, `organizer.application-detail`)
-- Meridian Alpha 1 tasks M5.1, M5.2, M5.3
+- Data/API spec sections 10.4 and 10.5 (`staff_organization_statuses`, `event_applications`, `event_application_department_interests`, `submit-application`)
+- UI implementation contract sections 8.2, 9.3 and 12.1, 12.6, 12.10 (`public.apply`, `organizer.applications`, `organizer.application-detail`)
+- Meridian Alpha 1 tasks M5.1, M5.2, M5.3, M5.4
 
 ## Environment
 
@@ -35,6 +36,7 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - At least one non-archived event exists with two or more non-archived departments assigned through `event_department_assignments` (the seeded "Idaho Decompression 2026" event under organization slug `idaho-burners` and event slug `idaho-decompression-2026` is sufficient if participating departments are configured). Note organization slug, event slug, and participating department names.
 - One event with **no** eligible participating departments (no active `event_department_assignments`, or all assigned departments archived) to confirm the department interest field is hidden.
 - One archived event (archive an event in Orchid) to confirm the closed state.
+- One staff record in the event organization with organization status `do_not_staff` and a known email address (the seeded Debbie DNS persona is sufficient when present).
 - Optional: one archived department or a department from another organization to use in invalid-interest validation tests.
 
 ## Steps
@@ -82,6 +84,16 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 22. After a successful submission with department interest, verify **none** of the following were created or changed solely because of department interest: department membership, team membership, department assignment, event staff assignment, shift signup eligibility, training completion, credential eligibility, application status other than `submitted`, or notifications/routing to department leads.
 23. Sign in as a department lead (without organizer/Staff Coordinator review permissions) when M5.3 read-only visibility is implemented. Confirm they can view read-only list/detail for applications that expressed interest in their department, including before org approval, and **cannot** view unrelated applications, approve, reject, defer, assign, or edit interest.
 
+### D. DNS auto-rejection (M5.4 / STAT-006)
+
+24. Submit the public application form using the known DNS email address for the same organization and any letter case variation of that email.
+25. Confirm the applicant sees only the generic submitted/received confirmation. The page must not say DNS, Do Not Staff, rejected, auto-rejected, blocked, or anything equivalent.
+26. Confirm one `event_applications` row exists for this event and email with status `auto_rejected_dns`, a normalized lowercased email, `submitted_at` set, `reviewed_at` set, no `reviewed_by_user_id`, no `staff_id`, and a decision reason suitable for organizer review.
+27. If department interest was selected on the DNS submission, confirm the interest remains a non-binding record only and creates no department membership, team membership, assignment, access, routing, or notification side effects.
+28. As an organizer or Staff Coordinator with application review permission, open the application detail and confirm the canonical status label is **Auto-rejected due to DNS**.
+29. As a department lead without organizer/Staff Coordinator review permission, confirm the DNS auto-rejected application is not visible through interest-only read-only application visibility.
+30. Submit the same DNS email to an event in a different organization where that staff email does not have `do_not_staff` status; confirm it follows the normal non-DNS submission path for that organization.
+
 ## Expected results
 
 - The public form is reachable without authentication and is scoped to one event (APP-001, APP-002).
@@ -97,6 +109,8 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Organizers with `platform.applications` permission can list and inspect applications with canonical status labels, organization context, and department interest display/filter (APP-003, APP-005, APP-011).
 - Department interest does not create assignment, membership, access, routing, or notification side effects (APP-011).
 - Department leads see only read-only interested applications when implemented; they gain no review authority from interest alone (APP-011).
+- DNS email applications are auto-rejected only for the matching organization and do not automatically notify the applicant (STAT-006).
+- DNS auto-rejected applications remain visible to organizers/Staff Coordinators for review history and are not exposed to department leads through interest-only visibility.
 
 ## Evidence to capture
 
@@ -108,13 +122,17 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 - Screenshot of the application review detail screen with department interest labeled as interest, not assignment.
 - Screenshot of validation errors for invalid department interest and the duplicate-submission message.
 - Screenshot of the closed state for the archived event.
+- Screenshot of the generic confirmation after DNS email submission, plus query output showing `auto_rejected_dns`.
+- Screenshot of organizer detail for the DNS auto-rejected application.
 - Evidence that no membership/assignment/access side effects occurred after interest submission.
 
 ## Failure notes
 
 - If **team selection** appears on the public form, stop and report scope leakage; team assignment belongs to M5.8.
 - If department interest is labeled or behaves like department **assignment** or **application to a department**, stop and report scope leakage (APP-002, APP-011).
-- If submission produces a status other than `submitted` (for example, approved or auto-rejected), stop and report scope leakage; review decisions and DNS handling belong to M5.4 through M5.6.
+- If a non-DNS submission produces a status other than `submitted`, stop and report scope leakage; review decisions belong to M5.5/M5.6.
+- If a DNS email submission tells the applicant that they are DNS, Do Not Staff, rejected, auto-rejected, or blocked, stop and report because STAT-006 requires no automatic applicant notice.
+- If a DNS auto-rejected application is visible to a department lead only because department interest was selected, stop and report because DNS-sensitive status should remain with organizer/Staff Coordinator review.
 - If the archived event still accepts submissions, stop and report because applications must not be created for events that are not accepting applications.
 - If Approve, Reject, Defer, Assign, or edit-interest actions appear on the review detail screen for users without the appropriate later-task permissions, stop and report scope leakage; decision actions belong to M5.5/M5.6 and assignment to M5.7/M5.8.
 - If department interest creates department membership, team membership, credentials, shifts, trainings, routing, or notifications, stop and report scope leakage (APP-011).
