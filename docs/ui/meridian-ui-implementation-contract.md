@@ -782,8 +782,8 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `organizer.dashboard` | `organizer.dashboard` | Org/event readiness dashboard | Organizer |
-| `organizer.applications` | `organizer.applications.index` | Review applications | Organizer |
-| `organizer.application-detail` | `organizer.applications.show` | Application review detail | Organizer |
+| `organizer.applications` | `organizer.applications.index` | Review applications | Organizer, Staff Coordinator |
+| `organizer.application-detail` | `organizer.applications.show` | Application review detail | Organizer, Staff Coordinator |
 | `organizer.staff` | `organizer.staff.index` | Org staff administration | Organizer |
 | `organizer.events` | `organizer.events.index` | Event administration | Organizer |
 | `organizer.departments` | `organizer.departments.index` | Department administration | Organizer |
@@ -832,6 +832,56 @@ Incident create/edit routes require active server connection in Alpha 1.
 | `orchid.document-acknowledgments` | Orchid screen | Acknowledgment review | Authorized maintainer/god mode |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
 | `orchid.node-config` | Orchid screen | Node configuration and source display | God mode |
+
+---
+
+## 12.10 Event Application Screen Contract
+
+### 12.10.1 `public.apply`
+
+The event application form is a fixed, non-configurable form. It is not part of a form builder.
+
+Required fields:
+
+- event context (read-only)
+- applicant legal name (unless authenticated identity already supplies it)
+- applicant email (unless authenticated identity already supplies it)
+
+Optional fixed field:
+
+- **Department interest** — multi-select checklist of eligible event-participating departments.
+
+Department interest UI rules:
+
+- label and helper text must make clear the field is optional and non-binding (interest, not assignment or membership)
+- helper text explains that leaving all options unchecked means no preference / open to any
+- use a multi-select or checklist-style control consistent with existing form components
+- eligible options are non-archived departments in the event organization with an active `event_department_assignments` (or equivalent) row for this event
+- hide the entire department interest field when no eligible participating departments exist; submission proceeds normally
+- do not show team selection or team interest
+- do not show a “No preference” pseudo-option
+- do not show a maximum-count validation message
+- do not prefill from the applicant’s existing department memberships
+- applicants cannot edit department interest after submit in Alpha 1
+
+Available to public and authenticated applicants.
+
+### 12.10.2 `organizer.applications` and `organizer.application-detail`
+
+Organizers and Staff Coordinators with application review permission:
+
+- display submitted department interest when present, labeled as **Department interest** (not assignment)
+- when no interests were recorded, show a neutral empty state such as “No department preference” or “Open to any”
+- support filtering the application list by department interest in Alpha 1
+- do not provide controls to edit department interest during review in Alpha 1
+- do not include department interest in Alpha 1 exports
+
+Department lead read-only visibility:
+
+- department leads may view read-only application list/detail for applications that expressed interest in a department they lead, including before organization approval and before department assignment
+- read-only department lead views must not expose Approve, Reject, Defer, Assign, or edit-interest actions unless the user also has organizer or Staff Coordinator review permissions
+- department lead visibility must not grant access to unrelated applications based only on department lead status
+- department lead visibility must not trigger routing, notifications, or assignment side effects
 
 ---
 
@@ -1060,6 +1110,7 @@ Use these UI states consistently:
 - Do not interrupt routine field work with sync noise.
 - Incident creation and editing are online-only in Alpha 1.
 - Policy/procedure acknowledgments are online-only in Alpha 1.
+- Event application submission, including optional department interest, is online-only in Alpha 1.
 - Staff profile picture upload, replace, and remove are online-only in Alpha 1.
 - Staff profile picture blobs sync lazily as accessed and should show a placeholder or pending image state while unavailable.
 - Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show are Alpha 1 offline writes.

@@ -199,13 +199,14 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 |---|---|---|---|
 | M5.1 Public application form | Add event application form and submitted state. | APP-001 through APP-004 | Feature/UI tests |
 | M5.2 Application review list | Add organizer application review list/detail. | APP-003, APP-005 | Feature tests |
-| M5.3 DNS auto-rejection | Reject DNS email applications without automatic notice. | APP-003; requirements 3.5 | Domain tests |
-| M5.4 Approve application | Approval creates Prospective staff organization status. | APP-005, APP-006 | Feature/domain tests |
-| M5.5 Reject/defer/withdraw | Implement remaining application status transitions. | APP-003, APP-004 | Status tests |
-| M5.6 Assign to department | Organizer/lead assigns approved staff to department. | APP-007; requirements 5.3 | Policy/domain tests |
-| M5.7 Assign to team | Department/team lead assigns staff to team. | Requirements 5.4; TEAM-008, TEAM-009 | Policy/domain tests |
-| M5.8 Rescind before team assignment | Allow rescind before team assignment and block after team assignment. | APP-008 through APP-010 | Domain tests |
-| M5.9 Onboarding QA script | Add `QA-APP-01-event-application-approval.md`. | QA README; development process | Human QA script validation |
+| M5.3 Department interest | Add optional department interest on application submit and review surfaces. | APP-011; requirements 3.10, 5.2; data/API 10.5; UI contract 12.10 | Feature/domain/UI tests: submit with no interest; submit with multiple unordered interests; reject invalid/archived/non-event/non-org departments; hide field when no eligible departments; organizer/Staff Coordinator display and list filter; department lead read-only visibility for interested applications; verify no membership/assignment/access side effects |
+| M5.4 DNS auto-rejection | Reject DNS email applications without automatic notice. | APP-003; requirements 3.5 | Domain tests |
+| M5.5 Approve application | Approval creates Prospective staff organization status. | APP-005, APP-006 | Feature/domain tests |
+| M5.6 Reject/defer/withdraw | Implement remaining application status transitions. | APP-003, APP-004 | Status tests |
+| M5.7 Assign to department | Organizer/lead assigns approved staff to department. | APP-007; requirements 5.3 | Policy/domain tests |
+| M5.8 Assign to team | Department/team lead assigns staff to team. | Requirements 5.4; TEAM-008, TEAM-009 | Policy/domain tests |
+| M5.9 Rescind before team assignment | Allow rescind before team assignment and block after team assignment. | APP-008 through APP-010 | Domain tests |
+| M5.10 Onboarding QA script | Add `QA-APP-01-event-application-approval.md`. | QA README; development process | Human QA script validation |
 
 **QA gate:** A human can apply, approve, assign department/team, and verify rescind rules in order.
 
