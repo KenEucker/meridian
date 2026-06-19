@@ -243,7 +243,8 @@ Check that:
 - autosave status is perceivable without interrupting note entry;
 - plain text incident notes remain readable and editable;
 - Field Report original body is not editable after submission;
-- Field Report corrections, where allowed, are append-only and audit-aware.
+- Field Report corrections, where allowed, are append-only and audit-aware;
+- Name References are distinguishable from tags, ordinary links, and user/profile mentions without relying only on color.
 
 ---
 

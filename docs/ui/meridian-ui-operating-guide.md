@@ -398,6 +398,8 @@ The command palette should include actions and navigation.
 
 IC roles may also see records, such as incidents, field reports, or other IC-visible records.
 
+For permitted IMS records, search may match Name Reference text with or without the `@` operator where supported by the search implementation. Clicking a Name Reference chip runs normal search for the reference text without the `@` prefix and must not open a dedicated profile/detail page.
+
 Policy/procedure visible documents may appear as navigation results by title for users with visibility. Full-text command palette search inside policy/procedure bodies or fragments is not part of Alpha 1.
 
 Command palette results should be grouped by type.
@@ -597,6 +599,8 @@ Field Report and Incident forms should use the same general form language, while
 Incident notes are edited as plain text.
 
 Markdown formatting may be supported while editing, but formatting should not render until after submission.
+
+Incident notes and Field Report text may render Name References as visually distinct inline `@name` markers after submission. Name References must not visually imply Meridian user mentions, notifications, volunteer profile links, or identity records.
 
 ### 14.6 Policy/procedure forms
 
@@ -845,6 +849,7 @@ IMS should favor:
 - timelines;
 - tables;
 - plain text notes;
+- metadata chips for tags and Name References;
 - restrained status indicators;
 - clear audit access.
 
@@ -861,6 +866,8 @@ Every change must autosave.
 Incident timelines should focus on meaningful operational entries.
 
 Routine field-change audit entries should be hidden unless expanded.
+
+Incident-level Name Reference chips should appear near existing incident tags or metadata when extracted from incident notes or attached Field Reports. They should be visually distinct from `#tags`, and clicking one should run normal permission-filtered search.
 
 ### 19.5 Speed of actions
 

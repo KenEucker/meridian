@@ -125,6 +125,7 @@ Recommended structure:
 - priority label;
 - context summary;
 - primary actions in `ActionBar`;
+- tag and Name Reference metadata where present;
 - current notes and operational details;
 - related field reports;
 - meaningful timeline entries;
@@ -168,7 +169,24 @@ Field Report submission forms should:
 - avoid normal in-place edit behavior after submission;
 - allow authors to view their own submitted Field Reports.
 
+Field Report entry remains plain text. It must not provide Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report text may highlight Name References where the renderer supports it.
+
 Corrections must be append-only, audit-aware, or represented as follow-up notes where allowed. IC users may attach Field Reports to incidents when permitted. Attaching or unlinking a Field Report is audit-aware and should appear in the incident timeline.
+
+## 9.1 Name References
+
+Name References are inline `@name` markers in Incident notes and Field Reports.
+
+Rendered Name References should:
+
+- remain readable as the original typed text;
+- be visually distinct from `#tags`;
+- avoid styling that suggests Meridian user mentions, notifications, volunteer profile links, or identity records;
+- use accessible names that identify them as Name References when the distinction is not visually obvious.
+
+Incident-level Name Reference chips should appear near existing tags or metadata where appropriate. Chips include references extracted from incident notes and attached Field Reports.
+
+Clicking a Name Reference chip runs normal permission-filtered search for the reference text without the `@` prefix. It must not open a Name Reference profile, detail page, profile drawer, alias merge UI, or management screen.
 
 ---
 
@@ -248,6 +266,8 @@ Command palette, search, dashboard widgets, and direct routes must all respect I
 
 IC access is granted through the event's configured IC department and team-granted IC authority such as IC Viewer, IC Operator, and IC Lead. Department Lead or Organizer access alone is insufficient.
 
+Name References inherit source-record visibility. Search results, chips, and rendered highlights must not reveal incidents or Field Reports unavailable to the user.
+
 Restricted access behavior:
 
 - default staff receive simple restricted-access messaging;
@@ -272,6 +292,8 @@ Incident autosave failures should be visible without destroying the user's curre
 
 Incidents require server connection for creation and editing in Alpha 1. Field Report creation may work offline and appears submitted immediately with queued sync state when applicable.
 
+Name References remain text-first and local-first friendly. Source text syncs through the existing Incident note and Field Report sync behavior, and any local/server Name Reference index must remain rebuildable from source text without becoming a separate permission source.
+
 ---
 
 ## 15. Accessibility
@@ -287,7 +309,8 @@ IMS-specific checks:
 - autosave state is perceivable;
 - dark mode preserves serious-state readability;
 - Field Report original body is viewable but not editable after submission;
-- Field Report append/correction affordances are audit-aware.
+- Field Report append/correction affordances are audit-aware;
+- Name References are distinguishable from tags, ordinary links, and user/profile mentions.
 
 ---
 
@@ -301,6 +324,7 @@ Review IMS UI changes for:
 - role and permission behavior;
 - autosave behavior on incident create/edit;
 - Field Report submit/finalize behavior;
+- Name Reference rendering, chip, search, and non-identity behavior;
 - destructive confirmations;
 - audit and history placement;
 - offline and sync behavior;

@@ -7,6 +7,7 @@
 **Architecture:** Intentionally out of scope for this document
 **Additive Update:** Policies and Procedures requirements added in v0.2.
 **Additive Update:** Policies and Procedures discovery decisions incorporated in v0.3.
+**Additive Update:** Name References requirements added for IMS notes and Field Reports.
 
 ---
 
@@ -952,6 +953,10 @@ When a field report is appended to, only the added content is copied into associ
 
 When a field report is removed from an incident, the incident history should show that relationship as stricken.
 
+Field Report text may contain Name References.
+
+Name References in Field Reports are parsed after submission for permitted search, display, and rendering support. They remain part of the original report text and do not give the author any additional access to incidents, reports, or search results.
+
 ---
 
 ## 3.21 Incident
@@ -973,6 +978,7 @@ Incident fields include:
 - linked incidents
 - attachments
 - tags
+- Name References derived from notes and attached field reports
 - notes
 
 Incidents are not destroyed.
@@ -992,6 +998,81 @@ Incident attachments may be stricken but not deleted.
 Incidents may be printed/exported to PDF by Incident Command Department leads.
 
 Incidents are not part of general spreadsheet exports for MVP.
+
+Incident views may display Name Reference chips near existing incident tags when Name References are present in incident notes or attached Field Reports.
+
+Clicking a Name Reference runs a normal permission-filtered search for the reference text without the `@` prefix. It does not open a Name Reference profile, detail page, volunteer profile, alias record, or canonical person/entity record.
+
+---
+
+## 3.21A Name References
+
+Name References are lightweight inline `@name` markers in Incident notes and Field Reports.
+
+They are syntax sugar for operational text. They are intended to make names, handles, camps, vehicles, or other informal identifiers easier to visually scan and search across permitted IMS text.
+
+Examples:
+
+```text
+@ranger-bucket
+@bucket
+@blue-hat
+@blue_hat
+@camp-moonbeam
+@white-truck
+```
+
+A Name Reference starts with `@` and continues through letters, numbers, hyphens, and underscores.
+
+Supported characters after `@` are:
+
+```text
+A-Z
+a-z
+0-9
+-
+_
+```
+
+Whitespace or punctuation ends the Name Reference.
+
+Examples:
+
+```text
+@bucket.        -> bucket
+@bucket,        -> bucket
+@bucket)        -> bucket
+@blue-hat       -> blue-hat
+@blue_hat       -> blue_hat
+@ranger bucket  -> ranger
+```
+
+Multi-word references should use hyphens or underscores. Bracket syntax such as `@[Ranger Bucket]` is not supported for MVP.
+
+Name Reference matching and search are case-insensitive. The original typed casing may be preserved in rendered source text, but derived index/search behavior should normalize case.
+
+The source of truth is always the original Incident note or Field Report text.
+
+Meridian may maintain a rebuildable derived index of extracted Name Reference tokens for search performance, incident summary chips, rendering/highlighting support, and offline/local-first usability where appropriate.
+
+The derived index is a search/display artifact, not a person, identity, alias, entity, suspect, volunteer profile, or canonical record.
+
+Name References are supported for MVP only in:
+
+- Incident notes
+- Field Reports
+
+Name References are not supported for MVP in:
+
+- Incident titles
+- structured incident detail fields
+- volunteer profiles
+- shift records
+- training records
+- policy/procedure documents
+- general comments outside IMS notes or Field Reports
+
+Name References must not create notifications, mention Meridian users, link to volunteer profiles, create autocomplete suggestions, create context menus, or grant access to related records.
 
 ---
 
@@ -1557,11 +1638,12 @@ If the staff member is not in the relevant department/team, a Department Lead mu
 
 1. An authorized staff member creates a field report.
 2. Field report records event, author, and report text.
-3. Field report is visible to author and IC department.
-4. Field report may exist independently.
-5. Author may append additional entries.
-6. Field report cannot be edited or stricken.
-7. IC department may attach field report to one or more incidents.
+3. Name References in report text are parsed after submission as a derived search/display artifact.
+4. Field report is visible to author and IC department.
+5. Field report may exist independently.
+6. Author may append additional entries.
+7. Field report cannot be edited or stricken.
+8. IC department may attach field report to one or more incidents.
 
 ---
 
@@ -1569,7 +1651,7 @@ If the staff member is not in the relevant department/team, a Department Lead mu
 
 1. IC department creates incident.
 2. Incident receives IMS number.
-3. Incident state, summary, type, location, tags, involved staff, notes, and attachments are managed.
+3. Incident state, summary, type, location, tags, Name References, involved staff, notes, and attachments are managed.
 4. IC department attaches field reports where relevant.
 5. Field report content is copied into incident notes.
 6. Later field report additions are copied into associated incidents.
@@ -1836,12 +1918,14 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - not stricken
 - attach to incidents
 - copied into incident notes
+- Name References parsed from report text after submission
 
 ### Incidents
 
 - incident list
 - incident editor
 - configurable states/types/tags
+- Name Reference chips derived from incident notes and attached field reports
 - IMS number
 - incident notes/history
 - linked incidents
@@ -1903,6 +1987,7 @@ The following are not required for October MVP:
 - policy/procedure acknowledgments as direct shift signup gates
 - policy/procedure acknowledgments as direct credential eligibility gates
 - policy/procedure acknowledgments outside signup or training for MVP
+- Name Reference autocomplete, notifications, alias merging, profile/detail pages, volunteer profile links, user mentions, canonical person/entity records, and management screens
 - team-scoped policy/procedure acknowledgments for MVP
 - nested fragments
 - rich policy/procedure formatting beyond Markdown for MVP
@@ -2604,6 +2689,66 @@ IC department leads may print incidents to PDF.
 ### INC-016
 
 Incidents shall not be included in general spreadsheet exports for MVP.
+
+---
+
+## 7.12A Name Reference Requirements
+
+### NR-001
+
+Name References shall be lightweight inline `@name` markers in Incident notes and Field Reports.
+
+### NR-002
+
+Name References shall be stored in the original Incident note or Field Report text.
+
+### NR-003
+
+Meridian may maintain a rebuildable derived index of extracted Name Reference tokens for search, display, rendering, or offline/local-first support.
+
+### NR-004
+
+The derived Name Reference index shall not be treated as a canonical person, alias, identity, entity, suspect, volunteer profile, or independent source of truth.
+
+### NR-005
+
+A Name Reference shall start with `@` and continue through letters, numbers, hyphens, and underscores until whitespace or punctuation.
+
+### NR-006
+
+Name Reference matching and search shall be case-insensitive.
+
+### NR-007
+
+Field Reports shall be parsed for Name References after submission.
+
+### NR-008
+
+Incident-level Name Reference chips shall include references extracted from the incident's own notes and Field Reports attached to the incident.
+
+### NR-009
+
+Name Reference chips shall be visually distinct from `#tags` and shall appear near existing incident tag/metadata areas where appropriate.
+
+### NR-010
+
+Clicking a Name Reference shall run normal permission-filtered search for the reference text without the `@` prefix.
+
+### NR-011
+
+Name References shall not create notifications, Meridian user mentions, volunteer profile links, autocomplete, context menus, alias merge behavior, canonical identity/entity records, or dedicated detail pages.
+
+### NR-012
+
+Name References shall inherit visibility from their source Incident note or Field Report and shall not grant access to additional incidents, reports, or search results.
+
+### NR-013
+
+Name Reference click/search behavior shall not require special Name Reference-specific audit events beyond existing read/view/search audit behavior where applicable.
+
+### NR-014
+
+Name Reference source text shall sync as part of the existing Incident note and Field Report sync behavior; any local or server-side derived index shall remain rebuildable from source text.
 
 ---
 

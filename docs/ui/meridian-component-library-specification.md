@@ -131,6 +131,8 @@ Results must respect organization, event, department, role, permissions, and kio
 
 IMS command results must not appear unless the user has the required IC role for the event's configured IC department.
 
+Name Reference chip clicks should invoke normal permission-filtered search for the reference text without the `@` prefix. `CommandPalette` results must not expose unavailable IMS records or route to a dedicated Name Reference profile/detail page.
+
 ---
 
 ## 5. Identity and Status Components
@@ -176,6 +178,8 @@ Severity indicators must distinguish:
 IMS priority labels must not be confused with normal statuses.
 
 Use `SeverityIndicator` for dashboard attention or IMS priority only. Use `StatusPill` for workflow/status values.
+
+Metadata chips for `#tags` and Name References are not status or severity components. Name Reference chips must be visually distinct from tags and must not imply user mentions, notifications, or volunteer profile links.
 
 ---
 

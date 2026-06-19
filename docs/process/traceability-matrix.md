@@ -64,3 +64,5 @@ This matrix links Meridian requirements and technical specification sections to 
 | FR-007 | Not started |  |  | Pending product tests |  | Field reports are immutable after submission. |
 | FR-012 | Not started |  |  | Pending product tests |  | Linked field report content is copied into incident notes. |
 | INC-014 | Not started |  |  | Pending product tests |  | Incident changes are preserved in history. |
+| NR-001 through NR-007 | Not started | [M9.6A](meridian-alpha-1-development-plan.md) |  | Pending parser/search/policy tests | Pending Field Report QA update | Name References are text-first `@name` markers in Field Report text, parsed after submission into a rebuildable derived index without identity/profile behavior. |
+| NR-008 through NR-014 | Not started | [M11.6A](meridian-alpha-1-development-plan.md) |  | Pending parser/search/UI/policy tests | Pending Incident QA update | Incident Name Reference chips derive from incident notes and attached Field Reports, click through to normal permission-filtered search, and do not broaden access or create a detail/profile surface. |

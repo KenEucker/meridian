@@ -1643,7 +1643,8 @@ Acceptance evidence:
 - author can append;
 - only added append content syncs to associated incidents later;
 - IC roles can view all event field reports;
-- non-IC department leads cannot view other users' field reports by default.
+- non-IC department leads cannot view other users' field reports by default;
+- Name References in Field Report text are preserved as source text, parsed into a rebuildable derived index, and do not create autocomplete, suggestions, notifications, or additional visibility.
 
 ### 17.9 Attendance and Shift Lead Board milestone
 
@@ -1694,7 +1695,8 @@ Acceptance evidence:
 - `ic_viewer` cannot modify incidents;
 - `ic_operator` can modify but cannot download field report photos;
 - `ic_lead` can print/export PDF and download permitted photos;
-- incident changes preserve history.
+- incident changes preserve history;
+- Name Reference chips derive from incident notes and attached Field Reports, remain visually distinct from tags, and click through to normal permission-filtered search without a profile/detail page.
 
 ### 17.11 Node sync milestone
 
