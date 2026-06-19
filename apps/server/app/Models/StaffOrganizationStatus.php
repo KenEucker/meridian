@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\StaffOrganizationStatusFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,7 +31,11 @@ class StaffOrganizationStatus extends Model
     public const STATUS_DO_NOT_STAFF = 'do_not_staff';
 
     /** @use HasFactory<StaffOrganizationStatusFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>

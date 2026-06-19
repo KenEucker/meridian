@@ -48,9 +48,9 @@ class EffectiveRoleResolver
                 return new EffectiveRole(
                     roleCode: $grant->permissionRole->code,
                     roleName: $roleName,
-                    teamId: (int) $grant->team_id,
+                    teamId: (string) $grant->team_id,
                     teamName: $teamName,
-                    teamGrantId: (int) $grant->id,
+                    teamGrantId: (string) $grant->id,
                     eventId: $grant->event_id,
                     reason: "You have the {$roleName} role because you are a member of the {$teamName} team.",
                 );

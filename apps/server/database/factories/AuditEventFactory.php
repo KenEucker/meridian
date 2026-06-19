@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\AuditEvent;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<AuditEvent>
@@ -32,7 +33,7 @@ class AuditEventFactory extends Factory
                 'incident.status.changed',
             ]),
             'entity_type' => 'audit.test_entity',
-            'entity_id' => (string) $this->faker->numberBetween(1, 1000),
+            'entity_id' => (string) Str::uuid(),
             'before_json' => null,
             'after_json' => null,
             'reason' => null,

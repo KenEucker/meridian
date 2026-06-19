@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\PermissionRoleFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -21,7 +22,11 @@ class PermissionRole extends Model
     public const SCOPE_TEAM = 'team';
 
     /** @use HasFactory<PermissionRoleFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -49,6 +54,7 @@ class PermissionRole extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'role_permissions')
+            ->using(RolePermission::class)
             ->withPivot('created_at');
     }
 

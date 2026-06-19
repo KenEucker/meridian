@@ -17,27 +17,25 @@ return new class extends Migration
      * Foreign keys use restrict-on-delete so audit history is preserved and
      * referenced actors/scopes cannot be silently destroyed.
      *
-     * NOTE: `organization_id`, `department_id`, `actor_user_id`, and
-     * `actor_node_id` remain bigint here because their referenced tables still
-     * use bigint primary keys. Those columns, along with the polymorphic
-     * `entity_id`, become UUID once the canonical-key remediation
-     * (docs/issues/005-uuid-primary-key-remediation.md) migrates the referenced
-     * tables. `entity_id` stays a string until then so audit rows can reference
-     * today's mixed bigint/UUID entities.
+     * All foreign-key columns and the polymorphic `entity_id` are UUIDs: the
+     * canonical-key remediation (docs/issues/005-uuid-primary-key-remediation.md)
+     * migrated every referenced table to UUID primary keys, so audit references
+     * are uniform UUIDs per the identifier policy (data/API section 4.1,
+     * technical spec section 6.2).
      */
     public function up(): void
     {
         Schema::create('audit_events', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignId('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
+            $table->foreignUuid('organization_id')->nullable()->constrained('organizations')->restrictOnDelete();
             $table->foreignUuid('event_id')->nullable()->constrained('events')->restrictOnDelete();
-            $table->foreignId('department_id')->nullable()->constrained('departments')->restrictOnDelete();
-            $table->foreignId('actor_user_id')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignUuid('department_id')->nullable()->constrained('departments')->restrictOnDelete();
+            $table->foreignUuid('actor_user_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->foreignUuid('actor_device_id')->nullable()->constrained('devices')->restrictOnDelete();
-            $table->foreignId('actor_node_id')->nullable()->constrained('nodes')->restrictOnDelete();
+            $table->foreignUuid('actor_node_id')->nullable()->constrained('nodes')->restrictOnDelete();
             $table->string('action');
             $table->string('entity_type');
-            $table->string('entity_id');
+            $table->uuid('entity_id');
             $table->json('before_json')->nullable();
             $table->json('after_json')->nullable();
             $table->text('reason')->nullable();

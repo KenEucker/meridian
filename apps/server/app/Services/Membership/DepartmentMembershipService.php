@@ -36,7 +36,7 @@ class DepartmentMembershipService
         }
 
         $teams->each(function (Team $team) use ($department): void {
-            if ((int) $team->department_id !== (int) $department->id) {
+            if ((string) $team->department_id !== (string) $department->id) {
                 throw new InvalidArgumentException('All team memberships must belong to the assigned department.');
             }
         });

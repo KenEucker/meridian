@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Types\Like;
@@ -11,6 +12,12 @@ use Orchid\Platform\Models\User as Authenticatable;
 
 class User extends Authenticatable
 {
+    use HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -89,7 +96,7 @@ class User extends Authenticatable
 
     public function staffProfiles(): BelongsToMany
     {
-        return $this->belongsToMany(Staff::class, 'staff_user')->withTimestamps();
+        return $this->belongsToMany(Staff::class, 'staff_user')->using(StaffUser::class)->withTimestamps();
     }
 
     public function staffOrganizationStatusChanges(): HasMany

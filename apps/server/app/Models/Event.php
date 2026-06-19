@@ -84,7 +84,6 @@ class Event extends Model
         return [
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
-            'ic_department_id' => 'integer',
             'active_event_window_starts_at' => 'datetime',
             'active_event_window_ends_at' => 'datetime',
             'archived_at' => 'datetime',

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\TeamMembershipFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,11 @@ use RuntimeException;
 class TeamMembership extends Model
 {
     /** @use HasFactory<TeamMembershipFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -91,7 +96,7 @@ class TeamMembership extends Model
             ->whereKey($this->department_membership_id)
             ->value('department_id');
 
-        if ($teamDepartmentId === null || $membershipDepartmentId === null || (int) $teamDepartmentId !== (int) $membershipDepartmentId) {
+        if ($teamDepartmentId === null || $membershipDepartmentId === null || (string) $teamDepartmentId !== (string) $membershipDepartmentId) {
             throw new RuntimeException('Team membership must use a team from the same department as the department membership.');
         }
     }

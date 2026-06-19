@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 return new class extends Migration
 {
@@ -13,8 +14,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('teams', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('department_id')->constrained()->restrictOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('department_id')->constrained()->restrictOnDelete();
             $table->string('name');
             $table->string('code');
             $table->text('description')->nullable();
@@ -31,7 +32,10 @@ return new class extends Migration
             ->each(function (object $department): void {
                 $now = now();
 
-                $defaultTeamId = DB::table('teams')->insertGetId([
+                $defaultTeamId = (string) Str::uuid();
+
+                DB::table('teams')->insert([
+                    'id' => $defaultTeamId,
                     'department_id' => $department->id,
                     'name' => 'Default',
                     'code' => 'DEFAULT',

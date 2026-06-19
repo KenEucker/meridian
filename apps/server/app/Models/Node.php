@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\NodeFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,7 +12,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Node extends Model
 {
     /** @use HasFactory<NodeFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     public const ROLE_DEVELOPMENT = 'development';
 

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\NodeConfigValueFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class NodeConfigValue extends Model
 {
     /** @use HasFactory<NodeConfigValueFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     public const SOURCE_FILE = 'file';
 

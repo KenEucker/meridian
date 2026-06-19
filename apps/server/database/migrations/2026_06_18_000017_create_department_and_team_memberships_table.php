@@ -12,9 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('department_memberships', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('department_id')->constrained()->restrictOnDelete();
-            $table->foreignId('staff_id')->constrained('staff')->restrictOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('department_id')->constrained()->restrictOnDelete();
+            $table->foreignUuid('staff_id')->constrained('staff')->restrictOnDelete();
             $table->string('status')->default('active')->index();
             $table->text('status_reason')->nullable();
             $table->timestamps();
@@ -26,10 +26,10 @@ return new class extends Migration
         });
 
         Schema::create('team_memberships', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('team_id')->constrained()->restrictOnDelete();
-            $table->foreignId('staff_id')->constrained('staff')->restrictOnDelete();
-            $table->foreignId('department_membership_id')->constrained()->restrictOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('team_id')->constrained()->restrictOnDelete();
+            $table->foreignUuid('staff_id')->constrained('staff')->restrictOnDelete();
+            $table->foreignUuid('department_membership_id')->constrained()->restrictOnDelete();
             $table->string('membership_role')->nullable();
             $table->timestamps();
             $table->timestamp('archived_at')->nullable()->index();

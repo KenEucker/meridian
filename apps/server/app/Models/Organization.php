@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,7 +22,11 @@ class Organization extends Model
     use Filterable;
 
     /** @use HasFactory<OrganizationFactory> */
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>
@@ -67,9 +72,6 @@ class Organization extends Model
     protected function casts(): array
     {
         return [
-            'organizers_department_id' => 'integer',
-            'default_ic_department_id' => 'integer',
-            'default_credit_policy_id' => 'integer',
             'active_inactive_threshold_years' => 'integer',
             'prospective_inactive_threshold_years' => 'integer',
             'calendar_year_start_month' => 'integer',
