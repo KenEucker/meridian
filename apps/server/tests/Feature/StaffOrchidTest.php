@@ -136,7 +136,7 @@ class StaffOrchidTest extends TestCase
         ]);
     }
 
-    public function test_orchid_staff_save_validates_required_profile_fields(): void
+    public function test_orchid_staff_save_requires_only_legal_name_and_email(): void
     {
         $response = $this->screen('platform.staff.create')
             ->actingAs($this->staffAdmin())
@@ -150,15 +150,46 @@ class StaffOrchidTest extends TestCase
 
         $response->assertSessionHasErrors([
             'staff.legal_name',
+            'staff.email',
+        ]);
+
+        $response->assertSessionDoesntHaveErrors([
             'staff.preferred_name',
             'staff.handle',
-            'staff.email',
             'staff.phone',
             'staff.city',
             'staff.state',
             'staff.date_of_birth',
             'staff.emergency_contact_name',
             'staff.emergency_contact_phone',
+        ]);
+    }
+
+    public function test_orchid_staff_save_allows_sparse_profile(): void
+    {
+        $response = $this->screen('platform.staff.create')
+            ->actingAs($this->staffAdmin())
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'staff' => [
+                    'legal_name' => 'Sparse Staff',
+                    'email' => 'sparse@example.org',
+                ],
+            ]);
+
+        $response->assertRedirect(route('platform.staff'));
+
+        $this->assertDatabaseHas('staff', [
+            'legal_name' => 'Sparse Staff',
+            'email' => 'sparse@example.org',
+            'preferred_name' => null,
+            'handle' => null,
+            'phone' => null,
+            'city' => null,
+            'state' => null,
+            'date_of_birth' => null,
+            'emergency_contact_name' => null,
+            'emergency_contact_phone' => null,
         ]);
     }
 

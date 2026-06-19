@@ -27,14 +27,12 @@ class StaffEditLayout extends Rows
             Input::make('staff.preferred_name')
                 ->type('text')
                 ->max(255)
-                ->required()
                 ->title(__('Preferred name'))
                 ->placeholder(__('Jordan')),
 
             Input::make('staff.handle')
                 ->type('text')
                 ->max(255)
-                ->required()
                 ->title(__('Handle'))
                 ->placeholder(__('Signal')),
 
@@ -53,40 +51,34 @@ class StaffEditLayout extends Rows
             Input::make('staff.phone')
                 ->type('tel')
                 ->max(255)
-                ->required()
                 ->title(__('Phone'))
                 ->placeholder(__('555-0100')),
 
             Input::make('staff.city')
                 ->type('text')
                 ->max(255)
-                ->required()
                 ->title(__('City'))
                 ->placeholder(__('Boise')),
 
             Input::make('staff.state')
                 ->type('text')
                 ->max(255)
-                ->required()
                 ->title(__('State'))
                 ->placeholder(__('ID')),
 
             Input::make('staff.date_of_birth')
                 ->type('date')
-                ->required()
                 ->title(__('Date of birth')),
 
             Input::make('staff.emergency_contact_name')
                 ->type('text')
                 ->max(255)
-                ->required()
                 ->title(__('Emergency contact name'))
                 ->placeholder(__('Casey Reed')),
 
             Input::make('staff.emergency_contact_phone')
                 ->type('tel')
                 ->max(255)
-                ->required()
                 ->title(__('Emergency contact phone'))
                 ->placeholder(__('555-0101')),
 

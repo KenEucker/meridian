@@ -817,6 +817,7 @@ Rules:
 - `formerly_known_as` is a simple text field for Alpha 1.
 - Emergency contact data is server-only except on trusted devices for users authorized to access it.
 - Staff profile pictures are optional and store only the current picture.
+- Staff profile records require legal name and email at creation. Preferred name, handle, phone, city/state, date of birth, and emergency contact fields are nullable so records can be completed later.
 - Staff may upload, replace, or remove their own profile picture only after becoming `active` in at least one organization.
 - Replacing or removing a profile picture does not preserve previous image blobs for Alpha 1.
 - Staff profile picture uploads support JPEG, PNG, and WebP.

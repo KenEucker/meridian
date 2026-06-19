@@ -338,7 +338,7 @@ A staff member has:
 - credits earned
 - credential eligibility history
 
-Required staff profile fields include:
+Staff profile fields include:
 
 - legal name
 - email
@@ -356,6 +356,8 @@ After a staff member becomes Active in an organization, the staff member may upl
 Staff profile pictures are visible only to people who can already view that staff profile.
 
 Meridian does not need to preserve previous staff profile pictures after replacement or removal.
+
+Staff records may be created with only legal name and email when full profile details are not available yet. Additional profile fields may be completed during onboarding or later profile maintenance.
 
 ---
 
@@ -2015,7 +2017,7 @@ Meridian shall require legal name and email for applicants unless they already h
 
 ### VOL-009
 
-Staff profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth.
+Staff profiles shall include legal name, email, preferred name, handle, phone, emergency contact, city/state, and age/date of birth, though only legal name and email are required when a staff record is first created.
 
 ### VOL-010
 

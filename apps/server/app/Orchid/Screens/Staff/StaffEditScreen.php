@@ -104,16 +104,16 @@ class StaffEditScreen extends Screen
     {
         $validated = $request->validate([
             'staff.legal_name' => ['required', 'string', 'max:255'],
-            'staff.preferred_name' => ['required', 'string', 'max:255'],
-            'staff.handle' => ['required', 'string', 'max:255'],
+            'staff.preferred_name' => ['nullable', 'string', 'max:255'],
+            'staff.handle' => ['nullable', 'string', 'max:255'],
             'staff.formerly_known_as' => ['nullable', 'string'],
             'staff.email' => ['required', 'email', 'max:255', Rule::unique(Staff::class, 'email')->ignore($staff)],
-            'staff.phone' => ['required', 'string', 'max:255'],
-            'staff.city' => ['required', 'string', 'max:255'],
-            'staff.state' => ['required', 'string', 'max:255'],
-            'staff.date_of_birth' => ['required', 'date', 'before_or_equal:today'],
-            'staff.emergency_contact_name' => ['required', 'string', 'max:255'],
-            'staff.emergency_contact_phone' => ['required', 'string', 'max:255'],
+            'staff.phone' => ['nullable', 'string', 'max:255'],
+            'staff.city' => ['nullable', 'string', 'max:255'],
+            'staff.state' => ['nullable', 'string', 'max:255'],
+            'staff.date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
+            'staff.emergency_contact_name' => ['nullable', 'string', 'max:255'],
+            'staff.emergency_contact_phone' => ['nullable', 'string', 'max:255'],
             'staff.profile_picture_path' => ['nullable', 'string', 'max:2048'],
         ]);
 
