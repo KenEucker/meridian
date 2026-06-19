@@ -81,6 +81,11 @@ class Team extends Model
         return $this->hasMany(TeamMembership::class);
     }
 
+    public function grants(): HasMany
+    {
+        return $this->hasMany(TeamGrant::class);
+    }
+
     /**
      * @param  Builder<Team>  $query
      * @return Builder<Team>
