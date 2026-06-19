@@ -104,6 +104,11 @@ class Department extends Model
         return $this->hasMany(Team::class);
     }
 
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(DepartmentMembership::class);
+    }
+
     /**
      * @param  Builder<Department>  $query
      * @return Builder<Department>
