@@ -184,6 +184,11 @@ class EventApplication extends Model
         return $this->status === self::STATUS_SUBMITTED;
     }
 
+    public function isApproved(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
+    }
+
     public function statusLabel(): string
     {
         return self::statusLabels()[$this->status] ?? $this->status;
