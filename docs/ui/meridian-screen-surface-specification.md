@@ -252,6 +252,46 @@ Admin surfaces must not become a separate design system.
 
 Orchid admin and god-mode surfaces must include policy documents, procedure documents, document fragments, document acknowledgments, node configuration, audit, and sync conflict review where authorized. Fragment edit screens must warn when changing a fragment will bump published referencing document versions.
 
+Event/admin surfaces must provide an event settings control for selecting the event's Placement department (with an organization-level default, mirroring the IC department selection). Department and event admin views must visibly indicate when a department is designated as the Placement department for an event.
+
+---
+
+## 13A. Event Map Surfaces
+
+Event Map surfaces are operational, field-ready, and primarily for leads, the Placement department, organizers/map managers, kiosk operators, and IC roles where relevant. They are not a public volunteer navigation feature for MVP.
+
+The Event Map screen shows a published map for the active event. Required behavior:
+
+- a map selector when the event has multiple maps (for example placement, topographic, operations);
+- a map search/filter panel scoped to the map surface for permitted users; camps and operational locations must not appear in the global command palette, and must not be exposed to users who lack map permissions;
+- layer toggles where useful, including sensitive layers only for permitted users;
+- a camp/location detail drawer or card showing permitted details;
+- a mobile map view for permitted users with touch-friendly behavior;
+- only `published` maps for operational users; draft/archived maps appear only for users with map edit/admin permission.
+
+Map-management surfaces (create/import map, lightweight map metadata, camp create/edit with name and location, map location create/edit, asset/package management, publish/archive) are available to the designated Placement department leads, organizers/admins, and granted map managers before the operations window begins.
+
+Operational entry points:
+
+- a department lead dashboard map widget or link where relevant;
+- the kiosk dashboard includes the map by default when the event has a published map and the kiosk/user is permitted (see kiosk guide);
+- the deployment board may offer a map view or map-linked deployment locations;
+- IMS incident create/edit may offer an optional camp/location selector, and the IMS incident view may show linked camp/location details where permitted (see IMS surface specification).
+
+State and locking:
+
+- map surfaces must define empty, loading, error, and offline states, including a stale/offline map indicator;
+- once the event operations window begins, published map geometry and camp/location records are locked; surfaces must show clear locked-state messaging, and only an organizer/admin override path may change locked data;
+- there are no arbitrary dropped pins, and volunteers cannot submit map corrections.
+
+Field considerations:
+
+- touch-friendly targets for field/mobile use;
+- dark/night operations legibility;
+- no floating action buttons unless existing UI docs explicitly allow them.
+
+Field Report surfaces must not gain a map/location selector for MVP.
+
 ---
 
 ## 14. Loading, Empty, Error, and Success States
@@ -283,6 +323,8 @@ Advanced sync repair belongs in advanced mode only.
 
 Incident creation and editing are online-only in Alpha 1. Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show may be offline writes. Policy/procedure acknowledgments are online-only in Alpha 1.
 
+Map editing is online-only for MVP. Published map packages and permitted camp/location data sync down read-only to permitted devices and remain readable offline; map surfaces should show a stale/offline map status where relevant.
+
 Name References remain text-first during offline use. Source text syncs through the existing Incident note and Field Report sync behavior, and any local Name Reference index or highlight state must remain rebuildable from source text and bounded by the same permissions.
 
 ---
@@ -294,6 +336,8 @@ Screens must be role-aware from the beginning.
 Default staff should not see administrative complexity. Elevated users may receive more specific restricted-access explanations.
 
 Organizer role alone does not grant access to IMS incidents or restricted IMS surfaces. Incident records, incident dashboards, and restricted Field Report review surfaces require appropriate IC team membership for the event's configured IC department.
+
+Map view and edit surfaces are permission-gated. Only published maps are visible to permitted operational users; camp names and operational map data are not exposed to users who lack map permissions; sensitive map layers/features require explicit permission. Map editing is granted primarily through organizers/admins and the event's designated Placement department.
 
 Name References inherit visibility from their source Incident notes and Field Reports. Rendering, chips, clicks, and search results must not reveal unavailable records.
 

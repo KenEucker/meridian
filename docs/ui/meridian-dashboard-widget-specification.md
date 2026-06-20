@@ -123,7 +123,8 @@ They may include:
 - check-in status;
 - shift readiness;
 - training readiness;
-- department policy/procedure readiness.
+- department policy/procedure readiness;
+- a map widget or link to relevant operational map data where it aligns with department-lead permissions; leads of the event's designated Placement department additionally get access to map-management surfaces before the operations window begins.
 
 ### 6.3 Shift Lead
 
@@ -215,7 +216,8 @@ Kiosk widgets should:
 - respect trusted workstation state;
 - support touch;
 - avoid tiny secondary controls;
-- expose only kiosk-appropriate command palette destinations.
+- expose only kiosk-appropriate command palette destinations;
+- include a read-only map widget by default when the event has a published map and the kiosk/user is permitted, using the offline map package and respecting sensitive-layer permissions.
 
 Kiosk widgets must distinguish trusted workstation state from individual user authority.
 

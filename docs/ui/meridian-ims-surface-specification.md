@@ -127,11 +127,14 @@ Recommended structure:
 - primary actions in `ActionBar`;
 - tag and Name Reference metadata where present;
 - current notes and operational details;
+- linked camp/operational map location details where the incident references one and the user is permitted;
 - related field reports;
 - meaningful timeline entries;
 - `HistoryDrawer` for audit and routine field-change entries.
 
 Routine audit entries should be hidden unless expanded.
+
+When an incident references a camp, the detail surface may show useful camp location details to permitted IC roles. Incident map/location visibility follows existing IMS permissions, and the free-text location/area remains the primary location display.
 
 ---
 
@@ -149,6 +152,8 @@ Required behavior:
 - destructive changes require confirmation.
 
 Incident notes are edited as plain text. Markdown formatting may be supported while editing, but formatting should not render until after submission. Incident body/history entries are append-only after posting.
+
+Incident create/edit may offer an optional camp/operational map location selector for users permitted to view map data. The selector chooses from known camps/map locations only; it must be optional, must never block incident creation, must not replace the free-text location/summary fields, and must not introduce arbitrary dropped pins. If the user lacks map permissions or no published map exists, the selector is hidden.
 
 Incident creation and editing require server connection in Alpha 1. IMS surfaces must not imply that offline incident creation has been queued.
 
@@ -170,6 +175,8 @@ Field Report submission forms should:
 - allow authors to view their own submitted Field Reports.
 
 Field Report entry remains plain text. It must not provide Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report text may highlight Name References where the renderer supports it.
+
+Field Reports remain a single text body only and must not gain a map/location selector, dropped pins, coordinates, or camp selector for MVP.
 
 Corrections must be append-only, audit-aware, or represented as follow-up notes where allowed. IC users may attach Field Reports to incidents when permitted. Attaching or unlinking a Field Report is audit-aware and should appear in the incident timeline.
 

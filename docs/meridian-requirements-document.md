@@ -8,6 +8,7 @@
 **Additive Update:** Policies and Procedures requirements added in v0.2.
 **Additive Update:** Policies and Procedures discovery decisions incorporated in v0.3.
 **Additive Update:** Name References requirements added for IMS notes and Field Reports.
+**Additive Update:** Event Geography & Maps (event maps, camps, map locations, and the event-level Placement department designation) added for MVP.
 
 ---
 
@@ -1261,6 +1262,86 @@ Acknowledgment records do not need to store a rendered copy of the text the staf
 
 ---
 
+## 3.28 Event Map
+
+An event map is an event-scoped map record used to show what is where for an event and to reference operational locations from other workflows.
+
+Events support maps by default. The map feature is enabled by default for new events.
+
+An event may have zero or more maps. An event may have multiple maps of different types, including but not limited to a placement map, a topographic/landscape map, and an operations map if useful later.
+
+Map types include:
+
+- `placement`: a 2D top-down local event/site map showing what is where and how much space it occupies, using a local coordinate plane.
+- `topographic`: a real-world landscape/geospatial map for terrain, roads, access routes, and other geography relevant to some events, using real-world coordinates or prepared map packages/assets.
+
+For MVP, a map is created from an uploaded/imported map asset or prepared map package, with lightweight map metadata and camp/location records placed on top of it. Meridian does not provide a full GIS editor, complex drawing suite, automatic geocoding, or a public map builder for MVP.
+
+A map has whole-map lifecycle states:
+
+- Draft
+- Published
+- Archived
+
+Only the whole map has Draft / Published / Archived state for MVP. Individual camps and map locations do not have separate lifecycle states.
+
+Only Published maps are visible to permitted operational users. Draft and Archived maps are limited to users with map edit/admin permissions.
+
+Placement maps and topographic maps should be linkable/georeference-compatible over time, but georeferencing is not required for MVP.
+
+## 3.29 Camp
+
+A camp is an event-scoped operational/location record representing a named placement on an event map.
+
+A camp is its own event-scoped entity. It is not a generic map feature, not a hierarchy level under organizations or departments, and not a child of the Placement department.
+
+For MVP, a camp record includes only:
+
+- camp name
+- location
+
+Location may be represented as a point, a simple footprint/area, local placement-map coordinates, or geospatial coordinates where available. Not every camp is required to have GPS coordinates.
+
+Camp records are designed so future versions can add description, lead/contact information, department or operational affiliation, public/private display flags, and additional placement metadata. Camps do not have notes for MVP.
+
+Camp names are not public to all volunteers by default. Camp visibility follows map permissions and operational role needs.
+
+## 3.30 Map Location / Map Feature
+
+A map location (map feature) is a lightweight event-scoped operational location placed on an event map that is not a camp.
+
+Feature/place types may include:
+
+- `department_hq`
+- `gate`
+- `road`
+- `landmark`
+- `deployment_location`
+- `service_location`
+- `restricted_area`
+- `parking`
+- `other`
+
+Map locations remain lightweight for MVP. They carry enough structure to display the feature on the map and to be referenced from operational workflows, but they do not form a large GIS subsystem.
+
+Geometry should be capable of representing points, lines, and polygons over time, using GeoJSON-compatible concepts where appropriate while allowing local/non-geographic placement coordinates.
+
+## 3.31 Placement Department
+
+The Placement department is the department designated for an event as responsible for event geography, placement, camp/location records, and published map data used across the system.
+
+The Placement department designation follows the same general pattern as the Incident Command Department designation. It is a normal Meridian department that has been designated for a specific event; it does not create a new organizational hierarchy.
+
+Organizations may define a default Placement department. Events may designate zero or one Placement department, and may override the organization default.
+
+The designated Placement department must be one of the departments assigned to that event.
+
+Designating a department as Placement applies only for the event where it is designated. It does not make that department globally special across all events, and does not automatically make it the Incident Command Department or Organizers Department.
+
+If no Placement department is designated for an event, map editing falls back to organizers/admins/map managers according to documented permissions.
+
+---
+
 # 4. User Roles
 
 ## 4.1 Staff
@@ -1479,6 +1560,31 @@ IC Department Leads may:
 - manage incident attachments as stricken when needed
 
 IC Department Leads are the only users who may print incident PDFs.
+
+---
+
+## 4.11 Placement Department Lead
+
+A Placement Department Lead is the Department Lead of the department designated as the event's Placement department.
+
+A Placement Department Lead is the default operational owner of event maps, camp records, placement locations, and geography data before the event operations window begins.
+
+For the event where their department is designated as Placement, Placement Department Leads may:
+
+- create/edit event maps before the operations window begins
+- create/edit camp records (name and location) before the operations window begins
+- create/edit map locations/features before the operations window begins
+- manage map layers and map assets/packages before the operations window begins
+- publish and archive event maps
+- view published, draft, and archived maps for that event
+
+Placement Department Leads do not gain Incident Command or Organizer authority through the Placement designation.
+
+Placement department authority applies only for the event where the department is designated as Placement.
+
+Placement department members who are not leads may receive view access by default and may receive edit access only when granted a map-management role/grant within the Placement department, following Meridian's existing team-grant model.
+
+Locked-map data overrides after the operations window begins are reserved for organizers/admins and are not part of the Placement Department Lead role.
 
 ---
 
@@ -1746,6 +1852,19 @@ Not required for October MVP:
 5. Policy/procedure packet exports include document contents only.
 6. Policy/procedure packet exports do not include staff acknowledgment status.
 
+## 5.17 Event Map and Placement Setup
+
+1. An organization may define a default Placement department.
+2. An event may designate zero or one Placement department from the departments assigned to the event, overriding the organization default where set.
+3. Meridian validates that the designated Placement department is assigned to the event.
+4. Before the operations window begins, an authorized map editor (Placement department lead, organizer/admin, or granted map manager) uploads/imports a map asset or prepared map package and creates an event map with lightweight metadata.
+5. The editor creates camp records with a name and a location on the map.
+6. The editor creates map locations/features for operational places such as department HQs, gates, and deployment locations where useful.
+7. The editor publishes the map. Only published maps become visible to permitted operational users.
+8. When the event enters its operations window, published map geometry, camp records, and map location records are locked against normal editing.
+9. After the operations window begins, corrections to locked map data require an organizer/admin override with an explicit reason or a post-event update path.
+10. Permitted devices receive the published event map package and permitted camp/location records offline by default.
+
 ---
 
 # 6. MVP Scope
@@ -1957,6 +2076,26 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - credits earned export
 - calculation basis included in export
 
+### Event Maps and Geography
+
+- event maps enabled by default
+- multiple maps per event (placement, topographic, operations if useful later)
+- `placement` and `topographic` map types
+- whole-map Draft / Published / Archived lifecycle
+- uploaded/imported map asset or prepared map package
+- lightweight map metadata
+- camps as event-scoped entities with name and location only
+- lightweight map locations/features for operational places
+- point/line/polygon-capable geometry, GeoJSON-compatible where appropriate, plus local placement coordinates
+- event-level Placement department designation with organization default
+- map view/edit permissions through organizers/admins and the designated Placement department
+- camp names not public to all volunteers
+- operations-window locking of published map geometry and camp/location records
+- organizer/admin locked-map override with explicit reason
+- optional IMS incident reference to a camp/map location
+- kiosk dashboard map by default when published and permitted
+- offline map package/data sync to permitted devices by default
+
 ### Reports
 
 - credential eligibility export
@@ -1998,6 +2137,17 @@ The following are not required for October MVP:
 - rich policy/procedure formatting beyond Markdown for MVP
 - automatic policy/procedure packet assembly
 - policy/procedure packet exports that include staff acknowledgment status
+- full GIS editor, complex drawing suite, automatic geocoding, or public map builder
+- hybrid map type beyond linkable placement/topographic maps
+- arbitrary dropped pins on maps
+- camps/map places in the global command palette
+- structured map/location fields on Field Reports
+- volunteer-submitted map corrections
+- live volunteer GPS tracking, turn-by-turn routing, or real-time moving personnel icons
+- per-camp lifecycle states separate from the whole map
+- camp notes, descriptions, contacts, or affiliation fields for MVP
+- multiple Placement departments per event
+- georeferencing requirement for placement maps
 
 ---
 
@@ -3165,6 +3315,230 @@ Google or Discord provider linking through a secondary email shall require the a
 
 ---
 
+## 7.17 Event Map, Geography, and Placement Requirements
+
+### MAP-001
+
+Events shall support maps, and the map feature shall be enabled by default for new events.
+
+### MAP-002
+
+An event may have zero or more maps, and may have multiple maps of different types.
+
+### MAP-003
+
+Maps shall support the `placement` and `topographic` map types.
+
+### MAP-004
+
+Placement maps shall represent a 2D top-down local event/site map using a local coordinate plane.
+
+### MAP-005
+
+Topographic maps shall represent real-world geography using real-world coordinates or prepared map packages/assets.
+
+### MAP-006
+
+Maps shall have whole-map lifecycle states of Draft, Published, and Archived.
+
+### MAP-007
+
+Individual camps and map locations shall not have lifecycle states separate from the whole map for MVP.
+
+### MAP-008
+
+Only Published maps shall be visible to permitted operational users; Draft and Archived maps shall be limited to users with map edit/admin permissions.
+
+### MAP-009
+
+For MVP, maps shall be created from an uploaded/imported map asset or prepared map package with lightweight metadata, with camp/location records placed on top.
+
+### MAP-010
+
+Meridian shall not provide a full GIS editor, complex drawing suite, automatic geocoding, or public map builder for MVP.
+
+### MAP-011
+
+Placement maps and topographic maps shall be designed to be linkable/georeference-compatible over time, but georeferencing shall not be required for MVP.
+
+### MAP-012
+
+Before the event operations window begins, authorized map editors may create/update maps, camps, and map locations.
+
+### MAP-013
+
+When the event enters its operations window, published map geometry, camp records, and map location records shall be locked against normal editing.
+
+### MAP-014
+
+After the operations window begins, corrections to locked map data shall require an organizer/admin override with an explicit reason, or a post-event update path.
+
+### MAP-015
+
+Map publishing, archiving, Placement department designation, and locked-map overrides shall be recorded as audited command-style writes.
+
+### MAP-016
+
+Geometry shall be capable of representing points, lines, and polygons over time, using GeoJSON-compatible concepts where appropriate while allowing local/non-geographic placement coordinates.
+
+### MAP-017
+
+Meridian shall not support arbitrary dropped pins for MVP.
+
+### MAP-018
+
+Camps and map locations shall not be added to the global command palette for MVP.
+
+### MAP-019
+
+A map surface may provide a scoped map search/filter panel for permitted users; it shall not expose camp names or operational locations to users who lack map permissions.
+
+### CAMP-001
+
+Camps shall be event-scoped entities, not generic map features, not a hierarchy level under organizations or departments, and not children of the Placement department.
+
+### CAMP-002
+
+For MVP, a camp record shall include only a camp name and a location.
+
+### CAMP-003
+
+Camp location may be represented as a point, a simple footprint/area, local placement-map coordinates, or geospatial coordinates where available.
+
+### CAMP-004
+
+Camps shall not be required to have GPS coordinates.
+
+### CAMP-005
+
+Camp records shall be designed so future versions can add description, lead/contact information, department or operational affiliation, public/private display flags, and additional placement metadata.
+
+### CAMP-006
+
+Camps shall not have notes for MVP.
+
+### CAMP-007
+
+Camp names shall not be public to all volunteers by default, and camp visibility shall follow map permissions and operational role needs.
+
+### LOC-001
+
+Map locations/features shall be lightweight event-scoped operational locations that are not camps.
+
+### LOC-002
+
+Map location types may include department_hq, gate, road, landmark, deployment_location, service_location, restricted_area, parking, and other.
+
+### LOC-003
+
+Map locations shall carry enough structure to display on the map and be referenced from operational workflows, without becoming a large GIS subsystem.
+
+### PLACE-001
+
+Organizations may define a default Placement department.
+
+### PLACE-002
+
+Each event may designate zero or one Placement department, and may override the organization default.
+
+### PLACE-003
+
+The designated Placement department shall be one of the departments assigned to that event.
+
+### PLACE-004
+
+The Placement department designation shall unlock map and placement-related permissions only for the event where the department is designated.
+
+### PLACE-005
+
+Designating a department as Placement shall not make that department globally special across all events, and shall not automatically make it the Incident Command Department or Organizers Department.
+
+### PLACE-006
+
+Only one Placement department shall be designated per event for MVP.
+
+### PLACE-007
+
+If no Placement department is designated, map editing shall fall back to organizers/admins/map managers according to documented permissions.
+
+### PLACE-008
+
+A department may be designated as both Placement and another special department (such as Incident Command or Organizers) for the same event, consistent with existing special-department rules, but each designation shall grant only its own authority.
+
+### PLACE-009
+
+Placement department leads may create/edit maps, camp records, placement locations, map layers/assets, and related geography records before the operations window begins.
+
+### PLACE-010
+
+Placement department leads may publish and archive event maps.
+
+### PLACE-011
+
+Placement department members who are not leads shall receive view access by default and may receive edit access only when granted a map-management role/grant within the Placement department.
+
+### PLACE-012
+
+Locked-map data overrides after the operations window begins shall be reserved for organizers/admins and shall not be part of the Placement department lead role.
+
+### MAPIMS-001
+
+IMS incidents may optionally reference a camp or operational map location.
+
+### MAPIMS-002
+
+A map/location reference shall not be required to create an incident.
+
+### MAPIMS-003
+
+IMS incident create/edit shall support selecting a known camp/location where permitted.
+
+### MAPIMS-004
+
+When an incident references a camp, the IMS view shall be able to display useful camp location details to IC roles.
+
+### MAPIMS-005
+
+Map references shall not replace existing incident free-text location/summary behavior.
+
+### MAPIMS-006
+
+Incident map/location visibility shall follow existing IMS permissions.
+
+### MAPFR-001
+
+Field Reports shall remain a single text body only and shall not gain structured map/location fields, dropped pins, coordinates, or camp selectors for MVP.
+
+### MAPOPS-001
+
+Operational map locations may be referenced by shift meeting/check-in locations, deployment locations, department HQ locations, and equipment/storage locations where equipment locations are already modeled.
+
+### MAPOPS-002
+
+Shift, deployment, and equipment records shall not be required to have a map location.
+
+### MAPKIOSK-001
+
+The kiosk dashboard shall include a map by default when an event has a published map and the current kiosk/user has permission to view it.
+
+### MAPSYNC-001
+
+Published placement maps, published/topographic map packages, and permitted camp/location records shall be eligible for offline sync to authorized users/devices by default.
+
+### MAPSYNC-002
+
+Sensitive map layers/features shall not sync to users without permission, and UI hiding alone shall not be sufficient.
+
+### MAPSYNC-003
+
+Locked operations-window map data shall remain stable offline.
+
+### MAPCORR-001
+
+Volunteers shall not submit map corrections for MVP; map corrections are an admin/map-manager/Placement department responsibility before the operations window, with organizer/admin override after the operations window begins.
+
+---
+
 # 8. Deferred / Future Scope
 
 The following concepts are acknowledged but deferred beyond October MVP:
@@ -3235,6 +3609,21 @@ Future versions may support:
 - acknowledgment status included in administrative exports
 - behavior divergence between policy documents and procedure documents
 
+## Advanced Event Geography and Maps
+
+Future versions may support:
+
+- in-app map drawing/editing beyond uploaded/imported assets
+- georeferencing placement maps to real-world coordinates
+- a `hybrid` map type if placement/topographic linking proves insufficient
+- richer camp records (description, lead/contact, affiliation, public/private flags, additional placement metadata)
+- camp/location aliases
+- public/volunteer-facing map navigation and map correction workflows
+- automatic geocoding
+- additional map-derived permissions and effective-permission-level role codes for the Placement department
+
+MVP only requires uploaded/imported maps, lightweight map metadata, camps with name and location, lightweight map locations, the Placement department designation, operations-window locking, optional IMS references, and offline sync to permitted devices.
+
 ---
 
 # 9. Explicit Non-Goals
@@ -3249,6 +3638,11 @@ Meridian is not intended to be:
 - a full inventory management system in MVP
 - a replacement for all physical event credentialing workflows
 - a system that deletes operational history
+- a full GIS, CAD, or emergency-dispatch system
+- a live volunteer GPS tracking, turn-by-turn routing, or real-time personnel-tracking system
+- a public, unauthenticated map sharing or public volunteer navigation system in MVP
+- a public map correction platform
+- a map-pin-centric brand identity
 
 ---
 

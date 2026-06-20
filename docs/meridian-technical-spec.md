@@ -499,6 +499,14 @@ Regular staff should cache:
 - Their policy/procedure acknowledgment status.
 - Relevant readiness/sync state.
 
+Permitted users/devices should additionally cache the event map package by default:
+
+- Published placement maps and published topographic map packages they may view.
+- Permitted camp/location records.
+- Kiosk devices receive the event map offline by default when published and permitted.
+
+Sensitive map layers/features must not sync to users/devices without permission. UI hiding is not sufficient.
+
 Shift leads should additionally cache:
 
 - Assigned staff for teams/shifts they lead.
@@ -537,6 +545,8 @@ Policy/procedure acknowledgments are not creatable offline in Alpha 1. Acknowled
 Event application submission, including optional department interest, is online-only in Alpha 1. It has no special offline or sync behavior beyond normal application submission records.
 
 Incidents require server connection for creation.
+
+Map editing (maps, camps, map locations, assets, publishing/archiving, and locked-data overrides) is not an offline write for MVP. Map packages and permitted camp/location data sync down to authorized devices read-only, and locked operations-window map data remains stable offline.
 
 Field reports are finalized when submitted. There are no field report drafts.
 
@@ -954,6 +964,47 @@ Permission changes are audit logged.
 Permission changes sync between central and on-site nodes.
 
 During the active event window, permission changes happen only on the on-site primary node.
+
+## 15.3 Event map and Placement department permissions
+
+Event map capabilities are expressed as permission capabilities and granted primarily through event organizers/admins and the event's designated Placement department. They follow the same general designation pattern as the Incident Command Department: a normal department is designated per event, and authority is event-scoped.
+
+Suggested permission capabilities (module.action style):
+
+```text
+maps.view                 view published event maps
+maps.view_camp_data       view camp/location map data
+maps.view_sensitive       view sensitive map layers/locations
+maps.manage_draft         create/edit draft maps before the operations window
+maps.publish              publish/archive maps
+camps.manage              manage camps/locations before the operations window
+map_assets.manage         manage map assets/packages before the operations window
+maps.override_locked      override locked map data after the operations window begins
+```
+
+Authority sources for map capabilities:
+
+- Organizers/admins (organizer, lead_organizer, god_mode) may view, manage, publish/archive, and perform locked-map overrides per documented rules.
+- The designated Placement department's lead(s) (department_lead scoped to the Placement department) may manage draft maps, manage camps/locations, manage map assets/packages, and publish/archive maps for that event before the operations window begins.
+- Placement department members who are not leads receive `maps.view`/`maps.view_camp_data` per map permissions by default, and receive edit capabilities only when granted a map-management grant within the Placement department, using the same event/team grant mechanism as the IC permission model.
+- If no Placement department is designated, map editing falls back to organizers/admins/map managers.
+
+Scoping rules:
+
+- The Placement designation applies only for the event where the department is designated and never makes a department globally special.
+- The Placement designation does not grant IC or organizer authority, and IC/organizer authority does not grant map-management authority by itself.
+- A department may be designated as both Placement and another special department for the same event, but each designation grants only its own authority.
+- `maps.override_locked` is reserved for organizers/admins for MVP and is not part of the Placement department lead role.
+
+Map capability decisions should be explainable in the UI, for example:
+
+```text
+You can edit this map because you lead the event's Placement department and the operations window has not started.
+```
+
+Sensitive map reads (for example incident, DNS, restricted-area, medical, staff-only, or security-sensitive locations) should follow existing sensitive-read audit principles where appropriate. Sensitive map layers/features must not sync to users/devices without permission; UI hiding is not sufficient.
+
+The exact effective-permission-level role codes for the Placement department (whether to mint placement-specific role codes mirroring `ic_lead`/`ic_operator`/`ic_viewer`, or to reuse `department_lead` plus map-management grants) are left to the implementing milestone; see Open Questions.
 
 ---
 
@@ -1395,6 +1446,8 @@ Incident title is user-generated and editable.
 Incident body/history is append-only and accepts inline notes.
 
 Incident history/update body is a single text area per update.
+
+An incident may optionally reference a known camp or map location. The reference is optional, is never required to create an incident, and does not replace the existing free-text location/summary behavior. When an incident references a camp, the IMS view may display useful camp location details to permitted IC roles. Incident map/location visibility follows existing IMS permissions, and map references do not introduce arbitrary dropped pins.
 
 ## 19.6 Incident statuses
 
@@ -1917,6 +1970,74 @@ Full-text search is not included.
 
 ---
 
+# 21A. Event Geography and Maps
+
+## 21A.1 Purpose
+
+Event Geography & Maps is an event-scoped operational feature for showing what is where for an event and for referencing operational locations from other workflows. It is enabled by default for events.
+
+It supports both real-world/topographic maps and 2D top-down placement maps, and is intentionally simple for MVP. It is primarily an operational feature for department leads, the Placement department, organizers/map managers, kiosk operators, and IC roles where relevant. It is not a public volunteer navigation feature for MVP.
+
+This feature must not become a full GIS, CAD, dispatch, public navigation, or live-tracking system. GPS collection from staff devices remains excluded (see section 28); optional geospatial coordinates here come from prepared assets or manual placement, not from tracking staff.
+
+## 21A.2 Entities and modules
+
+Map data lives in a Laravel module that owns event maps, map assets/packages, optional map layers, camps, and non-camp map locations. Canonical schema lives in PostgreSQL; PowerSync projects permitted data to devices but is not the business-rule engine.
+
+Core concepts:
+
+- Event map: event-scoped, typed `placement` or `topographic`, with a whole-map lifecycle of `draft`, `published`, `archived`.
+- Map asset/package: an uploaded/imported image/SVG/PDF-derived placement asset or a prepared topo package referenced by a map.
+- Map layer (optional): groups features for toggling and for sensitive-layer permission control.
+- Camp: event-scoped entity with `name` and `location` only for MVP.
+- Map location/feature: lightweight non-camp operational location with a type such as `department_hq`, `gate`, `road`, `landmark`, `deployment_location`, `service_location`, `restricted_area`, `parking`, or `other`.
+
+## 21A.3 Map types and coordinate systems
+
+- `placement` maps use a local coordinate plane suitable for top-down site plans. Placement-map camps/locations are not required to have GPS coordinates.
+- `topographic` maps use real-world geospatial coordinates or prepared map packages/assets, treated as offline-capable map packages rather than assumed-online basemaps.
+
+Geometry should be capable of representing points, lines, and polygons over time, using GeoJSON-compatible concepts where appropriate while allowing local/non-geographic placement coordinates. Placement and topographic maps should be designed to be linkable/georeferenced over time, but georeferencing is not required for MVP, and a separate `hybrid` type is not introduced.
+
+## 21A.4 MVP creation approach
+
+For MVP, a map is created from an uploaded/imported map asset or prepared map package, with lightweight map metadata, and camp/location records placed on top. There is no full GIS editor, no complex drawing suite, no automatic geocoding, and no public map builder. Map assets follow existing Meridian file-storage and offline principles.
+
+## 21A.5 Lifecycle, publishing, and operations-window locking
+
+Only the whole map has `draft`/`published`/`archived` state; individual camps/locations do not have separate lifecycle states. Only `published` maps are visible to permitted operational users; `draft`/`archived` maps are limited to users with map edit/admin permissions.
+
+Before the event operations window begins, authorized map editors may create/update maps, camps, and map locations. When the event enters its operations window (the existing event operations window concept), published map geometry, camp records, and map location records are locked against normal editing so incidents, deployments, kiosk views, and lead workflows do not change underneath active operations. After the operations window begins, corrections to locked data require an organizer/admin override with an explicit reason, or a post-event update path.
+
+## 21A.6 Command-style writes
+
+Business-rule map mutations use command-style writes:
+
+```text
+POST /api/commands/publish-event-map
+POST /api/commands/archive-event-map
+POST /api/commands/designate-placement-department
+POST /api/commands/override-locked-map-data
+```
+
+Command handlers enforce authorization, operations-window locking, and the rule that the designated Placement department is assigned to the event. Map publishing, archiving, Placement department designation, sensitive map reads/exports, and locked-data overrides are audited (see section 23).
+
+## 21A.7 Operational references
+
+Operational records may optionally reference map locations without requiring them:
+
+- Incidents may optionally reference a camp or map location (see section 19); references never replace incident free-text location/summary and never become required.
+- Shift meeting/check-in locations, deployment locations, department HQ locations, and equipment/storage locations (where equipment locations are already modeled) may reference an operational map location.
+- Field Reports do not gain structured map/location fields and remain a single text body only (see section 17).
+
+Arbitrary dropped pins are not supported for MVP. Camps and map locations are not added to the global command palette; map surfaces may provide their own scoped search/filter for permitted users.
+
+## 21A.8 Sync and offline
+
+Published placement maps, published topographic map packages, and permitted camp/location records are eligible for offline sync to authorized users/devices by default. Kiosk devices receive the event map offline by default when published and permitted; lead/IC devices receive map data according to permissions; non-permitted users do not receive hidden/sensitive camp/location data. Sensitive layers/features must not sync to users without permission. Locked operations-window map data remains stable offline, and surfaces should show stale/offline map status where relevant.
+
+---
+
 # 22. Admin, Orchid, and God Mode
 
 ## 22.1 Orchid purpose
@@ -1946,6 +2067,11 @@ Policy documents
 Procedure documents
 Document fragments
 Document acknowledgments
+Event maps
+Map assets/packages
+Camps
+Map locations
+Placement department designation (on the Event screen)
 Devices
 Shared workstations
 Node config
@@ -2058,6 +2184,10 @@ Audit applies to:
 - Fragment edits and fragment version changes.
 - Policy/procedure acknowledgments.
 - Policy/procedure export and print events.
+- Event map publishing and archiving.
+- Placement department designation changes.
+- Locked-map data overrides.
+- Sensitive map reads/exports, where existing sensitive-read audit principles apply.
 
 Automatic document version bumps caused by fragment changes do not need separate audit entries beyond the audited fragment edit and resulting document version metadata.
 
@@ -2218,6 +2348,12 @@ procedure documents
 reusable document fragments
 policy/procedure acknowledgments during signup or training
 policy/procedure Markdown and PDF export
+event maps enabled by default (placement and topographic)
+camps and lightweight map locations
+event-level Placement department designation with organization default
+operations-window map locking
+optional IMS incident camp/location reference
+offline map package/data sync to permitted devices
 central/on-site node pairing
 bidirectional node sync
 sync conflict queue
@@ -2255,6 +2391,10 @@ Alpha 1 should prove:
 22. Markdown and PDF exports render fragment text inline and include document version/export timestamp.
 23. Sync conflicts appear in God mode and do not block unrelated sync.
 24. Electron displays node health and sync status.
+25. An event has maps enabled by default and can designate zero or one Placement department that is assigned to the event.
+26. An authorized user can create/import a simple placement map, add camps with name/location, and publish the map before the operations window.
+27. A published map is visible to permitted lead/IC/kiosk users, camp names are not public to all volunteers, and the kiosk dashboard includes the map by default when published and permitted.
+28. Map geometry, camps, and locations lock when the event operations window begins, and the map package/permitted data syncs offline to permitted devices.
 
 Alpha 1 does not need to prove app-store distribution.
 
@@ -2286,6 +2426,15 @@ full-text search within policy/procedure documents or fragments
 incident creation while offline
 Name Reference autocomplete, notifications, alias merging, profile/detail pages, volunteer profile links, user mentions, and canonical person/entity records
 generic plugin system
+full GIS editor, drawing suite, automatic geocoding, or public map builder
+hybrid map type beyond linkable placement/topographic maps
+arbitrary dropped pins
+camps/map places in the global command palette
+structured map/location fields on Field Reports
+volunteer-submitted map corrections
+live volunteer GPS tracking, turn-by-turn routing, or real-time personnel icons
+per-camp lifecycle states separate from the whole map
+multiple Placement departments per event
 full multi-on-site-node implementation
 USB/server snapshot restore workflows
 automatic backups to USB/second disk
@@ -2371,6 +2520,9 @@ The following areas may need later detail:
 23. Exact acknowledgement flow placement in signup and training screens.
 24. Post-Alpha 1 multi-on-site-node architecture.
 25. Post-Alpha 1 backups and restore workflows.
+26. Exact effective-permission-level role codes for the Placement department (mint placement-specific codes mirroring IC roles, or reuse `department_lead` plus map-management grants). Resolved map behavior: Placement leads may publish/archive maps; non-lead Placement members get view by default and edit only via map-management grant; locked-map overrides are organizer/admin-only.
+27. Exact map asset/package storage, tiling, and topographic basemap package format.
+28. Exact GeoJSON/geometry storage representation and local-coordinate encoding for placement maps.
 
 ---
 
@@ -2411,6 +2563,22 @@ An event-selected department that functions as Incident Command for that event.
 ## IC role
 
 A team-granted incident command role within the selected IC department, such as `ic_lead`, `ic_operator`, or `ic_viewer`.
+
+## Event map
+
+An event-scoped map record, typed `placement` or `topographic`, with a whole-map lifecycle of draft/published/archived, used to show what is where and to reference operational locations.
+
+## Camp
+
+An event-scoped operational/location record with a name and a location for MVP; not a generic map feature and not a child of the Placement department.
+
+## Map location
+
+A lightweight non-camp operational location on an event map, such as a department HQ, gate, or deployment location.
+
+## Placement department
+
+A department designated for a specific event as responsible for event geography, placement, camp/location records, and published map data, following the same per-event designation pattern as the IC department.
 
 ## Shared workstation
 
