@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\Documents\DocumentFragmentReferenceParser;
 use Database\Factories\DocumentFragmentFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Reusable Markdown text shared by policy and procedure documents
@@ -54,6 +56,11 @@ class DocumentFragment extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (DocumentFragment $fragment): void {
+            app(DocumentFragmentReferenceParser::class)
+                ->assertFragmentMarkdownHasNoReferences($fragment->markdown_source);
+        });
+
         static::creating(function (DocumentFragment $fragment): void {
             $fragment->version = 1;
         });
@@ -125,5 +132,10 @@ class DocumentFragment extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by_user_id');
+    }
+
+    public function references(): HasMany
+    {
+        return $this->hasMany(DocumentFragmentReference::class, 'fragment_id');
     }
 }

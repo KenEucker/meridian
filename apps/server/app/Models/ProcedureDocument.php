@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Orchid\Filters\Filterable;
 use Orchid\Filters\Types\Like;
 use Orchid\Filters\Types\Where;
@@ -186,6 +187,12 @@ class ProcedureDocument extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by_user_id');
+    }
+
+    public function fragmentReferences(): HasMany
+    {
+        return $this->hasMany(DocumentFragmentReference::class, 'document_id')
+            ->where('document_type', DocumentFragmentReference::DOCUMENT_TYPE_PROCEDURE);
     }
 
     /**
