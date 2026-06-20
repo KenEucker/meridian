@@ -95,6 +95,11 @@ class Organization extends Model
         return $this->hasMany(PolicyDocument::class);
     }
 
+    public function procedureDocuments(): HasMany
+    {
+        return $this->hasMany(ProcedureDocument::class);
+    }
+
     public function organizersDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'organizers_department_id');
