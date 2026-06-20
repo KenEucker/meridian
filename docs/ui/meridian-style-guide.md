@@ -195,6 +195,8 @@ Do not:
 - Add unnecessary bevels, glossy effects, or tech-startup gradients.
 - Place the logo over busy photography without a clear field.
 
+The Event Geography & Maps feature does not change the brand identity. Map iconography (pins, markers, layers) is functional product UI only and must not be adopted as a brand motif; map pins remain prohibited in the Meridian mark.
+
 ### 3.6 Clear Space
 
 Maintain clear space around the logo equal to at least **one central hub diameter** on all sides.

@@ -400,7 +400,54 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 ---
 
-### Milestone 14: Packaging, Event-Mode Safeguards, and Release Candidate QA
+### Milestone 14: Event Geography & Maps
+
+**Goal:** Deliver the MVP Event Geography & Maps feature (event maps, camps, map locations, the event-level Placement department designation, operations-window locking, optional IMS references, and offline map sync) before pilot/release readiness. This is a required MVP feature and intentionally simple; it must not become a full GIS, dispatch, or live-tracking system.
+
+This milestone is placed after IMS (Milestone 11), offline foundations (Milestone 8), and core org/event/department/permission work (Milestone 4) because it depends on those surfaces. It is a dedicated milestone, not folded into an unrelated milestone, and uses a new milestone number rather than reusing the existing M5.3 identifier.
+
+**Primary source docs:** Requirements sections 3.28-3.31, 4.11, 5.17, 6.3 (Event Maps and Geography), 7.17; Technical spec sections 15.3, 19.5, 21A, 23, 27, 28; data/API sections 5.2, 6.6, 7.1, 7.3, 8, 10.1, 10.2, 10.9, 10.14, 10.16, 10.18, 15.6; UI screen surface section 13A; UI operating guide sections 8.6, 9.2/9.5/9.6, 10.3, 11.1; UI implementation contract sections 12.11, 13, 15, 16; IMS surface specification sections 7-9; kiosk guide sections 3, 10; dashboard widget spec sections 6.2, 9; component library section 6A; accessibility checklist section 17A.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M14.1 Placement department designation | Add organization `default_placement_department_id` and event `placement_department_id`, with validation that the designated department is assigned to the event, and event-settings/Orchid selection with org default. | PLACE-001 through PLACE-008; data/API 10.1, 10.2; technical spec 15.3 | Model/validation/feature tests |
+| M14.2 Map and asset model | Add `event_maps` (type, draft/published/archived state), `map_assets`/packages, and optional `map_layers`. Maps enabled by default for events. | MAP-001 through MAP-011; data/API 10.18 | Model/domain tests |
+| M14.3 Camp and map-location model | Add `camps` (name + location only) and `map_locations` with lightweight types, plus `map_geometries` (point/line/polygon, local + GeoJSON). | CAMP-001 through CAMP-007; LOC-001 through LOC-003; MAP-016; data/API 10.18 | Model/domain tests |
+| M14.4 Map import and metadata | Support uploaded/imported map asset or prepared package with lightweight metadata; no GIS editor/geocoding/public builder. | MAP-009, MAP-010; technical spec 21A.4 | Feature/import tests |
+| M14.5 Map permissions | Add map capabilities and authorization derived from organizers/admins and the designated Placement department (leads + map-management grants); non-lead members view by default. | PLACE-009 through PLACE-012; data/API 6.6; technical spec 15.3 | Policy tests |
+| M14.6 Publish/archive commands | Add `publish-event-map`/`archive-event-map` command writes; only published maps visible to operational users. | MAP-006, MAP-008, MAP-015; data/API 5.2 | Domain/policy/audit tests |
+| M14.7 Operations-window locking | Lock published map geometry and camp/location records when the operations window begins; add organizer/admin `override-locked-map-data` with reason. | MAP-012 through MAP-014; MAPCORR-001; technical spec 21A.5 | Domain/feature/audit tests |
+| M14.8 Map view surface | Add Event Map screen with map selector, scoped search/filter, layer toggles, camp/location detail drawer, and locked/offline states; no global command palette entries; no dropped pins. | MAP-017 through MAP-019; UI screen surface 13A; UI contract 12.11 | UI/policy tests |
+| M14.9 Kiosk and dashboard map | Add kiosk dashboard map by default when published/permitted, and a department-lead map widget/link. | MAPKIOSK-001; kiosk guide 3, 10; dashboard widget 6.2, 9 | UI/policy tests |
+| M14.10 IMS optional camp/location | Add optional incident camp/location reference (create/edit selector and detail display) without requiring it and without replacing free-text location. | MAPIMS-001 through MAPIMS-006; data/API 10.16; IMS spec 7-8 | Domain/UI/policy tests |
+| M14.11 Operational location references | Add optional shift meeting and deployment map-location references; do not require them; do not add Field Report or equipment-location fields. | MAPOPS-001, MAPOPS-002, MAPFR-001; data/API 10.9, 10.14 | Domain tests |
+| M14.12 Map offline sync | Sync published map packages and permitted camp/location data to permitted devices read-only by default; block sensitive layers; keep locked data stable offline. | MAPSYNC-001 through MAPSYNC-003; data/API 7.1, 7.3; technical spec 21A.8 | Sync/policy tests |
+| M14.13 Map QA script | Add `QA-MAP-01-event-geography-and-maps.md`. | QA README; development process | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- event has maps enabled by default;
+- event can designate zero or one Placement department, and the Placement department must be a department assigned to the event;
+- Placement department leads have documented map-management authority before the operations window begins (manage drafts/camps/locations/assets and publish/archive), per resolved permission boundaries;
+- an authorized user can create/import a simple placement map before the operations window;
+- an authorized user can create camp records with name/location;
+- an authorized user can publish a map (publishing authority confirmed for Placement leads and organizers/admins);
+- the published map is visible to permitted lead/IC/kiosk users;
+- camp names are not public to all volunteers;
+- the kiosk dashboard includes the map by default when published and permitted;
+- an IMS incident can optionally reference a camp/location and can also be created without a map location;
+- Field Reports remain single-text-body only and do not gain map selector requirements;
+- the map package/data syncs offline to permitted devices by default, and non-permitted users do not receive sensitive camp/location data;
+- map editing locks when the event operations window begins, with an organizer/admin override path only;
+- no arbitrary dropped pin workflow exists;
+- the global command palette does not expose camps/map places;
+- volunteers cannot submit map corrections.
+
+**QA gate:** A human can designate a Placement department, create/import a placement map, add camps/locations, publish, view it as a permitted lead/IC/kiosk user, optionally reference a camp from an incident, confirm Field Reports stay single-body, verify offline sync and sensitive-data exclusion, and confirm locking once the operations window begins.
+
+---
+
+### Milestone 15: Packaging, Event-Mode Safeguards, and Release Candidate QA
 
 **Goal:** Produce versioned Alpha 1 builds and verify release readiness.
 
@@ -408,13 +455,13 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M14.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
-| M14.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
-| M14.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
-| M14.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
-| M14.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
-| M14.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
-| M14.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
+| M15.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
+| M15.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
+| M15.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
+| M15.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
+| M15.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
+| M15.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
+| M15.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
 
 **QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness.
 
@@ -434,7 +481,8 @@ QA should run in this order:
 8. Incident management QA.
 9. Central/on-site sync QA.
 10. Export/reporting QA.
-11. Release candidate QA.
+11. Event geography and maps QA.
+12. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 
@@ -475,5 +523,13 @@ The following are acknowledged only as exclusions because the source documents d
 - Provision inventory and provision eligibility export for Alpha 1.
 - Incident spreadsheet export for Alpha 1.
 - Waiver completion export for Alpha 1.
+- Full GIS editor, drawing suite, automatic geocoding, and public map builder.
+- A `hybrid` map type beyond linkable placement/topographic maps.
+- Arbitrary dropped pins and volunteer-submitted map corrections.
+- Camps/map places in the global command palette.
+- Structured map/location fields on Field Reports.
+- Live GPS tracking, turn-by-turn routing, and real-time personnel icons.
+- Multiple Placement departments per event.
+- Equipment map-location fields (equipment location is not yet modeled).
 
 Any PR adding these behaviors must first update the relevant source documents through the normal change-control process.

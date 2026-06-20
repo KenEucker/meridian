@@ -240,6 +240,41 @@ Required behavior:
 
 ---
 
+## 6A. Map Surface Components
+
+Map components are composed from existing primitives and semantic tokens. They must not introduce a separate design system, must be permission-aware, and must support touch and dark/night operation.
+
+### 6A.1 `MapSurface`
+
+Renders a published event map (placement or topographic) with permitted camps and map locations.
+
+Required behavior:
+
+- shows only `published` maps to operational users; draft/archived require map edit/admin permission;
+- supports point/line/polygon features and both local placement coordinates and geospatial coordinates;
+- read-only on view surfaces; map editing happens only on permitted management surfaces before the operations window;
+- shows empty, loading, error, and stale/offline states;
+- shows locked-state messaging once the event operations window begins;
+- no arbitrary dropped pins; no floating action buttons unless explicitly allowed.
+
+### 6A.2 `MapSelector`
+
+Lets permitted users switch between an event's maps when more than one exists. Hidden when only one map is available.
+
+### 6A.3 `MapLayerToggles`
+
+Toggles map layers where useful. Sensitive layers appear only for users with permission to view them.
+
+### 6A.4 `MapSearchPanel`
+
+Scoped search/filter for the map surface only. Must not feed the global command palette and must not surface camp names or operational locations to users without map permissions.
+
+### 6A.5 `CampLocationDetail`
+
+Drawer or card showing permitted details for a selected camp or map location. For MVP a camp shows only name and location; other operational details appear only where permitted.
+
+---
+
 ## 7. Form Components
 
 ### 7.1 `Field`

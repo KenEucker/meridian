@@ -337,9 +337,15 @@ POST /api/commands/create-document-fragment
 POST /api/commands/update-document-fragment
 POST /api/commands/acknowledge-document
 POST /api/commands/export-document
+POST /api/commands/designate-placement-department
+POST /api/commands/publish-event-map
+POST /api/commands/archive-event-map
+POST /api/commands/override-locked-map-data
 ```
 
 Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment publish/archive commands are not part of the Alpha 1 command surface.
+
+Map publishing, archiving, Placement department designation, and locked-map data overrides use command-style writes because their business rules (operations-window locking, Placement-assignment validation, and elevated override authority) matter. Routine creation/editing of draft maps, camps, map locations, and map assets before the operations window may use the resource API under map permissions. Map records are not offline-writable for MVP.
 
 ### 5.3 Command Requirements
 
@@ -469,6 +475,40 @@ UI hiding is not sufficient.
 
 Name References inherit source-record visibility. A derived Name Reference token must not sync to a user or device unless the user is allowed to receive the underlying Incident note or Field Report text that produced it.
 
+### 6.6 Event Map and Placement Permissions
+
+Event map authority is event-scoped and follows the same per-event designation pattern as the IC department. Map capabilities are granted primarily through event organizers/admins and the event's designated Placement department.
+
+Suggested map capabilities (module.action style):
+
+```text
+maps.view
+maps.view_camp_data
+maps.view_sensitive
+maps.manage_draft
+maps.publish
+camps.manage
+map_assets.manage
+maps.override_locked
+```
+
+Authority sources:
+
+- organizers/admins (`organizer`, `lead_organizer`, `god_mode`) may view, manage, publish/archive, and perform locked-map overrides per documented rules
+- the designated Placement department's lead(s) (`department_lead` scoped to that department) may manage draft maps, camps/locations, and map assets/packages, and may publish/archive maps for that event before the operations window begins
+- non-lead Placement department members receive view capabilities by default and edit capabilities only when granted a map-management grant within the Placement department, using the same event/team grant mechanism as IC roles
+- if no Placement department is designated, map editing falls back to organizers/admins/map managers
+
+Scoping rules:
+
+- the Placement designation applies only for the event where the department is designated and never makes a department globally special
+- the Placement designation does not grant IC/organizer authority, and IC/organizer authority does not grant map-management authority by itself
+- a department may be designated as both Placement and another special department for the same event, but each designation grants only its own authority
+- `maps.override_locked` is reserved for organizers/admins for MVP and is not part of the Placement department lead role
+- only `published` maps are visible to permitted operational users; `draft`/`archived` maps require map edit/admin permission
+- camp names and operational map data are not exposed to users who lack map permissions
+- the exact effective-permission-level role codes for the Placement department are left to the implementing milestone (see section 16)
+
 ---
 
 ## 7. Sync Model
@@ -512,6 +552,15 @@ Incidents should not be greedily synced.
 
 Derived Name Reference caches must be rebuildable from source text and must not broaden offline access.
 
+Permitted users/devices may additionally cache the event map package by default:
+
+- published placement maps and published topographic map packages they may view
+- permitted camp/location records
+- kiosk devices receive the event map offline by default when published and permitted
+- lead/IC devices receive map data according to permissions
+
+Sensitive map layers/features must not sync to users/devices without permission; UI hiding is not sufficient. Locked operations-window map data remains stable offline.
+
 ### 7.2 Alpha 1 Offline Writes
 
 Alpha 1 offline writes include:
@@ -525,6 +574,8 @@ Alpha 1 offline writes include:
 Policy/procedure acknowledgments are not creatable offline in Alpha 1.
 
 Incident creation requires server connection.
+
+Map editing (maps, camps, map locations, assets, publishing/archiving, locked-data overrides) is not an offline write for MVP; map packages and permitted camp/location data sync down read-only.
 
 Field Reports are finalized when submitted. There are no Field Report drafts.
 
@@ -541,6 +592,8 @@ The following data is server-only or restricted unless explicitly included in an
 - sensitive DNS/removal details except where needed for enforcement
 - staff emergency contact data except on trusted devices for users authorized to access it
 - permission administration records except where needed for local authorization decisions
+- draft and archived maps for users without map edit/admin permissions
+- sensitive map layers/features and the camp/location data they contain for users without permission
 
 ### 7.4 Node Sync
 
@@ -598,6 +651,10 @@ Audit applies to:
 - policy/procedure acknowledgments
 - policy/procedure export and print events
 - sensitive read/view events for incidents, DNS status, and exports
+- event map publishing and archiving
+- Placement department designation changes
+- locked-map data overrides
+- sensitive map reads/exports, where existing sensitive-read audit principles apply
 
 Audit entries should capture:
 
@@ -649,11 +706,12 @@ Meridian's Alpha 1 data model is organized into these domains:
 23. Document Fragments
 24. Document Acknowledgments
 25. Document Exports
-26. Devices and trust
-27. Shared workstations
-28. Nodes and node sync
-29. Audit
-30. Sync conflicts
+26. Event maps and geography
+27. Devices and trust
+28. Shared workstations
+29. Nodes and node sync
+30. Audit
+31. Sync conflicts
 
 ---
 
@@ -672,6 +730,7 @@ Key fields:
 - `slug`
 - `organizers_department_id`
 - `default_ic_department_id`
+- `default_placement_department_id`
 - `default_credit_policy_id`
 - `active_inactive_threshold_years`
 - `prospective_inactive_threshold_years`
@@ -711,6 +770,7 @@ Key fields:
 - `timezone`
 - `status`
 - `ic_department_id`
+- `placement_department_id`
 - `active_event_window_starts_at`
 - `active_event_window_ends_at`
 - `created_at`
@@ -728,6 +788,18 @@ Relationships:
 - has many incidents
 - has many credentials
 - has many policy/procedure acknowledgment records where relevant
+- has many event maps
+- has many camps
+- has many map locations
+- belongs to Placement department (nullable, through `placement_department_id`)
+
+Rules:
+
+- `placement_department_id` is nullable; an event may designate zero or one Placement department.
+- When set, `placement_department_id` must reference a department assigned to the event.
+- `placement_department_id` defaults from the organization `default_placement_department_id` where set, and the event may override it.
+- The Placement designation is event-scoped: it grants map/placement authority only for this event and does not make the department globally special, IC, or Organizers.
+- A department may be the Placement department and also the IC department (or Organizers) for the same event; each designation grants only its own authority.
 
 ---
 
@@ -1363,6 +1435,7 @@ Key fields:
 - `signup_closes_at`
 - `schedule_lock_at`
 - `credit_policy_id`, nullable
+- `meeting_map_location_id`, nullable
 - `created_at`
 - `updated_at`
 - `cancelled_at`
@@ -1376,6 +1449,7 @@ Rules:
 - required trainings and waivers must be enforced for scheduled and unscheduled additions
 - overlap warnings are shown by default rather than hard-blocking
 - elevated leads may assign overlapping shifts
+- `meeting_map_location_id` is optional; a shift may reference an operational map meeting/check-in location but is not required to have one
 
 #### `shift_training_requirements`
 
@@ -1688,9 +1762,12 @@ Key fields:
 - `name`
 - `description`
 - `location_details`
+- `map_location_id` (nullable)
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+`map_location_id` is optional. A deployment may reference an operational map location, but deployments are not required to have a map location, and the reference does not replace `location_details`.
 
 #### `current_deployment_assignments`
 
@@ -1798,6 +1875,8 @@ Key fields:
 - `location_name`
 - `location_address`
 - `location_details`
+- `camp_id` (nullable)
+- `map_location_id` (nullable)
 - `created_by_user_id`
 - `created_at`
 - `updated_at`
@@ -1829,6 +1908,10 @@ Rules:
 - incident body/history is append-only
 - closing requires a note/reason
 - reopening is allowed
+- `camp_id` and `map_location_id` are optional and must not be required to create an incident
+- a camp/map-location reference does not replace the free-text `location_*` fields and does not introduce arbitrary dropped pins
+- when an incident references a camp, the IMS view may show camp location details to permitted IC roles
+- incident map/location visibility follows existing IMS permissions
 
 #### `incident_timeline_entries`
 
@@ -2003,6 +2086,161 @@ Rules:
 - incident attachments may be stricken but not deleted
 - attachment downloads are available only to authorized users; Field Report photo downloads are restricted to `ic_lead`
 - image URLs are short-lived signed URLs, not public file paths
+
+---
+
+### 10.18 Event Maps and Geography
+
+Event maps, camps, and map locations are event-scoped. Canonical data lives in PostgreSQL; PowerSync projects only permitted records to devices. Map records are not offline-writable for MVP.
+
+#### `event_maps`
+
+Represents an event-scoped map.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `name`
+- `type` (`placement` or `topographic`)
+- `state` (`draft`, `published`, `archived`)
+- `primary_asset_id`, nullable
+- `coordinate_system` (`local` for placement, `geo` for topographic)
+- `metadata_json`
+- `created_by_user_id`
+- `published_at`, nullable
+- `published_by_user_id`, nullable
+- `archived_at`, nullable
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- the map feature is enabled by default for new events; an event may have zero or more maps
+- an event may have multiple maps of different types
+- only the whole map has `draft`/`published`/`archived` state; camps and map locations do not have separate lifecycle states
+- only `published` maps are visible to permitted operational users; `draft`/`archived` maps are limited to users with map edit/admin permissions
+- `placement` maps use a local coordinate plane; `topographic` maps use real-world coordinates or prepared map packages
+- placement and topographic maps should be linkable/georeferenced over time; georeferencing is not required for MVP; no `hybrid` type is introduced
+- publishing and archiving use command-style writes and are audited
+- when the event enters its operations window, published map geometry and related camp/location records are locked against normal editing; corrections require an organizer/admin `override-locked-map-data` command with an explicit reason
+
+#### `map_assets`
+
+Represents an uploaded/imported map asset or prepared map package referenced by a map. Also serves the role of `map_packages` for topographic basemaps.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `event_map_id`, nullable
+- `kind` (for example `image`, `svg`, `pdf_derived`, `topo_package`)
+- `attachment_id`, nullable
+- `package_ref`, nullable
+- `metadata_json`
+- `created_by_user_id`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- map assets follow existing Meridian file-storage and offline principles
+- topographic basemaps are treated as map packages/offline-capable assets rather than assumed-online basemaps
+- there is no automatic geocoding and no public map builder for MVP
+
+#### `map_layers`
+
+Optional grouping of features for toggling and sensitive-layer permission control.
+
+Key fields:
+
+- `id`
+- `event_map_id`
+- `name`
+- `is_sensitive` (boolean)
+- `sort_order`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- sensitive layers/features must not sync to users/devices without permission; UI hiding is not sufficient
+- sensitive map reads/exports follow existing sensitive-read audit principles where appropriate
+
+#### `camps`
+
+Represents an event-scoped camp. Camps are their own entity, not generic map features, not a hierarchy level under organizations or departments, and not children of the Placement department.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `name`
+- `geometry_id`, nullable
+- `created_by_user_id`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- for MVP a camp has only a name and a location; no description, contact, affiliation, public/private flag, or notes
+- camp location may be a point, a simple footprint/area, local placement-map coordinates, or geospatial coordinates where available
+- camps are not required to have GPS coordinates
+- camp names are not public to all volunteers by default; camp visibility follows map permissions and operational role needs
+- the schema is designed so future versions can add description, lead/contact, affiliation, public/private flags, and additional placement metadata
+
+#### `map_locations`
+
+Represents a lightweight non-camp operational location on an event map.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `event_map_id`, nullable
+- `map_layer_id`, nullable
+- `type` (`department_hq`, `gate`, `road`, `landmark`, `deployment_location`, `service_location`, `restricted_area`, `parking`, `other`)
+- `name`
+- `department_id`, nullable
+- `geometry_id`, nullable
+- `created_by_user_id`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- map locations remain lightweight for MVP and do not form a large GIS subsystem
+- map locations carry enough structure to display and to be referenced by operational workflows
+- arbitrary dropped pins are not supported for MVP
+
+#### `map_geometries`
+
+Represents geometry for a camp or map location.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `geometry_kind` (`point`, `line`, `polygon`)
+- `coordinate_space` (`local` or `geo`)
+- `geojson` (GeoJSON-compatible geometry for geo space)
+- `local_coordinates_json` (local placement-plane coordinates)
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- geometry should be capable of representing points, lines, and polygons over time
+- GeoJSON-compatible concepts are used where appropriate while allowing local/non-geographic placement coordinates
+- placement-map geometry may use `local` space without real-world coordinates
+
+#### Operational references
+
+- `incidents.camp_id` and `incidents.map_location_id` are optional references (see 10.16).
+- `deployments.map_location_id` is an optional reference (see 10.14).
+- `shifts.meeting_map_location_id` is an optional reference (see 10.9).
+- Equipment/storage locations may reference a map location only where equipment locations are already modeled; equipment items do not gain a location field in this update.
+- Field Reports do not reference camps/map locations and remain a single text body only.
 
 ---
 
@@ -2598,6 +2836,37 @@ Alpha 1 excludes:
 - rich formatting beyond Markdown
 - nested fragments
 
+### 15.6 Event Map and Placement Alpha 1 Boundaries
+
+Alpha 1 includes:
+
+- event maps enabled by default, `placement` and `topographic` types
+- whole-map draft/published/archived lifecycle
+- uploaded/imported map asset or prepared map package with lightweight metadata
+- camps with name and location only
+- lightweight map locations/features
+- point/line/polygon-capable geometry, GeoJSON-compatible where appropriate, plus local placement coordinates
+- event-level Placement department designation with organization default
+- operations-window locking of published map geometry and camp/location records
+- organizer/admin locked-map override with explicit reason
+- optional IMS incident camp/location reference
+- optional shift meeting and deployment map-location references
+- offline sync of map packages/permitted camp/location data to permitted devices
+
+Alpha 1 excludes:
+
+- full GIS editor, drawing suite, automatic geocoding, public map builder
+- a `hybrid` map type beyond linkable placement/topographic maps
+- arbitrary dropped pins
+- camps/map places in the global command palette
+- structured map/location fields on Field Reports
+- volunteer-submitted map corrections
+- live GPS tracking, turn-by-turn routing, or real-time personnel icons
+- per-camp lifecycle states, camp notes, descriptions, contacts, or affiliation fields
+- multiple Placement departments per event
+- georeferencing requirement for placement maps
+- equipment location fields (equipment location is not yet modeled)
+
 ---
 
 ## 16. Initial Open Implementation Details
@@ -2620,6 +2889,9 @@ The following implementation details may be refined later without changing the c
 14. Exact IC incident dashboard UI.
 15. Exact deployment bundle format.
 16. Exact physical storage shape for the rebuildable Name Reference derived index.
+17. Exact map asset/package storage, tiling, and topographic basemap package format.
+18. Exact GeoJSON/geometry storage representation and local-coordinate encoding for placement maps.
+19. Exact effective-permission-level role codes for the Placement department (mint placement-specific codes mirroring IC roles, or reuse `department_lead` plus map-management grants).
 
 ---
 

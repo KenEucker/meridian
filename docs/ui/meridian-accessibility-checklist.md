@@ -262,6 +262,20 @@ Check that:
 
 ---
 
+## 17A. Event Map Accessibility
+
+Check that:
+
+- the map selector, layer toggles, scoped search/filter, and camp/location detail drawer are keyboard operable and have accessible names;
+- camps and map locations are reachable without relying on pointer-only interaction, and have an accessible list/alternative where a purely visual map would exclude keyboard and screen-reader users;
+- map features and layers do not rely on color alone to convey type, sensitivity, or status;
+- map and feature contrast meets requirements in light and dark/night operation modes;
+- touch targets on map controls meet touch sizing requirements;
+- locked operations-window state and stale/offline map state are perceivable, not color-only;
+- restricted/sensitive layers and camp data are not exposed to users without permission.
+
+---
+
 ## 18. Manual QA Checklist
 
 Before merging UI work, reviewers should manually verify:

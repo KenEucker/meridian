@@ -306,6 +306,14 @@ The configured Incident Command department does not receive a unique brand treat
 
 Incident and Field Report surfaces still use a more serious and restricted interface tone, but that tone comes from the surface type, not a special IC theme.
 
+### 8.6 Placement department treatment
+
+The event's designated Placement department does not receive a unique brand treatment beyond normal department branding, mirroring the IC department.
+
+Department and event admin views should visibly indicate when a department is designated as the event's Placement department. The Placement department is selected on the event settings/admin surface, with an organization-level default, mirroring the IC department selection. A department may be Placement for one event without becoming globally special.
+
+When the event operations window has begun, map-management surfaces for the Placement department and organizers should show clear locked-state messaging, and editing of published map geometry and camp/location records is disabled except through an organizer/admin override path.
+
 ---
 
 ## 9. Role-Aware Home and Dashboard Model
@@ -325,6 +333,8 @@ A department lead should see department-relevant dashboard widgets first.
 Below those widgets, the department lead should see the same general structure as a staff member: assigned departments and current event schedule.
 
 Department leads may also see department-scoped policy/procedure maintenance tasks, fragment warnings, draft documents, and required acknowledgment configuration where applicable.
+
+Department leads may see a map widget or link to relevant operational map data where it aligns with their department-lead permissions. Leads of the event's designated Placement department additionally see access to map-management surfaces (maps, camps, map locations, assets, publish/archive) before the operations window begins.
 
 ### 9.3 Team lead home
 
@@ -349,6 +359,8 @@ Organizer dashboards may include organization-scoped policy/procedure document s
 IC leads should see event operations and department-relevant widgets, including active incident counts, high-importance incidents, monitoring/on-scene incidents, and other attention items.
 
 Policy/procedure content relevant to incident escalation may appear as quick reference links, but IMS must remain focused on incident operations.
+
+Where an event has a published map and the IC user is permitted, IC surfaces may link to the event map and may display linked camp/location details for incidents that reference them.
 
 ### 9.7 Dashboard widget model
 
@@ -402,6 +414,8 @@ For permitted IMS records, search may match Name Reference text with or without 
 
 Policy/procedure visible documents may appear as navigation results by title for users with visibility. Full-text command palette search inside policy/procedure bodies or fragments is not part of Alpha 1.
 
+Camps and operational map locations/places must not appear in the global command palette for MVP. Map search and filtering happen only in a scoped panel on the map surface for permitted users.
+
 Command palette results should be grouped by type.
 
 Unavailable actions should be hidden.
@@ -427,6 +441,8 @@ Command palette actions should show keyboard shortcuts where available, except i
 The on-site laptop should default to a kiosk dashboard.
 
 Kiosk mode should hide admin and navigation complexity by default.
+
+The kiosk dashboard should include a map by default when the event has a published map and the current kiosk/user is permitted to view it. The kiosk map is read-only, should work from the offline map package, and should show a stale/offline map status where relevant. Sensitive map layers/locations must not appear without permission.
 
 ### 11.2 Authentication
 
@@ -781,6 +797,8 @@ Sync failures should never interrupt the user unless the current action cannot c
 Sync repair belongs in advanced mode only.
 
 Queued actions should be visible to the user who performed them when appropriate.
+
+Published map packages and permitted camp/location data sync down read-only to permitted devices and remain readable offline. Map surfaces should show a stale/offline map status where relevant, and locked operations-window map data should remain stable offline. Map editing is online-only for MVP.
 
 ### 17.5 Policy/procedure offline rules
 

@@ -830,6 +830,8 @@ Incident create/edit routes require active server connection in Alpha 1.
 | `orchid.procedure-documents` | Orchid screen | Procedure document CRUD, preview, publish/archive | Authorized maintainer/god mode |
 | `orchid.document-fragments` | Orchid screen | Fragment CRUD and reference impact warning | Authorized maintainer/god mode |
 | `orchid.document-acknowledgments` | Orchid screen | Acknowledgment review | Authorized maintainer/god mode |
+| `orchid.events` | Orchid screen | Event administration including IC and Placement department designation | Organizer/god mode |
+| `orchid.event-maps` | Orchid screen | Event maps, map assets/packages, camps, and map locations administration | Authorized maintainer/god mode |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
 | `orchid.node-config` | Orchid screen | Node configuration and source display | God mode |
 
@@ -885,6 +887,26 @@ Department lead read-only visibility:
 
 ---
 
+## 12.11 Event Map Screens
+
+| Screen ID | Route name | Purpose | Access |
+|---|---|---|---|
+| `map.view` | `events.map.show` | Event map view with map selector, scoped search/filter, layer toggles, and camp/location detail drawer | Permitted map viewers (leads, Placement dept, organizers/admins, IC where relevant, kiosk where permitted) |
+| `map.manage` | `events.map.manage` | Map management: create/import maps, lightweight metadata, camps (name/location), map locations, assets/packages, publish/archive | Placement department leads, organizers/admins, granted map managers, before the operations window |
+
+Event map screen rules:
+
+- only `published` maps are shown on `map.view` for operational users; `draft`/`archived` maps require map edit/admin permission.
+- camp names and operational map data are not exposed to users without map permissions; sensitive layers require explicit permission.
+- camps and map locations must not appear in the global command palette; map search/filter is scoped to the map surface.
+- map editing is online-only; once the event operations window begins, published map geometry and camp/location records are locked and `map.manage` shows locked-state messaging; only an organizer/admin override path may change locked data.
+- there are no arbitrary dropped pins and no volunteer map-correction workflow.
+- Field Report surfaces must not gain a map/location selector.
+
+Placement department designation is configured on the event admin surface (`organizer.events`) with an organization-level default, and is also available in Orchid (`orchid.events`). IMS incident create/edit (`ims.incident-create`, `ims.incident-edit`) may include an optional camp/location selector, and `ims.incident-detail` may display linked camp/location details where permitted.
+
+---
+
 ## 13. Dashboard Widget Inventory
 
 ### 13.1 Staff Widgets
@@ -908,6 +930,7 @@ Department lead read-only visibility:
 | `dept.training_readiness` | Training Readiness | department/event | department lead | Required trainings complete | Review trainings |
 | `dept.policy_readiness` | Policy Readiness | department | department lead | Department documents current | Review documents |
 | `dept.equipment_returns` | Equipment Returns | department/event | department/shift lead | No equipment returns pending | Open equipment |
+| `dept.event_map` | Event Map | department/event | department lead with map view permission; Placement dept lead gets management access | No published map | Open event map |
 
 ### 13.3 Shift Lead Widgets
 
@@ -950,6 +973,7 @@ Organizer widgets must not surface IMS incidents, restricted Field Reports, acti
 | `kiosk.equipment_returns` | Equipment Returns | event/department | shift/department lead | No returns pending | Open returns |
 | `kiosk.node_status` | Local Node Status | kiosk/event | trusted workstation | Local node reachable | View status if permitted |
 | `kiosk.switch_user` | Current User | kiosk | trusted workstation | User visible | Switch user |
+| `kiosk.event_map` | Event Map | event/kiosk | trusted workstation + map view permission | No published map | Open event map |
 
 ---
 
@@ -1013,12 +1037,15 @@ Incident create/edit must support:
 - location name;
 - location address;
 - location details;
+- optional camp/operational map location reference, where the user is permitted to view map data, never required and never replacing the free-text location fields;
 - attached Field Reports;
 - linked incidents;
 - notes;
 - tags derived from `#hashtags` in notes;
 - Name Reference chips derived from incident notes and attached Field Reports;
 - history/timeline.
+
+The camp/location selector chooses from known camps/map locations only. It must be optional, must never block incident creation, must not introduce arbitrary dropped pins, and must be hidden when the user lacks map permissions or no published map exists. Incident detail may display linked camp/location details where permitted, following existing IMS permissions.
 
 ### 15.2 Autosave
 
@@ -1114,6 +1141,8 @@ Use these UI states consistently:
 - Staff profile picture upload, replace, and remove are online-only in Alpha 1.
 - Staff profile picture blobs sync lazily as accessed and should show a placeholder or pending image state while unavailable.
 - Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show are Alpha 1 offline writes.
+- Map editing (maps, camps, map locations, assets, publish/archive, locked-data overrides) is online-only for MVP.
+- Published map packages and permitted camp/location data sync down read-only to permitted devices and remain readable offline; surfaces show a stale/offline map status where relevant, and locked operations-window map data remains stable offline.
 - Name Reference source text syncs through existing Incident note and Field Report behavior. Any local/server derived index is rebuildable from source text and must not widen offline visibility.
 
 ---

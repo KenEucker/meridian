@@ -49,8 +49,11 @@ The kiosk dashboard should:
 - prioritize current operational tasks;
 - hide admin and navigation complexity by default;
 - expose only role-appropriate actions;
-- support command palette access with kiosk-safe results.
+- support command palette access with kiosk-safe results;
+- include a map by default when the event has a published map and the kiosk/user is permitted to view it;
 - surface local node, PowerSync, HTTPS/certificate, connected-device, and version health only where relevant to the current user or trusted operator.
+
+The kiosk map is read-only, should work from the offline event map package, should show a stale/offline map status where relevant, and must not show sensitive map layers/locations without permission. Camps and map locations must not appear in the global command palette; map search/filter stays in a scoped panel on the map surface.
 
 ---
 
@@ -189,6 +192,8 @@ Unavailable actions should be hidden or disabled honestly. Queued actions should
 Sync repair belongs in advanced mode only.
 
 Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show may queue offline in Alpha 1. Incident creation/editing and policy/procedure acknowledgments require server connection and should block with a clear explanation when unavailable.
+
+Kiosk devices should receive the event map package offline by default when published and permitted. The kiosk map is read-only; map editing is online-only for MVP, and locked operations-window map data should remain stable offline.
 
 ---
 
