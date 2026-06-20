@@ -129,3 +129,7 @@ The PR body must follow `.github/pull_request_template.md` and include all requi
 - Human QA Plan
 - Risks
 - Follow-up Issues
+
+## Final Steps
+
+If I say "send it", that means I want you to push the changes and create the PR. It should be a review ready PR, not a draft, and I expect you to the use the github connector. I may have to ask you to make reviwsions before this point, so do not automatically push changes and create the PR before I ask.
