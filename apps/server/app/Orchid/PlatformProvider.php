@@ -87,6 +87,22 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.staff')
                 ->permission('platform.staff'),
 
+            Menu::make(__('Policy Documents'))
+                ->icon('bs.file-earmark-text')
+                ->route('platform.policy-documents')
+                ->permission('platform.policy-documents')
+                ->title(__('Policies & Procedures')),
+
+            Menu::make(__('Procedure Documents'))
+                ->icon('bs.journal-text')
+                ->route('platform.procedure-documents')
+                ->permission('platform.procedure-documents'),
+
+            Menu::make(__('Document Fragments'))
+                ->icon('bs.braces')
+                ->route('platform.document-fragments')
+                ->permission('platform.document-fragments'),
+
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
                 ->route('platform.node.config')
@@ -125,7 +141,10 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.applications', __('Applications'))
                 ->addPermission('platform.departments', __('Departments'))
                 ->addPermission('platform.teams', __('Teams'))
-                ->addPermission('platform.staff', __('Staff')),
+                ->addPermission('platform.staff', __('Staff'))
+                ->addPermission('platform.policy-documents', __('Policy documents'))
+                ->addPermission('platform.procedure-documents', __('Procedure documents'))
+                ->addPermission('platform.document-fragments', __('Document fragments')),
 
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.node.config', __('Node configuration')),

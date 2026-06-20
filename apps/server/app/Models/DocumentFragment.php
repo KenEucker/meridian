@@ -10,6 +10,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 
 /**
  * Reusable Markdown text shared by policy and procedure documents
@@ -17,6 +22,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class DocumentFragment extends Model
 {
+    use AsSource;
+    use Filterable;
+
     public const SCOPE_ORGANIZATION = 'organization';
 
     public const SCOPE_DEPARTMENT = 'department';
@@ -43,6 +51,34 @@ class DocumentFragment extends Model
         'version',
         'created_by_user_id',
         'updated_by_user_id',
+    ];
+
+    /**
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'id' => Where::class,
+        'organization_id' => Where::class,
+        'scope_type' => Where::class,
+        'scope_id' => Where::class,
+        'name' => Like::class,
+        'slug' => Like::class,
+        'updated_at' => WhereDateStartEnd::class,
+        'created_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'id',
+        'organization_id',
+        'scope_type',
+        'name',
+        'slug',
+        'version',
+        'updated_at',
+        'created_at',
     ];
 
     /**

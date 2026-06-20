@@ -6,6 +6,12 @@ use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
 use App\Orchid\Screens\Department\DepartmentListScreen;
+use App\Orchid\Screens\Document\DocumentFragmentEditScreen;
+use App\Orchid\Screens\Document\DocumentFragmentListScreen;
+use App\Orchid\Screens\Document\PolicyDocumentEditScreen;
+use App\Orchid\Screens\Document\PolicyDocumentListScreen;
+use App\Orchid\Screens\Document\ProcedureDocumentEditScreen;
+use App\Orchid\Screens\Document\ProcedureDocumentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
@@ -206,6 +212,69 @@ Route::screen('staff', StaffListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Staff'), route('platform.staff')));
+
+// Platform > Policies & Procedures > Policies > Policy
+Route::screen('policy-documents/{policyDocument}/edit', PolicyDocumentEditScreen::class)
+    ->name('platform.policy-documents.edit')
+    ->breadcrumbs(fn (Trail $trail, $policyDocument) => $trail
+        ->parent('platform.policy-documents')
+        ->push($policyDocument->title, route('platform.policy-documents.edit', $policyDocument)));
+
+// Platform > Policies & Procedures > Policies > Create
+Route::screen('policy-documents/create', PolicyDocumentEditScreen::class)
+    ->name('platform.policy-documents.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.policy-documents')
+        ->push(__('Create'), route('platform.policy-documents.create')));
+
+// Platform > Policies & Procedures > Policies
+Route::screen('policy-documents', PolicyDocumentListScreen::class)
+    ->name('platform.policy-documents')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Policy Documents'), route('platform.policy-documents')));
+
+// Platform > Policies & Procedures > Procedures > Procedure
+Route::screen('procedure-documents/{procedureDocument}/edit', ProcedureDocumentEditScreen::class)
+    ->name('platform.procedure-documents.edit')
+    ->breadcrumbs(fn (Trail $trail, $procedureDocument) => $trail
+        ->parent('platform.procedure-documents')
+        ->push($procedureDocument->title, route('platform.procedure-documents.edit', $procedureDocument)));
+
+// Platform > Policies & Procedures > Procedures > Create
+Route::screen('procedure-documents/create', ProcedureDocumentEditScreen::class)
+    ->name('platform.procedure-documents.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.procedure-documents')
+        ->push(__('Create'), route('platform.procedure-documents.create')));
+
+// Platform > Policies & Procedures > Procedures
+Route::screen('procedure-documents', ProcedureDocumentListScreen::class)
+    ->name('platform.procedure-documents')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Procedure Documents'), route('platform.procedure-documents')));
+
+// Platform > Policies & Procedures > Fragments > Fragment
+Route::screen('document-fragments/{fragment}/edit', DocumentFragmentEditScreen::class)
+    ->name('platform.document-fragments.edit')
+    ->breadcrumbs(fn (Trail $trail, $fragment) => $trail
+        ->parent('platform.document-fragments')
+        ->push($fragment->name, route('platform.document-fragments.edit', $fragment)));
+
+// Platform > Policies & Procedures > Fragments > Create
+Route::screen('document-fragments/create', DocumentFragmentEditScreen::class)
+    ->name('platform.document-fragments.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.document-fragments')
+        ->push(__('Create'), route('platform.document-fragments.create')));
+
+// Platform > Policies & Procedures > Fragments
+Route::screen('document-fragments', DocumentFragmentListScreen::class)
+    ->name('platform.document-fragments')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Document Fragments'), route('platform.document-fragments')));
 
 // Platform > God Mode > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)
