@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\BumpPublishedDocumentFragmentRevisions;
 use App\Services\Documents\DocumentFragmentReferenceParser;
 use Database\Factories\DocumentFragmentFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -77,6 +78,17 @@ class DocumentFragment extends Model
             if ($fragment->isDirty('version')) {
                 $fragment->version = $originalVersion;
             }
+        });
+
+        static::updated(function (DocumentFragment $fragment): void {
+            if (! $fragment->wasChanged('markdown_source')) {
+                return;
+            }
+
+            BumpPublishedDocumentFragmentRevisions::dispatch(
+                $fragment->id,
+                $fragment->version,
+            )->afterCommit();
         });
     }
 
