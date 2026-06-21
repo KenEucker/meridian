@@ -130,7 +130,15 @@ The PR body must follow `.github/pull_request_template.md` and include all requi
 - Risks
 - Follow-up Issues
 
-## Final Steps
+## GitHub operations
+
+When creating, updating, reviewing, or publishing pull requests, use the GitHub connector (`mcp__codex_apps__github_*`) as the required path.
+
+Do not call `gh`, including `gh auth status`, as a prerequisite or blocker unless:
+1. the GitHub connector fails for the requested operation; or
+2. the user explicitly asks to use `gh`.
+
+A local GitHub CLI authentication failure never blocks connector-based GitHub work.
 
 If I say "send it", that means I want you to push the changes and create the PR. It should be a review ready PR, not a draft, and I expect you to the use the github connector. I may have to ask you to make reviwsions before this point, so do not automatically push changes and create the PR before I ask.
 
