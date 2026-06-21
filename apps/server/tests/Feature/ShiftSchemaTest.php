@@ -30,6 +30,8 @@ class ShiftSchemaTest extends TestCase
             'starts_at',
             'ends_at',
             'capacity',
+            'signup_opens_at',
+            'signup_closes_at',
             'created_at',
             'updated_at',
             'cancelled_at',
@@ -38,11 +40,9 @@ class ShiftSchemaTest extends TestCase
         }
     }
 
-    public function test_shifts_table_defers_requirement_and_signup_fields_to_later_tasks(): void
+    public function test_shifts_table_defers_later_shift_fields_to_future_tasks(): void
     {
         foreach ([
-            'signup_opens_at',
-            'signup_closes_at',
             'schedule_lock_at',
             'credit_policy_id',
             'meeting_map_location_id',
@@ -50,8 +50,6 @@ class ShiftSchemaTest extends TestCase
             $this->assertFalse(Schema::hasColumn('shifts', $column), "shifts.{$column} should be deferred");
         }
 
-        $this->assertFalse(Schema::hasTable('shift_training_requirements'));
-        $this->assertFalse(Schema::hasTable('shift_waiver_requirements'));
         $this->assertFalse(Schema::hasTable('shift_assignments'));
     }
 
