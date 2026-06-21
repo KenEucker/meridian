@@ -113,6 +113,11 @@ class Event extends Model
             ->withPivot(['id', 'archived_at']);
     }
 
+    public function trainings(): HasMany
+    {
+        return $this->hasMany(Training::class);
+    }
+
     /**
      * @param  Builder<Event>  $query
      * @return Builder<Event>

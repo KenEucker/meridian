@@ -130,6 +130,11 @@ class Department extends Model
         return $this->hasMany(EventApplicationDepartmentInterest::class);
     }
 
+    public function trainings(): HasMany
+    {
+        return $this->hasMany(Training::class);
+    }
+
     public function documentAcknowledgmentRequirements(): HasMany
     {
         return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')

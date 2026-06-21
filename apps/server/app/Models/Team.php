@@ -91,6 +91,11 @@ class Team extends Model
         return $this->hasMany(TeamGrant::class);
     }
 
+    public function trainings(): HasMany
+    {
+        return $this->hasMany(Training::class);
+    }
+
     /**
      * @param  Builder<Team>  $query
      * @return Builder<Team>
