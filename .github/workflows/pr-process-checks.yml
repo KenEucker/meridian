@@ -34,6 +34,9 @@ jobs:
       - name: Validate PR body
         run: python scripts/process/validate_pr_body.py
 
+      - name: Regression-test PR body validator
+        run: python scripts/process/test_validate_pr_body.py
+
       - name: Validate PR title
         run: python scripts/process/validate_conventional_commits.py --event
 

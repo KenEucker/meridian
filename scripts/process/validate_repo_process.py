@@ -22,6 +22,7 @@ REQUIRED_FILES = [
     ".github/workflows/pr-process-checks.yml",
     ".github/workflows/main-process-checks.yml",
     "scripts/process/validate_pr_body.py",
+    "scripts/process/test_validate_pr_body.py",
     "scripts/process/validate_traceability_matrix.py",
     "scripts/process/validate_qa_docs.py",
     "scripts/process/validate_repo_process.py",

@@ -4,7 +4,7 @@
 
 # Traceability
 
-<!-- Reference at least one Meridian requirement ID such as ORG-001, SHIFT-016, FR-012, INC-014, or a technical spec section such as Technical spec: Section 28. -->
+<!-- Reference at least one documented Meridian requirement ID such as POL-028, ORG-001, SHIFT-016, or FR-012. You may instead cite a technical source such as Technical spec: Section 21.12. -->
 
 # Implementation Notes
 
