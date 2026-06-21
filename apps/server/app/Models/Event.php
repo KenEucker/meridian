@@ -118,6 +118,11 @@ class Event extends Model
         return $this->hasMany(Training::class);
     }
 
+    public function shifts(): HasMany
+    {
+        return $this->hasMany(Shift::class);
+    }
+
     /**
      * @param  Builder<Event>  $query
      * @return Builder<Event>
