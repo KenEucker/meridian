@@ -66,6 +66,8 @@ deploy/
 
 Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its default test suite, the `apps/mobile` Vue field app shell builds and runs its smoke tests, and the `apps/desktop` Electron wrapper shell builds and runs its unit tests, but none contain Meridian product behavior yet. The Docker Compose stack, PostgreSQL configuration, seed data, and product services are added in later Alpha 1 tasks.
 
+While the Orchid Admin should be comprehensive for features and data management, UI components for screens will be targeted for the majority of users.
+
 For the repository as a whole, a fresh checkout should be able to run the process validators. The server app additionally supports the Laravel boot/test commands documented in [apps/server/README.md](apps/server/README.md).
 
 ### Prerequisites
