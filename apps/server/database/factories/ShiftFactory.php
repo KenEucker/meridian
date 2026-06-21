@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\Shift;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Carbon;
 
 /**
  * @extends Factory<Shift>
@@ -45,6 +46,8 @@ class ShiftFactory extends Factory
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'capacity' => null,
+            'signup_opens_at' => null,
+            'signup_closes_at' => null,
             'cancelled_at' => null,
         ];
     }
@@ -63,6 +66,20 @@ class ShiftFactory extends Factory
     {
         return $this->state(fn (): array => [
             'cancelled_at' => now(),
+        ]);
+    }
+
+    /**
+     * A shift with configured signup availability dates.
+     */
+    public function withSignupWindow(?Carbon $opensAt = null, ?Carbon $closesAt = null): static
+    {
+        $opensAt ??= now()->addDay();
+        $closesAt ??= $opensAt->copy()->addWeek();
+
+        return $this->state(fn (): array => [
+            'signup_opens_at' => $opensAt,
+            'signup_closes_at' => $closesAt,
         ]);
     }
 }

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 class Shift extends Model
@@ -32,6 +34,8 @@ class Shift extends Model
         'starts_at',
         'ends_at',
         'capacity',
+        'signup_opens_at',
+        'signup_closes_at',
         'cancelled_at',
     ];
 
@@ -44,6 +48,8 @@ class Shift extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'capacity' => 'integer',
+            'signup_opens_at' => 'datetime',
+            'signup_closes_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -84,12 +90,72 @@ class Shift extends Model
         return $this->belongsTo(Team::class, 'eligible_team_id');
     }
 
+    public function trainingRequirements(): HasMany
+    {
+        return $this->hasMany(ShiftTrainingRequirement::class);
+    }
+
+    public function waiverRequirements(): HasMany
+    {
+        return $this->hasMany(ShiftWaiverRequirement::class);
+    }
+
+    /**
+     * Trainings required before shift signup (SHIFT-005).
+     */
+    public function requiredTrainings(): BelongsToMany
+    {
+        return $this->belongsToMany(Training::class, 'shift_training_requirements')
+            ->withPivot(['id', 'created_at']);
+    }
+
+    /**
+     * Waivers required before shift signup (SHIFT-006).
+     */
+    public function requiredWaivers(): BelongsToMany
+    {
+        return $this->belongsToMany(Waiver::class, 'shift_waiver_requirements')
+            ->withPivot(['id', 'created_at']);
+    }
+
     /**
      * Whether the shift defines a maximum staff capacity (SHIFT-007).
      */
     public function hasCapacityLimit(): bool
     {
         return $this->capacity !== null;
+    }
+
+    /**
+     * Whether the shift configures signup availability dates (SHIFT-008).
+     */
+    public function hasSignupWindow(): bool
+    {
+        return $this->signup_opens_at !== null || $this->signup_closes_at !== null;
+    }
+
+    /**
+     * Whether signup is open at the given moment based on configured availability dates (SHIFT-008).
+     *
+     * When no signup window is configured, signup is treated as open for later eligibility checks.
+     */
+    public function isSignupOpenAt(?Carbon $moment = null): bool
+    {
+        if (! $this->hasSignupWindow()) {
+            return true;
+        }
+
+        $moment ??= Carbon::now();
+
+        if ($this->signup_opens_at !== null && $moment->lt($this->signup_opens_at)) {
+            return false;
+        }
+
+        if ($this->signup_closes_at !== null && $moment->gt($this->signup_closes_at)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
