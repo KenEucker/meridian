@@ -288,7 +288,7 @@ class DocumentOrchidTest extends TestCase
             'title' => 'Volunteer Expectations',
             'markdown_source' => '{{fragment:shared-guidance}}',
         ]);
-        $procedure = ProcedureDocument::factory()->for($organization)->create([
+        $procedure = ProcedureDocument::factory()->for($organization)->published()->create([
             'scope_type' => ProcedureDocument::SCOPE_ORGANIZATION,
             'scope_id' => $organization->id,
             'title' => 'Gate Opening Procedure',
@@ -309,7 +309,41 @@ class DocumentOrchidTest extends TestCase
         $response->assertSee('Policy');
         $response->assertSee('Procedure');
         $response->assertSee('Published');
+        $response->assertSee('Published document impact');
+        $response->assertSee('Editing this fragment will bump versions for 2 published documents.');
+    }
+
+    public function test_fragment_editor_does_not_warn_when_only_draft_and_archived_documents_reference_it(): void
+    {
+        $organization = Organization::factory()->create();
+        $fragment = DocumentFragment::factory()->for($organization)->create([
+            'scope_type' => DocumentFragment::SCOPE_ORGANIZATION,
+            'scope_id' => $organization->id,
+            'slug' => 'draft-only-guidance',
+        ]);
+        $draftPolicy = PolicyDocument::factory()->for($organization)->create([
+            'scope_type' => PolicyDocument::SCOPE_ORGANIZATION,
+            'scope_id' => $organization->id,
+            'markdown_source' => '{{fragment:draft-only-guidance}}',
+        ]);
+        $archivedProcedure = ProcedureDocument::factory()->for($organization)->archived()->create([
+            'scope_type' => ProcedureDocument::SCOPE_ORGANIZATION,
+            'scope_id' => $organization->id,
+            'markdown_source' => '{{fragment:draft-only-guidance}}',
+        ]);
+
+        app(DocumentFragmentReferenceService::class)->synchronize($draftPolicy);
+        app(DocumentFragmentReferenceService::class)->synchronize($archivedProcedure);
+
+        $response = $this->actingAs($this->documentAdmin())
+            ->get(route('platform.document-fragments.edit', $fragment));
+
+        $response->assertOk();
+        $response->assertSee('Save Fragment Changes');
         $response->assertSee('Draft');
+        $response->assertSee('Archived');
+        $response->assertDontSee('Published document impact');
+        $response->assertDontSee('Editing this fragment will bump versions for');
     }
 
     public function test_fragment_save_rejects_nested_references_and_validates_scope_ownership(): void
