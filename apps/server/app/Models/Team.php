@@ -96,6 +96,12 @@ class Team extends Model
         return $this->hasMany(Training::class);
     }
 
+    public function waivers(): HasMany
+    {
+        return $this->hasMany(Waiver::class, 'scope_id')
+            ->where('scope_type', Waiver::SCOPE_TEAM);
+    }
+
     /**
      * @param  Builder<Team>  $query
      * @return Builder<Team>
