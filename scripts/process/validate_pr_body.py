@@ -8,6 +8,9 @@ import re
 import sys
 from pathlib import Path
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REQUIREMENTS_DOCUMENT = REPOSITORY_ROOT / "docs/meridian-requirements-document.md"
+
 REQUIRED_SECTIONS = [
     "Summary",
     "Traceability",
@@ -24,13 +27,19 @@ REQUIRED_SECTIONS = [
     "Follow-up Issues",
 ]
 
-TRACE_RE = re.compile(
-    r"\b(?:ORG|VOL|TEAM|SLB|FR|INC|SHIFT|APP|STAT|TRAIN|WAIVER|CRED|HOURS|CREDIT|EQUIP|REPORT)-\d{3}\b"
-    # "Technical spec:" label followed by a "Section X(.Y)" reference. The
-    # reference may sit on the same line or on a following (optionally
-    # bulleted) line, matching the canonical Traceability format in
-    # docs/process/meridian-development-process.md section 5.1.
-    r"|Technical spec:\s*(?:[-*+]\s*)?Section\s*\d+(?:\.\d+)?",
+REQUIREMENT_ID_RE = re.compile(
+    r"\b([A-Z][A-Z0-9_]*-\d{3}[A-Z]?)\b",
+    re.IGNORECASE,
+)
+REQUIREMENT_HEADING_RE = re.compile(
+    r"^#{1,6}\s+([A-Z][A-Z0-9_]*-\d{3}[A-Z]?)\s*#*\s*$",
+    re.MULTILINE,
+)
+# "Technical spec:" may reference one or more sections. Requirement IDs are
+# loaded from the canonical requirements document below so new requirement
+# families do not require this validator to be updated by hand.
+TECHNICAL_SECTION_RE = re.compile(
+    r"\bTechnical spec:\s*(?:[-*+]\s*)?Sections?\s*\d+(?:\.\d+)?",
     re.IGNORECASE,
 )
 
@@ -46,6 +55,24 @@ def headings(body):
         if match:
             found.add(normalize_heading(match.group(1)))
     return found
+
+
+def documented_requirement_ids():
+    """Return requirement IDs declared in the canonical requirements document."""
+    document = REQUIREMENTS_DOCUMENT.read_text(encoding="utf-8")
+    return {
+        match.group(1).upper()
+        for match in REQUIREMENT_HEADING_RE.finditer(document)
+    }
+
+
+def has_traceability_reference(body, requirement_ids):
+    referenced_ids = {
+        match.group(1).upper() for match in REQUIREMENT_ID_RE.finditer(body)
+    }
+    return bool(referenced_ids & requirement_ids) or bool(
+        TECHNICAL_SECTION_RE.search(body)
+    )
 
 
 def load_body(args):
@@ -76,9 +103,10 @@ def main():
                 f"Missing PR section '{section}'. Add a '# {section}' heading using .github/pull_request_template.md."
             )
 
-    if not TRACE_RE.search(body):
+    requirement_ids = documented_requirement_ids()
+    if not has_traceability_reference(body, requirement_ids):
         errors.append(
-            "Missing traceability reference. Add a Meridian requirement ID such as ORG-001, SHIFT-016, FR-012, INC-014, or a reference like 'Technical spec: Section 28'."
+            "Missing traceability reference. Add a documented Meridian requirement ID such as POL-028 or ORG-001, or a reference like 'Technical spec: Section 21.12'."
         )
 
     if errors:

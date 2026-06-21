@@ -7,6 +7,7 @@ namespace App\Orchid\Screens\Document;
 use App\Models\PolicyDocument;
 use App\Orchid\Layouts\Document\DocumentEditLayout;
 use App\Services\Documents\DocumentAdminService;
+use App\Services\Documents\DocumentExport;
 use App\Services\Documents\DocumentFragmentReferenceException;
 use App\Services\Documents\DocumentScopeValidator;
 use Illuminate\Http\RedirectResponse;
@@ -61,15 +62,32 @@ class PolicyDocumentEditScreen extends Screen
      */
     public function commandBar(): iterable
     {
-        return [
+        $actions = [
             Link::make(__('Cancel'))
                 ->icon('bs.x-circle')
                 ->route('platform.policy-documents'),
-
-            Button::make(__('Save Policy'))
-                ->icon('bs.check-circle')
-                ->method('save'),
         ];
+
+        if ($this->document->exists) {
+            $actions[] = Link::make(__('Export Markdown'))
+                ->icon('bs.download')
+                ->route('platform.policy-documents.export', [
+                    'policyDocument' => $this->document,
+                    'format' => DocumentExport::FORMAT_MARKDOWN,
+                ]);
+            $actions[] = Link::make(__('Export PDF'))
+                ->icon('bs.file-earmark-pdf')
+                ->route('platform.policy-documents.export', [
+                    'policyDocument' => $this->document,
+                    'format' => DocumentExport::FORMAT_PDF,
+                ]);
+        }
+
+        $actions[] = Button::make(__('Save Policy'))
+            ->icon('bs.check-circle')
+            ->method('save');
+
+        return $actions;
     }
 
     /**

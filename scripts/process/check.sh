@@ -18,6 +18,7 @@ $PYTHON scripts/process/validate_traceability_matrix.py
 $PYTHON scripts/process/validate_qa_docs.py
 $PYTHON scripts/process/validate_repo_process.py
 $PYTHON scripts/process/validate_conventional_commits.py --message "docs(process): validate process scaffold"
+$PYTHON scripts/process/test_validate_pr_body.py
 
 if [ -f composer.json ]; then
   composer validate --no-check-publish
