@@ -64,6 +64,11 @@ class Node extends Model
         return $this->hasMany(NodeConfigValue::class);
     }
 
+    public function acceptedDocumentAcknowledgments(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgment::class, 'accepted_by_node_id');
+    }
+
     /**
      * @param  Builder<Node>  $query
      * @return Builder<Node>

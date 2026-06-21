@@ -200,6 +200,18 @@ class PolicyDocument extends Model
             ->where('document_type', DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_POLICY);
     }
 
+    public function acknowledgments(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgment::class, 'document_id')
+            ->where('document_type', DocumentAcknowledgment::DOCUMENT_TYPE_POLICY);
+    }
+
+    public function versionSnapshots(): HasMany
+    {
+        return $this->hasMany(DocumentVersionSnapshot::class, 'document_id')
+            ->where('document_type', DocumentAcknowledgment::DOCUMENT_TYPE_POLICY);
+    }
+
     /**
      * @param  Builder<PolicyDocument>  $query
      * @return Builder<PolicyDocument>

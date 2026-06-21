@@ -201,6 +201,18 @@ class ProcedureDocument extends Model
             ->where('document_type', DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_PROCEDURE);
     }
 
+    public function acknowledgments(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgment::class, 'document_id')
+            ->where('document_type', DocumentAcknowledgment::DOCUMENT_TYPE_PROCEDURE);
+    }
+
+    public function versionSnapshots(): HasMany
+    {
+        return $this->hasMany(DocumentVersionSnapshot::class, 'document_id')
+            ->where('document_type', DocumentAcknowledgment::DOCUMENT_TYPE_PROCEDURE);
+    }
+
     /**
      * @param  Builder<ProcedureDocument>  $query
      * @return Builder<ProcedureDocument>
