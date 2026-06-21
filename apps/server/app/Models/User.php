@@ -100,6 +100,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Staff::class, 'staff_user')->using(StaffUser::class)->withTimestamps();
     }
 
+    public function documentAcknowledgments(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgment::class);
+    }
+
     public function staffOrganizationStatusChanges(): HasMany
     {
         return $this->hasMany(StaffOrganizationStatus::class, 'status_changed_by_user_id');

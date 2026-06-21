@@ -59,6 +59,23 @@ class DocumentRenderer
         return $rendered;
     }
 
+    /**
+     * Resolve current fragment Markdown into document Markdown for an immutable
+     * acknowledgment-version snapshot. Rendering remains separate so each
+     * fragment is still sanitized independently for display.
+     */
+    public function resolvedMarkdown(PolicyDocument|ProcedureDocument $document): string
+    {
+        /** @var array<string, string> $markdownByToken */
+        $markdownByToken = [];
+
+        foreach ($this->references->validate($document) as $reference) {
+            $markdownByToken[$reference['token']] = $reference['fragment']->markdown_source;
+        }
+
+        return strtr($document->markdown_source, $markdownByToken);
+    }
+
     private function renderMarkdown(string $markdown): string
     {
         return (string) Str::markdown($markdown, [
