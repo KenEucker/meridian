@@ -102,6 +102,11 @@ class Team extends Model
             ->where('scope_type', Waiver::SCOPE_TEAM);
     }
 
+    public function eligibleShifts(): HasMany
+    {
+        return $this->hasMany(Shift::class, 'eligible_team_id');
+    }
+
     /**
      * @param  Builder<Team>  $query
      * @return Builder<Team>

@@ -141,6 +141,11 @@ class Department extends Model
             ->where('scope_type', Waiver::SCOPE_DEPARTMENT);
     }
 
+    public function shifts(): HasMany
+    {
+        return $this->hasMany(Shift::class);
+    }
+
     public function documentAcknowledgmentRequirements(): HasMany
     {
         return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')
