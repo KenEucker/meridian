@@ -135,6 +135,12 @@ class Department extends Model
         return $this->hasMany(Training::class);
     }
 
+    public function waivers(): HasMany
+    {
+        return $this->hasMany(Waiver::class, 'scope_id')
+            ->where('scope_type', Waiver::SCOPE_DEPARTMENT);
+    }
+
     public function documentAcknowledgmentRequirements(): HasMany
     {
         return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')

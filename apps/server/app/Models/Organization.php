@@ -125,6 +125,11 @@ class Organization extends Model
         return $this->hasMany(Training::class);
     }
 
+    public function waivers(): HasMany
+    {
+        return $this->hasMany(Waiver::class);
+    }
+
     public function staff(): BelongsToMany
     {
         return $this->belongsToMany(Staff::class, 'staff_organization_statuses')
