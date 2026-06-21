@@ -105,6 +105,11 @@ class Organization extends Model
         return $this->hasMany(DocumentFragment::class);
     }
 
+    public function documentAcknowledgmentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgmentRequirement::class);
+    }
+
     public function organizersDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'organizers_department_id');

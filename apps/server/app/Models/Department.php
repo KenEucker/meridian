@@ -130,6 +130,12 @@ class Department extends Model
         return $this->hasMany(EventApplicationDepartmentInterest::class);
     }
 
+    public function documentAcknowledgmentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')
+            ->where('scope_type', DocumentAcknowledgmentRequirement::SCOPE_DEPARTMENT);
+    }
+
     /**
      * @param  Builder<Department>  $query
      * @return Builder<Department>
