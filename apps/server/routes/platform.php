@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Documents\DocumentExportController;
 use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
@@ -27,6 +28,7 @@ use App\Orchid\Screens\Team\TeamListScreen;
 use App\Orchid\Screens\User\UserEditScreen;
 use App\Orchid\Screens\User\UserListScreen;
 use App\Orchid\Screens\User\UserProfileScreen;
+use App\Services\Documents\DocumentExport;
 use Illuminate\Support\Facades\Route;
 use Tabuna\Breadcrumbs\Trail;
 
@@ -214,6 +216,10 @@ Route::screen('staff', StaffListScreen::class)
         ->push(__('Staff'), route('platform.staff')));
 
 // Platform > Policies & Procedures > Policies > Policy
+Route::get('policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'policy'])
+    ->whereIn('format', DocumentExport::formats())
+    ->name('platform.policy-documents.export');
+
 Route::screen('policy-documents/{policyDocument}/edit', PolicyDocumentEditScreen::class)
     ->name('platform.policy-documents.edit')
     ->breadcrumbs(fn (Trail $trail, $policyDocument) => $trail
@@ -235,6 +241,10 @@ Route::screen('policy-documents', PolicyDocumentListScreen::class)
         ->push(__('Policy Documents'), route('platform.policy-documents')));
 
 // Platform > Policies & Procedures > Procedures > Procedure
+Route::get('procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'procedure'])
+    ->whereIn('format', DocumentExport::formats())
+    ->name('platform.procedure-documents.export');
+
 Route::screen('procedure-documents/{procedureDocument}/edit', ProcedureDocumentEditScreen::class)
     ->name('platform.procedure-documents.edit')
     ->breadcrumbs(fn (Trail $trail, $procedureDocument) => $trail
