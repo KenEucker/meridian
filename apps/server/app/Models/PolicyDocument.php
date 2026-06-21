@@ -194,6 +194,12 @@ class PolicyDocument extends Model
             ->where('document_type', DocumentFragmentReference::DOCUMENT_TYPE_POLICY);
     }
 
+    public function acknowledgmentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'document_id')
+            ->where('document_type', DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_POLICY);
+    }
+
     /**
      * @param  Builder<PolicyDocument>  $query
      * @return Builder<PolicyDocument>
