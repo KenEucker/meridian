@@ -120,6 +120,11 @@ class Organization extends Model
         return $this->hasMany(StaffOrganizationStatus::class);
     }
 
+    public function trainings(): HasMany
+    {
+        return $this->hasMany(Training::class);
+    }
+
     public function staff(): BelongsToMany
     {
         return $this->belongsToMany(Staff::class, 'staff_organization_statuses')

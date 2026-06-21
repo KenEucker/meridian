@@ -119,6 +119,11 @@ class Staff extends Model
         return $this->hasMany(TeamMembership::class);
     }
 
+    public function trainingCompletions(): HasMany
+    {
+        return $this->hasMany(TrainingCompletion::class);
+    }
+
     public function organizations(): BelongsToMany
     {
         return $this->belongsToMany(Organization::class, 'staff_organization_statuses')
