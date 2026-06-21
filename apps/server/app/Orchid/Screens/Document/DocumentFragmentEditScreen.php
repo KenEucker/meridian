@@ -36,9 +36,12 @@ class DocumentFragmentEditScreen extends Screen
      */
     public function query(DocumentFragment $fragment): iterable
     {
+        $referencingDocuments = $this->referencingDocuments($fragment);
+
         return [
             'fragment' => $fragment,
-            'referencingDocuments' => $this->referencingDocuments($fragment),
+            'referencingDocuments' => $referencingDocuments,
+            'publishedReferenceCount' => $this->publishedReferenceCount($referencingDocuments),
         ];
     }
 
@@ -82,6 +85,7 @@ class DocumentFragmentEditScreen extends Screen
     public function layout(): iterable
     {
         return [
+            Layout::block(Layout::view('orchid.documents.fragment-impact-warning')),
             Layout::block(DocumentFragmentEditLayout::class)
                 ->title(__('Document fragment'))
                 ->description(__('Fragments are Markdown-only reusable content without lifecycle states.')),
@@ -155,7 +159,7 @@ class DocumentFragmentEditScreen extends Screen
     }
 
     /**
-     * @return list<array{type: string, title: string, scope: string, state: string, version: string, route: string, id: string}>
+     * @return list<array{type: string, title: string, scope: string, state: string, version: string, published: bool, route: string, id: string}>
      */
     private function referencingDocuments(DocumentFragment $fragment): array
     {
@@ -188,7 +192,7 @@ class DocumentFragmentEditScreen extends Screen
     /**
      * @param  class-string<PolicyDocument|ProcedureDocument>  $model
      * @param  list<string>  $ids
-     * @return list<array{type: string, title: string, scope: string, state: string, version: string, route: string, id: string}>
+     * @return list<array{type: string, title: string, scope: string, state: string, version: string, published: bool, route: string, id: string}>
      */
     private function documentReferenceRows(string $model, array $ids, string $type, string $route): array
     {
@@ -207,10 +211,22 @@ class DocumentFragmentEditScreen extends Screen
                 'scope' => $this->scopeLabel($document),
                 'state' => $document::stateLabels()[$document->state],
                 'version' => $document->version(),
+                'published' => $document->state === $document::STATE_PUBLISHED,
                 'route' => $route,
                 'id' => $document->id,
             ])
             ->all();
+    }
+
+    /**
+     * @param  list<array{published: bool}>  $referencingDocuments
+     */
+    private function publishedReferenceCount(array $referencingDocuments): int
+    {
+        return count(array_filter(
+            $referencingDocuments,
+            fn (array $document): bool => $document['published'],
+        ));
     }
 
     private function scopeLabel(PolicyDocument|ProcedureDocument $document): string
