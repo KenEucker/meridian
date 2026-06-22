@@ -32,6 +32,7 @@ class EventFactory extends Factory
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'timezone' => 'America/Los_Angeles',
+            'minimum_staff_age' => null,
             'status' => null,
             'ic_department_id' => null,
             'active_event_window_starts_at' => $startsAt->copy()->subDay(),
