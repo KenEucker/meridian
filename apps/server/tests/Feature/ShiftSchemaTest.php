@@ -50,7 +50,7 @@ class ShiftSchemaTest extends TestCase
             $this->assertFalse(Schema::hasColumn('shifts', $column), "shifts.{$column} should be deferred");
         }
 
-        $this->assertFalse(Schema::hasTable('shift_assignments'));
+        $this->assertTrue(Schema::hasTable('shift_assignments'));
     }
 
     public function test_shift_belongs_to_event_department_and_eligible_team(): void

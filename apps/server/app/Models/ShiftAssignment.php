@@ -1,0 +1,91 @@
+<?php
+
+namespace App\Models;
+
+use Database\Factories\ShiftAssignmentFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ShiftAssignment extends Model
+{
+    public const STATUS_SIGNED_UP = 'signed_up';
+
+    public const STATUS_ASSIGNED = 'assigned';
+
+    /** @use HasFactory<ShiftAssignmentFactory> */
+    use HasFactory, HasUuids;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    /**
+     * @var list<string>
+     */
+    protected $fillable = [
+        'shift_id',
+        'staff_id',
+        'assigned_by_user_id',
+        'assignment_status',
+        'removed_at',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'removed_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function statuses(): array
+    {
+        return [
+            self::STATUS_SIGNED_UP,
+            self::STATUS_ASSIGNED,
+        ];
+    }
+
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
+    }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class);
+    }
+
+    public function assignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by_user_id');
+    }
+
+    /**
+     * @param  Builder<ShiftAssignment>  $query
+     * @return Builder<ShiftAssignment>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('removed_at');
+    }
+
+    public function isRemoved(): bool
+    {
+        return $this->removed_at !== null;
+    }
+
+    public function isSelfSignup(): bool
+    {
+        return $this->assignment_status === self::STATUS_SIGNED_UP
+            && $this->assigned_by_user_id === null;
+    }
+}

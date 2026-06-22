@@ -100,6 +100,16 @@ class Shift extends Model
         return $this->hasMany(ShiftWaiverRequirement::class);
     }
 
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(ShiftAssignment::class);
+    }
+
+    public function activeAssignments(): HasMany
+    {
+        return $this->assignments()->whereNull('removed_at');
+    }
+
     /**
      * Trainings required before shift signup (SHIFT-005).
      */
