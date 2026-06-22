@@ -137,6 +137,18 @@ class Shift extends Model
     }
 
     /**
+     * Whether active assignments have reached the configured capacity (SHIFT-012).
+     */
+    public function isAtCapacity(): bool
+    {
+        if (! $this->hasCapacityLimit()) {
+            return false;
+        }
+
+        return $this->activeAssignments()->count() >= $this->capacity;
+    }
+
+    /**
      * Whether the shift configures signup availability dates (SHIFT-008).
      */
     public function hasSignupWindow(): bool

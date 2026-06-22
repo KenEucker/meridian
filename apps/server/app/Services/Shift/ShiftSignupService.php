@@ -17,13 +17,15 @@ use Illuminate\Support\Facades\DB;
 /**
  * Self-signup command for planned shift coverage (SHIFT-011; requirements 3.12).
  *
- * Training, waiver, capacity, department ineligible status, overlap warnings,
- * schedule lock rules, lead assignment, and removal are delivered by later M7
- * tasks.
+ * Overlap warnings, schedule lock rules, lead assignment, and removal are delivered
+ * by later M7 tasks.
  */
 class ShiftSignupService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly ShiftEligibilityService $eligibility,
+    ) {}
 
     /**
      * @throws ShiftSignupException when signup is not permitted
@@ -44,7 +46,8 @@ class ShiftSignupService
                 ->firstOrFail();
 
             $this->assertShiftAcceptsSignup($shift, $moment);
-            $this->assertStaffEligibleForSignup($shift, $staff);
+            $this->assertStaffEligibleForSignup($shift, $staff, $moment);
+            $this->eligibility->assertCapacityForSelfSignup($shift);
 
             $existingAssignment = ShiftAssignment::query()
                 ->where('shift_id', $shift->id)
@@ -95,7 +98,7 @@ class ShiftSignupService
     /**
      * @throws ShiftSignupException
      */
-    private function assertStaffEligibleForSignup(Shift $shift, Staff $staff): void
+    private function assertStaffEligibleForSignup(Shift $shift, Staff $staff, Carbon $moment): void
     {
         $organizationId = $shift->event?->organization_id;
 
@@ -119,6 +122,8 @@ class ShiftSignupService
         if ($departmentMembership === null) {
             throw ShiftSignupException::noDepartmentMembership();
         }
+
+        $this->eligibility->assertMeetsAssignmentRequirements($shift, $staff, $departmentMembership, $moment);
 
         $hasEligibleTeamMembership = TeamMembership::query()
             ->active()

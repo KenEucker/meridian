@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class Training extends Model
 {
@@ -102,6 +103,17 @@ class Training extends Model
     public function isEventSpecific(): bool
     {
         return $this->event_id !== null;
+    }
+
+    /**
+     * Whether the staff member has a current completion for this training (TRAIN-003).
+     */
+    public function isCompleteFor(Staff $staff, ?Carbon $moment = null): bool
+    {
+        return $this->completions()
+            ->where('staff_id', $staff->id)
+            ->current($moment)
+            ->exists();
     }
 
     /**

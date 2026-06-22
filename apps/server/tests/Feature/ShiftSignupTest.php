@@ -12,10 +12,16 @@ use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
+use App\Models\Training;
 use App\Models\User;
+use App\Models\Waiver;
 use App\Services\Membership\DepartmentMembershipService;
+use App\Services\Shift\ShiftRequirementService;
 use App\Services\Shift\ShiftSignupException;
 use App\Services\Shift\ShiftSignupService;
+use App\Services\Status\StaffStatusService;
+use App\Services\Training\TrainingService;
+use App\Services\Waiver\WaiverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -191,6 +197,93 @@ class ShiftSignupTest extends TestCase
             $user,
             $opensAt->copy()->addHour(),
         );
+
+        $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $assignment->assignment_status);
+    }
+
+    public function test_signup_rejects_missing_required_training(): void
+    {
+        [$shift, $staff, $user] = $this->eligibleSignupScenario();
+        $training = Training::factory()->for($shift->event->organization)->create();
+        app(ShiftRequirementService::class)->addTrainingRequirement($shift, $training);
+
+        $this->expectException(ShiftSignupException::class);
+        $this->expectExceptionMessage('Required training must be complete before shift signup.');
+
+        app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
+    }
+
+    public function test_signup_rejects_missing_required_waiver(): void
+    {
+        [$shift, $staff, $user] = $this->eligibleSignupScenario();
+        $waiver = Waiver::factory()->for($shift->event->organization)->create([
+            'scope_type' => Waiver::SCOPE_ORGANIZATION,
+            'scope_id' => $shift->event->organization_id,
+        ]);
+        app(ShiftRequirementService::class)->addWaiverRequirement($shift, $waiver);
+
+        $this->expectException(ShiftSignupException::class);
+        $this->expectExceptionMessage('Required waiver must be complete before shift signup.');
+
+        app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
+    }
+
+    public function test_signup_rejects_department_ineligible_status(): void
+    {
+        [$shift, $staff, $user] = $this->eligibleSignupScenario();
+        $departmentMembership = DepartmentMembership::query()
+            ->active()
+            ->where('department_id', $shift->department_id)
+            ->where('staff_id', $staff->id)
+            ->firstOrFail();
+
+        app(StaffStatusService::class)->transitionDepartmentStatus(
+            $departmentMembership,
+            DepartmentMembership::STATUS_INELIGIBLE,
+            'Not eligible for this department.',
+        );
+
+        $this->expectException(ShiftSignupException::class);
+        $this->expectExceptionMessage('Ineligible department status prevents shift signup.');
+
+        app(ShiftSignupService::class)->signUp($shift, $staff, $user);
+    }
+
+    public function test_signup_rejects_full_shift(): void
+    {
+        [$shift, $staff, $user] = $this->eligibleSignupScenario();
+        $shift->forceFill(['capacity' => 1])->save();
+
+        ShiftAssignment::factory()->create([
+            'shift_id' => $shift->id,
+            'staff_id' => Staff::factory()->create()->id,
+            'assignment_status' => ShiftAssignment::STATUS_SIGNED_UP,
+            'assigned_by_user_id' => null,
+            'removed_at' => null,
+        ]);
+
+        $this->expectException(ShiftSignupException::class);
+        $this->expectExceptionMessage('This shift is full and cannot accept additional signup.');
+
+        app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
+    }
+
+    public function test_signup_succeeds_when_required_training_and_waiver_are_complete(): void
+    {
+        [$shift, $staff, $user] = $this->eligibleSignupScenario();
+        $organization = $shift->event->organization;
+        $training = Training::factory()->for($organization)->create();
+        $waiver = Waiver::factory()->for($organization)->create([
+            'scope_type' => Waiver::SCOPE_ORGANIZATION,
+            'scope_id' => $organization->id,
+        ]);
+        $requirementService = app(ShiftRequirementService::class);
+        $requirementService->addTrainingRequirement($shift, $training);
+        $requirementService->addWaiverRequirement($shift, $waiver);
+        app(TrainingService::class)->recordCompletion($training, $staff);
+        app(WaiverService::class)->recordCompletion($waiver, $staff);
+
+        $assignment = app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
 
         $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $assignment->assignment_status);
     }

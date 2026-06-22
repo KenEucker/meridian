@@ -40,4 +40,24 @@ class ShiftSignupException extends RuntimeException
     {
         return new self('The staff profile must belong to the signing-up user.');
     }
+
+    public static function departmentIneligible(): self
+    {
+        return new self('Ineligible department status prevents shift signup.');
+    }
+
+    public static function missingRequiredTraining(): self
+    {
+        return new self('Required training must be complete before shift signup.');
+    }
+
+    public static function missingRequiredWaiver(): self
+    {
+        return new self('Required waiver must be complete before shift signup.');
+    }
+
+    public static function shiftFull(): self
+    {
+        return new self('This shift is full and cannot accept additional signup.');
+    }
 }
