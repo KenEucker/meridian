@@ -15,39 +15,41 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Self-signup command for planned shift coverage (SHIFT-011; requirements 3.12).
- *
- * Schedule lock rules, lead removal, API/OpenAPI, and UI are delivered by later M7 tasks.
+ * Lead-driven shift assignment with elevated overlap authority (SHIFT-015).
  */
-class ShiftSignupService
+class ShiftAssignmentService
 {
     public function __construct(
         private readonly AuditService $audit,
+        private readonly ShiftAssignmentAccess $access,
         private readonly ShiftEligibilityService $eligibility,
         private readonly ShiftOverlapService $overlaps,
     ) {}
 
     /**
-     * @throws ShiftSignupException when signup is not permitted
+     * @throws ShiftAssignmentException when assignment is not permitted
      */
-    public function signUp(Shift $shift, Staff $staff, User $user, ?Carbon $moment = null): ShiftAssignmentOutcome
-    {
+    public function assignStaffToShift(
+        Shift $shift,
+        Staff $staff,
+        User $assigner,
+        ?Carbon $moment = null,
+    ): ShiftAssignmentOutcome {
         $moment ??= Carbon::now();
 
-        if (! $user->staffProfiles()->whereKey($staff->getKey())->exists()) {
-            throw ShiftSignupException::staffNotLinkedToUser();
+        if (! $this->access->canAssignToShift($assigner, $shift)) {
+            throw ShiftAssignmentException::unauthorized();
         }
 
-        return DB::transaction(function () use ($shift, $staff, $user, $moment): ShiftAssignmentOutcome {
+        return DB::transaction(function () use ($shift, $staff, $assigner, $moment): ShiftAssignmentOutcome {
             $shift = Shift::query()
                 ->with(['event', 'department'])
                 ->whereKey($shift->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->assertShiftAcceptsSignup($shift, $moment);
-            $this->assertStaffEligibleForSignup($shift, $staff, $moment);
-            $this->eligibility->assertCapacityForSelfSignup($shift);
+            $this->assertShiftAcceptsAssignment($shift, $moment);
+            $this->assertStaffEligibleForAssignment($shift, $staff, $moment);
 
             $existingAssignment = ShiftAssignment::query()
                 ->where('shift_id', $shift->id)
@@ -56,7 +58,7 @@ class ShiftSignupService
                 ->first();
 
             if ($existingAssignment !== null && $existingAssignment->removed_at === null) {
-                throw ShiftSignupException::alreadySignedUp();
+                throw ShiftAssignmentException::alreadyAssigned();
             }
 
             $warnings = $this->overlaps->warningsFor($staff, $shift);
@@ -64,14 +66,14 @@ class ShiftSignupService
             $assignment = ShiftAssignment::query()->create([
                 'shift_id' => $shift->id,
                 'staff_id' => $staff->id,
-                'assigned_by_user_id' => null,
-                'assignment_status' => ShiftAssignment::STATUS_SIGNED_UP,
+                'assigned_by_user_id' => $assigner->id,
+                'assignment_status' => ShiftAssignment::STATUS_ASSIGNED,
             ]);
 
             $this->audit->recordForEntity(
                 entity: $assignment,
-                action: 'shift_assignment.signed_up',
-                actorUser: $user,
+                action: 'shift_assignment.assigned',
+                actorUser: $assigner,
                 organizationId: $shift->event?->organization_id,
                 eventId: $shift->event_id,
                 departmentId: $shift->department_id,
@@ -87,23 +89,23 @@ class ShiftSignupService
     }
 
     /**
-     * @throws ShiftSignupException
+     * @throws ShiftAssignmentException
      */
-    private function assertShiftAcceptsSignup(Shift $shift, Carbon $moment): void
+    private function assertShiftAcceptsAssignment(Shift $shift, Carbon $moment): void
     {
         if ($shift->isCancelled()) {
-            throw ShiftSignupException::cancelledShift();
+            throw ShiftAssignmentException::cancelledShift();
         }
 
         if (! $shift->isSignupOpenAt($moment)) {
-            throw ShiftSignupException::signupClosed();
+            throw ShiftAssignmentException::signupClosed();
         }
     }
 
     /**
-     * @throws ShiftSignupException
+     * @throws ShiftAssignmentException
      */
-    private function assertStaffEligibleForSignup(Shift $shift, Staff $staff, Carbon $moment): void
+    private function assertStaffEligibleForAssignment(Shift $shift, Staff $staff, Carbon $moment): void
     {
         $organizationId = $shift->event?->organization_id;
 
@@ -114,7 +116,7 @@ class ShiftSignupService
                 ->first();
 
             if ($organizationStatus?->status === StaffOrganizationStatus::STATUS_DO_NOT_STAFF) {
-                throw ShiftSignupException::doNotStaff();
+                throw ShiftAssignmentException::doNotStaff();
             }
         }
 
@@ -125,7 +127,7 @@ class ShiftSignupService
             ->first();
 
         if ($departmentMembership === null) {
-            throw ShiftSignupException::noDepartmentMembership();
+            throw ShiftAssignmentException::noDepartmentMembership();
         }
 
         $this->eligibility->assertMeetsAssignmentRequirements($shift, $staff, $departmentMembership, $moment);
@@ -138,7 +140,7 @@ class ShiftSignupService
             ->exists();
 
         if (! $hasEligibleTeamMembership) {
-            throw ShiftSignupException::notEligibleTeamMember();
+            throw ShiftAssignmentException::notEligibleTeamMember();
         }
     }
 
