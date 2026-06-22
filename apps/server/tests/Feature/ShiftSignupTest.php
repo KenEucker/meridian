@@ -56,7 +56,10 @@ class ShiftSignupTest extends TestCase
     {
         [$shift, $staff, $user] = $this->eligibleSignupScenario();
 
-        $assignment = app(ShiftSignupService::class)->signUp($shift, $staff, $user);
+        $outcome = app(ShiftSignupService::class)->signUp($shift, $staff, $user);
+        $assignment = $outcome->assignment;
+
+        $this->assertFalse($outcome->hasOverlapWarnings());
 
         $this->assertSame((string) $shift->id, (string) $assignment->shift_id);
         $this->assertSame((string) $staff->id, (string) $assignment->staff_id);
@@ -191,14 +194,14 @@ class ShiftSignupTest extends TestCase
             'signup_closes_at' => $opensAt->copy()->addDays(7),
         ])->save();
 
-        $assignment = app(ShiftSignupService::class)->signUp(
+        $outcome = app(ShiftSignupService::class)->signUp(
             $shift->refresh(),
             $staff,
             $user,
             $opensAt->copy()->addHour(),
         );
 
-        $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $assignment->assignment_status);
+        $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $outcome->assignment->assignment_status);
     }
 
     public function test_signup_rejects_missing_required_training(): void
@@ -283,9 +286,9 @@ class ShiftSignupTest extends TestCase
         app(TrainingService::class)->recordCompletion($training, $staff);
         app(WaiverService::class)->recordCompletion($waiver, $staff);
 
-        $assignment = app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
+        $outcome = app(ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user);
 
-        $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $assignment->assignment_status);
+        $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $outcome->assignment->assignment_status);
     }
 
     /**

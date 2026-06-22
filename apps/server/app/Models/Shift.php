@@ -189,6 +189,17 @@ class Shift extends Model
     }
 
     /**
+     * Whether this shift's scheduled interval overlaps another shift (SHIFT-014).
+     *
+     * Adjacent shifts that share a boundary do not overlap.
+     */
+    public function overlaps(Shift $other): bool
+    {
+        return $this->starts_at->lt($other->ends_at)
+            && $other->starts_at->lt($this->ends_at);
+    }
+
+    /**
      * @param  Builder<Shift>  $query
      * @return Builder<Shift>
      */
