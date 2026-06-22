@@ -7,6 +7,7 @@ use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Credential\CredentialEligibilityService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,7 @@ class ShiftRemovalService
     public function __construct(
         private readonly AuditService $audit,
         private readonly ShiftAssignmentAccess $access,
+        private readonly CredentialEligibilityService $credentials,
     ) {}
 
     /**
@@ -117,6 +119,13 @@ class ShiftRemovalService
             after: $this->auditSnapshot($assignment->refresh()),
             sourceContext: AuditEvent::SOURCE_API,
         );
+
+        $event = $assignment->shift?->event;
+        $staff = $assignment->staff;
+
+        if ($event !== null && $staff !== null) {
+            $this->credentials->recalculate($event, $staff, $moment, $actor);
+        }
 
         return $assignment;
     }

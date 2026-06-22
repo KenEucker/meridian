@@ -39,6 +39,7 @@ class Event extends Model
         'starts_at',
         'ends_at',
         'timezone',
+        'minimum_staff_age',
         'status',
         'ic_department_id',
         'active_event_window_starts_at',
@@ -89,7 +90,13 @@ class Event extends Model
             'active_event_window_starts_at' => 'datetime',
             'active_event_window_ends_at' => 'datetime',
             'archived_at' => 'datetime',
+            'minimum_staff_age' => 'integer',
         ];
+    }
+
+    public function credentials(): HasMany
+    {
+        return $this->hasMany(EventCredential::class);
     }
 
     public function organization(): BelongsTo

@@ -25,6 +25,7 @@ class EventSchemaTest extends TestCase
         $this->assertTrue(Schema::hasColumn('events', 'starts_at'));
         $this->assertTrue(Schema::hasColumn('events', 'ends_at'));
         $this->assertTrue(Schema::hasColumn('events', 'timezone'));
+        $this->assertTrue(Schema::hasColumn('events', 'minimum_staff_age'));
         $this->assertTrue(Schema::hasColumn('events', 'status'));
         $this->assertTrue(Schema::hasColumn('events', 'ic_department_id'));
         $this->assertTrue(Schema::hasColumn('events', 'active_event_window_starts_at'));

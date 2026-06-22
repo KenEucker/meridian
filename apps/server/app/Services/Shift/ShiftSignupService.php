@@ -11,6 +11,7 @@ use App\Models\StaffOrganizationStatus;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Credential\CredentialEligibilityService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -25,6 +26,7 @@ class ShiftSignupService
         private readonly AuditService $audit,
         private readonly ShiftEligibilityService $eligibility,
         private readonly ShiftOverlapService $overlaps,
+        private readonly CredentialEligibilityService $credentials,
     ) {}
 
     /**
@@ -78,6 +80,9 @@ class ShiftSignupService
                 after: $this->auditSnapshot($assignment),
                 sourceContext: AuditEvent::SOURCE_API,
             );
+
+            $shift->loadMissing('event');
+            $this->credentials->recalculate($shift->event, $staff, $moment, $user);
 
             return new ShiftAssignmentOutcome(
                 assignment: $assignment->load(['shift', 'staff']),
