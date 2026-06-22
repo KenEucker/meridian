@@ -78,6 +78,11 @@ class TrainingService
         ]);
     }
 
+    public function isCompleteFor(Training $training, Staff $staff, ?Carbon $moment = null): bool
+    {
+        return $training->isCompleteFor($staff, $moment);
+    }
+
     /**
      * Determine whether adding $prerequisite to $training would create a cycle.
      *
