@@ -48,6 +48,7 @@ class ShiftFactory extends Factory
             'capacity' => null,
             'signup_opens_at' => null,
             'signup_closes_at' => null,
+            'schedule_lock_at' => null,
             'cancelled_at' => null,
         ];
     }
@@ -80,6 +81,18 @@ class ShiftFactory extends Factory
         return $this->state(fn (): array => [
             'signup_opens_at' => $opensAt,
             'signup_closes_at' => $closesAt,
+        ]);
+    }
+
+    /**
+     * A shift with a configured schedule lock/cutoff.
+     */
+    public function withScheduleLock(?Carbon $lockAt = null): static
+    {
+        $lockAt ??= now()->addDays(3);
+
+        return $this->state(fn (): array => [
+            'schedule_lock_at' => $lockAt,
         ]);
     }
 }

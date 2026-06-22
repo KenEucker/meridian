@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Self-signup command for planned shift coverage (SHIFT-011; requirements 3.12).
  *
- * Schedule lock rules, lead removal, API/OpenAPI, and UI are delivered by later M7 tasks.
+ * Lead removal, API/OpenAPI, and UI are delivered by later M7 tasks.
  */
 class ShiftSignupService
 {
@@ -97,6 +97,10 @@ class ShiftSignupService
 
         if (! $shift->isSignupOpenAt($moment)) {
             throw ShiftSignupException::signupClosed();
+        }
+
+        if ($shift->isScheduleLockedAt($moment)) {
+            throw ShiftSignupException::scheduleLocked();
         }
     }
 

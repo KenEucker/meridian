@@ -208,4 +208,39 @@ class ShiftDomainTest extends TestCase
         $this->assertTrue($closesOnly->isSignupOpenAt(now()));
         $this->assertFalse($closesOnly->isSignupOpenAt(now()->addWeeks(2)));
     }
+
+    public function test_set_schedule_lock_persists_cutoff(): void
+    {
+        $lockAt = now()->addDays(4)->setTime(17, 0);
+
+        $shift = Shift::factory()->create();
+        $updated = $this->shiftRequirementService()->setScheduleLock($shift, $lockAt);
+
+        $this->assertTrue($updated->schedule_lock_at->equalTo($lockAt));
+        $this->assertTrue($updated->hasScheduleLock());
+        $this->assertFalse($updated->isScheduleLockedAt($lockAt->copy()->subMinute()));
+        $this->assertTrue($updated->isScheduleLockedAt($lockAt));
+        $this->assertTrue($updated->isScheduleLockedAt($lockAt->copy()->addHour()));
+    }
+
+    public function test_clearing_schedule_lock_reopens_self_service_changes(): void
+    {
+        $shift = Shift::factory()->withScheduleLock()->create();
+
+        $this->assertTrue($shift->isScheduleLockedAt(now()->addWeek()));
+
+        $updated = $this->shiftRequirementService()->setScheduleLock($shift, null);
+
+        $this->assertNull($updated->schedule_lock_at);
+        $this->assertFalse($updated->hasScheduleLock());
+        $this->assertFalse($updated->isScheduleLockedAt(now()->addWeek()));
+    }
+
+    public function test_schedule_is_not_locked_when_no_cutoff_is_configured(): void
+    {
+        $shift = Shift::factory()->create(['schedule_lock_at' => null]);
+
+        $this->assertFalse($shift->hasScheduleLock());
+        $this->assertFalse($shift->isScheduleLockedAt(Carbon::now()));
+    }
 }
