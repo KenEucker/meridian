@@ -76,6 +76,19 @@ class ShiftRequirementService
         return $shift->refresh();
     }
 
+    /**
+     * Configure schedule lock/cutoff for a shift (SHIFT-009).
+     *
+     * A null lock clears the cutoff and leaves self-service schedule changes governed by other rules.
+     */
+    public function setScheduleLock(Shift $shift, ?Carbon $lockAt = null): Shift
+    {
+        $shift->schedule_lock_at = $lockAt;
+        $shift->save();
+
+        return $shift->refresh();
+    }
+
     private function assertSameOrganization(Shift $shift, string $organizationId): void
     {
         $shift->loadMissing('event');

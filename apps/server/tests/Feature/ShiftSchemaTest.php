@@ -32,6 +32,7 @@ class ShiftSchemaTest extends TestCase
             'capacity',
             'signup_opens_at',
             'signup_closes_at',
+            'schedule_lock_at',
             'created_at',
             'updated_at',
             'cancelled_at',
@@ -43,7 +44,6 @@ class ShiftSchemaTest extends TestCase
     public function test_shifts_table_defers_later_shift_fields_to_future_tasks(): void
     {
         foreach ([
-            'schedule_lock_at',
             'credit_policy_id',
             'meeting_map_location_id',
         ] as $column) {

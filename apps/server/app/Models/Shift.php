@@ -36,6 +36,7 @@ class Shift extends Model
         'capacity',
         'signup_opens_at',
         'signup_closes_at',
+        'schedule_lock_at',
         'cancelled_at',
     ];
 
@@ -50,6 +51,7 @@ class Shift extends Model
             'capacity' => 'integer',
             'signup_opens_at' => 'datetime',
             'signup_closes_at' => 'datetime',
+            'schedule_lock_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -178,6 +180,30 @@ class Shift extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Whether the shift configures a schedule lock/cutoff (SHIFT-009).
+     */
+    public function hasScheduleLock(): bool
+    {
+        return $this->schedule_lock_at !== null;
+    }
+
+    /**
+     * Whether staff self-service schedule changes are locked at the given moment (SHIFT-009).
+     *
+     * When no schedule lock is configured, self-service changes remain allowed subject to other rules.
+     */
+    public function isScheduleLockedAt(?Carbon $moment = null): bool
+    {
+        if (! $this->hasScheduleLock()) {
+            return false;
+        }
+
+        $moment ??= Carbon::now();
+
+        return $moment->greaterThanOrEqualTo($this->schedule_lock_at);
     }
 
     /**

@@ -16,6 +16,11 @@ class ShiftSignupException extends RuntimeException
         return new self('Shift signup is not currently open.');
     }
 
+    public static function scheduleLocked(): self
+    {
+        return new self('The schedule is locked and cannot be changed.');
+    }
+
     public static function notEligibleTeamMember(): self
     {
         return new self('Staff must belong to the shift eligible team before signup.');
