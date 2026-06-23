@@ -15,9 +15,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Event credential eligibility calculation (CRED-001 through CRED-010; WAIVER-006).
+ * Event credential eligibility calculation (CRED-001 through CRED-010, CRED-014; WAIVER-006).
  *
- * Manual revocation and shift removal on revoke are delivered by M7.10.
+ * Manual revocation is delivered by {@see CredentialRevocationService}.
  */
 class CredentialEligibilityService
 {
@@ -43,9 +43,9 @@ class CredentialEligibilityService
         $asOf ??= Carbon::now();
         $event->loadMissing('organization');
 
-        $activeAssignments = $this->activeAssignmentsForEvent($event, $staff);
+        $credentialAssignments = $this->credentialEligibleAssignmentsForEvent($event, $staff);
 
-        if ($activeAssignments->isEmpty()) {
+        if ($credentialAssignments->isEmpty()) {
             return CredentialEvaluation::blocked(self::REASON_NO_SIGNED_UP_SHIFTS);
         }
 
@@ -58,7 +58,7 @@ class CredentialEligibilityService
             return CredentialEvaluation::blocked(self::REASON_ORGANIZATION_BLOCKING_STATUS);
         }
 
-        $workedDepartmentIds = $activeAssignments
+        $workedDepartmentIds = $credentialAssignments
             ->pluck('shift.department_id')
             ->unique()
             ->values();
@@ -79,7 +79,7 @@ class CredentialEligibilityService
             }
         }
 
-        $requiredWaivers = $this->requiredWaiversForAssignments($activeAssignments);
+        $requiredWaivers = $this->requiredWaiversForAssignments($credentialAssignments);
 
         foreach ($requiredWaivers as $waiver) {
             if (! $waiver->isCompleteFor($staff, $asOf)) {
@@ -118,9 +118,9 @@ class CredentialEligibilityService
             return $credential;
         }
 
-        $activeAssignments = $this->activeAssignmentsForEvent($event, $staff);
+        $credentialAssignments = $this->credentialEligibleAssignmentsForEvent($event, $staff);
 
-        if ($activeAssignments->isEmpty()) {
+        if ($credentialAssignments->isEmpty()) {
             if ($credential === null) {
                 return null;
             }
@@ -146,6 +146,41 @@ class CredentialEligibilityService
             reason: $evaluation->blockReason,
             changedBy: $changedBy,
         );
+    }
+
+    /**
+     * Whether an active assignment counts toward credential eligibility (CRED-004, CRED-014).
+     *
+     * Self-signup always counts. Lead assignments created before the shift starts count
+     * as planned coverage. Assignments created once shift operations have begun are
+     * unscheduled work and do not retroactively grant credential eligibility.
+     */
+    public function countsTowardCredentialEligibility(ShiftAssignment $assignment): bool
+    {
+        $assignment->loadMissing('shift');
+        $shift = $assignment->shift;
+
+        if ($shift === null) {
+            return false;
+        }
+
+        if ($assignment->assignment_status === ShiftAssignment::STATUS_SIGNED_UP) {
+            return true;
+        }
+
+        return $assignment->created_at !== null
+            && $shift->starts_at !== null
+            && $assignment->created_at->lt($shift->starts_at);
+    }
+
+    /**
+     * @return Collection<int, ShiftAssignment>
+     */
+    private function credentialEligibleAssignmentsForEvent(Event $event, Staff $staff): Collection
+    {
+        return $this->activeAssignmentsForEvent($event, $staff)
+            ->filter(fn (ShiftAssignment $assignment): bool => $this->countsTowardCredentialEligibility($assignment))
+            ->values();
     }
 
     /**
