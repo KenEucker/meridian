@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Placeholder home surface. No domain workflows, data, or authentication
 // are wired up in M2.1; those arrive with later Alpha 1 milestones.
+import { RouterLink } from "vue-router";
 </script>
 
 <template>
@@ -9,6 +10,9 @@
     <p class="home__lede">
       Field application shell. Volunteer, department, shift, and field-report
       surfaces are not yet implemented.
+    </p>
+    <p class="home__links">
+      <RouterLink :to="{ name: 'readiness' }">Check device readiness</RouterLink>
     </p>
   </section>
 </template>
@@ -25,7 +29,11 @@
 }
 
 .home__lede {
-  margin: 0;
+  margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.home__links {
+  margin: 0;
 }
 </style>
