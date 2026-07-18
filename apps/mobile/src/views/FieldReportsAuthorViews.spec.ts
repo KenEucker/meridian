@@ -102,7 +102,10 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     expect(wrapper.text()).toContain("Cancel");
     expect(wrapper.text()).not.toContain("Save");
     expect(wrapper.text()).toContain("Set by your signed-in session");
+    expect(wrapper.get("#fr-title").attributes("type")).toBe("text");
+    expect(wrapper.get("#fr-title").attributes("maxlength")).toBe("200");
 
+    await wrapper.get("#fr-title").setValue("Medical assist near Gate A");
     await wrapper
       .get("#fr-body")
       .setValue("Observed a medical assist near Gate A.");
@@ -110,13 +113,16 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.name).toBe("staff.field-reports.show");
-    expect(wrapper.get("#fr-detail-heading").text()).toMatch(/^LOCAL-/);
+    expect(wrapper.get("#fr-detail-heading").text()).toBe(
+      "Medical assist near Gate A",
+    );
+    expect(wrapper.get(".fr-detail__number").text()).toMatch(/^LOCAL-/);
     expect(wrapper.get(".fr-detail__body").text()).toBe(
       "Observed a medical assist near Gate A.",
     );
     expect(wrapper.text()).toContain("Pending sync");
     expect(wrapper.text()).toContain(
-      "This original submission is finalized and cannot be edited.",
+      "This original title and body are finalized and cannot be edited.",
     );
     expect(wrapper.text()).not.toContain("Edit");
     expect(wrapper.text()).not.toContain("Save");
@@ -125,6 +131,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
   it("lists only the author's submitted reports on the index", async () => {
     const { wrapper, router } = await mountAt("/staff/field-reports/create");
 
+    await wrapper.get("#fr-title").setValue("First author title");
     await wrapper.get("#fr-body").setValue("First author report");
     await wrapper.get(".fr-create__form").trigger("submit");
     await flushPromises();
@@ -141,6 +148,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         staffId: "staff-2",
         fraNumber: null,
         temporaryLocalNumber: "LOCAL-OTHER001",
+        title: "Other author title",
         body: "Should not appear for user-1",
         deviceSubmittedAt: "2027-06-01T12:00:00.000Z",
         serverReceivedAt: null,
@@ -154,8 +162,10 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     await router.push({ name: "staff.field-reports.index" });
     await flushPromises();
 
+    expect(wrapper.text()).toContain("First author title");
     expect(wrapper.text()).toContain("First author report");
     expect(wrapper.text()).not.toContain("Should not appear for user-1");
+    expect(wrapper.text()).not.toContain("Other author title");
     expect(wrapper.get(".field-reports__link").attributes("href")).toBe(
       `/staff/field-reports/${reportId}`,
     );
@@ -172,6 +182,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         staffId: "staff-2",
         fraNumber: null,
         temporaryLocalNumber: "LOCAL-OTHER001",
+        title: "Other author title",
         body: "Other author body",
         deviceSubmittedAt: "2027-06-01T12:00:00.000Z",
         serverReceivedAt: null,
@@ -188,11 +199,13 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
       "You can only view Field Reports you authored.",
     );
     expect(wrapper.text()).not.toContain("Other author body");
+    expect(wrapper.text()).not.toContain("Other author title");
   });
 
   it("replaces the temporary local number with the FRA number after acceptance", async () => {
     const { wrapper, router } = await mountAt("/staff/field-reports/create");
 
+    await wrapper.get("#fr-title").setValue("Synced report title");
     await wrapper.get("#fr-body").setValue("Synced report body");
     await wrapper.get(".fr-create__form").trigger("submit");
     await flushPromises();
@@ -205,7 +218,8 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     });
     await flushPromises();
 
-    expect(wrapper.get("#fr-detail-heading").text()).toBe("FRA-2027-000123");
+    expect(wrapper.get("#fr-detail-heading").text()).toBe("Synced report title");
+    expect(wrapper.get(".fr-detail__number").text()).toBe("FRA-2027-000123");
     expect(wrapper.text()).toContain("Synced");
     expect(wrapper.text()).not.toContain("Temporary local number");
   });
@@ -231,6 +245,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
   it("cancels create back to the author list without saving a draft", async () => {
     const { wrapper, router } = await mountAt("/staff/field-reports/create");
 
+    await wrapper.get("#fr-title").setValue("Draft title");
     await wrapper.get("#fr-body").setValue("Draft that must not persist");
     await wrapper.get(".fr-create__cancel").trigger("click");
     await flushPromises();
@@ -245,6 +260,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
   it("keeps submitted reports on the list after a simulated page refresh", async () => {
     const { wrapper, router } = await mountAt("/staff/field-reports/create");
 
+    await wrapper.get("#fr-title").setValue("Survives refresh title");
     await wrapper.get("#fr-body").setValue("Survives refresh");
     await wrapper.get(".fr-create__form").trigger("submit");
     await flushPromises();
@@ -257,6 +273,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     await router.push({ name: "staff.field-reports.index" });
     await flushPromises();
 
+    expect(wrapper.text()).toContain("Survives refresh title");
     expect(wrapper.text()).toContain("Survives refresh");
     expect(wrapper.text()).toContain("Pending sync");
   });

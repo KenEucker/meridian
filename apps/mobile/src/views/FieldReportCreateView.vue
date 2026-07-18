@@ -3,7 +3,10 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 
 import { resolveFieldSession } from "@/field-reports/fieldSession";
-import { OfflineFieldReportError } from "@/field-reports/offlineFieldReport";
+import {
+  FIELD_REPORT_TITLE_MAX_LENGTH,
+  OfflineFieldReportError,
+} from "@/field-reports/offlineFieldReport";
 import {
   FieldReportPhotoLimitError,
   FieldReportPhotoSelection,
@@ -17,12 +20,15 @@ import { attachPendingFieldReportPhotos } from "@/field-reports/pendingFieldRepo
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
 
 // Submit Field Report — UI contract 12.3 `staff.field-reports.create` and
-// section 14.1–14.3 (M9.4 / M9.7). Submit/Cancel only; finalize on submit; no
-// drafts or autosave. Photos: max 2, images only, no GIFs, processed to Alpha 1
-// limits before submit. Name Reference autocomplete is intentionally absent
-// (M9.6A). Photo upload sync is M9.8.
+// section 14.1–14.3 (M9.4 / M9.7 / M9.7A). Submit/Cancel only; finalize on
+// submit; no drafts or autosave. Required title + body; title and original body
+// are immutable after submit. Photos: max 2, images only, no GIFs, processed to
+// Alpha 1 limits before submit. Name Reference autocomplete is intentionally
+// absent (M9.6A); titles are not parsed for Name References. Photo upload sync
+// is M9.8.
 const router = useRouter();
 const session = computed(() => resolveFieldSession());
+const title = ref("");
 const body = ref("");
 const errorMessage = ref<string | null>(null);
 const submitting = ref(false);
@@ -47,6 +53,8 @@ function bumpPhotoSelection(): void {
 const canSubmit = computed(
   () =>
     Boolean(session.value) &&
+    title.value.trim().length > 0 &&
+    title.value.trim().length <= FIELD_REPORT_TITLE_MAX_LENGTH &&
     body.value.trim().length > 0 &&
     !submitting.value &&
     !processingPhotos.value,
@@ -128,6 +136,11 @@ function onSubmit(): void {
     return;
   }
 
+  if (title.value.trim().length === 0) {
+    errorMessage.value = "Field Report title is required.";
+    return;
+  }
+
   if (body.value.trim().length === 0) {
     errorMessage.value = "Field Report body text is required.";
     return;
@@ -145,6 +158,7 @@ function onSubmit(): void {
       originNodeId: current.originNodeId,
       departmentId: current.departmentId,
       teamId: current.teamId,
+      title: title.value,
       body: body.value,
     });
 
@@ -182,7 +196,7 @@ function onSubmit(): void {
     </header>
     <p class="fr-create__lede">
       Field Reports are finalized on submit. There are no drafts, and the
-      original body cannot be edited later.
+      original title and body cannot be edited later.
     </p>
 
     <p v-if="!session" class="fr-create__unavailable" role="status">
@@ -211,6 +225,19 @@ function onSubmit(): void {
       </dl>
 
       <form class="fr-create__form" @submit.prevent="onSubmit">
+        <label class="fr-create__label" for="fr-title">Title</label>
+        <input
+          id="fr-title"
+          v-model="title"
+          class="fr-create__title"
+          name="title"
+          type="text"
+          required
+          maxlength="200"
+          autocomplete="off"
+          spellcheck="true"
+        />
+
         <label class="fr-create__label" for="fr-body">Report text</label>
         <textarea
           id="fr-body"
@@ -387,6 +414,7 @@ function onSubmit(): void {
   font-weight: 600;
 }
 
+.fr-create__title,
 .fr-create__body {
   width: 100%;
   box-sizing: border-box;
@@ -397,9 +425,13 @@ function onSubmit(): void {
   background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
+}
+
+.fr-create__body {
   resize: vertical;
 }
 
+.fr-create__title:focus-visible,
 .fr-create__body:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;

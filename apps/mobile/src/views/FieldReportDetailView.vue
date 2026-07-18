@@ -10,9 +10,10 @@ import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { fieldReportSubmissionView } from "@/field-reports/offlineFieldReport";
 
 // View submitted Field Report — UI contract 12.3 `staff.field-reports.show`
-// (M9.4). Authors may view their own reports (FR-004). Original body is
-// view-only; no Edit/Save/autosave (FR-007; IMS surface §11; UI contract 14.2).
-// Incident attachment state is not shown to the submitter (technical spec 17.6).
+// (M9.4 / M9.7A). Authors may view their own reports (FR-004). Original title
+// and body are view-only; no Edit/Save/autosave (FR-007; IMS surface §11; UI
+// contract 14.2). Incident attachment state is not shown to the submitter
+// (technical spec 17.6).
 const route = useRoute();
 const session = computed(() => resolveFieldSession());
 
@@ -63,8 +64,11 @@ const submission = computed(() =>
 
     <template v-else>
       <h1 id="fr-detail-heading" class="fr-detail__heading">
-        {{ submission.displayNumber }}
+        {{ report.title }}
       </h1>
+      <p class="fr-detail__number" aria-label="Field Report number">
+        {{ submission.displayNumber }}
+      </p>
       <p
         v-if="submission.displayNumberIsTemporary"
         class="fr-detail__temporary"
@@ -74,6 +78,10 @@ const submission = computed(() =>
       </p>
 
       <dl class="fr-detail__meta">
+        <div>
+          <dt>Title</dt>
+          <dd>{{ report.title }}</dd>
+        </div>
         <div>
           <dt>Status</dt>
           <dd>Submitted</dd>
@@ -107,7 +115,7 @@ const submission = computed(() =>
       <h2 class="fr-detail__body-heading">Report text</h2>
       <pre class="fr-detail__body" tabindex="0">{{ report.body }}</pre>
       <p class="fr-detail__immutable">
-        This original submission is finalized and cannot be edited.
+        This original title and body are finalized and cannot be edited.
       </p>
     </template>
   </section>
@@ -126,6 +134,12 @@ const submission = computed(() =>
   margin: 0 0 var(--m-space-2);
   font-family: var(--m-font-heading);
   font-size: var(--m-text-xl);
+}
+
+.fr-detail__number {
+  margin: 0 0 var(--m-space-2);
+  color: var(--m-text-secondary);
+  font-weight: 600;
 }
 
 .fr-detail__temporary,

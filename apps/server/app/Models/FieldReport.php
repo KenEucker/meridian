@@ -13,14 +13,16 @@ use RuntimeException;
 
 /**
  * Immutable Field Report (data/API specification section 10.15, technical
- * spec section 17, FR-001 through FR-009).
+ * spec section 17, FR-001 through FR-009, FR-012).
  *
- * Original body never changes after submission. Server acceptance and FRA
- * numbering are implemented by M9.3; IC event-wide visibility is enforced by
- * FieldReportPolicy / FieldReportVisibilityAccess (M9.5). Append-only additions
- * are created through FieldReportAppendService (M9.6). Name References are
- * parsed into a rebuildable derived index after acceptance (M9.6A). Photos
- * belong to later M9 tasks.
+ * Original title and body never change after submission (FR-003, FR-007).
+ * Server acceptance and FRA numbering are implemented by M9.3; IC event-wide
+ * visibility is enforced by FieldReportPolicy / FieldReportVisibilityAccess
+ * (M9.5). Append-only additions are created through FieldReportAppendService
+ * (M9.6) and cannot add or alter titles. Name References are parsed from body
+ * text only into a rebuildable derived index after acceptance (M9.6A). Photos
+ * belong to later M9 tasks. Incident-note copy uses FieldReportIncidentNoteCopy
+ * (M9.7A contract; M11.8 wiring).
  */
 class FieldReport extends Model
 {
@@ -48,6 +50,7 @@ class FieldReport extends Model
         'staff_id',
         'fra_number',
         'temporary_local_number',
+        'title',
         'body',
         'device_submitted_at',
         'server_received_at',

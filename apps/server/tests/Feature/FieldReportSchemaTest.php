@@ -34,6 +34,7 @@ class FieldReportSchemaTest extends TestCase
             'staff_id',
             'fra_number',
             'temporary_local_number',
+            'title',
             'body',
             'device_submitted_at',
             'server_received_at',
@@ -85,6 +86,7 @@ class FieldReportSchemaTest extends TestCase
             'team_id' => $team->id,
             'submitted_by_user_id' => $author->id,
             'staff_id' => $staff->id,
+            'title' => 'Medical assist near Gate A',
             'body' => 'Observed a medical assist near Gate A.',
             'origin_device_id' => $device->id,
             'origin_node_id' => $node->id,
@@ -171,13 +173,25 @@ class FieldReportSchemaTest extends TestCase
     public function test_field_reports_cannot_be_updated(): void
     {
         $report = FieldReport::factory()->create([
+            'title' => 'Original immutable title',
             'body' => 'Original immutable body',
         ]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Field reports are immutable and cannot be updated.');
 
-        $report->update(['body' => 'Tampered body']);
+        $report->update([
+            'title' => 'Tampered title',
+            'body' => 'Tampered body',
+        ]);
+    }
+
+    public function test_field_report_appends_have_no_title_column(): void
+    {
+        $this->assertFalse(
+            Schema::hasColumn('field_report_appends', 'title'),
+            'field_report_appends.title should not exist (appends cannot add or alter titles).',
+        );
     }
 
     public function test_field_reports_cannot_be_deleted(): void

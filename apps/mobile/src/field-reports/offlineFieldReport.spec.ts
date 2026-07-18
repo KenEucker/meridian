@@ -17,6 +17,7 @@ const BASE_INPUT: CreateOfflineFieldReportInput = {
   staffId: "staff-1",
   originDeviceId: "device-1",
   originNodeId: "node-1",
+  title: "Medical assist near Gate A",
   body: "Observed a medical assist near Gate A.",
 };
 
@@ -50,10 +51,11 @@ describe("createOfflineFieldReport", () => {
     expect(report.serverReceivedAt).toBeNull();
   });
 
-  it("carries the caller-supplied event, author, staff, device, node, and body", () => {
+  it("carries the caller-supplied event, author, staff, device, node, title, and body", () => {
     const report = createWith({
       departmentId: "dept-1",
       teamId: "team-1",
+      title: "  Radio check failed  ",
       body: "Radio check failed on channel 3.",
     });
 
@@ -64,7 +66,28 @@ describe("createOfflineFieldReport", () => {
     expect(report.originNodeId).toBe("node-1");
     expect(report.departmentId).toBe("dept-1");
     expect(report.teamId).toBe("team-1");
+    expect(report.title).toBe("Radio check failed");
     expect(report.body).toBe("Radio check failed on channel 3.");
+  });
+
+  it("rejects empty or oversized titles", () => {
+    expect(() => createWith({ title: "   " })).toThrow(
+      "Field Report title is required.",
+    );
+    expect(() => createWith({ title: "a".repeat(201) })).toThrow(
+      "Field Report title must be at most 200 characters.",
+    );
+  });
+
+  it("allows duplicate titles within an event", () => {
+    const first = createWith({ title: "Same title" });
+    const second = createWith(
+      { title: "Same title" },
+      "aaaaaaaa-1111-2222-3333-444455556666",
+    );
+
+    expect(first.title).toBe("Same title");
+    expect(second.title).toBe("Same title");
   });
 
   it("defaults optional department/team context to null when unavailable", () => {
@@ -87,6 +110,9 @@ describe("createOfflineFieldReport", () => {
     expect(Object.isFrozen(report)).toBe(true);
     expect(() => {
       (report as { body: string }).body = "tampered";
+    }).toThrow(TypeError);
+    expect(() => {
+      (report as { title: string }).title = "tampered";
     }).toThrow(TypeError);
   });
 

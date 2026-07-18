@@ -17,6 +17,7 @@ function sampleReport() {
       staffId: "staff-1",
       originDeviceId: "device-1",
       originNodeId: "node-1",
+      title: "Persisted report title",
       body: "Persisted report body",
     },
     {
@@ -52,6 +53,7 @@ describe("fieldReportLocalStore", () => {
     const loaded = store.load();
     expect(loaded).toHaveLength(1);
     expect(loaded[0]?.id).toBe(report.id);
+    expect(loaded[0]?.title).toBe("Persisted report title");
     expect(loaded[0]?.body).toBe("Persisted report body");
     expect(loaded[0]?.syncStatus).toBe(FIELD_REPORT_PENDING_SYNC);
     expect(memory.has(FIELD_REPORT_LOCAL_STORE_KEY)).toBe(true);

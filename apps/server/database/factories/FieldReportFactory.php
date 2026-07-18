@@ -34,6 +34,7 @@ class FieldReportFactory extends Factory
             'staff_id' => Staff::factory(),
             'fra_number' => null,
             'temporary_local_number' => null,
+            'title' => $this->faker->sentence(4),
             'body' => $this->faker->paragraph(),
             'device_submitted_at' => now(),
             'server_received_at' => null,
