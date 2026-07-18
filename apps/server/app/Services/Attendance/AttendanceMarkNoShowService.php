@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Connected no-show command for scheduled staff (technical spec section 20.2).
- * HTTP command transport, offline queue reconciliation, and UI controls remain
- * with later M10 tasks.
+ * Connected/synced no-show command for scheduled staff (technical spec section
+ * 20.2). UI controls and conflict-resolution surfaces remain with later tasks.
  */
 class AttendanceMarkNoShowService
 {

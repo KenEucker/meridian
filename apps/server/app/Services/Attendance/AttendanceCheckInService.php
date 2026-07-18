@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Connected check-in command for scheduled staff (SLB-003). No-show,
- * unscheduled additions, and offline queue/signature handling are delivered by
- * later M10 tasks.
+ * Connected/synced check-in command for scheduled staff (SLB-003). Unscheduled
+ * additions and signed node-operation handling are delivered by later tasks.
  */
 class AttendanceCheckInService
 {
