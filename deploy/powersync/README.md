@@ -29,6 +29,13 @@ accepting all domain-sensitive writes.
   configuration placeholder only; M8.1 does not issue PowerSync client tokens
   or publish signing keys.
 
+The managed database service under [`deploy/docker`](../docker/README.md)
+satisfies the PostgreSQL prerequisites out of the box: it enables logical
+replication and provisions the `powersync_replication` role, the
+`powersync_storage` database/user, and the `powersync` publication. Point the
+connection URIs below at that service and set the credentials to match
+`deploy/docker/.env`.
+
 For local/private networks, the sample uses `sslmode=disable`. Set both SSL
 mode values to `verify-full` and provide trusted certificates for any
 connection outside a private development network.
@@ -53,6 +60,31 @@ powersync validate \
   --sync-config-file-path=deploy/powersync/sync-config.yaml \
   --validate-only=sync-config
 ```
+
+### Sync-rules SQL constraints
+
+`sync-config.yaml` uses `config: edition: 3`. The PowerSync sync-rules SQL dialect
+is more restrictive than PostgreSQL, and the same construct can be valid in one
+position but not another. When editing the sync streams, keep these rules in mind
+(the file's header comment documents them inline):
+
+- Parameter (`with`) queries must be self-contained. They may reference
+  `auth.user_id()` and base tables (including nested `IN (SELECT ...)`
+  subqueries), but must not reference another named CTE. A bareword
+  `IN other_cte` inside a `with` query compiles to a broken `json_each()` lookup
+  and fails at replication time, so each CTE re-derives the current user's
+  staff/team/department scope directly from `staff_user`.
+- Data queries (inside `queries:`) may reference named CTEs with `IN cte_name`,
+  may use `INNER JOIN` (all selected columns must come from a single table, with
+  simple equality join conditions), and may use nested subqueries.
+- `EXISTS(...)` is not supported anywhere; express correlated checks as `INNER
+  JOIN`s in data queries instead.
+
+Because some of these errors only surface at replication time (not at YAML load),
+validate changes by running the service against a real PostgreSQL source (for
+example the [`deploy/docker`](../docker/README.md) database service) and
+confirming the logs report no `Failed to update sync config`, `Fatal replication
+error`, or `Failed to evaluate parameter query ... json_each` messages.
 
 After configuring real services:
 

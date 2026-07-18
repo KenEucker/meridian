@@ -3,6 +3,17 @@
 # Every authorization scope originates from the signed JWT subject. Client
 # subscription parameters are intentionally not used, so a client cannot ask
 # PowerSync for another user's, team's, or department's records.
+#
+# PowerSync sync-rules dialect constraints that shape this file:
+#   * Parameter (with) queries must be self-contained: they may reference
+#     auth.user_id() and base tables (including nested subqueries), but must NOT
+#     reference another named CTE. A bareword `IN other_cte` inside a with query
+#     compiles to a broken json_each() lookup, so each CTE re-derives the current
+#     user's staff/team/department scope directly from staff_user.
+#   * Data queries may reference named CTEs with `IN cte_name`, and may use
+#     INNER JOINs (selected columns must all come from one table) and subqueries.
+#   * EXISTS(...) is not supported anywhere; correlated checks use JOINs in data
+#     queries instead.
 config:
   edition: 3
 
@@ -15,28 +26,45 @@ with:
   current_department_ids: |
     SELECT department_id
     FROM department_memberships
-    WHERE staff_id IN current_staff_ids
+    WHERE staff_id IN (
+      SELECT staff_id FROM staff_user WHERE user_id = auth.user_id()
+    )
       AND archived_at IS NULL
 
   current_team_ids: |
     SELECT team_id
     FROM team_memberships
-    WHERE staff_id IN current_staff_ids
+    WHERE staff_id IN (
+      SELECT staff_id FROM staff_user WHERE user_id = auth.user_id()
+    )
       AND archived_at IS NULL
 
   current_organization_ids: |
     SELECT organization_id
     FROM staff_organization_statuses
-    WHERE staff_id IN current_staff_ids
+    WHERE staff_id IN (
+      SELECT staff_id FROM staff_user WHERE user_id = auth.user_id()
+    )
 
   visible_policy_document_ids: |
     SELECT id
     FROM policy_documents
     WHERE state = 'published'
       AND (
-        (scope_type = 'organization' AND scope_id IN current_organization_ids)
-        OR (scope_type = 'department' AND scope_id IN current_department_ids)
-        OR (scope_type = 'team' AND scope_id IN current_team_ids)
+        (scope_type = 'organization' AND scope_id IN (
+          SELECT organization_id FROM staff_organization_statuses
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+        ))
+        OR (scope_type = 'department' AND scope_id IN (
+          SELECT department_id FROM department_memberships
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND archived_at IS NULL
+        ))
+        OR (scope_type = 'team' AND scope_id IN (
+          SELECT team_id FROM team_memberships
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND archived_at IS NULL
+        ))
       )
 
   visible_procedure_document_ids: |
@@ -44,16 +72,21 @@ with:
     FROM procedure_documents
     WHERE state = 'published'
       AND (
-        (scope_type = 'organization' AND scope_id IN current_organization_ids)
-        OR (scope_type = 'department' AND scope_id IN current_department_ids)
-        OR (scope_type = 'team' AND scope_id IN current_team_ids)
+        (scope_type = 'organization' AND scope_id IN (
+          SELECT organization_id FROM staff_organization_statuses
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+        ))
+        OR (scope_type = 'department' AND scope_id IN (
+          SELECT department_id FROM department_memberships
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND archived_at IS NULL
+        ))
+        OR (scope_type = 'team' AND scope_id IN (
+          SELECT team_id FROM team_memberships
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND archived_at IS NULL
+        ))
       )
-
-  visible_fragment_ids: |
-    SELECT fragment_id
-    FROM document_fragment_references
-    WHERE (document_type = 'policy' AND document_id IN visible_policy_document_ids)
-      OR (document_type = 'procedure' AND document_id IN visible_procedure_document_ids)
 
 streams:
   regular_staff_cache:
@@ -158,7 +191,12 @@ streams:
         SELECT id, organization_id, scope_type, scope_id, name, slug,
                markdown_source, version, created_at, updated_at
         FROM document_fragments
-        WHERE id IN visible_fragment_ids
+        WHERE id IN (
+          SELECT fragment_id
+          FROM document_fragment_references
+          WHERE (document_type = 'policy' AND document_id IN visible_policy_document_ids)
+            OR (document_type = 'procedure' AND document_id IN visible_procedure_document_ids)
+        )
       - |
         SELECT id, organization_id, scope_type, scope_id, document_type,
                document_id, requirement_context, active, created_at, updated_at
@@ -178,50 +216,68 @@ streams:
   shift_lead_cache:
     auto_subscribe: true
     with:
-      shift_lead_grants: |
-        SELECT team_grants.team_id, team_grants.event_id
+      # Teams the active user holds an active shift-lead grant on. Self-contained:
+      # the current-team scope is re-derived from staff_user rather than
+      # referencing the current_team_ids CTE, which is not permitted inside a
+      # parameter query.
+      shift_lead_team_ids: |
+        SELECT team_id
         FROM team_grants
-        INNER JOIN permission_roles
-          ON permission_roles.id = team_grants.permission_role_id
-        WHERE team_grants.team_id IN current_team_ids
-          AND team_grants.revoked_at IS NULL
-          AND permission_roles.code = 'shift_lead'
-
-      shift_lead_shift_ids: |
-        SELECT shifts.id
-        FROM shifts
-        WHERE EXISTS (
-          SELECT 1
-          FROM shift_lead_grants
-          WHERE shift_lead_grants.team_id = shifts.eligible_team_id
-            AND (
-              shift_lead_grants.event_id IS NULL
-              OR shift_lead_grants.event_id = shifts.event_id
-            )
+        WHERE team_id IN (
+          SELECT team_id FROM team_memberships
+          WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND archived_at IS NULL
         )
+          AND revoked_at IS NULL
+          AND permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'shift_lead'
+          )
 
     queries:
+      # Shifts for granted teams, honouring each grant's event scope. Event-scoped
+      # correlation requires a JOIN, which is only permitted in data queries.
       - |
-        SELECT id, event_id, department_id, eligible_team_id, title,
-               department_name_snapshot, team_name_snapshot, starts_at, ends_at,
-               capacity, signup_opens_at, signup_closes_at, schedule_lock_at,
-               created_at, updated_at, cancelled_at
+        SELECT shifts.id, shifts.event_id, shifts.department_id, shifts.eligible_team_id,
+               shifts.title, shifts.department_name_snapshot, shifts.team_name_snapshot,
+               shifts.starts_at, shifts.ends_at, shifts.capacity, shifts.signup_opens_at,
+               shifts.signup_closes_at, shifts.schedule_lock_at, shifts.created_at,
+               shifts.updated_at, shifts.cancelled_at
         FROM shifts
-        WHERE id IN shift_lead_shift_ids
+        INNER JOIN team_grants
+          ON team_grants.team_id = shifts.eligible_team_id
+        WHERE team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'shift_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = shifts.event_id
+          )
       - |
-        SELECT id, shift_id, staff_id, assignment_status,
-               created_at, updated_at, removed_at
+        SELECT shift_assignments.id, shift_assignments.shift_id, shift_assignments.staff_id,
+               shift_assignments.assignment_status, shift_assignments.created_at,
+               shift_assignments.updated_at, shift_assignments.removed_at
         FROM shift_assignments
-        WHERE shift_id IN shift_lead_shift_ids
-          AND removed_at IS NULL
+        INNER JOIN shifts
+          ON shifts.id = shift_assignments.shift_id
+        INNER JOIN team_grants
+          ON team_grants.team_id = shifts.eligible_team_id
+        WHERE shift_assignments.removed_at IS NULL
+          AND team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'shift_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = shifts.event_id
+          )
       - |
         SELECT id, team_id, staff_id, department_membership_id,
                membership_role, created_at, updated_at, archived_at
         FROM team_memberships
-        WHERE team_id IN (
-          SELECT team_id
-          FROM shift_lead_grants
-        )
+        WHERE team_id IN shift_lead_team_ids
           AND archived_at IS NULL
       - |
         SELECT id, legal_name, preferred_name, handle,
@@ -230,100 +286,49 @@ streams:
         WHERE id IN (
           SELECT staff_id
           FROM team_memberships
-          WHERE team_id IN (
-            SELECT team_id
-            FROM shift_lead_grants
-          )
+          WHERE team_id IN shift_lead_team_ids
             AND archived_at IS NULL
         )
         OR id IN (
-          SELECT staff_id
+          SELECT shift_assignments.staff_id
           FROM shift_assignments
-          WHERE shift_id IN shift_lead_shift_ids
-            AND removed_at IS NULL
+          INNER JOIN shifts
+            ON shifts.id = shift_assignments.shift_id
+          INNER JOIN team_grants
+            ON team_grants.team_id = shifts.eligible_team_id
+          WHERE shift_assignments.removed_at IS NULL
+            AND team_grants.team_id IN current_team_ids
+            AND team_grants.revoked_at IS NULL
+            AND team_grants.permission_role_id IN (
+              SELECT id FROM permission_roles WHERE code = 'shift_lead'
+            )
+            AND (
+              team_grants.event_id IS NULL
+              OR team_grants.event_id = shifts.event_id
+            )
         )
 
   department_lead_cache:
     auto_subscribe: true
     with:
-      department_lead_grants: |
-        SELECT teams.department_id, team_grants.event_id
-        FROM team_grants
-        INNER JOIN permission_roles
-          ON permission_roles.id = team_grants.permission_role_id
-        INNER JOIN teams
-          ON teams.id = team_grants.team_id
-        WHERE team_grants.team_id IN current_team_ids
-          AND team_grants.revoked_at IS NULL
-          AND permission_roles.code = 'department_lead'
-
-      department_lead_shift_ids: |
-        SELECT shifts.id
-        FROM shifts
-        WHERE EXISTS (
-          SELECT 1
-          FROM department_lead_grants
-          WHERE department_lead_grants.department_id = shifts.department_id
-            AND (
-              department_lead_grants.event_id IS NULL
-              OR department_lead_grants.event_id = shifts.event_id
+      # Departments the active user leads. Self-contained: team membership,
+      # grant, and team -> department hops are all expressed as nested subqueries
+      # anchored on auth.user_id() rather than referencing other CTEs.
+      department_lead_department_ids: |
+        SELECT department_id
+        FROM teams
+        WHERE id IN (
+          SELECT team_id
+          FROM team_grants
+          WHERE team_id IN (
+            SELECT team_id FROM team_memberships
+            WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+              AND archived_at IS NULL
+          )
+            AND revoked_at IS NULL
+            AND permission_role_id IN (
+              SELECT id FROM permission_roles WHERE code = 'department_lead'
             )
-        )
-
-      maintained_policy_document_ids: |
-        SELECT id
-        FROM policy_documents
-        WHERE (
-          scope_type = 'department'
-          AND scope_id IN (
-            SELECT department_id
-            FROM department_lead_grants
-          )
-        )
-        OR (
-          scope_type = 'team'
-          AND scope_id IN (
-            SELECT id
-            FROM teams
-            WHERE department_id IN (
-              SELECT department_id
-              FROM department_lead_grants
-            )
-          )
-        )
-
-      maintained_procedure_document_ids: |
-        SELECT id
-        FROM procedure_documents
-        WHERE (
-          scope_type = 'department'
-          AND scope_id IN (
-            SELECT department_id
-            FROM department_lead_grants
-          )
-        )
-        OR (
-          scope_type = 'team'
-          AND scope_id IN (
-            SELECT id
-            FROM teams
-            WHERE department_id IN (
-              SELECT department_id
-              FROM department_lead_grants
-            )
-          )
-        )
-
-      maintained_fragment_ids: |
-        SELECT fragment_id
-        FROM document_fragment_references
-        WHERE (
-          document_type = 'policy'
-          AND document_id IN maintained_policy_document_ids
-        )
-        OR (
-          document_type = 'procedure'
-          AND document_id IN maintained_procedure_document_ids
         )
 
     queries:
@@ -331,26 +336,17 @@ streams:
         SELECT id, organization_id, name, code, description, default_team_id,
                created_at, updated_at, archived_at
         FROM departments
-        WHERE id IN (
-          SELECT department_id
-          FROM department_lead_grants
-        )
+        WHERE id IN department_lead_department_ids
       - |
         SELECT id, department_id, name, code, description, is_default,
                created_at, updated_at, archived_at
         FROM teams
-        WHERE department_id IN (
-          SELECT department_id
-          FROM department_lead_grants
-        )
+        WHERE department_id IN department_lead_department_ids
       - |
         SELECT id, department_id, staff_id, status,
                created_at, updated_at, archived_at
         FROM department_memberships
-        WHERE department_id IN (
-          SELECT department_id
-          FROM department_lead_grants
-        )
+        WHERE department_id IN department_lead_department_ids
           AND archived_at IS NULL
       - |
         SELECT id, team_id, staff_id, department_membership_id,
@@ -359,10 +355,7 @@ streams:
         WHERE department_membership_id IN (
           SELECT id
           FROM department_memberships
-          WHERE department_id IN (
-            SELECT department_id
-            FROM department_lead_grants
-          )
+          WHERE department_id IN department_lead_department_ids
             AND archived_at IS NULL
         )
           AND archived_at IS NULL
@@ -373,112 +366,155 @@ streams:
         WHERE id IN (
           SELECT staff_id
           FROM department_memberships
-          WHERE department_id IN (
-            SELECT department_id
-            FROM department_lead_grants
-          )
+          WHERE department_id IN department_lead_department_ids
             AND archived_at IS NULL
         )
+      # Event-scoped correlation requires a JOIN, which is only permitted in data
+      # queries, so the department-lead grant scope is joined here directly.
       - |
-        SELECT id, event_id, department_id, created_at, archived_at
+        SELECT event_department_assignments.id, event_department_assignments.event_id,
+               event_department_assignments.department_id,
+               event_department_assignments.created_at,
+               event_department_assignments.archived_at
         FROM event_department_assignments
-        WHERE department_id IN (
-          SELECT department_id
-          FROM department_lead_grants
-        )
-          AND archived_at IS NULL
-          AND EXISTS (
-            SELECT 1
-            FROM department_lead_grants
-            WHERE department_lead_grants.department_id =
-                    event_department_assignments.department_id
-              AND (
-                department_lead_grants.event_id IS NULL
-                OR department_lead_grants.event_id =
-                   event_department_assignments.event_id
-              )
+        INNER JOIN teams
+          ON teams.department_id = event_department_assignments.department_id
+        INNER JOIN team_grants
+          ON team_grants.team_id = teams.id
+        WHERE event_department_assignments.archived_at IS NULL
+          AND team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'department_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = event_department_assignments.event_id
           )
       - |
-        SELECT id, organization_id, name, slug, starts_at, ends_at, timezone,
-               status, active_event_window_starts_at,
-               active_event_window_ends_at, created_at, updated_at, archived_at
+        SELECT events.id, events.organization_id, events.name, events.slug,
+               events.starts_at, events.ends_at, events.timezone, events.status,
+               events.active_event_window_starts_at, events.active_event_window_ends_at,
+               events.created_at, events.updated_at, events.archived_at
         FROM events
-        WHERE id IN (
-          SELECT event_id
-          FROM event_department_assignments
-          WHERE archived_at IS NULL
-            AND EXISTS (
-              SELECT 1
-              FROM department_lead_grants
-              WHERE department_lead_grants.department_id =
-                      event_department_assignments.department_id
-                AND (
-                  department_lead_grants.event_id IS NULL
-                  OR department_lead_grants.event_id =
-                     event_department_assignments.event_id
-                )
-            )
-        )
+        INNER JOIN event_department_assignments
+          ON event_department_assignments.event_id = events.id
+        INNER JOIN teams
+          ON teams.department_id = event_department_assignments.department_id
+        INNER JOIN team_grants
+          ON team_grants.team_id = teams.id
+        WHERE event_department_assignments.archived_at IS NULL
+          AND team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'department_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = event_department_assignments.event_id
+          )
       - |
-        SELECT id, event_id, department_id, eligible_team_id, title,
-               department_name_snapshot, team_name_snapshot, starts_at, ends_at,
-               capacity, signup_opens_at, signup_closes_at, schedule_lock_at,
-               created_at, updated_at, cancelled_at
+        SELECT shifts.id, shifts.event_id, shifts.department_id, shifts.eligible_team_id,
+               shifts.title, shifts.department_name_snapshot, shifts.team_name_snapshot,
+               shifts.starts_at, shifts.ends_at, shifts.capacity, shifts.signup_opens_at,
+               shifts.signup_closes_at, shifts.schedule_lock_at, shifts.created_at,
+               shifts.updated_at, shifts.cancelled_at
         FROM shifts
-        WHERE id IN department_lead_shift_ids
+        INNER JOIN teams
+          ON teams.department_id = shifts.department_id
+        INNER JOIN team_grants
+          ON team_grants.team_id = teams.id
+        WHERE team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'department_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = shifts.event_id
+          )
       - |
-        SELECT id, shift_id, staff_id, assignment_status,
-               created_at, updated_at, removed_at
+        SELECT shift_assignments.id, shift_assignments.shift_id, shift_assignments.staff_id,
+               shift_assignments.assignment_status, shift_assignments.created_at,
+               shift_assignments.updated_at, shift_assignments.removed_at
         FROM shift_assignments
-        WHERE shift_id IN department_lead_shift_ids
-          AND removed_at IS NULL
+        INNER JOIN shifts
+          ON shifts.id = shift_assignments.shift_id
+        INNER JOIN teams
+          ON teams.department_id = shifts.department_id
+        INNER JOIN team_grants
+          ON team_grants.team_id = teams.id
+        WHERE shift_assignments.removed_at IS NULL
+          AND team_grants.team_id IN current_team_ids
+          AND team_grants.revoked_at IS NULL
+          AND team_grants.permission_role_id IN (
+            SELECT id FROM permission_roles WHERE code = 'department_lead'
+          )
+          AND (
+            team_grants.event_id IS NULL
+            OR team_grants.event_id = shifts.event_id
+          )
       - |
         SELECT id, organization_id, scope_type, scope_id, title, slug,
                markdown_source, state, document_revision, fragment_revision,
                published_at, archived_at, created_at, updated_at
         FROM policy_documents
-        WHERE id IN maintained_policy_document_ids
+        WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+          OR (scope_type = 'team' AND scope_id IN (
+            SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+          ))
       - |
         SELECT id, organization_id, scope_type, scope_id, title, slug,
                markdown_source, state, document_revision, fragment_revision,
                published_at, archived_at, created_at, updated_at
         FROM procedure_documents
-        WHERE id IN maintained_procedure_document_ids
+        WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+          OR (scope_type = 'team' AND scope_id IN (
+            SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+          ))
       - |
         SELECT id, document_type, document_id, fragment_id, token,
                fragment_version_at_last_edit, created_at, updated_at
         FROM document_fragment_references
-        WHERE (
-          document_type = 'policy'
-          AND document_id IN maintained_policy_document_ids
+        WHERE document_id IN (
+          SELECT id FROM policy_documents
+          WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+            OR (scope_type = 'team' AND scope_id IN (
+              SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+            ))
         )
-        OR (
-          document_type = 'procedure'
-          AND document_id IN maintained_procedure_document_ids
+        OR document_id IN (
+          SELECT id FROM procedure_documents
+          WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+            OR (scope_type = 'team' AND scope_id IN (
+              SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+            ))
         )
       - |
         SELECT id, organization_id, scope_type, scope_id, name, slug,
                markdown_source, version, created_at, updated_at
         FROM document_fragments
-        WHERE id IN maintained_fragment_ids
-        OR (
-          scope_type = 'department'
-          AND scope_id IN (
-            SELECT department_id
-            FROM department_lead_grants
+        WHERE id IN (
+          SELECT fragment_id FROM document_fragment_references
+          WHERE document_id IN (
+            SELECT id FROM policy_documents
+            WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+              OR (scope_type = 'team' AND scope_id IN (
+                SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+              ))
+          )
+          OR document_id IN (
+            SELECT id FROM procedure_documents
+            WHERE (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+              OR (scope_type = 'team' AND scope_id IN (
+                SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+              ))
           )
         )
-        OR (
-          scope_type = 'team'
-          AND scope_id IN (
-            SELECT id
-            FROM teams
-            WHERE department_id IN (
-              SELECT department_id
-              FROM department_lead_grants
-            )
-          )
-        )
+        OR (scope_type = 'department' AND scope_id IN department_lead_department_ids)
+        OR (scope_type = 'team' AND scope_id IN (
+          SELECT id FROM teams WHERE department_id IN department_lead_department_ids
+        ))
 
 # Deferred to owning tasks because their canonical tables or runtime paths do
 # not yet exist: Field Reports/forms, attendance operations, readiness state,
