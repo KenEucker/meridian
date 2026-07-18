@@ -60,11 +60,11 @@ deploy/
   dns/           DNS configuration for on-site deployments
 ```
 
-`apps/server` contains a Laravel framework scaffold (see [apps/server/README.md](apps/server/README.md)), `apps/mobile` contains the Vue/Capacitor field app shell (see [apps/mobile/README.md](apps/mobile/README.md)), and `apps/desktop` contains the Electron on-site wrapper shell (see [apps/desktop/README.md](apps/desktop/README.md)). PowerSync service configuration now lives under [deploy/powersync](deploy/powersync/README.md); the remaining deployment directories are placeholders until their later Alpha 1 tasks add deployment behavior.
+`apps/server` contains a Laravel framework scaffold (see [apps/server/README.md](apps/server/README.md)), `apps/mobile` contains the Vue/Capacitor field app shell (see [apps/mobile/README.md](apps/mobile/README.md)), and `apps/desktop` contains the Electron on-site wrapper shell (see [apps/desktop/README.md](apps/desktop/README.md)). The managed PostgreSQL database service lives under [deploy/docker](deploy/docker/README.md), and the PowerSync service configuration lives under [deploy/powersync](deploy/powersync/README.md). The `caddy` and `dns` deployment directories are placeholders until their later Alpha 1 tasks add deployment behavior.
 
 ## Developer Boot Path
 
-Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its test suite, the `apps/mobile` Vue field app shell builds and runs its smoke tests, and the `apps/desktop` Electron wrapper shell builds and runs its unit tests. PostgreSQL development configuration, seed data, and the PowerSync service baseline are present; the complete Docker Compose deployment bundle and remaining product services arrive in later Alpha 1 tasks.
+Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot and run its test suite, the `apps/mobile` Vue field app shell builds and runs its smoke tests, and the `apps/desktop` Electron wrapper shell builds and runs its unit tests. A managed PostgreSQL database service ([deploy/docker](deploy/docker/README.md)), PostgreSQL development configuration, seed data, and the PowerSync service baseline are present; the complete multi-service deployment bundle (server container, reverse proxy, DNS, and a single top-level Compose file) and remaining product services arrive in later Alpha 1 tasks.
 
 While the Orchid Admin should be comprehensive for features and data management, UI components for screens will be targeted for the majority of users.
 
