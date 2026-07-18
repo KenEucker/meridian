@@ -1808,6 +1808,7 @@ Key fields:
 - `staff_id`
 - `fra_number`, nullable until server/node assignment
 - `temporary_local_number`, nullable
+- `title`
 - `body`
 - `device_submitted_at`
 - `server_received_at`
@@ -1821,12 +1822,16 @@ Rules:
 - Field Reports are not incidents
 - Field Reports can be created offline
 - there are no draft Field Reports
-- original body never changes
+- `title` is required plain text, trimmed of outer whitespace, 1–200 characters after trimming
+- duplicate titles are allowed within an event
+- original title and body never change after submission
 - Name References in `body` are parsed after submission as derived search/display artifacts
+- `title` is not parsed for Name References
 - Field Reports are not editable
 - Field Reports are not stricken
 - Field Reports may exist independently
 - Field Reports may be attached to one or more incidents
+- when a Field Report is attached to an incident, content is copied into incident notes as `Field Report: <title>` followed by the body
 - users see only their own Field Reports by default
 - IC roles see all Field Reports for the event
 - department leads, organizers, and shift leads do not automatically see Field Reports from their department/shifts
@@ -1853,6 +1858,7 @@ Rules:
 - only the original submitter may append to their own Field Report
 - elevated users can append only to their own Field Reports, not to other users' Field Reports
 - appends share the same FRA number with timestamped entries
+- appends do not have titles and cannot alter the original Field Report title
 - Name References in append `body` are parsed after submission as derived search/display artifacts
 - when a Field Report is appended, only the added content is copied into associated incidents
 
@@ -1950,7 +1956,7 @@ Rules:
 
 - IC leads and IC operators can link/unlink Field Reports
 - link/unlink activity appears on the incident timeline only
-- when a Field Report is attached, Field Report content is copied into incident notes
+- when a Field Report is attached, Field Report content is copied into incident notes as `Field Report: <title>` followed by the body
 - when removed from an incident, the incident history shows that relationship as stricken
 
 #### `incident_staff`
@@ -2017,7 +2023,7 @@ Rules:
 
 #### Name Reference derived index
 
-Name References are extracted from Incident timeline entry bodies, Field Report bodies, and Field Report append bodies.
+Name References are extracted from Incident timeline entry bodies, Field Report bodies, and Field Report append bodies. Field Report titles are not extracted for Name References.
 
 The source text remains authoritative. The derived index may be represented in PostgreSQL, local SQLite, a search index, or a combination of those storage layers, but the exact physical storage shape is not mandated by this document.
 
@@ -2036,7 +2042,7 @@ Rules:
 - supported tokens start with `@` and continue through letters, numbers, hyphens, and underscores
 - whitespace or punctuation ends a token
 - bracket syntax such as `@[Ranger Bucket]` is not supported for MVP
-- Field Reports are parsed immediately after submission
+- Field Report bodies and appends are parsed immediately after submission; titles are not parsed
 - derived entries inherit source record visibility
 - derived entries must not create user mentions, notifications, autocomplete, alias merge behavior, profile links, canonical identity/entity records, or dedicated detail pages
 - clicking a Name Reference runs normal search for the reference text without the `@` prefix
@@ -2240,7 +2246,7 @@ Rules:
 - `deployments.map_location_id` is an optional reference (see 10.14).
 - `shifts.meeting_map_location_id` is an optional reference (see 10.9).
 - Equipment/storage locations may reference a map location only where equipment locations are already modeled; equipment items do not gain a location field in this update.
-- Field Reports do not reference camps/map locations and remain a single text body only.
+- Field Reports do not reference camps/map locations; they have one required title and one unstructured body.
 
 ---
 
@@ -2798,9 +2804,11 @@ Setup, teardown, standby, emergency coverage, or unscheduled labor must be repre
 
 Field Reports are finalized at submit time.
 
-Original Field Report body is immutable.
+Original Field Report title and body are immutable.
 
 Only the original submitter may append.
+
+Appends do not have titles and cannot alter the original title.
 
 ### 15.4 Online-Only Incidents
 

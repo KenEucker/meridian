@@ -757,16 +757,16 @@ Scenarios:
 1. Authorized staff member submits a field report offline.
    - Given the user is authorized to create field reports
    - And the device is offline
-   - When the user submits field report body text
+   - When the user submits a field report title and body text
    - Then the report receives a device-generated UUID
    - And the report is locally stored encrypted
    - And the report appears submitted immediately to the user
    - And the report is marked pending sync
 
-2. Original report body cannot be edited.
+2. Original report title and body cannot be edited.
    - Given the report has been submitted
    - When the user views the report
-   - Then no edit action is available for the original body
+   - Then no edit action is available for the original title or body
 
 3. Report syncs after reconnect.
    - Given the device reconnects to the on-site node

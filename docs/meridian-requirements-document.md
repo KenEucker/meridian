@@ -9,6 +9,7 @@
 **Additive Update:** Policies and Procedures discovery decisions incorporated in v0.3.
 **Additive Update:** Name References requirements added for IMS notes and Field Reports.
 **Additive Update:** Event Geography & Maps (event maps, camps, map locations, and the event-level Placement department designation) added for MVP.
+**Additive Update:** Immutable Field Report titles added for MVP.
 
 ---
 
@@ -926,8 +927,11 @@ A field report contains:
 
 - event
 - author
+- title
 - report text
 - appended entries, if any
+
+The title is required plain text. Outer whitespace is trimmed. Titles must be 1–200 characters after trimming. Duplicate titles are allowed within an event. Appends do not have titles and cannot change the original title.
 
 Field reports are not private to the author.
 
@@ -938,7 +942,7 @@ Field reports are visible to:
 
 Field reports are not visible to non-IC department leads by default, even if their staff authored them.
 
-Field reports cannot be edited.
+Field reports cannot be edited. The original title and body are immutable after submission.
 
 Field reports cannot be stricken.
 
@@ -950,15 +954,15 @@ Field reports may exist independently.
 
 Field reports may be attached to one or more incidents.
 
-When a field report is attached to an incident, the field report content is copied into the incident notes.
+When a field report is attached to an incident, the field report content is copied into the incident notes as `Field Report: <title>` followed by the body.
 
 When a field report is appended to, only the added content is copied into associated incidents.
 
 When a field report is removed from an incident, the incident history should show that relationship as stricken.
 
-Field Report text may contain Name References.
+Field Report body text may contain Name References. Field Report titles do not participate in Name Reference parsing.
 
-Name References in Field Reports are parsed after submission for permitted search, display, and rendering support. They remain part of the original report text and do not give the author any additional access to incidents, reports, or search results.
+Name References in Field Report body text and appends are parsed after submission for permitted search, display, and rendering support. They remain part of the original report text and do not give the author any additional access to incidents, reports, or search results.
 
 ---
 
@@ -1063,11 +1067,12 @@ The derived index is a search/display artifact, not a person, identity, alias, e
 Name References are supported for MVP only in:
 
 - Incident notes
-- Field Reports
+- Field Report body text and appends
 
 Name References are not supported for MVP in:
 
 - Incident titles
+- Field Report titles
 - structured incident detail fields
 - volunteer profiles
 - shift records
@@ -1748,8 +1753,8 @@ If the staff member is not in the relevant department/team, a Department Lead mu
 ## 5.10 Field Report Creation
 
 1. An authorized staff member creates a field report.
-2. Field report records event, author, and report text.
-3. Name References in report text are parsed after submission as a derived search/display artifact.
+2. Field report records event, author, title, and report text.
+3. Name References in report body text are parsed after submission as a derived search/display artifact. Titles are not parsed for Name References.
 4. Field report is visible to author and IC department.
 5. Field report may exist independently.
 6. Author may append additional entries.
@@ -2035,14 +2040,15 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 ### Field Reports
 
 - author-created reports
+- required immutable title
 - author can view own reports
 - author can append
 - IC department visibility
 - not editable
 - not stricken
 - attach to incidents
-- copied into incident notes
-- Name References parsed from report text after submission
+- copied into incident notes as `Field Report: <title>` followed by body
+- Name References parsed from body text and appends after submission
 
 ### Incidents
 
@@ -2755,7 +2761,9 @@ Field reports shall be event-specific.
 
 ### FR-003
 
-Field reports shall record author and report text.
+Field reports shall record author, a required title, and report text.
+
+The title shall be plain text, trimmed of outer whitespace, 1–200 characters after trimming, and may duplicate other titles within the same event. Appends shall not have titles.
 
 ### FR-004
 
@@ -2771,7 +2779,7 @@ Field reports shall not be visible to non-IC department leads by default.
 
 ### FR-007
 
-Field reports shall not be editable after submission.
+Field reports shall not be editable after submission. The original title and body shall remain immutable.
 
 ### FR-008
 
@@ -2791,7 +2799,7 @@ Field reports may be attached to multiple incidents.
 
 ### FR-012
 
-When attached to an incident, field report content shall be copied into incident notes.
+When attached to an incident, field report content shall be copied into incident notes as `Field Report: <title>` followed by the body.
 
 ### FR-013
 
@@ -2899,7 +2907,7 @@ Name Reference matching and search shall be case-insensitive.
 
 ### NR-007
 
-Field Reports shall be parsed for Name References after submission.
+Field Report body text and appends shall be parsed for Name References after submission. Field Report titles shall not be parsed for Name References.
 
 ### NR-008
 
@@ -3507,7 +3515,7 @@ Incident map/location visibility shall follow existing IMS permissions.
 
 ### MAPFR-001
 
-Field Reports shall remain a single text body only and shall not gain structured map/location fields, dropped pins, coordinates, or camp selectors for MVP.
+Field Reports shall have one required title and one unstructured body text field, and shall not gain structured map/location fields, dropped pins, coordinates, or camp selectors for MVP.
 
 ### MAPOPS-001
 
