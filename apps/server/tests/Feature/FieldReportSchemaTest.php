@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Device;
 use App\Models\Event;
 use App\Models\FieldReport;
+use App\Models\FieldReportAppend;
 use App\Models\Node;
 use App\Models\Organization;
 use App\Models\Staff;
@@ -189,8 +190,86 @@ class FieldReportSchemaTest extends TestCase
         $report->delete();
     }
 
-    public function test_field_report_appends_table_is_deferred(): void
+    public function test_field_report_appends_table_has_documented_columns(): void
     {
-        $this->assertFalse(Schema::hasTable('field_report_appends'));
+        $this->assertTrue(Schema::hasTable('field_report_appends'));
+
+        foreach ([
+            'id',
+            'field_report_id',
+            'appended_by_user_id',
+            'body',
+            'device_submitted_at',
+            'server_received_at',
+            'origin_device_id',
+            'origin_node_id',
+            'created_at',
+        ] as $column) {
+            $this->assertTrue(
+                Schema::hasColumn('field_report_appends', $column),
+                "field_report_appends should have a {$column} column.",
+            );
+        }
+    }
+
+    public function test_field_report_appends_have_no_mutable_or_stricken_columns(): void
+    {
+        foreach (['updated_at', 'deleted_at', 'stricken_at', 'archived_at'] as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('field_report_appends', $column),
+                "field_report_appends.{$column} should not exist (FR-007 / FR-008).",
+            );
+        }
+    }
+
+    public function test_field_report_appends_use_uuid_primary_keys(): void
+    {
+        $append = FieldReportAppend::factory()->create();
+
+        $this->assertFalse($append->getIncrementing());
+        $this->assertSame('string', $append->getKeyType());
+        $this->assertTrue(Str::isUuid($append->getKey()));
+    }
+
+    public function test_field_report_has_ordered_appends_relationship(): void
+    {
+        $report = FieldReport::factory()->create([
+            'body' => 'Original immutable body',
+        ]);
+        $later = FieldReportAppend::factory()->forReport($report)->create([
+            'body' => 'Second append',
+            'device_submitted_at' => now()->addMinutes(5),
+        ]);
+        $earlier = FieldReportAppend::factory()->forReport($report)->create([
+            'body' => 'First append',
+            'device_submitted_at' => now()->addMinute(),
+        ]);
+
+        $appendIds = $report->fresh()->appends->pluck('id')->all();
+
+        $this->assertSame([$earlier->id, $later->id], $appendIds);
+        $this->assertSame('Original immutable body', $report->fresh()->body);
+    }
+
+    public function test_field_report_appends_cannot_be_updated(): void
+    {
+        $append = FieldReportAppend::factory()->create([
+            'body' => 'Original append body',
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Field report appends are immutable and cannot be updated.');
+
+        $append->update(['body' => 'Tampered append body']);
+    }
+
+    public function test_field_report_appends_cannot_be_deleted(): void
+    {
+        $append = FieldReportAppend::factory()->create();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Field report appends are immutable and cannot be deleted.');
+
+        $append->delete();
     }
 }

@@ -46,6 +46,23 @@ class FieldReportPolicyTest extends TestCase
         $this->assertFalse($author->can('delete', $report));
     }
 
+    public function test_author_can_append_own_field_report(): void
+    {
+        $author = User::factory()->create();
+        $report = FieldReport::factory()->forAuthor($author)->create();
+
+        $this->assertTrue($author->can('append', $report));
+    }
+
+    public function test_non_author_cannot_append_field_report(): void
+    {
+        $author = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $report = FieldReport::factory()->forAuthor($author)->create();
+
+        $this->assertFalse($otherUser->can('append', $report));
+    }
+
     public function test_non_author_cannot_update_or_delete_field_report(): void
     {
         $author = User::factory()->create();
@@ -142,6 +159,45 @@ class FieldReportPolicyTest extends TestCase
 
         $this->assertFalse($icUser->can('update', $report));
         $this->assertFalse($icUser->can('delete', $report));
+    }
+
+    public function test_ic_lead_cannot_append_others_field_report(): void
+    {
+        $event = Event::factory()->create();
+        $author = User::factory()->create();
+        $report = FieldReport::factory()->forEvent($event)->forAuthor($author)->create();
+        $icUser = $this->userWithEventRole('ic_lead', $event);
+
+        $this->assertFalse($icUser->can('append', $report));
+    }
+
+    public function test_ic_operator_cannot_append_others_field_report(): void
+    {
+        $event = Event::factory()->create();
+        $author = User::factory()->create();
+        $report = FieldReport::factory()->forEvent($event)->forAuthor($author)->create();
+        $icUser = $this->userWithEventRole('ic_operator', $event);
+
+        $this->assertFalse($icUser->can('append', $report));
+    }
+
+    public function test_ic_viewer_cannot_append_others_field_report(): void
+    {
+        $event = Event::factory()->create();
+        $author = User::factory()->create();
+        $report = FieldReport::factory()->forEvent($event)->forAuthor($author)->create();
+        $icUser = $this->userWithEventRole('ic_viewer', $event);
+
+        $this->assertFalse($icUser->can('append', $report));
+    }
+
+    public function test_elevated_author_can_append_own_field_report(): void
+    {
+        $event = Event::factory()->create();
+        $author = $this->userWithEventRole('ic_lead', $event);
+        $report = FieldReport::factory()->forEvent($event)->forAuthor($author)->create();
+
+        $this->assertTrue($author->can('append', $report));
     }
 
     private function userWithEventRole(string $roleCode, Event $event, bool $revoked = false): User
