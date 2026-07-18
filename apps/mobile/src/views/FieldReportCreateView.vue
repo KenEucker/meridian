@@ -1,29 +1,121 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { OfflineFieldReportError } from "@/field-reports/offlineFieldReport";
+import {
+  FieldReportPhotoLimitError,
+  FieldReportPhotoSelection,
+} from "@/field-reports/fieldReportPhotoSelection";
+import {
+  FieldReportPhotoProcessingError,
+  processFieldReportPhotoFile,
+} from "@/field-reports/fieldReportPhotoProcessor";
+import { FIELD_REPORT_PHOTO_MAX_COUNT } from "@/field-reports/fieldReportPhotoLimits";
+import { attachPendingFieldReportPhotos } from "@/field-reports/pendingFieldReportPhotos";
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
 
 // Submit Field Report — UI contract 12.3 `staff.field-reports.create` and
-// section 14.1–14.2 (M9.4). Submit/Cancel only; finalize on submit; no drafts
-// or autosave. Name Reference autocomplete is intentionally absent (M9.6A).
+// section 14.1–14.3 (M9.4 / M9.7). Submit/Cancel only; finalize on submit; no
+// drafts or autosave. Photos: max 2, images only, no GIFs, processed to Alpha 1
+// limits before submit. Name Reference autocomplete is intentionally absent
+// (M9.6A). Photo upload sync is M9.8.
 const router = useRouter();
 const session = computed(() => resolveFieldSession());
 const body = ref("");
 const errorMessage = ref<string | null>(null);
 const submitting = ref(false);
+const processingPhotos = ref(false);
+const photoSelection = new FieldReportPhotoSelection();
+const photoSelectionRevision = ref(0);
+const photoInput = ref<HTMLInputElement | null>(null);
+
+const selectedPhotos = computed(() => {
+  photoSelectionRevision.value;
+  return photoSelection.list();
+});
+const remainingPhotoSlots = computed(() => {
+  photoSelectionRevision.value;
+  return photoSelection.remainingSlots();
+});
+
+function bumpPhotoSelection(): void {
+  photoSelectionRevision.value += 1;
+}
 
 const canSubmit = computed(
   () =>
     Boolean(session.value) &&
     body.value.trim().length > 0 &&
-    !submitting.value,
+    !submitting.value &&
+    !processingPhotos.value,
 );
 
+onBeforeUnmount(() => {
+  photoSelection.clear();
+});
+
 function onCancel(): void {
+  photoSelection.clear();
+  bumpPhotoSelection();
   void router.push({ name: "staff.field-reports.index" });
+}
+
+function openPhotoPicker(): void {
+  photoInput.value?.click();
+}
+
+function removePhoto(id: string): void {
+  photoSelection.remove(id);
+  bumpPhotoSelection();
+}
+
+async function onPhotosSelected(event: Event): Promise<void> {
+  errorMessage.value = null;
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = "";
+
+  if (files.length === 0) {
+    return;
+  }
+
+  processingPhotos.value = true;
+
+  try {
+    for (const file of files) {
+      if (photoSelection.remainingSlots() <= 0) {
+        throw new FieldReportPhotoLimitError(
+          `Field Reports allow at most ${FIELD_REPORT_PHOTO_MAX_COUNT} photos total.`,
+        );
+      }
+
+      const processed = await processFieldReportPhotoFile(file);
+      const previewUrl =
+        typeof URL?.createObjectURL === "function"
+          ? URL.createObjectURL(
+              new Blob([processed.bytes.buffer.slice(
+                processed.bytes.byteOffset,
+                processed.bytes.byteOffset + processed.bytes.byteLength,
+              ) as ArrayBuffer], { type: processed.mimeType }),
+            )
+          : "";
+      photoSelection.add(processed, previewUrl);
+      bumpPhotoSelection();
+    }
+  } catch (error) {
+    if (
+      error instanceof FieldReportPhotoProcessingError ||
+      error instanceof FieldReportPhotoLimitError
+    ) {
+      errorMessage.value = error.message;
+    } else {
+      errorMessage.value = "Unable to process the selected photo.";
+    }
+  } finally {
+    processingPhotos.value = false;
+  }
 }
 
 function onSubmit(): void {
@@ -44,6 +136,7 @@ function onSubmit(): void {
   submitting.value = true;
 
   try {
+    const photos = photoSelection.snapshotForSubmit();
     const report = submitFieldReport({
       eventId: current.eventId,
       submittedByUserId: current.submittedByUserId,
@@ -54,6 +147,10 @@ function onSubmit(): void {
       teamId: current.teamId,
       body: body.value,
     });
+
+    attachPendingFieldReportPhotos(report.id, photos);
+    photoSelection.clear();
+    bumpPhotoSelection();
 
     void router.push({
       name: "staff.field-reports.show",
@@ -125,6 +222,72 @@ function onSubmit(): void {
           autocomplete="off"
           spellcheck="true"
         />
+
+        <div class="fr-create__photos">
+          <div class="fr-create__photos-heading">
+            <label class="fr-create__label" for="fr-photos">
+              Photos (optional)
+            </label>
+            <p id="fr-photos-help" class="fr-create__photos-help">
+              Up to {{ FIELD_REPORT_PHOTO_MAX_COUNT }} images. GIFs are not
+              allowed. Photos are resized and compressed before submit;
+              {{ remainingPhotoSlots }} slot{{ remainingPhotoSlots === 1 ? "" : "s" }}
+              remaining.
+            </p>
+          </div>
+
+          <input
+            id="fr-photos"
+            ref="photoInput"
+            class="fr-create__photo-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            :disabled="remainingPhotoSlots === 0 || processingPhotos"
+            aria-describedby="fr-photos-help"
+            @change="onPhotosSelected"
+          />
+
+          <button
+            type="button"
+            class="fr-create__add-photo"
+            :disabled="remainingPhotoSlots === 0 || processingPhotos"
+            @click="openPhotoPicker"
+          >
+            {{ processingPhotos ? "Processing…" : "Add photo" }}
+          </button>
+
+          <ul
+            v-if="selectedPhotos.length > 0"
+            class="fr-create__photo-list"
+            aria-label="Selected photos"
+          >
+            <li
+              v-for="photo in selectedPhotos"
+              :key="photo.id"
+              class="fr-create__photo-item"
+            >
+              <img
+                v-if="photo.previewUrl"
+                class="fr-create__photo-preview"
+                :src="photo.previewUrl"
+                :alt="`Selected photo ${photo.width} by ${photo.height}`"
+              />
+              <div class="fr-create__photo-meta">
+                <span>{{ photo.width }}×{{ photo.height }}</span>
+                <span>{{ Math.ceil(photo.byteSize / 1024) }} KB</span>
+              </div>
+              <button
+                type="button"
+                class="fr-create__photo-remove"
+                @click="removePhoto(photo.id)"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
+        </div>
 
         <p
           v-if="errorMessage"
@@ -240,6 +403,86 @@ function onSubmit(): void {
 .fr-create__body:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
+}
+
+.fr-create__photos {
+  margin-bottom: var(--m-space-4);
+}
+
+.fr-create__photos-help {
+  margin: 0 0 var(--m-space-3);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.fr-create__photo-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fr-create__add-photo,
+.fr-create__photo-remove {
+  min-width: 7rem;
+  padding: var(--m-space-2) var(--m-space-4);
+  border-radius: var(--m-radius-sm);
+  border: 1px solid var(--m-border-default);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fr-create__add-photo:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fr-create__add-photo:focus-visible,
+.fr-create__photo-remove:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.fr-create__photo-list {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: var(--m-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-create__photo-item {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
+  gap: var(--m-space-3);
+  align-items: center;
+  padding: var(--m-space-2);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.fr-create__photo-preview {
+  width: 5rem;
+  height: 5rem;
+  object-fit: cover;
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+}
+
+.fr-create__photo-meta {
+  display: grid;
+  gap: var(--m-space-1);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
 }
 
 .fr-create__error {

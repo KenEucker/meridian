@@ -217,6 +217,17 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     expect(wrapper.get(".fr-create__cancel").text()).toBe("Cancel");
   });
 
+  it("exposes optional photo capture controls with the Alpha 1 max-2 help text", async () => {
+    const { wrapper } = await mountAt("/staff/field-reports/create");
+
+    expect(wrapper.get("#fr-photos").attributes("type")).toBe("file");
+    expect(wrapper.get("#fr-photos").attributes("accept")).toBe("image/*");
+    expect(wrapper.get(".fr-create__add-photo").text()).toBe("Add photo");
+    expect(wrapper.get("#fr-photos-help").text()).toContain("Up to 2 images");
+    expect(wrapper.get("#fr-photos-help").text()).toContain("GIFs are not");
+    expect(wrapper.get("#fr-photos-help").text()).toContain("2 slots remaining");
+  });
+
   it("cancels create back to the author list without saving a draft", async () => {
     const { wrapper, router } = await mountAt("/staff/field-reports/create");
 
