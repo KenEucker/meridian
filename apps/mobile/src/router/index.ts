@@ -10,6 +10,7 @@ import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
 import HomeView from "@/views/HomeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import ShiftBoardCurrentView from "@/views/ShiftBoardCurrentView.vue";
 
 /**
  * Until auth and event selection land, author Field Report surfaces install a
@@ -33,6 +34,11 @@ export const routes: RouteRecordRaw[] = [
     path: "/readiness",
     name: "readiness",
     component: ReadinessView,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shift-board/current",
+    name: "events.departments.shift-board.current",
+    component: ShiftBoardCurrentView,
   },
   {
     path: "/staff/field-reports",
