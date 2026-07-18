@@ -1,6 +1,7 @@
 # PowerSync Deployment
 
-This directory contains the self-hosted PowerSync service baseline for M8.1.
+This directory contains the self-hosted PowerSync service baseline from M8.1
+and the initial authorized device cache projections from M8.2.
 It connects PowerSync to Meridian's canonical PostgreSQL database, dedicated
 PostgreSQL bucket storage, and a JWKS endpoint used to validate client tokens.
 
@@ -14,8 +15,8 @@ accepting all domain-sensitive writes.
 - `compose.yaml` pins `journeyapps/powersync-service:1.22.0`.
 - `service.yaml` defines replication, bucket storage, client authentication,
   and logging.
-- `sync-config.yaml` intentionally contains no streams. M8.2 owns the first
-  authorized device cache projections.
+- `sync-config.yaml` defines authenticated regular-staff, shift-lead, and
+  department-lead cache streams.
 - `.env.example` documents the required non-secret configuration shape.
 
 ## Prerequisites
@@ -45,6 +46,14 @@ The `config` command validates Compose interpolation without starting the
 service or printing secrets beyond values already present in the local
 environment file. Never commit `deploy/powersync/.env`.
 
+Validate the sync-stream syntax against a configured PowerSync instance with:
+
+```bash
+powersync validate \
+  --sync-config-file-path=deploy/powersync/sync-config.yaml \
+  --validate-only=sync-config
+```
+
 After configuring real services:
 
 ```bash
@@ -58,16 +67,37 @@ The PowerSync container reports healthy only after
 `/probes/liveness` succeeds. The API is available at
 `http://127.0.0.1:8080` by default.
 
-## Deliberate M8.1 limits
+## M8.2 projection boundaries
 
-- No Meridian records sync because `streams` is empty.
+- Every stream is automatically scoped from the signed JWT `sub` claim through
+  `auth.user_id()`. No client-controlled subscription or connection parameter
+  grants access.
+- Regular staff receive their own current organization/department/team
+  memberships, assigned shifts, basic event data, visible published
+  policy/procedure content and referenced fragments, and their acknowledgment
+  state.
+- Shift leads additionally receive safe roster fields and assignments for
+  teams/shifts covered by an active `shift_lead` team grant.
+- Department leads additionally receive safe department roster/schedule fields
+  and documents/fragments they may maintain through an active
+  `department_lead` team grant.
+- Staff projections deliberately omit email, phone, date of birth, emergency
+  contacts, status reasons, and profile-picture storage metadata.
+- Incidents, global configuration, audit archives, permission administration,
+  exports, and attachment binaries are not projected.
+
+## Deliberate limits
+
 - No client SDK, local SQLite schema, upload queue, or offline mutation path is
   installed.
 - No readiness UI or event-mode fail-closed behavior is enabled.
 - No PowerSync client JWT or JWKS endpoint is implemented.
+- Field Report/form, attendance, readiness, incident-cache, and map projections
+  remain deferred until their canonical tables and owning tasks exist.
 
-When projections are added in M8.2, Name References must remain text-first
-derived artifacts. Incident note and Field Report source text syncs through
-authorized projections; any local Name Reference index must be rebuildable
-from that source text, must not become a business-rule engine, and must not
-expose references from records the active user cannot otherwise access.
+When incident and Field Report projections are added, Name References must
+remain text-first derived artifacts. Incident note and Field Report source text
+must sync only through authorized projections; any local Name Reference index
+must be rebuildable from that source text, must not become a business-rule
+engine, and must not expose references from records the active user cannot
+otherwise access.
