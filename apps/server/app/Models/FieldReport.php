@@ -8,16 +8,18 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use RuntimeException;
 
 /**
  * Immutable Field Report (data/API specification section 10.15, technical
- * spec section 17, FR-001 through FR-007).
+ * spec section 17, FR-001 through FR-009).
  *
  * Original body never changes after submission. Server acceptance and FRA
  * numbering are implemented by M9.3; IC event-wide visibility is enforced by
- * FieldReportPolicy / FieldReportVisibilityAccess (M9.5). Appends, photos, and
- * Name References belong to later M9 tasks.
+ * FieldReportPolicy / FieldReportVisibilityAccess (M9.5). Append-only additions
+ * are created through FieldReportAppendService (M9.6). Photos and Name
+ * References belong to later M9 tasks.
  */
 class FieldReport extends Model
 {
@@ -109,6 +111,13 @@ class FieldReport extends Model
     public function originNode(): BelongsTo
     {
         return $this->belongsTo(Node::class, 'origin_node_id');
+    }
+
+    public function appends(): HasMany
+    {
+        return $this->hasMany(FieldReportAppend::class)
+            ->orderBy('device_submitted_at')
+            ->orderBy('created_at');
     }
 
     /**
