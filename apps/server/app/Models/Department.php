@@ -151,6 +151,11 @@ class Department extends Model
         return $this->hasMany(FieldReport::class);
     }
 
+    public function hoursWorked(): HasMany
+    {
+        return $this->hasMany(HoursWorked::class);
+    }
+
     public function documentAcknowledgmentRequirements(): HasMany
     {
         return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')
