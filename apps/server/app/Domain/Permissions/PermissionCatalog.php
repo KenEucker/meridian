@@ -137,4 +137,12 @@ final class PermissionCatalog
             ],
         ];
     }
+
+    /**
+     * Whether the given effective role code includes a catalog permission.
+     */
+    public static function roleHasPermission(string $roleCode, string $permissionCode): bool
+    {
+        return in_array($permissionCode, self::rolePermissions()[$roleCode] ?? [], true);
+    }
 }
