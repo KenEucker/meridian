@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\MagicLinkController;
+use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -61,4 +62,13 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('logout', [LogoutController::class, 'create'])->name('logout');
     Route::post('logout', [LogoutController::class, 'destroy'])->name('logout.destroy');
+
+    // Short-lived signed Field Report photo URLs (technical spec 18.6). Signature
+    // expiry is enforced by signed:relative; authorization is re-checked on use.
+    Route::get('field-report-photos/{attachment}/preview', [FieldReportPhotoController::class, 'preview'])
+        ->middleware('signed:relative')
+        ->name('field-report-photos.preview');
+    Route::get('field-report-photos/{attachment}/download', [FieldReportPhotoController::class, 'download'])
+        ->middleware('signed:relative')
+        ->name('field-report-photos.download');
 });

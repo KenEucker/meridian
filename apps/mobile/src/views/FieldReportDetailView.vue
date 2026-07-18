@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, watchEffect } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import {
   authorFieldReportCatalog,
   fieldReportCatalogRevision,
+  fieldReportPhotoRevision,
+  bumpFieldReportPhotoRevision,
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { fieldReportSubmissionView } from "@/field-reports/offlineFieldReport";
+import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
+import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 
 // View submitted Field Report — UI contract 12.3 `staff.field-reports.show`
-// (M9.4 / M9.7A). Authors may view their own reports (FR-004). Original title
-// and body are view-only; no Edit/Save/autosave (FR-007; IMS surface §11; UI
-// contract 14.2). Incident attachment state is not shown to the submitter
-// (technical spec 17.6).
+// (M9.4 / M9.7A / M9.8). Authors may view their own reports (FR-004). Original
+// title and body are view-only; no Edit/Save/autosave (FR-007; IMS surface §11;
+// UI contract 14.2). Incident attachment state is not shown to the submitter
+// (technical spec 17.6). Local photo previews and pending upload state come
+// from the durable encrypted photo queue until sync clears it.
 const route = useRoute();
 const session = computed(() => resolveFieldSession());
 
@@ -36,6 +41,88 @@ const report = computed(() => {
 const submission = computed(() =>
   report.value ? fieldReportSubmissionView(report.value) : null,
 );
+
+interface LocalPhotoPreview {
+  readonly id: string;
+  readonly syncStatus: string;
+  readonly previewUrl: string;
+  readonly lastError: string | null;
+}
+
+const pendingPhotoCount = ref(0);
+const failedPhotoCount = ref(0);
+const localPhotoPreviews = ref<LocalPhotoPreview[]>([]);
+const syncing = ref(false);
+const syncMessage = ref<string | null>(null);
+
+function revokePreviews(previews: readonly LocalPhotoPreview[]): void {
+  if (typeof URL?.revokeObjectURL !== "function") {
+    return;
+  }
+  for (const preview of previews) {
+    URL.revokeObjectURL(preview.previewUrl);
+  }
+}
+
+watchEffect(() => {
+  void fieldReportPhotoRevision.value;
+  const id = fieldReportId.value;
+  if (!id) {
+    revokePreviews(localPhotoPreviews.value);
+    localPhotoPreviews.value = [];
+    pendingPhotoCount.value = 0;
+    failedPhotoCount.value = 0;
+    return;
+  }
+
+  void listPendingFieldReportPhotoRecords(id).then((records) => {
+    revokePreviews(localPhotoPreviews.value);
+
+    pendingPhotoCount.value = records.filter(
+      (record) => record.syncStatus === "pending_upload",
+    ).length;
+    failedPhotoCount.value = records.filter(
+      (record) => record.syncStatus === "failed",
+    ).length;
+
+    localPhotoPreviews.value = records.map((record) => {
+      const blob = new Blob([record.photo.bytes], {
+        type: record.photo.mimeType,
+      });
+      return {
+        id: record.photo.id,
+        syncStatus: record.syncStatus,
+        lastError: record.lastError,
+        previewUrl: URL.createObjectURL(blob),
+      };
+    });
+  });
+});
+
+onBeforeUnmount(() => {
+  revokePreviews(localPhotoPreviews.value);
+});
+
+async function onRetrySync(): Promise<void> {
+  syncing.value = true;
+  syncMessage.value = null;
+  try {
+    const result = await syncFieldReportOutbox();
+    bumpFieldReportPhotoRevision();
+    if (result.photosFailed > 0 || result.textFailed > 0) {
+      syncMessage.value =
+        "Some uploads failed. Confirm the server is running, the local Field fixture is seeded, and the API token matches.";
+    } else if (result.photosUploaded === 0 && result.textAccepted === 0) {
+      syncMessage.value = "Nothing pending to sync.";
+    } else {
+      syncMessage.value = "Sync completed.";
+    }
+  } catch {
+    syncMessage.value = "Unable to sync Field Report uploads.";
+  } finally {
+    syncing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -90,6 +177,27 @@ const submission = computed(() =>
           <dt>Sync</dt>
           <dd>{{ submission.pendingSync ? "Pending sync" : "Synced" }}</dd>
         </div>
+        <div v-if="localPhotoPreviews.length > 0">
+          <dt>Photos</dt>
+          <dd>
+            <span v-if="pendingPhotoCount > 0">
+              {{ pendingPhotoCount }} pending upload
+            </span>
+            <span v-if="failedPhotoCount > 0">
+              <template v-if="pendingPhotoCount > 0">; </template>
+              {{ failedPhotoCount }} failed upload
+            </span>
+            <span
+              v-if="
+                pendingPhotoCount === 0 &&
+                failedPhotoCount === 0 &&
+                localPhotoPreviews.length > 0
+              "
+            >
+              {{ localPhotoPreviews.length }} uploaded
+            </span>
+          </dd>
+        </div>
         <div>
           <dt>Submitted at</dt>
           <dd>{{ report.deviceSubmittedAt }}</dd>
@@ -111,6 +219,55 @@ const submission = computed(() =>
           <dd>{{ session.teamLabel }}</dd>
         </div>
       </dl>
+
+      <div
+        v-if="localPhotoPreviews.length > 0"
+        class="fr-detail__photos"
+        aria-label="Local Field Report photos"
+      >
+        <h2 class="fr-detail__body-heading">Photos</h2>
+        <ul class="fr-detail__photo-list">
+          <li
+            v-for="photo in localPhotoPreviews"
+            :key="photo.id"
+            class="fr-detail__photo-item"
+          >
+            <img
+              class="fr-detail__photo-preview"
+              :src="photo.previewUrl"
+              alt="Field Report photo"
+            />
+            <p class="fr-detail__photo-status">
+              {{
+                photo.syncStatus === "uploaded"
+                  ? "Uploaded"
+                  : photo.syncStatus === "failed"
+                    ? "Upload failed"
+                    : "Pending upload"
+              }}
+            </p>
+            <p v-if="photo.lastError" class="fr-detail__photo-error">
+              {{ photo.lastError }}
+            </p>
+          </li>
+        </ul>
+        <p
+          v-if="pendingPhotoCount > 0 || failedPhotoCount > 0"
+          class="fr-detail__actions"
+        >
+          <button
+            type="button"
+            class="fr-detail__retry"
+            :disabled="syncing"
+            @click="onRetrySync"
+          >
+            {{ syncing ? "Syncing…" : "Retry upload" }}
+          </button>
+        </p>
+        <p v-if="syncMessage" class="fr-detail__sync-message" role="status">
+          {{ syncMessage }}
+        </p>
+      </div>
 
       <h2 class="fr-detail__body-heading">Report text</h2>
       <pre class="fr-detail__body" tabindex="0">{{ report.body }}</pre>
@@ -144,9 +301,16 @@ const submission = computed(() =>
 
 .fr-detail__temporary,
 .fr-detail__unavailable,
-.fr-detail__immutable {
+.fr-detail__immutable,
+.fr-detail__photo-status,
+.fr-detail__photo-error,
+.fr-detail__sync-message {
   margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.fr-detail__photo-error {
+  color: var(--m-text-danger, #b42318);
 }
 
 .fr-detail__meta {
@@ -190,5 +354,42 @@ const submission = computed(() =>
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-base);
   font: inherit;
+}
+
+.fr-detail__photos {
+  margin: 0 0 var(--m-space-6);
+}
+
+.fr-detail__photo-list {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.fr-detail__photo-preview {
+  display: block;
+  width: 100%;
+  max-height: 16rem;
+  object-fit: contain;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+}
+
+.fr-detail__retry {
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fr-detail__retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

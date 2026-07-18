@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Attachment;
 use App\Models\DeviceTrust;
 use App\Models\DocumentAcknowledgmentRequirement;
 use App\Models\FieldReport;
+use App\Models\OrchidAttachment;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Policies\DeviceTrustPolicy;
@@ -12,6 +14,8 @@ use App\Policies\FieldReportPolicy;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Orchid\Attachment\Models\Attachment as OrchidPlatformAttachment;
+use Orchid\Platform\Dashboard;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,9 +32,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Dashboard::useModel(OrchidPlatformAttachment::class, OrchidAttachment::class);
+
         Relation::morphMap([
             DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_POLICY => PolicyDocument::class,
             DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_PROCEDURE => ProcedureDocument::class,
+            Attachment::MORPH_FIELD_REPORT => FieldReport::class,
         ]);
 
         Gate::policy(DeviceTrust::class, DeviceTrustPolicy::class);

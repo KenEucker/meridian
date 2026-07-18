@@ -16,16 +16,18 @@ import {
   processFieldReportPhotoFile,
 } from "@/field-reports/fieldReportPhotoProcessor";
 import { FIELD_REPORT_PHOTO_MAX_COUNT } from "@/field-reports/fieldReportPhotoLimits";
+import { bumpFieldReportPhotoRevision } from "@/field-reports/fieldReportRuntime";
 import { attachPendingFieldReportPhotos } from "@/field-reports/pendingFieldReportPhotos";
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
+import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 
 // Submit Field Report — UI contract 12.3 `staff.field-reports.create` and
 // section 14.1–14.3 (M9.4 / M9.7 / M9.7A). Submit/Cancel only; finalize on
 // submit; no drafts or autosave. Required title + body; title and original body
 // are immutable after submit. Photos: max 2, images only, no GIFs, processed to
 // Alpha 1 limits before submit. Name Reference autocomplete is intentionally
-// absent (M9.6A); titles are not parsed for Name References. Photo upload sync
-// is M9.8.
+// absent (M9.6A); titles are not parsed for Name References. Photos attach to
+// the durable encrypted pending upload queue after submit (M9.8).
 const router = useRouter();
 const session = computed(() => resolveFieldSession());
 const title = ref("");
@@ -126,7 +128,7 @@ async function onPhotosSelected(event: Event): Promise<void> {
   }
 }
 
-function onSubmit(): void {
+async function onSubmit(): Promise<void> {
   errorMessage.value = null;
 
   const current = session.value;
@@ -162,11 +164,20 @@ function onSubmit(): void {
       body: body.value,
     });
 
-    attachPendingFieldReportPhotos(report.id, photos);
+    // Text finalize and navigate immediately; photo persistence/upload is a
+    // separate offline write (technical spec 18.2) and must not block submit.
+    void attachPendingFieldReportPhotos(report.id, photos)
+      .then(() => {
+        bumpFieldReportPhotoRevision();
+        return syncFieldReportOutbox();
+      })
+      .catch(() => {
+        bumpFieldReportPhotoRevision();
+      });
     photoSelection.clear();
     bumpPhotoSelection();
 
-    void router.push({
+    await router.push({
       name: "staff.field-reports.show",
       params: { fieldReportId: report.id },
     });

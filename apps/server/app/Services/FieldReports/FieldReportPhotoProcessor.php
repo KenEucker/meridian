@@ -11,7 +11,8 @@ use App\Exceptions\FieldReportPhotoProcessingException;
  * spec 18.3 / data/API 10.17 limits using PHP GD (already required for Orchid):
  * reject GIFs, fit within 2560×1900, compress to ≤ 5 MB, strip EXIF by
  * re-encoding, and emit a single WebP (JPEG fallback) bitmap. Upload persistence
- * and download authorization remain M9.8.
+ * and download authorization are owned by FieldReportPhotoUploadService /
+ * FieldReportPolicy (M9.8).
  */
 final class FieldReportPhotoProcessor
 {
