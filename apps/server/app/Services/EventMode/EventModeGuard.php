@@ -1,0 +1,136 @@
+<?php
+
+namespace App\Services\EventMode;
+
+use App\Models\Node;
+use App\Services\Node\NodeConfigResolver;
+use App\Services\Node\NodeSetupService;
+use App\Services\PowerSync\PowerSyncHealthClient;
+
+/**
+ * Evaluates and enforces event-mode fail-closed safeguards on the server
+ * (technical spec 8.6, 26.2).
+ *
+ * Event mode is derived from the effective node role: any non-development role
+ * (standalone/central/onsite) is treated as event/production mode, unless
+ * `meridian.event_mode.enabled` explicitly forces it on or off. The server owns
+ * two checks:
+ *
+ *   - HTTPS validation: the configured application URL must use HTTPS
+ *     (technical spec 8.2 "production/event mode never uses plain HTTP").
+ *   - PowerSync availability: the PowerSync liveness probe must succeed.
+ *
+ * Local encryption and device signing are client-side checks and are evaluated
+ * on the client (technical spec 8.6). Development mode never blocks.
+ */
+class EventModeGuard
+{
+    public function __construct(
+        private readonly PowerSyncHealthClient $powerSync,
+        private readonly NodeSetupService $nodes,
+        private readonly NodeConfigResolver $configResolver,
+    ) {}
+
+    /**
+     * Whether the node is in event/production mode. An explicit config value
+     * wins; otherwise any non-development effective node role is event mode.
+     */
+    public function isEventMode(?string $nodeRole = null): bool
+    {
+        $configured = config('meridian.event_mode.enabled');
+
+        if ($configured !== null && $configured !== '') {
+            return filter_var($configured, FILTER_VALIDATE_BOOL);
+        }
+
+        $role = $nodeRole ?? $this->effectiveNodeRole();
+
+        return $role !== Node::ROLE_DEVELOPMENT;
+    }
+
+    /**
+     * Evaluate the server-owned event-mode checks. In development mode no checks
+     * are run and the result always passes.
+     */
+    public function evaluate(?string $nodeRole = null): EventModeReadiness
+    {
+        if (! $this->isEventMode($nodeRole)) {
+            return new EventModeReadiness(eventMode: false, checks: []);
+        }
+
+        $checks = [];
+
+        if ((bool) config('meridian.event_mode.require_https', true)) {
+            $checks[] = $this->evaluateHttps();
+        }
+
+        if ((bool) config('meridian.event_mode.require_powersync', true)) {
+            $checks[] = $this->evaluatePowerSync();
+        }
+
+        return new EventModeReadiness(eventMode: true, checks: $checks);
+    }
+
+    /**
+     * Fail closed when event mode is entered while a required check fails.
+     *
+     * @throws EventModeNotReadyException
+     */
+    public function ensureReady(?string $nodeRole = null): void
+    {
+        $readiness = $this->evaluate($nodeRole);
+
+        if ($readiness->blocked()) {
+            throw new EventModeNotReadyException($readiness);
+        }
+    }
+
+    private function evaluateHttps(): EventModeCheck
+    {
+        $appUrl = (string) config('app.url', '');
+        $scheme = strtolower((string) parse_url($appUrl, PHP_URL_SCHEME));
+        $passed = $scheme === 'https';
+
+        return new EventModeCheck(
+            key: EventModeCheck::HTTPS,
+            label: 'HTTPS validation',
+            passed: $passed,
+            reason: $passed
+                ? null
+                : 'HTTPS validation failed: event mode requires the application URL to use HTTPS, but the configured URL does not.',
+        );
+    }
+
+    private function evaluatePowerSync(): EventModeCheck
+    {
+        $passed = $this->powerSync->isAvailable();
+
+        return new EventModeCheck(
+            key: EventModeCheck::POWERSYNC,
+            label: 'PowerSync availability',
+            passed: $passed,
+            reason: $passed
+                ? null
+                : 'PowerSync is unavailable: event mode requires the PowerSync service to be reachable.',
+        );
+    }
+
+    /**
+     * Resolve the effective node role using the same file-first, database-second
+     * precedence as the rest of the app, defaulting to development.
+     */
+    private function effectiveNodeRole(): string
+    {
+        $node = $this->nodes->activeNode();
+
+        foreach ($this->configResolver->valuesFor($node) as $value) {
+            if ($value['key'] === 'node_role') {
+                $role = $value['value'];
+
+                return is_string($role) && $role !== '' ? $role : Node::ROLE_DEVELOPMENT;
+            }
+        }
+
+        return Node::ROLE_DEVELOPMENT;
+    }
+}
