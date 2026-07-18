@@ -1,17 +1,27 @@
 <script setup lang="ts">
-// Placeholder home surface. Field Report author surfaces arrive with M9.4;
-// broader volunteer/department/shift workflows remain later Alpha 1 milestones.
 import { RouterLink } from "vue-router";
+
+import { LOCAL_CURRENT_SHIFT_BOARD } from "@/shift-board/currentShiftBoard";
+
+// Placeholder home surface. Field Report author surfaces arrived with M9.4;
+// the read-only current Shift Lead Board roster is present for M10.1.
+const shiftBoardRoute = {
+  name: "events.departments.shift-board.current",
+  params: {
+    eventId: LOCAL_CURRENT_SHIFT_BOARD.eventId,
+    departmentId: LOCAL_CURRENT_SHIFT_BOARD.departmentId,
+  },
+};
 </script>
 
 <template>
   <section class="home" aria-labelledby="home-heading">
     <h1 id="home-heading" class="home__heading">Meridian Field</h1>
     <p class="home__lede">
-      Field application shell. Volunteer, department, and shift surfaces are not
-      yet implemented. Authors can submit and view their own Field Reports.
+      Field application shell. Select a current operational surface.
     </p>
     <p class="home__links">
+      <RouterLink :to="shiftBoardRoute">Current shift board</RouterLink>
       <RouterLink :to="{ name: 'staff.field-reports.index' }"
         >My Field Reports</RouterLink
       >
