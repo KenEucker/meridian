@@ -60,7 +60,7 @@ class PowerSyncConfigurationTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_deploy_config_pins_the_approved_service_and_exposes_no_streams(): void
+    public function test_deploy_config_pins_the_approved_service_and_loads_sync_streams(): void
     {
         $compose = file_get_contents(base_path('../../deploy/powersync/compose.yaml'));
         $service = file_get_contents(base_path('../../deploy/powersync/service.yaml'));
@@ -73,7 +73,8 @@ class PowerSyncConfigurationTest extends TestCase
         $this->assertStringContainsString('storage:', $service);
         $this->assertStringContainsString('sync_config:', $service);
         $this->assertStringContainsString('client_auth:', $service);
-        $this->assertMatchesRegularExpression('/^streams: \{\}$/m', $syncConfig);
+        $this->assertMatchesRegularExpression('/^streams:$/m', $syncConfig);
+        $this->assertStringContainsString('regular_staff_cache:', $syncConfig);
         $this->assertStringNotContainsString('replace-me', $compose);
         $this->assertStringContainsString('replace-me', $exampleEnv);
     }
