@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Connected check-out command for scheduled staff (SLB-004 through SLB-006).
- * HTTP command transport, offline queue reconciliation, corrections, freezing,
- * credits, and exports remain with later M10 tasks.
+ * Connected/synced check-out command for scheduled staff (SLB-004 through
+ * SLB-006). Corrections, freezing, credits, and exports remain with later M10
+ * tasks.
  */
 class AttendanceCheckOutService
 {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -8,6 +9,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
 
 Route::middleware('local.field')->group(function (): void {
+    Route::post('/commands/check-in-staff', [AttendanceCommandController::class, 'checkIn'])
+        ->name('api.commands.check-in-staff');
+
+    Route::post('/commands/check-out-staff', [AttendanceCommandController::class, 'checkOut'])
+        ->name('api.commands.check-out-staff');
+
+    Route::post('/commands/mark-no-show', [AttendanceCommandController::class, 'markNoShow'])
+        ->name('api.commands.mark-no-show');
+
     Route::post('/commands/submit-field-report', [FieldReportCommandController::class, 'submit'])
         ->name('api.commands.submit-field-report');
 
