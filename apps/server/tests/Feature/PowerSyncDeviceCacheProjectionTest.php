@@ -73,8 +73,8 @@ class PowerSyncDeviceCacheProjectionTest extends TestCase
         $shiftLead = $this->stream('shift_lead_cache', 'department_lead_cache');
         $departmentLead = $this->stream('department_lead_cache');
 
-        $this->assertStringContainsString("permission_roles.code = 'shift_lead'", $shiftLead);
-        $this->assertStringContainsString("permission_roles.code = 'department_lead'", $departmentLead);
+        $this->assertStringContainsString("SELECT id FROM permission_roles WHERE code = 'shift_lead'", $shiftLead);
+        $this->assertStringContainsString("SELECT id FROM permission_roles WHERE code = 'department_lead'", $departmentLead);
 
         foreach ([$shiftLead, $departmentLead] as $leadStream) {
             $this->assertStringContainsString(
@@ -85,10 +85,11 @@ class PowerSyncDeviceCacheProjectionTest extends TestCase
                 'team_grants.revoked_at IS NULL',
                 $leadStream,
             );
+            $this->assertStringContainsString(
+                'team_grants.event_id IS NULL',
+                $leadStream,
+            );
         }
-
-        $this->assertStringContainsString('shift_lead_grants.event_id IS NULL', $shiftLead);
-        $this->assertStringContainsString('department_lead_grants.event_id IS NULL', $departmentLead);
         $this->assertStringContainsString('FROM shift_assignments', $shiftLead);
         $this->assertStringContainsString('FROM staff', $shiftLead);
         $this->assertStringContainsString('FROM department_memberships', $departmentLead);

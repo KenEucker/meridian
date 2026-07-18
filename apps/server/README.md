@@ -51,8 +51,23 @@ The development connection defaults match the committed `.env.example`:
 | Password | `meridian` | `DB_PASSWORD` |
 | SSL mode | `prefer` | `DB_SSLMODE` |
 
-Provide a PostgreSQL server that matches these values. Either run a local
-PostgreSQL 18.x service or start a disposable container:
+Provide a PostgreSQL server that matches these values. The recommended option is
+the managed database service under [`deploy/docker`](../../deploy/docker/README.md),
+which runs PostgreSQL 18 with logical replication enabled and provisions the
+PowerSync roles, storage database, and publication on first boot:
+
+```bash
+# From the repository root:
+corepack pnpm run db:setup
+```
+
+`db:setup` copies `deploy/docker/.env` from the example (if needed) and starts
+the database, waiting until it reports healthy. See
+[`deploy/docker/README.md`](../../deploy/docker/README.md) for the full `db:*`
+script list and the equivalent raw Docker Compose commands.
+
+Alternatively, run a local PostgreSQL 18.x service or start a disposable
+container:
 
 ```bash
 docker run --name meridian-postgres \
@@ -63,8 +78,11 @@ docker run --name meridian-postgres \
   -d postgres:18
 ```
 
-> The `docker run` command above is a local-development convenience only. The
-> production/on-site Docker Compose deployment bundle is a separate, later task.
+> The `docker run` command above is a bare-database convenience that does not set
+> up logical replication or the PowerSync prerequisites. Use the
+> [`deploy/docker`](../../deploy/docker/README.md) service when you need PowerSync
+> to connect. The complete multi-service deployment bundle remains a separate,
+> later task.
 
 If you already run PostgreSQL natively, create a matching role and database:
 
