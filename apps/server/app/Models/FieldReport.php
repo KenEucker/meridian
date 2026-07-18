@@ -15,8 +15,9 @@ use RuntimeException;
  * spec section 17, FR-001 through FR-007).
  *
  * Original body never changes after submission. Server acceptance and FRA
- * numbering are implemented by M9.3; appends, IC visibility, photos, and Name
- * References belong to later M9 tasks.
+ * numbering are implemented by M9.3; IC event-wide visibility is enforced by
+ * FieldReportPolicy / FieldReportVisibilityAccess (M9.5). Appends, photos, and
+ * Name References belong to later M9 tasks.
  */
 class FieldReport extends Model
 {
