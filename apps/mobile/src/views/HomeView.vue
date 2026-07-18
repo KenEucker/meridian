@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Placeholder home surface. No domain workflows, data, or authentication
-// are wired up in M2.1; those arrive with later Alpha 1 milestones.
+// Placeholder home surface. Field Report author surfaces arrive with M9.4;
+// broader volunteer/department/shift workflows remain later Alpha 1 milestones.
 import { RouterLink } from "vue-router";
 </script>
 
@@ -8,10 +8,13 @@ import { RouterLink } from "vue-router";
   <section class="home" aria-labelledby="home-heading">
     <h1 id="home-heading" class="home__heading">Meridian Field</h1>
     <p class="home__lede">
-      Field application shell. Volunteer, department, shift, and field-report
-      surfaces are not yet implemented.
+      Field application shell. Volunteer, department, and shift surfaces are not
+      yet implemented. Authors can submit and view their own Field Reports.
     </p>
     <p class="home__links">
+      <RouterLink :to="{ name: 'staff.field-reports.index' }"
+        >My Field Reports</RouterLink
+      >
       <RouterLink :to="{ name: 'readiness' }">Check device readiness</RouterLink>
     </p>
   </section>
@@ -35,5 +38,8 @@ import { RouterLink } from "vue-router";
 
 .home__links {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2);
 }
 </style>

@@ -85,4 +85,9 @@ export class PendingFieldReportQueue {
   markSynced(id: string): boolean {
     return this.reports.delete(id);
   }
+
+  /** Test/reset helper: drain the entire outbox. */
+  clear(): void {
+    this.reports.clear();
+  }
 }
