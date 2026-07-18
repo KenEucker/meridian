@@ -146,6 +146,11 @@ class Department extends Model
         return $this->hasMany(Shift::class);
     }
 
+    public function fieldReports(): HasMany
+    {
+        return $this->hasMany(FieldReport::class);
+    }
+
     public function documentAcknowledgmentRequirements(): HasMany
     {
         return $this->hasMany(DocumentAcknowledgmentRequirement::class, 'scope_id')

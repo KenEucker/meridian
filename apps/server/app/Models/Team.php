@@ -107,6 +107,11 @@ class Team extends Model
         return $this->hasMany(Shift::class, 'eligible_team_id');
     }
 
+    public function fieldReports(): HasMany
+    {
+        return $this->hasMany(FieldReport::class);
+    }
+
     /**
      * @param  Builder<Team>  $query
      * @return Builder<Team>

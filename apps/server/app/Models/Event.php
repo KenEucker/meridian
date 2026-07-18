@@ -130,6 +130,11 @@ class Event extends Model
         return $this->hasMany(Shift::class);
     }
 
+    public function fieldReports(): HasMany
+    {
+        return $this->hasMany(FieldReport::class);
+    }
+
     /**
      * @param  Builder<Event>  $query
      * @return Builder<Event>
