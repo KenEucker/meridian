@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Setup;
 
 use App\Http\Controllers\Controller;
 use App\Models\Node;
+use App\Services\EventMode\EventModeGuard;
+use App\Services\EventMode\EventModeNotReadyException;
 use App\Services\Node\NodeAlreadyConfiguredException;
 use App\Services\Node\NodeSetupService;
 use Illuminate\Http\RedirectResponse;
@@ -13,7 +15,10 @@ use Illuminate\View\View;
 
 class NodeSetupController extends Controller
 {
-    public function __construct(private readonly NodeSetupService $setup) {}
+    public function __construct(
+        private readonly NodeSetupService $setup,
+        private readonly EventModeGuard $eventMode,
+    ) {}
 
     public function show(): View
     {
@@ -35,6 +40,17 @@ class NodeSetupController extends Controller
             'node_role' => ['required', Rule::in(Node::ROLES)],
             'central_node_url' => ['nullable', 'url', 'max:2048'],
         ]);
+
+        // Setup must fail closed if a required event-mode safeguard fails while
+        // configuring an event/production node role (technical spec 8.6, 26.2).
+        try {
+            $this->eventMode->ensureReady($validated['node_role']);
+        } catch (EventModeNotReadyException $exception) {
+            return redirect()
+                ->route('setup.show')
+                ->withInput()
+                ->withErrors(['setup' => $exception->getMessage()]);
+        }
 
         try {
             $this->setup->setupFirstNode(

@@ -11,6 +11,15 @@ class NodeSetupTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // These tests cover node setup mechanics, not the M8.7 event-mode
+        // fail-closed safeguards; those are covered by EventModeSetupFailClosedTest.
+        config(['meridian.event_mode.enabled' => false]);
+    }
+
     public function test_setup_screen_loads_when_no_node_exists(): void
     {
         $response = $this->get(route('setup.show'));
