@@ -4,22 +4,26 @@ namespace App\Policies;
 
 use App\Models\FieldReport;
 use App\Models\User;
+use App\Services\FieldReports\FieldReportPhotoAccess;
 use App\Services\FieldReports\FieldReportVisibilityAccess;
 
 /**
- * Field Report authorization (FR-004 through FR-009; technical spec 17.4, 17.6).
+ * Field Report authorization (FR-004 through FR-009; technical spec 17.4, 17.6,
+ * 18.6).
  *
  * Authors may view their own submitted reports. IC roles with
  * `field_reports.view_event` may view all Field Reports for the granted event.
  * Non-authors without that permission are denied, including department leads,
  * organizers, and shift leads. Updates and deletes are always denied (FR-007).
  * Only the original author may append (FR-009); elevated IC roles cannot append
- * to other users' Field Reports.
+ * to other users' Field Reports. Photo upload is author-only. Photo download is
+ * restricted to `field_reports.download_photo` (ic_lead).
  */
 class FieldReportPolicy
 {
     public function __construct(
         private readonly FieldReportVisibilityAccess $visibility,
+        private readonly FieldReportPhotoAccess $photoAccess,
     ) {}
 
     public function view(User $user, FieldReport $fieldReport): bool
@@ -40,6 +44,22 @@ class FieldReportPolicy
     public function append(User $user, FieldReport $fieldReport): bool
     {
         return $this->isAuthor($user, $fieldReport);
+    }
+
+    public function uploadPhoto(User $user, FieldReport $fieldReport): bool
+    {
+        return $this->isAuthor($user, $fieldReport);
+    }
+
+    public function downloadPhoto(User $user, FieldReport $fieldReport): bool
+    {
+        $event = $fieldReport->event;
+
+        if ($event === null) {
+            return false;
+        }
+
+        return $this->photoAccess->canDownloadEventFieldReportPhotos($user, $event);
     }
 
     public function update(User $user, FieldReport $fieldReport): bool

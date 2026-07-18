@@ -41,6 +41,27 @@ Install workspace dependencies from the repository root:
 corepack pnpm install
 ```
 
+### Field Report photo upload (local QA)
+
+Photos upload to the Laravel server over `POST /api/commands/*` when local Field
+API auth is enabled:
+
+```bash
+# apps/server/.env
+MERIDIAN_LOCAL_FIELD_API_ENABLED=true
+MERIDIAN_LOCAL_FIELD_API_TOKEN=local-field-dev-token
+
+cd apps/server && php artisan meridian:seed-local-field-fixture
+
+# apps/mobile — match the token
+cp apps/mobile/.env.development.example apps/mobile/.env.development.local
+```
+
+Restart server and mobile. Submit a Field Report with photos; detail shows local
+previews and syncs text then photos. Files land in
+`apps/server/storage/app/attachments/field-reports/`. Use **Retry upload** on
+detail if the server was offline at submit time.
+
 Run the field app commands from the repository root via the workspace filter:
 
 ```bash

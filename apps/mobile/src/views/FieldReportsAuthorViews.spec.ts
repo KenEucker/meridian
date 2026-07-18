@@ -50,14 +50,14 @@ async function mountAt(path: string) {
   return { wrapper, router };
 }
 
-beforeEach(() => {
-  resetFieldReportRuntime();
+beforeEach(async () => {
+  await resetFieldReportRuntime();
   clearFieldSession();
   installFieldSession(SESSION);
 });
 
-afterEach(() => {
-  resetFieldReportRuntime();
+afterEach(async () => {
+  await resetFieldReportRuntime();
   clearFieldSession();
 });
 

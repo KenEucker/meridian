@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import OfflineBanner from "@/components/OfflineBanner.vue";
+import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { useConnectivity } from "@/offline/useConnectivity";
 
 // Shared offline/sync status display for the field app and kiosk (M8.6). The
@@ -9,7 +11,20 @@ import { useConnectivity } from "@/offline/useConnectivity";
 // while online, so it appears only where offline state affects current work
 // (UI implementation contract section 16.2). Richer sync states are fed through
 // the same OfflineBanner view-model by later Alpha 1 milestones.
+//
+// M9.8: when the device reports online, drain pending Field Report text and
+// photo uploads to the local Meridian server command API.
 const connectivity = useConnectivity();
+
+watch(
+  connectivity,
+  (state) => {
+    if (state === "online") {
+      void syncFieldReportOutbox();
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

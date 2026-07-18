@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RuntimeException;
 
 /**
@@ -20,9 +21,9 @@ use RuntimeException;
  * visibility is enforced by FieldReportPolicy / FieldReportVisibilityAccess
  * (M9.5). Append-only additions are created through FieldReportAppendService
  * (M9.6) and cannot add or alter titles. Name References are parsed from body
- * text only into a rebuildable derived index after acceptance (M9.6A). Photos
- * belong to later M9 tasks. Incident-note copy uses FieldReportIncidentNoteCopy
- * (M9.7A contract; M11.8 wiring).
+ * text only into a rebuildable derived index after acceptance (M9.6A). Photo
+ * attachment sync and storage are owned by M9.8. Incident-note copy uses
+ * FieldReportIncidentNoteCopy (M9.7A contract; M11.8 wiring).
  */
 class FieldReport extends Model
 {
@@ -127,6 +128,12 @@ class FieldReport extends Model
     public function nameReferenceTokens(): HasMany
     {
         return $this->hasMany(NameReferenceToken::class);
+    }
+
+    public function attachments(): MorphMany
+    {
+        return $this->morphMany(Attachment::class, 'attachable')
+            ->orderBy('created_at');
     }
 
     /**

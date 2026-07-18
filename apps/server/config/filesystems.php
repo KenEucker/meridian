@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Field Report / domain attachment disk
+    |--------------------------------------------------------------------------
+    |
+    | Alpha 1 stores Field Report photos on a private filesystem disk suitable
+    | for mounting as a Docker volume (technical spec 18.5). S3 remains available
+    | as a later storage target via the standard s3 disk.
+    |
+    */
+
+    'attachments_disk' => env('MERIDIAN_ATTACHMENTS_DISK', 'attachments'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -36,6 +49,15 @@ return [
             'serve' => true,
             'throw' => false,
             'report' => false,
+        ],
+
+        'attachments' => [
+            'driver' => 'local',
+            'root' => storage_path('app/attachments'),
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+            'visibility' => 'private',
         ],
 
         'public' => [

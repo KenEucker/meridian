@@ -9,6 +9,8 @@
 // When no session is installed, create/list fail closed with an explicit
 // unavailable state rather than inventing identity.
 
+import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+
 export interface FieldSessionContext {
   readonly eventId: string;
   readonly eventLabel: string;
@@ -40,22 +42,22 @@ export function resolveFieldSession(): FieldSessionContext | null {
 }
 
 /**
- * Development/testing helper that installs a clearly labeled placeholder
- * session so author Field Report surfaces remain exercisable before auth and
- * event selection land.
+ * Development helper that installs the well-known local Field fixture session
+ * so author surfaces and command upload QA share server-seeded UUIDs
+ * (`php artisan meridian:seed-local-field-fixture`).
  */
 export function installDevelopmentFieldSession(): FieldSessionContext {
   const session: FieldSessionContext = {
-    eventId: "dev-event-1",
-    eventLabel: "Development Event (placeholder)",
-    submittedByUserId: "dev-user-1",
-    staffId: "dev-staff-1",
-    originDeviceId: "dev-device-1",
-    originNodeId: "dev-node-1",
-    departmentId: "dev-department-1",
-    departmentLabel: "Development Department (placeholder)",
-    teamId: "dev-team-1",
-    teamLabel: "Development Team (placeholder)",
+    eventId: LOCAL_FIELD_FIXTURE.eventId,
+    eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
+    submittedByUserId: LOCAL_FIELD_FIXTURE.submittedByUserId,
+    staffId: LOCAL_FIELD_FIXTURE.staffId,
+    originDeviceId: LOCAL_FIELD_FIXTURE.originDeviceId,
+    originNodeId: LOCAL_FIELD_FIXTURE.originNodeId,
+    departmentId: LOCAL_FIELD_FIXTURE.departmentId,
+    departmentLabel: LOCAL_FIELD_FIXTURE.departmentLabel,
+    teamId: LOCAL_FIELD_FIXTURE.teamId,
+    teamLabel: LOCAL_FIELD_FIXTURE.teamLabel,
   };
 
   installFieldSession(session);
