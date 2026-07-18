@@ -73,9 +73,12 @@ describe("readiness surface", () => {
   it("links to the readiness surface from the home placeholder", async () => {
     const wrapper = await mountAt("/");
 
-    const link = wrapper.get(".home__links a");
-    expect(link.text()).toBe("Check device readiness");
-    expect(link.attributes("href")).toBe("/readiness");
+    const link = wrapper
+      .findAll(".home__links a")
+      .find((item) => item.text() === "Check device readiness");
+
+    expect(link?.text()).toBe("Check device readiness");
+    expect(link?.attributes("href")).toBe("/readiness");
   });
 
   it("probes the current client scope when the surface renders", () => {
