@@ -14,9 +14,9 @@ use RuntimeException;
  * Immutable Field Report (data/API specification section 10.15, technical
  * spec section 17, FR-001 through FR-007).
  *
- * Original body never changes after submission. Appends, FRA numbering,
- * offline create/sync, IC visibility, photos, and Name References belong to
- * later M9 tasks.
+ * Original body never changes after submission. Server acceptance and FRA
+ * numbering are implemented by M9.3; appends, IC visibility, photos, and Name
+ * References belong to later M9 tasks.
  */
 class FieldReport extends Model
 {
@@ -36,6 +36,7 @@ class FieldReport extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'id',
         'event_id',
         'department_id',
         'team_id',
