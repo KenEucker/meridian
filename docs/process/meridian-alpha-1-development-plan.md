@@ -298,10 +298,22 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M9.6 Append-only additions | Original author can append; original body remains immutable. | FR-007 through FR-009, FR-013 | Domain tests |
 | M9.6A Field report Name References | Parse submitted Field Report text and appends into a rebuildable derived Name Reference index without autocomplete, suggestions, notifications, or extra visibility. | NR-001 through NR-007, NR-011 through NR-014; technical spec 17.7 | Parser/search/policy tests |
 | M9.7 Photo capture limits | Enforce max 2 images, dimensions, size, no GIFs, EXIF strip. | Technical spec 18.3; data/API 10.17 | Processing tests |
+| M9.7A Immutable Field Report titles | Add required immutable Field Report titles end-to-end: schema, offline create/sync payload, server acceptance, author and permitted-reviewer UI, and incident-copy contract support. | FR-003, FR-007, FR-012; technical spec 17.3, 17.4, 24.1; data/API 10.15; UI contract 14 | Schema/domain/offline/UI tests |
 | M9.8 Photo sync and storage | Sync photos up, store server-side, restrict downloads. | Technical spec 18.5, 18.6 | Feature/security tests |
 | M9.9 Field report QA script | Add `QA-FR-01-offline-field-report.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can submit a field report offline, reconnect, see FRA assignment, verify immutability, confirm IC-only visibility, and verify Name References remain plain text for authors while parsing into permitted derived search/display behavior.
+**M9.7A acceptance criteria:**
+
+- required trimmed title of 1–200 characters; duplicate titles allowed within an event;
+- title and original body become immutable at submission;
+- appends cannot add or alter a title;
+- title works in offline-created and server-accepted reports;
+- author and IC list/detail surfaces show the title;
+- Name Reference parsing remains body/append-body only;
+- incident copies use `Field Report: <title>` followed by body;
+- schema/domain/offline/UI tests cover validation, immutability, and display.
+
+**QA gate:** A reviewer can submit a field report offline with a title, reconnect, see FRA assignment, verify title and body immutability, confirm IC-only visibility, and verify Name References remain plain text for authors while parsing into permitted derived search/display behavior.
 
 ---
 
@@ -345,7 +357,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M11.6 Incident timeline notes | Add append-only incident timeline entries. | INC-007, INC-014; data/API 10.16 | Domain tests |
 | M11.6A Incident Name References | Extract Name References from incident notes and attached Field Reports, render chips near tags, and wire chip clicks to normal permission-filtered search. | NR-001 through NR-014; technical spec 19.9, 19.10 | Parser/search/UI/policy tests |
 | M11.7 Incident status/title edits | Edit regardless of state; status affects filtering only. | INC-010 through INC-012 | Domain/UI tests |
-| M11.8 Link/unlink field report | Copy field report content into incident notes and strike relationship on removal. | FR-011 through FR-014; INC-014 | Domain tests |
+| M11.8 Link/unlink field report | Copy field report content into incident notes as `Field Report: <title>` followed by body, and strike relationship on removal. | FR-011 through FR-014; INC-014 | Domain tests |
 | M11.9 Incident attachments strike | Allow incident attachments to be stricken, not deleted. | INC-013; data/API 10.17 | Domain/security tests |
 | M11.10 Incident PDF print | IC leads print incidents to PDF. | INC-015 | Export test/sample |
 | M11.11 Incident QA script | Add `QA-INC-01-incident-management.md`. | QA README | Human QA script |

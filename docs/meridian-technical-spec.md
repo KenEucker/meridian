@@ -1122,6 +1122,7 @@ Alpha 1 field reports include:
 ```text
 event
 department/team context if available
+title
 body text
 picture attachments
 submitted_by
@@ -1132,7 +1133,9 @@ origin_node_id
 sync_status
 ```
 
-Field report body is a single text area.
+Field report title is required plain text: outer whitespace trimmed, 1–200 characters after trimming, duplicates allowed within an event.
+
+Field report body is a single unstructured text area. Field Reports have one title plus one body and do not gain categories/types or structured map/location fields in Alpha 1.
 
 There are no field report categories/types in Alpha 1.
 
@@ -1140,13 +1143,15 @@ GPS collection is excluded from Alpha 1.
 
 ## 17.4 Immutability and appends
 
-The original field report body never changes.
+The original field report title and body never change after submission.
 
 Field reports are immutable but can have append-only additions.
 
 Only the original submitter can append to their own field report.
 
 Elevated users can append only to their own field reports, not to other users’ field reports.
+
+Appends do not have titles and cannot alter the original title.
 
 Each append includes:
 
@@ -1200,7 +1205,7 @@ The original field report submitter is not shown that their field report has bee
 
 ## 17.7 Name References in Field Reports
 
-Field Report body text may contain Name References.
+Field Report body text may contain Name References. Field Report titles are not parsed for Name References.
 
 A Name Reference starts with `@` and continues through letters, numbers, hyphens, and underscores until whitespace or punctuation.
 
@@ -1213,7 +1218,7 @@ Examples:
 @ranger bucket  -> ranger
 ```
 
-Field Reports are parsed for Name References immediately after submission. The original body remains the source of truth.
+Field Report body text and appends are parsed for Name References immediately after submission. Titles are not parsed. The original body remains the source of truth for Name References.
 
 Name Reference extraction may update a rebuildable derived index for search, rendering/highlighting, incident summary chips, or permitted local/offline use.
 
@@ -2028,7 +2033,7 @@ Operational records may optionally reference map locations without requiring the
 
 - Incidents may optionally reference a camp or map location (see section 19); references never replace incident free-text location/summary and never become required.
 - Shift meeting/check-in locations, deployment locations, department HQ locations, and equipment/storage locations (where equipment locations are already modeled) may reference an operational map location.
-- Field Reports do not gain structured map/location fields and remain a single text body only (see section 17).
+- Field Reports have one required title and one unstructured body and do not gain structured map/location fields (see section 17).
 
 Arbitrary dropped pins are not supported for MVP. Camps and map locations are not added to the global command palette; map surfaces may provide their own scoped search/filter for permitted users.
 
@@ -2191,7 +2196,7 @@ Audit applies to:
 
 Automatic document version bumps caused by fragment changes do not need separate audit entries beyond the audited fragment edit and resulting document version metadata.
 
-Field reports preserve immutable original body and append-only additions.
+Field reports preserve immutable original title and body and append-only additions.
 
 Name Reference extraction, clicking, and searching do not require Name Reference-specific audit events. Existing read/view/search audit behavior applies where the relevant source record or surface already requires it.
 
@@ -2205,7 +2210,9 @@ Field report form fields are fixed for Alpha 1.
 
 Incident form fields are fixed for Alpha 1.
 
-Field report body is a single text area.
+Field report title is a required single-line text field.
+
+Field report body is a single unstructured text area.
 
 Incident history/update body is a single text area.
 

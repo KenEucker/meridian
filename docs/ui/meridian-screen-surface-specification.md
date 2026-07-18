@@ -213,9 +213,9 @@ Required form behavior:
 
 The incident create/edit screen is the only autosaving form. Routine operational changes may save immediately when the result is easy to correct.
 
-Field Reports are submitted, not saved as drafts. Field Report submission surfaces use Submit and Cancel, finalize on submit, do not autosave, and do not expose normal in-place editing after submission. Corrections, where allowed, are append-only and audit-aware.
+Field Reports are submitted, not saved as drafts. Field Report submission surfaces require a title and body, use Submit and Cancel, finalize on submit, do not autosave, and do not expose normal in-place editing after submission. Corrections, where allowed, are append-only and audit-aware. Author and permitted-reviewer list/detail surfaces show the title.
 
-Field Report entry must remain plain text. It must not show Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report views may highlight Name References when rendered.
+Field Report title and body entry must remain plain text. Body entry must not show Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report body views may highlight Name References when rendered. Titles are not parsed for Name References.
 
 Policy and procedure document editors use explicit Save/Publish/Archive actions. Document viewers render sanitized Markdown with referenced fragment text inline. Fragment editors show referencing documents before saving changes that will bump published document versions.
 

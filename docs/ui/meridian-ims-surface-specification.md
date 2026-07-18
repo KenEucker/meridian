@@ -167,16 +167,17 @@ Field Report submission forms should:
 
 - use the same general form language as incident forms;
 - avoid decorative treatment;
+- require a title and body text;
 - show event and department context where relevant;
 - use explicit Submit and Cancel;
 - finalize the Field Report on submit;
 - avoid autosave and drafts;
 - avoid normal in-place edit behavior after submission;
-- allow authors to view their own submitted Field Reports.
+- allow authors to view their own submitted Field Reports, including title.
 
-Field Report entry remains plain text. It must not provide Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report text may highlight Name References where the renderer supports it.
+Field Report title and body entry remain plain text. Body entry must not provide Name Reference autocomplete, context menus, or suggestions of existing references. Submitted Field Report body text may highlight Name References where the renderer supports it. Titles are not parsed for Name References.
 
-Field Reports remain a single text body only and must not gain a map/location selector, dropped pins, coordinates, or camp selector for MVP.
+Field Reports have one required title and one unstructured body text field and must not gain a map/location selector, dropped pins, coordinates, or camp selector for MVP.
 
 Corrections must be append-only, audit-aware, or represented as follow-up notes where allowed. IC users may attach Field Reports to incidents when permitted. Attaching or unlinking a Field Report is audit-aware and should appear in the incident timeline.
 

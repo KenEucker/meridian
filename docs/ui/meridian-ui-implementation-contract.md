@@ -984,13 +984,13 @@ Organizer widgets must not surface IMS incidents, restricted Field Reports, acti
 Field Reports follow this Alpha 1 lifecycle:
 
 1. User opens Field Report submission surface.
-2. User fills required fields and optional allowed attachments.
+2. User fills required title, required body text, and optional allowed attachments.
 3. User selects Submit or Cancel.
 4. On Submit, the Field Report is finalized.
 5. The submitted Field Report can be viewed by its author and permitted reviewers.
-6. Corrections are append-only and audit-aware; the original submission is not rewritten.
+6. Corrections are append-only and audit-aware; the original title and body are not rewritten.
 7. IC users may attach Field Reports to incidents where permitted.
-8. Name References in the submitted body may be highlighted after submission.
+8. Name References in the submitted body may be highlighted after submission. Titles are not parsed for Name References.
 
 ### 14.2 Field Report UI Rules
 
@@ -998,6 +998,8 @@ Field Reports follow this Alpha 1 lifecycle:
 - Do not autosave Field Reports.
 - Do not provide drafts in Alpha 1.
 - Do not render Field Reports as private notes.
+- Require a title: plain text, trimmed outer whitespace, 1–200 characters after trimming; duplicate titles allowed.
+- Show the title on author and permitted-reviewer list and detail surfaces.
 - Show event and department/team context.
 - Show submitted-by as system-set, not user-editable.
 - Attachments are images only.
