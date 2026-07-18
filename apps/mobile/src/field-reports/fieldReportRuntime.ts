@@ -11,6 +11,7 @@ import { ref } from "vue";
 import { AuthorFieldReportCatalog } from "@/field-reports/authorFieldReportCatalog";
 import { fieldReportLocalStore } from "@/field-reports/fieldReportLocalStore";
 import { FIELD_REPORT_PENDING_SYNC } from "@/field-reports/offlineFieldReport";
+import { clearPendingFieldReportPhotos } from "@/field-reports/pendingFieldReportPhotos";
 import { PendingFieldReportQueue } from "@/field-reports/pendingFieldReportQueue";
 
 export const pendingFieldReportQueue = new PendingFieldReportQueue();
@@ -56,5 +57,6 @@ export function resetFieldReportRuntime(): void {
   pendingFieldReportQueue.clear();
   authorFieldReportCatalog.clear();
   fieldReportLocalStore.clear();
+  clearPendingFieldReportPhotos();
   fieldReportCatalogRevision.value = 0;
 }
