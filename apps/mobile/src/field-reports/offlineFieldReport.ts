@@ -13,9 +13,10 @@
 // device UUID, records the device submission timestamp, assigns a temporary
 // local number, and produces a finalized/immutable local record in the
 // `pending_sync` state. Server acceptance and FRA numbering are M9.3; author
-// list/create/detail surfaces are M9.4; photos are M9.7/M9.8; server-side Name
-// Reference parsing is M9.6A. Persisting the record to the encrypted local store and
-// PowerSync, and signing the sync operation, are owned by later Alpha 1 tasks.
+// list/create/detail surfaces are M9.4; photo capture limits are M9.7; photo
+// sync/storage is M9.8; server-side Name Reference parsing is M9.6A. Persisting
+// the record to the encrypted local store and PowerSync, and signing the sync
+// operation, are owned by later Alpha 1 tasks.
 // Injecting the id generator and clock keeps this deterministic in tests.
 
 /**
