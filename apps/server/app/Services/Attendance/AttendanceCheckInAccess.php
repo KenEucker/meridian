@@ -10,15 +10,25 @@ use App\Services\Application\ApplicationReviewAccess;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Authorization for staff-mediated attendance check-in (SLB-003; technical
- * spec section 20.2). Shift leads are scoped to the shift eligible team;
- * department leads are scoped to their departments.
+ * Authorization for staff-mediated attendance operations (SLB-003, SLB-004;
+ * technical spec section 20.2). Shift leads are scoped to the shift eligible
+ * team; department leads are scoped to their departments.
  */
 class AttendanceCheckInAccess
 {
     public function __construct(private readonly ApplicationReviewAccess $applicationReviewAccess) {}
 
     public function canCheckInForShift(User $user, Shift $shift): bool
+    {
+        return $this->canManageAttendanceForShift($user, $shift);
+    }
+
+    public function canCheckOutForShift(User $user, Shift $shift): bool
+    {
+        return $this->canManageAttendanceForShift($user, $shift);
+    }
+
+    private function canManageAttendanceForShift(User $user, Shift $shift): bool
     {
         $shift->loadMissing('department');
 

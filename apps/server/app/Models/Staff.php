@@ -144,6 +144,11 @@ class Staff extends Model
         return $this->hasMany(AttendanceRecord::class);
     }
 
+    public function hoursWorked(): HasMany
+    {
+        return $this->hasMany(HoursWorked::class);
+    }
+
     public function fieldReports(): HasMany
     {
         return $this->hasMany(FieldReport::class);

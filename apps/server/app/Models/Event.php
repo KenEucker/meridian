@@ -135,6 +135,11 @@ class Event extends Model
         return $this->hasMany(FieldReport::class);
     }
 
+    public function hoursWorked(): HasMany
+    {
+        return $this->hasMany(HoursWorked::class);
+    }
+
     /**
      * @param  Builder<Event>  $query
      * @return Builder<Event>
