@@ -86,9 +86,18 @@ watchEffect(() => {
     ).length;
 
     localPhotoPreviews.value = records.map((record) => {
-      const blob = new Blob([record.photo.bytes], {
-        type: record.photo.mimeType,
-      });
+      const photoBytes = record.photo.bytes;
+      const blob = new Blob(
+        [
+          photoBytes.buffer.slice(
+            photoBytes.byteOffset,
+            photoBytes.byteOffset + photoBytes.byteLength,
+          ) as ArrayBuffer,
+        ],
+        {
+          type: record.photo.mimeType,
+        },
+      );
       return {
         id: record.photo.id,
         syncStatus: record.syncStatus,

@@ -50,6 +50,13 @@ function base64ToBytes(value: string): Uint8Array {
   return bytes;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+}
+
 function readStorage(): Storage | null {
   try {
     return globalThis.localStorage ?? null;
@@ -140,7 +147,7 @@ async function getOrCreateAesKey(storage: Storage): Promise<CryptoKey | null> {
   const existing = storage.getItem(FIELD_REPORT_PHOTO_KEY_STORE_KEY);
   if (existing) {
     try {
-      const raw = base64ToBytes(existing);
+      const raw = toArrayBuffer(base64ToBytes(existing));
       return await subtle.importKey("raw", raw, "AES-GCM", false, [
         "encrypt",
         "decrypt",
@@ -203,9 +210,9 @@ async function decryptPayload(
   }
 
   const decrypted = await subtle.decrypt(
-    { name: "AES-GCM", iv: base64ToBytes(envelope.iv) },
+    { name: "AES-GCM", iv: toArrayBuffer(base64ToBytes(envelope.iv)) },
     key,
-    base64ToBytes(envelope.ciphertext),
+    toArrayBuffer(base64ToBytes(envelope.ciphertext)),
   );
 
   return new TextDecoder().decode(decrypted);
