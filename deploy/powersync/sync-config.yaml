@@ -1,0 +1,6 @@
+# M8.1 establishes the service only. Authorized device projections are added
+# by M8.2; until then PowerSync must not expose any Meridian records.
+config:
+  edition: 3
+
+streams: {}
