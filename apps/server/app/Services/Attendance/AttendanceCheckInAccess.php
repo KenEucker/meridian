@@ -28,6 +28,11 @@ class AttendanceCheckInAccess
         return $this->canManageAttendanceForShift($user, $shift);
     }
 
+    public function canMarkNoShowForShift(User $user, Shift $shift): bool
+    {
+        return $this->canManageAttendanceForShift($user, $shift);
+    }
+
     private function canManageAttendanceForShift(User $user, Shift $shift): bool
     {
         $shift->loadMissing('department');
