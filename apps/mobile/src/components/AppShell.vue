@@ -1,5 +1,15 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
+
+import OfflineBanner from "@/components/OfflineBanner.vue";
+import { useConnectivity } from "@/offline/useConnectivity";
+
+// Shared offline/sync status display for the field app and kiosk (M8.6). The
+// banner is driven by the coarse device-connectivity view-model and is silent
+// while online, so it appears only where offline state affects current work
+// (UI implementation contract section 16.2). Richer sync states are fed through
+// the same OfflineBanner view-model by later Alpha 1 milestones.
+const connectivity = useConnectivity();
 </script>
 
 <template>
@@ -13,6 +23,7 @@ import { RouterLink } from "vue-router";
     <header class="app-shell__top-bar">
       <RouterLink class="app-shell__home" :to="{ name: 'home' }">Meridian Field</RouterLink>
     </header>
+    <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
     <main class="app-shell__main">
       <slot />
     </main>
@@ -43,6 +54,10 @@ import { RouterLink } from "vue-router";
 .app-shell__home:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
+}
+
+.app-shell__offline-banner {
+  margin: var(--m-space-3) var(--m-space-4) 0;
 }
 
 .app-shell__main {
