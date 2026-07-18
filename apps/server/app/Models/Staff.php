@@ -134,6 +134,16 @@ class Staff extends Model
         return $this->hasMany(EventCredential::class);
     }
 
+    public function attendanceOperations(): HasMany
+    {
+        return $this->hasMany(AttendanceOperation::class);
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
+    }
+
     public function fieldReports(): HasMany
     {
         return $this->hasMany(FieldReport::class);

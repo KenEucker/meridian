@@ -107,6 +107,16 @@ class Shift extends Model
         return $this->hasMany(ShiftAssignment::class);
     }
 
+    public function attendanceOperations(): HasMany
+    {
+        return $this->hasMany(AttendanceOperation::class);
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
+    }
+
     public function activeAssignments(): HasMany
     {
         return $this->assignments()->whereNull('removed_at');
