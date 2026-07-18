@@ -12,6 +12,7 @@ use App\Models\Node;
 use App\Models\Staff;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\NameReferences\NameReferenceIndexService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -20,9 +21,16 @@ use Illuminate\Support\Str;
 /**
  * Accepts a finalized device-created Field Report and assigns its event-local
  * FRA number (technical spec 17.5; data/API 4.5, 5.3, and 10.15).
+ *
+ * Name References in the accepted body are parsed into the rebuildable derived
+ * index immediately after submission (NR-007; technical spec 17.7).
  */
 final class FieldReportAcceptanceService
 {
+    public function __construct(
+        private readonly NameReferenceIndexService $nameReferences,
+    ) {}
+
     /**
      * @param  array{
      *     id: string,
@@ -91,7 +99,7 @@ final class FieldReportAcceptanceService
 
             $acceptedAt = CarbonImmutable::instance($receivedAt ?? now());
 
-            return FieldReport::query()->create([
+            $report = FieldReport::query()->create([
                 'id' => $id,
                 'event_id' => $event->id,
                 'department_id' => $department?->id,
@@ -108,6 +116,10 @@ final class FieldReportAcceptanceService
                 'sync_status' => 'accepted',
                 'created_at' => $acceptedAt,
             ]);
+
+            $this->nameReferences->synchronizeFieldReport($report);
+
+            return $report;
         });
     }
 
@@ -140,6 +152,9 @@ final class FieldReportAcceptanceService
                 'The Field Report UUID was already accepted with different source data.',
             );
         }
+
+        // Idempotent retries re-synchronize so a missing derived index can repair.
+        $this->nameReferences->synchronizeFieldReport($report);
 
         return $report;
     }

@@ -18,8 +18,9 @@ use RuntimeException;
  * Original body never changes after submission. Server acceptance and FRA
  * numbering are implemented by M9.3; IC event-wide visibility is enforced by
  * FieldReportPolicy / FieldReportVisibilityAccess (M9.5). Append-only additions
- * are created through FieldReportAppendService (M9.6). Photos and Name
- * References belong to later M9 tasks.
+ * are created through FieldReportAppendService (M9.6). Name References are
+ * parsed into a rebuildable derived index after acceptance (M9.6A). Photos
+ * belong to later M9 tasks.
  */
 class FieldReport extends Model
 {
@@ -118,6 +119,11 @@ class FieldReport extends Model
         return $this->hasMany(FieldReportAppend::class)
             ->orderBy('device_submitted_at')
             ->orderBy('created_at');
+    }
+
+    public function nameReferenceTokens(): HasMany
+    {
+        return $this->hasMany(NameReferenceToken::class);
     }
 
     /**

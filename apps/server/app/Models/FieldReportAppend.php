@@ -14,8 +14,9 @@ use RuntimeException;
  * technical spec section 17.4, FR-007 through FR-009).
  *
  * Appends never mutate the parent Field Report body. Only the original
- * submitter may create them. Photos, Name References, and incident-note
- * propagation of appended content belong to later M9/M11 tasks.
+ * submitter may create them. Name References in append bodies are indexed
+ * after acceptance (M9.6A). Photos and incident-note propagation of appended
+ * content belong to later M9/M11 tasks.
  */
 class FieldReportAppend extends Model
 {

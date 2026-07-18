@@ -9,6 +9,7 @@ use App\Models\FieldReport;
 use App\Models\FieldReportAppend;
 use App\Models\Node;
 use App\Models\User;
+use App\Services\NameReferences\NameReferenceIndexService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -18,11 +19,17 @@ use Illuminate\Support\Str;
  * Accepts an immutable append-only addition to an existing Field Report
  * (technical spec 17.4; data/API 10.15; FR-007 through FR-009).
  *
- * Incident-note copy of appended content (FR-013) is deferred until incident
- * linking exists. Photos and Name Reference parsing remain later M9 tasks.
+ * Name References in append bodies are parsed into the rebuildable derived
+ * index immediately after acceptance (NR-007; technical spec 17.7).
+ * Incident-note copy of appended content (FR-013) and photos remain later
+ * M9/M11 tasks.
  */
 final class FieldReportAppendService
 {
+    public function __construct(
+        private readonly NameReferenceIndexService $nameReferences,
+    ) {}
+
     /**
      * @param  array{
      *     id: string,
@@ -81,7 +88,7 @@ final class FieldReportAppendService
             $submittedAt = $this->submittedAt($attributes['device_submitted_at'] ?? null);
             $acceptedAt = CarbonImmutable::instance($receivedAt ?? now());
 
-            return FieldReportAppend::query()->create([
+            $append = FieldReportAppend::query()->create([
                 'id' => $id,
                 'field_report_id' => $report->id,
                 'appended_by_user_id' => $author->id,
@@ -92,6 +99,10 @@ final class FieldReportAppendService
                 'origin_node_id' => $node->id,
                 'created_at' => $acceptedAt,
             ]);
+
+            $this->nameReferences->synchronizeAppend($append);
+
+            return $append;
         });
     }
 
@@ -114,6 +125,9 @@ final class FieldReportAppendService
                 'The Field Report append UUID was already accepted with different source data.',
             );
         }
+
+        // Idempotent retries re-synchronize so a missing derived index can repair.
+        $this->nameReferences->synchronizeAppend($append);
 
         return $append;
     }
