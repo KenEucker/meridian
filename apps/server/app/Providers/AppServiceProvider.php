@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Models\DeviceTrust;
 use App\Models\DocumentAcknowledgmentRequirement;
+use App\Models\FieldReport;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Policies\DeviceTrustPolicy;
+use App\Policies\FieldReportPolicy;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -32,5 +34,6 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         Gate::policy(DeviceTrust::class, DeviceTrustPolicy::class);
+        Gate::policy(FieldReport::class, FieldReportPolicy::class);
     }
 }

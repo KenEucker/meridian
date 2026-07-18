@@ -134,6 +134,11 @@ class Staff extends Model
         return $this->hasMany(EventCredential::class);
     }
 
+    public function fieldReports(): HasMany
+    {
+        return $this->hasMany(FieldReport::class);
+    }
+
     public function organizations(): BelongsToMany
     {
         return $this->belongsToMany(Organization::class, 'staff_organization_statuses')
