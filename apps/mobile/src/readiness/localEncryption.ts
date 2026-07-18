@@ -9,9 +9,9 @@
 // This module only detects whether the current client platform is *capable*
 // of local encryption. It does not generate, persist, unlock, or wipe the
 // local encryption key: that key lifecycle is generated after successful
-// login/trust and is owned by later Alpha 1 tasks. Device signing readiness
-// (M8.4), the readiness UI surface (M8.5), and event-mode fail-closed
-// enforcement (M8.7) build on the result produced here.
+// login/trust and is owned by later Alpha 1 tasks. The readiness UI surface
+// (M8.5) and event-mode fail-closed enforcement (M8.7) build on the result
+// produced here.
 
 export const LOCAL_ENCRYPTION_CAPABILITY = "local-encryption" as const;
 
