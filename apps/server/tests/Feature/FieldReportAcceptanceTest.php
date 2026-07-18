@@ -33,6 +33,7 @@ class FieldReportAcceptanceTest extends TestCase
         $this->assertSame($attributes['id'], $report->id);
         $this->assertSame('FRA-2027-000001', $report->fra_number);
         $this->assertSame('LOCAL-ABC12345', $report->temporary_local_number);
+        $this->assertSame('Medical assist near Gate A', $report->title);
         $this->assertSame('Observed a medical assist near Gate A.', $report->body);
         $this->assertSame('accepted', $report->sync_status);
         $this->assertTrue($report->server_received_at->equalTo(now()));
@@ -82,6 +83,7 @@ class FieldReportAcceptanceTest extends TestCase
         $acceptedNext = $service->accept($next);
 
         $this->assertTrue($first->is($retried));
+        $this->assertSame('Medical assist near Gate A', $retried->title);
         $this->assertSame('Observed a medical assist near Gate A.', $retried->body);
         $this->assertSame(2, FieldReport::query()->count());
         $this->assertStringEndsWith('-000002', $acceptedNext->fra_number);
@@ -103,10 +105,73 @@ class FieldReportAcceptanceTest extends TestCase
         }
 
         $this->assertDatabaseCount('field_reports', 1);
+        $this->assertSame('Medical assist near Gate A', $accepted->fresh()->title);
         $this->assertSame(
             'Observed a medical assist near Gate A.',
             $accepted->fresh()->body,
         );
+    }
+
+    public function test_acceptance_trims_title_and_allows_duplicate_titles(): void
+    {
+        [, $first] = $this->validSubmission();
+        [, $second] = $this->validSubmission();
+        $service = app(FieldReportAcceptanceService::class);
+
+        $first['title'] = '  Shared title  ';
+        $second['title'] = 'Shared title';
+
+        $acceptedFirst = $service->accept($first);
+        $acceptedSecond = $service->accept($second);
+
+        $this->assertSame('Shared title', $acceptedFirst->title);
+        $this->assertSame('Shared title', $acceptedSecond->title);
+        $this->assertNotSame($acceptedFirst->id, $acceptedSecond->id);
+    }
+
+    public function test_acceptance_rejects_missing_or_oversized_title(): void
+    {
+        [, $missing] = $this->validSubmission();
+        $missing['title'] = '   ';
+
+        try {
+            app(FieldReportAcceptanceService::class)->accept($missing);
+            $this->fail('Blank title should be rejected.');
+        } catch (FieldReportAcceptanceException $exception) {
+            $this->assertStringContainsString('title is required', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('field_reports', ['id' => $missing['id']]);
+
+        [, $oversized] = $this->validSubmission();
+        $oversized['title'] = str_repeat('a', 201);
+
+        $this->expectException(FieldReportAcceptanceException::class);
+        $this->expectExceptionMessage('at most 200 characters');
+
+        try {
+            app(FieldReportAcceptanceService::class)->accept($oversized);
+        } finally {
+            $this->assertDatabaseMissing('field_reports', ['id' => $oversized['id']]);
+        }
+    }
+
+    public function test_duplicate_uuid_with_different_title_is_rejected(): void
+    {
+        [, $attributes] = $this->validSubmission();
+        $service = app(FieldReportAcceptanceService::class);
+        $accepted = $service->accept($attributes);
+
+        $attributes['title'] = 'Different title';
+
+        try {
+            $service->accept($attributes);
+            $this->fail('A conflicting title retry should not be accepted.');
+        } catch (FieldReportAcceptanceException $exception) {
+            $this->assertStringContainsString('different source data', $exception->getMessage());
+        }
+
+        $this->assertSame('Medical assist near Gate A', $accepted->fresh()->title);
     }
 
     public function test_acceptance_rejects_unlinked_staff_without_persisting_report(): void
@@ -166,6 +231,7 @@ class FieldReportAcceptanceTest extends TestCase
             'submitted_by_user_id' => $user->id,
             'staff_id' => $staff->id,
             'temporary_local_number' => 'LOCAL-ABC12345',
+            'title' => 'Medical assist near Gate A',
             'body' => 'Observed a medical assist near Gate A.',
             'device_submitted_at' => '2027-07-04T13:22:10Z',
             'origin_device_id' => $device->id,

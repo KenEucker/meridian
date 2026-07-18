@@ -22,8 +22,11 @@ use Illuminate\Support\Str;
  * Accepts a finalized device-created Field Report and assigns its event-local
  * FRA number (technical spec 17.5; data/API 4.5, 5.3, and 10.15).
  *
+ * Required title is normalized (trimmed, 1–200 characters) and persisted with
+ * the original body; both are immutable after acceptance (FR-003, FR-007).
  * Name References in the accepted body are parsed into the rebuildable derived
- * index immediately after submission (NR-007; technical spec 17.7).
+ * index immediately after submission (NR-007; technical spec 17.7). Titles are
+ * not parsed for Name References.
  */
 final class FieldReportAcceptanceService
 {
@@ -40,6 +43,7 @@ final class FieldReportAcceptanceService
      *     submitted_by_user_id: string,
      *     staff_id: string,
      *     temporary_local_number?: string|null,
+     *     title: string,
      *     body: string,
      *     device_submitted_at: DateTimeInterface|string,
      *     origin_device_id: string,
@@ -90,6 +94,8 @@ final class FieldReportAcceptanceService
                 $attributes['team_id'] ?? null,
             );
 
+            $title = FieldReportTitle::normalize($attributes['title'] ?? null);
+
             $body = (string) ($attributes['body'] ?? '');
             if (trim($body) === '') {
                 throw FieldReportAcceptanceException::invalid('Field Report body text is required.');
@@ -108,6 +114,7 @@ final class FieldReportAcceptanceService
                 'staff_id' => $staff->id,
                 'fra_number' => $this->nextFraNumber($event),
                 'temporary_local_number' => $attributes['temporary_local_number'] ?? null,
+                'title' => $title,
                 'body' => $body,
                 'device_submitted_at' => $submittedAt,
                 'server_received_at' => $acceptedAt,
@@ -140,6 +147,7 @@ final class FieldReportAcceptanceService
             && (string) ($attributes['submitted_by_user_id'] ?? '') === (string) $report->submitted_by_user_id
             && (string) ($attributes['staff_id'] ?? '') === (string) $report->staff_id
             && ($attributes['temporary_local_number'] ?? null) === $report->temporary_local_number
+            && $this->sameTitle($attributes['title'] ?? null, (string) $report->title)
             && ($attributes['body'] ?? null) === $report->body
             && (string) ($attributes['origin_device_id'] ?? '') === (string) $report->origin_device_id
             && (string) ($attributes['origin_node_id'] ?? '') === (string) $report->origin_node_id
@@ -157,6 +165,19 @@ final class FieldReportAcceptanceService
         $this->nameReferences->synchronizeFieldReport($report);
 
         return $report;
+    }
+
+    private function sameTitle(mixed $incoming, string $stored): bool
+    {
+        if (! is_string($incoming)) {
+            return false;
+        }
+
+        try {
+            return FieldReportTitle::normalize($incoming) === $stored;
+        } catch (FieldReportAcceptanceException) {
+            return false;
+        }
     }
 
     private function submittedAt(mixed $value): CarbonImmutable

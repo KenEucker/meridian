@@ -16,6 +16,7 @@ const BASE_INPUT: CreateOfflineFieldReportInput = {
   staffId: "staff-1",
   originDeviceId: "device-1",
   originNodeId: "node-1",
+  title: "Medical assist near Gate A",
   body: "Observed a medical assist near Gate A.",
 };
 

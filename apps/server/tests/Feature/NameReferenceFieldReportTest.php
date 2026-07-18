@@ -122,6 +122,23 @@ class NameReferenceFieldReportTest extends TestCase
         ]);
     }
 
+    public function test_field_report_titles_are_not_parsed_for_name_references(): void
+    {
+        [, $attributes] = $this->validSubmission('Plain body without references.');
+        $attributes['title'] = 'Title mentions @TitleToken and @Another';
+
+        $report = app(FieldReportAcceptanceService::class)->accept($attributes);
+
+        $this->assertSame('Title mentions @TitleToken and @Another', $report->title);
+        $this->assertDatabaseCount('name_reference_tokens', 0);
+        $this->assertDatabaseMissing('name_reference_tokens', [
+            'normalized_token' => 'titletoken',
+        ]);
+        $this->assertDatabaseMissing('name_reference_tokens', [
+            'normalized_token' => 'another',
+        ]);
+    }
+
     public function test_idempotent_acceptance_repairs_missing_name_reference_index(): void
     {
         [, $attributes] = $this->validSubmission('Spoke with @Ranger_1.');
@@ -320,6 +337,7 @@ class NameReferenceFieldReportTest extends TestCase
             'submitted_by_user_id' => $user->id,
             'staff_id' => $staff->id,
             'temporary_local_number' => 'LOCAL-'.Str::upper(Str::random(8)),
+            'title' => 'Field Report title',
             'body' => $body,
             'device_submitted_at' => '2027-07-04T13:22:10Z',
             'origin_device_id' => $device->id,

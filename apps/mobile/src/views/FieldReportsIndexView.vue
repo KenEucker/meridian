@@ -12,8 +12,9 @@ import {
   type OfflineFieldReport,
 } from "@/field-reports/offlineFieldReport";
 
-// My Field Reports — UI contract 12.3 `staff.field-reports.index` (M9.4).
+// My Field Reports — UI contract 12.3 `staff.field-reports.index` (M9.4 / M9.7A).
 // Authors see only their own submitted reports (FR-004; technical spec 17.6).
+// List shows the immutable title (UI contract 14.2).
 const session = computed(() => resolveFieldSession());
 
 const reports = computed(() => {
@@ -90,6 +91,7 @@ function syncLabel(report: OfflineFieldReport): string {
           <span class="field-reports__number">{{
             displayFor(report).displayNumber
           }}</span>
+          <span class="field-reports__title">{{ report.title }}</span>
           <span class="field-reports__meta">
             <span class="field-reports__sync">{{ syncLabel(report) }}</span>
             <span class="field-reports__submitted">
@@ -172,6 +174,10 @@ function syncLabel(report: OfflineFieldReport): string {
 
 .field-reports__number {
   font-weight: 700;
+}
+
+.field-reports__title {
+  font-weight: 600;
 }
 
 .field-reports__meta {

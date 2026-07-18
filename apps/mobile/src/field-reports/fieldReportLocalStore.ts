@@ -43,6 +43,7 @@ function isOfflineFieldReport(value: unknown): value is OfflineFieldReport {
     typeof report.submittedByUserId === "string" &&
     typeof report.staffId === "string" &&
     typeof report.temporaryLocalNumber === "string" &&
+    typeof report.title === "string" &&
     typeof report.body === "string" &&
     typeof report.deviceSubmittedAt === "string" &&
     typeof report.originDeviceId === "string" &&

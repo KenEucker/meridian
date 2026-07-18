@@ -1,4 +1,4 @@
-// Offline Field Report create operation (M9.2).
+// Offline Field Report create operation (M9.2 / M9.7A).
 //
 // Technical spec section 17.2 (Offline behavior) requires that Field Reports
 // can be created offline, that there are no drafts, that a report is finalized
@@ -7,16 +7,17 @@
 // offline report to show a clearly temporary local number until the server
 // assigns the FRA number. Data/API section 7.2 lists Field Report creation as
 // an Alpha 1 offline write, and section 10.15 defines the `field_reports`
-// record shape this local record mirrors.
+// record shape this local record mirrors, including required immutable title.
 //
 // This module owns the pure, device-side create step only: it generates the
 // device UUID, records the device submission timestamp, assigns a temporary
-// local number, and produces a finalized/immutable local record in the
-// `pending_sync` state. Server acceptance and FRA numbering are M9.3; author
-// list/create/detail surfaces are M9.4; photo capture limits are M9.7; photo
-// sync/storage is M9.8; server-side Name Reference parsing is M9.6A. Persisting
-// the record to the encrypted local store and PowerSync, and signing the sync
-// operation, are owned by later Alpha 1 tasks.
+// local number, normalizes the required title, and produces a finalized/
+// immutable local record in the `pending_sync` state. Server acceptance and
+// FRA numbering are M9.3; author list/create/detail surfaces are M9.4; photo
+// capture limits are M9.7; photo sync/storage is M9.8; server-side Name
+// Reference parsing is M9.6A. Persisting the record to the encrypted local
+// store and PowerSync, and signing the sync operation, are owned by later
+// Alpha 1 tasks.
 // Injecting the id generator and clock keeps this deterministic in tests.
 
 /**
@@ -27,6 +28,9 @@
  */
 export const FIELD_REPORT_PENDING_SYNC = "pending_sync" as const;
 export const FIELD_REPORT_ACCEPTED = "accepted" as const;
+
+/** Max title length after trimming (FR-003; technical spec 17.3; data/API 10.15). */
+export const FIELD_REPORT_TITLE_MAX_LENGTH = 200;
 
 export type FieldReportSyncStatus =
   | typeof FIELD_REPORT_PENDING_SYNC
@@ -46,6 +50,7 @@ export interface OfflineFieldReport {
   readonly staffId: string;
   readonly fraNumber: string | null;
   readonly temporaryLocalNumber: string;
+  readonly title: string;
   readonly body: string;
   readonly deviceSubmittedAt: string;
   readonly serverReceivedAt: string | null;
@@ -59,7 +64,7 @@ export interface OfflineFieldReport {
  * Caller-supplied fields for an offline Field Report submission. Department and
  * team context are optional ("if available", technical spec 17.3). The device,
  * node, author, staff, and event identifiers come from the authenticated field
- * session.
+ * session. Title is required plain text (trimmed, 1–200 characters).
  */
 export interface CreateOfflineFieldReportInput {
   readonly eventId: string;
@@ -67,6 +72,7 @@ export interface CreateOfflineFieldReportInput {
   readonly staffId: string;
   readonly originDeviceId: string;
   readonly originNodeId: string;
+  readonly title: string;
   readonly body: string;
   readonly departmentId?: string | null;
   readonly teamId?: string | null;
@@ -123,6 +129,30 @@ function requireNonEmpty(
 }
 
 /**
+ * Normalize a Field Report title: trim outer whitespace, require 1–200 chars
+ * (FR-003; technical spec 17.3; data/API 10.15; UI contract 14.2).
+ */
+export function normalizeFieldReportTitle(value: string): string {
+  if (typeof value !== "string") {
+    throw new OfflineFieldReportError("Field Report title is required.");
+  }
+
+  const title = value.trim();
+
+  if (title.length === 0) {
+    throw new OfflineFieldReportError("Field Report title is required.");
+  }
+
+  if (title.length > FIELD_REPORT_TITLE_MAX_LENGTH) {
+    throw new OfflineFieldReportError(
+      `Field Report title must be at most ${FIELD_REPORT_TITLE_MAX_LENGTH} characters.`,
+    );
+  }
+
+  return title;
+}
+
+/**
  * Build the clearly-temporary local number shown until the server assigns the
  * FRA number (technical spec 17.5). The `LOCAL-` prefix keeps it visually
  * distinct from a real `FRA-YYYY-NNNNNN` number so the swap after sync is
@@ -138,8 +168,9 @@ export function buildTemporaryLocalNumber(id: string): string {
 /**
  * Create a finalized, immutable offline Field Report. The returned record has a
  * device-generated UUID, a device submission timestamp, a temporary local
- * number, and the `pending_sync` status. It is frozen because a submitted Field
- * Report is finalized and never edited (technical spec 17.2/17.4, FR-007).
+ * number, a normalized title, and the `pending_sync` status. It is frozen
+ * because a submitted Field Report is finalized and never edited (technical
+ * spec 17.2/17.4, FR-007).
  */
 export function createOfflineFieldReport(
   input: CreateOfflineFieldReportInput,
@@ -148,6 +179,8 @@ export function createOfflineFieldReport(
   for (const field of REQUIRED_ID_FIELDS) {
     requireNonEmpty(input[field] as string | null | undefined, field);
   }
+
+  const title = normalizeFieldReportTitle(input.title);
 
   if (input.body.trim().length === 0) {
     throw new OfflineFieldReportError("Field Report body text is required.");
@@ -168,6 +201,7 @@ export function createOfflineFieldReport(
     staffId: input.staffId,
     fraNumber: null,
     temporaryLocalNumber: buildTemporaryLocalNumber(id),
+    title,
     body: input.body,
     deviceSubmittedAt: submittedAt,
     serverReceivedAt: null,

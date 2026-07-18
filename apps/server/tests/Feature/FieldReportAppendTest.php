@@ -30,6 +30,7 @@ class FieldReportAppendTest extends TestCase
         $this->assertSame($report->id, $append->field_report_id);
         $this->assertSame('Additional detail observed later.', $append->body);
         $this->assertSame('accepted', $report->fresh()->sync_status);
+        $this->assertSame('Original immutable title', $report->fresh()->title);
         $this->assertSame('Original immutable body', $report->fresh()->body);
         $this->assertTrue($append->server_received_at->equalTo(now()));
         $this->assertDatabaseHas('field_report_appends', [
@@ -40,8 +41,10 @@ class FieldReportAppendTest extends TestCase
         ]);
         $this->assertDatabaseHas('field_reports', [
             'id' => $report->id,
+            'title' => 'Original immutable title',
             'body' => 'Original immutable body',
         ]);
+        $this->assertArrayNotHasKey('title', $attributes);
     }
 
     public function test_multiple_appends_are_preserved_in_timeline_order(): void
@@ -187,6 +190,7 @@ class FieldReportAppendTest extends TestCase
             ->forAuthor($author)
             ->receivedByServer()
             ->create([
+                'title' => 'Original immutable title',
                 'body' => 'Original immutable body',
                 'origin_device_id' => $device->id,
                 'origin_node_id' => $node->id,
