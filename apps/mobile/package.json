@@ -6,11 +6,11 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @meridian/client run build",
+    "build": "corepack pnpm --filter @meridian/client run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "cap:copy": "pnpm --filter @meridian/client run build && cap copy",
-    "cap:sync": "pnpm --filter @meridian/client run build && cap sync"
+    "cap:copy": "corepack pnpm --filter @meridian/client run build && cap copy",
+    "cap:sync": "corepack pnpm --filter @meridian/client run build && cap sync"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0"

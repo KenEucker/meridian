@@ -7,7 +7,7 @@
   "main": "dist/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "pnpm --filter @meridian/client run build && tsc --project tsconfig.build.json",
+    "build": "corepack pnpm --filter @meridian/client run build && tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
