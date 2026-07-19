@@ -5,13 +5,15 @@ use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\MagicLinkController;
+use App\Http\Controllers\ClientAppController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', ClientAppController::class)->name('client.app');
+Route::get('assets/{clientAssetPath}', [ClientAppController::class, 'asset'])
+    ->where('clientAssetPath', '.*')
+    ->name('client.assets');
 
 Route::get('setup', [NodeSetupController::class, 'show'])->name('setup.show');
 Route::post('setup', [NodeSetupController::class, 'store'])->name('setup.store');
@@ -56,9 +58,7 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::middleware('auth')->group(function (): void {
-    Route::get('home', function () {
-        return view('home');
-    })->name('home');
+    Route::get('home', ClientAppController::class)->name('home');
 
     Route::get('logout', [LogoutController::class, 'create'])->name('logout');
     Route::post('logout', [LogoutController::class, 'destroy'])->name('logout.destroy');
@@ -72,3 +72,7 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('signed:relative')
         ->name('field-report-photos.download');
 });
+
+Route::get('{clientPath}', ClientAppController::class)
+    ->where('clientPath', '^(?!admin(?:/|$)|api(?:/|$)|up$|css/|js/|favicon\.ico$|robots\.txt$).*$')
+    ->name('client.app.route');

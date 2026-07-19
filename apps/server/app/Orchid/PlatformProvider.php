@@ -87,6 +87,11 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.staff')
                 ->permission('platform.staff'),
 
+            Menu::make(__('Equipment'))
+                ->icon('bs.box-seam')
+                ->route('platform.equipment')
+                ->permission('platform.equipment'),
+
             Menu::make(__('Policy Documents'))
                 ->icon('bs.file-earmark-text')
                 ->route('platform.policy-documents')
@@ -142,6 +147,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.departments', __('Departments'))
                 ->addPermission('platform.teams', __('Teams'))
                 ->addPermission('platform.staff', __('Staff'))
+                ->addPermission('platform.equipment', __('Equipment'))
                 ->addPermission('platform.policy-documents', __('Policy documents'))
                 ->addPermission('platform.procedure-documents', __('Procedure documents'))
                 ->addPermission('platform.document-fragments', __('Document fragments')),

@@ -7,11 +7,11 @@ describe("capacitor baseline config", () => {
     expect(capacitorConfig.appId).toMatch(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/);
   });
 
-  it("names the installable field application", () => {
+  it("names the installable mobile application", () => {
     expect(capacitorConfig.appName).toBe("Meridian Field");
   });
 
-  it("points the native web directory at the Vite build output", () => {
-    expect(capacitorConfig.webDir).toBe("dist");
+  it("packages the shared Vue client build output", () => {
+    expect(capacitorConfig.webDir).toBe("../client/dist");
   });
 });

@@ -36,13 +36,13 @@ the script does not invent those later Milestone 11 surfaces.
 - Repository dependencies installed with approved PHP, Composer, Node.js 24
   LTS, and pnpm 11.x versions.
 - Laravel available at `http://127.0.0.1:8000`.
-- The Vue field app available at `http://127.0.0.1:5173` in a secure browser
+- The shared Vue client available at `http://127.0.0.1:5173` in a secure browser
   context (`localhost` / `127.0.0.1` is sufficient).
 - Browser DevTools capable of switching the page network condition to Offline.
 - Two repository image fixtures:
   `meridian-signal-camp-base-logo.png` and
   `meridian-signal-camp-wordmark.webp`.
-- At least three terminals: Laravel server, field app, and QA commands.
+- At least three terminals: Laravel server, shared client dev server, and QA commands.
 
 The local Field API used here is a development-only bearer-token seam. Keep it
 disabled outside local development. PowerSync transport, signed operation
@@ -85,9 +85,9 @@ later sync tasks.
    ```bash
    php artisan config:clear
    ```
-5. From the repository root, create the ignored mobile development override:
+5. From the repository root, create the ignored shared-client development override:
    ```bash
-   cp apps/mobile/.env.development.example apps/mobile/.env.development.local
+   cp apps/client/.env.development.example apps/client/.env.development.local
    ```
    Confirm its token matches the server:
    ```dotenv
@@ -98,9 +98,9 @@ later sync tasks.
    ```bash
    php apps/server/artisan serve --host=127.0.0.1 --port=8000
    ```
-7. Start the field app in another terminal:
+7. Start the shared client in another terminal:
    ```bash
-   corepack pnpm --filter @meridian/mobile run dev -- --host 127.0.0.1
+   corepack pnpm --filter @meridian/client run dev -- --host 127.0.0.1
    ```
 8. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
    an earlier local Field Report run is present. Confirm the empty state says
@@ -114,9 +114,9 @@ later sync tasks.
 
 ### A. Automated Field Report evidence
 
-1. From the repository root, run the field app tests:
+1. From the repository root, run the shared client Field Report tests:
    ```bash
-   corepack pnpm --filter @meridian/mobile run test
+   corepack pnpm --filter @meridian/client run test
    ```
 2. From `apps/server`, run the Field Report server suites:
    ```bash
@@ -185,8 +185,10 @@ later sync tasks.
     - **Pending sync**;
     - a `LOCAL-` temporary number and the explanation that an FRA number is
       assigned after sync;
+    - a Field Report sync status panel showing queued report text;
     - both local photo previews;
-    - a **Retry upload** action when photos are still pending or failed;
+    - a **Retry sync** action when report text, photos, or both are still pending
+      or failed;
     - the statement that the original title and body are finalized and cannot
       be edited.
     Photo status may show **Pending upload** immediately, or **Upload failed**
@@ -203,8 +205,10 @@ later sync tasks.
 ### D. Reconnect, FRA assignment, and separate photo upload
 
 18. Restore the browser network condition to Online.
-19. Open the pending report and select **Retry upload**. Confirm the status
-    message says **Sync completed.**
+19. Open the pending report and select **Retry sync**. Confirm the status
+    message says **Sync completed.** If the API token or Field session is not
+    available, confirm the status panel names that blocked state instead of
+    silently doing nothing.
 20. Confirm the temporary number is replaced by an event-specific number in
     `FRA-2027-NNNNNN` form and the Sync value changes to **Synced**.
 21. Confirm both local photo entries show **Uploaded**. The text record may be

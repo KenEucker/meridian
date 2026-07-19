@@ -7,11 +7,13 @@ use App\Models\NodeConfigValue;
 use App\Models\User;
 use App\Services\Node\NodeConfigResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Orchid\Support\Testing\ScreenTesting;
 use Tests\TestCase;
 
 class NodeConfigSourceTest extends TestCase
 {
     use RefreshDatabase;
+    use ScreenTesting;
 
     public function test_resolver_reports_runtime_defaults_when_no_file_or_database_value_exists(): void
     {
@@ -102,5 +104,55 @@ class NodeConfigSourceTest extends TestCase
         $response->assertSee('database override');
         $response->assertSee('Configured (hidden)');
         $response->assertDontSee('very-secret-private-key');
+    }
+
+    public function test_orchid_node_config_screen_updates_setup_fields(): void
+    {
+        config(['meridian.event_mode.enabled' => false]);
+
+        $node = Node::factory()->create([
+            'node_name' => 'local.old',
+            'node_role' => Node::ROLE_DEVELOPMENT,
+            'central_node_url' => null,
+        ]);
+
+        $user = User::factory()->create([
+            'permissions' => [
+                'platform.index' => true,
+                'platform.node.config' => true,
+            ],
+        ]);
+
+        $response = $this->screen('platform.node.config')
+            ->actingAs($user)
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'node' => [
+                    'node_name' => 'local.updated',
+                    'node_role' => Node::ROLE_ONSITE,
+                    'central_node_url' => 'https://central.example.org',
+                ],
+            ]);
+
+        $response->assertRedirect(route('platform.node.config'));
+
+        $node->refresh();
+
+        $this->assertSame('local.updated', $node->node_name);
+        $this->assertSame(Node::ROLE_ONSITE, $node->node_role);
+        $this->assertSame('https://central.example.org', $node->central_node_url);
+
+        $roleOverride = NodeConfigValue::query()
+            ->where('node_id', $node->id)
+            ->where('key', 'node_role')
+            ->firstOrFail();
+        $centralUrlOverride = NodeConfigValue::query()
+            ->where('node_id', $node->id)
+            ->where('key', 'central_node_url')
+            ->firstOrFail();
+
+        $this->assertSame(NodeConfigValue::SOURCE_DATABASE, $roleOverride->source);
+        $this->assertSame(Node::ROLE_ONSITE, $roleOverride->value_json);
+        $this->assertSame('https://central.example.org', $centralUrlOverride->value_json);
     }
 }

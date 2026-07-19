@@ -55,16 +55,17 @@ export const UNAVAILABLE_VALUE = "Unavailable (server unreachable)";
 
 /**
  * Build the health panel model from the local Meridian web UI URL, the
- * wrapper's own version, and the latest server health payload (or `null` when
- * the server could not be reached).
+ * wrapper/client versions, and the latest server health payload (or `null`
+ * when the server could not be reached).
  */
 export function buildHealthPanelModel(input: {
   appUrl: string;
   appVersion: string;
+  clientVersion: string;
   health: ServerHealth | null;
   generatedAt?: string;
 }): HealthPanelModel {
-  const { appUrl, appVersion, health } = input;
+  const { appUrl, appVersion, clientVersion, health } = input;
   const reachable = health !== null;
   const generatedAt = input.generatedAt ?? new Date().toISOString();
 
@@ -86,7 +87,8 @@ export function buildHealthPanelModel(input: {
     { label: "Local discovery status", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Certificate / HTTPS status", value: describeHttpsStatus(appUrl), source: "app" },
     { label: "Server version", ...serverValue(health?.server_version) },
-    { label: "Expected app version", value: appVersion, source: "app" },
+    { label: "Client version", value: clientVersion, source: "app" },
+    { label: "Electron wrapper version", value: appVersion, source: "app" },
   ];
 
   return {

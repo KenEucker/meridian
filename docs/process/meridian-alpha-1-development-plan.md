@@ -127,21 +127,21 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 ---
 
-### Milestone 2: Mobile and Desktop Shells
+### Milestone 2: Shared Client and Platform Shells
 
-**Goal:** Establish the Vue/Capacitor field app and Electron on-site wrapper shells before field workflows.
+**Goal:** Establish the shared Vue client plus Capacitor and Electron packaging wrappers before field workflows.
 
 **Primary source docs:** Technical spec sections 3.2, 3.3, 9, 12, 13, 25, 26, and 29; UI implementation contract sections 3, 5, 6, 12, and 18; kiosk guide.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M2.1 Vue app shell | Add mobile/field app shell with routing placeholder and no domain workflows. | Technical spec section 3.2; UI implementation contract section 3 | App builds; smoke test loads |
-| M2.2 Capacitor baseline | Add Capacitor project configuration and documented local run path. | Technical spec section 3.2 | Build/config validation |
-| M2.3 Electron wrapper shell | Add Electron app that opens the local Meridian UI. | Technical spec sections 3.3, 25.1, 25.2 | Desktop app opens configured URL |
+| M2.1 Vue app shell | Add shared client app shell with routing placeholder and no domain workflows. | Technical spec section 3.2; UI implementation contract section 3 | App builds; smoke test loads |
+| M2.2 Capacitor baseline | Add Capacitor packaging configuration and documented local run path. | Technical spec section 3.3 | Build/config validation |
+| M2.3 Electron wrapper shell | Add Electron app that opens the packaged shared client UI. | Technical spec sections 3.4, 25.1, 25.2 | Desktop app opens configured URL |
 | M2.4 Electron health placeholder | Display local node/server version placeholders from server health. | Technical spec section 25.3; kiosk guide section 12 | Manual desktop QA |
 | M2.5 Shared UI tokens baseline | Add semantic token skeleton shared by field/admin surfaces. | Style guide; UI implementation contract section 10; component spec section 3 | Visual smoke test |
 
-**QA gate:** A reviewer can open the web/admin app, mobile shell, and Electron shell, even though product workflows are still placeholders.
+**QA gate:** A reviewer can open the shared client through the web server, mobile shell, and Electron shell, even though product workflows are still placeholders.
 
 ---
 
@@ -273,8 +273,8 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M8.2 Device cache projections | Define initial authorized device cache projections. | Technical spec 9.3; data/API 7.1 | Projection tests |
 | M8.3 Local encryption readiness | Add readiness check for local encryption availability. | Technical spec 12.3, 26.2 | Readiness tests |
 | M8.4 Device signing readiness | Add readiness check for device signing availability. | Technical spec 12.4, 26.2 | Readiness tests |
-| M8.5 Readiness UI | Add field app readiness checklist surface. | Technical spec 14; UI implementation contract 16 | Component/UI tests |
-| M8.6 Offline state UI | Add shared offline/sync status display for field app and kiosk. | UI implementation contract 11.13, 16 | UI tests/manual QA |
+| M8.5 Readiness UI | Add shared client readiness checklist surface. | Technical spec 14; UI implementation contract 16 | Component/UI tests |
+| M8.6 Offline state UI | Add shared offline/sync status display for shared client surfaces. | UI implementation contract 11.13, 16 | UI tests/manual QA |
 | M8.7 Event-mode fail-closed checks | Block event mode when HTTPS, PowerSync, encryption, or signing fails. | Technical spec 8.6, 26.2 | Feature tests |
 | M8.8 Offline readiness QA script | Add `QA-READY-01-device-readiness.md`. | QA README | Human QA script |
 

@@ -42,6 +42,18 @@
             font-size: var(--m-text-xl, 1.5rem);
             letter-spacing: 0;
         }
+        h2 {
+            margin: 0;
+            font-size: var(--m-text-lg, 1.25rem);
+        }
+        .lede,
+        .help {
+            margin: 0 0 1rem;
+            color: var(--m-text-secondary, #405665);
+        }
+        .help {
+            font-size: var(--m-text-sm, .875rem);
+        }
         form,
         .panel {
             display: grid;
@@ -94,6 +106,11 @@
 <body>
     <main>
         <h1>Meridian Node Setup</h1>
+        <p class="lede">
+            This first-run page configures this Meridian server/node. Browsers,
+            Electron, and mobile apps discover client settings from the server/API
+            URL and later trusted-device setup.
+        </p>
 
         @if (session('status'))
             <p class="status">{{ session('status') }}</p>
@@ -120,6 +137,11 @@
                     <dt>Public key</dt>
                     <dd>{{ $node->public_key }}</dd>
                 </dl>
+                <p class="help">
+                    This first-run setup is complete. Ongoing node name, role,
+                    and central URL edits are managed in Orchid God Mode under
+                    Node Configuration.
+                </p>
             </section>
         @else
             <form method="POST" action="{{ route('setup.store') }}">
@@ -146,6 +168,11 @@
                             </option>
                         @endforeach
                     </select>
+                    <span class="help">
+                        Use Development for local testing. Standalone, Central,
+                        and Onsite are event-mode roles and require this
+                        server's configured application URL to use HTTPS.
+                    </span>
                 </label>
 
                 <label for="central_node_url">

@@ -19,16 +19,26 @@
 
 import { app, BrowserWindow, globalShortcut } from "electron";
 
-import { resolveAppUrl, resolveHealthUrl } from "./config";
+import {
+  resolveClientDistPath,
+  resolveClientPort,
+  resolveClientVersion,
+  resolveConfiguredAppUrl,
+  resolveHealthUrl,
+  resolveServerUrl,
+} from "./config";
 import { buildHealthPanelModel, fetchServerHealth, renderHealthPanelHtml } from "./health";
+import { startClientStaticServer, type ClientStaticServer } from "./staticClientServer";
 
 const RELOAD_DELAY_MS = 2000;
 const HEALTH_TOGGLE_SHORTCUT = "CommandOrControl+Shift+H";
 
 let mainWindow: BrowserWindow | null = null;
 let healthWindow: BrowserWindow | null = null;
+let clientServer: ClientStaticServer | null = null;
+let currentAppUrl = "";
 
-function createMainWindow(): BrowserWindow {
+function createMainWindow(appUrl: string): BrowserWindow {
   const window = new BrowserWindow({
     show: false,
     fullscreen: true,
@@ -42,8 +52,6 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.setMenuBarVisibility(false);
-
-  const appUrl = resolveAppUrl(process.env);
 
   const loadAppUrl = (): void => {
     void window.loadURL(appUrl).catch(() => scheduleReload());
@@ -77,12 +85,13 @@ function createMainWindow(): BrowserWindow {
 }
 
 async function refreshHealthWindow(window: BrowserWindow): Promise<void> {
-  const appUrl = resolveAppUrl(process.env);
-  const healthUrl = resolveHealthUrl(process.env, appUrl);
+  const serverUrl = resolveServerUrl(process.env);
+  const healthUrl = resolveHealthUrl(process.env, serverUrl);
   const health = await fetchServerHealth(healthUrl);
   const model = buildHealthPanelModel({
-    appUrl,
+    appUrl: currentAppUrl,
     appVersion: app.getVersion(),
+    clientVersion: resolveClientVersion(process.env),
     health,
   });
   const html = renderHealthPanelHtml(model);
@@ -117,20 +126,39 @@ function toggleHealthWindow(): void {
   void refreshHealthWindow(healthWindow);
 }
 
-app.whenReady().then(() => {
-  mainWindow = createMainWindow();
+async function resolveMainAppUrl(): Promise<string> {
+  const configuredAppUrl = resolveConfiguredAppUrl(process.env);
+  if (configuredAppUrl) {
+    return configuredAppUrl;
+  }
+
+  clientServer = await startClientStaticServer({
+    distDir: resolveClientDistPath(process.env),
+    port: resolveClientPort(process.env),
+  });
+
+  return clientServer.url;
+}
+
+app.whenReady().then(async () => {
+  currentAppUrl = await resolveMainAppUrl();
+  mainWindow = createMainWindow(currentAppUrl);
 
   globalShortcut.register(HEALTH_TOGGLE_SHORTCUT, toggleHealthWindow);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createMainWindow();
+      mainWindow = createMainWindow(currentAppUrl);
     }
   });
 });
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  if (clientServer) {
+    void clientServer.close();
+    clientServer = null;
+  }
 });
 
 app.on("window-all-closed", () => {

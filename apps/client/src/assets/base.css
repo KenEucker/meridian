@@ -1,0 +1,34 @@
+/*
+ * Base styling for the shared client shell. Semantic design tokens are provided by
+ * the shared @meridian/ui-tokens baseline (M2.5), imported before this file.
+ */
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light dark;
+  --m-content-narrow: min(80vw, 40rem);
+  --m-content-wide: min(80vw, 64rem);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--m-font-body);
+  font-size: var(--m-text-md);
+  line-height: 1.5;
+  background: var(--m-surface-app);
+  color: var(--m-text-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

@@ -23,8 +23,10 @@ class SharedUiTokensTest extends TestCase
         $this->assertStringContainsString('[data-theme="dark"]', $css);
     }
 
-    public function test_welcome_page_links_the_shared_tokens_stylesheet(): void
+    public function test_client_build_missing_page_links_the_shared_tokens_stylesheet(): void
     {
+        config()->set('meridian.client.dist_path', sys_get_temp_dir().'/missing-meridian-client-dist');
+
         $response = $this->get('/');
 
         $response->assertOk();

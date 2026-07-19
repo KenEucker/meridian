@@ -43,9 +43,12 @@
     "db:ps": "docker compose --env-file deploy/docker/.env -f deploy/docker/compose.yaml ps",
     "db:logs": "docker compose --env-file deploy/docker/.env -f deploy/docker/compose.yaml logs -f",
     "db:setup": "corepack pnpm run db:env && corepack pnpm run db:up",
-    "mobile:dev": "corepack pnpm --filter @meridian/mobile run dev",
+    "client:dev": "corepack pnpm --filter @meridian/client run dev",
+    "client:build": "corepack pnpm --filter @meridian/client run build",
+    "client:preview": "corepack pnpm --filter @meridian/client run preview",
+    "client:typecheck": "corepack pnpm --filter @meridian/client run typecheck",
+    "client:test": "corepack pnpm --filter @meridian/client run test",
     "mobile:build": "corepack pnpm --filter @meridian/mobile run build",
-    "mobile:preview": "corepack pnpm --filter @meridian/mobile run preview",
     "mobile:typecheck": "corepack pnpm --filter @meridian/mobile run typecheck",
     "mobile:test": "corepack pnpm --filter @meridian/mobile run test",
     "mobile:cap:copy": "corepack pnpm --filter @meridian/mobile run cap:copy",
@@ -57,8 +60,8 @@
     "tokens:sync": "node -e \"require('fs').copyFileSync('packages/ui-tokens/tokens.css','apps/server/public/css/meridian-tokens.css')\"",
     "tokens:typecheck": "corepack pnpm --filter @meridian/ui-tokens run typecheck",
     "tokens:test": "corepack pnpm --filter @meridian/ui-tokens run test",
-    "build": "corepack pnpm run mobile:build && corepack pnpm run desktop:build",
-    "typecheck": "corepack pnpm run tokens:typecheck && corepack pnpm run mobile:typecheck && corepack pnpm run desktop:typecheck",
-    "test": "corepack pnpm run process:check && corepack pnpm run tokens:test && corepack pnpm run mobile:test && corepack pnpm run desktop:test"
+    "build": "corepack pnpm run client:build && corepack pnpm run mobile:build && corepack pnpm run desktop:build",
+    "typecheck": "corepack pnpm run tokens:typecheck && corepack pnpm run client:typecheck && corepack pnpm run mobile:typecheck && corepack pnpm run desktop:typecheck",
+    "test": "corepack pnpm run process:check && corepack pnpm run tokens:test && corepack pnpm run client:test && corepack pnpm run mobile:test && corepack pnpm run desktop:test"
   }
 }

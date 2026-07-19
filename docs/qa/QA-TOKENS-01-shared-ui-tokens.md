@@ -3,13 +3,13 @@
 ## Purpose
 
 Verify that the shared Meridian semantic UI design tokens (M2.5) are defined
-once and consumed by both the field (Vue) surface and the admin (Orchid /
+once and consumed by both the shared client (Vue) surface and the admin (Orchid /
 server) surface. This is a visual smoke test of the token skeleton; no domain
 workflows, authentication, or offline behavior are expected at this stage.
 
 ## Requirements covered
 
-- Technical spec: Section 3.2 Mobile/field application
+- Technical spec: Section 3.2 Shared client application
 - Technical spec: Section 3.1 Server/admin application
 - UI Implementation Contract: Section 10 Design Token Contract (canonical
   `--m-*` token names) and Section 9.9 Dashboard Attention Scale
@@ -39,16 +39,16 @@ workflows, authentication, or offline behavior are expected at this stage.
 1. From the repository root, install workspace dependencies:
    `corepack pnpm install`.
 2. Run the token contract smoke test: `corepack pnpm run tokens:test`.
-3. Run the field app smoke test: `corepack pnpm --filter @meridian/mobile run test`.
+3. Run the shared client smoke test: `corepack pnpm --filter @meridian/client run test`.
 4. Confirm the package and admin copies are in sync: run
    `corepack pnpm run tokens:sync` and confirm
    `apps/server/public/css/meridian-tokens.css` has no pending git changes.
-5. Start the field dev server: `corepack pnpm run mobile:dev` and open the
-   dev URL (for example `http://localhost:5173/`). Confirm the field home loads
+5. Start the shared client dev server: `corepack pnpm run client:dev` and open the
+   dev URL (for example `http://localhost:5173/`). Confirm the home surface loads
    on the warm canvas surface with token-driven text and shell styling.
 6. Toggle the OS appearance between light and dark (or set
    `document.documentElement.dataset.theme = "dark"` in the browser console)
-   and confirm the field surface switches to the dark token values.
+   and confirm the shared client surface switches to the dark token values.
 7. Start the server (`corepack pnpm run server:dev`) and open `/`. Confirm the
    server landing page renders with the shared tokens (warm canvas in light
    mode, dark surface in dark mode).
@@ -59,18 +59,18 @@ workflows, authentication, or offline behavior are expected at this stage.
 
 - `corepack pnpm run tokens:test` passes: every canonical `--m-*` token from
   contract section 10.1 is defined with a non-empty light value, dark mode
-  redefines the same names, and the field/admin copies are byte-identical.
-- `corepack pnpm --filter @meridian/mobile run test` passes, including the
-  field token-wiring checks.
+  redefines the same names, and the client/admin copies are byte-identical.
+- `corepack pnpm --filter @meridian/client run test` passes, including the
+  shared client token-wiring checks.
 - `tokens:sync` produces no git diff (package and server copies match).
-- The field app and the server landing page both render using the shared
+- The shared client and the server landing page both render using the shared
   tokens and respond to light/dark mode.
 - The admin login page head links `css/meridian-tokens.css`.
 
 ## Evidence to capture
 
-- Terminal output from `tokens:test` and the mobile smoke test.
-- Screenshots of the field home in light and dark mode.
+- Terminal output from `tokens:test` and the shared client smoke test.
+- Screenshots of the shared client home in light and dark mode.
 - Screenshot or view-source snippet showing `css/meridian-tokens.css` linked on
   the admin login page.
 

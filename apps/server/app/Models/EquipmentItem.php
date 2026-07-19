@@ -9,9 +9,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 
 class EquipmentItem extends Model
 {
+    use AsSource;
+    use Filterable;
+
     public const STATUS_AVAILABLE = 'available';
 
     public const STATUS_CHECKED_OUT = 'checked_out';
@@ -44,6 +52,38 @@ class EquipmentItem extends Model
     ];
 
     /**
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'id' => Where::class,
+        'organization_id' => Where::class,
+        'event_id' => Where::class,
+        'department_id' => Where::class,
+        'name' => Like::class,
+        'asset_tag' => Like::class,
+        'serial_number' => Like::class,
+        'status' => Like::class,
+        'updated_at' => WhereDateStartEnd::class,
+        'created_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'id',
+        'organization_id',
+        'event_id',
+        'department_id',
+        'name',
+        'asset_tag',
+        'serial_number',
+        'status',
+        'updated_at',
+        'created_at',
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -65,6 +105,29 @@ class EquipmentItem extends Model
             self::STATUS_MISSING,
             self::STATUS_DAMAGED,
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function statusLabels(): array
+    {
+        return [
+            self::STATUS_AVAILABLE => 'Available',
+            self::STATUS_CHECKED_OUT => 'Checked out',
+            self::STATUS_RETURNED => 'Returned',
+            self::STATUS_MISSING => 'Missing',
+            self::STATUS_DAMAGED => 'Damaged',
+        ];
+    }
+
+    public static function statusLabel(?string $status): string
+    {
+        if ($status === null || $status === '') {
+            return 'Not set';
+        }
+
+        return self::statusLabels()[$status] ?? ucfirst(str_replace('_', ' ', $status));
     }
 
     /**

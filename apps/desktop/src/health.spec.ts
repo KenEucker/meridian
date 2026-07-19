@@ -21,7 +21,8 @@ const SPEC_25_3_FIELDS = [
   "Local discovery status",
   "Certificate / HTTPS status",
   "Server version",
-  "Expected app version",
+  "Client version",
+  "Electron wrapper version",
 ];
 
 const health: ServerHealth = {
@@ -37,6 +38,7 @@ describe("buildHealthPanelModel", () => {
     const model = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
     });
 
@@ -47,13 +49,15 @@ describe("buildHealthPanelModel", () => {
     const model = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
     });
 
     const byLabel = Object.fromEntries(model.fields.map((field) => [field.label, field]));
     expect(byLabel["Server version"]).toMatchObject({ value: "1.2.3", source: "server" });
     expect(byLabel["Node role"]).toMatchObject({ value: "onsite", source: "server" });
-    expect(byLabel["Expected app version"]).toMatchObject({ value: "0.1.0", source: "app" });
+    expect(byLabel["Client version"]).toMatchObject({ value: "0.2.0", source: "app" });
+    expect(byLabel["Electron wrapper version"]).toMatchObject({ value: "0.1.0", source: "app" });
     expect(model.reachable).toBe(true);
     expect(model.connectionLabel).toContain("Connected to");
   });
@@ -62,11 +66,13 @@ describe("buildHealthPanelModel", () => {
     const httpsModel = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
     });
     const httpModel = buildHealthPanelModel({
       appUrl: "http://localhost:8000/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
     });
 
@@ -80,6 +86,7 @@ describe("buildHealthPanelModel", () => {
     const model = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
     });
 
@@ -100,6 +107,7 @@ describe("buildHealthPanelModel", () => {
     const model = buildHealthPanelModel({
       appUrl: "http://localhost:8000/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health: null,
     });
 
@@ -109,7 +117,8 @@ describe("buildHealthPanelModel", () => {
     expect(byLabel["Server version"].value).toBe(UNAVAILABLE_VALUE);
     expect(byLabel["Node role"].value).toBe(UNAVAILABLE_VALUE);
     // App-known fields are still available offline.
-    expect(byLabel["Expected app version"].value).toBe("0.1.0");
+    expect(byLabel["Client version"].value).toBe("0.2.0");
+    expect(byLabel["Electron wrapper version"].value).toBe("0.1.0");
     expect(byLabel["Certificate / HTTPS status"].value).toBe("HTTP (development only)");
   });
 
@@ -117,6 +126,7 @@ describe("buildHealthPanelModel", () => {
     const model = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health: { ...health, server_version: null },
     });
 
@@ -142,6 +152,7 @@ describe("renderHealthPanelHtml", () => {
     const model = buildHealthPanelModel({
       appUrl: "https://onsite.local/",
       appVersion: "0.1.0",
+      clientVersion: "0.2.0",
       health,
       generatedAt: "2026-06-17T12:00:00.000Z",
     });
@@ -151,6 +162,7 @@ describe("renderHealthPanelHtml", () => {
       expect(html).toContain(label);
     }
     expect(html).toContain("1.2.3");
+    expect(html).toContain("0.2.0");
     expect(html).toContain("Meridian On-site Health");
     expect(html).toContain("2026-06-17T12:00:00.000Z");
   });

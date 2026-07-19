@@ -3,7 +3,7 @@
 ## Purpose
 
 Verify Milestone 8 device readiness and offline foundations for a human
-reviewer: the field app shows an honest advisory readiness checklist, shared
+reviewer: the shared client shows an honest advisory readiness checklist, shared
 offline/sync status appears only when the device is offline, and event mode
 fails closed when required HTTPS, PowerSync, local encryption, or device
 signing capabilities are unavailable. This script closes the Milestone 8 QA
@@ -30,7 +30,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
   installed.
 - Node.js 24 LTS and pnpm 11.x available via Corepack.
 - PHP and Composer available for the Laravel server app under `apps/server`.
-- A secure-context browser session for the field app (localhost Vite/dev URL
+- A secure-context browser session for the shared client (localhost Vite/dev URL
   is sufficient; `http://localhost` is a secure context).
 - Optional: a migrated local Laravel database if repeating the `/setup`
   fail-closed path from section D; tinker-based checks do not require a fresh
@@ -58,8 +58,8 @@ later readiness signals (login, device trust, event selection, cache, sync).
 
 1. From the repository root, install workspace dependencies if needed:
    `corepack pnpm install`.
-2. Run the field app readiness and offline automated suite:
-   `corepack pnpm --filter @meridian/mobile run test`.
+2. Run the shared client readiness and offline automated suite:
+   `corepack pnpm --filter @meridian/client run test`.
 3. From `apps/server`, run the server event-mode fail-closed feature tests:
    ```bash
    cd apps/server
@@ -68,7 +68,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 
 ### B. Field app readiness checklist (M8.3–M8.5)
 
-4. Start the field app: `corepack pnpm --filter @meridian/mobile run dev`.
+4. Start the shared client: `corepack pnpm --filter @meridian/client run dev`.
 5. Open the home route (for example `http://localhost:5173/`) and confirm the
    home placeholder includes a link labeled **Check device readiness**.
 6. Follow the link (or open `/readiness` directly) and confirm the heading
@@ -100,7 +100,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 
 ### C. Shared offline / sync status display (M8.6)
 
-13. With the field app still open and the device online, confirm no
+13. With the shared client still open and the device online, confirm no
     OfflineBanner is visible in the app shell (online is silent).
 14. In browser DevTools, set the network condition to Offline (or otherwise
     make `navigator.onLine` false) and confirm an Offline banner appears with:
@@ -143,7 +143,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 ### E. Client event-mode fail-closed (encryption and signing) (M8.7)
 
 22. Confirm the client event-mode gate automated tests passed in step 2
-    (`apps/mobile/src/readiness/eventMode.spec.ts`): event mode is ready only
+    (`apps/client/src/readiness/eventMode.spec.ts`): event mode is ready only
     when both local encryption and device signing are available, and each
     missing capability is reported as a blocker with a human-readable reason.
 23. Confirm the readiness surface from section B already exposes the same
@@ -154,7 +154,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 
 ## Expected results
 
-- `corepack pnpm --filter @meridian/mobile run test` passes, including
+- `corepack pnpm --filter @meridian/client run test` passes, including
   local-encryption, device-signing, readiness checklist/UI, offline banner /
   connectivity, and client event-mode gate tests.
 - `php artisan test --filter=EventMode` passes
@@ -190,7 +190,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 ## Failure notes
 
 Record the failed step, exact error text or unexpected UI label, operating
-system, Node.js and pnpm versions, PHP version, whether the field app was
+system, Node.js and pnpm versions, PHP version, whether the shared client was
 served from a secure context, the `APP_URL` / PowerSync endpoint used for
 server checks, and whether automated EventMode or mobile readiness tests also
 failed. If encryption or device signing shows Not ready on localhost, capture

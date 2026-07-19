@@ -12,6 +12,7 @@ REQUIRED_FILES = [
     "docs/process/traceability-matrix.md",
     "docs/process/github-branch-protection.md",
     "docs/process/conventional-commits.md",
+    "docs/adr/0001-shared-vue-client.md",
     "docs/qa/README.md",
     "docs/qa/QA-BOOT-01-fresh-checkout-boots.md",
     ".github/pull_request_template.md",
@@ -34,6 +35,7 @@ REQUIRED_FILES = [
 ]
 
 REQUIRED_DIRECTORIES = [
+    "apps/client",
     "apps/server",
     "apps/mobile",
     "apps/desktop",

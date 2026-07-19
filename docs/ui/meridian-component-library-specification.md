@@ -18,8 +18,8 @@ When this document conflicts with the canonical Meridian UI Operating Guide, the
 For Alpha 1, Meridian UI spans multiple runtimes:
 
 - Laravel/Orchid implements trusted admin and god-mode surfaces;
-- Vue/Capacitor implements the offline-capable field application;
-- Electron wraps the local Meridian web UI for on-site command-center use;
+- the shared Vue client implements offline-capable product workflows;
+- Capacitor and Electron package the shared Vue client for mobile and on-site command-center use;
 - required context, status, permission, and offline information must not exist only in client-side state;
 - PowerSync/offline state should be passed through documented view-model inputs, not ad hoc component checks;
 - framework-neutral component names remain the design contract, while each runtime should expose stable local component APIs.

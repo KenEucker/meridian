@@ -30,6 +30,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Shared Vue Client
+    |--------------------------------------------------------------------------
+    |
+    | Laravel serves the built shared Vue client at the product root while
+    | Orchid remains under /admin. The default path points at apps/client/dist
+    | in the monorepo; deployment packaging may override it.
+    |
+    */
+
+    'client' => [
+        'dist_path' => env('MERIDIAN_CLIENT_DIST_PATH', base_path('../client/dist')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Node Configuration
     |--------------------------------------------------------------------------
     |
