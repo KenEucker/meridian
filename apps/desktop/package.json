@@ -2,12 +2,12 @@
   "name": "@meridian/desktop",
   "version": "0.0.0",
   "private": true,
-  "description": "Meridian Electron on-site workstation wrapper shell.",
+  "description": "Meridian Electron on-site workstation wrapper shell for Meridian Kiosk.",
   "license": "AGPL-3.0-or-later",
   "main": "dist/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "corepack pnpm --filter @meridian/client run build && tsc --project tsconfig.build.json",
+    "build": "corepack pnpm --filter @meridian/client run build:kiosk && tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

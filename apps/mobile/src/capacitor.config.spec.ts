@@ -11,7 +11,7 @@ describe("capacitor baseline config", () => {
     expect(capacitorConfig.appName).toBe("Meridian Field");
   });
 
-  it("packages the shared Vue client build output", () => {
-    expect(capacitorConfig.webDir).toBe("../client/dist");
+  it("packages the fixed Meridian Field build output", () => {
+    expect(capacitorConfig.webDir).toBe("../client/dist/field");
   });
 });

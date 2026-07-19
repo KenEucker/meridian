@@ -24,9 +24,13 @@ class SharedWorkstationFactory extends Factory
             'device_id' => Device::factory()->state([
                 'platform' => 'electron',
             ]),
+            'organization_id' => fake()->uuid(),
             'event_id' => fake()->uuid(),
+            'department_id' => null,
             'name' => fake()->unique()->slug(3),
             'trusted' => true,
+            'context_pinned_at' => now(),
+            'context_pinned_by_user_id' => null,
             'revoked_at' => null,
         ];
     }

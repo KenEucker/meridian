@@ -31,7 +31,7 @@ Exact patch versions are enforced by lockfiles and CI. This document defines the
 | Database | PostgreSQL 18.x | Use current patched `18.x`; avoid floating `latest` tags | PostgreSQL is the canonical server database. Client-side SQLite exists only for offline sync/client state. |
 | Offline sync service | PowerSync Service 1.22.x | Prefer explicit Docker tag such as `journeyapps/powersync-service:1.22.0` until reviewed | Self-hosted sync service. PowerSync is sync infrastructure, not the source of business-rule truth. |
 | Offline sync web/client SDK | PowerSync JavaScript/Web Client SDK 1.38.x | Use latest compatible `1.38.x`; lock exact package version | Used for offline-first web/PWA/Electron client state. |
-| Admin/back-office | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for admin/god-mode and generic data administration, not as the primary staff-facing UI. |
+| God Mode / repair tooling | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for God Mode, configuration override, repair, and generic data administration, not as the primary product UI. |
 | JavaScript runtime | Node.js 24 LTS | `24.x`; prefer current patched 24.x in CI | Do not move to Node 26 until it is LTS and Meridian compatibility is verified. |
 | JavaScript package manager | pnpm 11.x | Set `packageManager` in `package.json`; commit `pnpm-lock.yaml` | Use Corepack. Do not use npm or yarn for project installs unless explicitly approved. |
 | Frontend build tool | Vite 8.x | `vite:^8.0`, locked by pnpm | Used for the shared Vue client. Vue plugin via `@vitejs/plugin-vue:^6.0`. |
@@ -172,11 +172,14 @@ Incident records, DNS status, sensitive staff information, exports, and audit lo
 
 Dependencies that touch these areas must be conservative, well-maintained, and easy to inspect.
 
-### Orchid is for admin/god-mode surfaces
+### Orchid is for God Mode / repair tooling
 
-Orchid is approved for internal administration and generic back-office workflows.
+Orchid is approved for God Mode, repair, configuration override, and generic
+back-office workflows.
 
-Orchid should not define the primary staff-facing, department lead, shift board, kiosk, or IMS user experience unless explicitly approved by the UI specification.
+Orchid should not define normal Meridian Admin, staff-facing, department lead,
+shift board, Kiosk, or IMS product experiences unless explicitly approved by the
+UI specification.
 
 ### Electron is for the on-site workstation
 
@@ -186,7 +189,7 @@ Electron work must account for:
 
 - kiosk/shared workstation use
 - user switching
-- 12-hour sessions
+- 5-minute Kiosk inactivity timeout
 - offline operation
 - local network/self-signed certificate realities
 - reliable recovery after app or machine restart

@@ -1,12 +1,13 @@
 # Meridian Server
 
-The Laravel application that will host the Meridian API, Orchid admin, and node
-sync surfaces (Technical spec sections 3.1 and 5.1).
+The Laravel application that hosts the Meridian API, serves Meridian Admin, and
+provides Orchid God Mode / repair tooling plus node sync surfaces (Technical
+spec sections 3.1 and 5.1).
 
 This slice (`M1.3`) installs the Orchid admin platform and exposes a
 development admin route (technical spec sections 5.1 and 22.1). Orchid provides
-the trusted admin/god-mode data administration interface; the volunteer-facing
-operational workflows are separate from Orchid and arrive in later milestones.
+God Mode / repair tooling; normal Meridian Admin and operational workflows live
+in the shared Vue product client.
 PostgreSQL remains the canonical Meridian server database (data/API
 specification section 3.1). There are still no Meridian product models,
 workflows, permissions, sync behavior, or domain admin screens yet — only
@@ -22,7 +23,7 @@ This app follows `docs/meridian-technology-baseline.md`:
 
 - PHP `>=8.5 <8.6` target (PHP 8.4.x is the documented temporary local fallback).
 - `laravel/framework` `^13.0`.
-- `orchid/platform` `^14.0` for the admin/god-mode interface.
+- `orchid/platform` `^14.0` for God Mode / repair tooling.
 - PostgreSQL `18.x` as the canonical server database.
 - Composer-managed dependencies with a committed `composer.lock`.
 
@@ -143,10 +144,9 @@ Create a development admin user with Orchid's command:
 php artisan orchid:admin "Admin" admin@example.com password
 ```
 
-> Orchid is the admin/god-mode surface only. Real Meridian authentication
-> (external providers, magic link) and the volunteer-facing operational UI are
-> implemented in later milestones; this slice only proves the admin route is
-> reachable.
+> Orchid is God Mode / repair tooling only. Real Meridian authentication
+> (external providers, magic link) and the shared Vue product UI are implemented
+> in later milestones; this slice only proves the Orchid route is reachable.
 
 ## Tests
 

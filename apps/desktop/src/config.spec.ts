@@ -6,34 +6,9 @@ import {
   resolveClientDistPath,
   resolveClientPort,
   resolveClientVersion,
-  resolveConfiguredAppUrl,
   resolveHealthUrl,
   resolveServerUrl,
 } from "./config";
-
-describe("resolveConfiguredAppUrl", () => {
-  it("returns null when no development app URL override is set", () => {
-    expect(resolveConfiguredAppUrl({})).toBeNull();
-  });
-
-  it("uses MERIDIAN_APP_URL when provided", () => {
-    expect(resolveConfiguredAppUrl({ MERIDIAN_APP_URL: "https://onsite.local/" })).toBe(
-      "https://onsite.local/",
-    );
-  });
-
-  it("trims surrounding whitespace from the override", () => {
-    expect(resolveConfiguredAppUrl({ MERIDIAN_APP_URL: "  http://10.0.0.5:5173/  " })).toBe(
-      "http://10.0.0.5:5173/",
-    );
-  });
-
-  it("rejects non-http(s) schemes", () => {
-    expect(() => resolveConfiguredAppUrl({ MERIDIAN_APP_URL: "file:///etc/passwd" })).toThrow(
-      /must use http or https/,
-    );
-  });
-});
 
 describe("resolveServerUrl", () => {
   it("returns the local Laravel server default when no override is set", () => {
@@ -58,8 +33,10 @@ describe("resolveServerUrl", () => {
 });
 
 describe("resolveClientDistPath", () => {
-  it("defaults to the shared client dist directory beside the desktop app", () => {
-    expect(resolveClientDistPath({}, "/repo/apps/desktop")).toBe("/repo/apps/client/dist");
+  it("defaults to the fixed Meridian Kiosk dist directory beside the desktop app", () => {
+    expect(resolveClientDistPath({}, "/repo/apps/desktop")).toBe(
+      "/repo/apps/client/dist/kiosk",
+    );
   });
 
   it("uses MERIDIAN_CLIENT_DIST_DIR when provided", () => {

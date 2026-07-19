@@ -14,11 +14,13 @@ It is intended to keep the same concepts, relationships, identifiers, permission
 
 - Laravel backend
 - PostgreSQL database
-- Orchid admin/god-mode interface
+- Meridian Admin shared Vue product UI
+- Orchid God Mode / repair tooling
 - OpenAPI-described Laravel API
 - PowerSync device projections
 - local SQLite client databases
-- Vue/Capacitor mobile field app
+- Vue/Capacitor Meridian Field app
+- Vue/Electron Meridian Kiosk app
 - Electron on-site wrapper
 - node-to-node synchronization
 - export/reporting layers
@@ -79,9 +81,9 @@ Laravel owns:
 
 Laravel remains the canonical writer to PostgreSQL. Clients do not directly mutate canonical tables.
 
-### 3.3 Orchid Responsibility
+### 3.3 Orchid / God Mode Responsibility
 
-Orchid owns permission administration and trusted admin/god-mode data administration surfaces.
+Orchid owns permission administration and trusted God Mode / repair tooling.
 
 Orchid provides:
 
@@ -89,7 +91,7 @@ Orchid provides:
 - role and grant administration
 - team-based grant administration
 - direct god-mode/admin assignment where allowed
-- CRUD/admin screens for domain records
+- repair/admin screens for domain records
 - sync conflict review in God mode
 - audit log review
 - policy/procedure authoring and preview screens
@@ -98,6 +100,10 @@ Orchid provides:
 Orchid does not bypass Laravel authorization, validation, audit, or domain rules.
 
 All Orchid actions must call the same policies, services, and command/action classes used by the API and sync upload flows where practical.
+
+Meridian Admin is the server-hosted shared Vue product UI. Normal Admin,
+organizer, department, staff, and operational workflows belong in the shared Vue
+client unless they are explicitly God Mode repair tooling.
 
 ### 3.4 PowerSync Responsibility
 
@@ -134,6 +140,27 @@ central node ↔ on-site node
 ```
 
 Central/on-site node sync is operation-based, not raw database replication.
+
+### 3.6 UI Mode Authority Boundary
+
+Meridian UI mode is fixed by deployment target:
+
+| Deployment target | UI mode | Product name |
+|---|---|---|
+| Server-hosted web application | `admin` | Meridian Admin |
+| Capacitor mobile application | `field` | Meridian Field |
+| Electron desktop/on-site application | `kiosk` | Meridian Kiosk |
+
+UI mode is not a data authority source. APIs, policies, PowerSync rules, node
+sync handlers, Orchid actions, and domain services must not grant access because
+a request came from `admin`, `field`, or `kiosk` mode.
+
+Authorization comes from authenticated user identity, organization/event/
+department scope, roles, grants, trusted device/workstation state where
+explicitly required, operations-window rules, and server-side domain policy.
+
+Kiosk pinned context constrains route/shell framing and can be used as an input
+to scope selection, but it does not grant the active user authority.
 
 ---
 
@@ -619,9 +646,16 @@ Alpha 1 offline writes include:
 - check-out
 - mark no-show
 
+Supported offline writes are available wherever the corresponding product
+surface is available and the device has the required synced local data. Offline
+write support is not granted or denied by UI mode alone.
+
 Policy/procedure acknowledgments are not creatable offline in Alpha 1.
 
 Incident creation requires server connection.
+
+Incident reads may be available offline when synced and authorized. Incident
+creation and mutation are online-only in every UI mode.
 
 Map editing (maps, camps, map locations, assets, publishing/archiving, locked-data overrides) is not an offline write for MVP; map packages and permitted camp/location data sync down read-only.
 
@@ -664,7 +698,7 @@ After the event closes, post-event corrections happen on central.
 
 Conflicts go to a sync conflict queue.
 
-For Alpha 1, conflicts are visible only in God mode/Orchid.
+For Alpha 1, conflicts are visible only in God Mode / Orchid.
 
 Conflicts should be grouped by entity type and resolved by choosing either:
 
@@ -674,6 +708,10 @@ Conflicts should be grouped by entity type and resolved by choosing either:
 Conflict resolution is audited.
 
 Unresolved conflicts should not block unrelated sync.
+
+Offline server rejections and conflicts are deferred to the God Mode conflict
+queue. Until that queue exists, product surfaces may fail silently after
+recording enough queued/sync-failed local state for later repair.
 
 ---
 
@@ -688,7 +726,7 @@ Audit applies to:
 - shared workstation login code generation/use
 - node pairing/config changes
 - attendance direct edits
-- dangerous Orchid actions
+- dangerous God Mode actions
 - sync conflict resolution
 - incident status/title/link changes
 - incident note creation
@@ -2698,17 +2736,33 @@ Rules:
 
 ### 12.3 `shared_workstations`
 
-Represents a special trusted device intended for multiple users.
+Represents a special trusted device intended for multiple users and the pinned
+context for Meridian Kiosk.
 
 Key fields:
 
 - `id`
 - `device_id`
+- `organization_id`
 - `event_id`
+- `department_id`, nullable
 - `name`
 - `trusted`
+- `context_pinned_at`
+- `context_pinned_by_user_id`, nullable
 - `created_at`
 - `revoked_at`
+
+Rules:
+
+- every Kiosk shared workstation must be pinned to one organization and one event before normal operation
+- a Kiosk shared workstation may optionally be pinned to one department
+- missing pinned organization/event context sends Meridian Kiosk to setup
+- authorized organizers, lead organizers, and God Mode users may change pinned context
+- pinned context constrains Kiosk shell/scope selection but does not grant authority
+- inactivity timeout is 5 minutes for MVP
+- timeout abandons unsaved work while saved local queued operations remain queued for sync
+- Admin mode may configure, review, and support Kiosk context/session surfaces but does not provide quick switching for Admin's own session
 
 ### 12.4 `shared_workstation_login_codes`
 

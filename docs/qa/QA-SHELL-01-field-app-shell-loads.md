@@ -2,17 +2,21 @@
 
 ## Purpose
 
-Verify that the Meridian shared Vue client shell (M2.1) builds and loads:
-the app shell renders, the placeholder Home surface is shown at `/`, and an
-unknown path shows the placeholder Not Found surface. No domain workflows,
-authentication, or offline behavior are expected at this stage.
+Verify that the Meridian shared Vue client shell (M2.1/M2.6) builds and loads:
+the fixed Admin, Field, and Kiosk artifacts build; the default development app
+shell renders as Meridian Field for local field/mobile workflow development;
+the placeholder Home surface is shown at `/`; and an unknown path shows the
+placeholder Not Found surface. No domain workflows, authentication, or offline
+behavior are expected at this stage.
 
 ## Requirements covered
 
 - Technical spec: Section 3.2 Shared client application
+- Technical spec: Section 3.5 UI modes and presentation profiles
 - UI Implementation Contract: Section 3 Alpha 1 Technical Contract
 - UI Implementation Contract: Section 4 Global UI Rules (app shell; no
   persistent left sidebar as primary navigation)
+- UI Implementation Contract: Section 5 Fixed UI Mode Contract
 
 ## Environment
 
@@ -35,7 +39,7 @@ authentication, or offline behavior are expected at this stage.
    `corepack pnpm install`.
 2. Run the automated smoke test: `corepack pnpm --filter @meridian/client run test`.
 3. Build the production bundle: `corepack pnpm --filter @meridian/client run build`.
-4. Start the dev server: `corepack pnpm --filter @meridian/client run dev`.
+4. Start the Field dev server: `corepack pnpm --filter @meridian/client run dev`.
 5. In a browser, open the dev server URL (for example `http://localhost:5173/`)
    and confirm the home placeholder loads inside the app shell.
 6. Navigate to an unknown path such as `http://localhost:5173/nope` and confirm
@@ -45,8 +49,9 @@ authentication, or offline behavior are expected at this stage.
 
 - `corepack pnpm install` completes without errors.
 - The smoke test passes (app shell renders; Home and Not Found placeholders).
-- `corepack pnpm --filter @meridian/client run build` produces a production
-  build under `apps/client/dist` without errors.
+- `corepack pnpm --filter @meridian/client run build` produces production
+  builds under `apps/client/dist/admin`, `apps/client/dist/field`, and
+  `apps/client/dist/kiosk` without errors.
 - The dev server serves the app shell with a top bar showing "Meridian Field".
 - `/` shows the Home placeholder heading "Meridian Field".
 - An unknown path shows the "Page not found" placeholder with a working link

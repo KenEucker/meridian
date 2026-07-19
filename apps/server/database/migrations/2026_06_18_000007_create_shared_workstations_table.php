@@ -14,9 +14,13 @@ return new class extends Migration
         Schema::create('shared_workstations', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('device_id')->constrained('devices')->restrictOnDelete();
+            $table->uuid('organization_id')->index();
             $table->uuid('event_id')->index();
+            $table->uuid('department_id')->nullable()->index();
             $table->string('name');
             $table->boolean('trusted')->default(false)->index();
+            $table->timestamp('context_pinned_at')->nullable();
+            $table->foreignUuid('context_pinned_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->timestamp('revoked_at')->nullable()->index();
 

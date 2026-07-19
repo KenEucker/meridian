@@ -47,8 +47,8 @@ Meridian uses a monorepo layout aligned with the Alpha 1 technical specification
 
 ```text
 apps/
-  client/        Shared Vue product client for web, desktop, and mobile shells
-  server/        Laravel, Orchid, API, and client-serving application
+  client/        Shared Vue product client for Admin, Field, and Kiosk artifacts
+  server/        Laravel, API, Meridian Admin serving, and Orchid repair tooling
   mobile/        Capacitor iOS/Android packaging wrapper
   desktop/       Electron on-site workstation wrapper
 packages/
@@ -61,8 +61,10 @@ deploy/
   dns/           DNS configuration for on-site deployments
 ```
 
-`apps/client` contains the shared Vue product client, `apps/server` contains
-the Laravel backend/API and Orchid admin surface (see
+`apps/client` contains the shared Vue product client that builds Meridian Admin,
+Meridian Field, and Meridian Kiosk artifacts. `apps/server` contains the
+Laravel backend/API, serves Meridian Admin, and exposes Orchid God Mode / repair
+tooling (see
 [apps/server/README.md](apps/server/README.md)), `apps/mobile` contains the
 Capacitor iOS/Android packaging wrapper (see
 [apps/mobile/README.md](apps/mobile/README.md)), and `apps/desktop` contains
@@ -86,7 +88,8 @@ baseline are present; the complete multi-service deployment bundle (server
 container, reverse proxy, DNS, and a single top-level Compose file) and
 remaining product services arrive in later Alpha 1 tasks.
 
-While the Orchid Admin should be comprehensive for features and data management, UI components for screens will be targeted for the majority of users.
+Normal product UI is built in the shared Vue client. Orchid is reserved for God
+Mode / repair tooling, configuration override, and dangerous administration.
 
 For the repository as a whole, a fresh checkout should be able to run the process validators. The server app additionally supports the Laravel boot/test commands documented in [apps/server/README.md](apps/server/README.md).
 

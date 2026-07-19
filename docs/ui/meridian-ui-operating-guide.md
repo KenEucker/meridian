@@ -424,9 +424,9 @@ Unavailable actions should be hidden.
 
 Command palette results must respect the user’s permissions, current organization, current event, current department, current team where applicable, and role context.
 
-### 10.5 Kiosk mode
+### 10.5 Meridian Kiosk
 
-The command palette should be available in kiosk mode, but only with actions and navigation appropriate to the authenticated user and trusted workstation state.
+The command palette should be available in Meridian Kiosk, but only with actions and navigation appropriate to the authenticated user and trusted workstation state.
 
 ### 10.6 Shortcut display
 
@@ -436,11 +436,11 @@ Command palette actions should show keyboard shortcuts where available, except i
 
 ## 11. Kiosk and Shared Workstation Behavior
 
-### 11.1 Default kiosk surface
+### 11.1 Default Kiosk surface
 
 The on-site laptop should default to a kiosk dashboard.
 
-Kiosk mode should hide admin and navigation complexity by default.
+Meridian Kiosk should hide admin and navigation complexity by default.
 
 The kiosk dashboard should include a map by default when the event has a published map and the current kiosk/user is permitted to view it. The kiosk map is read-only, should work from the offline map package, and should show a stale/offline map status where relevant. Sensitive map layers/locations must not appear without permission.
 
@@ -456,7 +456,7 @@ Staff should not self check-in or self check-out unless they are department lead
 
 ### 11.4 Field assumptions
 
-Kiosk mode should assume:
+Meridian Kiosk should assume:
 
 - touchscreen laptops;
 - gloves;
@@ -1127,9 +1127,12 @@ Export/print events are audit events.
 
 Policy/procedure packet assembly should remain feature-gated until the requirements/technical timing conflict is resolved. If packet export is implemented in Alpha 1, it should be a simple manual ordered selection flow and must not include staff acknowledgment status.
 
-### 20.13 Orchid/admin behavior
+### 20.13 Admin and God Mode behavior
 
-Orchid is the trusted admin/god-mode data administration interface. User-facing policy/procedure workflows should be separate from Orchid where they are normal organizer, department lead, or team lead tasks.
+Meridian Admin is the server-hosted Vue product UI for normal administrative,
+organizer, department, staff, and operational workflows. Orchid is God Mode and
+repair tooling. User-facing policy/procedure workflows should be separate from
+Orchid where they are normal organizer, department lead, or team lead tasks.
 
 Orchid policy/procedure screens should support:
 

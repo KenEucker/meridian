@@ -104,12 +104,15 @@ Required content:
 - assignment or owner where applicable;
 - restricted-state indicator where applicable.
 
-On non-touch devices, incident lists should be table-first. On touch and kiosk devices, they should become card-first.
+On keyboard-first profiles, incident lists should be table-first. On
+touch-first and Kiosk fullscreen profiles, they should become card-first.
 
-Use the shared `surfaceMode` contract to select table-first, card-first, mobile, kiosk, or dense treatments:
+Use the shared `uiMode` plus `presentationProfile` contract to select
+table-first, card-first, narrow, fullscreen, or compact treatments:
 
 ```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+uiMode: 'admin' | 'field' | 'kiosk'
+presentationProfile: 'keyboard-first' | 'touch-first' | 'narrow' | 'wide' | 'fullscreen' | 'compact' | 'roomy' | 'table-first' | 'card-first' | 'priority-feed'
 ```
 
 ---
@@ -280,7 +283,7 @@ Restricted access behavior:
 
 - default staff receive simple restricted-access messaging;
 - elevated users may see required role information when helpful;
-- kiosk mode should return to a safe kiosk surface when appropriate.
+- Meridian Kiosk should return to a safe Kiosk surface when appropriate.
 
 ---
 
@@ -340,7 +343,7 @@ Review IMS UI changes for:
 - visible focus;
 - light and dark mode;
 - touch and kiosk behavior where relevant;
-- `surfaceMode` behavior.
+- `uiMode` and `presentationProfile` behavior.
 
 ---
 

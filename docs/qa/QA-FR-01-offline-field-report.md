@@ -100,7 +100,7 @@ later sync tasks.
    ```
 7. Start the shared client in another terminal:
    ```bash
-   corepack pnpm --filter @meridian/client run dev -- --host 127.0.0.1
+   corepack pnpm run client:dev:field -- --host 127.0.0.1
    ```
 8. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
    an earlier local Field Report run is present. Confirm the empty state says

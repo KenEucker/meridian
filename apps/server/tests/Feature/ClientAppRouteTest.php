@@ -30,6 +30,11 @@ class ClientAppRouteTest extends TestCase
         $this->assertFileResponseContains($response, 'Shared Vue client');
     }
 
+    public function test_default_client_dist_path_points_to_meridian_admin_artifact(): void
+    {
+        $this->assertSame(base_path('../client/dist/admin'), config('meridian.client.dist_path'));
+    }
+
     public function test_client_side_routes_fall_back_to_the_shared_vue_index(): void
     {
         $this->installClientDist('<!doctype html><div id="app">Shared Vue route shell</div>');

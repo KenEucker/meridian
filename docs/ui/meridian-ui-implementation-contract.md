@@ -2,7 +2,7 @@
 
 Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
-Purpose: Define deterministic Alpha 1 UI contracts for routes, screens, components, statuses, permissions, widgets, offline behavior, kiosk behavior, and code-generation tasks.
+Purpose: Define deterministic Alpha 1 UI contracts for routes, screens, components, statuses, permissions, widgets, offline behavior, fixed UI modes, kiosk behavior, and code-generation tasks.
 
 ---
 
@@ -38,22 +38,23 @@ If the canonical parent UI document has a different filename in the repository, 
 
 Meridian Alpha 1 UI implementation should follow this technical contract:
 
-- Server/admin application: Laravel, PostgreSQL, Orchid, and OpenAPI-described APIs.
-- Shared client application: Vue from day one for all non-admin product workflows.
-- Mobile packaging wrapper: Capacitor packages the shared Vue client for iOS and Android.
-- Desktop on-site wrapper: Electron packages and serves the shared Vue client locally.
+- Server/admin application: Laravel, PostgreSQL, Orchid God Mode / repair tooling, and OpenAPI-described APIs.
+- Shared client application: one Vue codebase for Meridian Admin, Meridian Field, and Meridian Kiosk product workflows.
+- Server-hosted web target: Laravel serves the Admin build of the shared Vue client as Meridian Admin.
+- Mobile packaging wrapper: Capacitor packages the Field build of the shared Vue client for iOS and Android as Meridian Field.
+- Desktop on-site wrapper: Electron packages and serves the Kiosk build of the shared Vue client locally as Meridian Kiosk.
 - Device sync: PowerSync-backed local state and sync-aware UI.
 - Offline-first behavior: PowerSync-backed local state and sync-aware UI.
-- Install targets: web/PWA, Electron for on-site laptop, and responsive browser surfaces.
+- Install targets: server-hosted web app, Electron for on-site laptop, and Capacitor mobile app.
 - Styling: semantic design tokens, not hard-coded raw brand colors.
 - Auth: email magic link, Google OAuth, and Discord OAuth; no internal username/password auth for Alpha 1.
 - Kiosk: trusted workstation context layered on top of authenticated user authority.
 
-Laravel/Orchid owns trusted admin and god-mode administration surfaces. The
-shared Vue client owns all non-admin user-facing workflows across web/PWA,
-Electron, and Capacitor. Shared component contracts in this document define
-behavior and semantics for the product client; platform-specific capabilities
-belong behind shell/platform adapters.
+Meridian Admin is the server-hosted Vue product UI. Orchid is God Mode and
+repair tooling only. The shared Vue client owns Field, Kiosk, and Admin product
+workflows across the fixed deployment targets. Shared component contracts in
+this document define behavior and semantics for the product client;
+platform-specific capabilities belong behind shell/platform adapters.
 
 ---
 
@@ -79,40 +80,116 @@ All authenticated Meridian product screens must follow these rules:
 
 ---
 
-## 5. Surface Mode Contract
+## 5. Fixed UI Mode Contract
 
-Meridian UI must support surface modes. Surface mode is not the same as viewport width.
+Meridian UI mode is fixed by deployment target:
 
-```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
-```
+| Deployment target | UI mode | Product name | Artifact |
+|---|---|---|---|
+| Server-hosted web application | `admin` | Meridian Admin | `apps/client/dist/admin` |
+| Capacitor mobile application | `field` | Meridian Field | `apps/client/dist/field` |
+| Electron desktop/on-site application | `kiosk` | Meridian Kiosk | `apps/client/dist/kiosk` |
 
-Equivalent PHP enum, config value, or view model naming is acceptable.
+UI mode controls shell, route availability posture, navigation framing, session
+assumptions, and workflow presentation. It does not grant permissions.
 
-### 5.1 Surface Mode Inputs
-
-Surface mode may be derived from:
+UI mode must not be derived from:
 
 - viewport size;
 - pointer capability;
 - known device profile;
-- Electron/kiosk configuration;
-- trusted workstation state;
-- user-selected dense mode;
+- network/connectivity state;
 - current screen type;
-- operational window state.
+- operational window state;
+- authenticated user;
+- role or permission grants;
+- trusted workstation state;
+- user preference.
 
-### 5.2 Surface Mode Rules
+Meridian must not expose a user-facing UI mode switcher.
 
-| Surface mode | Intended use | Layout preference | Control preference |
+### 5.1 Presentation Profile Inputs
+
+Presentation profile is the lower-level adaptation layer. It may be derived
+from:
+
+- viewport size;
+- pointer capability;
+- known device profile;
+- fullscreen/embedded presentation;
+- safe-area requirements;
+- current screen type;
+- density preference;
+- reduced-motion and other accessibility preferences.
+
+Allowed profile vocabulary includes `compact`, `roomy`, `touch-first`,
+`keyboard-first`, `narrow`, `wide`, `fullscreen`, `table-first`,
+`card-first`, and `priority-feed`.
+
+### 5.2 Presentation Profile Rules
+
+| Profile concern | Intended use | Layout preference | Control preference |
 |---|---|---|---|
-| `desktop` | mouse/keyboard laptop or desktop | table-first where useful | dense but accessible controls |
-| `touch` | touch-enabled laptop/tablet | card-first or hybrid | larger visible controls |
-| `mobile` | phone/PWA | priority feed, cards, single column | thumb/touch-friendly controls |
-| `kiosk` | shared trusted workstation | simplified operational dashboard/cards | large labeled actions |
-| `dense` | power-user density overlay | compact tables and reduced hints | labels and focus still required |
+| `keyboard-first` | mouse/keyboard laptop or desktop use | table-first where useful | dense but accessible controls |
+| `touch-first` | touch-enabled laptop/tablet/phone use | card-first or hybrid | larger visible controls |
+| `narrow` | phone or constrained viewport | priority feed, cards, single column | thumb/touch-friendly controls |
+| `fullscreen` | on-site unattended/shared display | simplified operational dashboard/cards | large labeled actions |
+| `compact` | power-user density overlay | compact tables and reduced hints | labels and focus still required |
 
-Dense mode must not remove required accessible names, canonical status text, focus visibility, or critical context.
+Presentation profiles must not remove required accessible names, canonical
+status text, focus visibility, or critical context.
+
+## 5A. Mode-by-Surface Capability Matrix
+
+Classification vocabulary:
+
+- `primary`: the mode's main expression of that surface;
+- `supported`: available when authorized, with normal mode-specific shell framing;
+- `adapted`: available with different layout/session treatment for the mode;
+- `summarized`: reduced dashboard/status treatment rather than full workflow;
+- `read-only`: visible but not writable from that mode;
+- `online-required`: visible/actionable only with server connection;
+- `unavailable`: not exposed in that mode.
+
+Authorization still applies to every `primary`, `supported`, `adapted`,
+`summarized`, `read-only`, and `online-required` entry.
+
+| Surface / workflow | Field | Kiosk | Admin | Notes |
+|---|---|---|---|---|
+| Public event application | supported, online-required | supported, online-required | supported, online-required | May be used off-site from a phone or from the server-hosted site. |
+| Authentication | supported | supported | supported | Same auth providers; Kiosk may add local re-auth for already provisioned users. |
+| Home / context selection | adapted | adapted | primary | Field and Admin select user/event context; Kiosk requires pinned context setup. |
+| Staff dashboard | primary | adapted | supported | Kiosk uses shared-workstation framing when pinned. |
+| Staff shifts | primary | adapted | supported | Offline check-in/check-out/no-show support depends on synced local data. |
+| Readiness / About | supported | supported | supported | Available in every mode. |
+| Policy/procedure read | supported | supported | supported | Permission-filtered. |
+| Policy/procedure write/maintain | unavailable | unavailable | primary | Admin product UI for normal authoring; God Mode only for repair where needed. |
+| Department roster / teams / trainings / shifts / equipment / credits / documents | supported | adapted | primary | Available in every mode when authorized. |
+| Department Overview | supported | adapted | primary | Mode-specific shell and density only. |
+| Logistics Desk | supported | adapted | primary | Offline attendance operations may queue locally. |
+| Operations Center | supported | adapted | primary | Kiosk emphasizes current pinned context. |
+| Planning Table | supported | adapted | primary | Presentation profile may choose compact/table-first or touch/card-first. |
+| Field Report authoring | primary | supported | supported | Field Reports can be created offline and sync later where local store is available. |
+| Field Report / IMS review | supported | adapted | primary | Permission-filtered; incident visibility remains IC-rule driven. |
+| IMS incident reads | read-only when synced | read-only when synced | read-only when synced | Reads may work offline only for synced authorized data. |
+| IMS incident create/mutate | online-required | online-required | online-required | Incident mutation is online-only in every mode. |
+| Organizer screens | unavailable | supported | primary | Field mode does not expose organizer screens. |
+| Organization/system configuration | unavailable | summarized | primary | Kiosk may show support/setup state; Admin owns normal configuration. |
+| Event maps | supported | adapted | primary | Published/permitted map data can sync read-only; sensitive layers must not sync without permission. |
+| Kiosk home | unavailable | primary | summarized | Admin can review/support Kiosk setup; it is not Admin's own session home. |
+| Kiosk switch / re-auth / safe timeout | unavailable | primary | supported | Admin support/configuration only; no Admin quick switcher. |
+| Kiosk context setup/config | unavailable | primary | supported | Organizer, lead organizer, and God Mode authority required. |
+| Orchid / God Mode repair tooling | unavailable | unavailable | primary | Orchid remains Admin-only God Mode/repair tooling. |
+
+Mode-specific route guards and navigation tests must prove that:
+
+- Field builds do not expose organizer screens, Kiosk session controls, or
+  Orchid/God Mode repair tooling;
+- Kiosk builds expose Kiosk setup/support when context is missing and normal
+  pinned-context surfaces after setup;
+- Admin builds expose Admin product workflows and support Kiosk configuration
+  without adding an Admin quick switcher;
+- route availability never replaces server authorization.
 
 ---
 
@@ -533,7 +610,7 @@ Suggested Blade API:
 <x-data-table
     :columns="$columns"
     :rows="$rows"
-    :surface-mode="$surfaceMode"
+    :presentation-profile="$presentationProfile"
     empty-message="No staff match these filters."
 />
 ```
@@ -769,7 +846,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `department.shift-create` | `events.departments.shifts.create` | Create shift | Department lead |
 | `department.shift-edit` | `events.departments.shifts.edit` | Edit shift | Department lead with time restrictions |
 | `department.deployments` | `events.departments.deployments.index` | Manage deployment options | Department operations/administration as permitted |
-| `department.equipment` | `events.departments.equipment.index` | View equipment settings/inventory | Department logistics/administration as permitted; Orchid is read-only unless an inventory task grants edit |
+| `department.equipment` | `events.departments.equipment.index` | View equipment settings/inventory | Department logistics/administration as permitted; God Mode repair tooling is read-only unless an inventory task grants edit |
 | `department.credits` | `events.departments.credits.index` | Credit review/export | Department lead / organizer as permitted |
 | `department.documents` | `events.departments.documents.index` | Department policy/procedure library and maintainer entry | Department member/lead as permitted |
 
@@ -1188,9 +1265,11 @@ Use these UI states consistently:
 - Staff profile picture upload, replace, and remove are online-only in Alpha 1.
 - Staff profile picture blobs sync lazily as accessed and should show a placeholder or pending image state while unavailable.
 - Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark no-show are Alpha 1 offline writes.
+- Supported offline writes are available wherever the corresponding surface is available and the device has required synced local data.
 - Map editing (maps, camps, map locations, assets, publish/archive, locked-data overrides) is online-only for MVP.
 - Published map packages and permitted camp/location data sync down read-only to permitted devices and remain readable offline; surfaces show a stale/offline map status where relevant, and locked operations-window map data remains stable offline.
 - Name Reference source text syncs through existing Incident note and Field Report behavior. Any local/server derived index is rebuildable from source text and must not widen offline visibility.
+- Offline server rejections and conflicts defer to the God Mode conflict queue. Until that queue exists, product surfaces may fail silently after preserving local queued/sync-failed state needed for later repair.
 
 ---
 
@@ -1237,7 +1316,11 @@ Policy/procedure export controls may offer Markdown and PDF export for authorize
 
 ### 18.1 Kiosk Context
 
-Kiosk mode is a constrained operating context, not a separate product.
+Kiosk is the fixed Electron desktop/on-site UI mode and product shell for
+Meridian Kiosk.
+
+Kiosk pinned context is the constrained trusted-workstation operating context
+inside Meridian Kiosk.
 
 Kiosk screens must show:
 
@@ -1247,6 +1330,15 @@ Kiosk screens must show:
 - trusted workstation state;
 - current user when actions are attributable;
 - relevant offline/local node state.
+
+Kiosk pinned context rules:
+
+- every Kiosk shared workstation must be pinned to one organization and one event before normal operation;
+- a Kiosk shared workstation may optionally be pinned to one department;
+- if pinned organization/event context is missing, Kiosk enters setup;
+- Kiosk must not infer pinned context from viewport, network, authenticated user, last route, or cached event data;
+- authorized organizers, lead organizers, and God Mode users may change pinned context from Kiosk setup/support surfaces;
+- pinned context constrains shell/scope selection but does not grant the active user authority.
 
 ### 18.2 Authentication and Re-authentication
 
@@ -1261,7 +1353,10 @@ Trusted workstation state and individual user authority are separate:
 - privileged actions may require re-authentication;
 - timeout returns to a safe kiosk surface.
 
-Exact timeout durations are product decisions and should be configured, not hard-coded.
+Kiosk inactivity timeout is 5 minutes for MVP.
+
+When Kiosk times out, unsaved work is abandoned. Saved local queued operations
+remain queued locally and sync when available.
 
 ### 18.3 Self Check-in
 
@@ -1300,9 +1395,9 @@ Restricted access
 This page requires IC Operator or IC Viewer access for the event's configured IC department.
 ```
 
-### 19.3 Kiosk Mode
+### 19.3 Meridian Kiosk
 
-In kiosk mode, permission denial should offer a safe return path.
+In Meridian Kiosk, permission denial should offer a safe return path.
 
 Example:
 
@@ -1339,7 +1434,7 @@ Automated tooling should be configured separately in CI. If not configured yet, 
 
 When using this document as input for Codex or another coding agent:
 
-1. Generate for the correct runtime: Orchid/Laravel for admin and god-mode surfaces, the shared Vue client for all non-admin product workflows, and Capacitor/Electron only as platform packaging wrappers.
+1. Generate product workflows in the shared Vue client for the fixed Admin, Field, and Kiosk artifacts; use Orchid only for God Mode / repair tooling; use Capacitor/Electron only as platform packaging wrappers.
 2. Do not invent new statuses.
 3. Do not invent new role access for IMS.
 4. Do not expose IMS widgets to organizers unless they also have IC team-granted authority.
@@ -1374,6 +1469,6 @@ A UI implementation PR satisfies this contract when:
 - offline/sync states are represented where relevant;
 - kiosk screens distinguish workstation state from user authority;
 - accessibility review is documented;
-- mobile/touch/kiosk behavior is considered where relevant;
+- presentation profiles and fixed UI modes are covered where relevant;
 - destructive actions require confirmation;
 - tests or QA notes cover the acceptance criteria for the changed surface.

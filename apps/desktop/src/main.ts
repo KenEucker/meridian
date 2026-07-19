@@ -23,7 +23,6 @@ import {
   resolveClientDistPath,
   resolveClientPort,
   resolveClientVersion,
-  resolveConfiguredAppUrl,
   resolveHealthUrl,
   resolveServerUrl,
 } from "./config";
@@ -127,11 +126,6 @@ function toggleHealthWindow(): void {
 }
 
 async function resolveMainAppUrl(): Promise<string> {
-  const configuredAppUrl = resolveConfiguredAppUrl(process.env);
-  if (configuredAppUrl) {
-    return configuredAppUrl;
-  }
-
   clientServer = await startClientStaticServer({
     distDir: resolveClientDistPath(process.env),
     port: resolveClientPort(process.env),

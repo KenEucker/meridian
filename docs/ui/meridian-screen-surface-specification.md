@@ -57,13 +57,18 @@ Relevant context may include:
 
 The context may appear in the `AppTopBar`, `ContextBar`, local heading area, status strip, or an inline control. It must not be hidden only in a menu when it changes user decisions.
 
-Screen view models should include the active surface mode:
+Screen view models should include the fixed UI mode and active presentation profile:
 
 ```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+uiMode: 'admin' | 'field' | 'kiosk'
+presentationProfile: 'keyboard-first' | 'touch-first' | 'narrow' | 'wide' | 'fullscreen' | 'compact' | 'roomy' | 'table-first' | 'card-first' | 'priority-feed'
 ```
 
-Equivalent PHP/Blade naming is acceptable. Screen width, pointer capability, device configuration, kiosk/trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
+Equivalent PHP/Blade naming is acceptable. `uiMode` is fixed by deployment
+target and must not be derived from viewport, user, role, permission,
+connectivity, or trusted-workstation state. Screen width, pointer capability,
+device configuration, current screen type, and density/accessibility
+preferences may influence `presentationProfile`.
 
 ---
 
@@ -141,7 +146,8 @@ Department accent color may be used as a small identifier. It must not become a 
 
 Roster and shift board screens must adapt to device capability.
 
-Use `surfaceMode` rather than viewport width alone to choose table-first, card-first, mobile, kiosk, or dense treatments.
+Use `presentationProfile` rather than viewport width alone to choose table-first,
+card-first, narrow, fullscreen, or compact treatments.
 
 On non-touch desktop and laptop devices:
 
@@ -345,7 +351,7 @@ Permission-denied screens should be direct and calm:
 
 - default staff: restricted access;
 - elevated users: role or permission required when useful;
-- kiosk mode: return to safe kiosk surface when appropriate.
+- Meridian Kiosk: return to a safe Kiosk surface when appropriate.
 
 ---
 
@@ -369,7 +375,7 @@ Every new or changed screen should be reviewed for:
 - policy/procedure document rendering, fragment references, and acknowledgment placement where relevant;
 - empty, loading, error, and success states.
 - route/screen ID alignment with the implementation contract;
-- `surfaceMode` behavior.
+- `uiMode` and `presentationProfile` behavior.
 
 ---
 

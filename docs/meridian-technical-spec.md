@@ -5,6 +5,7 @@ Scope: Alpha 1 technical architecture and implementation direction
 Status: Working draft  
 Additive Update: Policies and Procedures technical architecture added.
 Additive Update: Name References technical behavior added for IMS notes and Field Reports.
+Additive Update: Fixed UI modes and deployment-target build artifacts added.
 
 ---
 
@@ -51,7 +52,7 @@ PowerSync may be used as an external dependency and does not need to be shipped 
 
 # 3. High-Level Architecture
 
-Meridian is composed of five major runtime surfaces:
+Meridian is composed of five major runtime layers:
 
 1. Server/admin application.
 2. Shared client application.
@@ -73,10 +74,19 @@ The server/admin application is a Laravel modular monolith with:
 
 The Laravel server remains the canonical writer to PostgreSQL. Clients do not directly mutate canonical tables. Device writes are submitted through Laravel validation and acceptance flows.
 
-Laravel serves the built shared Vue client at `/`. Orchid remains scoped to
-`/admin` for trusted administration and god-mode data repair.
+Laravel serves the Admin build of the shared Vue client at `/`. Orchid remains
+scoped to `/admin` as God Mode and repair tooling.
 
 ## 3.2 Shared client application
+
+The shared client application is one Vue codebase that produces three fixed
+deployment artifacts:
+
+| Deployment target | UI mode | Product name | Build artifact |
+|---|---|---|---|
+| Server-hosted web application | `admin` | Meridian Admin | `apps/client/dist/admin` |
+| Capacitor mobile application | `field` | Meridian Field | `apps/client/dist/field` |
+| Electron desktop/on-site application | `kiosk` | Meridian Kiosk | `apps/client/dist/kiosk` |
 
 The shared client application is:
 
@@ -86,27 +96,37 @@ The shared client application is:
 - PowerSync-backed.
 - Locally encrypted.
 - Device-signing capable.
-- Served as the web/PWA product app.
-- Packaged by Electron for desktop/kiosk use.
-- Packaged by Capacitor for iOS and Android.
+- Built as the Admin artifact served by Laravel.
+- Built as the Field artifact packaged by Capacitor for iOS and Android.
+- Built as the Kiosk artifact packaged and locally served by Electron.
 
-All non-admin user-facing operational workflows live in this shared client.
-Platform shells may expose platform capabilities through adapters, but they do
-not fork product UI.
+Field, Kiosk, and Admin product workflows live in this shared client. Platform
+shells may expose platform capabilities through adapters, but they do not fork
+product UI or derive UI mode at runtime.
+
+UI mode is compile-time/package-time configuration. It must not be derived from
+viewport width, pointer capability, device profile, network state, current user,
+role, permission grants, authenticated state, trusted-workstation state, or user
+preference.
 
 ## 3.3 Mobile packaging wrapper
 
-The mobile app uses Capacitor to package the shared Vue client for iOS and
-Android. The installed app is required for reliable on-site/offline operation
-where DNS or browser-trusted HTTPS cannot be guaranteed.
+The mobile app uses Capacitor to package the Field build of the shared Vue
+client for iOS and Android. The installed app is required for reliable
+on-site/offline operation where DNS or browser-trusted HTTPS cannot be
+guaranteed.
+
+The Capacitor wrapper must not expose a UI mode override. It always packages
+Meridian Field.
 
 ## 3.4 Desktop on-site wrapper
 
-The on-site laptop uses an Electron desktop wrapper.
+The on-site laptop uses an Electron desktop wrapper that packages Meridian
+Kiosk.
 
 The Electron wrapper:
 
-- Serves a packaged local build of the shared Vue client through a tiny local
+- Serves the packaged Kiosk build of the shared Vue client through a tiny local
   static server.
 - Is installable.
 - Runs fullscreen/kiosk-style by default.
@@ -116,8 +136,29 @@ The Electron wrapper:
 - Does not start or stop Docker Compose.
 - Does not include emergency export in Alpha 1.
 - Does not need to block accidental close in Alpha 1.
+- Does not expose an external app URL override for normal operation.
 
-## 3.5 Node-to-node sync
+## 3.5 UI modes and presentation profiles
+
+UI mode controls the Meridian product shell, route availability posture,
+navigation framing, and session assumptions for a deployment target.
+
+Presentation profile is separate. Components and screens may still adapt to:
+
+- narrow or wide viewport;
+- touch-first or keyboard-first input;
+- compact or roomy density;
+- fullscreen or embedded presentation;
+- light, dark, reduced-motion, or other accessibility preferences;
+- table-first, card-first, or priority-feed layout needs.
+
+Those adaptations must be named and implemented as presentation/input/layout
+profiles rather than `field`, `kiosk`, or `admin` mode switches.
+
+Auth works in every UI mode. Authorization remains policy-driven and server
+enforced in every UI mode. UI mode never grants access by itself.
+
+## 3.6 Node-to-node sync
 
 Meridian supports multiple node roles:
 
@@ -157,9 +198,9 @@ meridian/
 
 Each target should produce a built distribution artifact:
 
-- Server Docker image / install bundle.
-- Mobile app package.
-- Electron desktop installer.
+- Server Docker image / install bundle with `apps/client/dist/admin`.
+- Mobile app package with `apps/client/dist/field`.
+- Electron desktop installer with `apps/client/dist/kiosk`.
 - Deployment configuration bundle.
 
 OpenAPI should generate a TypeScript API client used by the Vue app, even though most operational data comes through PowerSync.
@@ -857,7 +898,8 @@ Event mode fails closed if device signing is unavailable.
 
 ## 13.1 Definition
 
-A shared workstation is a special kind of trusted device.
+A shared workstation is a special kind of trusted device and is the persistence
+model for Kiosk pinned context.
 
 Shared workstations are managed in God mode.
 
@@ -871,9 +913,26 @@ radio-desk-1
 
 The on-site Electron machine is the first trusted shared workstation for Alpha 1.
 
+Every trusted shared workstation used by Meridian Kiosk must be pinned to:
+
+- one organization;
+- one event;
+- optionally one department.
+
+The pinned organization/event/department context is stored on the existing
+`shared_workstations` model. Meridian must not introduce a separate trusted
+device registration model for Kiosk context.
+
+If Meridian Kiosk starts without a pinned organization and event, it enters
+setup. It must not infer context from viewport, network, authenticated user,
+last route, or cached event data.
+
+Authorized organizers, lead organizers, and God Mode users may change pinned
+Kiosk context from Kiosk setup/support surfaces. Context changes are audited.
+
 ## 13.2 Shared workstation login
 
-Electron supports shared workstation login mode.
+Meridian Kiosk supports shared workstation login.
 
 Known users can enter short login codes generated by God mode.
 
@@ -897,7 +956,8 @@ Failed login-code attempts are audited after a threshold.
 
 ## 13.3 Shared workstation session behavior
 
-Shared workstation sessions last 12 hours or until the user explicitly ends the session.
+Shared workstation sessions time out after 5 minutes of inactivity or when the
+user explicitly ends the session.
 
 Users must explicitly end their session before switching users.
 
@@ -905,13 +965,23 @@ The active user is shown prominently at all times.
 
 Permissions come entirely from the active user.
 
+Pinned workstation context limits and frames the Kiosk shell; it does not grant
+the active user any authority.
+
 Shared workstation local data remains encrypted at rest.
 
-When a session ends, active session data is wiped.
+When a session ends or times out, active session data is wiped. Unsaved form
+state is abandoned. Saved local queued operations remain in the local queue and
+sync when available.
 
 If the Electron app restarts, the shared workstation session locks immediately.
 
 For MVP, shared workstation login is allowed only on the on-site server machine or on explicitly designated trusted shared workstations.
+
+Kiosk switch, re-authentication, safe-timeout, and setup/support surfaces are
+available in Meridian Kiosk. Meridian Admin may configure, review, and support
+those Kiosk surfaces, but Admin mode must not become a quick switcher for its
+own session.
 
 ---
 
@@ -2139,13 +2209,20 @@ Published placement maps, published topographic map packages, and permitted camp
 
 ## 22.1 Orchid purpose
 
-Orchid provides the trusted admin/god-mode data administration interface.
+Meridian Admin is the server-hosted Vue product UI for normal administrative,
+organizer, department, staff, and operational workflows that are available from
+the web deployment target.
 
-The user-facing operational workflows are separate from Orchid.
+Orchid is God Mode and repair tooling. It provides trusted data repair,
+break-glass visibility, configuration override, sync conflict, and dangerous
+administration screens. It is not the normal Admin product shell.
 
-## 22.2 Alpha 1 Orchid screens
+User-facing product workflows are separate from Orchid and live in the shared
+Vue client.
 
-Alpha 1 Orchid should include screens for:
+## 22.2 Alpha 1 Orchid / God Mode screens
+
+Alpha 1 Orchid / God Mode should include screens for:
 
 ```text
 Organizations
@@ -2193,7 +2270,7 @@ Spreadsheet import/export should focus first on:
 
 God mode is node-global.
 
-God mode users may directly edit:
+God Mode users may directly repair:
 
 - Users.
 - Teams.
@@ -2201,13 +2278,13 @@ God mode users may directly edit:
 - Incidents.
 - Attendance.
 
-Orchid cannot directly edit finalized field report original body.
+Orchid / God Mode cannot directly edit finalized field report original body.
 
-Orchid does not provide field report append/redaction workflows in Alpha 1.
+Orchid / God Mode does not provide field report append/redaction workflows in Alpha 1.
 
-Orchid does not allow attachment redaction/deletion in Alpha 1.
+Orchid / God Mode does not allow attachment redaction/deletion in Alpha 1.
 
-Dangerous Orchid actions require reason/comment.
+Dangerous God Mode actions require reason/comment.
 
 Policy/procedure and fragment screens must support rendered preview, title search/filtering, and clear scope display.
 
@@ -2272,7 +2349,7 @@ Audit applies to:
 - Shared workstation login code generation/use.
 - Node pairing/config changes.
 - Attendance direct edits.
-- Dangerous Orchid actions.
+- Dangerous God Mode actions.
 - Sync conflict resolution.
 - Incident status/title/link changes.
 - Node operation acceptance/rejection.
@@ -2329,9 +2406,9 @@ Internal status names remain fixed even if labels become configurable.
 
 ## 25.1 Purpose
 
-Electron provides the on-site command-center shell.
+Electron provides the Meridian Kiosk on-site command-center shell.
 
-It wraps the local Meridian web UI.
+It wraps the packaged Kiosk build of the shared Vue client.
 
 It does not own server process management in Alpha 1.
 
@@ -2339,13 +2416,19 @@ It does not own server process management in Alpha 1.
 
 Electron should be distributed as an installable app for the on-site laptop.
 
-It should default to fullscreen/kiosk mode.
+It should default to fullscreen/kiosk presentation.
 
 It should hide browser chrome and navigation.
 
 It should auto-reopen/recover if the local UI crashes.
 
 It does not need to prevent accidental close in Alpha 1.
+
+Electron serves `apps/client/dist/kiosk` through its local static server by
+default. It may override the local server/API URL and health URL for
+environment-specific connectivity, but it must not expose a generic
+`APP_URL`-style override that swaps Meridian Kiosk for an externally served
+client.
 
 ## 25.3 Health panel
 
@@ -2411,6 +2494,9 @@ Version metadata includes:
 - Docker image tags.
 - Mobile app version.
 - Electron app version.
+- UI mode.
+- Deployment target.
+- Client bundle version.
 - Config schema version.
 
 Node pairing rejects incompatible major versions.

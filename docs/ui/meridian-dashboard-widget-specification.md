@@ -13,7 +13,7 @@ This specification defines Meridian dashboard widget rules across staff, departm
 
 Dashboard widgets should help users understand what needs attention, what can be acted on, and what is currently okay.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 widget IDs, permissions, status labels, surface modes, and route destinations are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 widget IDs, permissions, status labels, UI modes, presentation profiles, and route destinations are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -201,7 +201,10 @@ The feed should:
 - keep quiet states visible when reassuring;
 - avoid dense multi-column layouts.
 
-The priority feed is active when `surfaceMode` is `mobile` and may also be used in `touch` or `kiosk` where a feed is more usable than a grid. Related Routine items may be grouped; Warning, Critical, and Restricted items should remain individually visible.
+The priority feed is active for `narrow` presentation profiles and may also be
+used in `touch-first` or Kiosk `fullscreen` profiles where a feed is more usable
+than a grid. Related Routine items may be grouped; Warning, Critical, and
+Restricted items should remain individually visible.
 
 ---
 
@@ -336,7 +339,7 @@ Review each widget for:
 - accessibility;
 - light and dark mode;
 - offline and sync behavior.
-- `surfaceMode` behavior.
+- `uiMode` and `presentationProfile` behavior.
 
 ---
 

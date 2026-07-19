@@ -2,14 +2,17 @@
 
 The shared Meridian Vue product client.
 
-`apps/client` owns all non-admin user-facing operational workflows across
-web/PWA, Electron desktop/kiosk, and Capacitor mobile packaging. It is built
-mobile-first and progressively enhances larger viewports.
+`apps/client` owns Meridian Admin, Meridian Field, and Meridian Kiosk product
+workflows from one Vue codebase. It builds three fixed artifacts:
 
-Laravel serves this built client at `/`; Orchid remains the admin and god-mode
-surface under `/admin`. Electron packages and serves this build through a tiny
-local static server. Capacitor packages this build for iOS and Android from
-`apps/mobile`.
+- `dist/admin` for the server-hosted Meridian Admin web application;
+- `dist/field` for the Capacitor Meridian Field mobile application;
+- `dist/kiosk` for the Electron Meridian Kiosk on-site application.
+
+Laravel serves the Admin artifact at `/`; Orchid remains God Mode / repair
+tooling under `/admin`. Electron packages and serves the Kiosk artifact through
+a tiny local static server. Capacitor packages the Field artifact for iOS and
+Android from `apps/mobile`.
 
 ## Source references
 
@@ -36,21 +39,30 @@ corepack pnpm install
 Run client commands from the repository root:
 
 ```bash
-# Start the shared client dev server
+# Start the shared client dev server in Field mode
 corepack pnpm run client:dev
+
+# Preview the other fixed modes explicitly
+corepack pnpm run client:dev:admin
+corepack pnpm run client:dev:kiosk
 
 # Type check
 corepack pnpm run client:typecheck
 
-# Production build
+# Production build for all fixed artifacts
 corepack pnpm run client:build
 
 # Test
 corepack pnpm run client:test
 ```
 
-The production build writes to `apps/client/dist`. Laravel, Electron, and
-Capacitor consume that same build output.
+The default Vite dev server previews Meridian Field because local browser
+development usually exercises mobile/offline field workflows. Meridian Admin
+and Meridian Kiosk previews are explicit commands; packaged deployments still
+use their fixed build artifacts.
+
+The production build writes to `apps/client/dist/admin`,
+`apps/client/dist/field`, and `apps/client/dist/kiosk`.
 
 ### Field Report photo upload (local QA)
 
@@ -76,4 +88,4 @@ detail if the server was offline at submit time.
 ## Routes
 
 Domain routes use the UI Implementation Contract route inventory and are shared
-by web, desktop, and mobile shells.
+by Admin, Field, and Kiosk shells where the mode-by-surface matrix allows them.

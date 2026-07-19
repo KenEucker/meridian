@@ -1,11 +1,11 @@
 # Meridian Desktop
 
-The Meridian Electron on-site workstation wrapper.
+The Meridian Electron on-site workstation wrapper for Meridian Kiosk.
 
-The desktop wrapper packages the shared Vue client from `apps/client`, serves it
-through a tiny local static server, opens it in a fullscreen/kiosk window, and
-auto-recovers if the wrapped UI crashes. The toggleable health panel displays
-server/node placeholders and the packaged client version.
+The desktop wrapper packages the Kiosk artifact from `apps/client/dist/kiosk`,
+serves it through a tiny local static server, opens it in a fullscreen/kiosk
+window, and auto-recovers if the wrapped UI crashes. The toggleable health panel
+displays server/node placeholders and the packaged client version.
 
 The wrapper intentionally does **not** manage Docker Compose, block accidental
 close, or include emergency export in Alpha 1 (technical spec 3.3, 25.1).
@@ -35,7 +35,7 @@ These versions follow `docs/meridian-technology-baseline.md`.
 
 | File | Purpose |
 |---|---|
-| `src/config.ts` | Pure resolution of the shared client dist path, optional app URL override, server URL, health URL, and client version. |
+| `src/config.ts` | Pure resolution of the Kiosk client dist path, server URL, health URL, and client version. |
 | `src/health.ts` | Pure health panel model, HTML renderer, and the non-throwing health fetch helper. |
 | `src/staticClientServer.ts` | Tiny local static server for the packaged shared Vue client. |
 | `src/main.ts` | Electron main process: packaged client serving, kiosk window, auto-recovery, and the toggleable health panel window. |
@@ -48,10 +48,9 @@ tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist` from `apps/desktop` | Shared Vue client build directory to serve locally. |
+| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist/kiosk` from `apps/desktop` | Meridian Kiosk build directory to serve locally. |
 | `MERIDIAN_CLIENT_PORT` | `0` | Local static-server port. `0` lets the OS choose. |
 | `MERIDIAN_CLIENT_VERSION` | read from `apps/client/package.json` | Optional packaged client version override for health display. |
-| `MERIDIAN_APP_URL` | unset | Optional development override that skips the packaged static server and opens an external client URL. |
 | `MERIDIAN_SERVER_URL` | `http://localhost:8000/` | Local Laravel server/API URL used to derive health checks. |
 | `MERIDIAN_HEALTH_URL` | `<server URL>/api/health` | Optional override for the server health endpoint. |
 
@@ -72,7 +71,7 @@ corepack pnpm --filter @meridian/desktop run typecheck
 # Unit tests (config + health modules)
 corepack pnpm --filter @meridian/desktop run test
 
-# Compile the Electron main process to dist/
+# Build the Kiosk artifact and compile the Electron main process to dist/
 corepack pnpm --filter @meridian/desktop run build
 ```
 
@@ -89,7 +88,7 @@ locally:
 # One-time: approve the Electron binary download for this workspace
 corepack pnpm approve-builds
 
-# Build the shared client and main process, then start the wrapper
+# Build the Kiosk artifact and main process, then start the wrapper
 corepack pnpm --filter @meridian/desktop run build
 corepack pnpm --filter @meridian/desktop run start
 ```

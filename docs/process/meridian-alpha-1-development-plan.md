@@ -140,8 +140,11 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 | M2.3 Electron wrapper shell | Add Electron app that opens the packaged shared client UI. | Technical spec sections 3.4, 25.1, 25.2 | Desktop app opens configured URL |
 | M2.4 Electron health placeholder | Display local node/server version placeholders from server health. | Technical spec section 25.3; kiosk guide section 12 | Manual desktop QA |
 | M2.5 Shared UI tokens baseline | Add semantic token skeleton shared by field/admin surfaces. | Style guide; UI implementation contract section 10; component spec section 3 | Visual smoke test |
+| M2.6 Fixed UI modes | Build Admin, Field, and Kiosk artifacts from the shared Vue client; lock Server/Mobile/Desktop packaging to their fixed UI modes; document the mode-by-surface matrix. | Requirements 7.18; Technical spec section 3.5; UI implementation contract sections 5 and 5A | Client mode config tests; mobile/desktop/server artifact path tests |
 
-**QA gate:** A reviewer can open the shared client through the web server, mobile shell, and Electron shell, even though product workflows are still placeholders.
+**QA gate:** A reviewer can open Meridian Admin through the web server, Meridian
+Field through the mobile shell, and Meridian Kiosk through the Electron shell,
+even though many product workflows are still placeholders.
 
 ---
 

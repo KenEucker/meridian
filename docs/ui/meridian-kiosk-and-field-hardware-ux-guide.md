@@ -3,17 +3,19 @@
 Version: Draft 2
 Project: Meridian Volunteer Operations Platform  
 Parent guide: `docs/ui/meridian-ui-operating-guide.md`  
-Purpose: Define Meridian UX expectations for kiosk mode, shared workstations, touch laptops, and field hardware.
+Purpose: Define Meridian UX expectations for Meridian Kiosk, shared workstations, touch laptops, and Field hardware.
 
 ---
 
 ## 1. Purpose
 
-This guide defines how Meridian should behave on trusted shared workstations and field devices. It builds on the UI Operating Guide's kiosk, touch, accessibility, action, offline, and permission rules.
+This guide defines how Meridian should behave on trusted shared workstations and field devices. It builds on the UI Operating Guide's Kiosk, touch, accessibility, action, offline, and permission rules.
 
-Kiosk mode is not a separate product. It is a constrained Meridian operating context.
+Kiosk is the fixed Electron desktop/on-site UI mode and product shell for
+Meridian Kiosk. Kiosk pinned context is the constrained shared-workstation
+operating context inside that fixed mode.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 kiosk routes, surface modes, authentication rules, offline labels, and permission behavior are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 Kiosk routes, UI modes, presentation profiles, authentication rules, offline labels, and permission behavior are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -113,13 +115,16 @@ Touch layouts should:
 
 Touch adaptation should consider device capability and operating context, not only viewport width.
 
-Use the shared surface mode contract for layout decisions:
+Use the fixed UI mode plus presentation profile contract for layout decisions:
 
 ```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+uiMode: 'admin' | 'field' | 'kiosk'
+presentationProfile: 'keyboard-first' | 'touch-first' | 'narrow' | 'wide' | 'fullscreen' | 'compact' | 'roomy' | 'table-first' | 'card-first' | 'priority-feed'
 ```
 
-Screen width, pointer capability, device configuration, kiosk state, trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
+`uiMode` is fixed by deployment target. Screen width, pointer capability,
+device configuration, current screen type, safe areas, and density/accessibility
+preferences may influence `presentationProfile`.
 
 ---
 
@@ -175,7 +180,7 @@ Routine mistakes should have a quick correction path.
 
 ## 10. Offline and Sync Behavior
 
-Kiosk mode must make relevant connectivity state visible without creating noise.
+Meridian Kiosk must make relevant connectivity state visible without creating noise.
 
 Kiosk surfaces should distinguish:
 
@@ -199,7 +204,7 @@ Kiosk devices should receive the event map package offline by default when publi
 
 ## 11. Command Palette in Kiosk Mode
 
-The command palette should be available in kiosk mode.
+The command palette should be available in Meridian Kiosk.
 
 Kiosk command palette results must be limited by:
 
