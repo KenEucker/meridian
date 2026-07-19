@@ -182,58 +182,60 @@ commands.
     no-show.
 27. Confirm the action remains locally represented as queued/pending sync and
     the UI does not imply current central truth while offline.
-28. Reload the page while still offline.
-29. Confirm the queued attendance action remains visible enough for the
+28. Record the queued operation UUID from the UI, local pending queue, or
+    browser storage evidence before reconnecting.
+29. Reload the page while still offline.
+30. Confirm the queued attendance action remains visible enough for the
     Department Logistics operator to trust that it was captured.
-30. Restore the browser network condition to Online.
-31. Trigger retry/sync if the UI exposes a manual retry, or wait for automatic
+31. Restore the browser network condition to Online.
+32. Trigger retry/sync if the UI exposes a manual retry, or wait for automatic
     sync.
-32. Confirm the queued action is accepted once, clears from pending state, and
+33. Confirm the queued action is accepted once, clears from pending state, and
     updates the server-side attendance/hours state.
-33. From `apps/server`, inspect accepted operation provenance:
+34. From `apps/server`, inspect accepted operation provenance:
     ```bash
     php artisan tinker --execute='App\Models\AttendanceOperation::query()->latest("created_at")->limit(10)->get(["operation_uuid", "operation_type", "staff_id", "shift_id", "source_context", "origin_device_id", "origin_node_id", "device_created_at", "server_received_at"])->each(fn ($operation) => print($operation->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
     ```
-34. Confirm offline-synced operations retain operation UUID, device-created
-    timestamp, server receipt timestamp, source context, and device/node
-    provenance when available.
+35. Confirm the accepted server row has the same operation UUID recorded before
+    reconnecting and retains device-created timestamp, server receipt timestamp,
+    source context, and device/node provenance when available.
 
 ### F. Hours correction and freeze
 
-35. Identify the latest `hours_worked_id` from section C.
-36. As an authorized attendance manager, correct the actual start/end while the
+36. Identify the latest `hours_worked_id` from section C.
+37. As an authorized attendance manager, correct the actual start/end while the
     record is unfrozen:
     ```bash
     php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $result = app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:15:00"), Illuminate\Support\Carbon::parse("2026-07-01 12:45:00")); print(json_encode(["hours_worked_id" => $result->hoursWorked->id, "operation_type" => $result->operation->operation_type, "minutes_worked" => $result->hoursWorked->minutes_worked, "corrected_by_user_id" => $result->hoursWorked->corrected_by_user_id, "corrected_at" => (string) $result->record->corrected_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
-37. Confirm the correction updates actual times/minutes, records the correcting
+38. Confirm the correction updates actual times/minutes, records the correcting
     actor, creates a `correct` attendance operation, and leaves the UI showing
     corrected attendance as normal.
-38. Inspect correction audit:
+39. Inspect correction audit:
     ```bash
     php artisan tinker --execute='App\Models\AuditEvent::query()->where("action", "hours.corrected")->latest("created_at")->limit(3)->get(["action", "actor_user_id", "entity_id", "before_json", "after_json"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
     ```
-39. Confirm before/after values include the prior and corrected minutes/times.
-40. Freeze the latest hours record:
+40. Confirm before/after values include the prior and corrected minutes/times.
+41. Freeze the latest hours record:
     ```bash
     php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $frozen = app(App\Services\Attendance\HoursCorrectionService::class)->freezeHours($hours, $actor, Illuminate\Support\Carbon::parse("2026-07-08 00:00:00")); print(json_encode(["hours_worked_id" => $frozen->id, "frozen_at" => (string) $frozen->frozen_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
-41. Attempt another correction:
+42. Attempt another correction:
     ```bash
     php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
     ```
-42. Confirm the denial message is `Hours are frozen after the correction grace
+43. Confirm the denial message is `Hours are frozen after the correction grace
     period.` and the frozen hours values are unchanged.
 
 ### G. Role and non-goal checks
 
-43. Sign in or simulate the UI as default Vera Staff without Department
+44. Sign in or simulate the UI as default Vera Staff without Department
     Logistics/lead authority.
-44. Confirm Vera cannot open Logistics mutation controls for herself, cannot
+45. Confirm Vera cannot open Logistics mutation controls for herself, cannot
     self check-in/out as default staff, and cannot correct hours.
-45. Confirm organizers do not automatically see all department attendance unless
+46. Confirm organizers do not automatically see all department attendance unless
     they also hold the documented department capability.
-46. Confirm this script did not require credit calculation, hours export,
+47. Confirm this script did not require credit calculation, hours export,
     unscheduled shift addition, equipment offline sync, incident creation,
     Field Report review, PowerSync conflict repair UI, or direct God Mode
     attendance editing.
