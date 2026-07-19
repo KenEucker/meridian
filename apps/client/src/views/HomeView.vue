@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
 
+import { meridianAppConfig } from "@/app/appConfig";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 
 // Placeholder home surface. Field Report author surfaces arrived with M9.4;
@@ -29,7 +30,9 @@ const planningRoute = {
 
 <template>
   <section class="home" aria-labelledby="home-heading">
-    <h1 id="home-heading" class="home__heading">Meridian Field</h1>
+    <h1 id="home-heading" class="home__heading">
+      {{ meridianAppConfig.productName }}
+    </h1>
     <p class="home__lede">
       Shared operational client. Select a current operational surface.
     </p>

@@ -31,7 +31,8 @@ describe("shared client shell", () => {
     });
 
     expect(wrapper.find(".app-shell").exists()).toBe(true);
-    expect(wrapper.get("#home-heading").text()).toBe("Meridian Field");
+    expect(wrapper.get("#home-heading").text()).toBe("Meridian Admin");
+    expect(document.title).toBe("Meridian Admin");
   });
 
   it("renders the not-found placeholder for unknown routes", async () => {

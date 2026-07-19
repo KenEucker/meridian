@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { computed, watch } from "vue";
 import { RouterLink } from "vue-router";
 
+import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { useConnectivity } from "@/offline/useConnectivity";
+import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
+
+const props = defineProps<{
+  readonly config?: MeridianAppConfig;
+}>();
+
+const appConfig = computed(() => props.config ?? meridianAppConfig);
 
 // Shared offline/sync status display for the shared client surfaces (M8.6). The
 // banner is driven by the coarse device-connectivity view-model and is silent
@@ -12,8 +20,8 @@ import { useConnectivity } from "@/offline/useConnectivity";
 // (UI implementation contract section 16.2). Richer sync states are fed through
 // the same OfflineBanner view-model by later Alpha 1 milestones.
 //
-// M9.8: when the device reports online, drain pending Field Report text and
-// photo uploads to the local Meridian server command API.
+// When the device reports online, drain supported local operation outboxes to
+// the local Meridian server command API.
 const connectivity = useConnectivity();
 
 watch(
@@ -21,6 +29,7 @@ watch(
   (state) => {
     if (state === "online") {
       void syncFieldReportOutbox();
+      void syncAttendanceOutbox();
     }
   },
   { immediate: true },
@@ -28,7 +37,13 @@ watch(
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :class="`app-shell--${appConfig.uiMode}`"
+    :data-ui-mode="appConfig.uiMode"
+    :data-deployment-target="appConfig.deploymentTarget"
+    :aria-label="`${appConfig.productName} application shell`"
+  >
     <!--
       Placeholder app shell. Follows UI Implementation Contract section 4
       (use the app shell; no persistent left sidebar as primary navigation).
@@ -38,7 +53,7 @@ watch(
     <header class="app-shell__top-bar">
       <nav class="app-shell__nav" aria-label="Application">
         <RouterLink class="app-shell__home" :to="{ name: 'home' }"
-          >Meridian Field</RouterLink
+          >{{ appConfig.productName }}</RouterLink
         >
         <RouterLink class="app-shell__about" :to="{ name: 'settings.about' }"
           >About</RouterLink

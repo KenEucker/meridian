@@ -25,9 +25,13 @@ class SharedWorkstation extends Model
     protected $fillable = [
         'id',
         'device_id',
+        'organization_id',
         'event_id',
+        'department_id',
         'name',
         'trusted',
+        'context_pinned_at',
+        'context_pinned_by_user_id',
         'revoked_at',
     ];
 
@@ -38,6 +42,7 @@ class SharedWorkstation extends Model
     {
         return [
             'trusted' => 'boolean',
+            'context_pinned_at' => 'datetime',
             'revoked_at' => 'datetime',
         ];
     }
@@ -45,6 +50,26 @@ class SharedWorkstation extends Model
     public function device(): BelongsTo
     {
         return $this->belongsTo(Device::class);
+    }
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function contextPinnedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'context_pinned_by_user_id');
     }
 
     public function loginCodes(): HasMany
@@ -80,5 +105,10 @@ class SharedWorkstation extends Model
             : $this->device()->first();
 
         return $device instanceof Device && ! $device->isRevoked();
+    }
+
+    public function hasPinnedKioskContext(): bool
+    {
+        return $this->organization_id !== null && $this->event_id !== null;
     }
 }

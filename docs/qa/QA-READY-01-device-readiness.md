@@ -68,7 +68,7 @@ later readiness signals (login, device trust, event selection, cache, sync).
 
 ### B. Field app readiness checklist (M8.3–M8.5)
 
-4. Start the shared client: `corepack pnpm --filter @meridian/client run dev`.
+4. Start the Field dev server: `corepack pnpm run client:dev:field`.
 5. Open the home route (for example `http://localhost:5173/`) and confirm the
    home placeholder includes a link labeled **Check device readiness**.
 6. Follow the link (or open `/readiness` directly) and confirm the heading

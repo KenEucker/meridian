@@ -729,8 +729,8 @@ Ensure charts remain usable for color-vision differences.
 - Body text contrast should meet WCAG AA.
 - Interactive controls must have visible focus states.
 - Status must never be communicated by color alone.
-- Touch targets should be at least 44×44px on mobile/kiosk surfaces.
-- Kiosk mode must support large type and clear action grouping.
+- Touch targets should be at least 44×44px on touch-first and Kiosk surfaces.
+- Meridian Kiosk must support large type and clear action grouping.
 - Error messages should explain the issue and the next action.
 
 ### 13.2 Brand Accessibility Notes

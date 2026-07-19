@@ -9,11 +9,11 @@ Purpose: Provide a practical accessibility and field-usability checklist for Mer
 
 ## 1. Purpose
 
-This checklist turns Meridian's accessibility principles into reviewable criteria. It applies to all UI work, including dashboards, forms, tables, touch surfaces, kiosk mode, IMS, policy/procedure documents, and admin screens.
+This checklist turns Meridian's accessibility principles into reviewable criteria. It applies to all UI work, including dashboards, forms, tables, touch surfaces, Meridian Kiosk, IMS, policy/procedure documents, and admin screens.
 
 Meridian should follow WCAG 2.2 AA unless the project approves a successor target.
 
-When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 route, component, status, permission, widget, offline, kiosk, and surface mode contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
+When this document conflicts with the canonical Meridian UI Operating Guide, the parent guide governs. Deterministic Alpha 1 route, component, status, permission, widget, offline, Kiosk, UI mode, and presentation profile contracts are defined in `docs/ui/meridian-ui-implementation-contract.md`.
 
 ---
 
@@ -31,15 +31,18 @@ Every UI PR must be reviewed for:
 - light and dark mode contrast;
 - touch and field usability when relevant;
 - policy/procedure document rendering, fragment references, and acknowledgment placement when relevant;
-- correct behavior for the active `surfaceMode`.
+- correct behavior for the active `uiMode` and `presentationProfile`.
 
-Surface mode must be treated as an explicit implementation input:
+Fixed UI mode and presentation profile must be treated as explicit implementation inputs:
 
 ```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+uiMode: 'admin' | 'field' | 'kiosk'
+presentationProfile: 'keyboard-first' | 'touch-first' | 'narrow' | 'wide' | 'fullscreen' | 'compact' | 'roomy' | 'table-first' | 'card-first' | 'priority-feed'
 ```
 
-Screen width, pointer capability, device profile, kiosk/trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
+`uiMode` is fixed by deployment target. Screen width, pointer capability,
+device profile, current screen type, and density/accessibility preferences may
+influence `presentationProfile`.
 
 ---
 
@@ -141,7 +144,7 @@ Check that:
 - dense mode preserves labels and focus states;
 - horizontal overflow is manageable on smaller screens;
 - table-first layouts switch to touch-appropriate layouts on touch surfaces where needed;
-- `surfaceMode` is used to decide table-first, card-first, kiosk, mobile, or dense treatment rather than viewport width alone.
+- `presentationProfile` is used to decide table-first, card-first, fullscreen, narrow, or compact treatment rather than viewport width alone.
 
 ---
 
@@ -299,7 +302,7 @@ Minimum Alpha 1 manual QA matrix for UI changes:
 | Focus | Focus indicator remains visible in light and dark mode and is not hidden by sticky bars. |
 | Forms | Blocking validation shows field errors and a top-level summary. |
 | Screen reader labels | New or changed controls expose useful accessible names. |
-| Surface mode | Verify affected `desktop`, `touch`, `mobile`, `kiosk`, or `dense` modes where relevant. |
+| UI mode / presentation | Verify affected `admin`, `field`, or `kiosk` modes plus relevant presentation profiles. |
 | Permissions | Verify default staff denial and elevated-user explanation where applicable. |
 | Offline/sync | Verify contextual state and queued/failed behavior where relevant. |
 | Documents | Verify policy/procedure render, fragment reference, and acknowledgment accessibility where relevant. |

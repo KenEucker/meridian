@@ -447,13 +447,19 @@ Components must account for:
 
 Touch adaptations should be based on capability and surface context, not screen width alone.
 
-Components that change density or layout must accept or derive the shared surface mode contract:
+Components that change density or layout must accept or derive the shared fixed
+UI mode plus presentation profile contract:
 
 ```ts
-surfaceMode: 'desktop' | 'touch' | 'mobile' | 'kiosk' | 'dense'
+uiMode: 'admin' | 'field' | 'kiosk'
+presentationProfile: 'keyboard-first' | 'touch-first' | 'narrow' | 'wide' | 'fullscreen' | 'compact' | 'roomy' | 'table-first' | 'card-first' | 'priority-feed'
 ```
 
-Equivalent PHP enum, string, or view-model naming is acceptable. Screen width, pointer capability, device configuration, trusted workstation state, current screen type, and user-selected dense mode may all influence the active surface mode.
+Equivalent PHP enum, string, or view-model naming is acceptable.
+`uiMode` is fixed by deployment target and must not be derived from viewport,
+device, user, role, permission, connectivity, or trusted-workstation state.
+Screen width, pointer capability, device configuration, current screen type, and
+density/accessibility preferences may influence `presentationProfile`.
 
 ---
 
@@ -463,25 +469,25 @@ These compact contracts are the minimum shape future code-generation tasks shoul
 
 | Component | Purpose | Inputs | Slots/content | Required behavior |
 |---|---|---|---|---|
-| `AppTopBar` | Global shell bar | `homeUrl`, `department`, `user`, `commandPaletteEnabled`, `surfaceMode` | optional user/session controls | Home logo, command palette trigger, department context; never org/event switcher. |
-| `ContextBar` | Operating scope display | `organization`, `event`, `department`, `roleContext`, `syncState`, `kioskState`, `surfaceMode` | optional extra context | Shows scope only where it affects decisions; collapses without hiding required state. |
-| `ActionBar` | Bottom current-screen actions | `surfaceMode`, `sticky`, `safeArea`, `disabledReason` | primary and secondary actions | Reachable on touch/kiosk, respects safe areas, does not cover required content. |
-| `CommandPalette` | Command/navigation overlay | `results`, `roleContext`, `scope`, `kioskState`, `surfaceMode` | grouped result rows | `Ctrl+K`, `Cmd+K`, `/`; filters by permissions and hides unauthorized IMS results. |
+| `AppTopBar` | Global shell bar | `homeUrl`, `department`, `user`, `commandPaletteEnabled`, `uiMode`, `presentationProfile` | optional user/session controls | Home logo, command palette trigger, department context; never org/event switcher. |
+| `ContextBar` | Operating scope display | `organization`, `event`, `department`, `roleContext`, `syncState`, `kioskState`, `uiMode`, `presentationProfile` | optional extra context | Shows scope only where it affects decisions; collapses without hiding required state. |
+| `ActionBar` | Bottom current-screen actions | `uiMode`, `presentationProfile`, `sticky`, `safeArea`, `disabledReason` | primary and secondary actions | Reachable on touch/Kiosk presentation profiles, respects safe areas, does not cover required content. |
+| `CommandPalette` | Command/navigation overlay | `results`, `roleContext`, `scope`, `kioskState`, `uiMode`, `presentationProfile` | grouped result rows | `Ctrl+K`, `Cmd+K`, `/`; filters by permissions and hides unauthorized IMS results. |
 | `DepartmentBadge` | Department identity | `department`, `showLogo`, `showAccent`, `size` | optional label override | Uses logo/icon/lettermark and small accent; accessible name includes department. |
 | `StatusPill` | Canonical status | `family`, `status`, `size`, `icon` | none | Visible text matches canonical label; state is not color-only. |
 | `SeverityIndicator` | Attention or IMS priority | `kind`, `value`, `label` | optional description | Keeps dashboard attention distinct from IMS priority and incident state. |
-| `DataTable` | Dense record list | `columns`, `rows`, `surfaceMode`, `emptyMessage`, `permissions` | filters/actions | Headers, keyboard row actions, loading/empty/error states, paired touch fallback. |
-| `TouchCard` | Touch record/task card | `record`, `status`, `actions`, `surfaceMode` | summary/details/actions | Large labeled actions, no hover-only controls, inline correction where appropriate. |
+| `DataTable` | Dense record list | `columns`, `rows`, `presentationProfile`, `emptyMessage`, `permissions` | filters/actions | Headers, keyboard row actions, loading/empty/error states, paired touch fallback. |
+| `TouchCard` | Touch record/task card | `record`, `status`, `actions`, `presentationProfile` | summary/details/actions | Large labeled actions, no hover-only controls, inline correction where appropriate. |
 | `MetricCard` | Operational metric | `label`, `value`, `scope`, `attention`, `freshness`, `href` | optional detail | Must support decision, action, or reassurance; shows freshness when stale risk matters. |
-| `PriorityFeed` | Mobile/compact dashboard feed | `items`, `roleContext`, `surfaceMode` | feed item template | Orders by attention and role relevance; preserves source context and quiet states. |
+| `PriorityFeed` | Mobile/compact dashboard feed | `items`, `roleContext`, `presentationProfile` | feed item template | Orders by attention and role relevance; preserves source context and quiet states. |
 | `Field` | Form field wrapper | `name`, `label`, `required`, `error`, `hint` | form control | Programmatic label/error association and required marker. |
 | `FormSummary` | Blocking validation summary | `errors`, `heading`, `focusOnMount` | optional actions | Lists errors and links/moves focus to fields where possible. |
 | `AutosaveStatus` | Incident autosave state | `state`, `lastSavedAt`, `repairHref` | optional message | Allowed only for online incident create/edit; states are `saved`, `saving`, `failed`, `blocked_offline`. |
-| `DocumentViewer` | Rendered policy/procedure document | `document`, `resolvedFragments`, `scope`, `version`, `surfaceMode` | document body/actions | Sanitized Markdown, fragments inline, type/scope/version visible. |
+| `DocumentViewer` | Rendered policy/procedure document | `document`, `resolvedFragments`, `scope`, `version`, `uiMode`, `presentationProfile` | document body/actions | Sanitized Markdown, fragments inline, type/scope/version visible. |
 | `FragmentReference` | Authoring-time fragment token | `fragment`, `version`, `state` | optional controls | Shows reference/version; broken references block publish; no nested fragments. |
 | `AcknowledgmentControl` | Signup/training acknowledgment | `document`, `version`, `scope`, `onlineState` | confirmation text/action | Online-only in Alpha 1; explicit user action; not a shift/credential gate. |
 | `ConfirmationDialog` | Destructive/high-impact confirmation | `title`, `impact`, `confirmLabel`, `variant` | explanation/actions | Focus-trapped modal; confirming action uses a specific verb. |
-| `HistoryDrawer` | Audit/history panel | `entries`, `defaultExpanded`, `surfaceMode` | timeline rows | Keyboard operable; hides routine field-change entries by default. |
+| `HistoryDrawer` | Audit/history panel | `entries`, `defaultExpanded`, `presentationProfile` | timeline rows | Keyboard operable; hides routine field-change entries by default. |
 | `OfflineBanner` | Contextual sync status | `state`, `scope`, `queuedCount`, `repairHref` | optional detail | Uses approved connectivity labels; appears only where state affects current work. |
 | `Toast` | Brief routine feedback | `variant`, `message`, `timeout` | optional action | Not for destructive confirmation, blocking error, or essential disappearing info. |
 

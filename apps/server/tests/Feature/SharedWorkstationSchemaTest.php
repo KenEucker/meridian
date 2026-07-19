@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\Device;
+use App\Models\Event;
+use App\Models\Organization;
 use App\Models\SharedWorkstation;
 use App\Models\SharedWorkstationLoginCode;
 use App\Models\User;
@@ -22,9 +25,13 @@ class SharedWorkstationSchemaTest extends TestCase
         $this->assertTrue(Schema::hasTable('shared_workstations'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'id'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'device_id'));
+        $this->assertTrue(Schema::hasColumn('shared_workstations', 'organization_id'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'event_id'));
+        $this->assertTrue(Schema::hasColumn('shared_workstations', 'department_id'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'name'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'trusted'));
+        $this->assertTrue(Schema::hasColumn('shared_workstations', 'context_pinned_at'));
+        $this->assertTrue(Schema::hasColumn('shared_workstations', 'context_pinned_by_user_id'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'created_at'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'updated_at'));
         $this->assertTrue(Schema::hasColumn('shared_workstations', 'revoked_at'));
@@ -57,6 +64,7 @@ class SharedWorkstationSchemaTest extends TestCase
 
         $this->assertTrue(Str::isUuid($workstation->id));
         $this->assertTrue(Str::isUuid($loginCode->id));
+        $this->assertTrue(Str::isUuid($workstation->organization_id));
         $this->assertTrue(Str::isUuid($workstation->event_id));
         $this->assertSame($workstation->event_id, $loginCode->event_id);
         $this->assertSame($workstation->id, $loginCode->shared_workstation_id);
@@ -106,6 +114,35 @@ class SharedWorkstationSchemaTest extends TestCase
         $this->assertTrue($loginCode->sharedWorkstation->is($workstation));
         $this->assertTrue($user->sharedWorkstationLoginCodes->first()->is($loginCode));
         $this->assertTrue($generator->generatedSharedWorkstationLoginCodes->first()->is($loginCode));
+    }
+
+    public function test_shared_workstation_tracks_pinned_kiosk_context(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create();
+        $organizer = User::factory()->create();
+
+        $workstation = SharedWorkstation::factory()->create([
+            'organization_id' => $organization->id,
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'context_pinned_at' => now(),
+            'context_pinned_by_user_id' => $organizer->id,
+        ]);
+
+        $workstation->refresh()->load(
+            'organization',
+            'event',
+            'department',
+            'contextPinnedByUser',
+        );
+
+        $this->assertTrue($workstation->organization->is($organization));
+        $this->assertTrue($workstation->event->is($event));
+        $this->assertTrue($workstation->department->is($department));
+        $this->assertTrue($workstation->contextPinnedByUser->is($organizer));
+        $this->assertTrue($workstation->hasPinnedKioskContext());
     }
 
     public function test_shared_workstation_is_unique_per_event_name_and_device(): void

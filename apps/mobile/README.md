@@ -3,8 +3,9 @@
 The Meridian Capacitor mobile packaging wrapper.
 
 `apps/mobile` does not own product UI. It packages the shared Vue client from
-`apps/client/dist` for iOS and Android. Product routes, screens, mobile-first
-layout, offline UX, and operational workflows are maintained in `apps/client`.
+`apps/client/dist/field` for iOS and Android as Meridian Field. Product routes,
+screens, mobile-first layout, offline UX, and operational workflows are
+maintained in `apps/client`.
 
 ## Source references
 
@@ -32,6 +33,12 @@ Build the shared client assets that Capacitor packages:
 corepack pnpm run mobile:build
 ```
 
+Preview Meridian Field in a local browser dev server:
+
+```bash
+corepack pnpm run mobile:dev
+```
+
 Validate the mobile packaging configuration:
 
 ```bash
@@ -47,7 +54,7 @@ The Capacitor configuration lives in `capacitor.config.ts`:
 |---|---|---|
 | `appId` | `org.meridian.field` | Reverse-domain native application identifier |
 | `appName` | `Meridian Field` | Installed application display name |
-| `webDir` | `../client/dist` | Shared Vue client build output packaged into native platforms |
+| `webDir` | `../client/dist/field` | Fixed Meridian Field build output packaged into native platforms |
 
 Native platform projects are not committed yet. When a later milestone needs
 installable native builds, add a platform and sync the built shared client
@@ -62,5 +69,5 @@ corepack pnpm --filter @meridian/mobile exec cap add ios
 corepack pnpm run mobile:cap:sync
 ```
 
-`mobile:cap:sync` builds the shared client and runs `cap sync`.
-`mobile:cap:copy` builds the shared client and runs `cap copy`.
+`mobile:cap:sync` builds the Field artifact and runs `cap sync`.
+`mobile:cap:copy` builds the Field artifact and runs `cap copy`.

@@ -2,8 +2,8 @@
  * Configuration resolution for the Meridian Electron on-site wrapper.
  *
  * The wrapper does not own server process management in Alpha 1 (technical
- * spec 25.1). It serves the packaged shared Vue client locally and reads
- * server health from the local Laravel node (technical spec 3.3, 25.2).
+ * spec 25.1). It serves the packaged Meridian Kiosk client locally and reads
+ * server health from the local Laravel node (technical spec 3.4, 25.2).
  *
  * All functions here are pure so they can be unit tested without an Electron
  * runtime; the Electron main process consumes them at startup.
@@ -27,22 +27,6 @@ export const HEALTH_PATH = "/api/health";
 type EnvLike = Record<string, string | undefined>;
 type ReadFile = typeof readFileSync;
 
-/**
- * Resolve an optional app URL override.
- *
- * By default the wrapper serves the packaged shared client with its own local
- * static server. `MERIDIAN_APP_URL` remains as an explicit development escape
- * hatch for smoke testing an externally served client.
- */
-export function resolveConfiguredAppUrl(env: EnvLike = {}): string | null {
-  const raw = env.MERIDIAN_APP_URL?.trim();
-  if (!raw) {
-    return null;
-  }
-
-  return normalizeHttpUrl(raw, "MERIDIAN_APP_URL");
-}
-
 /** Resolve the local server URL used for API health checks. */
 export function resolveServerUrl(env: EnvLike = {}): string {
   const raw = env.MERIDIAN_SERVER_URL?.trim();
@@ -53,14 +37,14 @@ export function resolveServerUrl(env: EnvLike = {}): string {
   return normalizeHttpUrl(raw, "MERIDIAN_SERVER_URL");
 }
 
-/** Resolve the packaged shared client build directory. */
+/** Resolve the packaged Meridian Kiosk client build directory. */
 export function resolveClientDistPath(env: EnvLike = {}, cwd = process.cwd()): string {
   const raw = env.MERIDIAN_CLIENT_DIST_DIR?.trim();
   if (raw) {
     return resolve(cwd, raw);
   }
 
-  return resolve(cwd, "../client/dist");
+  return resolve(cwd, "../client/dist/kiosk");
 }
 
 /** Resolve the optional local static-server port. Port 0 lets the OS choose. */

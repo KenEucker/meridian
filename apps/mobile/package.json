@@ -2,15 +2,15 @@
   "name": "@meridian/mobile",
   "version": "0.0.0",
   "private": true,
-  "description": "Meridian Capacitor mobile packaging wrapper for the shared Vue client.",
+  "description": "Meridian Capacitor mobile packaging wrapper for Meridian Field.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
-    "build": "corepack pnpm --filter @meridian/client run build",
+    "build": "corepack pnpm --filter @meridian/client run build:field",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "cap:copy": "corepack pnpm --filter @meridian/client run build && cap copy",
-    "cap:sync": "corepack pnpm --filter @meridian/client run build && cap sync"
+    "cap:copy": "corepack pnpm --filter @meridian/client run build:field && cap copy",
+    "cap:sync": "corepack pnpm --filter @meridian/client run build:field && cap sync"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0"

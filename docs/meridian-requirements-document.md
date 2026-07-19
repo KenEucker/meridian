@@ -10,6 +10,7 @@
 **Additive Update:** Name References requirements added for IMS notes and Field Reports.
 **Additive Update:** Event Geography & Maps (event maps, camps, map locations, and the event-level Placement department designation) added for MVP.
 **Additive Update:** Immutable Field Report titles added for MVP.
+**Additive Update:** Fixed Meridian UI modes and deployment target requirements added.
 
 ---
 
@@ -214,6 +215,20 @@ Policy/procedure documents should use the latest fragment text when rendered.
 When a fragment changes, documents that reference it should automatically render the updated fragment text.
 
 When an included fragment changes, the referencing document version should be bumped so acknowledgments can record the document version that was acknowledged.
+
+### 2.12 Fixed UI Modes and Deployment Targets
+
+Meridian has one shared product UI codebase, but the product is delivered through three fixed UI modes:
+
+- **Meridian Admin**: the server-hosted web application;
+- **Meridian Field**: the Capacitor mobile application;
+- **Meridian Kiosk**: the Electron desktop/on-site application.
+
+UI mode is selected by the deployment target and must not be inferred from viewport size, pointer type, device type, network state, user role, permission grants, or authentication state.
+
+UI mode controls shell, navigation posture, session framing, and workflow presentation. It does not grant permissions. Authentication and authorization remain separate requirements and must work consistently wherever a surface is available.
+
+Responsive layout, touch affordances, density, fullscreen presentation, and trusted-workstation state are lower-level presentation or session concerns. They must not be named or implemented as `field`, `kiosk`, or `admin` mode switches.
 
 ---
 
@@ -1370,6 +1385,40 @@ The designated Placement department must be one of the departments assigned to t
 Designating a department as Placement applies only for the event where it is designated. It does not make that department globally special across all events, and does not automatically make it the Incident Command Department or Organizers Department.
 
 If no Placement department is designated for an event, map editing falls back to organizers/admins/map managers according to documented permissions.
+
+## 3.32 Deployment Target
+
+A deployment target is the fixed runtime packaging channel that delivers Meridian to users.
+
+MVP deployment targets are:
+
+- server-hosted web application;
+- Capacitor mobile application;
+- Electron desktop/on-site application.
+
+The deployment target selects exactly one UI mode at build/package time.
+
+## 3.33 UI Mode
+
+A UI mode is one of Meridian's three fixed product modes:
+
+- `admin`;
+- `field`;
+- `kiosk`.
+
+UI mode controls the product shell and workflow framing. It does not replace authentication, permissions, role checks, device trust, event authority, sync scope, or offline support.
+
+## 3.34 Presentation Profile
+
+A presentation profile is a lower-level UI adaptation such as compact, roomy, touch-first, keyboard-first, fullscreen, narrow, wide, table-first, card-first, or reduced-motion.
+
+Presentation profiles may respond to viewport, pointer capability, device hardware, user accessibility preferences, or screen needs. They must not be treated as Meridian UI modes.
+
+## 3.35 Kiosk Context
+
+Kiosk context is the pinned organization, event, and optional department associated with a trusted shared workstation.
+
+A Kiosk context is a session/workstation constraint, not a user permission grant. Authorized organizers, lead organizers, and God Mode users may change a Kiosk context from Kiosk setup/support surfaces.
 
 ---
 
@@ -3642,6 +3691,114 @@ Locked operations-window map data shall remain stable offline.
 ### MAPCORR-001
 
 Volunteers shall not submit map corrections for MVP; map corrections are an admin/map-manager/Placement department responsibility before the operations window, with organizer/admin override after the operations window begins.
+
+---
+
+## 7.18 Fixed UI Mode Requirements
+
+### UI-001
+
+Meridian shall define exactly three MVP UI modes: `admin`, `field`, and `kiosk`.
+
+### UI-002
+
+The server-hosted web application shall use `admin` mode and the product name `Meridian Admin`.
+
+### UI-003
+
+The Capacitor mobile application shall use `field` mode and the product name `Meridian Field`.
+
+### UI-004
+
+The Electron desktop/on-site application shall use `kiosk` mode and the product name `Meridian Kiosk`.
+
+### UI-005
+
+UI mode shall be selected only by deployment target/build artifact, not by viewport, device class, touch capability, network state, current user, current role, permissions, authentication state, trusted-workstation state, or user preference.
+
+### UI-006
+
+Meridian shall not provide a user-facing UI mode switcher.
+
+### UI-007
+
+Authentication shall work in every UI mode.
+
+### UI-008
+
+Authorization shall be enforced by the same server-side policies, domain services, API command acceptance flows, and sync upload rules in every UI mode.
+
+### UI-009
+
+Responsive layout, touch adaptations, density, fullscreen presentation, and accessibility adaptations shall be modeled as presentation profiles or component-level behavior, not as UI modes.
+
+### UI-010
+
+Public event application shall be reachable from every deployment target when network access and event application state allow it.
+
+### UI-011
+
+Readiness and About surfaces shall be available in every UI mode.
+
+### UI-012
+
+Policy and procedure read surfaces shall be available in every UI mode where the authenticated user is permitted to view them.
+
+### UI-013
+
+Policy and procedure write/maintenance surfaces shall be available only in Admin mode for MVP.
+
+### UI-014
+
+Department roster, teams, trainings, shifts, equipment, credits, documents, maps, and department operations surfaces shall be available in every UI mode where the authenticated user is permitted to use them.
+
+### UI-015
+
+Organizer screens shall be available in Kiosk and Admin modes, and unavailable in Field mode.
+
+### UI-016
+
+Staff dashboard and shift surfaces shall be available in Field, Kiosk, and Admin modes, with the mode-specific shell controlling presentation.
+
+### UI-017
+
+Kiosk switch, re-authentication, safe-timeout, and setup/support surfaces shall be available in Kiosk mode. Admin mode may configure, review, and support those Kiosk surfaces, but Admin mode shall not become a quick switcher for its own session.
+
+### UI-018
+
+Orchid shall be treated as God Mode and repair tooling available only from Admin mode.
+
+### UI-019
+
+Kiosk mode shall require a pinned organization and event context before normal operation, with an optional pinned department context.
+
+### UI-020
+
+When Kiosk mode starts without a pinned context, it shall enter setup rather than inferring context from the current user, event data, viewport, local network, or last route.
+
+### UI-021
+
+Authorized organizers, lead organizers, and God Mode users may change Kiosk pinned context from Kiosk setup/support surfaces.
+
+### UI-022
+
+Kiosk inactivity timeout shall be 5 minutes for MVP.
+
+### UI-023
+
+Kiosk timeout shall abandon unsaved work, while locally queued saved operations remain queued and sync when available.
+
+### UI-024
+
+Offline Field Report creation, Field Report photo attachment sync, check-in, check-out, and mark-no-show shall remain supported wherever the corresponding surface is available and the device has the necessary synced local data.
+
+### UI-025
+
+Incident reads may be available offline when synced and authorized, but incident creation and mutation shall require server connection in every UI mode.
+
+### UI-026
+
+Offline server rejections and conflicts shall be deferred to the God Mode conflict queue. Until that queue exists, product surfaces may fail silently after recording the local queued/sync-failed state needed for later repair.
 
 ---
 
