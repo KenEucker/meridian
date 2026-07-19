@@ -26,6 +26,7 @@ export const LOCAL_CAPABILITIES: CapabilityContext = {
   hasLogistics: true,
   hasOperations: true,
   hasPlanning: true,
+  hasFieldReportPermission: true,
   hasIncidentCommand: false,
   hasEquipmentVisibility: true,
 };
@@ -427,6 +428,14 @@ export const LOCAL_OPERATIONS_CENTER: OperationsCenterModel = {
       available: true,
       unavailableReason: null,
       summary: "Current deployment/location assignments for staff on shift.",
+    },
+    {
+      id: "field_reports",
+      title: "Field Reports",
+      available: true,
+      unavailableReason: null,
+      summary:
+        "Field Report shortcuts available from the actor's existing permission.",
     },
     {
       id: "incidents",

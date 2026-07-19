@@ -260,6 +260,13 @@ describe("department operations surfaces", () => {
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Operations Center");
     expect(wrapper.text()).toContain("Deployments");
+    expect(wrapper.text()).toContain("Field Reports");
+    expect(wrapper.find("#field-reports-heading").exists()).toBe(true);
+    expect(
+      wrapper
+        .findAll("a")
+        .some((link) => link.text() === "Submit Field Report"),
+    ).toBe(true);
     expect(wrapper.text()).toContain(
       "Incident overview requires event-scoped Incident Command capability.",
     );

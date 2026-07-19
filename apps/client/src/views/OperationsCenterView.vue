@@ -20,10 +20,6 @@ const selectedDeploymentId = ref(
 );
 const status = ref<string | null>(null);
 
-const availableModules = computed(() =>
-  availableOperationsModules(center.value),
-);
-
 const modules = computed(() =>
   composeOperationsModules(
     center.value.capabilities,
@@ -31,6 +27,10 @@ const modules = computed(() =>
       ? 1
       : 0,
   ),
+);
+
+const availableModules = computed(() =>
+  availableOperationsModules({ ...center.value, modules: modules.value }),
 );
 
 function moveDeployment(): void {
@@ -144,6 +144,26 @@ function moveDeployment(): void {
     </section>
 
     <section
+      v-if="availableModules.some((module) => module.id === 'field_reports')"
+      aria-labelledby="field-reports-heading"
+      class="ops__section"
+    >
+      <h2 id="field-reports-heading">Field Reports</h2>
+      <p role="status">
+        Shortcuts are shown from existing Field Report permission. The
+        Operations Center does not grant Field Report access.
+      </p>
+      <div class="ops__actions" aria-label="Field Report shortcuts">
+        <RouterLink :to="{ name: 'staff.field-reports.index' }">
+          My Field Reports
+        </RouterLink>
+        <RouterLink :to="{ name: 'staff.field-reports.create' }">
+          Submit Field Report
+        </RouterLink>
+      </div>
+    </section>
+
+    <section
       v-if="availableModules.some((module) => module.id === 'incidents')"
       aria-labelledby="incidents-heading"
       class="ops__section"
@@ -201,6 +221,24 @@ function moveDeployment(): void {
   color: var(--m-text-muted);
 }
 
+.ops__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  margin-top: var(--m-space-3);
+}
+
+.ops__actions a {
+  min-height: 2.75rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .ops__form {
   display: grid;
   gap: var(--m-space-3);
@@ -230,7 +268,8 @@ function moveDeployment(): void {
 }
 
 .ops__form select:focus-visible,
-.ops__form button:focus-visible {
+.ops__form button:focus-visible,
+.ops__actions a:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
 }
