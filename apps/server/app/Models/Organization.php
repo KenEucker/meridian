@@ -115,6 +115,11 @@ class Organization extends Model
         return $this->belongsTo(Department::class, 'organizers_department_id');
     }
 
+    public function defaultIcDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'default_ic_department_id');
+    }
+
     public function staffOrganizationStatuses(): HasMany
     {
         return $this->hasMany(StaffOrganizationStatus::class);

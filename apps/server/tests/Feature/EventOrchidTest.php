@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditEvent;
+use App\Models\Department;
 use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,6 +54,7 @@ class EventOrchidTest extends TestCase
         $response->assertSee('Signal Camp 2026');
         $response->assertSee('signal-camp-2026');
         $response->assertSee('name="event[timezone]"', false);
+        $response->assertSee('name="event[ic_department_id]"', false);
         $response->assertSee('<option value="America/Denver"', false);
         $response->assertSee('Leave blank when the event schedule is TBD.');
         $response->assertSee('meridian-admin.js');
@@ -169,6 +173,100 @@ class EventOrchidTest extends TestCase
             ]);
 
         $response->assertSessionHasErrors('event.ends_at');
+    }
+
+    public function test_orchid_event_detail_lists_only_active_participating_ic_department_options(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $rangers = Department::factory()->for($organization)->create(['name' => 'Rangers']);
+        $gate = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $archived = Department::factory()->for($organization)->archived()->create(['name' => 'Archived Ops']);
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $rangers->id,
+        ]);
+        EventDepartmentAssignment::factory()->archived()->create([
+            'event_id' => $event->id,
+            'department_id' => $gate->id,
+        ]);
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $archived->id,
+        ]);
+
+        $response = $this->actingAs($this->eventAdmin())
+            ->get(route('platform.events.edit', $event));
+
+        $response->assertOk();
+        $response->assertSee('Rangers');
+        $response->assertDontSee('Gate');
+        $response->assertDontSee('Archived Ops');
+    }
+
+    public function test_orchid_event_save_configures_ic_department_with_audit(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create([
+            'name' => 'Idaho Decompression 2026',
+            'slug' => 'idaho-decompression-2026',
+            'timezone' => 'America/Denver',
+        ]);
+        $department = Department::factory()->for($organization)->create();
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+        ]);
+
+        $response = $this->screen('platform.events.edit', [
+            'event' => $event->id,
+        ])
+            ->actingAs($this->eventAdmin())
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'event' => [
+                    'organization_id' => $organization->id,
+                    'name' => 'Idaho Decompression 2026',
+                    'slug' => 'idaho-decompression-2026',
+                    'timezone' => 'America/Denver',
+                    'ic_department_id' => $department->id,
+                ],
+            ]);
+
+        $response->assertRedirect(route('platform.events'));
+
+        $this->assertSame($department->id, $event->refresh()->ic_department_id);
+
+        $audit = AuditEvent::query()->where('action', 'event.ic_department_changed')->sole();
+        $this->assertSame($organization->id, $audit->organization_id);
+        $this->assertSame($event->id, $audit->event_id);
+        $this->assertSame($department->id, $audit->department_id);
+        $this->assertSame(AuditEvent::SOURCE_ORCHID, $audit->source_context);
+    }
+
+    public function test_orchid_event_save_rejects_unassigned_ic_department(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $department = Department::factory()->for($organization)->create();
+
+        $response = $this->screen('platform.events.edit', [
+            'event' => $event->id,
+        ])
+            ->actingAs($this->eventAdmin())
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'event' => [
+                    'organization_id' => $organization->id,
+                    'name' => $event->name,
+                    'slug' => $event->slug,
+                    'timezone' => $event->timezone,
+                    'ic_department_id' => $department->id,
+                ],
+            ]);
+
+        $response->assertSessionHasErrors('event.ic_department_id');
+        $this->assertNull($event->refresh()->ic_department_id);
     }
 
     private function eventAdmin(): User

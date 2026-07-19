@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Orchid\Layouts\Event;
 
+use App\Models\Department;
+use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
 use DateTimeZone;
 use Orchid\Screen\Field;
@@ -48,6 +51,12 @@ class EventEditLayout extends Rows
                 ->title(__('Timezone'))
                 ->help(__('Choose the event-local timezone used for schedule display.')),
 
+            Select::make('event.ic_department_id')
+                ->options($this->incidentCommandDepartmentOptions())
+                ->empty(__('Use organization default'), '')
+                ->title(__('Incident Command department'))
+                ->help(__('Optional event override. Choices are active departments assigned to this event.')),
+
             Input::make('event.starts_at')
                 ->type('datetime-local')
                 ->title(__('Starts at'))
@@ -76,5 +85,31 @@ class EventEditLayout extends Rows
         $timezones = DateTimeZone::listIdentifiers();
 
         return array_combine($timezones, $timezones);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function incidentCommandDepartmentOptions(): array
+    {
+        $event = $this->query->get('event');
+
+        if (! $event instanceof Event || ! $event->exists) {
+            return [];
+        }
+
+        return Department::query()
+            ->where('departments.organization_id', $event->organization_id)
+            ->whereNull('departments.archived_at')
+            ->whereExists(function ($query) use ($event): void {
+                $query->selectRaw('1')
+                    ->from((new EventDepartmentAssignment)->getTable())
+                    ->whereColumn('event_department_assignments.department_id', 'departments.id')
+                    ->where('event_department_assignments.event_id', $event->id)
+                    ->whereNull('event_department_assignments.archived_at');
+            })
+            ->orderBy('departments.name')
+            ->pluck('departments.name', 'departments.id')
+            ->all();
     }
 }
