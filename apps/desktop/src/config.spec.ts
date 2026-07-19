@@ -5,6 +5,7 @@ import {
   DEFAULT_SERVER_URL,
   HEALTH_PATH,
   resolveAppUrlOverride,
+  resolveAppIconPath,
   resolveClientDevAppUrl,
   resolveClientDevServerUrl,
   resolveClientDistPath,
@@ -46,6 +47,14 @@ describe("resolveClientDistPath", () => {
   it("uses MERIDIAN_CLIENT_DIST_DIR when provided", () => {
     expect(resolveClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "../custom-dist" }, "/repo/apps/desktop")).toBe(
       "/repo/apps/custom-dist",
+    );
+  });
+});
+
+describe("resolveAppIconPath", () => {
+  it("defaults to the Meridian desktop icon asset beside the desktop app", () => {
+    expect(resolveAppIconPath({}, "/repo/apps/desktop")).toBe(
+      "/repo/apps/desktop/assets/icon.png",
     );
   });
 });

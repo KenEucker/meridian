@@ -18,16 +18,19 @@ describe("Meridian app config", () => {
       deploymentTarget: "server",
       uiMode: "admin",
       productName: "Meridian Admin",
+      modeDisplayName: "Admin",
     });
     expect(appConfigForDeploymentTarget("mobile")).toEqual({
       deploymentTarget: "mobile",
       uiMode: "field",
       productName: "Meridian Field",
+      modeDisplayName: "Field",
     });
     expect(appConfigForDeploymentTarget("desktop")).toEqual({
       deploymentTarget: "desktop",
       uiMode: "kiosk",
       productName: "Meridian Kiosk",
+      modeDisplayName: "Kiosk",
     });
   });
 

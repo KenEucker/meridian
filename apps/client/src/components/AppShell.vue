@@ -8,6 +8,8 @@ import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { useConnectivity } from "@/offline/useConnectivity";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
+const meridianWordmarkUrl = "/assets/brand/meridian-signal-camp-wordmark.webp";
+
 const props = defineProps<{
   readonly config?: MeridianAppConfig;
 }>();
@@ -52,9 +54,23 @@ watch(
     -->
     <header class="app-shell__top-bar">
       <nav class="app-shell__nav" aria-label="Application">
-        <RouterLink class="app-shell__home" :to="{ name: 'home' }"
-          >{{ appConfig.productName }}</RouterLink
+        <RouterLink
+          class="app-shell__home"
+          :to="{ name: 'home' }"
+          :aria-label="appConfig.productName"
         >
+          <img
+            class="app-shell__wordmark"
+            :src="meridianWordmarkUrl"
+            alt=""
+            width="248"
+            height="64"
+            aria-hidden="true"
+          />
+          <span class="app-shell__mode-name">{{
+            appConfig.modeDisplayName
+          }}</span>
+        </RouterLink>
         <RouterLink class="app-shell__about" :to="{ name: 'settings.about' }"
           >About</RouterLink
         >
@@ -80,10 +96,17 @@ watch(
   grid-template-columns: minmax(0, var(--m-content-wide));
   justify-content: center;
   align-items: center;
-  padding: calc(var(--m-space-3) + env(safe-area-inset-top)) 0
-    var(--m-space-3);
-  background: var(--m-surface-raised);
-  border-bottom: 1px solid var(--m-border-default);
+  padding: calc(var(--m-space-2) + env(safe-area-inset-top)) 0
+    var(--m-space-2);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--m-action-secondary-bg) 12%, transparent),
+      transparent 38%
+    ),
+    var(--m-surface-raised);
+  border-bottom: 2px solid var(--m-action-secondary-bg);
+  box-shadow: inset 0 -1px 0 var(--m-border-default);
 }
 
 .app-shell__nav {
@@ -91,16 +114,46 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: var(--m-space-3);
+  min-width: 0;
 }
 
 .app-shell__home {
-  display: block;
+  display: inline-grid;
+  grid-template-columns: minmax(8.5rem, 13rem) minmax(0, auto);
+  align-items: center;
+  gap: var(--m-space-3);
+  min-width: 0;
   font-weight: 600;
   text-decoration: none;
   color: var(--m-text-primary);
 }
 
+.app-shell__wordmark {
+  display: block;
+  width: clamp(8.5rem, 28vw, 13rem);
+  height: auto;
+  object-fit: contain;
+}
+
+.app-shell__mode-name {
+  min-width: 0;
+  padding: var(--m-space-1) var(--m-space-2);
+  border-left: 3px solid var(--m-action-primary-bg);
+  color: var(--m-action-primary-bg);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: var(--m-text-lg);
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  overflow: hidden;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--m-surface-raised) 85%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-shell__about {
+  flex: 0 0 auto;
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
   font-weight: 600;

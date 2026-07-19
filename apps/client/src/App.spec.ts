@@ -37,6 +37,12 @@ describe("shared client shell", () => {
 
     expect(wrapper.find(".app-shell").exists()).toBe(true);
     expect(wrapper.get("#home-heading").text()).toBe("Meridian Admin");
+    expect(wrapper.get("#home-primary-heading").text()).toBe(
+      "Department operations",
+    );
+    expect(wrapper.get("#home-secondary-heading").text()).toBe(
+      "Supporting tools",
+    );
     expect(document.title).toBe("Meridian Admin");
   });
 

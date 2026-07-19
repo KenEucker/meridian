@@ -143,3 +143,4 @@ A local GitHub CLI authentication failure never blocks connector-based GitHub wo
 If I say "send it", that means I want you to push the changes and create the PR. It should be a review ready PR, not a draft, and I expect you to the use the github connector. I may have to ask you to make reviwsions before this point, so do not automatically push changes and create the PR before I ask.
 
 You may have to make changes to the PR title or PR body, in order to pass validation, as this has been happening a lot. If you have to do this, you will need to also submit a chore commit in order for the updated title/body to be included in a new run of the actions.
+Update the PR title/body first, then push the chore commit, so the new pull request event evaluates the corrected metadata.

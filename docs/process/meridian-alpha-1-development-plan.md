@@ -188,7 +188,9 @@ even though many product workflows are still placeholders.
 | M4.9 Audit service baseline | Add reusable audit event write path. | Requirements 2.4; technical spec section 23; data/API 8, 14.1 | Audit unit tests |
 | M4.10 Seed personas | Add development seed organization, event, departments, teams, and personas. | Development process section 13.3 | Seed smoke test |
 
-**QA gate:** Seeded users, organization, event, departments, teams, memberships, statuses, and permission scaffolds are visible in admin surfaces and covered by tests.
+**QA gate:** Seeded users, organization, event, departments, teams,
+memberships, statuses, and permission scaffolds are visible in admin surfaces
+and covered by tests.
 
 ---
 
@@ -353,11 +355,13 @@ individual signup or team-member identities.
 
 ---
 
-### Milestone 11: Incident Management
+### Milestone 11: Incident Management and MVP Product UI Gap Closure
 
-**Goal:** Support online-only incident management for the configured Incident Command Department.
+**Goal:** Support online-only incident management for the configured Incident Command Department, and close MVP-critical product UI gaps discovered after the foundational organization/department/team/document/training milestones.
 
-**Primary source docs:** Requirements sections 3.21-3.23, 3.21A, 5.11, 7.12, 7.12A; Technical spec sections 16, 19, 23, 24, 27.1, 28; data/API sections 6.5, 10.16, 15.4, 15.4A; IMS surface specification; UI implementation contract section 15.
+The MVP product UI gap-closure tasks in this milestone are forward-scheduled work from the current development point; they do not reopen earlier completed milestone scopes.
+
+**Primary source docs:** Requirements sections 3.1-3.12, 3.20-3.23, 3.21A, 5, 7.6, 7.8-7.13, 7.12A; Technical spec sections 15, 16, 19, 21, 22, 23, 24, 27.1, 28; data/API sections 6.5, 10.5-10.7, 10.9, 10.15-10.17, 11, 15.3, 15.4, 15.4A; IMS surface specification; UI implementation contract sections 12, 15, and 17.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
@@ -373,8 +377,16 @@ individual signup or team-member identities.
 | M11.9 Incident attachments strike | Allow incident attachments to be stricken, not deleted. | INC-013; data/API 10.17 | Domain/security tests |
 | M11.10 Incident PDF print | IC leads print incidents to PDF. | INC-015 | Export test/sample |
 | M11.11 Incident QA script | Add `QA-INC-01-incident-management.md`. | QA README | Human QA script |
+| M11.12 Admin department management | Add normal Meridian Admin product UI and API/domain actions for organizers to create, edit, archive/restore, and list organization departments outside Orchid/God Mode. This is a Milestone 11 product-admin backfill, not a retroactive Milestone 4 task. | ORG-002; Technical spec sections 15.2, 22.1; data/API 10.6; UI contract 12.6 `organizer.departments` | API/domain/UI tests; organizer QA |
+| M11.13 Department self-administration | Add normal Meridian Admin product UI and API/domain actions for department administration/department leads to maintain permitted department details and manage teams, including default-team rename and non-default team archive/restore, outside Orchid/God Mode. This is a Milestone 11 product-admin backfill, not a retroactive Milestone 4 task. | TEAM-001 through TEAM-006, TEAM-009; Technical spec sections 15.2, 22.1; data/API 10.6, 10.7; UI contract 12.4 `department.teams` | API/domain/policy/UI tests; department lead QA |
+| M11.14 Staff intake and lead selection UI | Add MVP Meridian Admin flows for organization-interest/organizer signup intake, organizer add/invite staff without requiring the public application path, and organizer selection of department leads from existing staff. | Requirements sections 3.1, 3.3, 5.1-5.4; ORG-001, ORG-015, ORG-016, VOL-001 through VOL-006, TEAM-009; UI contract 12.6 `organizer.staff`, `organizer.departments` | API/domain/policy/UI tests; organizer staff-intake QA |
+| M11.15 Product document authoring and sharing UI | Move MVP policy/procedure/fragment creation, preview, publish/archive, internal visibility review, and permitted external share/export entry points into normal Meridian Admin and department/team product surfaces instead of relying on Orchid for maintainer work. | Requirements sections 3.8, 3.15, 7.10; POL-001 through POL-047; Technical spec section 21; UI contract 12.3, 12.4, 12.6, 17.3 | API/domain/policy/UI tests; document authoring/sharing QA |
+| M11.16 Product training management UI | Add department/organizer training creation, prerequisite/expiration setup, staff signup/roster where the MVP workflow requires scheduled training attendance, manual completion recording by authorized trainers/leads, and completion spreadsheet import entry points. | TRAIN-001 through TRAIN-006; Requirements 3.8, 5.6, 7.6; Technical spec sections 15.2, 22.2; UI contract 12.4 `department.trainings` | API/domain/policy/UI/import tests; training management QA |
+| M11.17 Product team and shift administration UI | Ensure department leads can designate team leads, team leads can assign permitted staff to their teams, and team/department leads can create and maintain shifts from the normal product UI with the documented eligibility and time-window rules. | TEAM-008 through TEAM-010; SHIFT-001 through SHIFT-016; Requirements 5.4, 5.7, 7.7; UI contract 12.4 `department.teams`, `department.shifts`, `department.shift-create`, `department.shift-edit` | API/domain/policy/UI tests; team and shift administration QA |
+| M11.18 Equipment inventory setup and import UI | Add normal product UI for department/event equipment inventory creation and bulk CSV import before operations, feeding the existing Logistics checkout/check-in workflow. Do not add department-to-department allotments unless EQUIP-006 is changed, because they are explicitly out of MVP. | EQUIP-001 through EQUIP-007; Requirements 3.13, 7.13; Technical spec sections 20.2, 22.2; UI contract 12.4 `department.equipment` | API/domain/policy/UI/import tests; equipment inventory QA |
+| M11.19 Incident search and list filters | Add explicit IMS incident search/filter behavior beyond list/detail and Name Reference chip navigation, restricted by existing IC permissions. | INC-001 through INC-015; NR-001 through NR-014; Technical spec 19.9, 19.10; UI contract 12.7, 15 | Search/UI/policy tests; incident search QA |
 
-**QA gate:** A reviewer can verify IC-only incident access, create/edit incidents online, link field reports, review history, and confirm Name Reference chips/search do not expose unauthorized incidents or Field Reports.
+**QA gate:** A reviewer can verify IC-only incident access, create/edit incidents online, link field reports, review history, search/filter incidents, and confirm Name Reference chips/search do not expose unauthorized incidents or Field Reports. A reviewer can also complete the MVP product-admin path in normal Meridian Admin without Orchid/God Mode: organizer-interest intake, staff invite/add, department creation, department lead selection, department/team administration, document authoring/sharing, training creation/signup/completion where enabled, team/shift administration, and equipment inventory CSV setup feeding Logistics checkout/check-in.
 
 ---
 

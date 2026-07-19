@@ -36,16 +36,33 @@ const planningRoute = {
     <p class="home__lede">
       Shared operational client. Select a current operational surface.
     </p>
-    <p class="home__links">
-      <RouterLink :to="overviewRoute">Department overview</RouterLink>
-      <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
-      <RouterLink :to="operationsRoute">Operations center</RouterLink>
-      <RouterLink :to="planningRoute">Planning table</RouterLink>
-      <RouterLink :to="{ name: 'staff.field-reports.index' }"
-        >My Field Reports</RouterLink
-      >
-      <RouterLink :to="{ name: 'readiness' }">Check device readiness</RouterLink>
-    </p>
+    <div class="home__sections">
+      <section class="home__section" aria-labelledby="home-primary-heading">
+        <h2 id="home-primary-heading" class="home__section-heading">
+          Department operations
+        </h2>
+        <div class="home__links home__links--primary">
+          <RouterLink :to="overviewRoute">Department overview</RouterLink>
+          <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
+          <RouterLink :to="operationsRoute">Operations center</RouterLink>
+          <RouterLink :to="planningRoute">Planning table</RouterLink>
+        </div>
+      </section>
+
+      <section class="home__section" aria-labelledby="home-secondary-heading">
+        <h2 id="home-secondary-heading" class="home__section-heading">
+          Supporting tools
+        </h2>
+        <div class="home__links home__links--secondary">
+          <RouterLink :to="{ name: 'staff.field-reports.index' }"
+            >My Field Reports</RouterLink
+          >
+          <RouterLink :to="{ name: 'readiness' }"
+            >Check device readiness</RouterLink
+          >
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
@@ -65,10 +82,38 @@ const planningRoute = {
   color: var(--m-text-muted);
 }
 
+.home__sections {
+  display: grid;
+  gap: var(--m-space-6);
+}
+
+.home__section {
+  display: grid;
+  gap: var(--m-space-3);
+}
+
+.home__section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  margin: 0;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.home__section-heading::before {
+  display: block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--m-radius-sm);
+  background: var(--m-action-secondary-bg);
+  content: "";
+}
+
 .home__links {
   display: grid;
   gap: var(--m-space-3);
-  margin: 0;
 }
 
 .home__links a {
@@ -81,6 +126,27 @@ const planningRoute = {
   color: var(--m-text-primary);
   font-weight: 600;
   text-decoration: none;
+}
+
+.home__links--primary a {
+  border-color: var(--m-border-strong);
+  border-left: 4px solid var(--m-action-primary-bg);
+  box-shadow: var(--m-shadow-sm);
+}
+
+.home__links--secondary a {
+  border-color: color-mix(
+    in srgb,
+    var(--m-action-secondary-bg) 55%,
+    var(--m-border-default)
+  );
+  border-left: 4px solid var(--m-action-secondary-bg);
+  background: color-mix(
+    in srgb,
+    var(--m-action-secondary-bg) 8%,
+    var(--m-surface-base)
+  );
+  color: var(--m-text-secondary);
 }
 
 .home__links a:focus-visible {

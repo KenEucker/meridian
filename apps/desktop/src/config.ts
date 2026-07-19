@@ -50,6 +50,11 @@ export function resolveClientDistPath(env: EnvLike = {}, cwd = process.cwd()): s
   return resolve(cwd, "../client/dist/kiosk");
 }
 
+/** Resolve the Meridian desktop window/app icon asset. */
+export function resolveAppIconPath(_env: EnvLike = {}, cwd = process.cwd()): string {
+  return resolve(cwd, "assets/icon.png");
+}
+
 /** Resolve the optional local static-server port. Port 0 lets the OS choose. */
 export function resolveClientPort(env: EnvLike = {}): number {
   const raw = env.MERIDIAN_CLIENT_PORT?.trim();

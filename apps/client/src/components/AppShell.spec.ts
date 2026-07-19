@@ -106,7 +106,16 @@ describe("AppShell fixed UI mode display", () => {
       expect(shell.attributes("aria-label")).toBe(
         `${productName} application shell`,
       );
-      expect(wrapper.get(".app-shell__home").text()).toBe(productName);
+      expect(wrapper.get(".app-shell__home").attributes("aria-label")).toBe(
+        productName,
+      );
+      expect(wrapper.get(".app-shell__wordmark").attributes("src")).toBe(
+        "/assets/brand/meridian-signal-camp-wordmark.webp",
+      );
+      expect(wrapper.get(".app-shell__mode-name").text()).toBe(
+        productName.replace("Meridian ", ""),
+      );
+      expect(wrapper.get(".app-shell__home").text()).not.toContain("Meridian");
     },
   );
 
@@ -125,6 +134,9 @@ describe("AppShell fixed UI mode display", () => {
     await wrapper.vm.$nextTick();
 
     expect(wrapper.get(".app-shell").attributes("data-ui-mode")).toBe("kiosk");
-    expect(wrapper.get(".app-shell__home").text()).toBe("Meridian Kiosk");
+    expect(wrapper.get(".app-shell__wordmark").attributes("src")).toBe(
+      "/assets/brand/meridian-signal-camp-wordmark.webp",
+    );
+    expect(wrapper.get(".app-shell__mode-name").text()).toBe("Kiosk");
   });
 });

@@ -6,6 +6,7 @@ export interface MeridianAppConfig {
   readonly deploymentTarget: DeploymentTarget;
   readonly uiMode: UiMode;
   readonly productName: ProductName;
+  readonly modeDisplayName: "Admin" | "Field" | "Kiosk";
 }
 
 const CONFIG_BY_DEPLOYMENT_TARGET = {
@@ -13,16 +14,19 @@ const CONFIG_BY_DEPLOYMENT_TARGET = {
     deploymentTarget: "server",
     uiMode: "admin",
     productName: "Meridian Admin",
+    modeDisplayName: "Admin",
   },
   mobile: {
     deploymentTarget: "mobile",
     uiMode: "field",
     productName: "Meridian Field",
+    modeDisplayName: "Field",
   },
   desktop: {
     deploymentTarget: "desktop",
     uiMode: "kiosk",
     productName: "Meridian Kiosk",
+    modeDisplayName: "Kiosk",
   },
 } satisfies Record<DeploymentTarget, MeridianAppConfig>;
 
