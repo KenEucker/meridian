@@ -108,6 +108,24 @@ describe("department operations surfaces", () => {
     const { wrapper } = await mountAt(logisticsPath());
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Logistics Desk");
+    expect(wrapper.get("#search-cache-heading").text()).toBe(
+      "Offline search cache",
+    );
+    expect(wrapper.text()).toContain("Offline usable");
+
+    await wrapper.get('input[type="search"]').setValue("swing");
+    const shiftButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Ranger Dirt Swing Shift"));
+    expect(shiftButton).toBeTruthy();
+    await shiftButton!.trigger("click");
+
+    expect(wrapper.get("#search-context-heading").text()).toBe(
+      "Ranger Dirt Swing Shift",
+    );
+    expect(wrapper.text()).toContain("Open Local Field Author");
+    expect(wrapper.text()).toContain("Open Ari Ranger");
+
     await wrapper.get('input[type="search"]').setValue("Vera");
     const resultButton = wrapper
       .findAll("button")
@@ -117,10 +135,124 @@ describe("department operations surfaces", () => {
 
     expect(wrapper.get("#staff-workspace-heading").text()).toBe("Vera Staff");
     expect(wrapper.text()).toContain("Mark on-site");
+    expect(wrapper.get("#active-shifts-heading").text()).toBe("Active shift");
+    expect(wrapper.get("#upcoming-shifts-heading").text()).toBe(
+      "Upcoming shifts",
+    );
+    expect(wrapper.get("#outgoing-shifts-heading").text()).toBe(
+      "Outgoing shifts",
+    );
     expect(wrapper.text()).toContain("Provisions");
     expect(wrapper.text()).toContain(
       "Provisions will appear here once that domain is specified.",
     );
+  });
+
+  it("opens check-in and check-out as modal dialogs", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await wrapper.get('input[type="search"]').setValue("Vera");
+    const veraButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Vera Staff"));
+    expect(veraButton).toBeTruthy();
+    await veraButton!.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Mark on-site")!
+      .trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Check in")!
+      .trigger("click");
+
+    let dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.attributes("aria-modal")).toBe("true");
+    expect(wrapper.find(".logistics__modal-backdrop").exists()).toBe(true);
+    expect(dialog.get("#attendance-dialog-heading").text()).toBe("Check in");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Cancel")!
+      .trigger("click");
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    await wrapper.get('input[type="search"]').setValue("Local Field Author");
+    const authorButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Local Field Author"));
+    expect(authorButton).toBeTruthy();
+    await authorButton!.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Check out")!
+      .trigger("click");
+
+    dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.attributes("aria-modal")).toBe("true");
+    expect(dialog.get("#attendance-dialog-heading").text()).toBe("Check out");
+    expect(dialog.text()).toContain("Return equipment");
+    expect(dialog.text()).toContain("Radio 12");
+    expect(dialog.text()).toContain("Returned");
+    expect(dialog.text()).toContain("Missing");
+    expect(dialog.text()).toContain("Damaged");
+
+    await dialog
+      .findAll("button")
+      .find((button) => button.text() === "Confirm")!
+      .trigger("click");
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("No open equipment for this staff member.");
+  });
+
+  it("checks out equipment from the staff workspace after check-in", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await wrapper.get('input[type="search"]').setValue("Vera");
+    const veraButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Vera Staff"));
+    expect(veraButton).toBeTruthy();
+    await veraButton!.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Mark on-site")!
+      .trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Check in")!
+      .trigger("click");
+    await wrapper
+      .get('[role="dialog"]')
+      .findAll("button")
+      .find((button) => button.text() === "Confirm")!
+      .trigger("click");
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Check out equipment")!
+      .trigger("click");
+
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.get("#attendance-dialog-heading").text()).toBe(
+      "Check out equipment",
+    );
+    expect(dialog.text()).toContain("Available equipment");
+    expect(dialog.text()).toContain("Radio 13");
+    expect(dialog.text()).toContain("Radio 14");
+    await dialog.get('input[value="equipment-radio-13"]').setValue(true);
+    await dialog.get('input[value="equipment-radio-14"]').setValue(true);
+    await dialog
+      .findAll("button")
+      .find((button) => button.text() === "Confirm")!
+      .trigger("click");
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain("Vera Staff equipment checked out.");
+    expect(wrapper.text()).toContain("Radio 13");
+    expect(wrapper.text()).toContain("Radio 14");
+    expect(wrapper.text()).toContain("Checked out");
   });
 
   it("keeps operations center modules capability-composed", async () => {

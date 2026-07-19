@@ -2,6 +2,7 @@ import type {
   EquipmentReturnCondition,
   LogisticsDeskModel,
   LogisticsSearchHit,
+  LogisticsShiftCard,
   LogisticsStaffWorkspace,
 } from "@/department-ops/types";
 
@@ -83,6 +84,63 @@ export function selectLogisticsStaff(
   return {
     ...desk,
     selectedStaffId: staffId,
+    selectedSearchContext: null,
+  };
+}
+
+export function selectLogisticsHit(
+  desk: LogisticsDeskModel,
+  hit: LogisticsSearchHit,
+): LogisticsDeskModel {
+  if (hit.kind === "staff") {
+    return selectLogisticsStaff(desk, hit.id);
+  }
+
+  if (hit.kind === "equipment") {
+    const holder = desk.searchableEquipment.find(
+      (item) => item.equipmentItemId === hit.id,
+    )?.holderName;
+    const staff = desk.searchableStaff.find(
+      (member) => member.displayName === holder,
+    );
+
+    return {
+      ...desk,
+      selectedStaffId: staff?.staffId ?? null,
+      selectedSearchContext: {
+        id: hit.id,
+        kind: hit.kind,
+        label: hit.label,
+        detail: hit.detail,
+        relatedStaffIds: staff ? [staff.staffId] : [],
+        emptyReason: staff
+          ? null
+          : "This item is available in the department cache and is not checked out to a staff member.",
+      },
+    };
+  }
+
+  const relatedStaffIds = Object.values(desk.staffWorkspaces)
+    .filter((workspace) =>
+      workspace.shiftCards.some((card) => card.shiftId === hit.id),
+    )
+    .map((workspace) => workspace.staffId);
+
+  return {
+    ...desk,
+    selectedStaffId:
+      relatedStaffIds.length === 1 ? (relatedStaffIds[0] ?? null) : null,
+    selectedSearchContext: {
+      id: hit.id,
+      kind: hit.kind,
+      label: hit.label,
+      detail: hit.detail,
+      relatedStaffIds,
+      emptyReason:
+        relatedStaffIds.length === 0
+          ? "No staff workspace in the local department cache references this shift yet."
+          : null,
+    },
   };
 }
 
@@ -94,6 +152,28 @@ export function selectedLogisticsWorkspace(
   }
 
   return desk.staffWorkspaces[desk.selectedStaffId] ?? null;
+}
+
+export function logisticsShiftSections(workspace: LogisticsStaffWorkspace): {
+  readonly active: readonly LogisticsShiftCard[];
+  readonly upcoming: readonly LogisticsShiftCard[];
+  readonly outgoing: readonly LogisticsShiftCard[];
+} {
+  return {
+    active: workspace.shiftCards.filter(
+      (card) =>
+        card.lifecycle === "active" || card.attendanceState === "checked_in",
+    ),
+    upcoming: workspace.shiftCards.filter(
+      (card) =>
+        card.lifecycle === "upcoming" && card.attendanceState !== "checked_in",
+    ),
+    outgoing: workspace.shiftCards.filter(
+      (card) =>
+        card.lifecycle === "completed" ||
+        card.attendanceState === "checked_out",
+    ),
+  };
 }
 
 export function markLogisticsStaffOnSite(
@@ -125,6 +205,7 @@ export function markLogisticsStaffOnSite(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
 
@@ -163,6 +244,7 @@ export function markLogisticsStaffOffSite(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
 
@@ -193,6 +275,11 @@ export function checkInLogisticsStaff(
 
   return {
     ...desk,
+    searchableEquipment: desk.searchableEquipment.map((item) =>
+      equipmentItemIds.includes(item.equipmentItemId)
+        ? { ...item, status: "checked_out", holderName: workspace.displayName }
+        : item,
+    ),
     staffWorkspaces: {
       ...desk.staffWorkspaces,
       [staffId]: {
@@ -225,6 +312,66 @@ export function checkInLogisticsStaff(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
+  };
+}
+
+export function checkOutLogisticsEquipment(
+  desk: LogisticsDeskModel,
+  staffId: string,
+  checkedOutAt: string,
+  equipmentItemIds: readonly string[],
+): LogisticsDeskModel {
+  const workspace = desk.staffWorkspaces[staffId];
+  if (workspace === undefined) {
+    throw new Error("Staff member is not available in this department.");
+  }
+
+  if (workspace.presenceState !== "on_site") {
+    throw new Error("Staff must be on-site before equipment checkout.");
+  }
+
+  if (equipmentItemIds.length === 0) {
+    throw new Error("Choose at least one available equipment item.");
+  }
+
+  const issued = workspace.availableEquipment.filter((item) =>
+    equipmentItemIds.includes(item.equipmentItemId),
+  );
+  if (issued.length !== equipmentItemIds.length) {
+    throw new Error("Equipment is not available for checkout.");
+  }
+
+  return {
+    ...desk,
+    searchableEquipment: desk.searchableEquipment.map((item) =>
+      equipmentItemIds.includes(item.equipmentItemId)
+        ? { ...item, status: "checked_out", holderName: workspace.displayName }
+        : item,
+    ),
+    staffWorkspaces: {
+      ...desk.staffWorkspaces,
+      [staffId]: {
+        ...workspace,
+        canGoOffSite: false,
+        offSiteBlockedReason:
+          "Equipment must be returned or marked missing/damaged before going off-site.",
+        availableEquipment: workspace.availableEquipment.filter(
+          (item) => !equipmentItemIds.includes(item.equipmentItemId),
+        ),
+        openEquipment: [
+          ...workspace.openEquipment,
+          ...issued.map((item) => ({
+            ...item,
+            checkoutId: `local-checkout-${item.equipmentItemId}-${staffId}`,
+            status: "checked_out" as const,
+            checkedOutAt,
+          })),
+        ],
+      },
+    },
+    selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
 
@@ -268,6 +415,7 @@ export function checkOutLogisticsStaff(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
 
@@ -298,6 +446,15 @@ export function returnLogisticsEquipment(
 
   return {
     ...desk,
+    searchableEquipment: desk.searchableEquipment.map((item) =>
+      item.equipmentItemId === openItem.equipmentItemId
+        ? {
+            ...item,
+            status: condition === "returned" ? "available" : condition,
+            holderName: null,
+          }
+        : item,
+    ),
     staffWorkspaces: {
       ...desk.staffWorkspaces,
       [staffId]: {
@@ -323,6 +480,7 @@ export function returnLogisticsEquipment(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
 
@@ -366,5 +524,6 @@ export function addLogisticsStaffToShift(
       },
     },
     selectedStaffId: staffId,
+    selectedSearchContext: null,
   };
 }
