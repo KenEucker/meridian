@@ -66,6 +66,28 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     expect(summary).toContain("2");
   });
 
+  it("adds an eligible unscheduled staff member to the roster", async () => {
+    const { wrapper } = await mountAt(shiftBoardPath());
+
+    const addSection = wrapper.get('[aria-labelledby="unscheduled-heading"]');
+    expect(addSection.text()).toContain("Ari Ranger");
+
+    await addSection.get("form").trigger("submit");
+
+    expect(wrapper.get('[aria-label="Roster summary"]').text()).toContain("4");
+    expect(wrapper.get('[aria-labelledby="roster-heading"]').text()).toContain(
+      "Ari Ranger",
+    );
+    expect(wrapper.get('[role="status"]').text()).toBe(
+      "Ari Ranger added to roster.",
+    );
+    expect(
+      wrapper
+        .findAll('[aria-label="Add eligible unscheduled staff"] option')
+        .map((option) => option.text()),
+    ).toEqual([]);
+  });
+
   it("lists the current roster and labels checked-in state with text", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
@@ -87,10 +109,13 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     expect(checkedIn.text()).not.toContain("Vera Staff");
   });
 
-  it("does not expose attendance operation or adjacent workflow controls", async () => {
+  it("does not expose deferred attendance operation or adjacent workflow controls", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
-    expect(wrapper.findAll("button")).toHaveLength(0);
+    expect(wrapper.findAll("button").map((button) => button.text())).toEqual([
+      "Add to roster",
+    ]);
+    expect(wrapper.text()).not.toContain("Check in");
     expect(wrapper.text()).not.toContain("Check out");
     expect(wrapper.text()).not.toContain("No-show");
     expect(wrapper.text()).not.toContain("Hours");

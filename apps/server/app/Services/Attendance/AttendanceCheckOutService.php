@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Connected/synced check-out command for scheduled staff (SLB-004 through
- * SLB-006). Corrections, freezing, credits, and exports remain with later M10
- * tasks.
+ * Connected/synced check-out command for assigned staff (SLB-004 through
+ * SLB-006). Post-checkout corrections/freezing live in {@see HoursCorrectionService};
+ * credits and exports remain with later M10/M13 tasks.
  */
 class AttendanceCheckOutService
 {

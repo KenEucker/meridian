@@ -28,9 +28,10 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
 
-## Alpha 1 Shift Lead Board roster smoke
+## Alpha 1 Shift Lead Board partial smoke
 
-M10.1 covers the read-only current roster and checked-in state only. The full
+M10.1 covers the current roster and checked-in state. M10.7 adds the local
+eligible unscheduled staff add-to-roster affordance. The full
 `QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
 
 1. Start the field app in development mode.
@@ -38,6 +39,9 @@ M10.1 covers the read-only current roster and checked-in state only. The full
 3. Confirm the board shows the Local Field Event, Rangers department, Dirt team,
    Ranger Dirt Day Shift, roster count, and checked-in count.
 4. Confirm Local Field Author and Sam Shiftlead appear under Checked-in staff,
-   Vera Staff remains Scheduled in the roster, and no check-in, check-out,
-   no-show, hours, deployment, equipment, field report shortcut, or incident
-   shortcut controls are present.
+   Vera Staff remains Scheduled in the roster, and Ari Ranger appears as an
+   eligible staff member who can be added to the roster.
+5. Add Ari Ranger to the roster. Confirm the roster count increases by one, Ari
+   Ranger appears as Scheduled, and the eligible-staff list is empty.
+6. Confirm no check-in, check-out, no-show, hours, deployment, equipment, field
+   report shortcut, or incident shortcut controls are present.

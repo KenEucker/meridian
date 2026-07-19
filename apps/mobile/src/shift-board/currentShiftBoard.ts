@@ -21,6 +21,13 @@ export interface ShiftBoardRosterMember {
   readonly checkedInAt: string | null;
 }
 
+export interface UnscheduledStaffCandidate {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly handle: string | null;
+  readonly teamLabel: string;
+}
+
 export interface CurrentShiftBoard {
   readonly eventId: string;
   readonly eventLabel: string;
@@ -34,6 +41,7 @@ export interface CurrentShiftBoard {
   readonly endsAt: string;
   readonly timeZone: string;
   readonly roster: readonly ShiftBoardRosterMember[];
+  readonly unscheduledCandidates: readonly UnscheduledStaffCandidate[];
 }
 
 export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
@@ -77,6 +85,14 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       checkedInAt: "2027-07-04T16:03:00.000Z",
     },
   ],
+  unscheduledCandidates: [
+    {
+      staffId: "33333333-3333-4333-8333-333333333336",
+      displayName: "Ari Ranger",
+      handle: "ari",
+      teamLabel: "Dirt",
+    },
+  ],
 };
 
 export function attendanceStateLabel(state: ShiftAttendanceState): string {
@@ -111,5 +127,45 @@ export function rosterSummary(board: CurrentShiftBoard): {
   return {
     rosterCount: board.roster.length,
     checkedInCount: checkedInRoster(board).length,
+  };
+}
+
+export function eligibleUnscheduledCandidates(
+  board: CurrentShiftBoard,
+): readonly UnscheduledStaffCandidate[] {
+  const rosterStaffIds = new Set(board.roster.map((member) => member.staffId));
+
+  return board.unscheduledCandidates.filter(
+    (candidate) => !rosterStaffIds.has(candidate.staffId),
+  );
+}
+
+export function addUnscheduledRosterMember(
+  board: CurrentShiftBoard,
+  staffId: string,
+  assignmentId: string,
+): CurrentShiftBoard {
+  const candidate = eligibleUnscheduledCandidates(board).find(
+    (item) => item.staffId === staffId,
+  );
+
+  if (candidate === undefined) {
+    throw new Error("Eligible unscheduled staff member is not available.");
+  }
+
+  return {
+    ...board,
+    roster: [
+      ...board.roster,
+      {
+        assignmentId,
+        staffId: candidate.staffId,
+        displayName: candidate.displayName,
+        handle: candidate.handle,
+        teamLabel: candidate.teamLabel,
+        attendanceState: "scheduled",
+        checkedInAt: null,
+      },
+    ],
   };
 }

@@ -1,29 +1,33 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import {
   LOCAL_CURRENT_SHIFT_BOARD,
+  addUnscheduledRosterMember,
   attendanceStateLabel,
   checkedInRoster,
+  eligibleUnscheduledCandidates,
   rosterSummary,
   type ShiftBoardRosterMember,
 } from "@/shift-board/currentShiftBoard";
 
-// Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1).
-// This slice is read-only: it shows the current roster and derived checked-in
-// state. Attendance operations, hours, deployment, equipment, and shortcuts
-// arrive in their owning M10 tasks.
-const board = LOCAL_CURRENT_SHIFT_BOARD;
-const checkedInMembers = computed(() => checkedInRoster(board));
-const summary = computed(() => rosterSummary(board));
+// Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1, M10.7).
+// Check-in/out, no-show, hours correction forms, deployment, equipment, and
+// shortcuts arrive in their owning M10 tasks.
+const board = ref(LOCAL_CURRENT_SHIFT_BOARD);
+const checkedInMembers = computed(() => checkedInRoster(board.value));
+const summary = computed(() => rosterSummary(board.value));
+const candidates = computed(() => eligibleUnscheduledCandidates(board.value));
+const selectedCandidateId = ref(candidates.value[0]?.staffId ?? "");
+const addStatus = ref<string | null>(null);
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
-  timeZone: board.timeZone,
+  timeZone: board.value.timeZone,
   timeZoneName: "short",
 });
 
@@ -37,6 +41,24 @@ function checkedInText(member: ShiftBoardRosterMember): string {
   }
 
   return `Checked in ${formatTimestamp(member.checkedInAt)}`;
+}
+
+function addSelectedCandidate(): void {
+  const candidate = candidates.value.find(
+    (item) => item.staffId === selectedCandidateId.value,
+  );
+
+  if (candidate === undefined) {
+    return;
+  }
+
+  board.value = addUnscheduledRosterMember(
+    board.value,
+    candidate.staffId,
+    `local-unscheduled-${candidate.staffId}`,
+  );
+  selectedCandidateId.value = candidates.value[0]?.staffId ?? "";
+  addStatus.value = `${candidate.displayName} added to roster.`;
 }
 </script>
 
@@ -83,6 +105,46 @@ function checkedInText(member: ShiftBoardRosterMember): string {
         <dd>{{ summary.checkedInCount }}</dd>
       </div>
     </dl>
+
+    <section
+      class="shift-board__unscheduled"
+      aria-labelledby="unscheduled-heading"
+    >
+      <h2 id="unscheduled-heading" class="shift-board__subheading">
+        Add eligible staff
+      </h2>
+      <form
+        class="shift-board__add-form"
+        aria-label="Add eligible unscheduled staff"
+        @submit.prevent="addSelectedCandidate"
+      >
+        <label class="shift-board__field">
+          <span>Staff</span>
+          <select
+            v-model="selectedCandidateId"
+            :disabled="candidates.length === 0"
+          >
+            <option
+              v-for="candidate in candidates"
+              :key="candidate.staffId"
+              :value="candidate.staffId"
+            >
+              {{ candidate.displayName }} - {{ candidate.teamLabel }}
+            </option>
+          </select>
+        </label>
+        <button
+          class="shift-board__button"
+          type="submit"
+          :disabled="selectedCandidateId === ''"
+        >
+          Add to roster
+        </button>
+      </form>
+      <p class="shift-board__status" role="status">
+        {{ addStatus ?? "No unscheduled staff added." }}
+      </p>
+    </section>
 
     <section
       class="shift-board__checked-in"
@@ -243,6 +305,7 @@ function checkedInText(member: ShiftBoardRosterMember): string {
 }
 
 .shift-board__checked-in,
+.shift-board__unscheduled,
 .shift-board__roster {
   margin-top: var(--m-space-6);
 }
@@ -272,6 +335,62 @@ function checkedInText(member: ShiftBoardRosterMember): string {
 
 .shift-board__checked-item span:last-child {
   color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+}
+
+.shift-board__add-form {
+  display: flex;
+  align-items: end;
+  gap: var(--m-space-3);
+  max-width: 34rem;
+}
+
+.shift-board__field {
+  display: grid;
+  flex: 1;
+  gap: var(--m-space-1);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.shift-board__field select {
+  min-height: 2.75rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 600;
+  padding: 0 var(--m-space-3);
+}
+
+.shift-board__button {
+  min-height: 2.75rem;
+  border: 1px solid var(--m-text-primary);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-text-primary);
+  color: var(--m-surface-app);
+  font: inherit;
+  font-weight: 700;
+  padding: 0 var(--m-space-4);
+}
+
+.shift-board__button:disabled,
+.shift-board__field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.shift-board__button:focus-visible,
+.shift-board__field select:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.shift-board__status {
+  margin: var(--m-space-2) 0 0;
+  color: var(--m-text-muted);
   font-size: var(--m-text-sm);
 }
 
@@ -355,6 +474,11 @@ function checkedInText(member: ShiftBoardRosterMember): string {
   .shift-board__context,
   .shift-board__summary {
     grid-template-columns: 1fr;
+  }
+
+  .shift-board__add-form {
+    align-items: stretch;
+    display: grid;
   }
 
   .shift-board__checked-item span {
