@@ -13,6 +13,8 @@ use App\Orchid\Screens\Document\PolicyDocumentEditScreen;
 use App\Orchid\Screens\Document\PolicyDocumentListScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentEditScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentListScreen;
+use App\Orchid\Screens\Equipment\EquipmentEditScreen;
+use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
@@ -214,6 +216,27 @@ Route::screen('staff', StaffListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Staff'), route('platform.staff')));
+
+// Platform > Operations > Equipment > Equipment
+Route::screen('equipment/{equipmentItem}/edit', EquipmentEditScreen::class)
+    ->name('platform.equipment.edit')
+    ->breadcrumbs(fn (Trail $trail, $equipmentItem) => $trail
+        ->parent('platform.equipment')
+        ->push($equipmentItem->name, route('platform.equipment.edit', $equipmentItem)));
+
+// Platform > Operations > Equipment > Create
+Route::screen('equipment/create', EquipmentEditScreen::class)
+    ->name('platform.equipment.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.equipment')
+        ->push(__('Create'), route('platform.equipment.create')));
+
+// Platform > Operations > Equipment
+Route::screen('equipment', EquipmentListScreen::class)
+    ->name('platform.equipment')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Equipment'), route('platform.equipment')));
 
 // Platform > Policies & Procedures > Policies > Policy
 Route::get('policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'policy'])

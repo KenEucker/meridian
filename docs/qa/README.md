@@ -36,7 +36,7 @@ current deployment/location move affordance. M10.9 adds local equipment
 checkout/check-in controls and checked-out equipment state. The full
 `QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
 
-1. Start the field app in development mode.
+1. Start the shared client in development mode.
 2. Open **Current shift board** from the home surface.
 3. Confirm the board shows the Local Field Event, Rangers department, Dirt team,
    Ranger Dirt Day Shift, roster count, and checked-in count.
@@ -53,7 +53,13 @@ checkout/check-in controls and checked-out equipment state. The full
 7. Check out Safety Vest to Vera Staff. Confirm the equipment status says Safety
    Vest was checked out to Vera Staff and the checked-out equipment list includes
    Safety Vest with visible Checked out state text.
-8. Check in Radio 12 as Returned. Confirm the equipment status says Radio 12 was
-   checked in as Returned and Radio 12 leaves the checked-out equipment list.
-9. Confirm no staff attendance check-in, staff attendance check-out, no-show,
+8. Add Radio 14 with asset tag RDO-14 and immediately check it out to Vera Staff.
+   Confirm the status says Radio 14 was added and checked out to Vera Staff.
+9. In the check-in control, select Vera Staff. Confirm Safety Vest and Radio 14
+   are both available for selection, select both, and check them in as Returned.
+   Confirm the status says 2 items checked in as Returned and both leave the checked-out
+   equipment list.
+10. Check in Radio 12 as Returned by selecting Local Field Author. Confirm Radio
+   12 leaves the checked-out equipment list.
+11. Confirm no staff attendance check-in, staff attendance check-out, no-show,
    hours, field report shortcut, or incident shortcut controls are present.

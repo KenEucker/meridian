@@ -39,8 +39,9 @@ If the canonical parent UI document has a different filename in the repository, 
 Meridian Alpha 1 UI implementation should follow this technical contract:
 
 - Server/admin application: Laravel, PostgreSQL, Orchid, and OpenAPI-described APIs.
-- Mobile/field application: Vue + Capacitor from day one.
-- Desktop on-site wrapper: Electron wrapping the local Meridian web UI.
+- Shared client application: Vue from day one for all non-admin product workflows.
+- Mobile packaging wrapper: Capacitor packages the shared Vue client for iOS and Android.
+- Desktop on-site wrapper: Electron packages and serves the shared Vue client locally.
 - Device sync: PowerSync-backed local state and sync-aware UI.
 - Offline-first behavior: PowerSync-backed local state and sync-aware UI.
 - Install targets: web/PWA, Electron for on-site laptop, and responsive browser surfaces.
@@ -48,7 +49,11 @@ Meridian Alpha 1 UI implementation should follow this technical contract:
 - Auth: email magic link, Google OAuth, and Discord OAuth; no internal username/password auth for Alpha 1.
 - Kiosk: trusted workstation context layered on top of authenticated user authority.
 
-Laravel/Orchid owns trusted admin and god-mode administration surfaces. Vue/Capacitor owns the offline-capable field application experience. Shared component contracts in this document define behavior and semantics across both surfaces; implementation APIs may differ by runtime.
+Laravel/Orchid owns trusted admin and god-mode administration surfaces. The
+shared Vue client owns all non-admin user-facing workflows across web/PWA,
+Electron, and Capacitor. Shared component contracts in this document define
+behavior and semantics for the product client; platform-specific capabilities
+belong behind shell/platform adapters.
 
 ---
 
@@ -777,6 +782,12 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `shift-board.deployment-update` | `events.departments.shift-board.deployments.update` | Move staff/deployment | Shift lead/department lead |
 | `shift-board.equipment-update` | `events.departments.shift-board.equipment.update` | Check equipment in/out | Shift lead/department lead |
 
+The current shared-client Alpha 1 surface may colocate local controls while parity
+is still being closed, but the UX direction is separate surfaces for passive
+shift viewing and action-focused check-in/check-out. Equipment check-in should be
+staff-first: choose the staff member, show the equipment currently checked out to
+that person, and allow multiple items to be returned in one action.
+
 ### 12.6 Organizer Screens
 
 | Screen ID | Route name | Purpose | Access |
@@ -1294,7 +1305,7 @@ Automated tooling should be configured separately in CI. If not configured yet, 
 
 When using this document as input for Codex or another coding agent:
 
-1. Generate for the correct runtime: Orchid/Laravel for admin and god-mode surfaces, Vue/Capacitor for the offline field app, and Electron wrapper UI for on-site shell surfaces.
+1. Generate for the correct runtime: Orchid/Laravel for admin and god-mode surfaces, the shared Vue client for all non-admin product workflows, and Capacitor/Electron only as platform packaging wrappers.
 2. Do not invent new statuses.
 3. Do not invent new role access for IMS.
 4. Do not expose IMS widgets to organizers unless they also have IC team-granted authority.

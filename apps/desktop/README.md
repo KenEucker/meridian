@@ -2,11 +2,10 @@
 
 The Meridian Electron on-site workstation wrapper.
 
-`M2.3` adds the Electron wrapper shell that opens the local Meridian web UI in
-a fullscreen/kiosk window and auto-recovers if the wrapped UI crashes or has
-not loaded yet. `M2.4` adds a toggleable health panel that displays the
-node/server version placeholders described by technical spec 25.3, reading the
-values it can from the server health endpoint.
+The desktop wrapper packages the shared Vue client from `apps/client`, serves it
+through a tiny local static server, opens it in a fullscreen/kiosk window, and
+auto-recovers if the wrapped UI crashes. The toggleable health panel displays
+server/node placeholders and the packaged client version.
 
 The wrapper intentionally does **not** manage Docker Compose, block accidental
 close, or include emergency export in Alpha 1 (technical spec 3.3, 25.1).
@@ -16,7 +15,8 @@ milestones; the health panel shows them as clearly labeled placeholders for now.
 
 ## Source references
 
-- Technical spec section 3.3 Desktop on-site wrapper.
+- [ADR 0001: Shared Vue Client Across Web, Desktop, and Mobile](../../docs/adr/0001-shared-vue-client.md)
+- Technical spec section 3.4 Desktop on-site wrapper.
 - Technical spec section 25.1 Purpose.
 - Technical spec section 25.2 Distribution.
 - Technical spec section 25.3 Health panel.
@@ -35,9 +35,10 @@ These versions follow `docs/meridian-technology-baseline.md`.
 
 | File | Purpose |
 |---|---|
-| `src/config.ts` | Pure resolution of the local Meridian web UI URL and health URL from environment variables. |
+| `src/config.ts` | Pure resolution of the shared client dist path, optional app URL override, server URL, health URL, and client version. |
 | `src/health.ts` | Pure health panel model, HTML renderer, and the non-throwing health fetch helper. |
-| `src/main.ts` | Electron main process: kiosk window, auto-recovery, and the toggleable health panel window. |
+| `src/staticClientServer.ts` | Tiny local static server for the packaged shared Vue client. |
+| `src/main.ts` | Electron main process: packaged client serving, kiosk window, auto-recovery, and the toggleable health panel window. |
 
 `src/config.ts` and `src/health.ts` contain all domain logic and are unit
 tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
@@ -47,8 +48,12 @@ tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `MERIDIAN_APP_URL` | `http://localhost:8000/` | Local Meridian web UI the wrapper opens. Must be `http`/`https`. |
-| `MERIDIAN_HEALTH_URL` | `<app URL>/api/health` | Optional override for the server health endpoint. |
+| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist` from `apps/desktop` | Shared Vue client build directory to serve locally. |
+| `MERIDIAN_CLIENT_PORT` | `0` | Local static-server port. `0` lets the OS choose. |
+| `MERIDIAN_CLIENT_VERSION` | read from `apps/client/package.json` | Optional packaged client version override for health display. |
+| `MERIDIAN_APP_URL` | unset | Optional development override that skips the packaged static server and opens an external client URL. |
+| `MERIDIAN_SERVER_URL` | `http://localhost:8000/` | Local Laravel server/API URL used to derive health checks. |
+| `MERIDIAN_HEALTH_URL` | `<server URL>/api/health` | Optional override for the server health endpoint. |
 
 ## Local development
 
@@ -84,10 +89,9 @@ locally:
 # One-time: approve the Electron binary download for this workspace
 corepack pnpm approve-builds
 
-# Build the main process and start the wrapper against a running local server
+# Build the shared client and main process, then start the wrapper
 corepack pnpm --filter @meridian/desktop run build
-MERIDIAN_APP_URL="http://localhost:8000/" \
-  corepack pnpm --filter @meridian/desktop run start
+corepack pnpm --filter @meridian/desktop run start
 ```
 
 Press `Ctrl+Shift+H` (`Cmd+Shift+H` on macOS) to toggle the health panel.

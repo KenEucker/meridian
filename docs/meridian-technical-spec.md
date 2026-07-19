@@ -51,12 +51,13 @@ PowerSync may be used as an external dependency and does not need to be shipped 
 
 # 3. High-Level Architecture
 
-Meridian is composed of four major runtime surfaces:
+Meridian is composed of five major runtime surfaces:
 
 1. Server/admin application.
-2. Mobile/field application.
-3. Desktop on-site wrapper.
-4. Node-to-node synchronization layer.
+2. Shared client application.
+3. Mobile packaging wrapper.
+4. Desktop on-site wrapper.
+5. Node-to-node synchronization layer.
 
 ## 3.1 Server/admin application
 
@@ -72,27 +73,41 @@ The server/admin application is a Laravel modular monolith with:
 
 The Laravel server remains the canonical writer to PostgreSQL. Clients do not directly mutate canonical tables. Device writes are submitted through Laravel validation and acceptance flows.
 
-## 3.2 Mobile/field application
+Laravel serves the built shared Vue client at `/`. Orchid remains scoped to
+`/admin` for trusted administration and god-mode data repair.
 
-The field application is:
+## 3.2 Shared client application
+
+The shared client application is:
 
 - Vue.
-- Capacitor from day one.
+- Mobile-first.
 - Offline-capable.
 - PowerSync-backed.
 - Locally encrypted.
 - Device-signing capable.
-- Installable as a native-feeling application.
+- Served as the web/PWA product app.
+- Packaged by Electron for desktop/kiosk use.
+- Packaged by Capacitor for iOS and Android.
 
-The installed app is required for reliable on-site/offline operation where DNS or browser-trusted HTTPS cannot be guaranteed.
+All non-admin user-facing operational workflows live in this shared client.
+Platform shells may expose platform capabilities through adapters, but they do
+not fork product UI.
 
-## 3.3 Desktop on-site wrapper
+## 3.3 Mobile packaging wrapper
+
+The mobile app uses Capacitor to package the shared Vue client for iOS and
+Android. The installed app is required for reliable on-site/offline operation
+where DNS or browser-trusted HTTPS cannot be guaranteed.
+
+## 3.4 Desktop on-site wrapper
 
 The on-site laptop uses an Electron desktop wrapper.
 
 The Electron wrapper:
 
-- Wraps the local Meridian web UI.
+- Serves a packaged local build of the shared Vue client through a tiny local
+  static server.
 - Is installable.
 - Runs fullscreen/kiosk-style by default.
 - Shows a health panel.
@@ -102,7 +117,7 @@ The Electron wrapper:
 - Does not include emergency export in Alpha 1.
 - Does not need to block accidental close in Alpha 1.
 
-## 3.4 Node-to-node sync
+## 3.5 Node-to-node sync
 
 Meridian supports multiple node roles:
 
@@ -126,8 +141,9 @@ Proposed structure:
 ```text
 meridian/
   apps/
-    server/        Laravel + Orchid + API
-    mobile/        Vue + Capacitor
+    client/        Shared Vue client
+    server/        Laravel + Orchid + API + client serving
+    mobile/        Capacitor mobile packaging
     desktop/       Electron wrapper
   packages/
     shared-types/
@@ -1810,7 +1826,7 @@ Policy documents, procedure documents, and fragments are authored as Markdown.
 
 Laravel APIs should send Markdown/source content as plain text. Rendering happens where the document is rendered.
 
-The Vue/Capacitor app may render synced Markdown locally through PowerSync-backed data for offline reliability.
+The shared Vue client may render synced Markdown locally through PowerSync-backed data for offline reliability.
 
 Laravel may render Markdown server-side for previews, PDF export, Markdown export with resolved fragments, and other server-generated artifacts.
 
@@ -2337,7 +2353,8 @@ Alpha 1 includes:
 Laravel + Orchid + PostgreSQL
 Docker Compose deployment
 PowerSync
-Vue + Capacitor field app
+Shared Vue client
+Capacitor mobile wrapper
 Electron desktop wrapper
 real auth
 device trust
@@ -2520,7 +2537,7 @@ The following areas may need later detail:
 16. Exact attendance reconciliation rules.
 17. Exact photo conversion pipeline.
 18. Exact deployment bundle format.
-19. Exact Markdown sanitizer/renderer libraries for Laravel and Vue/Capacitor.
+19. Exact Markdown sanitizer/renderer libraries for Laravel and the shared Vue client.
 20. Exact custom fragment token grammar and editor UI.
 21. Exact snapshot strategy for acknowledged policy/procedure versions.
 22. Exact background job behavior for fragment-driven document version bumps.

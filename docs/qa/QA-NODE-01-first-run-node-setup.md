@@ -28,7 +28,9 @@ Verify that a fresh Meridian server can create its first node, generate node key
 
 - No organization or event setup is required.
 - Use a node name such as `qa.2027.onsite`.
-- Use the `onsite` role for the first pass.
+- Use the `development` role for local HTTP testing. Use `onsite`, `central`, or
+  `standalone` only when `APP_URL` is HTTPS and required event-mode services are
+  available.
 - Optional central URL: `https://central.example.org`.
 
 ## Steps
@@ -41,6 +43,7 @@ Verify that a fresh Meridian server can create its first node, generate node key
 6. Refresh `/setup`.
 7. Sign in as an Orchid user with the `platform.node.config` permission.
 8. Open `/admin/node-config`.
+9. Change the node name, role, or central node URL in Node Configuration and save.
 
 ## Expected results
 
@@ -49,6 +52,8 @@ Verify that a fresh Meridian server can create its first node, generate node key
 - Refreshing `/setup` does not show a second setup form.
 - The configured node shows the selected name, role, optional central URL, and a public key.
 - `/admin/node-config` shows node configuration rows.
+- `/admin/node-config` lets a permitted God mode administrator edit the active
+  node name, role, and central node URL after first-run setup.
 - Setup-created values show `database override` as the source.
 - Values that are not configured show `runtime/default` or `file config` as appropriate.
 - Private key material is not displayed directly.
@@ -58,9 +63,12 @@ Verify that a fresh Meridian server can create its first node, generate node key
 - Screenshot of `/setup` before submission.
 - Screenshot of `/setup` after submission.
 - Screenshot of `/admin/node-config` showing config sources with private key hidden.
+- Screenshot of `/admin/node-config` after editing an allowed node setting.
 
 ## Failure notes
 
 - If `/setup` creates more than one active node, stop testing and file a blocking setup issue.
 - If private key material is visible in `/admin/node-config`, stop testing and file a blocking security issue.
 - If the Orchid screen is not permission-gated, stop testing and file a blocking God-mode issue.
+- If an event-mode role saves while `APP_URL` is plain HTTP, stop testing and
+  file a blocking event-mode safeguard issue.
