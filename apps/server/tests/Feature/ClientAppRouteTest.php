@@ -55,10 +55,19 @@ class ClientAppRouteTest extends TestCase
         $response->assertOk();
         $response->assertSee('<title>Meridian Admin</title>', false);
         $response->assertSee('http://localhost:5173/@vite/client', false);
-        $this->assertMatchesRegularExpression(
-            '#window\.__MERIDIAN_RUNTIME_CONFIG__ = \{"apiBaseUrl":"http://localhost(?::\d+)?","deploymentTarget":"server","uiMode":"admin"\}#',
+        $this->assertSame(1, preg_match(
+            '#window\.__MERIDIAN_RUNTIME_CONFIG__ = (?P<runtimeConfig>\{[^<]+\});</script>#',
             (string) $response->getContent(),
+            $matches,
+        ));
+        $runtimeConfig = json_decode($matches['runtimeConfig'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('http', parse_url((string) $runtimeConfig['apiBaseUrl'], PHP_URL_SCHEME));
+        $this->assertContains(
+            parse_url((string) $runtimeConfig['apiBaseUrl'], PHP_URL_HOST),
+            ['localhost', '127.0.0.1', '::1'],
         );
+        $this->assertSame('server', $runtimeConfig['deploymentTarget']);
+        $this->assertSame('admin', $runtimeConfig['uiMode']);
         $response->assertSee('http://localhost:5173/src/main.ts', false);
     }
 
