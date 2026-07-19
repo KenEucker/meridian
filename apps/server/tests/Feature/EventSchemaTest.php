@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\Event;
 use App\Models\Organization;
 use Illuminate\Database\QueryException;
@@ -80,17 +81,19 @@ class EventSchemaTest extends TestCase
 
     public function test_event_time_timezone_status_and_active_window_are_persisted(): void
     {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
         $startsAt = Carbon::parse('2026-10-01 09:00:00');
         $endsAt = Carbon::parse('2026-10-04 18:00:00');
         $activeWindowStartsAt = Carbon::parse('2026-09-30 09:00:00');
         $activeWindowEndsAt = Carbon::parse('2026-10-05 18:00:00');
 
-        $event = Event::factory()->create([
+        $event = Event::factory()->for($organization)->create([
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'timezone' => 'America/Denver',
             'status' => 'event-status-placeholder',
-            'ic_department_id' => 42,
+            'ic_department_id' => $department->id,
             'active_event_window_starts_at' => $activeWindowStartsAt,
             'active_event_window_ends_at' => $activeWindowEndsAt,
         ]);
@@ -99,7 +102,7 @@ class EventSchemaTest extends TestCase
         $this->assertSame($endsAt->toDateTimeString(), $event->ends_at->toDateTimeString());
         $this->assertSame('America/Denver', $event->timezone);
         $this->assertSame('event-status-placeholder', $event->status);
-        $this->assertSame(42, $event->ic_department_id);
+        $this->assertSame($department->id, $event->ic_department_id);
         $this->assertSame(
             $activeWindowStartsAt->toDateTimeString(),
             $event->active_event_window_starts_at->toDateTimeString()

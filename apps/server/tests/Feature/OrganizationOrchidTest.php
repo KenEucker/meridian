@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditEvent;
+use App\Models\Department;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -45,6 +47,7 @@ class OrganizationOrchidTest extends TestCase
         $response->assertSee('Edit Organization');
         $response->assertSee('Signal Camp');
         $response->assertSee('signal-camp');
+        $response->assertSee('name="organization[default_ic_department_id]"', false);
         $response->assertSee('meridian-admin.js');
         $response->assertSee('data-meridian-slug-target="organization[slug]"', false);
         $response->assertSee('Save');
@@ -109,6 +112,61 @@ class OrganizationOrchidTest extends TestCase
             ]);
 
         $response->assertSessionHasErrors('organization.slug');
+    }
+
+    public function test_orchid_organization_save_configures_default_ic_department_with_audit(): void
+    {
+        $organization = Organization::factory()->create([
+            'name' => 'Idaho Burners',
+            'slug' => 'idaho-burners',
+        ]);
+        $department = Department::factory()->for($organization)->create([
+            'name' => 'Rangers',
+        ]);
+
+        $response = $this->screen('platform.organizations.edit', [
+            'organization' => $organization->id,
+        ])
+            ->actingAs($this->organizationAdmin())
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'organization' => [
+                    'name' => 'Idaho Burners',
+                    'slug' => 'idaho-burners',
+                    'default_ic_department_id' => $department->id,
+                ],
+            ]);
+
+        $response->assertRedirect(route('platform.organizations'));
+
+        $this->assertSame($department->id, $organization->refresh()->default_ic_department_id);
+
+        $audit = AuditEvent::query()->where('action', 'organization.default_ic_department_changed')->sole();
+        $this->assertSame($organization->id, $audit->organization_id);
+        $this->assertSame($department->id, $audit->department_id);
+        $this->assertSame(AuditEvent::SOURCE_ORCHID, $audit->source_context);
+    }
+
+    public function test_orchid_organization_save_rejects_other_organization_default_ic_department(): void
+    {
+        $organization = Organization::factory()->create();
+        $otherDepartment = Department::factory()->create();
+
+        $response = $this->screen('platform.organizations.edit', [
+            'organization' => $organization->id,
+        ])
+            ->actingAs($this->organizationAdmin())
+            ->withoutFollowingRedirects()
+            ->method('save', [
+                'organization' => [
+                    'name' => $organization->name,
+                    'slug' => $organization->slug,
+                    'default_ic_department_id' => $otherDepartment->id,
+                ],
+            ]);
+
+        $response->assertSessionHasErrors('organization.default_ic_department_id');
+        $this->assertNull($organization->refresh()->default_ic_department_id);
     }
 
     private function organizationAdmin(): User

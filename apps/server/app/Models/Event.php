@@ -104,6 +104,11 @@ class Event extends Model
         return $this->belongsTo(Organization::class);
     }
 
+    public function icDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'ic_department_id');
+    }
+
     public function applications(): HasMany
     {
         return $this->hasMany(EventApplication::class);
