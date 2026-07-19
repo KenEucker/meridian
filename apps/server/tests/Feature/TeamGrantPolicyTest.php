@@ -84,12 +84,51 @@ class TeamGrantPolicyTest extends TestCase
         (new TeamGrantService)->grant($team, $this->role('ic_lead'));
     }
 
-    public function test_event_scoped_ic_role_can_be_granted_with_an_event(): void
+    public function test_event_scoped_ic_roles_can_be_granted_to_teams_in_the_selected_ic_department(): void
+    {
+        [$event, $team] = $this->eventWithIcTeam();
+
+        foreach (['ic_viewer', 'ic_operator', 'ic_lead'] as $roleCode) {
+            $grant = (new TeamGrantService)->grant($team, $this->role($roleCode), $event);
+
+            $this->assertSame($event->id, $grant->event_id);
+            $this->assertSame($team->id, $grant->team_id);
+            $this->assertSame($roleCode, $grant->permissionRole->code);
+        }
+    }
+
+    public function test_event_scoped_ic_role_is_rejected_when_event_has_no_ic_department(): void
     {
         $team = Team::factory()->create();
-        $event = Event::factory()->create();
+        $event = Event::factory()->create(['ic_department_id' => null]);
 
-        $grant = (new TeamGrantService)->grant($team, $this->role('ic_operator'), $event);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('IC roles require the event to have an Incident Command department.');
+
+        (new TeamGrantService)->grant($team, $this->role('ic_viewer'), $event);
+    }
+
+    public function test_event_scoped_ic_role_is_rejected_for_team_outside_selected_ic_department(): void
+    {
+        [$event] = $this->eventWithIcTeam();
+        $otherDepartment = Department::factory()->for($event->organization)->create();
+        $otherTeam = Team::factory()->for($otherDepartment)->create();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('IC roles can only be granted to teams in the event Incident Command department.');
+
+        (new TeamGrantService)->grant($otherTeam, $this->role('ic_operator'), $event);
+    }
+
+    public function test_event_scoped_ic_role_uses_organization_default_when_event_has_no_override(): void
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $organization->forceFill(['default_ic_department_id' => $department->id])->save();
+        $event = Event::factory()->for($organization)->create(['ic_department_id' => null]);
+        $team = Team::factory()->for($department)->create();
+
+        $grant = (new TeamGrantService)->grant($team, $this->role('ic_lead'), $event);
 
         $this->assertSame($event->id, $grant->event_id);
     }
@@ -129,5 +168,20 @@ class TeamGrantPolicyTest extends TestCase
         $organization->forceFill(['organizers_department_id' => $department->id])->save();
 
         return Team::factory()->for($department)->create();
+    }
+
+    /**
+     * @return array{0: Event, 1: Team}
+     */
+    private function eventWithIcTeam(): array
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $event = Event::factory()->for($organization)->create([
+            'ic_department_id' => $department->id,
+        ]);
+        $team = Team::factory()->for($department)->create();
+
+        return [$event, $team];
     }
 }

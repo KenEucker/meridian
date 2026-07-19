@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
+use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
 use App\Models\Team;
@@ -73,11 +75,10 @@ class EffectiveRoleResolverTest extends TestCase
 
     public function test_event_scoped_grant_is_only_returned_for_matching_event(): void
     {
-        $team = Team::factory()->create();
+        [$event, $team] = $this->eventWithIcTeam();
         $staff = Staff::factory()->create();
         $this->addStaffToTeam($staff, $team);
 
-        $event = Event::factory()->create();
         $otherEvent = Event::factory()->create();
 
         TeamGrant::factory()->create([
@@ -89,6 +90,53 @@ class EffectiveRoleResolverTest extends TestCase
         $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff));
         $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff, $otherEvent));
         $this->assertCount(1, (new EffectiveRoleResolver)->resolveForStaff($staff, $event));
+    }
+
+    public function test_ic_grant_is_excluded_when_team_is_not_in_selected_ic_department(): void
+    {
+        [$event] = $this->eventWithIcTeam();
+        $otherDepartment = Department::factory()->for($event->organization)->create();
+        $otherTeam = Team::factory()->for($otherDepartment)->create();
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $otherTeam);
+
+        TeamGrant::factory()->create([
+            'team_id' => $otherTeam->id,
+            'event_id' => $event->id,
+            'permission_role_id' => $this->role('ic_operator')->id,
+        ]);
+
+        $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff, $event));
+    }
+
+    public function test_normal_team_in_ic_department_does_not_receive_ic_role_without_team_grant(): void
+    {
+        [$event, $team] = $this->eventWithIcTeam();
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff, $event));
+    }
+
+    public function test_ic_grant_uses_organization_default_ic_department_when_event_has_no_override(): void
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $organization->forceFill(['default_ic_department_id' => $department->id])->save();
+        $event = Event::factory()->for($organization)->create(['ic_department_id' => null]);
+        $team = Team::factory()->for($department)->create();
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'event_id' => $event->id,
+            'permission_role_id' => $this->role('ic_viewer')->id,
+        ]);
+
+        $roles = (new EffectiveRoleResolver)->resolveForStaff($staff, $event);
+
+        $this->assertSame('ic_viewer', $roles->sole()->roleCode);
     }
 
     public function test_organization_scoped_grants_apply_regardless_of_event(): void
@@ -135,5 +183,20 @@ class EffectiveRoleResolverTest extends TestCase
             'staff_id' => $staff->id,
             'department_membership_id' => $departmentMembership->id,
         ]);
+    }
+
+    /**
+     * @return array{0: Event, 1: Team}
+     */
+    private function eventWithIcTeam(): array
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $event = Event::factory()->for($organization)->create([
+            'ic_department_id' => $department->id,
+        ]);
+        $team = Team::factory()->for($department)->create();
+
+        return [$event, $team];
     }
 }

@@ -45,7 +45,7 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->assertSame($organization->default_ic_department_id, $event->ic_department_id);
 
         $this->assertSame(
-            ['COMMAND', 'DIRT', 'LOGISTICS', 'OPERATOR'],
+            ['COMMAND', 'DIRT', 'IC_OPERATOR', 'IC_VIEWER', 'LOGISTICS', 'OPERATOR'],
             Team::query()
                 ->whereHas('department', fn ($query) => $query->where('organization_id', $organization->id))
                 ->where('is_default', false)
@@ -143,10 +143,10 @@ class DevelopmentScenarioSeedTest extends TestCase
         );
 
         $operatorTeam = Team::query()
-            ->where('code', 'OPERATOR')
+            ->where('code', 'IC_OPERATOR')
             ->whereHas('department', fn ($query) => $query
                 ->where('organization_id', $organization->id)
-                ->where('code', 'GATE'))
+                ->where('code', 'ORGANIZERS'))
             ->firstOrFail();
 
         $this->assertTrue(

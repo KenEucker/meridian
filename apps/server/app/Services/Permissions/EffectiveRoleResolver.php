@@ -2,6 +2,7 @@
 
 namespace App\Services\Permissions;
 
+use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Event;
 use App\Models\Staff;
 use App\Models\TeamGrant;
@@ -29,6 +30,8 @@ class EffectiveRoleResolver
             return collect();
         }
 
+        $icDepartmentId = $event === null ? null : $this->effectiveIncidentCommandDepartmentId($event);
+
         return TeamGrant::query()
             ->active()
             ->whereIn('team_id', $teamIds)
@@ -39,8 +42,16 @@ class EffectiveRoleResolver
                     $query->orWhere('event_id', $event->id);
                 }
             })
-            ->with(['permissionRole', 'team'])
+            ->with(['permissionRole', 'team.department'])
             ->get()
+            ->filter(function (TeamGrant $grant) use ($icDepartmentId): bool {
+                if (! $this->isIncidentCommandGrant($grant)) {
+                    return true;
+                }
+
+                return $icDepartmentId !== null
+                    && (string) $grant->team->department_id === (string) $icDepartmentId;
+            })
             ->map(function (TeamGrant $grant): EffectiveRole {
                 $roleName = $grant->permissionRole->name;
                 $teamName = $grant->team->name;
@@ -56,5 +67,21 @@ class EffectiveRoleResolver
                 );
             })
             ->values();
+    }
+
+    private function effectiveIncidentCommandDepartmentId(Event $event): ?string
+    {
+        $event->loadMissing(['icDepartment', 'organization.defaultIcDepartment']);
+
+        return $event->ic_department_id ?? $event->organization?->default_ic_department_id;
+    }
+
+    private function isIncidentCommandGrant(TeamGrant $grant): bool
+    {
+        return in_array($grant->permissionRole->code, [
+            PermissionCatalog::ROLE_IC_LEAD,
+            PermissionCatalog::ROLE_IC_OPERATOR,
+            PermissionCatalog::ROLE_IC_VIEWER,
+        ], true);
     }
 }

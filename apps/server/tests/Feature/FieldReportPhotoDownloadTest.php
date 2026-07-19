@@ -136,7 +136,7 @@ class FieldReportPhotoDownloadTest extends TestCase
             $event->forceFill(['organization_id' => $organization->id])->save();
         }
 
-        $department = Department::factory()->for($organization)->create();
+        $department = $this->ensureEventIcDepartment($event, $organization);
         $team = Team::factory()->for($department)->create();
         $staff = Staff::factory()->create();
         $user = User::factory()->create();
@@ -160,5 +160,25 @@ class FieldReportPhotoDownloadTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function ensureEventIcDepartment(Event $event, Organization $organization): Department
+    {
+        if ($event->ic_department_id !== null) {
+            return Department::query()->findOrFail($event->ic_department_id);
+        }
+
+        $event->loadMissing(['icDepartment', 'organization.defaultIcDepartment']);
+
+        $department = $event->organization?->defaultIcDepartment;
+
+        if ($department !== null) {
+            return $department;
+        }
+
+        $department = Department::factory()->for($organization)->create();
+        $event->forceFill(['ic_department_id' => $department->id])->save();
+
+        return $department;
     }
 }
