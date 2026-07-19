@@ -33,8 +33,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 M10.1B resets the four department operations surfaces around field workflows.
 M10.1 delivers Department Overview. M10.9B delivers Logistics Desk search and
 staff workspace. M10.8 delivers the capability-composed Operations Center.
-M10.9A delivers the identity-free Planning Table. The full
-`QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
+M10.9A delivers the identity-free Planning Table. M10.11 delivers the full
+attendance, check-out, and hours QA script.
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-SLB-01-checkin-checkout-hours.md`](QA-SLB-01-checkin-checkout-hours.md) | Staff-mediated on-site/check-in/check-out, actual hours creation, no-show, offline queued attendance writes, hours correction, freeze, audit/history, and self-service non-goals | M10.11 |
 
 1. Start the shared client in development mode.
 2. Confirm the shared shell header shows the Meridian wordmark image, with the
