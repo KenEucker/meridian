@@ -359,6 +359,8 @@ individual signup or team-member identities.
 
 **Goal:** Support online-only incident management for the configured Incident Command Department, and close MVP-critical product UI gaps discovered after the foundational organization/department/team/document/training milestones.
 
+The MVP product UI gap-closure tasks in this milestone are forward-scheduled work from the current development point; they do not reopen earlier completed milestone scopes.
+
 **Primary source docs:** Requirements sections 3.1-3.12, 3.20-3.23, 3.21A, 5, 7.6, 7.8-7.13, 7.12A; Technical spec sections 15, 16, 19, 21, 22, 23, 24, 27.1, 28; data/API sections 6.5, 10.5-10.7, 10.9, 10.15-10.17, 11, 15.3, 15.4, 15.4A; IMS surface specification; UI implementation contract sections 12, 15, and 17.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
