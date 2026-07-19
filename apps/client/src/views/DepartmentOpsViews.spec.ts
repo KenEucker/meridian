@@ -139,8 +139,11 @@ describe("department operations surfaces", () => {
     const { wrapper } = await mountAt(planningPath());
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Planning Table");
+    expect(wrapper.text()).toContain("Offline aggregate cache");
     expect(wrapper.text()).toContain("Plan versus actual");
     expect(wrapper.text()).toContain("Signed up / assigned");
+    expect(wrapper.text()).toContain("No target");
+    expect(wrapper.text()).toContain("Completed");
     expect(wrapper.text()).toContain("Actual hours");
     expect(wrapper.text()).toContain("Variance");
     expect(wrapper.text()).not.toContain("Local Field Author");
@@ -149,5 +152,20 @@ describe("department operations surfaces", () => {
     expect(wrapper.text()).toContain(
       "does not show individual staff identities",
     );
+
+    expect(wrapper.findAll("tbody tr")).toHaveLength(3);
+    await wrapper.get("select").setValue(
+      "77777777-7777-4777-8777-777777777772",
+    );
+    expect(wrapper.findAll("tbody tr")).toHaveLength(1);
+    expect(wrapper.text()).toContain("Ranger Command Overnight");
+    expect(wrapper.text()).not.toContain("Ranger Dirt Day Shift");
+
+    await wrapper.get("select").setValue("");
+    await wrapper.get('input[type="date"]').setValue("2027-07-04");
+    expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+    expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
+    expect(wrapper.text()).toContain("Ranger Dirt Swing Shift");
+    expect(wrapper.text()).not.toContain("Ranger Command Overnight");
   });
 });

@@ -32,6 +32,9 @@ export const LOCAL_CAPABILITIES: CapabilityContext = {
 
 const dayShiftId = "99999999-9999-4999-8999-999999999999";
 const swingShiftId = "99999999-9999-4999-8999-999999999998";
+const overnightShiftId = "99999999-9999-4999-8999-999999999997";
+const dirtTeamId = "77777777-7777-4777-8777-777777777771";
+const commandTeamId = "77777777-7777-4777-8777-777777777772";
 
 export const LOCAL_DEPARTMENT_OVERVIEW: DepartmentOverview = {
   context: LOCAL_DEPARTMENT_OPS_CONTEXT,
@@ -414,11 +417,26 @@ export const LOCAL_OPERATIONS_CENTER: OperationsCenterModel = {
 
 export const LOCAL_PLANNING_TABLE: PlanningTableModel = {
   context: LOCAL_DEPARTMENT_OPS_CONTEXT,
-  selectedTeamId: null,
+  selectedFilters: {
+    teamId: null,
+    date: null,
+  },
+  availableTeams: [
+    {
+      teamId: dirtTeamId,
+      teamLabel: "Dirt",
+    },
+    {
+      teamId: commandTeamId,
+      teamLabel: "Command",
+    },
+  ],
+  syncState: "offline",
   rows: [
     {
       shiftId: dayShiftId,
       title: "Ranger Dirt Day Shift",
+      teamId: dirtTeamId,
       teamLabel: "Dirt",
       startsAt: "2027-07-04T16:00:00.000Z",
       endsAt: "2027-07-04T22:00:00.000Z",
@@ -436,6 +454,7 @@ export const LOCAL_PLANNING_TABLE: PlanningTableModel = {
     {
       shiftId: swingShiftId,
       title: "Ranger Dirt Swing Shift",
+      teamId: dirtTeamId,
       teamLabel: "Dirt",
       startsAt: "2027-07-04T22:00:00.000Z",
       endsAt: "2027-07-05T04:00:00.000Z",
@@ -449,6 +468,24 @@ export const LOCAL_PLANNING_TABLE: PlanningTableModel = {
       actualHours: 0,
       varianceHours: -18,
       statusLabel: "Upcoming",
+    },
+    {
+      shiftId: overnightShiftId,
+      title: "Ranger Command Overnight",
+      teamId: commandTeamId,
+      teamLabel: "Command",
+      startsAt: "2027-07-04T04:00:00.000Z",
+      endsAt: "2027-07-04T10:00:00.000Z",
+      lifecycle: "completed",
+      capacity: null,
+      signedUpOrAssignedCount: 2,
+      checkedInCount: 2,
+      noShowCount: 1,
+      unscheduledCount: 1,
+      plannedHours: 12,
+      actualHours: 13.5,
+      varianceHours: 1.5,
+      statusLabel: "Completed over plan",
     },
   ],
 };
