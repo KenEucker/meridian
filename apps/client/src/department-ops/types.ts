@@ -214,6 +214,7 @@ export interface OperationsCenterModel {
 export interface PlanningAggregateRow {
   readonly shiftId: string;
   readonly title: string;
+  readonly teamId: string;
   readonly teamLabel: string;
   readonly startsAt: string;
   readonly endsAt: string;
@@ -229,8 +230,18 @@ export interface PlanningAggregateRow {
   readonly statusLabel: string;
 }
 
+export interface PlanningTableFilters {
+  readonly teamId: string | null;
+  readonly date: string | null;
+}
+
 export interface PlanningTableModel {
   readonly context: DepartmentOpsContext;
   readonly rows: readonly PlanningAggregateRow[];
-  readonly selectedTeamId: string | null;
+  readonly selectedFilters: PlanningTableFilters;
+  readonly availableTeams: readonly {
+    readonly teamId: string;
+    readonly teamLabel: string;
+  }[];
+  readonly syncState: "fresh" | "stale" | "offline";
 }
