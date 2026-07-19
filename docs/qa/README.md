@@ -32,7 +32,8 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 
 M10.1 covers the current roster and checked-in state. M10.7 adds the local
 eligible unscheduled staff add-to-roster affordance. M10.8 adds the local
-current deployment/location move affordance. The full
+current deployment/location move affordance. M10.9 adds local equipment
+checkout/check-in controls and checked-out equipment state. The full
 `QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
 
 1. Start the field app in development mode.
@@ -43,10 +44,16 @@ current deployment/location move affordance. The full
    Vera Staff remains Scheduled in the roster, and Ari Ranger appears as an
    eligible staff member who can be added to the roster. Confirm Local Field
    Author is assigned to Gate 1, Sam Shiftlead is assigned to Perimeter North,
-   and Vera Staff is Unassigned.
+   and Vera Staff is Unassigned. Confirm Radio 12 is checked out to Local Field
+   Author and the equipment-out summary count is 1.
 5. Add Ari Ranger to the roster. Confirm the roster count increases by one, Ari
    Ranger appears as Scheduled, and the eligible-staff list is empty.
 6. Move Vera Staff to HQ Runner. Confirm the deployment status says Vera Staff
    moved to HQ Runner and the roster shows HQ Runner for Vera.
-7. Confirm no check-in, check-out, no-show, hours, equipment, field report
-   shortcut, or incident shortcut controls are present.
+7. Check out Safety Vest to Vera Staff. Confirm the equipment status says Safety
+   Vest was checked out to Vera Staff and the checked-out equipment list includes
+   Safety Vest with visible Checked out state text.
+8. Check in Radio 12 as Returned. Confirm the equipment status says Radio 12 was
+   checked in as Returned and Radio 12 leaves the checked-out equipment list.
+9. Confirm no staff attendance check-in, staff attendance check-out, no-show,
+   hours, field report shortcut, or incident shortcut controls are present.

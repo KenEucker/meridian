@@ -11,6 +11,21 @@ export const SHIFT_ATTENDANCE_STATES = [
 
 export type ShiftAttendanceState = (typeof SHIFT_ATTENDANCE_STATES)[number];
 
+export const EQUIPMENT_STATES = [
+  "available",
+  "checked_out",
+  "returned",
+  "missing",
+  "damaged",
+] as const;
+
+export type EquipmentState = (typeof EQUIPMENT_STATES)[number];
+
+export type EquipmentReturnCondition = Extract<
+  EquipmentState,
+  "returned" | "missing" | "damaged"
+>;
+
 export interface ShiftBoardRosterMember {
   readonly assignmentId: string;
   readonly staffId: string;
@@ -36,6 +51,33 @@ export interface DeploymentOption {
   readonly locationDetails: string | null;
 }
 
+export interface EquipmentItem {
+  readonly equipmentItemId: string;
+  readonly name: string;
+  readonly assetTag: string | null;
+  readonly status: EquipmentState;
+}
+
+export interface EquipmentCheckout {
+  readonly checkoutId: string;
+  readonly equipmentItemId: string;
+  readonly staffId: string;
+  readonly checkedOutAt: string;
+  readonly returnedAt: string | null;
+  readonly returnCondition: EquipmentReturnCondition | null;
+}
+
+export interface CheckedOutEquipment {
+  readonly checkoutId: string;
+  readonly equipmentItemId: string;
+  readonly itemName: string;
+  readonly assetTag: string | null;
+  readonly staffId: string;
+  readonly staffName: string;
+  readonly checkedOutAt: string;
+  readonly status: EquipmentState;
+}
+
 export interface CurrentShiftBoard {
   readonly eventId: string;
   readonly eventLabel: string;
@@ -51,6 +93,8 @@ export interface CurrentShiftBoard {
   readonly roster: readonly ShiftBoardRosterMember[];
   readonly unscheduledCandidates: readonly UnscheduledStaffCandidate[];
   readonly deploymentOptions: readonly DeploymentOption[];
+  readonly equipmentItems: readonly EquipmentItem[];
+  readonly equipmentCheckouts: readonly EquipmentCheckout[];
 }
 
 export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
@@ -125,6 +169,36 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       locationDetails: "Ranger HQ",
     },
   ],
+  equipmentItems: [
+    {
+      equipmentItemId: "equipment-radio-12",
+      name: "Radio 12",
+      assetTag: "RDO-12",
+      status: "checked_out",
+    },
+    {
+      equipmentItemId: "equipment-safety-vest",
+      name: "Safety Vest",
+      assetTag: "VEST-04",
+      status: "available",
+    },
+    {
+      equipmentItemId: "equipment-shift-flag",
+      name: "Shift Flag",
+      assetTag: "FLAG-01",
+      status: "returned",
+    },
+  ],
+  equipmentCheckouts: [
+    {
+      checkoutId: "equipment-checkout-radio-12",
+      equipmentItemId: "equipment-radio-12",
+      staffId: LOCAL_FIELD_FIXTURE.staffId,
+      checkedOutAt: "2027-07-04T16:05:00.000Z",
+      returnedAt: null,
+      returnCondition: null,
+    },
+  ],
 };
 
 export function attendanceStateLabel(state: ShiftAttendanceState): string {
@@ -194,6 +268,80 @@ export function deploymentLabel(
   return deploymentOptionFor(board, deploymentId)?.name ?? "Unassigned";
 }
 
+export function equipmentStateLabel(state: EquipmentState): string {
+  switch (state) {
+    case "available":
+      return "Available";
+    case "checked_out":
+      return "Checked out";
+    case "returned":
+      return "Returned";
+    case "missing":
+      return "Missing";
+    case "damaged":
+      return "Damaged";
+  }
+}
+
+export function equipmentItemLabel(item: EquipmentItem): string {
+  return item.assetTag === null ? item.name : `${item.name} (${item.assetTag})`;
+}
+
+export function equipmentSummary(board: CurrentShiftBoard): {
+  readonly checkedOutCount: number;
+} {
+  return {
+    checkedOutCount: checkedOutEquipment(board).length,
+  };
+}
+
+export function checkoutReadyEquipment(
+  board: CurrentShiftBoard,
+): readonly EquipmentItem[] {
+  const openEquipmentItemIds = new Set(
+    board.equipmentCheckouts
+      .filter((checkout) => checkout.returnedAt === null)
+      .map((checkout) => checkout.equipmentItemId),
+  );
+
+  return board.equipmentItems.filter(
+    (item) =>
+      (item.status === "available" || item.status === "returned") &&
+      !openEquipmentItemIds.has(item.equipmentItemId),
+  );
+}
+
+export function checkedOutEquipment(
+  board: CurrentShiftBoard,
+): readonly CheckedOutEquipment[] {
+  return board.equipmentCheckouts
+    .filter((checkout) => checkout.returnedAt === null)
+    .map((checkout) => {
+      const item = board.equipmentItems.find(
+        (equipment) => equipment.equipmentItemId === checkout.equipmentItemId,
+      );
+      const staff = board.roster.find(
+        (member) => member.staffId === checkout.staffId,
+      );
+
+      if (item === undefined) {
+        return null;
+      }
+
+      return {
+        checkoutId: checkout.checkoutId,
+        equipmentItemId: item.equipmentItemId,
+        itemName: item.name,
+        assetTag: item.assetTag,
+        staffId: checkout.staffId,
+        staffName: staff?.displayName ?? "Unknown staff",
+        checkedOutAt: checkout.checkedOutAt,
+        status: item.status,
+      } satisfies CheckedOutEquipment;
+    })
+    .filter((item): item is CheckedOutEquipment => item !== null);
+}
+
 export function addUnscheduledRosterMember(
   board: CurrentShiftBoard,
   staffId: string,
@@ -222,6 +370,83 @@ export function addUnscheduledRosterMember(
         currentDeploymentId: null,
       },
     ],
+  };
+}
+
+export function checkoutEquipmentToStaff(
+  board: CurrentShiftBoard,
+  equipmentItemId: string,
+  assignmentId: string,
+  checkoutId: string,
+  checkedOutAt: string,
+): CurrentShiftBoard {
+  const item = checkoutReadyEquipment(board).find(
+    (equipment) => equipment.equipmentItemId === equipmentItemId,
+  );
+
+  if (item === undefined) {
+    throw new Error("Equipment item is not available for checkout.");
+  }
+
+  const member = board.roster.find(
+    (rosterMember) => rosterMember.assignmentId === assignmentId,
+  );
+
+  if (member === undefined) {
+    throw new Error("Roster member is not available.");
+  }
+
+  return {
+    ...board,
+    equipmentItems: board.equipmentItems.map((equipment) =>
+      equipment.equipmentItemId === item.equipmentItemId
+        ? { ...equipment, status: "checked_out" }
+        : equipment,
+    ),
+    equipmentCheckouts: [
+      ...board.equipmentCheckouts,
+      {
+        checkoutId,
+        equipmentItemId: item.equipmentItemId,
+        staffId: member.staffId,
+        checkedOutAt,
+        returnedAt: null,
+        returnCondition: null,
+      },
+    ],
+  };
+}
+
+export function returnEquipmentFromStaff(
+  board: CurrentShiftBoard,
+  checkoutId: string,
+  returnCondition: EquipmentReturnCondition,
+  returnedAt: string,
+): CurrentShiftBoard {
+  const checkout = board.equipmentCheckouts.find(
+    (item) => item.checkoutId === checkoutId,
+  );
+
+  if (checkout === undefined || checkout.returnedAt !== null) {
+    throw new Error("Checked-out equipment is not available for return.");
+  }
+
+  return {
+    ...board,
+    equipmentItems: board.equipmentItems.map((equipment) =>
+      equipment.equipmentItemId === checkout.equipmentItemId
+        ? { ...equipment, status: returnCondition }
+        : equipment,
+    ),
+    equipmentCheckouts: board.equipmentCheckouts.map((item) =>
+      item.checkoutId === checkout.checkoutId
+        ? {
+            ...item,
+            returnedAt,
+            returnCondition,
+          }
+        : item,
+    ),
   };
 }
 

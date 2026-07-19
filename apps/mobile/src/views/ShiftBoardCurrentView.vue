@@ -8,18 +8,28 @@ import {
   assignCurrentDeployment,
   attendanceStateLabel,
   checkedInRoster,
+  checkedOutEquipment,
+  checkoutEquipmentToStaff,
+  checkoutReadyEquipment,
   deploymentLabel,
+  equipmentItemLabel,
+  equipmentStateLabel,
+  equipmentSummary,
   eligibleUnscheduledCandidates,
+  returnEquipmentFromStaff,
   rosterSummary,
+  type CheckedOutEquipment,
+  type EquipmentReturnCondition,
   type ShiftBoardRosterMember,
 } from "@/shift-board/currentShiftBoard";
 
 // Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1, M10.7,
-// M10.8). Check-in/out, no-show, hours correction forms, equipment, and
+// M10.8, M10.9). Attendance write controls, hours correction forms, and
 // shortcuts arrive in their owning M10 tasks.
 const board = ref(LOCAL_CURRENT_SHIFT_BOARD);
 const checkedInMembers = computed(() => checkedInRoster(board.value));
 const summary = computed(() => rosterSummary(board.value));
+const equipmentCounts = computed(() => equipmentSummary(board.value));
 const candidates = computed(() => eligibleUnscheduledCandidates(board.value));
 const selectedCandidateId = ref(candidates.value[0]?.staffId ?? "");
 const addStatus = ref<string | null>(null);
@@ -28,6 +38,19 @@ const selectedDeploymentId = ref(
   board.value.deploymentOptions[0]?.deploymentId ?? "",
 );
 const deploymentStatus = ref<string | null>(null);
+const availableEquipment = computed(() => checkoutReadyEquipment(board.value));
+const equipmentCheckedOut = computed(() => checkedOutEquipment(board.value));
+const selectedEquipmentItemId = ref(
+  availableEquipment.value[0]?.equipmentItemId ?? "",
+);
+const selectedEquipmentAssignmentId = ref(
+  board.value.roster[0]?.assignmentId ?? "",
+);
+const selectedEquipmentCheckoutId = ref(
+  equipmentCheckedOut.value[0]?.checkoutId ?? "",
+);
+const selectedReturnCondition = ref<EquipmentReturnCondition>("returned");
+const equipmentStatus = ref<string | null>(null);
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -52,6 +75,12 @@ function checkedInText(member: ShiftBoardRosterMember): string {
 
 function deploymentText(member: ShiftBoardRosterMember): string {
   return deploymentLabel(board.value, member.currentDeploymentId);
+}
+
+function checkedOutEquipmentText(item: CheckedOutEquipment): string {
+  return `${equipmentStateLabel(item.status)} to ${item.staffName} since ${formatTimestamp(
+    item.checkedOutAt,
+  )}`;
 }
 
 function addSelectedCandidate(): void {
@@ -90,6 +119,60 @@ function moveSelectedDeployment(): void {
   deploymentStatus.value = `${member.displayName} moved to ${deploymentLabel(
     board.value,
     selectedDeploymentId.value,
+  )}.`;
+}
+
+function checkoutSelectedEquipment(): void {
+  const equipment = availableEquipment.value.find(
+    (item) => item.equipmentItemId === selectedEquipmentItemId.value,
+  );
+  const member = board.value.roster.find(
+    (item) => item.assignmentId === selectedEquipmentAssignmentId.value,
+  );
+
+  if (equipment === undefined || member === undefined) {
+    return;
+  }
+
+  const checkedOutAt = new Date().toISOString();
+
+  board.value = checkoutEquipmentToStaff(
+    board.value,
+    equipment.equipmentItemId,
+    member.assignmentId,
+    `local-equipment-checkout-${equipment.equipmentItemId}-${member.staffId}`,
+    checkedOutAt,
+  );
+
+  selectedEquipmentItemId.value =
+    availableEquipment.value[0]?.equipmentItemId ?? "";
+  selectedEquipmentCheckoutId.value =
+    equipmentCheckedOut.value[0]?.checkoutId ?? "";
+  equipmentStatus.value = `${equipment.name} checked out to ${member.displayName}.`;
+}
+
+function returnSelectedEquipment(): void {
+  const checkout = equipmentCheckedOut.value.find(
+    (item) => item.checkoutId === selectedEquipmentCheckoutId.value,
+  );
+
+  if (checkout === undefined) {
+    return;
+  }
+
+  board.value = returnEquipmentFromStaff(
+    board.value,
+    checkout.checkoutId,
+    selectedReturnCondition.value,
+    new Date().toISOString(),
+  );
+
+  selectedEquipmentCheckoutId.value =
+    equipmentCheckedOut.value[0]?.checkoutId ?? "";
+  selectedEquipmentItemId.value =
+    availableEquipment.value[0]?.equipmentItemId ?? "";
+  equipmentStatus.value = `${checkout.itemName} checked in as ${equipmentStateLabel(
+    selectedReturnCondition.value,
   )}.`;
 }
 </script>
@@ -135,6 +218,10 @@ function moveSelectedDeployment(): void {
       <div>
         <dt>Checked in</dt>
         <dd>{{ summary.checkedInCount }}</dd>
+      </div>
+      <div>
+        <dt>Equipment out</dt>
+        <dd>{{ equipmentCounts.checkedOutCount }}</dd>
       </div>
     </dl>
 
@@ -229,6 +316,126 @@ function moveSelectedDeployment(): void {
       >
         {{ deploymentStatus ?? "No deployment changes." }}
       </p>
+    </section>
+
+    <section class="shift-board__equipment" aria-labelledby="equipment-heading">
+      <h2 id="equipment-heading" class="shift-board__subheading">
+        Equipment
+      </h2>
+
+      <div class="shift-board__equipment-actions">
+        <form
+          class="shift-board__add-form"
+          aria-label="Check out equipment"
+          @submit.prevent="checkoutSelectedEquipment"
+        >
+          <label class="shift-board__field">
+            <span>Equipment</span>
+            <select
+              v-model="selectedEquipmentItemId"
+              :disabled="availableEquipment.length === 0"
+            >
+              <option
+                v-for="equipment in availableEquipment"
+                :key="equipment.equipmentItemId"
+                :value="equipment.equipmentItemId"
+              >
+                {{ equipmentItemLabel(equipment) }} -
+                {{ equipmentStateLabel(equipment.status) }}
+              </option>
+            </select>
+          </label>
+          <label class="shift-board__field">
+            <span>Staff</span>
+            <select
+              v-model="selectedEquipmentAssignmentId"
+              :disabled="board.roster.length === 0"
+            >
+              <option
+                v-for="member in board.roster"
+                :key="member.assignmentId"
+                :value="member.assignmentId"
+              >
+                {{ member.displayName }}
+              </option>
+            </select>
+          </label>
+          <button
+            class="shift-board__button"
+            type="submit"
+            :disabled="
+              selectedEquipmentItemId === '' ||
+              selectedEquipmentAssignmentId === ''
+            "
+          >
+            Check out equipment
+          </button>
+        </form>
+
+        <form
+          class="shift-board__add-form"
+          aria-label="Check in equipment"
+          @submit.prevent="returnSelectedEquipment"
+        >
+          <label class="shift-board__field">
+            <span>Checked-out item</span>
+            <select
+              v-model="selectedEquipmentCheckoutId"
+              :disabled="equipmentCheckedOut.length === 0"
+            >
+              <option
+                v-for="checkout in equipmentCheckedOut"
+                :key="checkout.checkoutId"
+                :value="checkout.checkoutId"
+              >
+                {{ checkout.itemName }} - {{ checkout.staffName }}
+              </option>
+            </select>
+          </label>
+          <label class="shift-board__field">
+            <span>Return state</span>
+            <select v-model="selectedReturnCondition">
+              <option value="returned">Returned</option>
+              <option value="missing">Missing</option>
+              <option value="damaged">Damaged</option>
+            </select>
+          </label>
+          <button
+            class="shift-board__button"
+            type="submit"
+            :disabled="selectedEquipmentCheckoutId === ''"
+          >
+            Check in equipment
+          </button>
+        </form>
+      </div>
+
+      <p
+        class="shift-board__status"
+        role="status"
+        aria-label="Equipment workflow status"
+      >
+        {{ equipmentStatus ?? "No equipment changes." }}
+      </p>
+
+      <h3 class="shift-board__minor-heading">Checked-out equipment</h3>
+      <p
+        v-if="equipmentCheckedOut.length === 0"
+        class="shift-board__empty"
+        role="status"
+      >
+        No equipment is checked out.
+      </p>
+      <ul v-else class="shift-board__checked-list">
+        <li
+          v-for="checkout in equipmentCheckedOut"
+          :key="checkout.checkoutId"
+          class="shift-board__checked-item"
+        >
+          <span>{{ checkout.itemName }}</span>
+          <span>{{ checkedOutEquipmentText(checkout) }}</span>
+        </li>
+      </ul>
     </section>
 
     <section
@@ -363,7 +570,7 @@ function moveSelectedDeployment(): void {
 }
 
 .shift-board__summary {
-  grid-template-columns: repeat(2, minmax(8rem, 12rem));
+  grid-template-columns: repeat(3, minmax(8rem, 12rem));
 }
 
 .shift-board__context div,
@@ -393,6 +600,7 @@ function moveSelectedDeployment(): void {
 
 .shift-board__checked-in,
 .shift-board__deployments,
+.shift-board__equipment,
 .shift-board__unscheduled,
 .shift-board__roster {
   margin-top: var(--m-space-6);
@@ -402,6 +610,21 @@ function moveSelectedDeployment(): void {
   margin: 0 0 var(--m-space-3);
   font-family: var(--m-font-heading);
   font-size: var(--m-text-lg);
+}
+
+.shift-board__minor-heading {
+  margin: var(--m-space-4) 0 var(--m-space-2);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-md);
+}
+
+.shift-board__equipment-actions {
+  display: grid;
+  gap: var(--m-space-4);
+}
+
+.shift-board__equipment-actions .shift-board__add-form {
+  max-width: none;
 }
 
 .shift-board__checked-list {
