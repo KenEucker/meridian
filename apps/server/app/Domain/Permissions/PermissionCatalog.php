@@ -120,7 +120,7 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE => 'Check department staff in and out of shifts.',
             self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
             self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN => 'Assign current or planned shift deployments.',
-            self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'Manage department shifts, shift signups, and planning board work.',
+            self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'View identity-free Planning Table aggregates comparing plan versus actual.',
             self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer department settings and team membership.',
         ];
     }
