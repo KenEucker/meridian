@@ -25,6 +25,7 @@ import {
   resolveClientPort,
   resolveClientVersion,
   resolveHealthUrl,
+  resolveAppIconPath,
   resolveAppUrlOverride,
   resolveServerUrl,
 } from "./config";
@@ -47,6 +48,7 @@ function createMainWindow(appUrl: string): BrowserWindow {
     kiosk: true,
     autoHideMenuBar: true,
     backgroundColor: "#11151c",
+    icon: resolveAppIconPath(process.env),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -114,6 +116,7 @@ function toggleHealthWindow(): void {
     title: "Meridian On-site Health",
     autoHideMenuBar: true,
     backgroundColor: "#11151c",
+    icon: resolveAppIconPath(process.env),
     parent: mainWindow ?? undefined,
     webPreferences: {
       contextIsolation: true,

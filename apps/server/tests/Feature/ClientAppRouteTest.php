@@ -90,6 +90,19 @@ class ClientAppRouteTest extends TestCase
         $this->assertFileResponseContains($response, "console.log('client');");
     }
 
+    public function test_client_public_brand_assets_are_served_from_admin_build(): void
+    {
+        $this->installClientDist('<!doctype html><div id="app"></div>');
+        File::ensureDirectoryExists($this->clientDistPath.'/assets/brand');
+        File::put($this->clientDistPath.'/assets/brand/meridian-signal-camp-wordmark.webp', 'wordmark');
+
+        $response = $this->get('/assets/brand/meridian-signal-camp-wordmark.webp');
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/webp');
+        $this->assertFileResponseContains($response, 'wordmark');
+    }
+
     public function test_local_development_redirects_client_assets_to_vite(): void
     {
         config()->set('meridian.client.use_dev_server', true);
