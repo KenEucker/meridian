@@ -1,6 +1,5 @@
 {
   "name": "@meridian/mobile",
-  "version": "0.0.0",
   "private": true,
   "description": "Meridian Capacitor mobile packaging wrapper for Meridian Field.",
   "license": "AGPL-3.0-or-later",

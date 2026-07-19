@@ -10,7 +10,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 /**
  * Default local Meridian server URL.
@@ -20,12 +20,15 @@ import { resolve } from "node:path";
  * override this with `MERIDIAN_SERVER_URL`.
  */
 export const DEFAULT_SERVER_URL = "http://localhost:8000/";
+export const DEFAULT_CLIENT_DEV_SERVER_URL = "http://localhost:5173/";
+const ROOT_PACKAGE_NAME = "meridian";
 
 /** Relative path of the server health endpoint (technical spec 25.3, 26.3). */
 export const HEALTH_PATH = "/api/health";
 
 type EnvLike = Record<string, string | undefined>;
 type ReadFile = typeof readFileSync;
+type DevUiMode = "admin" | "field" | "kiosk";
 
 /** Resolve the local server URL used for API health checks. */
 export function resolveServerUrl(env: EnvLike = {}): string {
@@ -62,22 +65,54 @@ export function resolveClientPort(env: EnvLike = {}): number {
   return port;
 }
 
-/** Resolve the shared Vue client version displayed in desktop health. */
-export function resolveClientVersion(
+/** Resolve the shared Vue Vite dev server URL used by unpackaged Electron. */
+export function resolveClientDevServerUrl(env: EnvLike = {}): string {
+  const raw = env.MERIDIAN_CLIENT_DEV_SERVER_URL?.trim();
+  if (!raw) {
+    return DEFAULT_CLIENT_DEV_SERVER_URL;
+  }
+
+  return normalizeHttpUrl(raw, "MERIDIAN_CLIENT_DEV_SERVER_URL");
+}
+
+/** Resolve the Vite development app URL for a specific shared-client UI mode. */
+export function resolveClientDevAppUrl(
   env: EnvLike = {},
+  uiMode: DevUiMode = "kiosk",
+): string {
+  const url = new URL(resolveClientDevServerUrl(env));
+  url.searchParams.set("meridianUiMode", uiMode);
+
+  return url.toString();
+}
+
+/** Resolve an explicit app URL override, when one has been provided. */
+export function resolveAppUrlOverride(env: EnvLike = {}): string | null {
+  const raw = env.MERIDIAN_APP_URL?.trim();
+  if (!raw) {
+    return null;
+  }
+
+  return normalizeHttpUrl(raw, "MERIDIAN_APP_URL");
+}
+
+/** Resolve the shared Meridian version displayed in desktop health. */
+export function resolveClientVersion(
+  _env: EnvLike = {},
   cwd = process.cwd(),
   readFile: ReadFile = readFileSync,
 ): string {
-  const raw = env.MERIDIAN_CLIENT_VERSION?.trim();
-  if (raw) {
-    return raw;
+  const repositoryRoot = resolveRepositoryRoot(cwd, readFile);
+  if (repositoryRoot === null) {
+    return "unknown";
   }
 
+  const packageJsonPath = resolve(repositoryRoot, "package.json");
   try {
-    const packageJson = JSON.parse(
-      readFile(resolve(cwd, "../client/package.json"), "utf8"),
-    ) as { version?: unknown };
-    return typeof packageJson.version === "string" ? packageJson.version : "unknown";
+    const packageJson = JSON.parse(readFile(packageJsonPath, "utf8")) as { version?: unknown };
+    return typeof packageJson.version === "string" && /^\d+\.\d+\.\d+$/.test(packageJson.version)
+      ? packageJson.version
+      : "unknown";
   } catch {
     return "unknown";
   }
@@ -111,4 +146,27 @@ function normalizeHttpUrl(raw: string, name: string): string {
   }
 
   return parsed.toString();
+}
+
+function resolveRepositoryRoot(cwd: string, readFile: ReadFile): string | null {
+  let current = resolve(cwd);
+
+  for (;;) {
+    const packageJsonPath = resolve(current, "package.json");
+    try {
+      const packageJson = JSON.parse(readFile(packageJsonPath, "utf8")) as { name?: unknown };
+      if (packageJson.name === ROOT_PACKAGE_NAME) {
+        return current;
+      }
+    } catch {
+      // Keep walking upward until the repository root package is found.
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+
+    current = parent;
+  }
 }

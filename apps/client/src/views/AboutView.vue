@@ -40,6 +40,20 @@ const connectivityDescription = computed(() =>
   describeConnectivityState(connectivity.value),
 );
 const fieldSession = computed(() => resolveFieldSession());
+const fieldSessionText = computed(() => {
+  const session = fieldSession.value;
+  if (!session) {
+    return "Unavailable.";
+  }
+
+  const context = [session.departmentLabel, session.teamLabel].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  return context.length > 0
+    ? `${session.eventLabel} / ${context.join(" / ")}`
+    : session.eventLabel;
+});
 const hasCommandToken = computed(() => Boolean(apiConfig.value.bearerToken));
 const submittedReportCount = computed(() => {
   void fieldReportCatalogRevision.value;
@@ -245,13 +259,7 @@ onMounted(() => {
         </div>
         <div>
           <dt>Field session</dt>
-          <dd>
-            {{
-              fieldSession
-                ? `${fieldSession.eventLabel} / ${fieldSession.departmentLabel}`
-                : "Unavailable."
-            }}
-          </dd>
+          <dd>{{ fieldSessionText }}</dd>
         </div>
         <div>
           <dt>FR command sync</dt>

@@ -94,7 +94,24 @@ CREATE DATABASE meridian OWNER meridian;
 
 ## Boot path
 
-From this directory:
+From the repository root, configure the ignored local env files for Laravel and
+all shared-client Vite modes:
+
+```bash
+corepack pnpm run env:local
+```
+
+When PostgreSQL is reachable and Composer dependencies are installed, run the
+idempotent server setup:
+
+```bash
+corepack pnpm run server:setup
+```
+
+`server:setup` ensures `apps/server/.env` exists, generates `APP_KEY` only when
+it is missing, clears cached configuration, runs migrations, and seeds the
+well-known local Field fixture used by Field Report command upload QA. The older
+manual sequence is still:
 
 ```bash
 composer install
@@ -122,12 +139,21 @@ with the development password `password`. Gwen Godmode is seeded without a
 `god_mode` grant because node-scoped direct user roles remain deferred to a
 later task.
 
+In local development (`APP_ENV=local`), product routes served by Laravel load
+the shared Vue Vite dev server from `MERIDIAN_CLIENT_DEV_SERVER_URL`
+(`http://localhost:5173` by default). Start it from the repository root with
+`corepack pnpm run client:dev` when you want Vue changes to hot-update through
+the server app. Set `MERIDIAN_CLIENT_USE_DEV_SERVER=false` to test the
+production-style `apps/client/dist` path locally.
+
+The health endpoint version comes from the root `package.json` Meridian version.
+
 `composer install` republishes Orchid's front-end assets to
 `public/vendor/orchid` (via the `orchid:publish` post-autoload step), so the
 admin UI is styled after a fresh checkout. `php artisan migrate` runs the
 default Laravel migrations plus the published Orchid migrations against
 PostgreSQL and should report each migration as `DONE`. `php artisan serve`
-exposes the scaffold welcome page at the printed local URL.
+exposes the server at the printed local URL.
 
 ## Orchid admin
 

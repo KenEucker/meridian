@@ -19,12 +19,15 @@ export interface MeridianApiConfig {
 
 function readConfig(): MeridianApiConfig {
   const env = import.meta.env as Record<string, string | undefined>;
+  const runtimeConfig =
+    typeof window === "undefined" ? null : window.__MERIDIAN_RUNTIME_CONFIG__;
 
   return {
-    baseUrl: (env.VITE_MERIDIAN_API_BASE_URL ?? "http://127.0.0.1:8000").replace(
-      /\/$/,
-      "",
-    ),
+    baseUrl: (
+      runtimeConfig?.apiBaseUrl ??
+      env.VITE_MERIDIAN_API_BASE_URL ??
+      "http://127.0.0.1:8000"
+    ).replace(/\/$/, ""),
     bearerToken: env.VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN ?? null,
   };
 }

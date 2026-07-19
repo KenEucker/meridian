@@ -64,24 +64,29 @@ use their fixed build artifacts.
 The production build writes to `apps/client/dist/admin`,
 `apps/client/dist/field`, and `apps/client/dist/kiosk`.
 
+In local Laravel development (`APP_ENV=local`), the server product routes load
+this Vite dev server by default so changes hot-update when viewing the app
+through Laravel. Unpackaged Electron development also loads this Vite dev
+server by default. The production build still writes to `apps/client/dist`;
+Laravel, packaged Electron, and Capacitor consume that same build output.
+
 ### Field Report photo upload (local QA)
 
 Photos upload to the Laravel server over `POST /api/commands/*` when local Field
-API auth is enabled:
+API auth is enabled. From the repository root, run:
 
 ```bash
-# apps/server/.env
-MERIDIAN_LOCAL_FIELD_API_ENABLED=true
-MERIDIAN_LOCAL_FIELD_API_TOKEN=local-field-dev-token
-
-cd apps/server && php artisan meridian:seed-local-field-fixture
-
-# apps/client - match the token
-cp apps/client/.env.development.example apps/client/.env.development.local
+corepack pnpm run setup:local
 ```
 
-Restart server and client. Submit a Field Report with photos; detail shows local
-previews and syncs text then photos. Files land in
+The setup script writes ignored `.env.development.local`,
+`.env.meridian-admin.local`, `.env.meridian-field.local`, and
+`.env.meridian-kiosk.local` files with the same local Field API token configured
+in `apps/server/.env`. It also enables the development Field session fixture so
+the About/health view and command sync checks report a configured local session.
+
+Restart server and client after changing env files. Submit a Field Report with
+photos; detail shows local previews and syncs text then photos. Files land in
 `apps/server/storage/app/attachments/field-reports/`. Use **Retry upload** on
 detail if the server was offline at submit time.
 

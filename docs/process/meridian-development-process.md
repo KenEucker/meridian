@@ -8,6 +8,7 @@
 - `docs/meridian-requirements-document.md`
 - `docs/meridian-technical-spec.md`
 - `docs/meridian-technology-baseline.md`
+- `docs/process/versioning-strategy.md`
 
 ---
 
@@ -83,6 +84,20 @@ Use:
 When an implementation decision conflicts with the technology baseline, the technology baseline wins unless a human-approved baseline update is made before or alongside the implementation.
 
 AI coding agents and human contributors must not introduce, replace, or upgrade runtimes, package managers, libraries, services, desktop/mobile wrappers, authentication systems, UI frameworks, component libraries, or test runners outside this baseline without first asking for a decision and recording the approved change in the baseline.
+
+### 2.5 Versioning strategy
+
+The versioning strategy defines the product version source of truth, numeric
+version format, automatic production patch bumps, lifecycle promotion points,
+and future packaged app/API major-version compatibility rule.
+
+Use:
+
+- `docs/process/versioning-strategy.md`
+
+When implementation structure or automation conflicts with the versioning
+strategy, the versioning strategy wins unless a formal process update is
+accepted.
 
 ---
 
@@ -355,6 +370,16 @@ If the slice needs a runtime, package manager, framework, library, service, wrap
 - update the technology baseline with the accepted decision before using the dependency.
 
 Do not make implicit LLM-chosen dependency decisions inside feature work.
+
+### Step 4b: Check the versioning strategy
+
+Before changing release automation, package manifests, build metadata, app
+packaging, or API compatibility behavior, read
+`docs/process/versioning-strategy.md`.
+
+The root `package.json` version is the only Meridian product version source of
+truth. App and package manifests must not carry independent product versions,
+and runtime/build metadata must derive from the root version.
 
 ### Step 5: Implement the smallest complete path
 
@@ -1113,9 +1138,8 @@ Environment:
 
 Build:
 - commit SHA
-- server version
-- mobile version
-- Electron version, if relevant
+- Meridian version from root `package.json`
+- server/client/mobile/Electron surfaces showing the same Meridian version
 
 Result:
 - Pass / Fail / Blocked
@@ -1868,9 +1892,10 @@ A release candidate should not be considered ready until this checklist is revie
 ## Release Candidate Checklist
 
 Build/version:
-- [ ] Server version set.
-- [ ] Mobile version set.
-- [ ] Electron version set.
+- [ ] Root `package.json` Meridian version set.
+- [ ] Server version reads from the root Meridian version.
+- [ ] Mobile version reads from the root Meridian version.
+- [ ] Electron version reads from the root Meridian version.
 - [ ] Config schema version set.
 - [ ] Docker image tags set.
 

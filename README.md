@@ -27,6 +27,7 @@ The current source-of-truth documents are:
 - [Technical specification](docs/meridian-technical-spec.md)
 - [Technology baseline](docs/meridian-technology-baseline.md)
 - [Development process](docs/process/meridian-development-process.md)
+- [Versioning strategy](docs/process/versioning-strategy.md)
 
 Start with the development process before opening issues or pull requests. It defines how work should move from requirement to implementation, review, automated checks, and human QA.
 Before adding, replacing, or upgrading runtimes, packages, libraries, services, wrappers, test tools, or package managers, read the technology baseline and ask for human approval if the change is not already approved there.
@@ -113,6 +114,26 @@ Install the current Node workspace dependencies from the lockfile:
 ```bash
 corepack pnpm install --frozen-lockfile
 ```
+
+### Local App Setup
+
+Configure the ignored local env files for Laravel and every shared-client Vite
+mode:
+
+```bash
+corepack pnpm run env:local
+```
+
+When a local PostgreSQL database is reachable and server dependencies are
+installed, run the full idempotent setup instead:
+
+```bash
+corepack pnpm run setup:local
+```
+
+`setup:local` also ensures Laravel has an `APP_KEY`, clears cached
+configuration, runs migrations, and seeds the local Field fixture used by Field
+Report command upload QA. `server:setup` is an alias for this same path.
 
 ### Quick Local Check
 

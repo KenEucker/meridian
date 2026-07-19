@@ -24,6 +24,7 @@ jobs:
           python scripts/process/validate_traceability_matrix.py
           python scripts/process/validate_qa_docs.py
           python scripts/process/validate_repo_process.py --write-summary process-summary.md
+          python scripts/process/validate_version_strategy.py
 
       - name: Validate Composer project if present
         if: hashFiles('composer.json') != ''

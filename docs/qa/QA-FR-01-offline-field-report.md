@@ -68,44 +68,30 @@ later sync tasks.
    corepack pnpm install
    composer --working-dir=apps/server install
    ```
-2. Configure a dedicated local server database, then reset and seed it:
+2. Configure local Laravel and shared-client Vite env files:
    ```bash
-   cd apps/server
-   php artisan migrate:fresh --seed
-   php artisan meridian:seed-local-field-fixture
+   corepack pnpm run setup:local
    ```
-3. In `apps/server/.env`, set these local-only values:
-   ```dotenv
-   MERIDIAN_LOCAL_FIELD_API_ENABLED=true
-   MERIDIAN_LOCAL_FIELD_API_TOKEN=local-field-dev-token
-   MERIDIAN_LOCAL_FIELD_API_USER_ID=22222222-2222-4222-8222-222222222222
-   MERIDIAN_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
-   ```
-4. Clear cached Laravel configuration:
+3. Configure a dedicated local server database, then reset and seed it:
    ```bash
-   php artisan config:clear
+   php apps/server/artisan migrate:fresh --seed
+   php apps/server/artisan meridian:seed-local-field-fixture
    ```
-5. From the repository root, create the ignored shared-client development override:
-   ```bash
-   cp apps/client/.env.development.example apps/client/.env.development.local
-   ```
-   Confirm its token matches the server:
-   ```dotenv
-   VITE_MERIDIAN_API_BASE_URL=http://127.0.0.1:8000
-   VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN=local-field-dev-token
-   ```
-6. Start Laravel in one terminal:
+   `setup:local` already writes matching ignored client env files for
+   `.env.development.local`, `.env.meridian-admin.local`,
+   `.env.meridian-field.local`, and `.env.meridian-kiosk.local`.
+4. Start Laravel in one terminal:
    ```bash
    php apps/server/artisan serve --host=127.0.0.1 --port=8000
    ```
-7. Start the shared client in another terminal:
+5. Start the shared client in another terminal:
    ```bash
    corepack pnpm run client:dev:field -- --host 127.0.0.1
    ```
-8. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
+6. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
    an earlier local Field Report run is present. Confirm the empty state says
    **You have not submitted any Field Reports yet.**
-9. Create a known GIF fixture for the rejection check:
+7. Create a known GIF fixture for the rejection check:
    ```bash
    php -r 'file_put_contents(sys_get_temp_dir()."/qa-fr-unsupported.gif", base64_decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="));'
    ```

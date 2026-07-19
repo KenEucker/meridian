@@ -64,3 +64,14 @@ export function installDevelopmentFieldSession(): FieldSessionContext {
 
   return session;
 }
+
+/** Install the local development fixture session when enabled by Vite env. */
+export function installDevelopmentFieldSessionFromEnv(
+  env: Pick<ImportMetaEnv, "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"> = import.meta.env,
+): FieldSessionContext | null {
+  if (env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true") {
+    return resolveFieldSession();
+  }
+
+  return resolveFieldSession() ?? installDevelopmentFieldSession();
+}
