@@ -31,65 +31,122 @@ function shiftBoardPath(): string {
   return `/events/${LOCAL_CURRENT_SHIFT_BOARD.eventId}/departments/${LOCAL_CURRENT_SHIFT_BOARD.departmentId}/shift-board/current`;
 }
 
-describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
-  it("registers the UI contract route name", () => {
+function logisticsPath(): string {
+  return `/events/${LOCAL_CURRENT_SHIFT_BOARD.eventId}/departments/${LOCAL_CURRENT_SHIFT_BOARD.departmentId}/shift-board/logistics`;
+}
+
+function operationsPath(): string {
+  return `/events/${LOCAL_CURRENT_SHIFT_BOARD.eventId}/departments/${LOCAL_CURRENT_SHIFT_BOARD.departmentId}/shift-board/operations`;
+}
+
+function planningPath(): string {
+  return `/events/${LOCAL_CURRENT_SHIFT_BOARD.eventId}/departments/${LOCAL_CURRENT_SHIFT_BOARD.departmentId}/shift-board/planning`;
+}
+
+describe("Department shift board surfaces (M10 course correction)", () => {
+  it("registers the UI contract route names", () => {
     const names = routes.map((route) => route.name);
 
     expect(names).toContain("events.departments.shift-board.current");
+    expect(names).toContain("events.departments.shift-board.logistics");
+    expect(names).toContain("events.departments.shift-board.operations");
+    expect(names).toContain("events.departments.shift-board.planning");
   });
 
-  it("links to the current shift board from the home surface", async () => {
+  it("links to department role surfaces from the home surface", async () => {
     const { wrapper } = await mountAt("/");
 
     const link = wrapper
       .findAll(".home__links a")
-      .find((item) => item.text() === "Current shift board");
+      .find((item) => item.text() === "Department board");
 
     expect(link?.attributes("href")).toBe(shiftBoardPath());
+    expect(wrapper.text()).toContain("Logistics desk");
+    expect(wrapper.text()).toContain("Operations board");
+    expect(wrapper.text()).toContain("Planning board");
   });
 
-  it("shows current shift context, roster count, and checked-in count", async () => {
+  it("shows department context, assignment count, and checked-in count", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
-    expect(wrapper.get("#shift-board-heading").text()).toBe(
-      "Current Shift Board",
-    );
+    expect(wrapper.get("#shift-board-heading").text()).toBe("Department Board");
     expect(wrapper.text()).toContain("Local Field Event");
     expect(wrapper.text()).toContain("Rangers");
-    expect(wrapper.text()).toContain("Dirt");
     expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
+    expect(wrapper.find('[aria-labelledby="unscheduled-heading"]').exists()).toBe(
+      false,
+    );
+    expect(wrapper.find('[aria-labelledby="deployments-heading"]').exists()).toBe(
+      false,
+    );
 
-    const summary = wrapper.get('[aria-label="Roster summary"]').text();
-    expect(summary).toContain("Roster");
+    const summary = wrapper.get(
+      '[aria-label="Department operations summary"]',
+    ).text();
+    expect(summary).toContain("Shift assignments");
     expect(summary).toContain("3");
     expect(summary).toContain("Checked in");
     expect(summary).toContain("2");
+    expect(summary).toContain("On-site");
   });
 
-  it("adds an eligible unscheduled staff member to the roster", async () => {
-    const { wrapper } = await mountAt(shiftBoardPath());
+  it("marks staff on-site and adds eligible staff to the shift from Logistics", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    expect(wrapper.get("#shift-board-heading").text()).toBe("Logistics Desk");
+
+    const presenceSection = wrapper.get('[aria-labelledby="presence-heading"]');
+    await presenceSection.find("select").setValue(
+      "33333333-3333-4333-8333-333333333337",
+    );
+    await presenceSection.findAll("button")[0].trigger("click");
+
+    expect(wrapper.get('[aria-label="Presence workflow status"]').text()).toBe(
+      "Bea Ranger marked on-site.",
+    );
 
     const addSection = wrapper.get('[aria-labelledby="unscheduled-heading"]');
     expect(addSection.text()).toContain("Ari Ranger");
 
     await addSection.get("form").trigger("submit");
 
-    expect(wrapper.get('[aria-label="Roster summary"]').text()).toContain("4");
+    expect(
+      wrapper.get('[aria-label="Department operations summary"]').text(),
+    ).toContain("4");
     expect(wrapper.get('[aria-labelledby="roster-heading"]').text()).toContain(
       "Ari Ranger",
     );
-    expect(wrapper.get('[role="status"]').text()).toBe(
-      "Ari Ranger added to roster.",
+    expect(addSection.get('[role="status"]').text()).toBe(
+      "Ari Ranger added to shift.",
     );
     expect(
       wrapper
         .findAll('[aria-label="Add eligible unscheduled staff"] option')
         .map((option) => option.text()),
-    ).toEqual([]);
+    ).toEqual(["Bea Ranger - Dirt"]);
   });
 
-  it("moves a roster member to a current deployment", async () => {
-    const { wrapper } = await mountAt(shiftBoardPath());
+  it("blocks off-site status when Logistics has unresolved work", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const presenceSection = wrapper.get('[aria-labelledby="presence-heading"]');
+    await presenceSection.find("select").setValue(
+      "33333333-3333-4333-8333-333333333335",
+    );
+    await presenceSection.findAll("button")[1].trigger("click");
+
+    expect(wrapper.get('[aria-label="Presence workflow status"]').text()).toContain(
+      "checked out of their shift",
+    );
+  });
+
+  it("moves a shift assignment to a current deployment from Operations", async () => {
+    const { wrapper } = await mountAt(operationsPath());
+
+    expect(wrapper.get("#shift-board-heading").text()).toBe("Operations Board");
+    expect(wrapper.find('[aria-labelledby="equipment-heading"]').exists()).toBe(
+      false,
+    );
 
     const deploymentSection = wrapper.get(
       '[aria-labelledby="deployments-heading"]',
@@ -113,17 +170,17 @@ describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
     );
   });
 
-  it("shows checked-out equipment and checks equipment in and out", async () => {
-    const { wrapper } = await mountAt(shiftBoardPath());
+  it("shows checked-out equipment and checks equipment in and out from Logistics", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
 
     const equipmentSection = wrapper.get('[aria-labelledby="equipment-heading"]');
     expect(equipmentSection.text()).toContain("Radio 12");
     expect(equipmentSection.text()).toContain("Local Field Author");
     expect(equipmentSection.text()).toContain("Checked out");
     expect(equipmentSection.text()).toContain("Safety Vest (VEST-04)");
-    expect(wrapper.get('[aria-label="Roster summary"]').text()).toContain(
-      "Equipment out",
-    );
+    expect(
+      wrapper.get('[aria-label="Department operations summary"]').text(),
+    ).toContain("Equipment out");
 
     const forms = equipmentSection.findAll("form");
     expect(forms).toHaveLength(3);
@@ -184,7 +241,7 @@ describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
   });
 
   it("checks multiple equipment items back in for one staff member", async () => {
-    const { wrapper } = await mountAt(shiftBoardPath());
+    const { wrapper } = await mountAt(logisticsPath());
     const equipmentSection = wrapper.get('[aria-labelledby="equipment-heading"]');
 
     const checkoutForm = equipmentSection.findAll("form")[0];
@@ -229,7 +286,25 @@ describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
     expect(checkedOutRows.some((row) => row.includes("Radio 14"))).toBe(false);
   });
 
-  it("lists the current roster and labels checked-in state with text", async () => {
+  it("shows schedule, signups, and team members on the Planning board", async () => {
+    const { wrapper } = await mountAt(planningPath());
+
+    expect(wrapper.get("#shift-board-heading").text()).toBe("Planning Board");
+    expect(wrapper.get('[aria-labelledby="planning-schedule-heading"]').text()).toContain(
+      "Ranger Dirt Swing Shift",
+    );
+    expect(wrapper.get('[aria-labelledby="planning-signups-heading"]').text()).toContain(
+      "Ari Ranger",
+    );
+    expect(wrapper.get('[aria-labelledby="planning-members-heading"]').text()).toContain(
+      "On-site",
+    );
+    expect(wrapper.find('[aria-labelledby="deployments-heading"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("lists the current shift assignments and labels checked-in state with text", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
     const roster = wrapper.get('[aria-labelledby="roster-heading"]');
@@ -253,16 +328,10 @@ describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
     expect(checkedIn.text()).not.toContain("Vera Staff");
   });
 
-  it("does not expose deferred attendance operation or adjacent workflow controls", async () => {
+  it("keeps the current department board read-only", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
-    expect(wrapper.findAll("button").map((button) => button.text())).toEqual([
-      "Add to roster",
-      "Move to deployment",
-      "Check out equipment",
-      "Add and check out",
-      "Check in equipment",
-    ]);
+    expect(wrapper.findAll("button")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("No-show");
     expect(wrapper.text()).not.toContain("Hours");
     expect(wrapper.text()).not.toContain("Field report");

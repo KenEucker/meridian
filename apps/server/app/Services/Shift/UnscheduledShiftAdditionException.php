@@ -55,4 +55,9 @@ class UnscheduledShiftAdditionException extends RuntimeException
     {
         return new self('This staff member is already assigned to the shift.');
     }
+
+    public static function staffNotOnSite(): self
+    {
+        return new self('Staff must be marked on-site with this department before unscheduled shift addition.');
+    }
 }

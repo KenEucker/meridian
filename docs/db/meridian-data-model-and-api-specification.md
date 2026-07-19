@@ -36,7 +36,7 @@ This version aligns the data model with:
 
 Important alignment changes from earlier data-model drafts:
 
-1. Teams replace the earlier operational concept of department roles.
+1. Teams replace the earlier operational grouping concept of department roles; system authority comes from permission roles/grants assigned through teams.
 2. Shifts derive eligibility from team membership, not role membership.
 3. The `Roles` module now refers to permission/effective-authority roles, not operational shift roles.
 4. Attendance is operation-based and append-only, with derived current state.
@@ -408,7 +408,9 @@ Laravel policies, gates, middleware, command handlers, and domain services enfor
 - staff status changes
 - department/team/event assignment
 - attendance operations
+- department presence operations
 - equipment operations
+- deployment assignment operations
 - credit calculation and exports
 
 ### 6.3 Authority Sources
@@ -434,6 +436,10 @@ Alpha 1 effective permission levels include:
 staff
 shift_lead
 department_lead
+department_logistics
+department_operations
+department_administration
+department_planning
 ic_lead
 ic_operator
 ic_viewer
@@ -442,12 +448,20 @@ lead_organizer
 god_mode
 ```
 
+Alpha 1 department operational grants are department-scoped and assigned through
+teams:
+
+- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in.
+- `department_operations` manages current deployment/location assignment.
+- `department_planning` views shift schedule, shift signups, and team members.
+- `department_administration` manages department/team administrative settings as permitted.
+
 Permission decisions should be explainable in the UI.
 
 Example:
 
 ```text
-You can mark no-show because you are a shift lead for this team.
+You can mark no-show because your team has Department Logistics for this department.
 ```
 
 Denied actions should show a reason when practical.
@@ -529,11 +543,24 @@ Regular staff may cache:
 - their policy/procedure acknowledgment status
 - readiness/sync state
 
-Shift leads may additionally cache:
+Department Logistics users may additionally cache:
 
-- assigned staff for teams/shifts they lead
-- check-in/check-out/no-show state for those teams/shifts
-- team roster
+- department on-site/off-site presence state
+- current and upcoming shift assignments for their department
+- check-in/check-out/no-show state for those department shifts
+- department equipment state and open checkouts they are permitted to manage
+
+Department Operations users may additionally cache:
+
+- current and upcoming shift assignments for their department
+- current deployment/location assignment for those shifts
+- active deployment/location options
+
+Department Planning users may additionally cache:
+
+- department schedule
+- shift signups
+- team membership for planning views
 
 Department leads may additionally cache:
 
@@ -1443,7 +1470,7 @@ Key fields:
 Rules:
 
 - shifts belong to an event and department
-- shifts define eligible team membership
+- shifts define exactly one eligible team membership
 - a shift may have its own displayed title/function
 - a shift does not require membership in multiple teams
 - required trainings and waivers must be enforced for scheduled and unscheduled additions
@@ -1528,6 +1555,7 @@ correct
 Rules:
 
 - attendance operations can be created offline
+- check-in requires the staff member to be on-site for the shift department/event
 - duplicate check-in is idempotent
 - overlapping check-ins are allowed but warn
 - offline check-out without known server-side check-in is accepted and reconciled later
@@ -1592,9 +1620,49 @@ Rules:
 - hours always belong to an event, department, shift, and staff
 - no free-floating hours exist in MVP
 - checkout creates hours
-- shift/department leads may correct hours during the correction grace period
+- authorized attendance managers may correct hours during the correction grace period
 - hours freeze after the grace period
 - staff do not self-report hours in MVP
+
+---
+
+### 10.10A Department Presence
+
+#### `event_department_presences`
+
+Represents whether an eligible staff member is currently on-site or off-site for
+an event department.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `department_id`
+- `staff_id`
+- `current_state`
+- `marked_on_site_at`
+- `marked_off_site_at`
+- `last_marked_by_user_id`
+- `created_at`
+- `updated_at`
+
+States:
+
+```text
+on_site
+off_site
+```
+
+Rules:
+
+- there is at most one presence row per event, department, and staff member
+- on-site/off-site state is department-specific
+- only `department_logistics` may mark staff on-site/off-site
+- staff must be an active member of the department before being marked on-site
+- on-site state makes staff eligible for Logistics shift add/check-in
+- staff cannot be marked off-site while checked into a shift for that department/event
+- staff cannot be marked off-site while holding checked-out department/event equipment unless the equipment is returned or marked Missing/Damaged
+- presence changes are audit logged
 
 ---
 
@@ -1744,6 +1812,9 @@ Rules:
 - MVP tracking is visible/manual
 - checkout/check-in is to individual staff members
 - equipment does not need to be tied to a shift for MVP
+- equipment may be checked out before, during, or after a shift
+- checkout department scope is derived from the shift when present, otherwise from the equipment item's event/department scope
+- `department_logistics` authorizes equipment checkout/check-in
 - department-to-department allotments and full custody chains are out of scope
 
 ---
@@ -1788,6 +1859,10 @@ Key fields:
 Rules:
 
 - MVP only tracks current deployment/location
+- current state is unique per shift/staff pair
+- a staff member has at most one current deployment/location per shift
+- `department_operations` authorizes current deployment/location assignment
+- assignment may happen before or during the shift
 - deployment movement history is out of scope for MVP
 
 ---

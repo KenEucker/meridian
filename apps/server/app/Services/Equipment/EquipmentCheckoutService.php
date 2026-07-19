@@ -10,9 +10,8 @@ use App\Models\Shift;
 use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\User;
-use App\Services\Application\ApplicationReviewAccess;
-use App\Services\Attendance\AttendanceCheckInAccess;
 use App\Services\Audit\AuditService;
+use App\Services\Permissions\DepartmentOperationalAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -33,8 +32,7 @@ class EquipmentCheckoutService
     ];
 
     public function __construct(
-        private readonly AttendanceCheckInAccess $shiftAccess,
-        private readonly ApplicationReviewAccess $applicationReviewAccess,
+        private readonly DepartmentOperationalAccess $access,
         private readonly AuditService $audit,
     ) {}
 
@@ -228,7 +226,8 @@ class EquipmentCheckoutService
      */
     private function authorizeShiftCheckout(User $actor, Shift $shift): void
     {
-        if (! $this->shiftAccess->canCheckInForShift($actor, $shift)) {
+        if ($shift->event === null || $shift->department === null
+            || ! $this->access->canManageEquipment($actor, $shift->event, $shift->department)) {
             throw EquipmentCheckoutException::unauthorized();
         }
 
@@ -247,9 +246,9 @@ class EquipmentCheckoutService
         }
 
         if ($equipmentItem->department_id === null
-            || ! $this->applicationReviewAccess
-                ->departmentLeadDepartmentIds($actor)
-                ->contains((string) $equipmentItem->department_id)) {
+            || $equipmentItem->event === null
+            || $equipmentItem->department === null
+            || ! $this->access->canManageEquipment($actor, $equipmentItem->event, $equipmentItem->department)) {
             throw EquipmentCheckoutException::unauthorized();
         }
     }
@@ -332,17 +331,23 @@ class EquipmentCheckoutService
 
     private function canReturnCheckout(User $actor, EquipmentCheckout $checkout, EquipmentItem $equipmentItem): bool
     {
-        if ($checkout->shift !== null && $this->shiftAccess->canCheckInForShift($actor, $checkout->shift)) {
-            return true;
+        if ($checkout->shift !== null) {
+            $checkout->shift->loadMissing(['event', 'department']);
+
+            return $checkout->shift->event !== null
+                && $checkout->shift->department !== null
+                && $this->access->canManageEquipment($actor, $checkout->shift->event, $checkout->shift->department);
         }
 
-        if ($equipmentItem->department_id === null) {
+        if ($equipmentItem->event_id === null || $equipmentItem->department_id === null) {
             return false;
         }
 
-        return $this->applicationReviewAccess
-            ->departmentLeadDepartmentIds($actor)
-            ->contains((string) $equipmentItem->department_id);
+        $equipmentItem->loadMissing(['event', 'department']);
+
+        return $equipmentItem->event !== null
+            && $equipmentItem->department !== null
+            && $this->access->canManageEquipment($actor, $equipmentItem->event, $equipmentItem->department);
     }
 
     /**

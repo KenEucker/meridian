@@ -17,23 +17,47 @@ import {
   equipmentStateLabel,
   equipmentSummary,
   eligibleUnscheduledCandidates,
+  markStaffOffSite,
+  markStaffOnSite,
+  onSiteStaff,
+  presenceStateLabel,
+  presenceSummary,
   returnEquipmentFromStaff,
   rosterSummary,
+  shiftSignupStateLabel,
   type CheckedOutEquipment,
+  type DepartmentPresenceMember,
   type EquipmentReturnCondition,
   type ShiftBoardRosterMember,
 } from "@/shift-board/currentShiftBoard";
 
-// Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1, M10.7,
-// M10.8, M10.9). Attendance write controls, hours correction forms, and
-// shortcuts arrive in their owning M10 tasks.
+type DepartmentBoardSurface = "current" | "logistics" | "operations" | "planning";
+
+const props = withDefaults(
+  defineProps<{
+    surface?: DepartmentBoardSurface;
+  }>(),
+  {
+    surface: "current",
+  },
+);
+
+// Department board prototype - UI contract 12.5 (M10 course correction).
+// Server-backed role enforcement is owned by Laravel; this local surface keeps
+// the role workflows visually separated while API parity continues.
 const board = ref(LOCAL_CURRENT_SHIFT_BOARD);
 const checkedInMembers = computed(() => checkedInRoster(board.value));
 const summary = computed(() => rosterSummary(board.value));
+const presenceCounts = computed(() => presenceSummary(board.value));
+const onsiteMembers = computed(() => onSiteStaff(board.value));
 const equipmentCounts = computed(() => equipmentSummary(board.value));
 const candidates = computed(() => eligibleUnscheduledCandidates(board.value));
 const selectedCandidateId = ref(candidates.value[0]?.staffId ?? "");
 const addStatus = ref<string | null>(null);
+const selectedPresenceStaffId = ref(
+  board.value.departmentPresence[0]?.staffId ?? "",
+);
+const presenceStatus = ref<string | null>(null);
 const selectedAssignmentId = ref(board.value.roster[0]?.assignmentId ?? "");
 const selectedDeploymentId = ref(
   board.value.deploymentOptions[0]?.deploymentId ?? "",
@@ -76,6 +100,57 @@ const selectedStaffEquipment = computed(
   () => equipmentByStaff.value.get(selectedReturnStaffId.value) ?? [],
 );
 
+const isCurrentSurface = computed(() => props.surface === "current");
+const isLogisticsSurface = computed(() => props.surface === "logistics");
+const isOperationsSurface = computed(() => props.surface === "operations");
+const isPlanningSurface = computed(() => props.surface === "planning");
+const showsAssignments = computed(
+  () =>
+    isCurrentSurface.value ||
+    isLogisticsSurface.value ||
+    isOperationsSurface.value,
+);
+const showsCheckedIn = computed(
+  () => isCurrentSurface.value || isLogisticsSurface.value,
+);
+const showsEquipment = computed(
+  () => isCurrentSurface.value || isLogisticsSurface.value,
+);
+const surfaceTitle = computed(() => {
+  switch (props.surface) {
+    case "logistics":
+      return "Logistics Desk";
+    case "operations":
+      return "Operations Board";
+    case "planning":
+      return "Planning Board";
+    case "current":
+      return "Department Board";
+  }
+});
+const surfaceLinks = computed(() => [
+  {
+    surface: "current",
+    label: "Board",
+    routeName: "events.departments.shift-board.current",
+  },
+  {
+    surface: "logistics",
+    label: "Logistics",
+    routeName: "events.departments.shift-board.logistics",
+  },
+  {
+    surface: "operations",
+    label: "Operations",
+    routeName: "events.departments.shift-board.operations",
+  },
+  {
+    surface: "planning",
+    label: "Planning",
+    routeName: "events.departments.shift-board.planning",
+  },
+]);
+
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -101,10 +176,56 @@ function deploymentText(member: ShiftBoardRosterMember): string {
   return deploymentLabel(board.value, member.currentDeploymentId);
 }
 
+function shiftTitle(shiftId: string): string {
+  return (
+    board.value.shiftSchedule.find((shift) => shift.shiftId === shiftId)
+      ?.title ?? "Unknown shift"
+  );
+}
+
 function checkedOutEquipmentText(item: CheckedOutEquipment): string {
   return `${equipmentStateLabel(item.status)} to ${item.staffName} since ${formatTimestamp(
     item.checkedOutAt,
   )}`;
+}
+
+function presenceOptionText(member: DepartmentPresenceMember): string {
+  return `${member.displayName} - ${member.teamLabel} - ${presenceStateLabel(
+    member.presenceState,
+  )}`;
+}
+
+function markSelectedStaffOnSite(): void {
+  const member = board.value.departmentPresence.find(
+    (item) => item.staffId === selectedPresenceStaffId.value,
+  );
+
+  if (member === undefined) {
+    return;
+  }
+
+  board.value = markStaffOnSite(board.value, member.staffId);
+  selectedCandidateId.value = candidates.value[0]?.staffId ?? "";
+  presenceStatus.value = `${member.displayName} marked on-site.`;
+}
+
+function markSelectedStaffOffSite(): void {
+  const member = board.value.departmentPresence.find(
+    (item) => item.staffId === selectedPresenceStaffId.value,
+  );
+
+  if (member === undefined) {
+    return;
+  }
+
+  try {
+    board.value = markStaffOffSite(board.value, member.staffId);
+    selectedCandidateId.value = candidates.value[0]?.staffId ?? "";
+    presenceStatus.value = `${member.displayName} marked off-site.`;
+  } catch (error) {
+    presenceStatus.value =
+      error instanceof Error ? error.message : "Unable to update presence.";
+  }
 }
 
 function addSelectedCandidate(): void {
@@ -122,7 +243,7 @@ function addSelectedCandidate(): void {
     `local-unscheduled-${candidate.staffId}`,
   );
   selectedCandidateId.value = candidates.value[0]?.staffId ?? "";
-  addStatus.value = `${candidate.displayName} added to roster.`;
+  addStatus.value = `${candidate.displayName} added to shift.`;
 }
 
 function moveSelectedDeployment(): void {
@@ -246,6 +367,36 @@ function returnSelectedEquipment(): void {
 }
 
 watch(
+  candidates,
+  (items) => {
+    if (
+      selectedCandidateId.value &&
+      items.some((candidate) => candidate.staffId === selectedCandidateId.value)
+    ) {
+      return;
+    }
+
+    selectedCandidateId.value = items[0]?.staffId ?? "";
+  },
+  { immediate: true },
+);
+
+watch(
+  () => board.value.departmentPresence,
+  (items) => {
+    if (
+      selectedPresenceStaffId.value &&
+      items.some((member) => member.staffId === selectedPresenceStaffId.value)
+    ) {
+      return;
+    }
+
+    selectedPresenceStaffId.value = items[0]?.staffId ?? "";
+  },
+  { immediate: true },
+);
+
+watch(
   staffWithCheckedOutEquipment,
   (staff) => {
     if (
@@ -285,7 +436,7 @@ watch(
       <div>
         <p class="shift-board__eyebrow">{{ board.departmentLabel }}</p>
         <h1 id="shift-board-heading" class="shift-board__heading">
-          Current Shift Board
+          {{ surfaceTitle }}
         </h1>
       </div>
       <p class="shift-board__window" aria-label="Current shift time">
@@ -299,23 +450,48 @@ watch(
         <dd>{{ board.eventLabel }}</dd>
       </div>
       <div>
-        <dt>Team</dt>
-        <dd>{{ board.teamLabel }}</dd>
+        <dt>Department</dt>
+        <dd>{{ board.departmentLabel }}</dd>
+      </div>
+      <div v-if="board.selectedTeamLabel">
+        <dt>Team filter</dt>
+        <dd>{{ board.selectedTeamLabel }}</dd>
       </div>
       <div>
-        <dt>Shift</dt>
+        <dt>Active shift</dt>
         <dd>{{ board.shiftTitle }}</dd>
       </div>
     </dl>
 
-    <dl class="shift-board__summary" aria-label="Roster summary">
+    <nav class="shift-board__surface-nav" aria-label="Department board views">
+      <RouterLink
+        v-for="link in surfaceLinks"
+        :key="link.surface"
+        :to="{
+          name: link.routeName,
+          params: {
+            eventId: board.eventId,
+            departmentId: board.departmentId,
+          },
+        }"
+        :aria-current="props.surface === link.surface ? 'page' : undefined"
+      >
+        {{ link.label }}
+      </RouterLink>
+    </nav>
+
+    <dl class="shift-board__summary" aria-label="Department operations summary">
       <div>
-        <dt>Roster</dt>
+        <dt>Shift assignments</dt>
         <dd>{{ summary.rosterCount }}</dd>
       </div>
       <div>
         <dt>Checked in</dt>
         <dd>{{ summary.checkedInCount }}</dd>
+      </div>
+      <div>
+        <dt>On-site</dt>
+        <dd>{{ presenceCounts.onSiteCount }}</dd>
       </div>
       <div>
         <dt>Equipment out</dt>
@@ -324,11 +500,83 @@ watch(
     </dl>
 
     <section
+      v-if="isLogisticsSurface"
+      class="shift-board__presence"
+      aria-labelledby="presence-heading"
+    >
+      <h2 id="presence-heading" class="shift-board__subheading">
+        On-site status
+      </h2>
+      <form
+        class="shift-board__add-form shift-board__presence-form"
+        aria-label="Update department on-site status"
+      >
+        <label class="shift-board__field">
+          <span>Department staff</span>
+          <select
+            v-model="selectedPresenceStaffId"
+            :disabled="board.departmentPresence.length === 0"
+          >
+            <option
+              v-for="member in board.departmentPresence"
+              :key="member.staffId"
+              :value="member.staffId"
+            >
+              {{ presenceOptionText(member) }}
+            </option>
+          </select>
+        </label>
+        <button
+          class="shift-board__button"
+          type="button"
+          :disabled="selectedPresenceStaffId === ''"
+          @click="markSelectedStaffOnSite"
+        >
+          Mark on-site
+        </button>
+        <button
+          class="shift-board__button"
+          type="button"
+          :disabled="selectedPresenceStaffId === ''"
+          @click="markSelectedStaffOffSite"
+        >
+          Mark off-site
+        </button>
+      </form>
+      <p
+        class="shift-board__status"
+        role="status"
+        aria-label="Presence workflow status"
+      >
+        {{ presenceStatus ?? "No on-site status changes." }}
+      </p>
+      <h3 class="shift-board__minor-heading">Currently on-site</h3>
+      <p
+        v-if="onsiteMembers.length === 0"
+        class="shift-board__empty"
+        role="status"
+      >
+        No department staff are marked on-site.
+      </p>
+      <ul v-else class="shift-board__checked-list">
+        <li
+          v-for="member in onsiteMembers"
+          :key="member.staffId"
+          class="shift-board__checked-item"
+        >
+          <span>{{ member.displayName }}</span>
+          <span>{{ member.teamLabel }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section
+      v-if="isLogisticsSurface"
       class="shift-board__unscheduled"
       aria-labelledby="unscheduled-heading"
     >
       <h2 id="unscheduled-heading" class="shift-board__subheading">
-        Add eligible staff
+        Add on-site staff to shift
       </h2>
       <form
         class="shift-board__add-form"
@@ -355,17 +603,21 @@ watch(
           type="submit"
           :disabled="selectedCandidateId === ''"
         >
-          Add to roster
+          Add to shift
         </button>
       </form>
       <p class="shift-board__status" role="status">
-        {{ addStatus ?? "No unscheduled staff added." }}
+        {{ addStatus ?? "No staff added to this shift." }}
       </p>
     </section>
 
-    <section class="shift-board__deployments" aria-labelledby="deployments-heading">
+    <section
+      v-if="isOperationsSurface"
+      class="shift-board__deployments"
+      aria-labelledby="deployments-heading"
+    >
       <h2 id="deployments-heading" class="shift-board__subheading">
-        Deployments
+        Deployment assignments
       </h2>
       <form
         class="shift-board__add-form"
@@ -416,12 +668,16 @@ watch(
       </p>
     </section>
 
-    <section class="shift-board__equipment" aria-labelledby="equipment-heading">
+    <section
+      v-if="showsEquipment"
+      class="shift-board__equipment"
+      aria-labelledby="equipment-heading"
+    >
       <h2 id="equipment-heading" class="shift-board__subheading">
         Equipment
       </h2>
 
-      <div class="shift-board__equipment-actions">
+      <div v-if="isLogisticsSurface" class="shift-board__equipment-actions">
         <form
           class="shift-board__add-form"
           aria-label="Check out equipment"
@@ -583,6 +839,7 @@ watch(
       </div>
 
       <p
+        v-if="isLogisticsSurface"
         class="shift-board__status"
         role="status"
         aria-label="Equipment workflow status"
@@ -611,6 +868,105 @@ watch(
     </section>
 
     <section
+      v-if="isPlanningSurface"
+      class="shift-board__planning"
+      aria-labelledby="planning-schedule-heading"
+    >
+      <h2 id="planning-schedule-heading" class="shift-board__subheading">
+        Shift schedule
+      </h2>
+      <div class="shift-board__table-frame">
+        <table class="shift-board__table">
+          <thead>
+            <tr>
+              <th scope="col">Shift</th>
+              <th scope="col">Team</th>
+              <th scope="col">Window</th>
+              <th scope="col">Signups</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="shift in board.shiftSchedule" :key="shift.shiftId">
+              <th scope="row" data-label="Shift">{{ shift.title }}</th>
+              <td data-label="Team">{{ shift.teamLabel }}</td>
+              <td data-label="Window">
+                {{ formatTimestamp(shift.startsAt) }} -
+                {{ formatTimestamp(shift.endsAt) }}
+              </td>
+              <td data-label="Signups">{{ shift.signupCount }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      v-if="isPlanningSurface"
+      class="shift-board__planning"
+      aria-labelledby="planning-signups-heading"
+    >
+      <h2 id="planning-signups-heading" class="shift-board__subheading">
+        Shift signups
+      </h2>
+      <div class="shift-board__table-frame">
+        <table class="shift-board__table">
+          <thead>
+            <tr>
+              <th scope="col">Staff</th>
+              <th scope="col">Team</th>
+              <th scope="col">Shift</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="signup in board.shiftSignups" :key="signup.signupId">
+              <th scope="row" data-label="Staff">{{ signup.displayName }}</th>
+              <td data-label="Team">{{ signup.teamLabel }}</td>
+              <td data-label="Shift">{{ shiftTitle(signup.shiftId) }}</td>
+              <td data-label="Status">{{ shiftSignupStateLabel(signup.state) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      v-if="isPlanningSurface"
+      class="shift-board__planning"
+      aria-labelledby="planning-members-heading"
+    >
+      <h2 id="planning-members-heading" class="shift-board__subheading">
+        Team members
+      </h2>
+      <div class="shift-board__table-frame">
+        <table class="shift-board__table">
+          <thead>
+            <tr>
+              <th scope="col">Staff</th>
+              <th scope="col">Team</th>
+              <th scope="col">Presence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="member in board.teamMembers" :key="member.staffId">
+              <th scope="row" data-label="Staff">
+                <span class="shift-board__name">{{ member.displayName }}</span>
+                <span v-if="member.handle" class="shift-board__handle"
+                  >@{{ member.handle }}</span
+                >
+              </th>
+              <td data-label="Team">{{ member.teamLabel }}</td>
+              <td data-label="Presence">
+                {{ presenceStateLabel(member.presenceState) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section
+      v-if="showsCheckedIn"
       class="shift-board__checked-in"
       aria-labelledby="checked-in-heading"
     >
@@ -636,9 +992,13 @@ watch(
       </ul>
     </section>
 
-    <section class="shift-board__roster" aria-labelledby="roster-heading">
+    <section
+      v-if="showsAssignments"
+      class="shift-board__roster"
+      aria-labelledby="roster-heading"
+    >
       <h2 id="roster-heading" class="shift-board__subheading">
-        Current shift roster
+        Shift assignments
       </h2>
 
       <div class="shift-board__table-frame">
@@ -735,6 +1095,38 @@ watch(
   grid-template-columns: minmax(0, 1fr);
 }
 
+.shift-board__surface-nav {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shift-board__surface-nav a {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.shift-board__surface-nav a[aria-current="page"] {
+  border-color: var(--m-text-primary);
+  background: var(--m-text-primary);
+  color: var(--m-surface-app);
+}
+
+.shift-board__surface-nav a:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
 .shift-board__context div,
 .shift-board__summary div {
   border: 1px solid var(--m-border-default);
@@ -763,6 +1155,8 @@ watch(
 .shift-board__checked-in,
 .shift-board__deployments,
 .shift-board__equipment,
+.shift-board__planning,
+.shift-board__presence,
 .shift-board__unscheduled,
 .shift-board__roster {
   margin-top: var(--m-space-8);
@@ -1020,7 +1414,12 @@ watch(
 
   .shift-board__context,
   .shift-board__summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+
+  .shift-board__surface-nav {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .shift-board__add-form {

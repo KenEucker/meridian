@@ -54,6 +54,10 @@ final class DevelopmentScenarioCatalog
                 'department_status' => null,
                 'grants' => [
                     ['role' => 'shift_lead', 'event_scoped' => false],
+                    ['role' => 'department_logistics', 'event_scoped' => false],
+                    ['role' => 'department_operations', 'event_scoped' => false],
+                    ['role' => 'department_administration', 'event_scoped' => false],
+                    ['role' => 'department_planning', 'event_scoped' => false],
                 ],
             ],
             [

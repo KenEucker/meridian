@@ -6,6 +6,7 @@ use App\Models\AttendanceOperation;
 use App\Models\AttendanceRecord;
 use App\Models\AuditEvent;
 use App\Models\Device;
+use App\Models\EventDepartmentPresence;
 use App\Models\Node;
 use App\Models\Shift;
 use App\Models\ShiftAssignment;
@@ -93,6 +94,10 @@ class AttendanceCheckInService
                 return $this->acceptedExisting($existingOperation, $shift, $staff, $assignment, $actor);
             }
 
+            if (! $this->staffIsOnSite($shift, $staff)) {
+                throw AttendanceCheckInException::staffNotOnSite();
+            }
+
             $record = AttendanceRecord::query()
                 ->where('shift_id', $shift->id)
                 ->where('staff_id', $staff->id)
@@ -159,6 +164,16 @@ class AttendanceCheckInService
                 createdStateChange: $createdStateChange,
             );
         });
+    }
+
+    private function staffIsOnSite(Shift $shift, Staff $staff): bool
+    {
+        return EventDepartmentPresence::query()
+            ->where('event_id', $shift->event_id)
+            ->where('department_id', $shift->department_id)
+            ->where('staff_id', $staff->id)
+            ->where('current_state', EventDepartmentPresence::STATE_ON_SITE)
+            ->exists();
     }
 
     /**

@@ -2,21 +2,18 @@
 
 namespace App\Services\Attendance;
 
-use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Shift;
-use App\Models\TeamMembership;
 use App\Models\User;
-use App\Services\Application\ApplicationReviewAccess;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\Permissions\DepartmentOperationalAccess;
 
 /**
  * Authorization for staff-mediated attendance operations (SLB-003, SLB-004;
- * technical spec section 20.2). Shift leads are scoped to the shift eligible
- * team; department leads are scoped to their departments.
+ * technical spec section 20.2). Department Logistics owns live shift
+ * check-in/check-out and no-show operations.
  */
 class AttendanceCheckInAccess
 {
-    public function __construct(private readonly ApplicationReviewAccess $applicationReviewAccess) {}
+    public function __construct(private readonly DepartmentOperationalAccess $departmentAccess) {}
 
     public function canCheckInForShift(User $user, Shift $shift): bool
     {
@@ -35,46 +32,12 @@ class AttendanceCheckInAccess
 
     private function canManageAttendanceForShift(User $user, Shift $shift): bool
     {
-        $shift->loadMissing('department');
+        $shift->loadMissing(['event', 'department']);
 
-        if ($shift->department === null || $shift->department->isArchived()) {
+        if ($shift->event === null || $shift->department === null || $shift->department->isArchived()) {
             return false;
         }
 
-        if ($this->isShiftLeadForShiftTeam($user, $shift)) {
-            return true;
-        }
-
-        return $this->applicationReviewAccess
-            ->departmentLeadDepartmentIds($user)
-            ->contains((string) $shift->department_id);
-    }
-
-    private function isShiftLeadForShiftTeam(User $user, Shift $shift): bool
-    {
-        $staffIds = $user->staffProfiles()
-            ->get(['staff.id'])
-            ->pluck('id');
-
-        if ($staffIds->isEmpty()) {
-            return false;
-        }
-
-        return TeamMembership::query()
-            ->active()
-            ->whereIn('staff_id', $staffIds)
-            ->where('team_id', $shift->eligible_team_id)
-            ->whereHas('team', fn (Builder $teamQuery) => $teamQuery->active())
-            ->whereHas('team.grants', function (Builder $grantQuery) use ($shift): void {
-                $grantQuery
-                    ->active()
-                    ->where(function (Builder $eventQuery) use ($shift): void {
-                        $eventQuery->whereNull('event_id')
-                            ->orWhere('event_id', $shift->event_id);
-                    })
-                    ->whereHas('permissionRole', fn (Builder $roleQuery) => $roleQuery
-                        ->where('code', PermissionCatalog::ROLE_SHIFT_LEAD));
-            })
-            ->exists();
+        return $this->departmentAccess->canManageAttendance($user, $shift->event, $shift->department);
     }
 }

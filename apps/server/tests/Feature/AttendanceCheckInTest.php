@@ -8,6 +8,7 @@ use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
+use App\Models\EventDepartmentPresence;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Shift;
@@ -333,7 +334,15 @@ class AttendanceCheckInTest extends TestCase
             'removed_at' => null,
         ]);
 
-        return [$shift, $staff, $assignment, $this->shiftLeadUserFor($department->defaultTeam)];
+        $actor = $this->shiftLeadUserFor($department->defaultTeam);
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'staff_id' => $staff->id,
+            'last_marked_by_user_id' => $actor->id,
+        ]);
+
+        return [$shift, $staff, $assignment, $actor];
     }
 
     private function shiftLeadUserFor(Team $team): User
@@ -352,7 +361,7 @@ class AttendanceCheckInTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('shift_lead')->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
         ]);
 
         return $user;
@@ -375,7 +384,7 @@ class AttendanceCheckInTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('department_lead')->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
         ]);
 
         return $user;

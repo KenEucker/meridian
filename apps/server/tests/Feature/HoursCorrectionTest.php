@@ -266,7 +266,7 @@ class HoursCorrectionTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('shift_lead')->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
         ]);
 
         return $user;
@@ -289,7 +289,7 @@ class HoursCorrectionTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('department_lead')->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
         ]);
 
         return $user;

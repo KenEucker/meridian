@@ -4,13 +4,26 @@ import { RouterLink } from "vue-router";
 import { LOCAL_CURRENT_SHIFT_BOARD } from "@/shift-board/currentShiftBoard";
 
 // Placeholder home surface. Field Report author surfaces arrived with M9.4;
-// the read-only current Shift Lead Board roster is present for M10.1.
-const shiftBoardRoute = {
+// department operations surfaces are split by role workflow for M10.
+const departmentRouteParams = {
+  eventId: LOCAL_CURRENT_SHIFT_BOARD.eventId,
+  departmentId: LOCAL_CURRENT_SHIFT_BOARD.departmentId,
+};
+const departmentBoardRoute = {
   name: "events.departments.shift-board.current",
-  params: {
-    eventId: LOCAL_CURRENT_SHIFT_BOARD.eventId,
-    departmentId: LOCAL_CURRENT_SHIFT_BOARD.departmentId,
-  },
+  params: departmentRouteParams,
+};
+const logisticsRoute = {
+  name: "events.departments.shift-board.logistics",
+  params: departmentRouteParams,
+};
+const operationsRoute = {
+  name: "events.departments.shift-board.operations",
+  params: departmentRouteParams,
+};
+const planningRoute = {
+  name: "events.departments.shift-board.planning",
+  params: departmentRouteParams,
 };
 </script>
 
@@ -21,7 +34,10 @@ const shiftBoardRoute = {
       Shared operational client. Select a current operational surface.
     </p>
     <p class="home__links">
-      <RouterLink :to="shiftBoardRoute">Current shift board</RouterLink>
+      <RouterLink :to="departmentBoardRoute">Department board</RouterLink>
+      <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
+      <RouterLink :to="operationsRoute">Operations board</RouterLink>
+      <RouterLink :to="planningRoute">Planning board</RouterLink>
       <RouterLink :to="{ name: 'staff.field-reports.index' }"
         >My Field Reports</RouterLink
       >
