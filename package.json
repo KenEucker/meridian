@@ -33,7 +33,7 @@
     "server:setup": "corepack pnpm run setup:local",
     "server:dev": "php apps/server/artisan serve",
     "server:logs": "node scripts/server/tail-laravel-log.mjs",
-    "server:test": "php apps/server/artisan config:clear --ansi && php apps/server/artisan test",
+    "server:test": "cd apps/server && php artisan config:clear --ansi && php artisan test",
     "server:artisan": "php apps/server/artisan",
     "server:migrate": "php apps/server/artisan migrate",
     "server:migrate:status": "php apps/server/artisan migrate:status",

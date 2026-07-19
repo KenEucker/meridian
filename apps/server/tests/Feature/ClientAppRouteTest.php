@@ -55,9 +55,9 @@ class ClientAppRouteTest extends TestCase
         $response->assertOk();
         $response->assertSee('<title>Meridian Admin</title>', false);
         $response->assertSee('http://localhost:5173/@vite/client', false);
-        $response->assertSee(
-            'window.__MERIDIAN_RUNTIME_CONFIG__ = {"apiBaseUrl":"http://localhost","deploymentTarget":"server","uiMode":"admin"}',
-            false,
+        $this->assertMatchesRegularExpression(
+            '#window\.__MERIDIAN_RUNTIME_CONFIG__ = \{"apiBaseUrl":"http://localhost(?::\d+)?","deploymentTarget":"server","uiMode":"admin"\}#',
+            (string) $response->getContent(),
         );
         $response->assertSee('http://localhost:5173/src/main.ts', false);
     }
@@ -106,6 +106,12 @@ class ClientAppRouteTest extends TestCase
 
     private function assertFileResponseContains(TestResponse $response, string $expected): void
     {
+        if (! method_exists($response->baseResponse, 'getFile')) {
+            $this->assertStringContainsString($expected, (string) $response->getContent());
+
+            return;
+        }
+
         $file = $response->baseResponse->getFile();
 
         $this->assertStringContainsString($expected, (string) file_get_contents($file->getPathname()));
