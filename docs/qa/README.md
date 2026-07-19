@@ -57,7 +57,7 @@ checkout/check-in controls and checked-out equipment state. The full
    Confirm the status says Radio 14 was added and checked out to Vera Staff.
 9. In the check-in control, select Vera Staff. Confirm Safety Vest and Radio 14
    are both available for selection, select both, and check them in as Returned.
-   Confirm the status says 2 items were checked in and both leave the checked-out
+   Confirm the status says 2 items checked in as Returned and both leave the checked-out
    equipment list.
 10. Check in Radio 12 as Returned by selecting Local Field Author. Confirm Radio
    12 leaves the checked-out equipment list.
