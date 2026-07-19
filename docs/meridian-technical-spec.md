@@ -525,25 +525,34 @@ Sensitive map layers/features must not sync to users/devices without permission.
 
 Department Logistics users should additionally cache:
 
+- Department-scoped searchable staff, equipment, and shift indexes for the
+  current event/department.
 - Department on-site/off-site presence state.
-- Current and upcoming shift assignments for their department.
+- Current, upcoming, and outgoing shift context for selected staff.
 - Check-in/check-out/no-show state for those department shifts.
 - Department equipment state and open checkouts they are permitted to manage.
+- Future shift signups needed for the selected staff workspace.
 
 Department Operations users should additionally cache:
 
 - Current and upcoming shift assignments for their department.
 - Current deployment/location assignment for those shifts.
 - Active deployment/location options.
+- Capability-authorized overview module payloads only; the Operations Center
+  shell does not expand cache authority by itself.
 
 Department Planning users should additionally cache:
 
-- Department schedule.
-- Shift signups.
-- Team membership for planning views.
+- Identity-free plan-versus-actual aggregate rows by shift/team window.
+- Aggregate fields only: capacity target, signed-up/assigned count, checked-in
+  count, no-show count, unscheduled additions, planned hours, actual hours, and
+  variance/status.
+- Explicit data-freshness metadata.
 
 Department leads should additionally cache:
 
+- Department Overview selected-shift summaries, exceptions, checked-in staff,
+  assignments, and compact equipment/deployment readiness identifiers.
 - Department roster.
 - Department schedule.
 - Department attendance data.
@@ -985,10 +994,12 @@ god_mode
 
 Alpha 1 department operational capabilities are separated:
 
-- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in.
-- `department_operations` manages current deployment/location assignment.
-- `department_planning` views shift schedule, shift signups, and team members.
+- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in through the Logistics Desk staff workspace.
+- `department_operations` opens the Operations Center and manages current deployment/location assignment. The shell does not grant incident, equipment, or other module access.
+- `department_planning` views identity-free Planning Table aggregates comparing plan versus actual by shift/team window.
 - `department_administration` manages department/team administrative settings as permitted.
+- Incident overview modules require separate event-scoped IC capability.
+- Equipment overview modules require the relevant equipment visibility/manage capability.
 
 Every permission decision should be explainable in the UI.
 
@@ -1644,13 +1655,19 @@ Check-out creates hours for the selected shift.
 
 ## 20.5 Department operations workflows
 
-Department boards default to department scope and only become team-specific when
-a team filter is selected.
+Department Overview and Planning Table are department-scoped by default. Optional
+team or date filters may narrow the view without changing authorization.
 
 Shifts have exactly one team.
 
-Logistics sees current shift assignments for department shifts with attendance
-and equipment actions.
+Department Overview is a lead situational-awareness surface for a selected shift.
+Content order is exceptions, summary counts, checked-in staff, assignments, then
+compact equipment/deployment/readiness summaries with drill-throughs.
+
+Logistics Desk is staff-first. Department-scoped offline search finds staff,
+equipment, and shifts. Selecting a staff member opens a workspace with presence,
+active/upcoming/outgoing shift context, check-in/check-out dialog, equipment
+handoff, and future signup or eligible shift-add actions.
 
 Logistics can add an on-site eligible staff member who is not assigned to the
 shift.
@@ -1672,13 +1689,16 @@ Duplicate check-in is idempotent.
 
 Attendance operations do not include optional notes in Alpha 1.
 
-Operations sees current shift assignments for department shifts with
-deployment/location actions.
+Operations Center always shows the deployment/location module for users with
+Department Operations capability. Additional modules appear only when the actor
+already holds the corresponding capability.
 
 Operations may assign or change one current deployment/location per shift/staff
 before or during the shift.
 
-Planning sees shift schedule, shift signups, and team members.
+Planning Table shows identity-free plan-versus-actual aggregates by shift/team
+window and must not expose individual staff identities, signup lists, or
+team-member lists.
 
 ## 20.6 Attendance visibility
 

@@ -28,38 +28,40 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
 
-## Alpha 1 Shift Lead Board partial smoke
+## Alpha 1 Department operations UX smoke
 
-M10.1 covers the current roster and checked-in state. M10.7 adds the local
-eligible unscheduled staff add-to-roster affordance. M10.8 adds the local
-current deployment/location move affordance. M10.9 adds local equipment
-checkout/check-in controls and checked-out equipment state. The full
+M10.1B resets the four department operations surfaces around field workflows.
+M10.1 delivers Department Overview. M10.9B delivers Logistics Desk search and
+staff workspace. M10.8 delivers the capability-composed Operations Center.
+M10.9A delivers the identity-free Planning Table. The full
 `QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
 
 1. Start the shared client in development mode.
-2. Open **Current shift board** from the home surface.
-3. Confirm the board shows the Local Field Event, Rangers department, Dirt team,
-   Ranger Dirt Day Shift, roster count, and checked-in count.
-4. Confirm Local Field Author and Sam Shiftlead appear under Checked-in staff,
-   Vera Staff remains Scheduled in the roster, and Ari Ranger appears as an
-   eligible staff member who can be added to the roster. Confirm Local Field
-   Author is assigned to Gate 1, Sam Shiftlead is assigned to Perimeter North,
-   and Vera Staff is Unassigned. Confirm Radio 12 is checked out to Local Field
-   Author and the equipment-out summary count is 1.
-5. Add Ari Ranger to the roster. Confirm the roster count increases by one, Ari
-   Ranger appears as Scheduled, and the eligible-staff list is empty.
-6. Move Vera Staff to HQ Runner. Confirm the deployment status says Vera Staff
-   moved to HQ Runner and the roster shows HQ Runner for Vera.
-7. Check out Safety Vest to Vera Staff. Confirm the equipment status says Safety
-   Vest was checked out to Vera Staff and the checked-out equipment list includes
-   Safety Vest with visible Checked out state text.
-8. Add Radio 14 with asset tag RDO-14 and immediately check it out to Vera Staff.
-   Confirm the status says Radio 14 was added and checked out to Vera Staff.
-9. In the check-in control, select Vera Staff. Confirm Safety Vest and Radio 14
-   are both available for selection, select both, and check them in as Returned.
-   Confirm the status says 2 items checked in as Returned and both leave the checked-out
-   equipment list.
-10. Check in Radio 12 as Returned by selecting Local Field Author. Confirm Radio
-   12 leaves the checked-out equipment list.
-11. Confirm no staff attendance check-in, staff attendance check-out, no-show,
-   hours, field report shortcut, or incident shortcut controls are present.
+2. Open **Department overview** from the home surface.
+3. Confirm compact event/department context, a switchable shift selector
+   defaulting to Ranger Dirt Day Shift, and summary counts for assignments,
+   checked in, on-site, and equipment out.
+4. Confirm content order: exceptions first, then checked-in staff currently
+   working, then full shift assignments, then compact equipment summary.
+5. Switch to Ranger Dirt Swing Shift and confirm the overview updates to that
+   shift without showing Logistics mutation controls.
+6. Open **Logistics desk**. Confirm the search field is front and center and
+   can find staff, equipment, and shifts for the current department.
+7. Search for Vera Staff and open the staff workspace. Confirm presence
+   controls, active/upcoming/outgoing shift context, and future signup list.
+8. Mark Vera on-site if needed, then open Check in. Confirm the dialog defaults
+   the timestamp to now and can hand off available equipment.
+9. Confirm open equipment for a checked-in staff member can be returned as
+   Returned, Missing, or Damaged with one action each.
+10. Confirm provisions appear only as an extension placeholder with no fake data.
+11. Open **Operations center**. Confirm the deployments module is present for
+    Operations capability and can move a rostered staff member between
+    deployments.
+12. Confirm the incident overview module is absent unless IC capability is
+    granted, and that opening Operations Center alone does not reveal incident
+    content.
+13. Open **Planning table**. Confirm rows are shift/team windows with capacity,
+    signed-up/assigned, checked-in, no-show, unscheduled, planned hours, actual
+    hours, and variance/status columns.
+14. Confirm Planning Table shows no individual staff names, signup lists, or
+    team-member lists.

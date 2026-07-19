@@ -761,6 +761,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `department.dashboard` | `events.departments.show` | Department operational home | Department member/lead as permitted |
+| `department.overview` | `events.departments.overview` | Lead situational awareness for a selected shift | Department lead |
 | `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
 | `department.teams` | `events.departments.teams.index` | Manage teams and team membership | Department lead |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
@@ -776,27 +777,50 @@ Route names are implementation targets and may be adapted to Laravel conventions
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
-| `shift-board.current` | `events.departments.shift-board.current` | Read-only department board for current shift assignments, attendance state, deployment state, and equipment out | Department member with operational visibility |
-| `shift-board.logistics` | `events.departments.shift-board.logistics` | Department presence, staff-mediated shift check-in/check-out, and equipment checkout/check-in | `department_logistics` |
-| `shift-board.operations` | `events.departments.shift-board.operations` | Current deployment/location assignment for staff on shift | `department_operations` |
-| `shift-board.planning` | `events.departments.shift-board.planning` | Shift schedule, shift signups, and team members | `department_planning` |
+| `department.overview` | `events.departments.overview` | Switchable-shift situational awareness: exceptions, checked-in staff, assignments, compact equipment/deployment summaries, and drill-throughs | Department lead |
+| `department.logistics` | `events.departments.logistics` | Staff-first Logistics Desk with offline department-scoped search and staff operational workspace | `department_logistics` |
+| `department.operations` | `events.departments.operations` | Operations Center composed from the actor's existing capabilities | `department_operations` for the shell and deployments module |
+| `department.planning` | `events.departments.planning` | Identity-free Planning Table comparing plan versus actual by shift/team window | `department_planning` |
 
-Shifts have exactly one team. Department boards default to department scope and
-only become team-specific when the user explicitly selects a team filter.
+Legacy route names `events.departments.shift-board.*` redirect to the corresponding
+`events.departments.*` destinations during the redesign transition.
 
-The Logistics Desk owns the on-site/off-site workflow for eligible department
-staff. Marking a staff member on-site makes that person eligible to be added to a
-shift; Logistics still performs the actual shift add/check-in. Going off-site is
-blocked while the staff member is checked into a shift or has equipment checked
-out unless that equipment is returned or marked missing/damaged.
+Shifts have exactly one team. Department Overview and Planning Table are
+department-scoped by default; optional team or date filters may narrow the view
+without changing authorization.
 
-The Operations Board owns current deployment/location assignment. A staff member
-has at most one current deployment per shift, and Operations can pre-assign or
-change that assignment before or during the shift.
+The Department Overview is a lead situational-awareness surface. Event and
+department identity appear as compact page context. The selected shift is
+prominent and switchable. Content order is: exceptions requiring attention;
+summary counts; checked-in staff currently working; full shift assignments;
+compact equipment/deployment/readiness summaries; then drill-through links to
+owning workflows. Overview actions do not replace Logistics or Operations.
 
-Equipment check-in should be staff-first: choose the staff member, show the
-equipment currently checked out to that person, and allow multiple items to be
-returned in one action.
+The Logistics Desk is a staff-first service station. Search for staff, equipment,
+and shifts is front and center and works from department-scoped offline cache for
+the current event/department. Selecting a staff member opens one continuous
+workspace: identity/context; on-site/off-site; active/upcoming/outgoing shift;
+check-in/check-out dialog with editable default-now timestamp and equipment
+handoff; open equipment with Returned/Missing/Damaged actions; a provisions
+extension slot when that domain exists; and future shift signups or eligible
+shift-add actions. Marking a staff member on-site makes that person eligible to
+be added to a shift; Logistics still performs the actual shift add/check-in.
+Going off-site is blocked while the staff member is checked into a shift or has
+equipment checked out unless that equipment is returned or marked missing/damaged.
+
+The Operations Center is a high-level operational picture. Users with
+`department_operations` always see the deployment/location module. Incident
+overview appears only with event-scoped IC capability. Equipment overview appears
+only with the relevant equipment visibility capability. Future maintenance/ticket
+modules appear only after those domains are specified. The shell never grants
+module access by itself and must not reproduce the Logistics staff service
+workflow.
+
+The Planning Table compares plan versus actual without individual identities.
+Rows are shift/team windows. Columns include capacity target or “No target”,
+signed-up/assigned count, checked-in count, no-show count, unscheduled additions,
+planned hours, actual hours, and variance/status. Upcoming, active, and completed
+shifts are distinguished, and data freshness/offline state is visible.
 
 ### 12.6 Organizer Screens
 
@@ -957,9 +981,9 @@ Placement department designation is configured on the event admin surface (`orga
 
 | Widget ID | Title | Scope | Permissions | Quiet state | Primary action |
 |---|---|---|---|---|---|
-| `shift.current_assignments` | Current Assignments | shift/department/event | operational visibility | No current assignments | Open Department Board |
+| `shift.current_assignments` | Current Assignments | shift/department/event | operational visibility | No current assignments | Open Department Overview |
 | `shift.late_missing` | Late or Missing Staff | shift/department/event | department logistics | No late or missing staff | Review check-in |
-| `shift.deployment_needs` | Deployment Needs | shift/department/event | department operations | Deployments look okay | Open Operations Board |
+| `shift.deployment_needs` | Deployment Needs | shift/department/event | department operations | Deployments look okay | Open Operations Center |
 | `shift.equipment_status` | Equipment Status | shift/department/event | department logistics | Equipment accounted for | Open Logistics Desk |
 
 ### 13.4 Organizer Widgets

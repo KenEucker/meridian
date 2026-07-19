@@ -1,28 +1,28 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
 
-import { LOCAL_CURRENT_SHIFT_BOARD } from "@/shift-board/currentShiftBoard";
+import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 
 // Placeholder home surface. Field Report author surfaces arrived with M9.4;
-// department operations surfaces are split by role workflow for M10.
+// department operations surfaces are workflow-specific for M10.
 const departmentRouteParams = {
-  eventId: LOCAL_CURRENT_SHIFT_BOARD.eventId,
-  departmentId: LOCAL_CURRENT_SHIFT_BOARD.departmentId,
+  eventId: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+  departmentId: LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId,
 };
-const departmentBoardRoute = {
-  name: "events.departments.shift-board.current",
+const overviewRoute = {
+  name: "events.departments.overview",
   params: departmentRouteParams,
 };
 const logisticsRoute = {
-  name: "events.departments.shift-board.logistics",
+  name: "events.departments.logistics",
   params: departmentRouteParams,
 };
 const operationsRoute = {
-  name: "events.departments.shift-board.operations",
+  name: "events.departments.operations",
   params: departmentRouteParams,
 };
 const planningRoute = {
-  name: "events.departments.shift-board.planning",
+  name: "events.departments.planning",
   params: departmentRouteParams,
 };
 </script>
@@ -34,10 +34,10 @@ const planningRoute = {
       Shared operational client. Select a current operational surface.
     </p>
     <p class="home__links">
-      <RouterLink :to="departmentBoardRoute">Department board</RouterLink>
+      <RouterLink :to="overviewRoute">Department overview</RouterLink>
       <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
-      <RouterLink :to="operationsRoute">Operations board</RouterLink>
-      <RouterLink :to="planningRoute">Planning board</RouterLink>
+      <RouterLink :to="operationsRoute">Operations center</RouterLink>
+      <RouterLink :to="planningRoute">Planning table</RouterLink>
       <RouterLink :to="{ name: 'staff.field-reports.index' }"
         >My Field Reports</RouterLink
       >

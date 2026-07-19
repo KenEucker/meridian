@@ -278,6 +278,11 @@ GET /api/events/{event}
 GET /api/events/{event}/departments
 GET /api/events/{event}/teams
 GET /api/events/{event}/shifts
+GET /api/events/{event}/departments/{department}/overview
+GET /api/events/{event}/departments/{department}/logistics/search
+GET /api/events/{event}/departments/{department}/logistics/staff/{staff}
+GET /api/events/{event}/departments/{department}/operations
+GET /api/events/{event}/departments/{department}/planning
 GET /api/events/{event}/field-reports
 GET /api/events/{event}/incidents
 GET /api/policy-documents
@@ -287,6 +292,18 @@ GET /api/document-acknowledgments/me
 ```
 
 All read APIs return permission-filtered resources.
+
+Department operations read models are purpose-built and separate:
+
+- Overview returns selected-shift exceptions, summary counts, checked-in staff,
+  assignments, and compact equipment/deployment summaries for department leads.
+- Logistics search returns department-scoped staff, equipment, and shift hits
+  suitable for offline cache.
+- Logistics staff detail returns one staff operational workspace payload.
+- Operations Center returns a capability-composed module manifest plus authorized
+  module payloads only.
+- Planning returns identity-free plan-versus-actual aggregate rows and must not
+  include staff identities, signup lists, or team-member lists.
 
 Incident APIs must return data only to IC-authorized users.
 
@@ -451,9 +468,9 @@ god_mode
 Alpha 1 department operational grants are department-scoped and assigned through
 teams:
 
-- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in.
-- `department_operations` manages current deployment/location assignment.
-- `department_planning` views shift schedule, shift signups, and team members.
+- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in through the Logistics Desk staff workspace.
+- `department_operations` opens the Operations Center and manages current deployment/location assignment. The shell does not grant incident or equipment module access.
+- `department_planning` views identity-free Planning Table aggregates comparing plan versus actual by shift/team window.
 - `department_administration` manages department/team administrative settings as permitted.
 
 Permission decisions should be explainable in the UI.
@@ -545,25 +562,29 @@ Regular staff may cache:
 
 Department Logistics users may additionally cache:
 
+- department-scoped searchable staff, equipment, and shift indexes for the current event/department
 - department on-site/off-site presence state
-- current and upcoming shift assignments for their department
+- current, upcoming, and outgoing shift context for selected staff
 - check-in/check-out/no-show state for those department shifts
 - department equipment state and open checkouts they are permitted to manage
+- future shift signups needed for the selected staff workspace
 
 Department Operations users may additionally cache:
 
 - current and upcoming shift assignments for their department
 - current deployment/location assignment for those shifts
 - active deployment/location options
+- capability-authorized overview module payloads only; the Operations Center shell does not expand cache authority by itself
 
 Department Planning users may additionally cache:
 
-- department schedule
-- shift signups
-- team membership for planning views
+- identity-free plan-versus-actual aggregate rows by shift/team window
+- aggregate fields only: capacity target, signed-up/assigned count, checked-in count, no-show count, unscheduled additions, planned hours, actual hours, and variance/status
+- explicit data-freshness metadata
 
 Department leads may additionally cache:
 
+- Department Overview selected-shift summaries, exceptions, checked-in staff, assignments, and compact equipment/deployment readiness identifiers
 - department roster
 - department schedule
 - department attendance data

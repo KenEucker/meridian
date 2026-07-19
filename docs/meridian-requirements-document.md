@@ -893,7 +893,7 @@ MVP equipment tracking supports:
 
 - checkout to individual staff members
 - check-in from individual staff members
-- visibility on the Department Board and Logistics Desk
+- visibility on the Department Overview and Logistics Desk
 - manual correction when physical handoffs happen outside the system
 
 MVP equipment states include:
@@ -931,7 +931,7 @@ Deployments answer:
 For MVP, deployment tracking only needs to show the current deployment/location assignment.
 
 Department Operations may assign and update a staff member's current
-deployment/location from the Operations Board.
+deployment/location from the Operations Center.
 
 Staff may be moved between deployments/locations during a shift.
 
@@ -1761,7 +1761,7 @@ For MVP, Meridian provides credential eligibility reporting, not physical creden
 4. Logistics confirms the staff member's schedule/signups.
 5. Logistics issues event equipment if needed.
 6. Logistics checks the staff member into a scheduled shift, or adds an on-site eligible unscheduled staff member to the shift.
-7. Department Operations opens the Operations Board.
+7. Department Operations opens the Operations Center.
 8. Operations assigns or confirms the staff member's deployment/location.
 9. Shift work occurs.
 10. Staff may move between deployments/locations.
@@ -1947,7 +1947,7 @@ The MVP should prioritize:
 - shift eligibility
 - shift signup
 - credential eligibility reporting
-- Department Operations, Logistics, and Planning boards
+- Department Overview, Logistics Desk, Operations Center, and Planning Table
 - field report creation
 - incident list/editor
 - hours recording
@@ -1962,7 +1962,7 @@ Priority operational screens:
 
 1. Staff Application
 2. Staff Coordination
-3. Department Board / Logistics Desk / Operations Board
+3. Department Overview / Logistics Desk / Operations Center / Planning Table
 4. Incident List / Incident Editor
 5. Field Report Creation
 
@@ -2069,25 +2069,24 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - future shifts removed where possible after revocation
 - reporting/export
 
-### Department Operations Boards
+### Department Operations Surfaces
 
-- current shift assignments
+- Department Overview for lead situational awareness on a selected shift
+- Logistics Desk staff-first search and staff workspace
 - department on-site/off-site status
-- check-in
-- check-out
+- check-in / check-out with editable default-now timestamps
 - actual start/end time
 - hour creation
 - hour correction during grace period
-- add eligible unscheduled staff
+- add eligible unscheduled staff from the staff workspace
+- Operations Center capability-composed modules
 - current deployment/location assignment
 - move staff between locations
-- equipment checked out
+- equipment checked out summaries and staff-workspace handoff
 - equipment checkout/check-in to individuals
-- shift schedule
-- shift signups
-- team members
-- field report shortcut
-- incident shortcut
+- identity-free Planning Table aggregates
+- field report shortcut or module only where already permitted
+- incident overview module only with Incident Command capability
 
 ### Equipment
 
@@ -2696,23 +2695,23 @@ Unscheduled work shall not retroactively grant credential eligibility.
 
 ---
 
-## 7.9 Department Operations Board Requirements
+## 7.9 Department Operations Surface Requirements
 
 ### SLB-001
 
-The Department Board shall show current shift assignments.
+The Department Overview shall let department leads select a shift and review current department operations for that shift.
 
 ### SLB-002
 
-The Department Board and Logistics Desk shall show checked-in staff.
+The Department Overview shall show exceptions requiring attention first, then checked-in staff currently working, then full shift assignments, then compact equipment and deployment summaries.
 
 ### SLB-003
 
-The Logistics Desk shall allow staff check-in after staff are marked on-site for the department.
+The Logistics Desk shall allow staff check-in after staff are marked on-site for the department through a staff-first search and staff operational workspace.
 
 ### SLB-004
 
-The Logistics Desk shall allow staff check-out.
+The Logistics Desk shall allow staff check-out from the selected staff member's active or outgoing shift workspace.
 
 ### SLB-005
 
@@ -2728,31 +2727,31 @@ Authorized attendance managers shall be able to correct hours during the correct
 
 ### SLB-008
 
-The Logistics Desk shall allow on-site eligible unscheduled staff to be added to a shift.
+The Logistics Desk shall allow on-site eligible unscheduled staff to be added to a shift from the selected staff member's workspace.
 
 ### SLB-009
 
-The Operations Board shall allow deployment/location assignment.
+The Operations Center shall always include a deployment/location module for users with Department Operations capability.
 
 ### SLB-010
 
-The Operations Board shall allow staff to be moved between deployments/locations.
+The Operations Center deployment module shall allow staff to be moved between deployments/locations.
 
 ### SLB-011
 
-The Department Board and Logistics Desk shall show equipment checked out.
+The Department Overview shall show a compact summary of equipment checked out, and the Logistics Desk staff workspace shall show equipment checked out to the selected staff member.
 
 ### SLB-012
 
-The Logistics Desk shall support equipment checkout/check-in to individual staff members.
+The Logistics Desk shall support equipment checkout/check-in to individual staff members from the staff operational workspace.
 
 ### SLB-013
 
-Department operations surfaces shall provide a field report shortcut where permitted.
+Department operations surfaces shall provide a field report shortcut or module only where the actor already has Field Report permission.
 
 ### SLB-014
 
-Department operations surfaces shall provide an incident shortcut where permitted.
+The Operations Center shall show an incident overview module only when the actor has event-scoped Incident Command capability. Opening the Operations Center shall not grant incident access.
 
 ### SLB-015
 
@@ -2760,7 +2759,7 @@ Meridian shall track on-site/off-site status per event, department, and staff me
 
 ### SLB-016
 
-Only Department Logistics shall mark department staff on-site/off-site.
+Only Department Logistics shall mark department staff on-site/off-site from the Logistics Desk staff workspace.
 
 ### SLB-017
 
@@ -2772,11 +2771,19 @@ Staff shall not be marked off-site while holding checked-out equipment for that 
 
 ### SLB-019
 
-The Planning Board shall show shift schedule, shift signups, and team members.
+The Planning Table shall show identity-free plan-versus-actual aggregates by shift/team window, including capacity target, signed-up or assigned count, checked-in count, no-show count, unscheduled additions, planned hours, actual hours, and variance or status. It shall not expose individual staff identities, signup lists, or team-member lists.
 
 ### SLB-020
 
-Department boards shall be department-specific by default and team-specific only when a team filter is selected.
+Department Overview and Planning Table shall be department-scoped by default. Optional team or date filters may narrow the view without changing authorization or revealing identities on the Planning Table.
+
+### SLB-021
+
+The Logistics Desk shall provide department-scoped offline search across staff, equipment, and shifts for the current event and department.
+
+### SLB-022
+
+The Operations Center shall compose overview modules from capabilities the actor already holds. The shell itself shall not grant access to incidents, equipment, maintenance tickets, or other modules.
 
 ---
 

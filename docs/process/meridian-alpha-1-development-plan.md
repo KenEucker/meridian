@@ -325,24 +325,28 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M10.1 Department board | Show current department shift assignments and checked-in state, department-scoped by default with optional team filter. | SLB-001, SLB-002 | UI/feature tests |
+| M10.1 Department overview | Lead situational-awareness surface with switchable shift, exceptions-first ordering, checked-in staff, assignments, and compact equipment/deployment summaries. | SLB-001, SLB-002, SLB-020 | UI/feature tests |
 | M10.1A Department presence | Track department-specific on-site/off-site status for eligible department staff. | SLB-015 through SLB-018; data/API 10.10A | Domain/policy tests |
+| M10.1B Department ops UX contract reset | Align requirements, UI/API contracts, milestone language, and QA with Department Overview, Logistics Desk, Operations Center, and Planning Table workflows. | SLB-001 through SLB-022; UI contract 12.4-12.5 | Doc/traceability checks |
 | M10.2 Check-in operation | Department Logistics checks staff into a shift with operation record after the staff member is on-site. | SLB-003; technical spec 20.2 | Domain/policy tests |
 | M10.3 Check-out and hours | Check-out creates actual hours with actual start/end. | SLB-004 through SLB-006; HOURS-001 through HOURS-006 | Domain tests |
 | M10.4 No-show operation | Authorized attendance manager marks no-show idempotently. | Technical spec 20.2 | Domain tests |
 | M10.5 Offline attendance queue | Check-in/check-out/no-show work offline and sync later. | Technical spec 20.1; data/API 7.2 | Sync/idempotency tests |
 | M10.6 Hours correction grace period | Allow corrections during grace period and freeze later. | HOURS-007, HOURS-008 | Domain/audit tests |
-| M10.7 On-site staff shift addition | Logistics adds an on-site eligible unscheduled staff member during operations. | SLB-008; SHIFT-016 | Domain/UI tests |
-| M10.8 Operations deployment/location assignment | Department Operations assigns and moves current deployment/location. | SLB-009, SLB-010; data/API 10.14 | Domain/UI tests |
-| M10.9 Logistics equipment checkout/check-in | Manual equipment workflows and states, including equipment issued outside a shift. | SLB-011, SLB-012; EQUIP-001 through EQUIP-005 | Domain/UI tests |
-| M10.9A Planning board | Show shift schedule, shift signups, and team members as a read-only department planning surface. | UI contract 12.5 | UI tests |
-| M10.10 Field report/incident shortcuts | Add department board shortcuts without bypassing permissions. | SLB-013, SLB-014 | UI/policy tests |
+| M10.7 On-site staff shift addition | Logistics adds an on-site eligible unscheduled staff member during operations from the staff workspace. | SLB-008; SHIFT-016 | Domain/UI tests |
+| M10.8 Operations Center | Capability-composed Operations Center with mandatory deployments module and capability-gated incident/equipment overview slots. | SLB-009, SLB-010, SLB-014, SLB-022; data/API 10.14 | Domain/UI/policy tests |
+| M10.9 Logistics equipment checkout/check-in | Manual equipment workflows and states from the staff workspace, including equipment issued outside a shift. | SLB-011, SLB-012; EQUIP-001 through EQUIP-005 | Domain/UI tests |
+| M10.9A Planning table | Identity-free Planning Table comparing plan versus actual aggregates by shift/team window. | SLB-019, SLB-020; UI contract 12.5 | UI/aggregate tests |
+| M10.9B Logistics search workspace | Department-scoped offline Logistics search and staff operational workspace shell. | SLB-003, SLB-021; UI contract 12.5 | UI/search/offline tests |
+| M10.10 Field report/incident modules | Add Field Report and incident modules/shortcuts only where the actor already has permission; Operations Center shell grants nothing. | SLB-013, SLB-014, SLB-022 | UI/policy tests |
 | M10.11 Attendance QA script | Add `QA-SLB-01-checkin-checkout-hours.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can mark department staff on-site/off-site, add on-site
-staff to a shift, check staff in/out, create hours, mark no-show, assign
-deployments from Operations, check equipment in/out from Logistics, and view
-Planning schedule/signups/team members.
+**QA gate:** A reviewer can use Department Overview to switch shifts and see
+exceptions/checked-in/assignments, use Logistics Desk search to mark a staff
+member on-site/off-site, check them in/out with equipment handoff, add an
+on-site eligible staff member to a shift, assign deployments from the Operations
+Center, and review identity-free Planning Table aggregates without seeing
+individual signup or team-member identities.
 
 ---
 
