@@ -5,7 +5,8 @@ The Meridian Capacitor mobile packaging wrapper.
 `apps/mobile` does not own product UI. It packages the shared Vue client from
 `apps/client/dist/field` for iOS and Android as Meridian Field. Product routes,
 screens, mobile-first layout, offline UX, and operational workflows are
-maintained in `apps/client`.
+maintained in `apps/client`. Native app versions must be derived from the root
+`package.json` Meridian version when release packaging is added.
 
 ## Source references
 

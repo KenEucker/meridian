@@ -141,7 +141,7 @@ class SeedLocalFieldFixtureCommand extends Command
         $this->info('Local Field fixture seeded.');
         $this->line('User: '.LocalFieldFixture::USER_EMAIL.' / password');
         $this->line('Event ID: '.LocalFieldFixture::EVENT_ID);
-        $this->line('Set MERIDIAN_LOCAL_FIELD_API_ENABLED=true and MERIDIAN_LOCAL_FIELD_API_TOKEN in apps/server/.env');
+        $this->line('Run `corepack pnpm run env:local` from the repository root to configure matching local API/client env.');
 
         return self::SUCCESS;
     }

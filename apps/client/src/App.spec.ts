@@ -4,6 +4,10 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
+import {
+  clearFieldSession,
+  installDevelopmentFieldSession,
+} from "@/field-reports/fieldSession";
 import { routes } from "@/router";
 
 function buildRouter() {
@@ -15,6 +19,7 @@ function buildRouter() {
 
 afterEach(() => {
   configureMeridianApi(null);
+  clearFieldSession();
   vi.unstubAllGlobals();
 });
 
@@ -97,5 +102,48 @@ describe("shared client shell", () => {
     expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
       "Missing VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN.",
     );
+  });
+
+  it("renders configured local Field command diagnostics on the settings/about route", async () => {
+    configureMeridianApi({
+      baseUrl: "http://localhost:8000",
+      bearerToken: "local-field-dev-token",
+    });
+    installDevelopmentFieldSession();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            environment: "local",
+            server_version: "1.2.3",
+            config_schema_version: 1,
+            timestamp: "2026-07-18T12:00:00.000Z",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+
+    const router = buildRouter();
+    await router.push("/settings/about");
+    await router.isReady();
+
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+      },
+    });
+    await flushPromises();
+
+    const healthText = wrapper.get('[aria-label="Operational health"]').text();
+    expect(healthText).toContain("Configured for local Field command uploads.");
+    expect(healthText).toContain("Local Field Event");
+    expect(healthText).not.toContain("null");
+    expect(healthText).toContain("Ready; no pending Field Report work.");
   });
 });

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_CLIENT_DEV_SERVER_URL,
   DEFAULT_SERVER_URL,
   HEALTH_PATH,
+  resolveAppUrlOverride,
+  resolveClientDevAppUrl,
+  resolveClientDevServerUrl,
   resolveClientDistPath,
   resolveClientPort,
   resolveClientVersion,
@@ -62,19 +66,87 @@ describe("resolveClientPort", () => {
   });
 });
 
-describe("resolveClientVersion", () => {
-  it("uses MERIDIAN_CLIENT_VERSION when provided", () => {
-    expect(resolveClientVersion({ MERIDIAN_CLIENT_VERSION: "1.2.3" })).toBe("1.2.3");
+describe("resolveClientDevServerUrl", () => {
+  it("defaults to the shared Vue Vite dev server", () => {
+    expect(resolveClientDevServerUrl({})).toBe(DEFAULT_CLIENT_DEV_SERVER_URL);
   });
 
-  it("reads the shared client package version by default", () => {
-    const readFile = (() => JSON.stringify({ version: "2.0.0" })) as unknown as typeof import("node:fs").readFileSync;
+  it("uses MERIDIAN_CLIENT_DEV_SERVER_URL when provided", () => {
+    expect(
+      resolveClientDevServerUrl({
+        MERIDIAN_CLIENT_DEV_SERVER_URL: "  http://127.0.0.1:5174  ",
+      }),
+    ).toBe("http://127.0.0.1:5174/");
+  });
+
+  it("rejects non-http(s) schemes", () => {
+    expect(() =>
+      resolveClientDevServerUrl({ MERIDIAN_CLIENT_DEV_SERVER_URL: "file:///tmp/client" }),
+    ).toThrow(/must use http or https/);
+  });
+});
+
+describe("resolveClientDevAppUrl", () => {
+  it("adds the Kiosk runtime UI mode to the default Vite dev server URL", () => {
+    expect(resolveClientDevAppUrl({})).toBe(
+      "http://localhost:5173/?meridianUiMode=kiosk",
+    );
+  });
+
+  it("preserves existing dev server URL query params", () => {
+    expect(
+      resolveClientDevAppUrl({
+        MERIDIAN_CLIENT_DEV_SERVER_URL: "http://127.0.0.1:5174/?debug=true",
+      }),
+    ).toBe("http://127.0.0.1:5174/?debug=true&meridianUiMode=kiosk");
+  });
+});
+
+describe("resolveAppUrlOverride", () => {
+  it("returns null when MERIDIAN_APP_URL is unset", () => {
+    expect(resolveAppUrlOverride({})).toBeNull();
+  });
+
+  it("uses MERIDIAN_APP_URL when provided", () => {
+    expect(resolveAppUrlOverride({ MERIDIAN_APP_URL: "  http://localhost:5173/kiosk  " })).toBe(
+      "http://localhost:5173/kiosk",
+    );
+  });
+
+  it("rejects non-http(s) schemes", () => {
+    expect(() => resolveAppUrlOverride({ MERIDIAN_APP_URL: "file:///tmp/client" })).toThrow(
+      /must use http or https/,
+    );
+  });
+});
+
+describe("resolveClientVersion", () => {
+  it("reads the root package version by default", () => {
+    const readFile = ((path: Parameters<typeof import("node:fs").readFileSync>[0]) => {
+      if (String(path) === "/repo/package.json") {
+        return JSON.stringify({ name: "meridian", version: "2.0.0" });
+      }
+
+      throw new Error("missing");
+    }) as unknown as typeof import("node:fs").readFileSync;
 
     expect(resolveClientVersion({}, "/repo/apps/desktop", readFile)).toBe("2.0.0");
   });
 
-  it("returns unknown when the client package version cannot be read", () => {
+  it("returns unknown when the root package version cannot be read", () => {
     const readFile = (() => {
+      throw new Error("missing");
+    }) as unknown as typeof import("node:fs").readFileSync;
+
+    expect(resolveClientVersion({}, "/repo/apps/desktop", readFile)).toBe("unknown");
+  });
+
+  it("returns unknown when the root package version is not numeric", () => {
+    const readFile = ((path: Parameters<typeof import("node:fs").readFileSync>[0]) => {
+      if (String(path) === "/repo/package.json") {
+        return JSON.stringify({ name: "meridian", version: "2.0.0-alpha" });
+      }
+
       throw new Error("missing");
     }) as unknown as typeof import("node:fs").readFileSync;
 

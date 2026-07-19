@@ -59,6 +59,17 @@ Do not require the `main-process-checks` workflow as a PR merge check. It runs a
 
 Before relying on the post-merge monitor, confirm that the workflow branch filter targets the protected branch. In this repository, the protected branch is `production`; if a workflow name still says `main-process-checks`, treat that as a historical name and verify the trigger branch separately.
 
+## Production Version Bump
+
+The `production-version-bump` workflow runs after a pull request into
+`production` is merged. It increments only the root `package.json` patch version
+and pushes that version commit back to `production`.
+
+Repository Actions settings and branch protection must allow the workflow's
+`GITHUB_TOKEN` to write this commit, or an equivalent trusted automation account
+must be allowed to push only the version bump. Human contributors should still
+merge product changes through pull requests.
+
 ## Human Confirmation Checklist
 
 A maintainer should confirm:
@@ -70,5 +81,6 @@ A maintainer should confirm:
 - Branch deletion and force pushes are disabled.
 - Bypass access is limited to trusted maintainers.
 - The post-merge process workflow runs on the protected branch and failures are monitored.
+- The production version bump workflow can push its root `package.json` version commit.
 
 Record confirmation in the pull request or repository administration notes.

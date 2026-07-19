@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\RootPackageVersion;
+
 return [
 
     /*
@@ -13,7 +15,7 @@ return [
     |
     */
 
-    'version' => env('MERIDIAN_VERSION', '0.1.0-alpha'),
+    'version' => RootPackageVersion::resolve(base_path('../..')),
 
     /*
     |--------------------------------------------------------------------------
@@ -42,6 +44,11 @@ return [
 
     'client' => [
         'dist_path' => env('MERIDIAN_CLIENT_DIST_PATH', base_path('../client/dist/admin')),
+        'dev_server_url' => env('MERIDIAN_CLIENT_DEV_SERVER_URL', 'http://localhost:5173'),
+        'use_dev_server' => filter_var(
+            env('MERIDIAN_CLIENT_USE_DEV_SERVER', env('APP_ENV') === 'local'),
+            FILTER_VALIDATE_BOOL,
+        ),
     ],
 
     /*

@@ -1,6 +1,5 @@
 {
   "name": "@meridian/ui-tokens",
-  "version": "0.0.0",
   "private": true,
   "description": "Meridian shared semantic UI design tokens for field and admin surfaces.",
   "license": "AGPL-3.0-or-later",

@@ -21,9 +21,11 @@ import { app, BrowserWindow, globalShortcut } from "electron";
 
 import {
   resolveClientDistPath,
+  resolveClientDevAppUrl,
   resolveClientPort,
   resolveClientVersion,
   resolveHealthUrl,
+  resolveAppUrlOverride,
   resolveServerUrl,
 } from "./config";
 import { buildHealthPanelModel, fetchServerHealth, renderHealthPanelHtml } from "./health";
@@ -36,6 +38,7 @@ let mainWindow: BrowserWindow | null = null;
 let healthWindow: BrowserWindow | null = null;
 let clientServer: ClientStaticServer | null = null;
 let currentAppUrl = "";
+let currentMeridianVersion = "unknown";
 
 function createMainWindow(appUrl: string): BrowserWindow {
   const window = new BrowserWindow({
@@ -89,8 +92,8 @@ async function refreshHealthWindow(window: BrowserWindow): Promise<void> {
   const health = await fetchServerHealth(healthUrl);
   const model = buildHealthPanelModel({
     appUrl: currentAppUrl,
-    appVersion: app.getVersion(),
-    clientVersion: resolveClientVersion(process.env),
+    appVersion: currentMeridianVersion,
+    clientVersion: currentMeridianVersion,
     health,
   });
   const html = renderHealthPanelHtml(model);
@@ -126,6 +129,15 @@ function toggleHealthWindow(): void {
 }
 
 async function resolveMainAppUrl(): Promise<string> {
+  const explicitAppUrl = resolveAppUrlOverride(process.env);
+  if (explicitAppUrl !== null) {
+    return explicitAppUrl;
+  }
+
+  if (!app.isPackaged) {
+    return resolveClientDevAppUrl(process.env, "kiosk");
+  }
+
   clientServer = await startClientStaticServer({
     distDir: resolveClientDistPath(process.env),
     port: resolveClientPort(process.env),
@@ -135,6 +147,7 @@ async function resolveMainAppUrl(): Promise<string> {
 }
 
 app.whenReady().then(async () => {
+  currentMeridianVersion = resolveClientVersion(process.env);
   currentAppUrl = await resolveMainAppUrl();
   mainWindow = createMainWindow(currentAppUrl);
 

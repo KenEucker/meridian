@@ -1,0 +1,71 @@
+name: production-version-bump
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Bump root patch version
+        id: version
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const fs = require("node:fs");
+          const path = "package.json";
+          const packageJson = JSON.parse(fs.readFileSync(path, "utf8"));
+          const previousPackageJson = JSON.parse(
+            execFileSync("git", ["show", `${process.env.BASE_SHA}:package.json`], { encoding: "utf8" }),
+          );
+
+          if (previousPackageJson.version !== packageJson.version) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${packageJson.version}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, "bumped=false\n");
+            process.exit(0);
+          }
+
+          const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(packageJson.version);
+
+          if (!match) {
+            throw new Error("Root package.json version must use numeric x.y.z format.");
+          }
+
+          const nextVersion = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+          packageJson.version = nextVersion;
+          fs.writeFileSync(path, `${JSON.stringify(packageJson, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "bumped=true\n");
+          NODE
+
+      - name: Commit version bump
+        if: ${{ steps.version.outputs.bumped == 'true' }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore(release): bump version to ${{ steps.version.outputs.version }}"
+          git push origin HEAD:production
