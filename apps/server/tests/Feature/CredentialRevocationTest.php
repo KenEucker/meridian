@@ -286,6 +286,9 @@ class CredentialRevocationTest extends TestCase
         $organization = Organization::factory()->create();
         $event = Event::factory()->for($organization)->create();
         $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        if ($eventScoped && in_array($grantRole, ['ic_lead', 'ic_operator', 'ic_viewer'], true)) {
+            $event->forceFill(['ic_department_id' => $department->id])->save();
+        }
         $team = Team::factory()->for($department)->create(['name' => 'Gate Team']);
 
         $actorStaff = Staff::factory()->create();

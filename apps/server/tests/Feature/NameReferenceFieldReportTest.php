@@ -395,7 +395,7 @@ class NameReferenceFieldReportTest extends TestCase
     private function userWithEventRole(string $roleCode, Event $event): User
     {
         $organization = $event->organization;
-        $department = Department::factory()->for($organization)->create();
+        $department = $this->ensureEventIcDepartment($event);
         $team = Team::factory()->for($department)->create();
         $staff = Staff::factory()->create();
         $user = User::factory()->create();
@@ -419,5 +419,23 @@ class NameReferenceFieldReportTest extends TestCase
         ]);
 
         return $user;
+    }
+
+    private function ensureEventIcDepartment(Event $event): Department
+    {
+        if ($event->ic_department_id !== null) {
+            return Department::query()->findOrFail($event->ic_department_id);
+        }
+
+        $event->loadMissing('organization.defaultIcDepartment');
+
+        if ($event->organization?->defaultIcDepartment !== null) {
+            return $event->organization->defaultIcDepartment;
+        }
+
+        $department = Department::factory()->for($event->organization)->create();
+        $event->forceFill(['ic_department_id' => $department->id])->save();
+
+        return $department;
     }
 }

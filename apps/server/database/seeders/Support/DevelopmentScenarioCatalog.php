@@ -101,8 +101,8 @@ final class DevelopmentScenarioCatalog
                 'user_name' => 'Omar ICOperator',
                 'email' => 'omar.icoperator@idaho-burners.test',
                 'org_status' => 'active',
-                'department_code' => 'GATE',
-                'team_code' => 'OPERATOR',
+                'department_code' => 'ORGANIZERS',
+                'team_code' => 'IC_OPERATOR',
                 'department_status' => null,
                 'grants' => [
                     ['role' => 'ic_operator', 'event_scoped' => true],
@@ -113,8 +113,8 @@ final class DevelopmentScenarioCatalog
                 'user_name' => 'Ivy ICViewer',
                 'email' => 'ivy.icviewer@idaho-burners.test',
                 'org_status' => 'active',
-                'department_code' => 'DPW',
-                'team_code' => 'LOGISTICS',
+                'department_code' => 'ORGANIZERS',
+                'team_code' => 'IC_VIEWER',
                 'department_status' => null,
                 'grants' => [
                     ['role' => 'ic_viewer', 'event_scoped' => true],
@@ -174,6 +174,8 @@ final class DevelopmentScenarioCatalog
                 'code' => 'ORGANIZERS',
                 'teams' => [
                     ['name' => 'Command', 'code' => 'COMMAND'],
+                    ['name' => 'IC Operators', 'code' => 'IC_OPERATOR'],
+                    ['name' => 'IC Viewers', 'code' => 'IC_VIEWER'],
                 ],
             ],
             [

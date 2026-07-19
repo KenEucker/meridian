@@ -3,6 +3,7 @@
 namespace App\Services\Permissions;
 
 use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Department;
 use App\Models\Event;
 use App\Models\PermissionRole;
 use App\Models\Team;
@@ -52,6 +53,10 @@ class TeamGrantService
             throw new InvalidArgumentException('Event-scoped roles require an event.');
         }
 
+        if ($event !== null && $this->isIncidentCommandRole($role)) {
+            $this->assertTeamIsInEventIncidentCommandDepartment($team, $event);
+        }
+
         if (in_array($role->code, [PermissionCatalog::ROLE_ORGANIZER, PermissionCatalog::ROLE_LEAD_ORGANIZER], true)) {
             $this->assertTeamIsInOrganizersDepartment($team);
         }
@@ -69,5 +74,39 @@ class TeamGrantService
         if ((string) $department->id !== (string) $organization->organizers_department_id) {
             throw new InvalidArgumentException('Organizer roles can only be granted to teams in the configured Organizers Department.');
         }
+    }
+
+    private function assertTeamIsInEventIncidentCommandDepartment(Team $team, Event $event): void
+    {
+        $department = $team->department()->first();
+        $icDepartment = $this->effectiveIncidentCommandDepartment($event);
+
+        if ($icDepartment === null) {
+            throw new InvalidArgumentException('IC roles require the event to have an Incident Command department.');
+        }
+
+        if ($department === null || (string) $department->id !== (string) $icDepartment->id) {
+            throw new InvalidArgumentException('IC roles can only be granted to teams in the event Incident Command department.');
+        }
+    }
+
+    private function effectiveIncidentCommandDepartment(Event $event): ?Department
+    {
+        if ($event->ic_department_id !== null) {
+            return Department::query()->find($event->ic_department_id);
+        }
+
+        $event->loadMissing(['icDepartment', 'organization.defaultIcDepartment']);
+
+        return $event->organization?->defaultIcDepartment;
+    }
+
+    private function isIncidentCommandRole(PermissionRole $role): bool
+    {
+        return in_array($role->code, [
+            PermissionCatalog::ROLE_IC_LEAD,
+            PermissionCatalog::ROLE_IC_OPERATOR,
+            PermissionCatalog::ROLE_IC_VIEWER,
+        ], true);
     }
 }

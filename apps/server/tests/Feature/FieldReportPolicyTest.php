@@ -212,7 +212,9 @@ class FieldReportPolicyTest extends TestCase
         bool $eventScoped,
         bool $revoked = false,
     ): User {
-        $department = Department::factory()->for($organization)->create();
+        $department = $eventScoped && in_array($roleCode, ['ic_lead', 'ic_operator', 'ic_viewer'], true)
+            ? $this->ensureEventIcDepartment($event, $organization)
+            : Department::factory()->for($organization)->create();
 
         if (in_array($roleCode, ['organizer', 'lead_organizer'], true)) {
             $organization->forceFill(['organizers_department_id' => $department->id])->save();
@@ -247,5 +249,25 @@ class FieldReportPolicyTest extends TestCase
         }
 
         return $user;
+    }
+
+    private function ensureEventIcDepartment(Event $event, Organization $organization): Department
+    {
+        if ($event->ic_department_id !== null) {
+            return Department::query()->findOrFail($event->ic_department_id);
+        }
+
+        $event->loadMissing(['icDepartment', 'organization.defaultIcDepartment']);
+
+        $department = $event->organization?->defaultIcDepartment;
+
+        if ($department !== null) {
+            return $department;
+        }
+
+        $department = Department::factory()->for($organization)->create();
+        $event->forceFill(['ic_department_id' => $department->id])->save();
+
+        return $department;
     }
 }
