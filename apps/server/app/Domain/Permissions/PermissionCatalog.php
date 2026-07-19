@@ -23,6 +23,14 @@ final class PermissionCatalog
 
     public const ROLE_DEPARTMENT_LEAD = 'department_lead';
 
+    public const ROLE_DEPARTMENT_LOGISTICS = 'department_logistics';
+
+    public const ROLE_DEPARTMENT_OPERATIONS = 'department_operations';
+
+    public const ROLE_DEPARTMENT_ADMINISTRATION = 'department_administration';
+
+    public const ROLE_DEPARTMENT_PLANNING = 'department_planning';
+
     public const ROLE_IC_LEAD = 'ic_lead';
 
     public const ROLE_IC_OPERATOR = 'ic_operator';
@@ -51,6 +59,18 @@ final class PermissionCatalog
 
     public const PERMISSION_POLICIES_VIEW_PUBLISHED = 'policies.view_published';
 
+    public const PERMISSION_DEPARTMENT_PRESENCE_MANAGE = 'department.presence.manage';
+
+    public const PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE = 'department.attendance.manage';
+
+    public const PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE = 'department.equipment.manage';
+
+    public const PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN = 'department.deployments.assign';
+
+    public const PERMISSION_DEPARTMENT_SCHEDULE_MANAGE = 'department.schedule.manage';
+
+    public const PERMISSION_DEPARTMENT_ADMINISTER = 'department.administer';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -63,6 +83,10 @@ final class PermissionCatalog
             self::ROLE_STAFF => ['name' => 'Staff', 'scope_type' => PermissionRole::SCOPE_ORGANIZATION],
             self::ROLE_SHIFT_LEAD => ['name' => 'Shift Lead', 'scope_type' => PermissionRole::SCOPE_TEAM],
             self::ROLE_DEPARTMENT_LEAD => ['name' => 'Department Lead', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
+            self::ROLE_DEPARTMENT_LOGISTICS => ['name' => 'Department Logistics', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
+            self::ROLE_DEPARTMENT_OPERATIONS => ['name' => 'Department Operations', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
+            self::ROLE_DEPARTMENT_ADMINISTRATION => ['name' => 'Department Administration', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
+            self::ROLE_DEPARTMENT_PLANNING => ['name' => 'Department Planning', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
             self::ROLE_IC_LEAD => ['name' => 'Incident Command Lead', 'scope_type' => PermissionRole::SCOPE_EVENT],
             self::ROLE_IC_OPERATOR => ['name' => 'Incident Command Operator', 'scope_type' => PermissionRole::SCOPE_EVENT],
             self::ROLE_IC_VIEWER => ['name' => 'Incident Command Viewer', 'scope_type' => PermissionRole::SCOPE_EVENT],
@@ -92,6 +116,12 @@ final class PermissionCatalog
             self::PERMISSION_FIELD_REPORTS_VIEW_EVENT => 'View all field reports for the event.',
             self::PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO => 'Download field report photos.',
             self::PERMISSION_POLICIES_VIEW_PUBLISHED => 'View all published policy and procedure documents in the organization.',
+            self::PERMISSION_DEPARTMENT_PRESENCE_MANAGE => 'Mark eligible department staff on-site or off-site.',
+            self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE => 'Check department staff in and out of shifts.',
+            self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
+            self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN => 'Assign current or planned shift deployments.',
+            self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'Manage department shifts, shift signups, and planning board work.',
+            self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer department settings and team membership.',
         ];
     }
 
@@ -128,6 +158,20 @@ final class PermissionCatalog
             self::ROLE_IC_VIEWER => [
                 self::PERMISSION_INCIDENTS_VIEW,
                 self::PERMISSION_FIELD_REPORTS_VIEW_EVENT,
+            ],
+            self::ROLE_DEPARTMENT_LOGISTICS => [
+                self::PERMISSION_DEPARTMENT_PRESENCE_MANAGE,
+                self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE,
+                self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE,
+            ],
+            self::ROLE_DEPARTMENT_OPERATIONS => [
+                self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN,
+            ],
+            self::ROLE_DEPARTMENT_ADMINISTRATION => [
+                self::PERMISSION_DEPARTMENT_ADMINISTER,
+            ],
+            self::ROLE_DEPARTMENT_PLANNING => [
+                self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
             ],
             self::ROLE_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,

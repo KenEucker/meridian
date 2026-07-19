@@ -761,32 +761,42 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `department.dashboard` | `events.departments.show` | Department operational home | Department member/lead as permitted |
-| `department.roster` | `events.departments.roster` | Department roster | Department lead or permitted shift lead |
+| `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
 | `department.teams` | `events.departments.teams.index` | Manage teams and team membership | Department lead |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
 | `department.shifts` | `events.departments.shifts.index` | Manage/view shifts | Department lead or permitted role |
 | `department.shift-create` | `events.departments.shifts.create` | Create shift | Department lead |
 | `department.shift-edit` | `events.departments.shifts.edit` | Edit shift | Department lead with time restrictions |
-| `department.deployments` | `events.departments.deployments.index` | Manage deployments | Department/shift lead |
-| `department.equipment` | `events.departments.equipment.index` | Equipment workflows | Department/shift lead as permitted |
+| `department.deployments` | `events.departments.deployments.index` | Manage deployment options | Department operations/administration as permitted |
+| `department.equipment` | `events.departments.equipment.index` | View equipment settings/inventory | Department logistics/administration as permitted; Orchid is read-only unless an inventory task grants edit |
 | `department.credits` | `events.departments.credits.index` | Credit review/export | Department lead / organizer as permitted |
 | `department.documents` | `events.departments.documents.index` | Department policy/procedure library and maintainer entry | Department member/lead as permitted |
 
-### 12.5 Shift Board Screens
+### 12.5 Department Operations Screens
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
-| `shift-board.current` | `events.departments.shift-board.current` | Current shift board | Shift lead/department lead |
-| `shift-board.check-in` | `events.departments.shift-board.check-in` | Staff-mediated check-in | Shift lead/department lead |
-| `shift-board.check-out` | `events.departments.shift-board.check-out` | Staff-mediated check-out | Shift lead/department lead |
-| `shift-board.deployment-update` | `events.departments.shift-board.deployments.update` | Move staff/deployment | Shift lead/department lead |
-| `shift-board.equipment-update` | `events.departments.shift-board.equipment.update` | Check equipment in/out | Shift lead/department lead |
+| `shift-board.current` | `events.departments.shift-board.current` | Read-only department board for current shift assignments, attendance state, deployment state, and equipment out | Department member with operational visibility |
+| `shift-board.logistics` | `events.departments.shift-board.logistics` | Department presence, staff-mediated shift check-in/check-out, and equipment checkout/check-in | `department_logistics` |
+| `shift-board.operations` | `events.departments.shift-board.operations` | Current deployment/location assignment for staff on shift | `department_operations` |
+| `shift-board.planning` | `events.departments.shift-board.planning` | Shift schedule, shift signups, and team members | `department_planning` |
 
-The current shared-client Alpha 1 surface may colocate local controls while parity
-is still being closed, but the UX direction is separate surfaces for passive
-shift viewing and action-focused check-in/check-out. Equipment check-in should be
-staff-first: choose the staff member, show the equipment currently checked out to
-that person, and allow multiple items to be returned in one action.
+Shifts have exactly one team. Department boards default to department scope and
+only become team-specific when the user explicitly selects a team filter.
+
+The Logistics Desk owns the on-site/off-site workflow for eligible department
+staff. Marking a staff member on-site makes that person eligible to be added to a
+shift; Logistics still performs the actual shift add/check-in. Going off-site is
+blocked while the staff member is checked into a shift or has equipment checked
+out unless that equipment is returned or marked missing/damaged.
+
+The Operations Board owns current deployment/location assignment. A staff member
+has at most one current deployment per shift, and Operations can pre-assign or
+change that assignment before or during the shift.
+
+Equipment check-in should be staff-first: choose the staff member, show the
+equipment currently checked out to that person, and allow multiple items to be
+returned in one action.
 
 ### 12.6 Organizer Screens
 
@@ -937,20 +947,20 @@ Placement department designation is configured on the event admin surface (`orga
 |---|---|---|---|---|---|
 | `dept.coverage_issues` | Coverage Issues | department/event | department lead | All scheduled shifts covered | Open shifts |
 | `dept.shift_readiness` | Shift Readiness | department/event | department lead | Department shifts ready | Review shifts |
-| `dept.checkin_status` | Check-in Status | department/event | department/shift lead | No check-in issues | Open shift board |
+| `dept.checkin_status` | Check-in Status | department/event | department logistics | No check-in issues | Open Logistics Desk |
 | `dept.training_readiness` | Training Readiness | department/event | department lead | Required trainings complete | Review trainings |
 | `dept.policy_readiness` | Policy Readiness | department | department lead | Department documents current | Review documents |
-| `dept.equipment_returns` | Equipment Returns | department/event | department/shift lead | No equipment returns pending | Open equipment |
+| `dept.equipment_returns` | Equipment Returns | department/event | department logistics | No equipment returns pending | Open Logistics Desk |
 | `dept.event_map` | Event Map | department/event | department lead with map view permission; Placement dept lead gets management access | No published map | Open event map |
 
-### 13.3 Shift Lead Widgets
+### 13.3 Department Operations Widgets
 
 | Widget ID | Title | Scope | Permissions | Quiet state | Primary action |
 |---|---|---|---|---|---|
-| `shift.current_roster` | Current Roster | shift/department/event | shift lead | No current roster | Open shift board |
-| `shift.late_missing` | Late or Missing Staff | shift/department/event | shift lead | No late or missing staff | Review check-in |
-| `shift.deployment_needs` | Deployment Needs | shift/department/event | shift lead | Deployments look okay | Manage deployments |
-| `shift.equipment_status` | Equipment Status | shift/department/event | shift lead | Equipment accounted for | Review equipment |
+| `shift.current_assignments` | Current Assignments | shift/department/event | operational visibility | No current assignments | Open Department Board |
+| `shift.late_missing` | Late or Missing Staff | shift/department/event | department logistics | No late or missing staff | Review check-in |
+| `shift.deployment_needs` | Deployment Needs | shift/department/event | department operations | Deployments look okay | Open Operations Board |
+| `shift.equipment_status` | Equipment Status | shift/department/event | department logistics | Equipment accounted for | Open Logistics Desk |
 
 ### 13.4 Organizer Widgets
 
@@ -1234,7 +1244,7 @@ Exact timeout durations are product decisions and should be configured, not hard
 Alpha 1 rule:
 
 - default staff do not self check-in or self check-out;
-- department leads and shift leads may check staff in/out where authorized;
+- Department Logistics may check staff in/out where authorized;
 - unavailable self-service actions should not be shown to default staff;
 - future self-service check-in must be a deliberate permission-controlled product decision.
 

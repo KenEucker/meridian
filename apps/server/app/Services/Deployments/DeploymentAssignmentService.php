@@ -9,8 +9,8 @@ use App\Models\Shift;
 use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\User;
-use App\Services\Attendance\AttendanceCheckInAccess;
 use App\Services\Audit\AuditService;
+use App\Services\Permissions\DepartmentOperationalAccess;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 class DeploymentAssignmentService
 {
     public function __construct(
-        private readonly AttendanceCheckInAccess $access,
+        private readonly DepartmentOperationalAccess $access,
         private readonly AuditService $audit,
     ) {}
 
@@ -50,7 +50,8 @@ class DeploymentAssignmentService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (! $this->access->canCheckInForShift($actor, $shift)) {
+            if ($shift->event === null || $shift->department === null
+                || ! $this->access->canAssignDeployments($actor, $shift->event, $shift->department)) {
                 throw DeploymentAssignmentException::unauthorized();
             }
 

@@ -317,7 +317,7 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 ---
 
-### Milestone 10: Shift Lead Board, Attendance, Hours, Deployments, and Equipment
+### Milestone 10: Department Operations, Attendance, Hours, Deployments, and Equipment
 
 **Goal:** Support staff-mediated field operations and actual work records.
 
@@ -325,19 +325,24 @@ Each milestone has a QA gate. QA gates should be run in order because later mile
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M10.1 Shift Lead Board roster | Show current shift roster and checked-in state. | SLB-001, SLB-002 | UI/feature tests |
-| M10.2 Check-in operation | Shift lead checks staff in with operation record. | SLB-003; technical spec 20.2 | Domain/policy tests |
+| M10.1 Department board | Show current department shift assignments and checked-in state, department-scoped by default with optional team filter. | SLB-001, SLB-002 | UI/feature tests |
+| M10.1A Department presence | Track department-specific on-site/off-site status for eligible department staff. | SLB-015 through SLB-018; data/API 10.10A | Domain/policy tests |
+| M10.2 Check-in operation | Department Logistics checks staff into a shift with operation record after the staff member is on-site. | SLB-003; technical spec 20.2 | Domain/policy tests |
 | M10.3 Check-out and hours | Check-out creates actual hours with actual start/end. | SLB-004 through SLB-006; HOURS-001 through HOURS-006 | Domain tests |
-| M10.4 No-show operation | Shift lead marks no-show idempotently. | Technical spec 20.2 | Domain tests |
+| M10.4 No-show operation | Authorized attendance manager marks no-show idempotently. | Technical spec 20.2 | Domain tests |
 | M10.5 Offline attendance queue | Check-in/check-out/no-show work offline and sync later. | Technical spec 20.1; data/API 7.2 | Sync/idempotency tests |
 | M10.6 Hours correction grace period | Allow corrections during grace period and freeze later. | HOURS-007, HOURS-008 | Domain/audit tests |
-| M10.7 Unscheduled eligible staff member | Add an eligible unscheduled staff member during operations. | SLB-008; SHIFT-016 | Domain/UI tests |
-| M10.8 Deployment/location assignment | Assign and move current deployment/location. | SLB-009, SLB-010; data/API 10.14 | Domain/UI tests |
-| M10.9 Equipment checkout/check-in | Manual equipment workflows and states. | SLB-011, SLB-012; EQUIP-001 through EQUIP-005 | Domain/UI tests |
-| M10.10 Field report/incident shortcuts | Add shift board shortcuts without bypassing permissions. | SLB-013, SLB-014 | UI/policy tests |
+| M10.7 On-site staff shift addition | Logistics adds an on-site eligible unscheduled staff member during operations. | SLB-008; SHIFT-016 | Domain/UI tests |
+| M10.8 Operations deployment/location assignment | Department Operations assigns and moves current deployment/location. | SLB-009, SLB-010; data/API 10.14 | Domain/UI tests |
+| M10.9 Logistics equipment checkout/check-in | Manual equipment workflows and states, including equipment issued outside a shift. | SLB-011, SLB-012; EQUIP-001 through EQUIP-005 | Domain/UI tests |
+| M10.9A Planning board | Show shift schedule, shift signups, and team members as a read-only department planning surface. | UI contract 12.5 | UI tests |
+| M10.10 Field report/incident shortcuts | Add department board shortcuts without bypassing permissions. | SLB-013, SLB-014 | UI/policy tests |
 | M10.11 Attendance QA script | Add `QA-SLB-01-checkin-checkout-hours.md`. | QA README | Human QA script |
 
-**QA gate:** A reviewer can run a shift, check staff in/out, create hours, mark no-show, assign deployments, and check equipment in/out.
+**QA gate:** A reviewer can mark department staff on-site/off-site, add on-site
+staff to a shift, check staff in/out, create hours, mark no-show, assign
+deployments from Operations, check equipment in/out from Logistics, and view
+Planning schedule/signups/team members.
 
 ---
 
@@ -489,7 +494,7 @@ QA should run in this order:
 4. Shift signup and credential QA.
 5. Device readiness QA.
 6. Offline field report QA.
-7. Shift Lead Board and attendance QA.
+7. Department operations and attendance QA.
 8. Incident management QA.
 9. Central/on-site sync QA.
 10. Export/reporting QA.

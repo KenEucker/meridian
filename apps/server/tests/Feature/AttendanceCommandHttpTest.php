@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Device;
 use App\Models\Event;
+use App\Models\EventDepartmentPresence;
 use App\Models\HoursWorked;
 use App\Models\Node;
 use App\Models\Organization;
@@ -203,7 +204,15 @@ class AttendanceCommandHttpTest extends TestCase
             'event_id' => $event->id,
         ]);
 
-        return [$shift, $staff, $assignment, $this->shiftLeadUserFor($department->defaultTeam), $device, $node];
+        $actor = $this->shiftLeadUserFor($department->defaultTeam);
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'staff_id' => $staff->id,
+            'last_marked_by_user_id' => $actor->id,
+        ]);
+
+        return [$shift, $staff, $assignment, $actor, $device, $node];
     }
 
     private function shiftLeadUserFor(Team $team): User
@@ -222,7 +231,7 @@ class AttendanceCommandHttpTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('shift_lead')->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
         ]);
 
         return $user;

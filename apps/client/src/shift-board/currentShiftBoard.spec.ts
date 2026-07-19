@@ -14,15 +14,23 @@ import {
   equipmentStateLabel,
   equipmentSummary,
   eligibleUnscheduledCandidates,
+  markStaffOffSite,
+  markStaffOnSite,
+  presenceStateLabel,
+  presenceSummary,
   returnEquipmentFromStaff,
   rosterSummary,
 } from "@/shift-board/currentShiftBoard";
 
-describe("current shift board roster model (M10.1)", () => {
-  it("summarizes roster and checked-in staff from derived attendance state", () => {
+describe("current department board model (M10 course correction)", () => {
+  it("summarizes shift assignments and department presence", () => {
     expect(rosterSummary(LOCAL_CURRENT_SHIFT_BOARD)).toEqual({
       rosterCount: 3,
       checkedInCount: 2,
+    });
+    expect(presenceSummary(LOCAL_CURRENT_SHIFT_BOARD)).toEqual({
+      onSiteCount: 3,
+      offSiteCount: 2,
     });
 
     expect(
@@ -39,6 +47,11 @@ describe("current shift board roster model (M10.1)", () => {
     expect(attendanceStateLabel("no_show")).toBe("No-show");
   });
 
+  it("uses human-readable department presence labels", () => {
+    expect(presenceStateLabel("on_site")).toBe("On-site");
+    expect(presenceStateLabel("off_site")).toBe("Off-site");
+  });
+
   it("uses human-readable equipment state labels", () => {
     expect(equipmentStateLabel("available")).toBe("Available");
     expect(equipmentStateLabel("checked_out")).toBe("Checked out");
@@ -47,7 +60,7 @@ describe("current shift board roster model (M10.1)", () => {
     expect(equipmentStateLabel("damaged")).toBe("Damaged");
   });
 
-  it("adds an eligible unscheduled staff member to the roster view model", () => {
+  it("adds an on-site eligible staff member to the shift view model", () => {
     expect(
       eligibleUnscheduledCandidates(LOCAL_CURRENT_SHIFT_BOARD).map(
         (candidate) => candidate.displayName,
@@ -72,6 +85,69 @@ describe("current shift board roster model (M10.1)", () => {
       currentDeploymentId: null,
     });
     expect(eligibleUnscheduledCandidates(updated)).toEqual([]);
+  });
+
+  it("requires department staff to be on-site before they become shift candidates", () => {
+    expect(
+      eligibleUnscheduledCandidates(LOCAL_CURRENT_SHIFT_BOARD).map(
+        (candidate) => candidate.displayName,
+      ),
+    ).not.toContain("Bea Ranger");
+
+    const updated = markStaffOnSite(
+      LOCAL_CURRENT_SHIFT_BOARD,
+      "33333333-3333-4333-8333-333333333337",
+    );
+
+    expect(
+      eligibleUnscheduledCandidates(updated).map(
+        (candidate) => candidate.displayName,
+      ),
+    ).toContain("Bea Ranger");
+  });
+
+  it("blocks off-site status while staff are checked into a shift", () => {
+    expect(() =>
+      markStaffOffSite(
+        LOCAL_CURRENT_SHIFT_BOARD,
+        "33333333-3333-4333-8333-333333333335",
+      ),
+    ).toThrow("checked out of their shift");
+  });
+
+  it("blocks off-site status while staff still hold equipment", () => {
+    const withAriAssigned = addUnscheduledRosterMember(
+      LOCAL_CURRENT_SHIFT_BOARD,
+      "33333333-3333-4333-8333-333333333336",
+      "local-unscheduled-ari",
+    );
+    const withEquipment = checkoutEquipmentToStaff(
+      withAriAssigned,
+      "equipment-safety-vest",
+      "local-unscheduled-ari",
+      "local-equipment-checkout-safety-vest-ari",
+      "2027-07-04T16:30:00.000Z",
+    );
+
+    expect(() =>
+      markStaffOffSite(
+        withEquipment,
+        "33333333-3333-4333-8333-333333333336",
+      ),
+    ).toThrow("Equipment must be returned");
+
+    const returned = returnEquipmentFromStaff(
+      withEquipment,
+      "local-equipment-checkout-safety-vest-ari",
+      "returned",
+      "2027-07-04T17:00:00.000Z",
+    );
+
+    expect(
+      presenceSummary(
+        markStaffOffSite(returned, "33333333-3333-4333-8333-333333333336"),
+      ).offSiteCount,
+    ).toBe(3);
   });
 
   it("assigns and moves the current deployment for a roster member", () => {

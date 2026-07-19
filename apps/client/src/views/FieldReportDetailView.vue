@@ -190,14 +190,48 @@ async function onRetrySync(): Promise<void> {
       <p class="fr-detail__number" aria-label="Field Report number">
         {{ submission.displayNumber }}
       </p>
-      <p
-        v-if="submission.displayNumberIsTemporary"
-        class="fr-detail__temporary"
-        role="status"
+
+      <h2 class="fr-detail__body-heading">Report text</h2>
+      <pre class="fr-detail__body" tabindex="0">{{ report.body }}</pre>
+
+      <div
+        v-if="localPhotoPreviews.length > 0"
+        class="fr-detail__photos"
+        aria-label="Local Field Report photos"
       >
-        Temporary local number until sync assigns the FRA number.
+        <h2 class="fr-detail__body-heading">Photos</h2>
+        <ul class="fr-detail__photo-list">
+          <li
+            v-for="photo in localPhotoPreviews"
+            :key="photo.id"
+            class="fr-detail__photo-item"
+          >
+            <img
+              class="fr-detail__photo-preview"
+              :src="photo.previewUrl"
+              alt="Field Report photo"
+            />
+            <p class="fr-detail__photo-status">
+              {{
+                photo.syncStatus === "uploaded"
+                  ? "Uploaded"
+                  : photo.syncStatus === "failed"
+                    ? "Upload failed"
+                    : "Pending upload"
+              }}
+            </p>
+            <p v-if="photo.lastError" class="fr-detail__photo-error">
+              {{ photo.lastError }}
+            </p>
+          </li>
+        </ul>
+      </div>
+
+      <p class="fr-detail__immutable">
+        This original title and body are finalized and cannot be edited.
       </p>
 
+      <h2 class="fr-detail__debug-heading">Field Report details</h2>
       <dl class="fr-detail__meta">
         <div>
           <dt>Title</dt>
@@ -264,6 +298,14 @@ async function onRetrySync(): Promise<void> {
           <strong>{{ syncTextStatus }}</strong>
         </p>
         <p
+          v-if="submission.displayNumberIsTemporary"
+          class="fr-detail__sync-row"
+          role="status"
+        >
+          <span>FR number</span>
+          <strong>Temporary until sync assigns the FRA number</strong>
+        </p>
+        <p
           v-if="localPhotoPreviews.length > 0"
           class="fr-detail__sync-row"
         >
@@ -283,45 +325,6 @@ async function onRetrySync(): Promise<void> {
           {{ syncMessage }}
         </p>
       </div>
-
-      <div
-        v-if="localPhotoPreviews.length > 0"
-        class="fr-detail__photos"
-        aria-label="Local Field Report photos"
-      >
-        <h2 class="fr-detail__body-heading">Photos</h2>
-        <ul class="fr-detail__photo-list">
-          <li
-            v-for="photo in localPhotoPreviews"
-            :key="photo.id"
-            class="fr-detail__photo-item"
-          >
-            <img
-              class="fr-detail__photo-preview"
-              :src="photo.previewUrl"
-              alt="Field Report photo"
-            />
-            <p class="fr-detail__photo-status">
-              {{
-                photo.syncStatus === "uploaded"
-                  ? "Uploaded"
-                  : photo.syncStatus === "failed"
-                    ? "Upload failed"
-                    : "Pending upload"
-              }}
-            </p>
-            <p v-if="photo.lastError" class="fr-detail__photo-error">
-              {{ photo.lastError }}
-            </p>
-          </li>
-        </ul>
-      </div>
-
-      <h2 class="fr-detail__body-heading">Report text</h2>
-      <pre class="fr-detail__body" tabindex="0">{{ report.body }}</pre>
-      <p class="fr-detail__immutable">
-        This original title and body are finalized and cannot be edited.
-      </p>
     </template>
   </section>
 </template>
@@ -347,7 +350,6 @@ async function onRetrySync(): Promise<void> {
   font-weight: 600;
 }
 
-.fr-detail__temporary,
 .fr-detail__unavailable,
 .fr-detail__immutable,
 .fr-detail__photo-status,
@@ -390,6 +392,12 @@ async function onRetrySync(): Promise<void> {
   margin: 0 0 var(--m-space-2);
   font-size: var(--m-text-lg);
   font-family: var(--m-font-heading);
+}
+
+.fr-detail__debug-heading {
+  margin: var(--m-space-8) 0 var(--m-space-2);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-md);
 }
 
 .fr-detail__body {

@@ -523,11 +523,24 @@ Permitted users/devices should additionally cache the event map package by defau
 
 Sensitive map layers/features must not sync to users/devices without permission. UI hiding is not sufficient.
 
-Shift leads should additionally cache:
+Department Logistics users should additionally cache:
 
-- Assigned staff for teams/shifts they lead.
-- Check-in/check-out/no-show state for those teams/shifts.
-- Team roster.
+- Department on-site/off-site presence state.
+- Current and upcoming shift assignments for their department.
+- Check-in/check-out/no-show state for those department shifts.
+- Department equipment state and open checkouts they are permitted to manage.
+
+Department Operations users should additionally cache:
+
+- Current and upcoming shift assignments for their department.
+- Current deployment/location assignment for those shifts.
+- Active deployment/location options.
+
+Department Planning users should additionally cache:
+
+- Department schedule.
+- Shift signups.
+- Team membership for planning views.
 
 Department leads should additionally cache:
 
@@ -948,6 +961,10 @@ Alpha 1 effective permission levels include:
 staff
 shift_lead
 department_lead
+department_logistics
+department_operations
+department_administration
+department_planning
 ic_lead
 ic_operator
 ic_viewer
@@ -963,14 +980,22 @@ god_mode
 - `lead_organizer` is organization-scoped through the configured Organizers Department and may be granted to any subset of that department, including every department member.
 - `department_lead` is department-scoped.
 - `shift_lead` is team-scoped, not shift-scoped.
+- `department_logistics`, `department_operations`, `department_administration`, and `department_planning` are department-scoped grants assigned through teams; team names are arbitrary.
 - `ic_lead`, `ic_operator`, and `ic_viewer` are event/team scoped through the IC permission model.
+
+Alpha 1 department operational capabilities are separated:
+
+- `department_logistics` manages department presence, staff-mediated attendance, and equipment checkout/check-in.
+- `department_operations` manages current deployment/location assignment.
+- `department_planning` views shift schedule, shift signups, and team members.
+- `department_administration` manages department/team administrative settings as permitted.
 
 Every permission decision should be explainable in the UI.
 
 Example:
 
 ```text
-You can mark no-show because you are a shift lead for this team.
+You can mark no-show because your team has Department Logistics for this department.
 ```
 
 Denied actions should show a reason when possible.
@@ -1580,33 +1605,55 @@ corrected
 
 Alpha 1 supports:
 
+- Mark department staff on-site/off-site.
 - Check-in.
 - Check-out.
 - Mark no-show.
 
 Staff self check-in/out is excluded from Alpha 1.
 
-Shift leads can check staff in/out.
+Department Logistics can mark department staff on-site/off-site.
 
-Shift leads can mark no-show.
+Department Logistics can check staff in/out after the staff member is marked on-site for that department.
+
+Department Logistics can mark no-show.
 
 Department leads may have broader attendance access for their department.
 
-## 20.3 Shift selection
+## 20.3 Department Presence
 
-Check-in/check-out does not always require selecting a shift.
+On-site/off-site status is scoped by event, department, and staff member.
 
-The UI should provide the option to select a shift.
+Only Department Logistics may mark eligible department staff on-site/off-site.
+
+On-site status makes a staff member eligible for Logistics shift add/check-in.
+
+Going off-site is blocked while the staff member is checked into a shift for the
+department/event.
+
+Going off-site is blocked while the staff member has checked-out equipment for
+the department/event unless the equipment is returned or marked Missing/Damaged.
+
+## 20.4 Shift selection
+
+Check-in/check-out should select a shift.
 
 If there is only one obvious/current shift, the UI should default to that shift.
 
-Check-out can happen after a shift and may not need to be attached to a shift.
+Check-out creates hours for the selected shift.
 
-## 20.4 Shift lead workflows
+## 20.5 Department operations workflows
 
-Shift leads see rosters for teams/shifts they lead with action buttons.
+Department boards default to department scope and only become team-specific when
+a team filter is selected.
 
-Shift leads can check in a staff member who is not assigned to the shift.
+Shifts have exactly one team.
+
+Logistics sees current shift assignments for department shifts with attendance
+and equipment actions.
+
+Logistics can add an on-site eligible staff member who is not assigned to the
+shift.
 
 This does not create a separate exception record in Alpha 1.
 
@@ -1614,7 +1661,8 @@ No-show only applies after a shift has started.
 
 Check-out normally requires prior check-in.
 
-A shift lead or department lead can create a check-in and check-out at the same time if necessary.
+An authorized attendance manager can create a check-in and check-out at the same
+time if necessary.
 
 Offline check-out without known server-side check-in is accepted and reconciled later.
 
@@ -1624,11 +1672,19 @@ Duplicate check-in is idempotent.
 
 Attendance operations do not include optional notes in Alpha 1.
 
-## 20.5 Attendance visibility
+Operations sees current shift assignments for department shifts with
+deployment/location actions.
+
+Operations may assign or change one current deployment/location per shift/staff
+before or during the shift.
+
+Planning sees shift schedule, shift signups, and team members.
+
+## 20.6 Attendance visibility
 
 Staff see their own attendance state.
 
-Shift leads see attendance for teams/shifts they lead.
+Department Logistics sees attendance for department shifts they are permitted to manage.
 
 Department leads see attendance for their department.
 
@@ -1642,7 +1698,7 @@ Direct attendance edits create before/after audit entries.
 
 The UI shows corrected attendance as normal, with history available only to elevated users.
 
-Duplicate/overlapping attendance warnings are visible to shift leads immediately.
+Duplicate/overlapping attendance warnings are visible to Department Logistics immediately.
 
 Attendance conflicts from offline devices go to the sync conflict queue.
 
@@ -2404,7 +2460,7 @@ Alpha 1 should prove:
 11. The on-site node accepts and countersigns the operation.
 12. The on-site node syncs the field report metadata and photos to central when internet is available.
 13. The field report is visible in Orchid according to permission rules.
-14. A shift lead can check staff in/out and mark no-show.
+14. Department Logistics can mark staff on-site, check staff in/out, and mark no-show.
 15. IC roles can create and manage incidents online.
 16. Permitted IC users can see incident-level Name Reference chips derived from incident notes and attached Field Reports, and clicking a chip runs normal permission-filtered search.
 17. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.

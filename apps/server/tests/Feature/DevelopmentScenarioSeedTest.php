@@ -99,6 +99,17 @@ class DevelopmentScenarioSeedTest extends TestCase
                 ->exists(),
         );
 
+        foreach (['department_logistics', 'department_operations', 'department_administration', 'department_planning'] as $roleCode) {
+            $this->assertTrue(
+                TeamGrant::query()
+                    ->active()
+                    ->where('team_id', $dirtTeam->id)
+                    ->whereHas('permissionRole', fn ($query) => $query->where('code', $roleCode))
+                    ->exists(),
+                "Rangers Dirt should have {$roleCode}.",
+            );
+        }
+
         $commandTeam = Team::query()
             ->where('code', 'COMMAND')
             ->whereHas('department', fn ($query) => $query
@@ -149,7 +160,9 @@ class DevelopmentScenarioSeedTest extends TestCase
 
         $sam = Staff::query()->where('email', 'sam.shiftlead@idaho-burners.test')->firstOrFail();
         $roles = (new EffectiveRoleResolver)->resolveForStaff($sam);
-        $this->assertSame('shift_lead', $roles->first()?->roleCode);
+        $this->assertContains('shift_lead', $roles->pluck('roleCode')->all());
+        $this->assertContains('department_logistics', $roles->pluck('roleCode')->all());
+        $this->assertContains('department_operations', $roles->pluck('roleCode')->all());
 
         $ingrid = Staff::query()->where('email', 'ingrid.iclead@idaho-burners.test')->firstOrFail();
         $icRoles = (new EffectiveRoleResolver)->resolveForStaff($ingrid, $event);

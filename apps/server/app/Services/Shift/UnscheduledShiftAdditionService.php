@@ -4,6 +4,7 @@ namespace App\Services\Shift;
 
 use App\Models\AuditEvent;
 use App\Models\DepartmentMembership;
+use App\Models\EventDepartmentPresence;
 use App\Models\Shift;
 use App\Models\ShiftAssignment;
 use App\Models\Staff;
@@ -132,6 +133,17 @@ class UnscheduledShiftAdditionService
 
         if ($departmentMembership === null) {
             throw UnscheduledShiftAdditionException::noDepartmentMembership();
+        }
+
+        $isOnSite = EventDepartmentPresence::query()
+            ->where('event_id', $shift->event_id)
+            ->where('department_id', $shift->department_id)
+            ->where('staff_id', $staff->id)
+            ->where('current_state', EventDepartmentPresence::STATE_ON_SITE)
+            ->exists();
+
+        if (! $isOnSite) {
+            throw UnscheduledShiftAdditionException::staffNotOnSite();
         }
 
         try {

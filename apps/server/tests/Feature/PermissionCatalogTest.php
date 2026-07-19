@@ -19,6 +19,10 @@ class PermissionCatalogTest extends TestCase
             'staff' => PermissionRole::SCOPE_ORGANIZATION,
             'shift_lead' => PermissionRole::SCOPE_TEAM,
             'department_lead' => PermissionRole::SCOPE_DEPARTMENT,
+            'department_logistics' => PermissionRole::SCOPE_DEPARTMENT,
+            'department_operations' => PermissionRole::SCOPE_DEPARTMENT,
+            'department_administration' => PermissionRole::SCOPE_DEPARTMENT,
+            'department_planning' => PermissionRole::SCOPE_DEPARTMENT,
             'ic_lead' => PermissionRole::SCOPE_EVENT,
             'ic_operator' => PermissionRole::SCOPE_EVENT,
             'ic_viewer' => PermissionRole::SCOPE_EVENT,
@@ -92,6 +96,27 @@ class PermissionCatalogTest extends TestCase
             $this->assertNotContains('incidents.view', $permissions);
             $this->assertNotContains('field_reports.view_event', $permissions);
         }
+    }
+
+    public function test_department_operational_roles_have_separate_capabilities(): void
+    {
+        $this->assertSame([
+            'department.presence.manage',
+            'department.attendance.manage',
+            'department.equipment.manage',
+        ], $this->permissionCodesFor('department_logistics'));
+
+        $this->assertSame([
+            'department.deployments.assign',
+        ], $this->permissionCodesFor('department_operations'));
+
+        $this->assertSame([
+            'department.administer',
+        ], $this->permissionCodesFor('department_administration'));
+
+        $this->assertSame([
+            'department.schedule.manage',
+        ], $this->permissionCodesFor('department_planning'));
     }
 
     public function test_seeder_is_idempotent(): void

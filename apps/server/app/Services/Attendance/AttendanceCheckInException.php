@@ -30,4 +30,9 @@ class AttendanceCheckInException extends RuntimeException
     {
         return new self('Staff must have an active assignment for this shift before check-in.');
     }
+
+    public static function staffNotOnSite(): self
+    {
+        return new self('Staff must be marked on-site with this department before shift check-in.');
+    }
 }

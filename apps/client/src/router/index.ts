@@ -45,6 +45,25 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/shift-board/current",
     name: "events.departments.shift-board.current",
     component: ShiftBoardCurrentView,
+    props: { surface: "current" },
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shift-board/logistics",
+    name: "events.departments.shift-board.logistics",
+    component: ShiftBoardCurrentView,
+    props: { surface: "logistics" },
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shift-board/operations",
+    name: "events.departments.shift-board.operations",
+    component: ShiftBoardCurrentView,
+    props: { surface: "operations" },
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shift-board/planning",
+    name: "events.departments.shift-board.planning",
+    component: ShiftBoardCurrentView,
+    props: { surface: "planning" },
   },
   {
     path: "/staff/field-reports",

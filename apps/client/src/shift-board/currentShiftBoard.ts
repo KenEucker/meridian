@@ -11,6 +11,11 @@ export const SHIFT_ATTENDANCE_STATES = [
 
 export type ShiftAttendanceState = (typeof SHIFT_ATTENDANCE_STATES)[number];
 
+export const DEPARTMENT_PRESENCE_STATES = ["on_site", "off_site"] as const;
+
+export type DepartmentPresenceState =
+  (typeof DEPARTMENT_PRESENCE_STATES)[number];
+
 export const EQUIPMENT_STATES = [
   "available",
   "checked_out",
@@ -42,6 +47,41 @@ export interface UnscheduledStaffCandidate {
   readonly displayName: string;
   readonly handle: string | null;
   readonly teamLabel: string;
+  readonly presenceState: DepartmentPresenceState;
+}
+
+export interface DepartmentPresenceMember {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly handle: string | null;
+  readonly teamLabel: string;
+  readonly presenceState: DepartmentPresenceState;
+}
+
+export interface DepartmentShiftScheduleItem {
+  readonly shiftId: string;
+  readonly title: string;
+  readonly teamLabel: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly signupCount: number;
+}
+
+export interface DepartmentShiftSignup {
+  readonly signupId: string;
+  readonly shiftId: string;
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly teamLabel: string;
+  readonly state: "signed_up" | "confirmed" | "waitlisted";
+}
+
+export interface DepartmentTeamMember {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly handle: string | null;
+  readonly teamLabel: string;
+  readonly presenceState: DepartmentPresenceState;
 }
 
 export interface DeploymentOption {
@@ -83,8 +123,8 @@ export interface CurrentShiftBoard {
   readonly eventLabel: string;
   readonly departmentId: string;
   readonly departmentLabel: string;
-  readonly teamId: string;
-  readonly teamLabel: string;
+  readonly selectedTeamId: string | null;
+  readonly selectedTeamLabel: string | null;
   readonly shiftId: string;
   readonly shiftTitle: string;
   readonly startsAt: string;
@@ -92,6 +132,10 @@ export interface CurrentShiftBoard {
   readonly timeZone: string;
   readonly roster: readonly ShiftBoardRosterMember[];
   readonly unscheduledCandidates: readonly UnscheduledStaffCandidate[];
+  readonly departmentPresence: readonly DepartmentPresenceMember[];
+  readonly shiftSchedule: readonly DepartmentShiftScheduleItem[];
+  readonly shiftSignups: readonly DepartmentShiftSignup[];
+  readonly teamMembers: readonly DepartmentTeamMember[];
   readonly deploymentOptions: readonly DeploymentOption[];
   readonly equipmentItems: readonly EquipmentItem[];
   readonly equipmentCheckouts: readonly EquipmentCheckout[];
@@ -102,8 +146,8 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
   eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
   departmentId: "66666666-6666-4666-8666-666666666666",
   departmentLabel: "Rangers",
-  teamId: "77777777-7777-4777-8777-777777777777",
-  teamLabel: "Dirt",
+  selectedTeamId: null,
+  selectedTeamLabel: null,
   shiftId: "99999999-9999-4999-8999-999999999999",
   shiftTitle: "Ranger Dirt Day Shift",
   startsAt: "2027-07-04T16:00:00.000Z",
@@ -147,6 +191,118 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       displayName: "Ari Ranger",
       handle: "ari",
       teamLabel: "Dirt",
+      presenceState: "on_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333337",
+      displayName: "Bea Ranger",
+      handle: "bea",
+      teamLabel: "Dirt",
+      presenceState: "off_site",
+    },
+  ],
+  departmentPresence: [
+    {
+      staffId: LOCAL_FIELD_FIXTURE.staffId,
+      displayName: "Local Field Author",
+      handle: "local-field-author",
+      teamLabel: "Dirt",
+      presenceState: "on_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333334",
+      displayName: "Vera Staff",
+      handle: "vera",
+      teamLabel: "Dirt",
+      presenceState: "off_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333335",
+      displayName: "Sam Shiftlead",
+      handle: "sam",
+      teamLabel: "Dirt",
+      presenceState: "on_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333336",
+      displayName: "Ari Ranger",
+      handle: "ari",
+      teamLabel: "Dirt",
+      presenceState: "on_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333337",
+      displayName: "Bea Ranger",
+      handle: "bea",
+      teamLabel: "Dirt",
+      presenceState: "off_site",
+    },
+  ],
+  shiftSchedule: [
+    {
+      shiftId: "99999999-9999-4999-8999-999999999999",
+      title: "Ranger Dirt Day Shift",
+      teamLabel: "Dirt",
+      startsAt: "2027-07-04T16:00:00.000Z",
+      endsAt: "2027-07-04T22:00:00.000Z",
+      signupCount: 3,
+    },
+    {
+      shiftId: "99999999-9999-4999-8999-999999999998",
+      title: "Ranger Dirt Swing Shift",
+      teamLabel: "Dirt",
+      startsAt: "2027-07-04T22:00:00.000Z",
+      endsAt: "2027-07-05T04:00:00.000Z",
+      signupCount: 2,
+    },
+  ],
+  shiftSignups: [
+    {
+      signupId: "signup-local-field-author-day",
+      shiftId: "99999999-9999-4999-8999-999999999999",
+      staffId: LOCAL_FIELD_FIXTURE.staffId,
+      displayName: "Local Field Author",
+      teamLabel: "Dirt",
+      state: "confirmed",
+    },
+    {
+      signupId: "signup-vera-day",
+      shiftId: "99999999-9999-4999-8999-999999999999",
+      staffId: "33333333-3333-4333-8333-333333333334",
+      displayName: "Vera Staff",
+      teamLabel: "Dirt",
+      state: "signed_up",
+    },
+    {
+      signupId: "signup-ari-swing",
+      shiftId: "99999999-9999-4999-8999-999999999998",
+      staffId: "33333333-3333-4333-8333-333333333336",
+      displayName: "Ari Ranger",
+      teamLabel: "Dirt",
+      state: "signed_up",
+    },
+  ],
+  teamMembers: [
+    {
+      staffId: LOCAL_FIELD_FIXTURE.staffId,
+      displayName: "Local Field Author",
+      handle: "local-field-author",
+      teamLabel: "Dirt",
+      presenceState: "on_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333334",
+      displayName: "Vera Staff",
+      handle: "vera",
+      teamLabel: "Dirt",
+      presenceState: "off_site",
+    },
+    {
+      staffId: "33333333-3333-4333-8333-333333333336",
+      displayName: "Ari Ranger",
+      handle: "ari",
+      teamLabel: "Dirt",
+      presenceState: "on_site",
     },
   ],
   deploymentOptions: [
@@ -218,12 +374,41 @@ export function attendanceStateLabel(state: ShiftAttendanceState): string {
   }
 }
 
+export function presenceStateLabel(state: DepartmentPresenceState): string {
+  switch (state) {
+    case "on_site":
+      return "On-site";
+    case "off_site":
+      return "Off-site";
+  }
+}
+
 export function checkedInRoster(
   board: CurrentShiftBoard,
 ): readonly ShiftBoardRosterMember[] {
   return board.roster.filter(
     (member) => member.attendanceState === "checked_in",
   );
+}
+
+export function onSiteStaff(
+  board: CurrentShiftBoard,
+): readonly DepartmentPresenceMember[] {
+  return board.departmentPresence.filter(
+    (member) => member.presenceState === "on_site",
+  );
+}
+
+export function presenceSummary(board: CurrentShiftBoard): {
+  readonly onSiteCount: number;
+  readonly offSiteCount: number;
+} {
+  return {
+    onSiteCount: onSiteStaff(board).length,
+    offSiteCount: board.departmentPresence.filter(
+      (member) => member.presenceState === "off_site",
+    ).length,
+  };
 }
 
 export function rosterSummary(board: CurrentShiftBoard): {
@@ -242,7 +427,9 @@ export function eligibleUnscheduledCandidates(
   const rosterStaffIds = new Set(board.roster.map((member) => member.staffId));
 
   return board.unscheduledCandidates.filter(
-    (candidate) => !rosterStaffIds.has(candidate.staffId),
+    (candidate) =>
+      candidate.presenceState === "on_site" &&
+      !rosterStaffIds.has(candidate.staffId),
   );
 }
 
@@ -280,6 +467,19 @@ export function equipmentStateLabel(state: EquipmentState): string {
       return "Missing";
     case "damaged":
       return "Damaged";
+  }
+}
+
+export function shiftSignupStateLabel(
+  state: DepartmentShiftSignup["state"],
+): string {
+  switch (state) {
+    case "confirmed":
+      return "Confirmed";
+    case "signed_up":
+      return "Signed up";
+    case "waitlisted":
+      return "Waitlisted";
   }
 }
 
@@ -340,6 +540,87 @@ export function checkedOutEquipment(
       } satisfies CheckedOutEquipment;
     })
     .filter((item): item is CheckedOutEquipment => item !== null);
+}
+
+function staffHasOpenShift(board: CurrentShiftBoard, staffId: string): boolean {
+  return board.roster.some(
+    (member) =>
+      member.staffId === staffId && member.attendanceState === "checked_in",
+  );
+}
+
+function staffOpenEquipmentCount(
+  board: CurrentShiftBoard,
+  staffId: string,
+): number {
+  return board.equipmentCheckouts.filter(
+    (checkout) => checkout.staffId === staffId && checkout.returnedAt === null,
+  ).length;
+}
+
+function requireDepartmentPresenceMember(
+  board: CurrentShiftBoard,
+  staffId: string,
+): DepartmentPresenceMember {
+  const member = board.departmentPresence.find(
+    (item) => item.staffId === staffId,
+  );
+
+  if (member === undefined) {
+    throw new Error("Staff member is not available for this department.");
+  }
+
+  return member;
+}
+
+function updatePresenceCollections(
+  board: CurrentShiftBoard,
+  staffId: string,
+  presenceState: DepartmentPresenceState,
+): CurrentShiftBoard {
+  return {
+    ...board,
+    departmentPresence: board.departmentPresence.map((member) =>
+      member.staffId === staffId ? { ...member, presenceState } : member,
+    ),
+    teamMembers: board.teamMembers.map((member) =>
+      member.staffId === staffId ? { ...member, presenceState } : member,
+    ),
+    unscheduledCandidates: board.unscheduledCandidates.map((candidate) =>
+      candidate.staffId === staffId ? { ...candidate, presenceState } : candidate,
+    ),
+  };
+}
+
+export function markStaffOnSite(
+  board: CurrentShiftBoard,
+  staffId: string,
+): CurrentShiftBoard {
+  requireDepartmentPresenceMember(board, staffId);
+
+  return updatePresenceCollections(board, staffId, "on_site");
+}
+
+export function markStaffOffSite(
+  board: CurrentShiftBoard,
+  staffId: string,
+): CurrentShiftBoard {
+  requireDepartmentPresenceMember(board, staffId);
+
+  if (staffHasOpenShift(board, staffId)) {
+    throw new Error(
+      "Staff must be checked out of their shift before going off-site.",
+    );
+  }
+
+  const openEquipmentCount = staffOpenEquipmentCount(board, staffId);
+  if (openEquipmentCount > 0) {
+    throw new Error(
+      "Equipment must be returned or marked missing/damaged before going off-site.",
+    );
+  }
+
+  return updatePresenceCollections(board, staffId, "off_site");
 }
 
 export function addUnscheduledRosterMember(

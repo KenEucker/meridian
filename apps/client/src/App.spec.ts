@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
+import { configureMeridianApi } from "@/api/meridianApi";
 import { routes } from "@/router";
 
 function buildRouter() {
@@ -11,6 +12,11 @@ function buildRouter() {
     routes,
   });
 }
+
+afterEach(() => {
+  configureMeridianApi(null);
+  vi.unstubAllGlobals();
+});
 
 describe("shared client shell", () => {
   it("renders the app shell with the home placeholder", async () => {
@@ -43,6 +49,29 @@ describe("shared client shell", () => {
   });
 
   it("renders the settings/about route with the client version", async () => {
+    configureMeridianApi({
+      baseUrl: "http://localhost:8000",
+      bearerToken: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            status: "ok",
+            environment: "local",
+            server_version: "1.2.3",
+            config_schema_version: 1,
+            timestamp: "2026-07-18T12:00:00.000Z",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+
     const router = buildRouter();
     await router.push("/settings/about");
     await router.isReady();
@@ -52,10 +81,20 @@ describe("shared client shell", () => {
         plugins: [router],
       },
     });
+    await flushPromises();
 
     expect(wrapper.get("#about-heading").text()).toBe("Settings");
     expect(wrapper.get('[aria-label="Application version"]').text()).toContain(
       "Client version",
+    );
+    expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
+      "Server health",
+    );
+    expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
+      "Reachable (ok); server 1.2.3.",
+    );
+    expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
+      "Missing VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN.",
     );
   });
 });

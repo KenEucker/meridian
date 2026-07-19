@@ -498,6 +498,19 @@ Team membership may grant:
 - operational identity
 - leadership responsibility
 
+Team names are arbitrary and do not define system authority by themselves.
+
+Department-scoped permission grants may be assigned to any team in the
+department. Alpha 1 department operational grants include:
+
+- `department_logistics`
+- `department_operations`
+- `department_administration`
+- `department_planning`
+
+The same team may carry more than one grant, and different teams may share the
+same grant.
+
 Every department has a default team.
 
 Departments may rename their default team.
@@ -517,6 +530,8 @@ Team names used in historical worked shifts are preserved as they were at the ti
 A shift may have its own displayed title/function, but eligibility to work that shift derives from team membership.
 
 A shift does not require membership in multiple teams.
+
+A shift has exactly one team.
 
 System authority should not be granted as free-floating permissions. Authority should come through organization, department, or team membership.
 
@@ -702,9 +717,9 @@ Staff may check out after the scheduled end time.
 
 Check-out creates the actual hours record.
 
-Shift leads may edit actual start/end time during check-out.
+Department Logistics may edit actual start/end time during check-out.
 
-Shift leads and department leads may correct hours after check-out during the organization-wide correction grace period.
+Authorized attendance managers may correct hours after check-out during the organization-wide correction grace period.
 
 ---
 
@@ -729,7 +744,7 @@ Hours cannot exist without a shift.
 
 Setup, teardown, standby, emergency coverage, or unscheduled labor must be represented as shift work if it should count for hours/credits.
 
-Hours are recorded by shift leads or department leads.
+Hours are recorded through Department Logistics check-out.
 
 Staff do not self-report hours in MVP.
 
@@ -878,7 +893,7 @@ MVP equipment tracking supports:
 
 - checkout to individual staff members
 - check-in from individual staff members
-- visibility on the Shift Lead Board
+- visibility on the Department Board and Logistics Desk
 - manual correction when physical handoffs happen outside the system
 
 MVP equipment states include:
@@ -889,13 +904,19 @@ MVP equipment states include:
 - Missing
 - Damaged
 
-Shift leads and department leads may check equipment in/out.
+Department Logistics may check equipment in/out.
 
 Department-to-department allotments are future scope.
 
 Full inventory custody chains are future scope.
 
 Equipment does not need to be tied to a shift for MVP.
+
+Equipment may be issued before, during, or after a staff member's shift.
+
+A staff member may not be marked off-site for a department while holding
+checked-out equipment for that department/event unless the equipment is returned
+or marked Missing/Damaged.
 
 ---
 
@@ -909,9 +930,14 @@ Deployments answer:
 
 For MVP, deployment tracking only needs to show the current deployment/location assignment.
 
-Shift leads may assign and update a staff member's current deployment/location from the Shift Lead Board.
+Department Operations may assign and update a staff member's current
+deployment/location from the Operations Board.
 
 Staff may be moved between deployments/locations during a shift.
+
+A staff member has at most one current deployment/location per shift.
+
+Department Operations may assign or change deployment before or during the shift.
 
 MVP does not need to preserve deployment movement history.
 
@@ -1187,7 +1213,7 @@ Procedure documents support Markdown content for MVP.
 
 Examples:
 
-- shift lead check-in procedure
+- logistics check-in procedure
 - radio checkout procedure
 - field report procedure
 - incident escalation procedure
@@ -1510,17 +1536,26 @@ Team Lead authority does not override Department Lead authority.
 
 ## 4.8 Shift Lead
 
-A Shift Lead manages live shift operations.
+A Shift Lead is an operational identity for a team or shift.
 
-Shift Leads may:
+Shift Lead status does not by itself grant every live-operation permission.
+Alpha 1 live-operation permissions come from department-scoped team grants.
 
-- view current shift roster
+---
+
+## 4.8A Department Operational Roles
+
+Department operational roles are permission grants assigned through teams within
+a department. Team names remain arbitrary.
+
+Department Logistics may:
+
+- mark eligible department staff on-site/off-site
+- view current shift assignments
 - check staff in
 - check staff out
 - edit actual start/end time during check-out
 - correct hours during the grace period
-- assign deployment/location
-- move staff between deployments/locations
 - view checked-in staff
 - view equipment checked out
 - check equipment in/out to individuals
@@ -1528,7 +1563,28 @@ Shift Leads may:
 - access field report shortcut
 - access incident shortcut
 
-Shift Leads may not add staff to a department/team. If a staff member is not already in the relevant department/team, a Department Lead must add them first.
+Department Logistics may not add staff to a department/team. If a staff member
+is not already in the relevant department/team, Department Administration or a
+Department Lead must add them first.
+
+Department Operations may:
+
+- view current shift assignments
+- assign deployment/location
+- move staff between deployments/locations
+- access field report shortcut
+- access incident shortcut
+
+Department Planning may:
+
+- view shift schedule
+- view shift signups
+- view team members
+
+Department Administration may:
+
+- manage department team membership and department settings as permitted
+- view department logistics, operations, and planning settings
 
 ---
 
@@ -1699,30 +1755,33 @@ For MVP, Meridian provides credential eligibility reporting, not physical creden
 
 ## 5.7 Shift Operations
 
-1. A staff member arrives for shift.
-2. Shift Lead opens Shift Lead Board.
-3. Shift Lead views roster.
-4. Shift Lead checks staff in.
-5. Shift Lead may add eligible unscheduled staff to the shift.
-6. Shift Lead assigns deployment/location.
-7. Shift Lead checks out equipment to individual staff members if needed.
-8. Shift work occurs.
-9. Staff may move between deployments/locations.
-10. Shift Lead updates current deployment/location.
-11. Shift Lead checks staff out.
-12. Check-out creates actual hours record.
-13. Shift Lead may edit actual start/end time during check-out.
-14. Equipment is checked back in.
-15. Hours may be corrected during the grace period.
-16. Credits are calculated after the grace period.
+1. A staff member arrives for the event or department work area.
+2. Department Logistics opens the Logistics Desk.
+3. Logistics verifies the staff member and marks them on-site for the department.
+4. Logistics confirms the staff member's schedule/signups.
+5. Logistics issues event equipment if needed.
+6. Logistics checks the staff member into a scheduled shift, or adds an on-site eligible unscheduled staff member to the shift.
+7. Department Operations opens the Operations Board.
+8. Operations assigns or confirms the staff member's deployment/location.
+9. Shift work occurs.
+10. Staff may move between deployments/locations.
+11. Operations updates current deployment/location.
+12. Logistics checks staff out.
+13. Check-out creates actual hours record.
+14. Logistics may edit actual start/end time during check-out.
+15. Equipment is checked back in, returned, or marked Missing/Damaged.
+16. Logistics marks the staff member off-site only after open shift and equipment issues are resolved.
+17. Hours may be corrected during the grace period.
+18. Credits are calculated after the grace period.
 
 ---
 
 ## 5.8 Unscheduled Shift Work
 
 1. A staff member shows up or is needed for a shift without prior signup.
-2. Shift Lead or Department Lead attempts to add staff to shift.
+2. Department Logistics attempts to add staff to shift.
 3. System checks:
+   - staff member is marked on-site for the department
    - staff member belongs to relevant department/team
    - required training complete
    - required waiver complete
@@ -1731,15 +1790,15 @@ For MVP, Meridian provides credential eligibility reporting, not physical creden
 5. The staff member may check in/out and earn hours.
 6. Unscheduled work does not retroactively grant credential eligibility.
 
-If the staff member is not in the relevant department/team, a Department Lead must add them first.
+If the staff member is not in the relevant department/team, Department Administration or a Department Lead must add them first.
 
 ---
 
 ## 5.9 Hours and Credits
 
-1. Shift Lead checks staff out.
+1. Department Logistics checks staff out.
 2. Check-out creates hours record using actual start/end time.
-3. Shift Lead or Department Lead may correct hours during grace period.
+3. Authorized attendance managers may correct hours during grace period.
 4. Grace period closes.
 5. Hours freeze.
 6. Credits are calculated from finalized hours.
@@ -1888,7 +1947,7 @@ The MVP should prioritize:
 - shift eligibility
 - shift signup
 - credential eligibility reporting
-- Shift Lead Board operations
+- Department Operations, Logistics, and Planning boards
 - field report creation
 - incident list/editor
 - hours recording
@@ -1903,7 +1962,7 @@ Priority operational screens:
 
 1. Staff Application
 2. Staff Coordination
-3. Shift Lead Board
+3. Department Board / Logistics Desk / Operations Board
 4. Incident List / Incident Editor
 5. Field Report Creation
 
@@ -2010,9 +2069,10 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - future shifts removed where possible after revocation
 - reporting/export
 
-### Shift Lead Board
+### Department Operations Boards
 
-- current shift roster
+- current shift assignments
+- department on-site/off-site status
 - check-in
 - check-out
 - actual start/end time
@@ -2023,6 +2083,9 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - move staff between locations
 - equipment checked out
 - equipment checkout/check-in to individuals
+- shift schedule
+- shift signups
+- team members
 - field report shortcut
 - incident shortcut
 
@@ -2633,23 +2696,23 @@ Unscheduled work shall not retroactively grant credential eligibility.
 
 ---
 
-## 7.9 Shift Lead Board Requirements
+## 7.9 Department Operations Board Requirements
 
 ### SLB-001
 
-The Shift Lead Board shall show the current shift roster.
+The Department Board shall show current shift assignments.
 
 ### SLB-002
 
-The Shift Lead Board shall show checked-in staff.
+The Department Board and Logistics Desk shall show checked-in staff.
 
 ### SLB-003
 
-The Shift Lead Board shall allow staff check-in.
+The Logistics Desk shall allow staff check-in after staff are marked on-site for the department.
 
 ### SLB-004
 
-The Shift Lead Board shall allow staff check-out.
+The Logistics Desk shall allow staff check-out.
 
 ### SLB-005
 
@@ -2657,39 +2720,63 @@ Check-out shall create an actual hours record.
 
 ### SLB-006
 
-Shift leads shall be able to edit actual start/end time during check-out.
+Department Logistics shall be able to edit actual start/end time during check-out.
 
 ### SLB-007
 
-Shift leads shall be able to correct hours during the correction grace period.
+Authorized attendance managers shall be able to correct hours during the correction grace period.
 
 ### SLB-008
 
-The Shift Lead Board shall allow eligible unscheduled staff to be added to a shift.
+The Logistics Desk shall allow on-site eligible unscheduled staff to be added to a shift.
 
 ### SLB-009
 
-The Shift Lead Board shall allow deployment/location assignment.
+The Operations Board shall allow deployment/location assignment.
 
 ### SLB-010
 
-The Shift Lead Board shall allow staff to be moved between deployments/locations.
+The Operations Board shall allow staff to be moved between deployments/locations.
 
 ### SLB-011
 
-The Shift Lead Board shall show equipment checked out.
+The Department Board and Logistics Desk shall show equipment checked out.
 
 ### SLB-012
 
-The Shift Lead Board shall support equipment checkout/check-in to individual staff members.
+The Logistics Desk shall support equipment checkout/check-in to individual staff members.
 
 ### SLB-013
 
-The Shift Lead Board shall provide a field report shortcut.
+Department operations surfaces shall provide a field report shortcut where permitted.
 
 ### SLB-014
 
-The Shift Lead Board shall provide an incident shortcut.
+Department operations surfaces shall provide an incident shortcut where permitted.
+
+### SLB-015
+
+Meridian shall track on-site/off-site status per event, department, and staff member.
+
+### SLB-016
+
+Only Department Logistics shall mark department staff on-site/off-site.
+
+### SLB-017
+
+Staff shall not be marked off-site while checked into a shift for that department/event.
+
+### SLB-018
+
+Staff shall not be marked off-site while holding checked-out equipment for that department/event unless the equipment is returned or marked Missing/Damaged.
+
+### SLB-019
+
+The Planning Board shall show shift schedule, shift signups, and team members.
+
+### SLB-020
+
+Department boards shall be department-specific by default and team-specific only when a team filter is selected.
 
 ---
 
@@ -2721,7 +2808,7 @@ Hours shall not exist without a department.
 
 ### HOURS-007
 
-Shift leads and department leads may correct hours during the organization-wide correction grace period.
+Authorized attendance managers may correct hours during the organization-wide correction grace period.
 
 ### HOURS-008
 
@@ -2955,7 +3042,7 @@ MVP equipment tracking shall support check-in from individual staff members.
 
 ### EQUIP-004
 
-Shift leads and department leads may check equipment in/out.
+Department Logistics may check equipment in/out.
 
 ### EQUIP-005
 
@@ -2964,6 +3051,10 @@ MVP equipment states shall include Available, Checked out, Returned, Missing, an
 ### EQUIP-006
 
 Department-to-department allotments are out of scope for MVP.
+
+### EQUIP-007
+
+Equipment may be checked out to staff before, during, or after a shift.
 
 ### EQUIP-007
 
