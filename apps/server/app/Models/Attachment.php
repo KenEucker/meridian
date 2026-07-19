@@ -24,6 +24,8 @@ class Attachment extends Model
 
     public const MORPH_FIELD_REPORT = 'field_report';
 
+    public const MORPH_INCIDENT = 'incident';
+
     public $incrementing = false;
 
     protected $keyType = 'string';

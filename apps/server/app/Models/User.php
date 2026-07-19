@@ -110,6 +110,11 @@ class User extends Authenticatable
         return $this->hasMany(FieldReport::class, 'submitted_by_user_id');
     }
 
+    public function createdIncidents(): HasMany
+    {
+        return $this->hasMany(Incident::class, 'created_by_user_id');
+    }
+
     public function staffOrganizationStatusChanges(): HasMany
     {
         return $this->hasMany(StaffOrganizationStatus::class, 'status_changed_by_user_id');
