@@ -63,17 +63,20 @@ M10.9A delivers the identity-free Planning Table. The full
    controls, active/upcoming/outgoing shift context, and future signup list.
 12. Mark Vera on-site if needed, then open Check in. Confirm the dialog defaults
    the timestamp to now and can hand off available equipment.
-13. Confirm open equipment for a checked-in staff member can be returned as
+13. After Vera is checked in, open Check out equipment from the staff workspace
+   and confirm multiple available radios, such as Radio 13 and Radio 14, can be
+   selected and checked out together.
+14. Confirm open equipment for a checked-in staff member can be returned as
    Returned, Missing, or Damaged with one action each.
-14. Confirm provisions appear only as an extension placeholder with no fake data.
-15. Open **Operations center**. Confirm the deployments module is present for
+15. Confirm provisions appear only as an extension placeholder with no fake data.
+16. Open **Operations center**. Confirm the deployments module is present for
     Operations capability and can move a rostered staff member between
     deployments.
-16. Confirm the incident overview module is absent unless IC capability is
+17. Confirm the incident overview module is absent unless IC capability is
     granted, and that opening Operations Center alone does not reveal incident
     content.
-17. Open **Planning table**. Confirm rows are shift/team windows with capacity,
+18. Open **Planning table**. Confirm rows are shift/team windows with capacity,
     signed-up/assigned, checked-in, no-show, unscheduled, planned hours, actual
     hours, and variance/status columns.
-18. Confirm Planning Table shows no individual staff names, signup lists, or
+19. Confirm Planning Table shows no individual staff names, signup lists, or
     team-member lists.
