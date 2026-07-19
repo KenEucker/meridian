@@ -5,15 +5,17 @@ import { RouterLink } from "vue-router";
 import {
   LOCAL_CURRENT_SHIFT_BOARD,
   addUnscheduledRosterMember,
+  assignCurrentDeployment,
   attendanceStateLabel,
   checkedInRoster,
+  deploymentLabel,
   eligibleUnscheduledCandidates,
   rosterSummary,
   type ShiftBoardRosterMember,
 } from "@/shift-board/currentShiftBoard";
 
-// Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1, M10.7).
-// Check-in/out, no-show, hours correction forms, deployment, equipment, and
+// Current Shift Board - UI contract 12.5 `shift-board.current` (M10.1, M10.7,
+// M10.8). Check-in/out, no-show, hours correction forms, equipment, and
 // shortcuts arrive in their owning M10 tasks.
 const board = ref(LOCAL_CURRENT_SHIFT_BOARD);
 const checkedInMembers = computed(() => checkedInRoster(board.value));
@@ -21,6 +23,11 @@ const summary = computed(() => rosterSummary(board.value));
 const candidates = computed(() => eligibleUnscheduledCandidates(board.value));
 const selectedCandidateId = ref(candidates.value[0]?.staffId ?? "");
 const addStatus = ref<string | null>(null);
+const selectedAssignmentId = ref(board.value.roster[0]?.assignmentId ?? "");
+const selectedDeploymentId = ref(
+  board.value.deploymentOptions[0]?.deploymentId ?? "",
+);
+const deploymentStatus = ref<string | null>(null);
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -43,6 +50,10 @@ function checkedInText(member: ShiftBoardRosterMember): string {
   return `Checked in ${formatTimestamp(member.checkedInAt)}`;
 }
 
+function deploymentText(member: ShiftBoardRosterMember): string {
+  return deploymentLabel(board.value, member.currentDeploymentId);
+}
+
 function addSelectedCandidate(): void {
   const candidate = candidates.value.find(
     (item) => item.staffId === selectedCandidateId.value,
@@ -59,6 +70,27 @@ function addSelectedCandidate(): void {
   );
   selectedCandidateId.value = candidates.value[0]?.staffId ?? "";
   addStatus.value = `${candidate.displayName} added to roster.`;
+}
+
+function moveSelectedDeployment(): void {
+  const member = board.value.roster.find(
+    (item) => item.assignmentId === selectedAssignmentId.value,
+  );
+
+  if (member === undefined || selectedDeploymentId.value === "") {
+    return;
+  }
+
+  board.value = assignCurrentDeployment(
+    board.value,
+    member.assignmentId,
+    selectedDeploymentId.value,
+  );
+
+  deploymentStatus.value = `${member.displayName} moved to ${deploymentLabel(
+    board.value,
+    selectedDeploymentId.value,
+  )}.`;
 }
 </script>
 
@@ -146,6 +178,59 @@ function addSelectedCandidate(): void {
       </p>
     </section>
 
+    <section class="shift-board__deployments" aria-labelledby="deployments-heading">
+      <h2 id="deployments-heading" class="shift-board__subheading">
+        Deployments
+      </h2>
+      <form
+        class="shift-board__add-form"
+        aria-label="Move staff to deployment"
+        @submit.prevent="moveSelectedDeployment"
+      >
+        <label class="shift-board__field">
+          <span>Staff</span>
+          <select v-model="selectedAssignmentId" :disabled="board.roster.length === 0">
+            <option
+              v-for="member in board.roster"
+              :key="member.assignmentId"
+              :value="member.assignmentId"
+            >
+              {{ member.displayName }} - {{ deploymentText(member) }}
+            </option>
+          </select>
+        </label>
+        <label class="shift-board__field">
+          <span>Deployment</span>
+          <select
+            v-model="selectedDeploymentId"
+            :disabled="board.deploymentOptions.length === 0"
+          >
+            <option
+              v-for="deployment in board.deploymentOptions"
+              :key="deployment.deploymentId"
+              :value="deployment.deploymentId"
+            >
+              {{ deployment.name }}
+            </option>
+          </select>
+        </label>
+        <button
+          class="shift-board__button"
+          type="submit"
+          :disabled="selectedAssignmentId === '' || selectedDeploymentId === ''"
+        >
+          Move to deployment
+        </button>
+      </form>
+      <p
+        class="shift-board__status"
+        role="status"
+        aria-label="Deployment assignment status"
+      >
+        {{ deploymentStatus ?? "No deployment changes." }}
+      </p>
+    </section>
+
     <section
       class="shift-board__checked-in"
       aria-labelledby="checked-in-heading"
@@ -184,6 +269,7 @@ function addSelectedCandidate(): void {
               <th scope="col">Staff</th>
               <th scope="col">Team</th>
               <th scope="col">Attendance</th>
+              <th scope="col">Deployment</th>
               <th scope="col">Checked-in time</th>
             </tr>
           </thead>
@@ -204,6 +290,7 @@ function addSelectedCandidate(): void {
                   {{ attendanceStateLabel(member.attendanceState) }}
                 </span>
               </td>
+              <td>{{ deploymentText(member) }}</td>
               <td>{{ checkedInText(member) }}</td>
             </tr>
           </tbody>
@@ -305,6 +392,7 @@ function addSelectedCandidate(): void {
 }
 
 .shift-board__checked-in,
+.shift-board__deployments,
 .shift-board__unscheduled,
 .shift-board__roster {
   margin-top: var(--m-space-6);
@@ -403,7 +491,7 @@ function addSelectedCandidate(): void {
 
 .shift-board__table {
   width: 100%;
-  min-width: 42rem;
+  min-width: 52rem;
   border-collapse: collapse;
 }
 

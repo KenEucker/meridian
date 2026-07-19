@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   LOCAL_CURRENT_SHIFT_BOARD,
   addUnscheduledRosterMember,
+  assignCurrentDeployment,
   attendanceStateLabel,
   checkedInRoster,
+  deploymentLabel,
   eligibleUnscheduledCandidates,
   rosterSummary,
 } from "@/shift-board/currentShiftBoard";
@@ -52,7 +54,31 @@ describe("current shift board roster model (M10.1)", () => {
       displayName: "Ari Ranger",
       attendanceState: "scheduled",
       checkedInAt: null,
+      currentDeploymentId: null,
     });
     expect(eligibleUnscheduledCandidates(updated)).toEqual([]);
+  });
+
+  it("assigns and moves the current deployment for a roster member", () => {
+    expect(
+      deploymentLabel(
+        LOCAL_CURRENT_SHIFT_BOARD,
+        LOCAL_CURRENT_SHIFT_BOARD.roster[1].currentDeploymentId,
+      ),
+    ).toBe("Unassigned");
+
+    const updated = assignCurrentDeployment(
+      LOCAL_CURRENT_SHIFT_BOARD,
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+      "deployment-hq-runner",
+    );
+
+    expect(updated.roster[1].currentDeploymentId).toBe(
+      "deployment-hq-runner",
+    );
+    expect(deploymentLabel(updated, updated.roster[1].currentDeploymentId)).toBe(
+      "HQ Runner",
+    );
+    expect(LOCAL_CURRENT_SHIFT_BOARD.roster[1].currentDeploymentId).toBeNull();
   });
 });
