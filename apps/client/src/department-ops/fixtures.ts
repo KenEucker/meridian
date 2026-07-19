@@ -36,6 +36,41 @@ const overnightShiftId = "99999999-9999-4999-8999-999999999997";
 const dirtTeamId = "77777777-7777-4777-8777-777777777771";
 const commandTeamId = "77777777-7777-4777-8777-777777777772";
 
+const availableLogisticsEquipment = [
+  {
+    checkoutId: null,
+    equipmentItemId: "equipment-safety-vest",
+    name: "Safety Vest",
+    assetTag: "VEST-04",
+    status: "available" as const,
+    checkedOutAt: null,
+  },
+  {
+    checkoutId: null,
+    equipmentItemId: "equipment-radio-13",
+    name: "Radio 13",
+    assetTag: "RDO-13",
+    status: "available" as const,
+    checkedOutAt: null,
+  },
+  {
+    checkoutId: null,
+    equipmentItemId: "equipment-radio-14",
+    name: "Radio 14",
+    assetTag: "RDO-14",
+    status: "available" as const,
+    checkedOutAt: null,
+  },
+  {
+    checkoutId: null,
+    equipmentItemId: "equipment-radio-15",
+    name: "Radio 15",
+    assetTag: "RDO-15",
+    status: "available" as const,
+    checkedOutAt: null,
+  },
+];
+
 export const LOCAL_DEPARTMENT_OVERVIEW: DepartmentOverview = {
   context: LOCAL_DEPARTMENT_OPS_CONTEXT,
   selectedShiftId: dayShiftId,
@@ -148,6 +183,14 @@ export const LOCAL_DEPARTMENT_OVERVIEW: DepartmentOverview = {
 export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
   context: LOCAL_DEPARTMENT_OPS_CONTEXT,
   selectedStaffId: null,
+  selectedSearchContext: null,
+  searchCache: {
+    state: "offline_usable",
+    scopeLabel: "Idaho Decompression 2026 / Rangers",
+    indexedAt: "2027-07-04T17:59:00.000Z",
+    includes: ["staff", "equipment", "shift"],
+    note: "Department-scoped cache available for staff, equipment, and shift lookup while offline.",
+  },
   searchableStaff: [
     {
       staffId: LOCAL_FIELD_FIXTURE.staffId,
@@ -193,6 +236,27 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
       status: "available",
       holderName: null,
     },
+    {
+      equipmentItemId: "equipment-radio-13",
+      name: "Radio 13",
+      assetTag: "RDO-13",
+      status: "available",
+      holderName: null,
+    },
+    {
+      equipmentItemId: "equipment-radio-14",
+      name: "Radio 14",
+      assetTag: "RDO-14",
+      status: "available",
+      holderName: null,
+    },
+    {
+      equipmentItemId: "equipment-radio-15",
+      name: "Radio 15",
+      assetTag: "RDO-15",
+      status: "available",
+      holderName: null,
+    },
   ],
   searchableShifts: LOCAL_DEPARTMENT_OVERVIEW.shifts,
   staffWorkspaces: {
@@ -219,6 +283,32 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
           canCheckOut: true,
           canAddToShift: false,
         },
+        {
+          shiftId: swingShiftId,
+          title: "Ranger Dirt Swing Shift",
+          teamLabel: "Dirt",
+          startsAt: "2027-07-04T22:00:00.000Z",
+          endsAt: "2027-07-05T04:00:00.000Z",
+          lifecycle: "upcoming",
+          attendanceState: "scheduled",
+          assignmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa91",
+          canCheckIn: false,
+          canCheckOut: false,
+          canAddToShift: false,
+        },
+        {
+          shiftId: overnightShiftId,
+          title: "Ranger Command Overnight",
+          teamLabel: "Command",
+          startsAt: "2027-07-04T04:00:00.000Z",
+          endsAt: "2027-07-04T10:00:00.000Z",
+          lifecycle: "completed",
+          attendanceState: "checked_out",
+          assignmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa92",
+          canCheckIn: false,
+          canCheckOut: false,
+          canAddToShift: false,
+        },
       ],
       openEquipment: [
         {
@@ -230,16 +320,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
           checkedOutAt: "2027-07-04T16:05:00.000Z",
         },
       ],
-      availableEquipment: [
-        {
-          checkoutId: null,
-          equipmentItemId: "equipment-safety-vest",
-          name: "Safety Vest",
-          assetTag: "VEST-04",
-          status: "available",
-          checkedOutAt: null,
-        },
-      ],
+      availableEquipment: availableLogisticsEquipment,
       futureSignups: [
         {
           signupId: "signup-local-swing",
@@ -277,16 +358,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         },
       ],
       openEquipment: [],
-      availableEquipment: [
-        {
-          checkoutId: null,
-          equipmentItemId: "equipment-safety-vest",
-          name: "Safety Vest",
-          assetTag: "VEST-04",
-          status: "available",
-          checkedOutAt: null,
-        },
-      ],
+      availableEquipment: availableLogisticsEquipment,
       futureSignups: [],
       provisionsExtensionNote:
         "Provisions will appear here once that domain is specified.",
@@ -328,16 +400,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         },
       ],
       openEquipment: [],
-      availableEquipment: [
-        {
-          checkoutId: null,
-          equipmentItemId: "equipment-safety-vest",
-          name: "Safety Vest",
-          assetTag: "VEST-04",
-          status: "available",
-          checkedOutAt: null,
-        },
-      ],
+      availableEquipment: availableLogisticsEquipment,
       futureSignups: [
         {
           signupId: "signup-ari-swing",

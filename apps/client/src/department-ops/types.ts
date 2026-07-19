@@ -119,6 +119,15 @@ export interface LogisticsSearchHit {
   readonly detail: string;
 }
 
+export interface LogisticsSearchContext {
+  readonly id: string;
+  readonly kind: LogisticsSearchHit["kind"];
+  readonly label: string;
+  readonly detail: string;
+  readonly relatedStaffIds: readonly string[];
+  readonly emptyReason: string | null;
+}
+
 export interface LogisticsShiftCard {
   readonly shiftId: string;
   readonly title: string;
@@ -166,8 +175,17 @@ export interface LogisticsStaffWorkspace {
   readonly provisionsExtensionNote: string;
 }
 
+export interface LogisticsSearchCache {
+  readonly state: "offline_usable" | "stale" | "sync_failed";
+  readonly scopeLabel: string;
+  readonly indexedAt: string;
+  readonly includes: readonly LogisticsSearchHit["kind"][];
+  readonly note: string;
+}
+
 export interface LogisticsDeskModel {
   readonly context: DepartmentOpsContext;
+  readonly searchCache: LogisticsSearchCache;
   readonly searchableStaff: readonly {
     readonly staffId: string;
     readonly displayName: string;
@@ -185,6 +203,7 @@ export interface LogisticsDeskModel {
   readonly searchableShifts: readonly ShiftOption[];
   readonly staffWorkspaces: Readonly<Record<string, LogisticsStaffWorkspace>>;
   readonly selectedStaffId: string | null;
+  readonly selectedSearchContext: LogisticsSearchContext | null;
 }
 
 export interface OperationsDeploymentRow {
