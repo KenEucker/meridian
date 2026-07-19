@@ -72,11 +72,14 @@ M10.9A delivers the identity-free Planning Table. The full
 16. Open **Operations center**. Confirm the deployments module is present for
     Operations capability and can move a rostered staff member between
     deployments.
-17. Confirm the incident overview module is absent unless IC capability is
+17. Confirm the Field Reports module and shortcuts appear only for a user who
+    already has Field Report permission; Operations Center access alone must not
+    reveal Field Report shortcuts.
+18. Confirm the incident overview module is absent unless IC capability is
     granted, and that opening Operations Center alone does not reveal incident
     content.
-18. Open **Planning table**. Confirm rows are shift/team windows with capacity,
+19. Open **Planning table**. Confirm rows are shift/team windows with capacity,
     signed-up/assigned, checked-in, no-show, unscheduled, planned hours, actual
     hours, and variance/status columns.
-19. Confirm Planning Table shows no individual staff names, signup lists, or
+20. Confirm Planning Table shows no individual staff names, signup lists, or
     team-member lists.

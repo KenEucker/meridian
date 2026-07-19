@@ -22,6 +22,9 @@ describe("operations center model", () => {
     expect(modules.find((module) => module.id === "deployments")?.available).toBe(
       true,
     );
+    expect(
+      modules.find((module) => module.id === "field_reports")?.available,
+    ).toBe(true);
     expect(modules.find((module) => module.id === "incidents")?.available).toBe(
       false,
     );
@@ -31,6 +34,26 @@ describe("operations center model", () => {
     expect(
       withoutIc.find((module) => module.id === "incidents")?.unavailableReason,
     ).toContain("Incident Command");
+  });
+
+  it("keeps field report shortcuts behind existing field report permission", () => {
+    const withoutFieldReports = composeOperationsModules(
+      { ...LOCAL_CAPABILITIES, hasFieldReportPermission: false },
+      1,
+    );
+
+    expect(
+      withoutFieldReports.find((module) => module.id === "deployments")
+        ?.available,
+    ).toBe(true);
+    expect(
+      withoutFieldReports.find((module) => module.id === "field_reports")
+        ?.available,
+    ).toBe(false);
+    expect(
+      withoutFieldReports.find((module) => module.id === "field_reports")
+        ?.unavailableReason,
+    ).toContain("Field Report permission");
   });
 
   it("moves current deployments for operations capability", () => {

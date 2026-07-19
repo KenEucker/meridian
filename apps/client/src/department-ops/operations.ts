@@ -19,6 +19,17 @@ export function composeOperationsModules(
       summary: "Current deployment/location assignments for staff on shift.",
     },
     {
+      id: "field_reports",
+      title: "Field Reports",
+      available: capabilities.hasFieldReportPermission,
+      unavailableReason: capabilities.hasFieldReportPermission
+        ? null
+        : "Field Report shortcuts require existing Field Report permission.",
+      summary: capabilities.hasFieldReportPermission
+        ? "Field Report shortcuts available from the actor's existing permission."
+        : "Field Report shortcuts are hidden until Field Report permission is granted.",
+    },
+    {
       id: "incidents",
       title: "Incidents",
       available: capabilities.hasIncidentCommand,

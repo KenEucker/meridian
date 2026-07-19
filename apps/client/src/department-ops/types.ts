@@ -48,6 +48,7 @@ export interface CapabilityContext {
   readonly hasLogistics: boolean;
   readonly hasOperations: boolean;
   readonly hasPlanning: boolean;
+  readonly hasFieldReportPermission: boolean;
   readonly hasIncidentCommand: boolean;
   readonly hasEquipmentVisibility: boolean;
 }
@@ -215,7 +216,12 @@ export interface OperationsDeploymentRow {
 }
 
 export interface OperationsModule {
-  readonly id: "deployments" | "incidents" | "equipment" | "maintenance";
+  readonly id:
+    | "deployments"
+    | "field_reports"
+    | "incidents"
+    | "equipment"
+    | "maintenance";
   readonly title: string;
   readonly available: boolean;
   readonly unavailableReason: string | null;
