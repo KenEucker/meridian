@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
+use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -17,6 +18,9 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/mark-no-show', [AttendanceCommandController::class, 'markNoShow'])
         ->name('api.commands.mark-no-show');
+
+    Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
+        ->name('api.commands.set-current-deployment');
 
     Route::post('/commands/submit-field-report', [FieldReportCommandController::class, 'submit'])
         ->name('api.commands.submit-field-report');

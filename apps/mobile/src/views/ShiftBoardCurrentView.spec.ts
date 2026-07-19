@@ -88,6 +88,31 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     ).toEqual([]);
   });
 
+  it("moves a roster member to a current deployment", async () => {
+    const { wrapper } = await mountAt(shiftBoardPath());
+
+    const deploymentSection = wrapper.get(
+      '[aria-labelledby="deployments-heading"]',
+    );
+    expect(deploymentSection.text()).toContain("Local Field Author - Gate 1");
+    expect(deploymentSection.text()).toContain("Vera Staff - Unassigned");
+
+    await deploymentSection
+      .findAll("select")[0]
+      .setValue("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2");
+    await deploymentSection
+      .findAll("select")[1]
+      .setValue("deployment-hq-runner");
+    await deploymentSection.get("form").trigger("submit");
+
+    expect(
+      wrapper.get('[aria-label="Deployment assignment status"]').text(),
+    ).toBe("Vera Staff moved to HQ Runner.");
+    expect(wrapper.get('[aria-labelledby="roster-heading"]').text()).toContain(
+      "HQ Runner",
+    );
+  });
+
   it("lists the current roster and labels checked-in state with text", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
@@ -97,6 +122,9 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     expect(roster.text()).toContain("Sam Shiftlead");
     expect(roster.text()).toContain("Checked in");
     expect(roster.text()).toContain("Scheduled");
+    expect(roster.text()).toContain("Gate 1");
+    expect(roster.text()).toContain("Perimeter North");
+    expect(roster.text()).toContain("Unassigned");
     expect(roster.text()).toContain("Not checked in");
   });
 
@@ -114,12 +142,12 @@ describe("Current Shift Board roster surface (M10.1)", () => {
 
     expect(wrapper.findAll("button").map((button) => button.text())).toEqual([
       "Add to roster",
+      "Move to deployment",
     ]);
     expect(wrapper.text()).not.toContain("Check in");
     expect(wrapper.text()).not.toContain("Check out");
     expect(wrapper.text()).not.toContain("No-show");
     expect(wrapper.text()).not.toContain("Hours");
-    expect(wrapper.text()).not.toContain("Deployment");
     expect(wrapper.text()).not.toContain("Equipment");
     expect(wrapper.text()).not.toContain("Incident");
   });

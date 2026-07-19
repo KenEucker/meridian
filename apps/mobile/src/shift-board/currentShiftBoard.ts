@@ -19,6 +19,7 @@ export interface ShiftBoardRosterMember {
   readonly teamLabel: string;
   readonly attendanceState: ShiftAttendanceState;
   readonly checkedInAt: string | null;
+  readonly currentDeploymentId: string | null;
 }
 
 export interface UnscheduledStaffCandidate {
@@ -26,6 +27,13 @@ export interface UnscheduledStaffCandidate {
   readonly displayName: string;
   readonly handle: string | null;
   readonly teamLabel: string;
+}
+
+export interface DeploymentOption {
+  readonly deploymentId: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly locationDetails: string | null;
 }
 
 export interface CurrentShiftBoard {
@@ -42,6 +50,7 @@ export interface CurrentShiftBoard {
   readonly timeZone: string;
   readonly roster: readonly ShiftBoardRosterMember[];
   readonly unscheduledCandidates: readonly UnscheduledStaffCandidate[];
+  readonly deploymentOptions: readonly DeploymentOption[];
 }
 
 export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
@@ -65,6 +74,7 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       teamLabel: "Dirt",
       attendanceState: "checked_in",
       checkedInAt: "2027-07-04T15:52:00.000Z",
+      currentDeploymentId: "deployment-gate-1",
     },
     {
       assignmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
@@ -74,6 +84,7 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       teamLabel: "Dirt",
       attendanceState: "scheduled",
       checkedInAt: null,
+      currentDeploymentId: null,
     },
     {
       assignmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
@@ -83,6 +94,7 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       teamLabel: "Dirt",
       attendanceState: "checked_in",
       checkedInAt: "2027-07-04T16:03:00.000Z",
+      currentDeploymentId: "deployment-perimeter-north",
     },
   ],
   unscheduledCandidates: [
@@ -91,6 +103,26 @@ export const LOCAL_CURRENT_SHIFT_BOARD: CurrentShiftBoard = {
       displayName: "Ari Ranger",
       handle: "ari",
       teamLabel: "Dirt",
+    },
+  ],
+  deploymentOptions: [
+    {
+      deploymentId: "deployment-gate-1",
+      name: "Gate 1",
+      description: "Entry checkpoint",
+      locationDetails: "North entry checkpoint",
+    },
+    {
+      deploymentId: "deployment-perimeter-north",
+      name: "Perimeter North",
+      description: "Roving perimeter watch",
+      locationDetails: "North fence line",
+    },
+    {
+      deploymentId: "deployment-hq-runner",
+      name: "HQ Runner",
+      description: "Radio and supply runner",
+      locationDetails: "Ranger HQ",
     },
   ],
 };
@@ -140,6 +172,28 @@ export function eligibleUnscheduledCandidates(
   );
 }
 
+export function deploymentOptionFor(
+  board: CurrentShiftBoard,
+  deploymentId: string | null,
+): DeploymentOption | null {
+  if (deploymentId === null) {
+    return null;
+  }
+
+  return (
+    board.deploymentOptions.find(
+      (deployment) => deployment.deploymentId === deploymentId,
+    ) ?? null
+  );
+}
+
+export function deploymentLabel(
+  board: CurrentShiftBoard,
+  deploymentId: string | null,
+): string {
+  return deploymentOptionFor(board, deploymentId)?.name ?? "Unassigned";
+}
+
 export function addUnscheduledRosterMember(
   board: CurrentShiftBoard,
   staffId: string,
@@ -165,7 +219,44 @@ export function addUnscheduledRosterMember(
         teamLabel: candidate.teamLabel,
         attendanceState: "scheduled",
         checkedInAt: null,
+        currentDeploymentId: null,
       },
     ],
+  };
+}
+
+export function assignCurrentDeployment(
+  board: CurrentShiftBoard,
+  assignmentId: string,
+  deploymentId: string,
+): CurrentShiftBoard {
+  const deployment = deploymentOptionFor(board, deploymentId);
+
+  if (deployment === null) {
+    throw new Error("Deployment option is not available.");
+  }
+
+  let assignmentFound = false;
+
+  const roster = board.roster.map((member) => {
+    if (member.assignmentId !== assignmentId) {
+      return member;
+    }
+
+    assignmentFound = true;
+
+    return {
+      ...member,
+      currentDeploymentId: deployment.deploymentId,
+    };
+  });
+
+  if (!assignmentFound) {
+    throw new Error("Roster member is not available.");
+  }
+
+  return {
+    ...board,
+    roster,
   };
 }

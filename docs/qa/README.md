@@ -31,7 +31,8 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 ## Alpha 1 Shift Lead Board partial smoke
 
 M10.1 covers the current roster and checked-in state. M10.7 adds the local
-eligible unscheduled staff add-to-roster affordance. The full
+eligible unscheduled staff add-to-roster affordance. M10.8 adds the local
+current deployment/location move affordance. The full
 `QA-SLB-01-checkin-checkout-hours.md` script remains deferred to M10.11.
 
 1. Start the field app in development mode.
@@ -40,8 +41,12 @@ eligible unscheduled staff add-to-roster affordance. The full
    Ranger Dirt Day Shift, roster count, and checked-in count.
 4. Confirm Local Field Author and Sam Shiftlead appear under Checked-in staff,
    Vera Staff remains Scheduled in the roster, and Ari Ranger appears as an
-   eligible staff member who can be added to the roster.
+   eligible staff member who can be added to the roster. Confirm Local Field
+   Author is assigned to Gate 1, Sam Shiftlead is assigned to Perimeter North,
+   and Vera Staff is Unassigned.
 5. Add Ari Ranger to the roster. Confirm the roster count increases by one, Ari
    Ranger appears as Scheduled, and the eligible-staff list is empty.
-6. Confirm no check-in, check-out, no-show, hours, deployment, equipment, field
-   report shortcut, or incident shortcut controls are present.
+6. Move Vera Staff to HQ Runner. Confirm the deployment status says Vera Staff
+   moved to HQ Runner and the roster shows HQ Runner for Vera.
+7. Confirm no check-in, check-out, no-show, hours, equipment, field report
+   shortcut, or incident shortcut controls are present.
