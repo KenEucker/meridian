@@ -40,6 +40,13 @@ class ClientAppRouteTest extends TestCase
         $this->assertFileResponseContains($response, 'Shared Vue route shell');
     }
 
+    public function test_public_apply_like_routes_do_not_fall_back_to_the_client_app(): void
+    {
+        $this->installClientDist('<!doctype html><div id="app">Shared Vue route shell</div>');
+
+        $this->get('/summer-fest/apply')->assertNotFound();
+    }
+
     public function test_client_assets_are_served_from_the_shared_vue_build(): void
     {
         $this->installClientDist('<!doctype html><div id="app"></div>');

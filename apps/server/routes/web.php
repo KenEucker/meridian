@@ -74,5 +74,5 @@ Route::middleware('auth')->group(function (): void {
 });
 
 Route::get('{clientPath}', ClientAppController::class)
-    ->where('clientPath', '^(?!admin(?:/|$)|api(?:/|$)|up$|css/|js/|favicon\.ico$|robots\.txt$).*$')
+    ->where('clientPath', '^(?!admin(?:/|$)|api(?:/|$)|up$|css/|js/|favicon\.ico$|robots\.txt$)(?!.*(?:^|/)apply(?:/|$)).*$')
     ->name('client.app.route');
