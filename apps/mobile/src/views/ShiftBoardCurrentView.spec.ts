@@ -31,7 +31,7 @@ function shiftBoardPath(): string {
   return `/events/${LOCAL_CURRENT_SHIFT_BOARD.eventId}/departments/${LOCAL_CURRENT_SHIFT_BOARD.departmentId}/shift-board/current`;
 }
 
-describe("Current Shift Board roster surface (M10.1)", () => {
+describe("Current Shift Board roster surface (M10.1 through M10.9)", () => {
   it("registers the UI contract route name", () => {
     const names = routes.map((route) => route.name);
 
@@ -113,6 +113,56 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     );
   });
 
+  it("shows checked-out equipment and checks equipment in and out", async () => {
+    const { wrapper } = await mountAt(shiftBoardPath());
+
+    const equipmentSection = wrapper.get('[aria-labelledby="equipment-heading"]');
+    expect(equipmentSection.text()).toContain("Radio 12");
+    expect(equipmentSection.text()).toContain("Local Field Author");
+    expect(equipmentSection.text()).toContain("Checked out");
+    expect(equipmentSection.text()).toContain("Safety Vest (VEST-04)");
+    expect(wrapper.get('[aria-label="Roster summary"]').text()).toContain(
+      "Equipment out",
+    );
+
+    const forms = equipmentSection.findAll("form");
+    await forms[0].findAll("select")[0].setValue("equipment-safety-vest");
+    await forms[0]
+      .findAll("select")[1]
+      .setValue("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2");
+    await forms[0].trigger("submit");
+
+    expect(wrapper.get('[aria-label="Equipment workflow status"]').text()).toBe(
+      "Safety Vest checked out to Vera Staff.",
+    );
+    expect(wrapper.get('[aria-labelledby="equipment-heading"]').text()).toContain(
+      "Safety Vest",
+    );
+    expect(wrapper.get('[aria-labelledby="equipment-heading"]').text()).toContain(
+      "Vera Staff",
+    );
+
+    const updatedEquipmentSection = wrapper.get(
+      '[aria-labelledby="equipment-heading"]',
+    );
+    const returnForm = updatedEquipmentSection.findAll("form")[1];
+    await returnForm.findAll("select")[0].setValue("equipment-checkout-radio-12");
+    await returnForm.findAll("select")[1].setValue("returned");
+    await returnForm.trigger("submit");
+
+    expect(wrapper.get('[aria-label="Equipment workflow status"]').text()).toBe(
+      "Radio 12 checked in as Returned.",
+    );
+    const checkedOutRows = wrapper
+      .get('[aria-labelledby="equipment-heading"]')
+      .findAll(".shift-board__checked-item")
+      .map((row) => row.text());
+    expect(checkedOutRows.some((row) => row.includes("Radio 12"))).toBe(false);
+    expect(checkedOutRows.some((row) => row.includes("Safety Vest"))).toBe(
+      true,
+    );
+  });
+
   it("lists the current roster and labels checked-in state with text", async () => {
     const { wrapper } = await mountAt(shiftBoardPath());
 
@@ -143,12 +193,12 @@ describe("Current Shift Board roster surface (M10.1)", () => {
     expect(wrapper.findAll("button").map((button) => button.text())).toEqual([
       "Add to roster",
       "Move to deployment",
+      "Check out equipment",
+      "Check in equipment",
     ]);
-    expect(wrapper.text()).not.toContain("Check in");
-    expect(wrapper.text()).not.toContain("Check out");
     expect(wrapper.text()).not.toContain("No-show");
     expect(wrapper.text()).not.toContain("Hours");
-    expect(wrapper.text()).not.toContain("Equipment");
+    expect(wrapper.text()).not.toContain("Field report");
     expect(wrapper.text()).not.toContain("Incident");
   });
 });
