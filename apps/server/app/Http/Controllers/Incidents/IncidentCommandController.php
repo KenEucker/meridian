@@ -51,6 +51,8 @@ final class IncidentCommandController extends Controller
             'incident_type_names.*' => ['string'],
             'responder_staff_ids' => ['nullable', 'array'],
             'responder_staff_ids.*' => ['uuid'],
+            'initial_field_update_fields' => ['nullable', 'array'],
+            'initial_field_update_fields.*' => ['string'],
         ]);
 
         $event = Event::query()->findOrFail((string) $validated['event_id']);

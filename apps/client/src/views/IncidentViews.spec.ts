@@ -199,6 +199,15 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
     expect(wrapper.text()).toContain("INC-2027-000043");
     expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
+    expect(wrapper.text()).toContain("Changed priority: Important");
+
+    const openingTimelineEntries = wrapper.findAll(".ims-edit__timeline li");
+    expect(openingTimelineEntries[0]?.text()).toContain(
+      "Incident INC-2027-000043 opened.",
+    );
+    expect(openingTimelineEntries[1]?.text()).toContain(
+      "Changed priority: Important",
+    );
 
     await addBySearch(wrapper, "#ims-edit-type-add", "Log", "Logistics");
     await addBySearch(wrapper, "#ims-edit-type-add", "Rad", "Radio");

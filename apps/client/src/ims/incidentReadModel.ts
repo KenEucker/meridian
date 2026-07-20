@@ -397,6 +397,7 @@ export function incidentToAutosaveForm(
 export function createIncidentFromAutosaveForm(
   context: IncidentSessionContext | null,
   form: IncidentAutosaveForm,
+  previousForm: IncidentAutosaveForm | null = null,
   createdAt = new Date(),
 ): ImsIncident {
   if (!canEditIncident(context)) {
@@ -405,19 +406,29 @@ export function createIncidentFromAutosaveForm(
 
   const timestamp = createdAt.toISOString();
   const id = `local-incident-${++incidentSequence}`;
-  const incident: ImsIncident = Object.freeze({
-    id,
-    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
-    incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
+  const startedAt = fromDatetimeLocalValue(form.startedAt, createdAt);
+  const nextValues = {
     title: normalizedTitle(form.title),
     status: form.status,
     priorityLabel: validatedPriorityLabel(form.priorityLabel),
     incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
     responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
-    startedAt: fromDatetimeLocalValue(form.startedAt, createdAt),
+    startedAt,
     locationName: nullableText(form.locationName),
     locationAddress: nullableText(form.locationAddress),
     locationDetails: nullableText(form.locationDetails),
+  };
+  const previousValue = previousForm
+    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "before")
+    : {};
+  const newValue = previousForm
+    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "after")
+    : {};
+  const incident: ImsIncident = Object.freeze({
+    id,
+    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
+    incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
+    ...nextValues,
     createdByName: context?.roleLabel ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -432,6 +443,20 @@ export function createIncidentFromAutosaveForm(
         body: `Incident INC-2027-${String(incidentSequence).padStart(6, "0")} opened.`,
         createdAt: timestamp,
       }),
+      ...(Object.keys(newValue).length > 0
+        ? [
+            Object.freeze({
+              id: `local-incident-field-${++fieldUpdateSequence}`,
+              incidentId: id,
+              actorName: context?.roleLabel ?? null,
+              entryType: "incident_field_updated" as const,
+              body: timelineFieldUpdateBody(newValue),
+              previousValue,
+              newValue,
+              createdAt: timestamp,
+            }),
+          ]
+        : []),
     ]),
   });
 
@@ -784,6 +809,61 @@ function changedAutosaveFields(
   direction: "before" | "after",
 ): Record<string, string | null> {
   const before = autosaveDiffSnapshot(incident);
+  const after: Record<string, string | null> = {
+    title: nextValues.title,
+    status: nextValues.status,
+    priorityLabel: nextValues.priorityLabel,
+    startedAt: nextValues.startedAt,
+    locationName: nextValues.locationName,
+    locationAddress: nextValues.locationAddress,
+    locationDetails: nextValues.locationDetails,
+    incidentTypeNames: nextValues.incidentTypeNames.join(", "),
+    responders: nextValues.responders
+      .map((responder) => responder.displayName)
+      .join(", "),
+  };
+  const values = direction === "before" ? before : after;
+  const changed: Record<string, string | null> = {};
+
+  for (const field of Object.keys(after)) {
+    if (before[field] !== after[field]) {
+      changed[field] = values[field] ?? null;
+    }
+  }
+
+  return changed;
+}
+
+function changedInitialAutosaveFields(
+  previousForm: IncidentAutosaveForm,
+  nextValues: Pick<
+    ImsIncident,
+    | "title"
+    | "status"
+    | "priorityLabel"
+    | "incidentTypeNames"
+    | "responders"
+    | "startedAt"
+    | "locationName"
+    | "locationAddress"
+    | "locationDetails"
+  >,
+  fallback: Date,
+  direction: "before" | "after",
+): Record<string, string | null> {
+  const before: Record<string, string | null> = {
+    title: normalizedTitle(previousForm.title),
+    status: previousForm.status,
+    priorityLabel: previousForm.priorityLabel,
+    startedAt: fromDatetimeLocalValue(previousForm.startedAt, fallback),
+    locationName: nullableText(previousForm.locationName),
+    locationAddress: nullableText(previousForm.locationAddress),
+    locationDetails: nullableText(previousForm.locationDetails),
+    incidentTypeNames: normalizedStringList(previousForm.incidentTypeNames).join(", "),
+    responders: respondersForStaffIds(previousForm.responderStaffIds)
+      .map((responder) => responder.displayName)
+      .join(", "),
+  };
   const after: Record<string, string | null> = {
     title: nextValues.title,
     status: nextValues.status,

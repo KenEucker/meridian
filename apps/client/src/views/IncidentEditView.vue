@@ -45,6 +45,7 @@ const noteBody = ref("");
 const noteError = ref<string | null>(null);
 const revision = ref(0);
 const lastSavedSignature = ref<string | null>(null);
+const lastSavedForm = ref<IncidentAutosaveForm | null>(null);
 const autosaveQueued = ref(false);
 const incidentTypeAddQuery = ref("");
 const responderAddQuery = ref("");
@@ -106,6 +107,7 @@ watch(
       : null;
     lastSavedAt.value = existing?.updatedAt ?? null;
     lastSavedSignature.value = formSignature(form);
+    lastSavedForm.value = cloneAutosaveForm(form);
   },
   { immediate: true },
 );
@@ -201,17 +203,19 @@ async function autosave(): Promise<void> {
   autosaveQueued.value = false;
 
   try {
+    const previousForm = lastSavedForm.value;
     const saved = savedIncidentId.value
       ? updateIncidentFromAutosaveForm(
           session.value,
           savedIncidentId.value,
           form,
         )
-      : createIncidentFromAutosaveForm(session.value, form);
+      : createIncidentFromAutosaveForm(session.value, form, previousForm);
 
     savedIncidentId.value = saved.id;
     lastSavedAt.value = saved.updatedAt;
     lastSavedSignature.value = signature;
+    lastSavedForm.value = cloneAutosaveForm(form);
     autosaveState.value = "saved";
     autosaveMessage.value = null;
     revision.value += 1;
@@ -346,6 +350,20 @@ function formSignature(value: IncidentAutosaveForm): string {
     locationAddress: value.locationAddress.trim(),
     locationDetails: value.locationDetails.trim(),
   });
+}
+
+function cloneAutosaveForm(value: IncidentAutosaveForm): IncidentAutosaveForm {
+  return {
+    title: value.title,
+    status: value.status,
+    priorityLabel: value.priorityLabel,
+    incidentTypeNames: [...value.incidentTypeNames],
+    responderStaffIds: [...value.responderStaffIds],
+    startedAt: value.startedAt,
+    locationName: value.locationName,
+    locationAddress: value.locationAddress,
+    locationDetails: value.locationDetails,
+  };
 }
 
 function fieldLabel(field: string): string {
@@ -709,10 +727,10 @@ function onAppendNote(): void {
 
             <label class="ims-edit__field ims-edit__field--details">
               <span>Details</span>
-              <textarea
+              <input
                 id="ims-edit-location-details"
                 v-model="form.locationDetails"
-                rows="3"
+                type="text"
                 :disabled="isOfflineBlocked"
                 @blur="commitAutosave"
               />

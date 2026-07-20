@@ -130,6 +130,37 @@ class IncidentCommandHttpTest extends TestCase
         ]);
     }
 
+    public function test_incident_create_records_opening_then_initial_field_change_timeline_entries(): void
+    {
+        Carbon::setTestNow('2027-07-04 20:30:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-incident', [
+                'event_id' => $event->id,
+                'priority_label' => Incident::PRIORITY_IMPORTANT,
+                'initial_field_update_fields' => ['priority_label'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('priority_label', Incident::PRIORITY_IMPORTANT);
+
+        $incident = Incident::query()->sole();
+        $timelineEntries = IncidentTimelineEntry::query()
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $timelineEntries);
+        $this->assertSame(IncidentTimelineEntry::TYPE_INCIDENT_OPENED, $timelineEntries[0]->entry_type);
+        $this->assertSame('Incident INC-2027-000001 opened.', $timelineEntries[0]->body);
+        $this->assertSame(IncidentTimelineEntry::TYPE_FIELD_UPDATED, $timelineEntries[1]->entry_type);
+        $this->assertSame('Changed priority: Important', $timelineEntries[1]->body);
+        $this->assertSame(Incident::PRIORITY_ROUTINE, $timelineEntries[1]->previous_value['priority_label']);
+        $this->assertSame(Incident::PRIORITY_IMPORTANT, $timelineEntries[1]->new_value['priority_label']);
+        $this->assertSame($incident->id, $timelineEntries[1]->incident_id);
+    }
+
     public function test_ic_operator_can_autosave_edit_closed_incident_fields_online(): void
     {
         Carbon::setTestNow('2027-07-04 22:45:00 UTC');
