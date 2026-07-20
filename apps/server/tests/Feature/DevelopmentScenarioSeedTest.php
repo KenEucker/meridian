@@ -35,6 +35,12 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->assertSame(DevelopmentScenarioCatalog::ORGANIZATION_NAME, $organization->name);
         $this->assertNotNull($organization->organizers_department_id);
         $this->assertNotNull($organization->default_ic_department_id);
+        $this->assertNotSame($organization->organizers_department_id, $organization->default_ic_department_id);
+
+        $organizersDepartment = Department::query()->findOrFail($organization->organizers_department_id);
+        $icDepartment = Department::query()->findOrFail($organization->default_ic_department_id);
+        $this->assertSame('ORGANIZERS', $organizersDepartment->code);
+        $this->assertSame('RANGERS', $icDepartment->code);
 
         $event = Event::query()
             ->where('slug', DevelopmentScenarioCatalog::EVENT_SLUG)
@@ -114,7 +120,7 @@ class DevelopmentScenarioSeedTest extends TestCase
             ->where('code', 'COMMAND')
             ->whereHas('department', fn ($query) => $query
                 ->where('organization_id', $organization->id)
-                ->where('code', 'ORGANIZERS'))
+                ->where('code', 'RANGERS'))
             ->firstOrFail();
 
         $defaultTeam = Team::query()
@@ -146,7 +152,7 @@ class DevelopmentScenarioSeedTest extends TestCase
             ->where('code', 'IC_OPERATOR')
             ->whereHas('department', fn ($query) => $query
                 ->where('organization_id', $organization->id)
-                ->where('code', 'ORGANIZERS'))
+                ->where('code', 'RANGERS'))
             ->firstOrFail();
 
         $this->assertTrue(

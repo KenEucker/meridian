@@ -26,6 +26,9 @@ const planningRoute = {
   name: "events.departments.planning",
   params: departmentRouteParams,
 };
+const imsIncidentsRoute = {
+  name: "ims.incidents.index",
+};
 </script>
 
 <template>
@@ -57,6 +60,7 @@ const planningRoute = {
           <RouterLink :to="{ name: 'staff.field-reports.index' }"
             >My Field Reports</RouterLink
           >
+          <RouterLink :to="imsIncidentsRoute">IMS incidents</RouterLink>
           <RouterLink :to="{ name: 'readiness' }"
             >Check device readiness</RouterLink
           >

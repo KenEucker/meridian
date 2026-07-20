@@ -50,12 +50,19 @@ describe("department operations surfaces", () => {
     expect(names).toContain("events.departments.logistics");
     expect(names).toContain("events.departments.operations");
     expect(names).toContain("events.departments.planning");
+    expect(names).toContain("ims.incidents.index");
 
     const { wrapper } = await mountAt("/");
     expect(wrapper.text()).toContain("Department overview");
     expect(wrapper.text()).toContain("Logistics desk");
     expect(wrapper.text()).toContain("Operations center");
     expect(wrapper.text()).toContain("Planning table");
+    expect(
+      wrapper
+        .findAll(".home__links a")
+        .find((item) => item.text() === "IMS incidents")
+        ?.attributes("href"),
+    ).toBe("/ims/incidents");
   });
 
   it("redirects legacy shift-board routes to the new surfaces", async () => {
@@ -267,10 +274,15 @@ describe("department operations surfaces", () => {
         .findAll("a")
         .some((link) => link.text() === "Submit Field Report"),
     ).toBe(true);
-    expect(wrapper.text()).toContain(
+    expect(wrapper.find("#incidents-heading").exists()).toBe(true);
+    expect(
+      wrapper
+        .findAll("a")
+        .some((link) => link.text() === "Open IMS incidents"),
+    ).toBe(true);
+    expect(wrapper.text()).not.toContain(
       "Incident overview requires event-scoped Incident Command capability.",
     );
-    expect(wrapper.find("#incidents-heading").exists()).toBe(false);
     expect(wrapper.find("#deployments-heading").exists()).toBe(true);
   });
 

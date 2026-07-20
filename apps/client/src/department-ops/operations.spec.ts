@@ -26,7 +26,7 @@ describe("operations center model", () => {
       modules.find((module) => module.id === "field_reports")?.available,
     ).toBe(true);
     expect(modules.find((module) => module.id === "incidents")?.available).toBe(
-      false,
+      true,
     );
     expect(modules.find((module) => module.id === "equipment")?.available).toBe(
       true,

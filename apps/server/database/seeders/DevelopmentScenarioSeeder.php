@@ -30,7 +30,7 @@ class DevelopmentScenarioSeeder extends Seeder
         DB::transaction(function (): void {
             $organization = $this->seedOrganization();
             [$teamsByCode, $departmentsByCode] = $this->seedDepartmentsAndTeams($organization);
-            $event = $this->seedEvent($organization, $departmentsByCode['ORGANIZERS']);
+            $event = $this->seedEvent($organization, $departmentsByCode['RANGERS']);
             $this->seedEventDepartmentAssignments($event, $departmentsByCode);
             $this->seedPersonas($organization, $teamsByCode, $departmentsByCode);
             $this->seedTeamGrants($event, $teamsByCode, $departmentsByCode);
@@ -90,6 +90,9 @@ class DevelopmentScenarioSeeder extends Seeder
 
             if ($departmentDefinition['code'] === 'ORGANIZERS') {
                 $organizersDepartmentId = $department->id;
+            }
+
+            if ($departmentDefinition['code'] === 'RANGERS') {
                 $icDepartmentId = $department->id;
             }
 

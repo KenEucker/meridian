@@ -89,7 +89,7 @@ final class DevelopmentScenarioCatalog
                 'user_name' => 'Ingrid ICLead',
                 'email' => 'ingrid.iclead@idaho-burners.test',
                 'org_status' => 'active',
-                'department_code' => 'ORGANIZERS',
+                'department_code' => 'RANGERS',
                 'team_code' => 'COMMAND',
                 'department_status' => null,
                 'grants' => [
@@ -101,7 +101,7 @@ final class DevelopmentScenarioCatalog
                 'user_name' => 'Omar ICOperator',
                 'email' => 'omar.icoperator@idaho-burners.test',
                 'org_status' => 'active',
-                'department_code' => 'ORGANIZERS',
+                'department_code' => 'RANGERS',
                 'team_code' => 'IC_OPERATOR',
                 'department_status' => null,
                 'grants' => [
@@ -113,7 +113,7 @@ final class DevelopmentScenarioCatalog
                 'user_name' => 'Ivy ICViewer',
                 'email' => 'ivy.icviewer@idaho-burners.test',
                 'org_status' => 'active',
-                'department_code' => 'ORGANIZERS',
+                'department_code' => 'RANGERS',
                 'team_code' => 'IC_VIEWER',
                 'department_status' => null,
                 'grants' => [
@@ -172,17 +172,16 @@ final class DevelopmentScenarioCatalog
             [
                 'name' => 'Organizers',
                 'code' => 'ORGANIZERS',
-                'teams' => [
-                    ['name' => 'Command', 'code' => 'COMMAND'],
-                    ['name' => 'IC Operators', 'code' => 'IC_OPERATOR'],
-                    ['name' => 'IC Viewers', 'code' => 'IC_VIEWER'],
-                ],
+                'teams' => [],
             ],
             [
                 'name' => 'Rangers',
                 'code' => 'RANGERS',
                 'teams' => [
                     ['name' => 'Dirt', 'code' => 'DIRT'],
+                    ['name' => 'Command', 'code' => 'COMMAND'],
+                    ['name' => 'IC Operators', 'code' => 'IC_OPERATOR'],
+                    ['name' => 'IC Viewers', 'code' => 'IC_VIEWER'],
                 ],
             ],
             [
