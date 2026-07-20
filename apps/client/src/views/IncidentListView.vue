@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
+  canEditIncident,
+  formatIncidentDateTime,
   hasIncidentCommandAccess,
   listIncidentsForSession,
   resolveIncidentSession,
@@ -11,16 +13,32 @@ import {
 
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
+const canEdit = computed(() => canEditIncident(session.value));
 const route = useRoute();
+const router = useRouter();
 const searchQuery = computed(() =>
   typeof route.query.search === "string" ? route.query.search : "",
 );
+const searchDraft = ref(searchQuery.value);
 const incidents = computed(() =>
   listIncidentsForSession(session.value, searchQuery.value),
 );
 
+watch(searchQuery, (value) => {
+  searchDraft.value = value;
+});
+
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
+}
+
+async function onSearchSubmit(): Promise<void> {
+  const search = searchDraft.value.trim();
+
+  await router.push({
+    name: "ims.incidents.index",
+    query: search ? { search } : {},
+  });
 }
 </script>
 
@@ -33,6 +51,13 @@ function priorityText(priorityLabel: string | null): string {
           Incidents
         </h1>
       </div>
+      <RouterLink
+        v-if="canEdit"
+        class="ims-list__create"
+        :to="{ name: 'ims.incidents.create' }"
+      >
+        Create incident
+      </RouterLink>
       <dl v-if="session" class="ims-list__context">
         <div>
           <dt>Organization</dt>
@@ -59,70 +84,94 @@ function priorityText(priorityLabel: string | null): string {
       </RouterLink>
     </div>
 
-    <p
-      v-else-if="incidents.length === 0"
-      class="ims-list__empty"
-      role="status"
-    >
-      {{
-        searchQuery
-          ? "No incidents match this search."
-          : "No incidents are recorded for this event."
-      }}
-    </p>
+    <template v-else>
+      <form
+        class="ims-list__search-form"
+        aria-label="Search incidents"
+        @submit.prevent="onSearchSubmit"
+      >
+        <label for="ims-list-search">Search</label>
+        <input
+          id="ims-list-search"
+          v-model="searchDraft"
+          type="search"
+          autocomplete="off"
+        />
+        <button type="submit">Search</button>
+        <RouterLink
+          v-if="searchQuery"
+          class="ims-list__clear-search"
+          :to="{ name: 'ims.incidents.index' }"
+        >
+          Clear
+        </RouterLink>
+      </form>
 
-    <div v-else class="ims-list__results">
-      <div
-        v-if="searchQuery"
-        class="ims-list__search-context"
+      <p
+        v-if="incidents.length === 0"
+        class="ims-list__empty"
         role="status"
       >
-        <span>Search: {{ searchQuery }}</span>
-        <RouterLink :to="{ name: 'ims.incidents.index' }">Clear</RouterLink>
-      </div>
+        {{
+          searchQuery
+            ? "No incidents match this search."
+            : "No incidents are recorded for this event."
+        }}
+      </p>
 
-      <div class="ims-list__table-wrap">
-      <table class="ims-list__table">
-        <caption>
-          Restricted incident list for the configured Incident Command
-          department.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Incident</th>
-            <th scope="col">State</th>
-            <th scope="col">Priority</th>
-            <th scope="col">Location</th>
-            <th scope="col">Last update</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="incident in incidents" :key="incident.id">
-            <th scope="row">
-              <RouterLink
-                class="ims-list__incident-link"
-                :to="{
-                  name: 'ims.incidents.show',
-                  params: { incidentId: incident.id },
-                }"
-              >
-                <span>{{ incident.incidentNumber }}</span>
-                <span>{{ incident.title }}</span>
-              </RouterLink>
-            </th>
-            <td>
-              <span class="ims-list__status">{{
-                statusLabel(incident.status)
-              }}</span>
-            </td>
-            <td>{{ priorityText(incident.priorityLabel) }}</td>
-            <td>{{ incident.locationName ?? "Location not set" }}</td>
-            <td>{{ incident.updatedAt }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="ims-list__results">
+        <div
+          v-if="searchQuery"
+          class="ims-list__search-context"
+          role="status"
+        >
+          <span>Search: {{ searchQuery }}</span>
+          <RouterLink :to="{ name: 'ims.incidents.index' }">Clear</RouterLink>
+        </div>
+
+        <div class="ims-list__table-wrap">
+        <table class="ims-list__table">
+          <caption>
+            Restricted incident list for the configured Incident Command
+            department.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Incident</th>
+              <th scope="col">State</th>
+              <th scope="col">Priority</th>
+              <th scope="col">Location</th>
+              <th scope="col">Last update</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="incident in incidents" :key="incident.id">
+              <th scope="row">
+                <RouterLink
+                  class="ims-list__incident-link"
+                  :to="{
+                    name: 'ims.incidents.show',
+                    params: { incidentId: incident.id },
+                  }"
+                >
+                  <span>{{ incident.incidentNumber }}</span>
+                  <span>{{ incident.title }}</span>
+                </RouterLink>
+              </th>
+              <td>
+                <span class="ims-list__status">{{
+                  statusLabel(incident.status)
+                }}</span>
+              </td>
+              <td>{{ priorityText(incident.priorityLabel) }}</td>
+              <td>{{ incident.locationName ?? "Location not set" }}</td>
+              <td>{{ formatIncidentDateTime(incident.updatedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
       </div>
-    </div>
+    </template>
   </section>
 </template>
 
@@ -136,6 +185,16 @@ function priorityText(priorityLabel: string | null): string {
 .ims-list__header {
   display: grid;
   gap: var(--m-space-4);
+}
+
+.ims-list__create {
+  justify-self: start;
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .ims-list__eyebrow,
@@ -188,9 +247,59 @@ function priorityText(priorityLabel: string | null): string {
 
 .ims-list__restricted a,
 .ims-list__incident-link,
-.ims-list__search-context a {
+.ims-list__search-context a,
+.ims-list__clear-search {
   color: var(--m-action-secondary-bg);
   font-weight: 700;
+}
+
+.ims-list__create:focus-visible,
+.ims-list__search-form input:focus-visible,
+.ims-list__search-form button:focus-visible,
+.ims-list__clear-search:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.ims-list__search-form {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto auto;
+  gap: var(--m-space-2);
+  align-items: end;
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.ims-list__search-form label {
+  grid-column: 1 / -1;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ims-list__search-form input {
+  min-width: 0;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-3);
+  background: var(--m-surface-primary);
+  color: var(--m-text-primary);
+  font: inherit;
+}
+
+.ims-list__search-form button {
+  border: 0;
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+  font-weight: 800;
+}
+
+.ims-list__clear-search {
+  align-self: center;
 }
 
 .ims-list__results {
@@ -261,6 +370,14 @@ function priorityText(priorityLabel: string | null): string {
 }
 
 @media (max-width: 43.99rem) {
+  .ims-list__search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .ims-list__clear-search {
+    justify-self: start;
+  }
+
   .ims-list__table-wrap {
     border: 0;
     background: transparent;

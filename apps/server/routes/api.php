@@ -40,6 +40,9 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/create-incident', [IncidentCommandController::class, 'create'])
         ->name('api.commands.create-incident');
 
+    Route::post('/commands/update-incident', [IncidentCommandController::class, 'update'])
+        ->name('api.commands.update-incident');
+
     Route::post('/commands/append-incident-note', [IncidentCommandController::class, 'appendNote'])
         ->name('api.commands.append-incident-note');
 

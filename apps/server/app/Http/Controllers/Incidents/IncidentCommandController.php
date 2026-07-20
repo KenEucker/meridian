@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Incidents;
 
 use App\Exceptions\IncidentCreationException;
 use App\Exceptions\IncidentTimelineException;
+use App\Exceptions\IncidentUpdateException;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
@@ -12,6 +13,8 @@ use App\Services\Incidents\IncidentCreationAccess;
 use App\Services\Incidents\IncidentCreationService;
 use App\Services\Incidents\IncidentNoteAccess;
 use App\Services\Incidents\IncidentTimelineService;
+use App\Services\Incidents\IncidentUpdateAccess;
+use App\Services\Incidents\IncidentUpdateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,8 +22,9 @@ use Illuminate\Http\Request;
  * Online-only IMS command transport.
  *
  * Data/API section 5.2 documents POST /api/commands/create-incident and
- * POST /api/commands/append-incident-note. Technical spec 19.2 requires active
- * server connection for incident mutations.
+ * POST /api/commands/append-incident-note. M11.7 adds
+ * POST /api/commands/update-incident for online autosaved current-field edits.
+ * Technical spec 19.2 requires active server connection for incident mutations.
  */
 final class IncidentCommandController extends Controller
 {
@@ -73,6 +77,74 @@ final class IncidentCommandController extends Controller
             'created_by_user_id' => $incident->created_by_user_id,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
         ], 201);
+    }
+
+    public function update(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentUpdateService $incidents,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+            'title' => ['sometimes', 'required', 'string'],
+            'status' => ['sometimes', 'required', 'string'],
+            'started_at' => ['sometimes', 'required', 'date'],
+            'location_name' => ['sometimes', 'nullable', 'string'],
+            'location_address' => ['sometimes', 'nullable', 'string'],
+            'location_details' => ['sometimes', 'nullable', 'string'],
+            'camp_id' => ['sometimes', 'nullable', 'uuid'],
+            'map_location_id' => ['sometimes', 'nullable', 'uuid'],
+        ], [
+            'title.required' => 'Incident title is required.',
+        ]);
+
+        $event = Event::query()->findOrFail((string) $validated['event_id']);
+        $incident = Incident::query()->findOrFail((string) $validated['incident_id']);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canUpdateIncident($user, $event)) {
+            return response()->json([
+                'message' => 'Only IC operators and IC leads for this event may edit incidents.',
+            ], 403);
+        }
+
+        unset($validated['event_id'], $validated['incident_id']);
+
+        try {
+            $incident = $incidents->update(
+                incident: $incident,
+                actor: $user,
+                attributes: $validated,
+                sourceContext: AuditEvent::SOURCE_API,
+            );
+        } catch (IncidentUpdateException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'id' => $incident->id,
+            'event_id' => $incident->event_id,
+            'incident_number' => $incident->incident_number,
+            'status' => $incident->status,
+            'started_at' => optional($incident->started_at)?->toIso8601String(),
+            'title' => $incident->title,
+            'location_name' => $incident->location_name,
+            'location_address' => $incident->location_address,
+            'location_details' => $incident->location_details,
+            'camp_id' => $incident->camp_id,
+            'map_location_id' => $incident->map_location_id,
+            'created_by_user_id' => $incident->created_by_user_id,
+            'created_at' => optional($incident->created_at)?->toIso8601String(),
+            'updated_at' => optional($incident->updated_at)?->toIso8601String(),
+            'closed_at' => optional($incident->closed_at)?->toIso8601String(),
+        ]);
     }
 
     public function appendNote(

@@ -5,10 +5,13 @@ import { RouterLink, useRoute } from "vue-router";
 import {
   appendIncidentNoteForSession,
   canAppendIncidentNote,
+  canEditIncident,
   findIncidentForSession,
+  formatIncidentDateTime,
   hasIncidentCommandAccess,
   resolveIncidentSession,
   statusLabel,
+  type IncidentTagChip,
   type IncidentTimelineEntry,
   type NameReferenceChip,
 } from "@/ims/incidentReadModel";
@@ -17,6 +20,7 @@ const route = useRoute();
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
 const canAppendNote = computed(() => canAppendIncidentNote(session.value));
+const canEdit = computed(() => canEditIncident(session.value));
 const timelineRevision = ref(0);
 const noteBody = ref("");
 const noteError = ref<string | null>(null);
@@ -33,16 +37,66 @@ function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
 }
 
-function timelineEntryLabel(entry: IncidentTimelineEntry): string {
-  return entry.entryType === "incident_opened"
-    ? "Incident opened"
-    : "Operational note";
+function timelineEntryBody(entry: IncidentTimelineEntry): string | null {
+  if (entry.body) {
+    return entry.body;
+  }
+
+  if (entry.entryType === "incident_opened") {
+    return "Incident opened.";
+  }
+
+  if (entry.entryType !== "incident_field_updated") {
+    return null;
+  }
+
+  const newValue = entry.newValue ?? {};
+
+  return Object.keys(newValue)
+    .map((field) => {
+      const label = fieldLabel(field).toLowerCase();
+      const value = formatTimelineChangedValue(field, newValue[field] ?? null);
+
+      return `Changed ${label}: ${value}`;
+    })
+    .join("\n");
 }
 
-function chipSearchTarget(chip: NameReferenceChip) {
+function fieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    title: "Title",
+    status: "State",
+    startedAt: "Started",
+    locationName: "Location name",
+    locationAddress: "Location address",
+    locationDetails: "Location details",
+  };
+
+  return labels[field] ?? field;
+}
+
+function formatTimelineChangedValue(
+  field: string,
+  value: string | null,
+): string {
+  if (value === null || value === "") {
+    return "not set";
+  }
+
+  return field === "status" ? statusLabel(value as Parameters<typeof statusLabel>[0]) : value;
+}
+
+function nameReferenceSearchTarget(chip: NameReferenceChip) {
   return {
     name: "ims.incidents.index",
     query: { search: chip.token },
+  };
+}
+
+function tagSearchTarget(chip: IncidentTagChip) {
+  return {
+    name: "ims.incidents.index",
+    query: { search: `#${chip.tag}` },
   };
 }
 
@@ -91,6 +145,13 @@ function onAppendNote(): void {
         <h1 id="ims-detail-heading" class="ims-detail__heading">
           {{ incident.title }}
         </h1>
+        <RouterLink
+          v-if="canEdit"
+          class="ims-detail__edit"
+          :to="{ name: 'ims.incidents.edit', params: { incidentId: incident.id } }"
+        >
+          Edit incident
+        </RouterLink>
         <dl class="ims-detail__status-row">
           <div>
             <dt>State</dt>
@@ -102,23 +163,35 @@ function onAppendNote(): void {
           </div>
           <div>
             <dt>Started</dt>
-            <dd>{{ incident.startedAt }}</dd>
+            <dd>{{ formatIncidentDateTime(incident.startedAt) }}</dd>
           </div>
           <div>
             <dt>Last update</dt>
-            <dd>{{ incident.updatedAt }}</dd>
+            <dd>{{ formatIncidentDateTime(incident.updatedAt) }}</dd>
           </div>
         </dl>
         <nav
-          v-if="incident.nameReferenceChips.length > 0"
-          class="ims-detail__name-references"
-          aria-label="Incident Name References"
+          v-if="
+            incident.tagChips.length > 0 ||
+            incident.nameReferenceChips.length > 0
+          "
+          class="ims-detail__chips"
+          aria-label="Incident metadata chips"
         >
           <RouterLink
+            v-for="chip in incident.tagChips"
+            :key="`tag-${chip.normalizedTag}`"
+            class="ims-detail__chip ims-detail__chip--tag"
+            :to="tagSearchTarget(chip)"
+            :aria-label="`Search incidents for tag ${chip.tag}`"
+          >
+            #{{ chip.tag }}
+          </RouterLink>
+          <RouterLink
             v-for="chip in incident.nameReferenceChips"
-            :key="chip.normalizedToken"
-            class="ims-detail__name-reference"
-            :to="chipSearchTarget(chip)"
+            :key="`name-${chip.normalizedToken}`"
+            class="ims-detail__chip ims-detail__chip--name-reference"
+            :to="nameReferenceSearchTarget(chip)"
             :aria-label="`Search incidents for Name Reference ${chip.token}`"
           >
             @{{ chip.token }}
@@ -164,10 +237,15 @@ function onAppendNote(): void {
           <h2 id="ims-timeline-heading">Timeline</h2>
           <ol class="ims-detail__timeline">
             <li v-for="entry in timelineEntries" :key="entry.id">
-              <span>{{ timelineEntryLabel(entry) }}</span>
-              <p v-if="entry.body">{{ entry.body }}</p>
-              <time :datetime="entry.createdAt">{{ entry.createdAt }}</time>
-              <small v-if="entry.actorName">{{ entry.actorName }}</small>
+              <div class="ims-detail__timeline-meta">
+                <time :datetime="entry.createdAt">
+                  {{ formatIncidentDateTime(entry.createdAt) }}
+                </time>
+                <strong v-if="entry.actorName">{{ entry.actorName }}</strong>
+              </div>
+              <p v-if="timelineEntryBody(entry)">
+                {{ timelineEntryBody(entry) }}
+              </p>
             </li>
           </ol>
 
@@ -204,15 +282,32 @@ function onAppendNote(): void {
 
 <style scoped>
 .ims-detail {
-  width: min(100%, 72rem);
+  box-sizing: border-box;
+  width: min(calc(100% - var(--m-space-8)), 72rem);
+  margin-inline: auto;
   display: grid;
-  gap: var(--m-space-5);
+  gap: var(--m-space-4);
+}
+
+.ims-detail *,
+.ims-detail *::before,
+.ims-detail *::after {
+  box-sizing: border-box;
 }
 
 .ims-detail__back,
-.ims-detail__restricted a {
+.ims-detail__restricted a,
+.ims-detail__edit {
   color: var(--m-action-secondary-bg);
   font-weight: 700;
+}
+
+.ims-detail__edit {
+  justify-self: start;
+  border: 1px solid var(--m-action-secondary-bg);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  text-decoration: none;
 }
 
 .ims-detail__restricted,
@@ -222,7 +317,7 @@ function onAppendNote(): void {
 
 .ims-detail__header {
   display: grid;
-  gap: var(--m-space-3);
+  gap: var(--m-space-4);
 }
 
 .ims-detail__number,
@@ -238,19 +333,20 @@ function onAppendNote(): void {
 
 .ims-detail__heading {
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-xl);
+  font-size: clamp(var(--m-text-lg), 5vw, var(--m-text-xl));
+  line-height: 1.15;
 }
 
 .ims-detail__status-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--m-space-3);
   margin: 0;
 }
 
 .ims-detail__status-row div,
 .ims-detail__panel {
-  padding: var(--m-space-4);
+  padding: var(--m-space-5);
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-raised);
@@ -266,30 +362,45 @@ function onAppendNote(): void {
 .ims-detail__status-row dd,
 .ims-detail__definition dd {
   margin: var(--m-space-1) 0 0;
+  overflow-wrap: anywhere;
 }
 
-.ims-detail__name-references {
+.ims-detail__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--m-space-2);
   align-items: center;
 }
 
-.ims-detail__name-reference {
+.ims-detail__chip {
   display: inline-flex;
   min-height: 2rem;
   align-items: center;
-  border: 1px solid var(--m-action-secondary-bg);
   border-radius: var(--m-radius-sm);
   padding: 0 var(--m-space-2);
-  background: var(--m-surface-primary);
-  color: var(--m-action-secondary-bg);
   font-size: var(--m-text-sm);
   font-weight: 800;
   text-decoration: none;
 }
 
-.ims-detail__name-reference:focus-visible {
+.ims-detail__chip--tag {
+  border: 1px solid var(--m-border-strong);
+  background: var(--m-status-neutral-bg, var(--m-surface-primary));
+  color: var(--m-text-secondary);
+}
+
+.ims-detail__chip--name-reference {
+  border: 1px solid var(--m-action-secondary-bg);
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
+}
+
+.ims-detail__chip:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.ims-detail__edit:focus-visible {
   outline: 3px solid var(--m-focus-ring);
   outline-offset: 2px;
 }
@@ -312,40 +423,54 @@ function onAppendNote(): void {
 }
 
 .ims-detail__timeline {
+  position: relative;
+  display: grid;
+  gap: var(--m-space-4);
   margin: 0;
-  padding-left: var(--m-space-5);
+  padding: 0 0 0 var(--m-space-5);
+  list-style: none;
+}
+
+.ims-detail__timeline::before {
+  position: absolute;
+  inset: 0 auto 0 var(--m-space-2);
+  width: 2px;
+  background: var(--m-border-default);
+  content: "";
 }
 
 .ims-detail__timeline li {
-  margin-bottom: var(--m-space-2);
+  position: relative;
+  display: grid;
+  gap: var(--m-space-2);
+  min-width: 0;
+  padding: 0 0 var(--m-space-1) var(--m-space-2);
 }
 
-.ims-detail__timeline span {
-  display: block;
-  font-weight: 700;
-}
-
-.ims-detail__timeline time {
-  display: block;
+.ims-detail__timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
 }
 
-.ims-detail__timeline p {
-  margin: var(--m-space-1) 0;
-  white-space: pre-wrap;
+.ims-detail__timeline-meta strong {
+  color: var(--m-text-primary);
+  font-weight: 800;
 }
 
-.ims-detail__timeline small {
-  display: block;
-  color: var(--m-text-muted);
+.ims-detail__timeline p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .ims-detail__note-form {
   display: grid;
-  gap: var(--m-space-2);
-  margin-top: var(--m-space-4);
-  padding-top: var(--m-space-4);
+  gap: var(--m-space-3);
+  margin-top: var(--m-space-5);
+  padding-top: var(--m-space-5);
   border-top: 1px solid var(--m-border-default);
 }
 
@@ -391,6 +516,34 @@ function onAppendNote(): void {
 @media (min-width: 56rem) {
   .ims-detail__layout {
     grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.8fr);
+  }
+}
+
+@media (max-width: 48rem) {
+  .ims-detail {
+    width: min(calc(100% - var(--m-space-4)), 72rem);
+    gap: var(--m-space-4);
+  }
+
+  .ims-detail__header {
+    gap: var(--m-space-3);
+  }
+
+  .ims-detail__status-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ims-detail__status-row div,
+  .ims-detail__panel {
+    padding: var(--m-space-4);
+  }
+
+  .ims-detail__timeline {
+    padding-left: var(--m-space-4);
+  }
+
+  .ims-detail__timeline::before {
+    left: var(--m-space-1);
   }
 }
 </style>

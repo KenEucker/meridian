@@ -59,6 +59,7 @@ class PermissionCatalogTest extends TestCase
         $this->assertSame([
             'incidents.view',
             'incidents.create',
+            'incidents.update',
             'incidents.add_note',
             'incidents.close',
             'incidents.reopen',
@@ -71,6 +72,7 @@ class PermissionCatalogTest extends TestCase
         $this->assertSame([
             'incidents.view',
             'incidents.create',
+            'incidents.update',
             'incidents.add_note',
             'incidents.close',
             'incidents.reopen',
@@ -98,6 +100,7 @@ class PermissionCatalogTest extends TestCase
             // access to all incidents or all field reports.
             $this->assertNotContains('incidents.view', $permissions);
             $this->assertNotContains('incidents.create', $permissions);
+            $this->assertNotContains('incidents.update', $permissions);
             $this->assertNotContains('field_reports.view_event', $permissions);
         }
     }

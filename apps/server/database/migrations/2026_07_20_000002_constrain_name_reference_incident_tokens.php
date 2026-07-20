@@ -11,6 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasColumn('name_reference_tokens', 'incident_id')) {
+            Schema::table('name_reference_tokens', function (Blueprint $table) {
+                $table->uuid('incident_id')->nullable();
+                $table->index(['normalized_token', 'incident_id']);
+            });
+        }
+
         Schema::table('name_reference_tokens', function (Blueprint $table) {
             $table->foreign('incident_id')
                 ->references('id')
