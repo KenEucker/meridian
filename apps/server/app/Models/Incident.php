@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RuntimeException;
 
@@ -16,8 +17,8 @@ use RuntimeException;
  * spec section 19; data/API specification sections 4.4 and 10.16).
  *
  * Incidents are event-specific operational records with server-assigned IMS
- * numbers. The body/history remains append-only through later timeline-entry
- * work; title/status edits stay allowed regardless of state in later M11 tasks.
+ * numbers. The body/history is append-only through incident timeline entries;
+ * title/status edits stay allowed regardless of state in later M11 tasks.
  */
 class Incident extends Model
 {
@@ -103,6 +104,13 @@ class Incident extends Model
     {
         return $this->morphMany(Attachment::class, 'attachable')
             ->orderBy('created_at');
+    }
+
+    public function timelineEntries(): HasMany
+    {
+        return $this->hasMany(IncidentTimelineEntry::class)
+            ->orderBy('created_at')
+            ->orderBy('id');
     }
 
     /**

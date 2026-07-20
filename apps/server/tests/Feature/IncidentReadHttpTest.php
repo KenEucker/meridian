@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentTimelineEntry;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
@@ -65,6 +66,18 @@ class IncidentReadHttpTest extends TestCase
             'location_details' => 'North side of entry.',
             'created_by_user_id' => $actor->id,
         ]);
+        $opened = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_OPENED,
+            'body' => null,
+            'created_at' => Carbon::parse('2027-07-04T20:18:00Z'),
+        ]);
+        $note = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+            'body' => 'Radio relay established.',
+            'created_at' => Carbon::parse('2027-07-04T20:30:00Z'),
+        ]);
 
         $this->actingAs($actor)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
@@ -77,7 +90,13 @@ class IncidentReadHttpTest extends TestCase
             ->assertJsonPath('incident.location_name', 'Gate A')
             ->assertJsonPath('incident.location_details', 'North side of entry.')
             ->assertJsonPath('incident.created_by_user_id', $actor->id)
-            ->assertJsonPath('incident.created_by_name', $actor->name);
+            ->assertJsonPath('incident.created_by_name', $actor->name)
+            ->assertJsonPath('incident.timeline_entries.0.id', $opened->id)
+            ->assertJsonPath('incident.timeline_entries.0.entry_type', IncidentTimelineEntry::TYPE_INCIDENT_OPENED)
+            ->assertJsonPath('incident.timeline_entries.0.actor_name', $actor->name)
+            ->assertJsonPath('incident.timeline_entries.1.id', $note->id)
+            ->assertJsonPath('incident.timeline_entries.1.entry_type', IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE)
+            ->assertJsonPath('incident.timeline_entries.1.body', 'Radio relay established.');
 
         $audit = AuditEvent::query()->where('action', 'incident.viewed')->sole();
         $this->assertSame($incident->id, $audit->entity_id);

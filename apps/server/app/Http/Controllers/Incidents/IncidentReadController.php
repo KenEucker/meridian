@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
 use App\Services\Incidents\IncidentReadAccess;
 use Illuminate\Http\JsonResponse;
@@ -62,7 +63,7 @@ final class IncidentReadController extends Controller
             return $this->restrictedResponse();
         }
 
-        $incident->loadMissing('createdByUser');
+        $incident->loadMissing(['createdByUser', 'timelineEntries.actorUser']);
 
         $audit->recordForEntity(
             entity: $incident,
@@ -110,6 +111,32 @@ final class IncidentReadController extends Controller
             'created_at' => optional($incident->created_at)?->toIso8601String(),
             'updated_at' => optional($incident->updated_at)?->toIso8601String(),
             'closed_at' => optional($incident->closed_at)?->toIso8601String(),
+            'timeline_entries' => $incident->relationLoaded('timelineEntries')
+                ? $incident->timelineEntries->map(
+                    fn (IncidentTimelineEntry $entry): array => $this->timelineEntryPayload($entry),
+                )->values()
+                : [],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function timelineEntryPayload(IncidentTimelineEntry $entry): array
+    {
+        return [
+            'id' => $entry->id,
+            'incident_id' => $entry->incident_id,
+            'actor_user_id' => $entry->actor_user_id,
+            'actor_name' => $entry->actorUser?->name,
+            'entry_type' => $entry->entry_type,
+            'body' => $entry->body,
+            'previous_value' => $entry->previous_value,
+            'new_value' => $entry->new_value,
+            'reason' => $entry->reason,
+            'created_at' => optional($entry->created_at)?->toIso8601String(),
+            'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
+            'stricken_reason' => $entry->stricken_reason,
         ];
     }
 

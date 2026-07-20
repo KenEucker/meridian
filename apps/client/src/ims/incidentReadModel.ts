@@ -15,6 +15,15 @@ export interface IncidentSessionContext {
   readonly roleLabel: string;
 }
 
+export interface IncidentTimelineEntry {
+  readonly id: string;
+  readonly incidentId: string;
+  readonly actorName: string | null;
+  readonly entryType: "incident_opened" | "operational_note";
+  readonly body: string | null;
+  readonly createdAt: string;
+}
+
 export interface ImsIncident {
   readonly id: string;
   readonly eventId: string;
@@ -29,6 +38,7 @@ export interface ImsIncident {
   readonly createdByName: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly timelineEntries: readonly IncidentTimelineEntry[];
 }
 
 export const LOCAL_IMS_EVENT_ID = "event-ims-local";
@@ -63,6 +73,24 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     createdByName: "Ingrid ICLead",
     createdAt: "2027-07-04T20:18:00.000Z",
     updatedAt: "2027-07-04T20:32:00.000Z",
+    timelineEntries: Object.freeze([
+      Object.freeze({
+        id: "timeline-gate-opened",
+        incidentId: "incident-gate-medical",
+        actorName: "Ingrid ICLead",
+        entryType: "incident_opened",
+        body: null,
+        createdAt: "2027-07-04T20:18:00.000Z",
+      }),
+      Object.freeze({
+        id: "timeline-gate-note",
+        incidentId: "incident-gate-medical",
+        actorName: "Omar ICOperator",
+        entryType: "operational_note",
+        body: "Responder is on scene and monitoring breathing.",
+        createdAt: "2027-07-04T20:32:00.000Z",
+      }),
+    ]),
   }),
   Object.freeze({
     id: "incident-radio-check",
@@ -78,10 +106,32 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     createdByName: "Omar ICOperator",
     createdAt: "2027-07-04T19:45:00.000Z",
     updatedAt: "2027-07-04T19:56:00.000Z",
+    timelineEntries: Object.freeze([
+      Object.freeze({
+        id: "timeline-radio-opened",
+        incidentId: "incident-radio-check",
+        actorName: "Omar ICOperator",
+        entryType: "incident_opened",
+        body: null,
+        createdAt: "2027-07-04T19:45:00.000Z",
+      }),
+      Object.freeze({
+        id: "timeline-radio-note",
+        incidentId: "incident-radio-check",
+        actorName: "Omar ICOperator",
+        entryType: "operational_note",
+        body: "Monitoring signal reports from the west side.",
+        createdAt: "2027-07-04T19:56:00.000Z",
+      }),
+    ]),
   }),
 ]);
 
 let session: IncidentSessionContext | null = null;
+let noteSequence = 0;
+
+const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
+const localIncidentUpdatedAt = new Map<string, string>();
 
 export function installDevelopmentIncidentSession(): void {
   session = LOCAL_SESSION;
@@ -93,6 +143,9 @@ export function installIncidentSession(context: IncidentSessionContext): void {
 
 export function clearIncidentSession(): void {
   session = null;
+  localTimelineEntries.clear();
+  localIncidentUpdatedAt.clear();
+  noteSequence = 0;
 }
 
 export function resolveIncidentSession(): IncidentSessionContext | null {
@@ -105,6 +158,12 @@ export function hasIncidentCommandAccess(
   return context !== null && IC_ROLES.includes(context.role);
 }
 
+export function canAppendIncidentNote(
+  context: IncidentSessionContext | null,
+): boolean {
+  return context?.role === "ic_operator" || context?.role === "ic_lead";
+}
+
 export function listIncidentsForSession(
   context: IncidentSessionContext | null,
 ): ImsIncident[] {
@@ -114,6 +173,7 @@ export function listIncidentsForSession(
 
   return [...LOCAL_INCIDENTS]
     .filter((incident) => incident.eventId === context?.eventId)
+    .map((incident) => incidentWithLocalTimeline(incident))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -128,6 +188,45 @@ export function findIncidentForSession(
   );
 }
 
+export function appendIncidentNoteForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  body: string,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canAppendIncidentNote(context)) {
+    throw new Error("Only IC operators and IC leads may add incident notes.");
+  }
+
+  const trimmedBody = body.trim();
+  if (trimmedBody.length === 0) {
+    throw new Error("Incident note body is required.");
+  }
+
+  const incident = findIncidentForSession(context, incidentId);
+  if (!incident) {
+    throw new Error("Incident not found for this event.");
+  }
+
+  const timestamp = createdAt.toISOString();
+  const entry: IncidentTimelineEntry = Object.freeze({
+    id: `local-incident-note-${++noteSequence}`,
+    incidentId: incident.id,
+    actorName: context?.roleLabel ?? null,
+    entryType: "operational_note",
+    body: trimmedBody,
+    createdAt: timestamp,
+  });
+
+  localTimelineEntries.set(incident.id, [
+    ...(localTimelineEntries.get(incident.id) ?? []),
+    entry,
+  ]);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+
+  return findIncidentForSession(context, incidentId) ?? incident;
+}
+
 export function statusLabel(status: ImsIncident["status"]): string {
   return {
     open: "Open",
@@ -136,4 +235,17 @@ export function statusLabel(status: ImsIncident["status"]): string {
     on_hold: "On Hold",
     closed: "Closed",
   }[status];
+}
+
+function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
+  const timelineEntries = [
+    ...incident.timelineEntries,
+    ...(localTimelineEntries.get(incident.id) ?? []),
+  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+
+  return Object.freeze({
+    ...incident,
+    updatedAt: localIncidentUpdatedAt.get(incident.id) ?? incident.updatedAt,
+    timelineEntries: Object.freeze(timelineEntries),
+  });
 }
