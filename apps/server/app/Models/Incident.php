@@ -113,6 +113,13 @@ class Incident extends Model
             ->orderBy('id');
     }
 
+    public function fieldReportLinks(): HasMany
+    {
+        return $this->hasMany(IncidentFieldReport::class)
+            ->orderBy('linked_at')
+            ->orderBy('id');
+    }
+
     /**
      * Scope incidents to a single event (INC-001).
      *

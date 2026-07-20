@@ -24,6 +24,11 @@ export interface IncidentTimelineEntry {
   readonly createdAt: string;
 }
 
+export interface NameReferenceChip {
+  readonly token: string;
+  readonly normalizedToken: string;
+}
+
 export interface ImsIncident {
   readonly id: string;
   readonly eventId: string;
@@ -38,6 +43,7 @@ export interface ImsIncident {
   readonly createdByName: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly nameReferenceChips: readonly NameReferenceChip[];
   readonly timelineEntries: readonly IncidentTimelineEntry[];
 }
 
@@ -73,6 +79,16 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     createdByName: "Ingrid ICLead",
     createdAt: "2027-07-04T20:18:00.000Z",
     updatedAt: "2027-07-04T20:32:00.000Z",
+    nameReferenceChips: Object.freeze([
+      Object.freeze({
+        token: "Blue-Hat",
+        normalizedToken: "blue-hat",
+      }),
+      Object.freeze({
+        token: "Gate_A",
+        normalizedToken: "gate_a",
+      }),
+    ]),
     timelineEntries: Object.freeze([
       Object.freeze({
         id: "timeline-gate-opened",
@@ -106,6 +122,7 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     createdByName: "Omar ICOperator",
     createdAt: "2027-07-04T19:45:00.000Z",
     updatedAt: "2027-07-04T19:56:00.000Z",
+    nameReferenceChips: Object.freeze([]),
     timelineEntries: Object.freeze([
       Object.freeze({
         id: "timeline-radio-opened",
@@ -166,14 +183,18 @@ export function canAppendIncidentNote(
 
 export function listIncidentsForSession(
   context: IncidentSessionContext | null,
+  search = "",
 ): ImsIncident[] {
   if (!hasIncidentCommandAccess(context)) {
     return [];
   }
 
+  const normalizedSearch = normalizeNameReferenceSearch(search);
+
   return [...LOCAL_INCIDENTS]
     .filter((incident) => incident.eventId === context?.eventId)
     .map((incident) => incidentWithLocalTimeline(incident))
+    .filter((incident) => incidentMatchesNameReferenceSearch(incident, normalizedSearch))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -246,6 +267,62 @@ function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
   return Object.freeze({
     ...incident,
     updatedAt: localIncidentUpdatedAt.get(incident.id) ?? incident.updatedAt,
+    nameReferenceChips: Object.freeze(
+      mergeNameReferenceChips([
+        ...incident.nameReferenceChips,
+        ...timelineEntries.flatMap((entry) => parseNameReferences(entry.body ?? "")),
+      ]),
+    ),
     timelineEntries: Object.freeze(timelineEntries),
   });
+}
+
+function normalizeNameReferenceSearch(search: string): string {
+  const trimmed = search.trim();
+
+  return trimmed.startsWith("@")
+    ? trimmed.slice(1).toLowerCase()
+    : trimmed.toLowerCase();
+}
+
+function incidentMatchesNameReferenceSearch(
+  incident: ImsIncident,
+  normalizedSearch: string,
+): boolean {
+  if (normalizedSearch.length === 0) {
+    return true;
+  }
+
+  return incident.nameReferenceChips.some(
+    (chip) => chip.normalizedToken === normalizedSearch,
+  );
+}
+
+function parseNameReferences(text: string): NameReferenceChip[] {
+  const matches = text.matchAll(/@([A-Za-z0-9_-]+)/gu);
+
+  return mergeNameReferenceChips(
+    [...matches].map((match) => ({
+      token: match[1] ?? "",
+      normalizedToken: (match[1] ?? "").toLowerCase(),
+    })),
+  );
+}
+
+function mergeNameReferenceChips(
+  chips: readonly NameReferenceChip[],
+): NameReferenceChip[] {
+  const byNormalizedToken = new Map<string, NameReferenceChip>();
+
+  for (const chip of chips) {
+    if (chip.normalizedToken.length === 0) {
+      continue;
+    }
+
+    if (!byNormalizedToken.has(chip.normalizedToken)) {
+      byNormalizedToken.set(chip.normalizedToken, chip);
+    }
+  }
+
+  return [...byNormalizedToken.values()];
 }

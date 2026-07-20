@@ -110,6 +110,8 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("On Scene");
     expect(wrapper.text()).toContain("Serious");
     expect(wrapper.text()).toContain("Gate A");
+    expect(wrapper.text()).toContain("@Blue-Hat");
+    expect(wrapper.text()).toContain("@Gate_A");
     expect(wrapper.text()).toContain("Responder staged near the shade structure.");
     expect(wrapper.text()).toContain("Incident opened");
     expect(wrapper.text()).toContain("Responder is on scene and monitoring breathing.");
@@ -117,6 +119,21 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Add note");
     expect(wrapper.text()).not.toContain("Save");
     expect(wrapper.text()).not.toContain("Edit");
+    expect(
+      wrapper.get(".ims-detail__name-reference").attributes("href"),
+    ).toBe("/ims/incidents?search=Blue-Hat");
+  });
+
+  it("filters the incident list from a Name Reference chip search", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents?search=Blue-Hat");
+
+    expect(wrapper.text()).toContain("Search: Blue-Hat");
+    expect(wrapper.text()).toContain("INC-2027-000042");
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("INC-2027-000041");
+    expect(wrapper.text()).not.toContain("Radio relay check");
   });
 
   it("lets IC operators append a plain-text operational timeline note", async () => {
@@ -129,9 +146,26 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
 
     expect(wrapper.text()).toContain("Radio relay confirmed.");
     expect(wrapper.text()).toContain("Incident Command Operator");
+    expect(wrapper.text()).not.toContain("Search: Radio relay confirmed.");
     expect(wrapper.get<HTMLTextAreaElement>("#ims-note-body").element.value).toBe(
       "",
     );
+  });
+
+  it("adds Name Reference chips for locally appended timeline notes", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-radio-check");
+
+    expect(wrapper.text()).not.toContain("@RadioLead");
+
+    await wrapper.get("#ims-note-body").setValue("Follow up with @RadioLead.");
+    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+
+    expect(wrapper.text()).toContain("@RadioLead");
+    expect(
+      wrapper.get(".ims-detail__name-reference").attributes("href"),
+    ).toBe("/ims/incidents?search=RadioLead");
   });
 
   it("keeps blank timeline notes from being appended in the operator surface", async () => {
@@ -153,6 +187,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Incident Command access required");
     expect(wrapper.text()).not.toContain("Medical assist near Gate A");
     expect(wrapper.text()).not.toContain("INC-2027-000042");
+    expect(wrapper.text()).not.toContain("@Blue-Hat");
   });
 
   it("shows an event-scoped missing state for unknown detail IDs", async () => {

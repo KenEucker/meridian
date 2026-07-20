@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Rebuildable derived Name Reference token extracted from Field Report or
- * append source text (NR-001 through NR-007, NR-011 through NR-014).
+ * Rebuildable derived Name Reference token extracted from Field Report,
+ * append, or Incident timeline source text (NR-001 through NR-014).
  *
  * This is a search/display artifact, not a person, alias, identity, entity,
  * suspect, volunteer profile, or independent source of truth. Source text on
@@ -19,6 +19,8 @@ class NameReferenceToken extends Model
     public const SOURCE_TYPE_FIELD_REPORT = 'field_report';
 
     public const SOURCE_TYPE_FIELD_REPORT_APPEND = 'field_report_append';
+
+    public const SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY = 'incident_timeline_entry';
 
     use HasUuids;
 
@@ -38,6 +40,7 @@ class NameReferenceToken extends Model
         'source_type',
         'source_id',
         'field_report_id',
+        'incident_id',
         'token',
         'normalized_token',
     ];
@@ -60,11 +63,17 @@ class NameReferenceToken extends Model
         return [
             self::SOURCE_TYPE_FIELD_REPORT,
             self::SOURCE_TYPE_FIELD_REPORT_APPEND,
+            self::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
         ];
     }
 
     public function fieldReport(): BelongsTo
     {
         return $this->belongsTo(FieldReport::class);
+    }
+
+    public function incident(): BelongsTo
+    {
+        return $this->belongsTo(Incident::class);
     }
 }

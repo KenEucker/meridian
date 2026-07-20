@@ -41,6 +41,7 @@ class NameReferenceFieldReportTest extends TestCase
             'source_type',
             'source_id',
             'field_report_id',
+            'incident_id',
             'token',
             'normalized_token',
             'created_at',
