@@ -526,20 +526,11 @@ function onAppendNote(): void {
 }
 
 .ims-detail__timeline {
-  position: relative;
   display: grid;
   gap: var(--m-space-4);
   margin: 0;
-  padding: 0 0 0 var(--m-space-5);
+  padding: 0 0 0 var(--m-space-6);
   list-style: none;
-}
-
-.ims-detail__timeline::before {
-  position: absolute;
-  inset: 0 auto 0 var(--m-space-2);
-  width: 2px;
-  background: var(--m-border-default);
-  content: "";
 }
 
 .ims-detail__timeline li {
@@ -547,7 +538,16 @@ function onAppendNote(): void {
   display: grid;
   gap: var(--m-space-2);
   min-width: 0;
-  padding: 0 0 var(--m-space-1) var(--m-space-2);
+  padding: var(--m-space-1) 0 var(--m-space-2) var(--m-space-4);
+}
+
+.ims-detail__timeline li::before {
+  position: absolute;
+  inset: var(--m-space-1) auto var(--m-space-1) 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--m-border-strong);
+  content: "";
 }
 
 .ims-detail__timeline-meta {
@@ -642,11 +642,7 @@ function onAppendNote(): void {
   }
 
   .ims-detail__timeline {
-    padding-left: var(--m-space-4);
-  }
-
-  .ims-detail__timeline::before {
-    left: var(--m-space-1);
+    padding-left: var(--m-space-5);
   }
 }
 </style>

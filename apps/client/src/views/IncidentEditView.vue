@@ -1155,20 +1155,11 @@ function onAppendNote(): void {
 }
 
 .ims-edit__timeline ol {
-  position: relative;
   display: grid;
   gap: var(--m-space-3);
   margin: 0;
-  padding: 0 var(--m-space-3) 0 var(--m-space-5);
+  padding: 0 var(--m-space-3) 0 var(--m-space-6);
   list-style: none;
-}
-
-.ims-edit__timeline ol::before {
-  position: absolute;
-  inset: 0 auto 0 var(--m-space-2);
-  width: 2px;
-  background: var(--m-border-default);
-  content: "";
 }
 
 .ims-edit__timeline li {
@@ -1177,7 +1168,16 @@ function onAppendNote(): void {
   gap: var(--m-space-2);
   width: 100%;
   min-width: 0;
-  padding: 0 0 var(--m-space-1) var(--m-space-2);
+  padding: var(--m-space-1) 0 var(--m-space-2) var(--m-space-4);
+}
+
+.ims-edit__timeline li::before {
+  position: absolute;
+  inset: var(--m-space-1) auto var(--m-space-1) 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--m-border-strong);
+  content: "";
 }
 
 .ims-edit__timeline-meta {
@@ -1245,11 +1245,7 @@ function onAppendNote(): void {
   }
 
   .ims-edit__timeline ol {
-    padding-left: var(--m-space-4);
-  }
-
-  .ims-edit__timeline ol::before {
-    left: var(--m-space-1);
+    padding-left: var(--m-space-5);
   }
 }
 
