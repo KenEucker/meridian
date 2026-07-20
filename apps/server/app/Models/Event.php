@@ -140,6 +140,11 @@ class Event extends Model
         return $this->hasMany(FieldReport::class);
     }
 
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(Incident::class);
+    }
+
     public function hoursWorked(): HasMany
     {
         return $this->hasMany(HoursWorked::class);
