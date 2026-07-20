@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Attachment;
+use App\Models\Event;
+use App\Models\Incident;
 use App\Support\LocalFieldFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -96,6 +98,28 @@ class FieldReportCommandHttpTest extends TestCase
         ], [
             'Authorization' => 'Bearer wrong-token',
         ])->assertUnauthorized();
+    }
+
+    public function test_local_field_fixture_account_can_create_incidents_for_the_fixture_event(): void
+    {
+        $event = Event::query()->findOrFail(LocalFieldFixture::EVENT_ID);
+
+        $this->assertSame(LocalFieldFixture::DEPARTMENT_ID, $event->ic_department_id);
+
+        $this->postJson('/api/commands/create-incident', [
+            'event_id' => LocalFieldFixture::EVENT_ID,
+            'title' => 'Local fixture incident',
+            'started_at' => '2027-07-04T14:00:00Z',
+            'location_name' => 'Ranger HQ',
+        ], [
+            'Authorization' => 'Bearer test-local-field-token',
+        ])->assertCreated()
+            ->assertJsonPath('incident_number', 'INC-2027-000001')
+            ->assertJsonPath('title', 'Local fixture incident')
+            ->assertJsonPath('created_by_user_id', LocalFieldFixture::USER_ID);
+
+        $incident = Incident::query()->firstOrFail();
+        $this->assertSame(LocalFieldFixture::EVENT_ID, $incident->event_id);
     }
 
     private function createJpegBytes(int $width, int $height): string

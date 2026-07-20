@@ -27,7 +27,7 @@ export const LOCAL_CAPABILITIES: CapabilityContext = {
   hasOperations: true,
   hasPlanning: true,
   hasFieldReportPermission: true,
-  hasIncidentCommand: false,
+  hasIncidentCommand: true,
   hasEquipmentVisibility: true,
 };
 
@@ -440,10 +440,9 @@ export const LOCAL_OPERATIONS_CENTER: OperationsCenterModel = {
     {
       id: "incidents",
       title: "Incidents",
-      available: false,
-      unavailableReason:
-        "Incident overview requires event-scoped Incident Command capability.",
-      summary: "Incident overview is hidden until IC capability is granted.",
+      available: true,
+      unavailableReason: null,
+      summary: "Restricted IMS incident list/detail for IC-authorized operators.",
     },
     {
       id: "equipment",

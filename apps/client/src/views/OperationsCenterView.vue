@@ -170,8 +170,13 @@ function moveDeployment(): void {
     >
       <h2 id="incidents-heading">Incidents</h2>
       <p role="status">
-        Incident overview will appear here for IC-authorized operators.
+        Incident overview is available through the restricted IMS workspace.
       </p>
+      <div class="ops__actions" aria-label="Incident Management System shortcuts">
+        <RouterLink :to="{ name: 'ims.incidents.index' }">
+          Open IMS incidents
+        </RouterLink>
+      </div>
     </section>
 
     <section

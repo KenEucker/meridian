@@ -372,7 +372,7 @@ The MVP product UI gap-closure tasks in this milestone are forward-scheduled wor
 | M11.5 Incident list/detail | Build restricted incident list/detail surfaces. | IMS spec sections 5-7 | UI/policy tests |
 | M11.6 Incident timeline notes | Add append-only incident timeline entries. | INC-007, INC-014; data/API 10.16 | Domain tests |
 | M11.6A Incident Name References | Extract Name References from incident notes and attached Field Reports, render chips near tags, and wire chip clicks to normal permission-filtered search. | NR-001 through NR-014; technical spec 19.9, 19.10 | Parser/search/UI/policy tests |
-| M11.7 Incident status/title edits | Edit regardless of state; status affects filtering only. | INC-010 through INC-012 | Domain/UI tests |
+| M11.7 Incident create/edit autosave screen | Add the unified online-only incident create/edit form: opening create starts with a blank edit form, the first persisted field change creates the incident and assigns its IMS number, and permitted IC operators/leads can continue editing current incident fields regardless of status. Status affects filtering only. | INC-001, INC-003, INC-004, INC-010 through INC-012; technical spec 19.2; IMS spec section 8; UI operating guide 19.3; data/API 10.16 | Domain/UI/autosave/policy tests |
 | M11.8 Link/unlink field report | Copy field report content into incident notes as `Field Report: <title>` followed by body, and strike relationship on removal. | FR-011 through FR-014; INC-014 | Domain tests |
 | M11.9 Incident attachments strike | Allow incident attachments to be stricken, not deleted. | INC-013; data/API 10.17 | Domain/security tests |
 | M11.10 Incident PDF print | IC leads print incidents to PDF. | INC-015 | Export test/sample |

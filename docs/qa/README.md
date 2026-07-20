@@ -28,6 +28,31 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
 
+## Alpha 1 IMS list/detail smoke
+
+M11.5 adds the first restricted IMS incident list/detail read surfaces. The full
+`QA-INC-01` incident-management script remains owned by M11.11.
+
+1. Seed or create an event with a configured Incident Command department,
+   an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
+   department lead outside IC, a revoked IC grant, and at least two incidents.
+2. As `ic_viewer`, open `/ims/incidents` in the shared client and confirm the
+   list shows only that event's incidents with IMS number, title, state,
+   priority text, location, and last update.
+3. Open an incident detail and confirm the current state, event/IC department
+   context, location, creator, and initial timeline entry are visible without
+   Edit, Save, note, status-change, field-report-link, attachment, search, or
+   PDF actions.
+4. Repeat the list/detail API checks as `ic_operator` and `ic_lead` and confirm
+   both can read incidents.
+5. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
+   revoked IC grant, unauthenticated user, and normal staff. Confirm no incident
+   row or detail content is exposed and restricted access messaging appears.
+6. Request an incident detail under the wrong event URL and confirm the server
+   fails closed.
+7. Confirm permitted detail views create `incident.viewed` audit rows, while
+   denied reads do not create incident-view audit rows.
+
 ## Alpha 1 Department operations UX smoke
 
 M10.1B resets the four department operations surfaces around field workflows.

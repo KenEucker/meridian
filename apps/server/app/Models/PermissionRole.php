@@ -54,8 +54,7 @@ class PermissionRole extends Model
     public function permissions(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'role_permissions')
-            ->using(RolePermission::class)
-            ->withPivot('created_at');
+            ->using(RolePermission::class);
     }
 
     public function teamGrants(): HasMany

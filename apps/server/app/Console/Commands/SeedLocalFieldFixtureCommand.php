@@ -2,14 +2,25 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Department;
+use App\Models\DepartmentMembership;
 use App\Models\Device;
 use App\Models\DeviceTrust;
 use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\Node;
 use App\Models\Organization;
+use App\Models\PermissionRole;
 use App\Models\Staff;
+use App\Models\StaffOrganizationStatus;
+use App\Models\Team;
+use App\Models\TeamGrant;
 use App\Models\User;
+use App\Services\Membership\DepartmentMembershipService;
+use App\Services\Permissions\TeamGrantService;
 use App\Support\LocalFieldFixture;
+use Database\Seeders\PermissionCatalogSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -28,6 +39,8 @@ class SeedLocalFieldFixtureCommand extends Command
     public function handle(): int
     {
         DB::transaction(function (): void {
+            app(PermissionCatalogSeeder::class)->run();
+
             $organization = $this->upsert(
                 Organization::class,
                 LocalFieldFixture::ORGANIZATION_ID,
@@ -45,7 +58,38 @@ class SeedLocalFieldFixtureCommand extends Command
                 uniqueBy: ['slug' => 'local-field-org'],
             );
 
-            $this->upsert(
+            $department = $this->upsert(
+                Department::class,
+                LocalFieldFixture::DEPARTMENT_ID,
+                [
+                    'organization_id' => $organization->id,
+                    'name' => 'Rangers',
+                    'code' => 'RANGERS',
+                    'description' => 'Local fixture Incident Command Department.',
+                    'archived_at' => null,
+                ],
+                uniqueBy: ['organization_id' => $organization->id, 'code' => 'RANGERS'],
+            );
+
+            $team = $this->upsert(
+                Team::class,
+                LocalFieldFixture::TEAM_ID,
+                [
+                    'department_id' => $department->id,
+                    'name' => 'Command',
+                    'code' => 'COMMAND',
+                    'description' => 'Local fixture IC operator team.',
+                    'is_default' => false,
+                    'archived_at' => null,
+                ],
+                uniqueBy: ['department_id' => $department->id, 'code' => 'COMMAND'],
+            );
+
+            $organization->forceFill([
+                'default_ic_department_id' => $department->id,
+            ])->save();
+
+            $event = $this->upsert(
                 Event::class,
                 LocalFieldFixture::EVENT_ID,
                 [
@@ -57,12 +101,22 @@ class SeedLocalFieldFixtureCommand extends Command
                     'timezone' => 'America/Los_Angeles',
                     'minimum_staff_age' => null,
                     'status' => null,
-                    'ic_department_id' => null,
+                    'ic_department_id' => $department->id,
                     'active_event_window_starts_at' => Carbon::parse('2027-07-03 09:00:00', 'America/Los_Angeles')->utc(),
                     'active_event_window_ends_at' => Carbon::parse('2027-07-09 18:00:00', 'America/Los_Angeles')->utc(),
                     'archived_at' => null,
                 ],
                 uniqueBy: ['slug' => 'local-field-event', 'organization_id' => $organization->id],
+            );
+
+            EventDepartmentAssignment::query()->updateOrCreate(
+                [
+                    'event_id' => $event->id,
+                    'department_id' => $department->id,
+                ],
+                [
+                    'archived_at' => null,
+                ],
             );
 
             $user = $this->upsert(
@@ -98,6 +152,22 @@ class SeedLocalFieldFixtureCommand extends Command
             if (! $staff->users()->whereKey($user->id)->exists()) {
                 $staff->users()->attach($user->id);
             }
+
+            StaffOrganizationStatus::query()->updateOrCreate(
+                [
+                    'organization_id' => $organization->id,
+                    'staff_id' => $staff->id,
+                ],
+                [
+                    'status' => StaffOrganizationStatus::STATUS_ACTIVE,
+                    'status_reason' => 'Local fixture IC-capable test account.',
+                    'status_changed_at' => now(),
+                    'status_changed_by_user_id' => $user->id,
+                ],
+            );
+
+            $this->ensureDepartmentTeamMembership($staff, $department, $team, $user);
+            $this->ensureIncidentCommandGrant($team, $event);
 
             $device = $this->upsert(Device::class, LocalFieldFixture::DEVICE_ID, [
                 'device_label' => 'Local Field Device',
@@ -144,6 +214,65 @@ class SeedLocalFieldFixtureCommand extends Command
         $this->line('Run `corepack pnpm run env:local` from the repository root to configure matching local API/client env.');
 
         return self::SUCCESS;
+    }
+
+    private function ensureDepartmentTeamMembership(
+        Staff $staff,
+        Department $department,
+        Team $team,
+        User $changedBy,
+    ): void {
+        $membership = $staff->departmentMemberships()
+            ->where('department_id', $department->id)
+            ->whereNull('archived_at')
+            ->first();
+
+        if ($membership === null) {
+            app(DepartmentMembershipService::class)->createWithTeams(
+                $staff,
+                $department,
+                [$team],
+                DepartmentMembership::STATUS_ACTIVE,
+                'Local fixture IC-capable test account.',
+                $changedBy,
+            );
+
+            return;
+        }
+
+        $membership->forceFill([
+            'status' => DepartmentMembership::STATUS_ACTIVE,
+            'status_reason' => 'Local fixture IC-capable test account.',
+        ])->save();
+
+        $membership->teamMemberships()->updateOrCreate(
+            [
+                'team_id' => $team->id,
+                'staff_id' => $staff->id,
+            ],
+            [
+                'membership_role' => 'member',
+                'archived_at' => null,
+            ],
+        );
+    }
+
+    private function ensureIncidentCommandGrant(Team $team, Event $event): void
+    {
+        $role = PermissionRole::query()
+            ->where('code', PermissionCatalog::ROLE_IC_OPERATOR)
+            ->firstOrFail();
+
+        $existingGrant = TeamGrant::query()
+            ->active()
+            ->where('team_id', $team->id)
+            ->where('event_id', $event->id)
+            ->where('permission_role_id', $role->id)
+            ->exists();
+
+        if (! $existingGrant) {
+            app(TeamGrantService::class)->grant($team, $role, $event);
+        }
     }
 
     /**

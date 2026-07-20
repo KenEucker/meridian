@@ -7,6 +7,7 @@ use App\Models\Permission;
 use App\Models\PermissionRole;
 use Database\Seeders\PermissionCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PermissionCatalogTest extends TestCase
@@ -136,6 +137,23 @@ class PermissionCatalogTest extends TestCase
             'incidents.view',
             'field_reports.view_event',
         ], $this->permissionCodesFor('ic_viewer'));
+    }
+
+    public function test_seeder_restores_missing_role_permission_links(): void
+    {
+        $role = PermissionRole::query()->where('code', 'ic_operator')->firstOrFail();
+        $permission = Permission::query()->where('code', 'incidents.create')->firstOrFail();
+
+        DB::table('role_permissions')
+            ->where('permission_role_id', $role->id)
+            ->where('permission_id', $permission->id)
+            ->delete();
+
+        $this->assertNotContains('incidents.create', $this->permissionCodesFor('ic_operator'));
+
+        (new PermissionCatalogSeeder)->run();
+
+        $this->assertContains('incidents.create', $this->permissionCodesFor('ic_operator'));
     }
 
     /**
