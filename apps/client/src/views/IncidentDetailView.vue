@@ -1,23 +1,63 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import {
+  appendIncidentNoteForSession,
+  canAppendIncidentNote,
   findIncidentForSession,
   hasIncidentCommandAccess,
   resolveIncidentSession,
   statusLabel,
+  type IncidentTimelineEntry,
 } from "@/ims/incidentReadModel";
 
 const route = useRoute();
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
-const incident = computed(() =>
-  findIncidentForSession(session.value, String(route.params.incidentId)),
-);
+const canAppendNote = computed(() => canAppendIncidentNote(session.value));
+const timelineRevision = ref(0);
+const noteBody = ref("");
+const noteError = ref<string | null>(null);
+const incident = computed(() => {
+  // Recompute after local append-note writes in the development IMS surface.
+  // Real server reads will replace this session fixture in the auth/API slice.
+  timelineRevision.value;
+
+  return findIncidentForSession(session.value, String(route.params.incidentId));
+});
+const timelineEntries = computed(() => incident.value?.timelineEntries ?? []);
 
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
+}
+
+function timelineEntryLabel(entry: IncidentTimelineEntry): string {
+  return entry.entryType === "incident_opened"
+    ? "Incident opened"
+    : "Operational note";
+}
+
+function onAppendNote(): void {
+  noteError.value = null;
+
+  if (!incident.value) {
+    noteError.value = "Incident not found for this event.";
+    return;
+  }
+
+  try {
+    appendIncidentNoteForSession(
+      session.value,
+      incident.value.id,
+      noteBody.value,
+    );
+    noteBody.value = "";
+    timelineRevision.value += 1;
+  } catch (error) {
+    noteError.value =
+      error instanceof Error ? error.message : "Unable to add incident note.";
+  }
 }
 </script>
 
@@ -100,11 +140,39 @@ function priorityText(priorityLabel: string | null): string {
         >
           <h2 id="ims-timeline-heading">Timeline</h2>
           <ol class="ims-detail__timeline">
-            <li>
-              <span>Incident opened</span>
-              <time :datetime="incident.createdAt">{{ incident.createdAt }}</time>
+            <li v-for="entry in timelineEntries" :key="entry.id">
+              <span>{{ timelineEntryLabel(entry) }}</span>
+              <p v-if="entry.body">{{ entry.body }}</p>
+              <time :datetime="entry.createdAt">{{ entry.createdAt }}</time>
+              <small v-if="entry.actorName">{{ entry.actorName }}</small>
             </li>
           </ol>
+
+          <form
+            v-if="canAppendNote"
+            class="ims-detail__note-form"
+            aria-labelledby="ims-note-heading"
+            @submit.prevent="onAppendNote"
+          >
+            <h3 id="ims-note-heading">Add note</h3>
+            <label class="ims-detail__note-label" for="ims-note-body">
+              Operational note
+            </label>
+            <textarea
+              id="ims-note-body"
+              v-model="noteBody"
+              class="ims-detail__note-body"
+              name="body"
+              rows="4"
+              required
+            />
+            <p v-if="noteError" class="ims-detail__note-error" role="alert">
+              {{ noteError }}
+            </p>
+            <button class="ims-detail__note-submit" type="submit">
+              Add note
+            </button>
+          </form>
         </section>
       </div>
     </template>
@@ -209,8 +277,66 @@ function priorityText(priorityLabel: string | null): string {
 }
 
 .ims-detail__timeline time {
+  display: block;
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
+}
+
+.ims-detail__timeline p {
+  margin: var(--m-space-1) 0;
+  white-space: pre-wrap;
+}
+
+.ims-detail__timeline small {
+  display: block;
+  color: var(--m-text-muted);
+}
+
+.ims-detail__note-form {
+  display: grid;
+  gap: var(--m-space-2);
+  margin-top: var(--m-space-4);
+  padding-top: var(--m-space-4);
+  border-top: 1px solid var(--m-border-default);
+}
+
+.ims-detail__note-form h3 {
+  margin: 0;
+  font-size: var(--m-text-base);
+}
+
+.ims-detail__note-label {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.ims-detail__note-body {
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-3);
+  background: var(--m-surface-primary);
+  color: var(--m-text-primary);
+  font: inherit;
+}
+
+.ims-detail__note-error {
+  margin: 0;
+  color: var(--m-status-danger);
+  font-size: var(--m-text-sm);
+}
+
+.ims-detail__note-submit {
+  justify-self: start;
+  border: 0;
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+  font-weight: 800;
 }
 
 @media (min-width: 56rem) {

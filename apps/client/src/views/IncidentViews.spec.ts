@@ -26,6 +26,12 @@ const NON_IC_SESSION: IncidentSessionContext = {
   roleLabel: "Department Lead",
 };
 
+const IC_OPERATOR_SESSION: IncidentSessionContext = {
+  ...IC_SESSION,
+  role: "ic_operator",
+  roleLabel: "Incident Command Operator",
+};
+
 function buildRouter() {
   return createRouter({
     history: createWebHistory(),
@@ -106,9 +112,37 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Gate A");
     expect(wrapper.text()).toContain("Responder staged near the shade structure.");
     expect(wrapper.text()).toContain("Incident opened");
+    expect(wrapper.text()).toContain("Responder is on scene and monitoring breathing.");
     expect(wrapper.text()).toContain("Ingrid ICLead");
+    expect(wrapper.text()).not.toContain("Add note");
     expect(wrapper.text()).not.toContain("Save");
     expect(wrapper.text()).not.toContain("Edit");
+  });
+
+  it("lets IC operators append a plain-text operational timeline note", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+
+    await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
+    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+
+    expect(wrapper.text()).toContain("Radio relay confirmed.");
+    expect(wrapper.text()).toContain("Incident Command Operator");
+    expect(wrapper.get<HTMLTextAreaElement>("#ims-note-body").element.value).toBe(
+      "",
+    );
+  });
+
+  it("keeps blank timeline notes from being appended in the operator surface", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+
+    await wrapper.get("#ims-note-body").setValue("   ");
+    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+
+    expect(wrapper.text()).toContain("Incident note body is required.");
   });
 
   it("fails closed when direct detail access lacks IC authority", async () => {

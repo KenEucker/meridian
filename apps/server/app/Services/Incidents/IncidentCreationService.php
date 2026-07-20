@@ -18,11 +18,14 @@ use Illuminate\Support\Str;
  * (INC-001, INC-003, INC-004; technical spec 19.4; data/API 4.4 and 10.16).
  *
  * Permission checks happen before this service is called by command transport.
- * Timelines, attachments, and sync projections are later M11 tasks.
+ * Attachments and sync projections are later M11 tasks.
  */
 final class IncidentCreationService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly IncidentTimelineService $timeline,
+    ) {}
 
     /**
      * @param  array{
@@ -42,8 +45,7 @@ final class IncidentCreationService
         User $actor,
         ?DateTimeInterface $createdAt = null,
         string $sourceContext = AuditEvent::SOURCE_SYSTEM,
-    ): Incident
-    {
+    ): Incident {
         return DB::transaction(function () use ($attributes, $actor, $createdAt, $sourceContext): Incident {
             $event = Event::query()
                 ->whereKey($this->requiredUuid($attributes, 'event_id', 'Incident event_id must be a valid UUID.'))
@@ -88,6 +90,8 @@ final class IncidentCreationService
                 after: $this->auditSnapshot($incident),
                 sourceContext: $sourceContext,
             );
+
+            $this->timeline->recordIncidentOpened($incident, $actor, $now);
 
             return $incident->refresh();
         });

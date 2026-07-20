@@ -28,10 +28,11 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
 
-## Alpha 1 IMS list/detail smoke
+## Alpha 1 IMS list/detail and timeline smoke
 
-M11.5 adds the first restricted IMS incident list/detail read surfaces. The full
-`QA-INC-01` incident-management script remains owned by M11.11.
+M11.5 adds the first restricted IMS incident list/detail read surfaces. M11.6
+adds append-only operational timeline notes. The full `QA-INC-01`
+incident-management script remains owned by M11.11.
 
 1. Seed or create an event with a configured Incident Command department,
    an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
@@ -43,14 +44,21 @@ M11.5 adds the first restricted IMS incident list/detail read surfaces. The full
    context, location, creator, and initial timeline entry are visible without
    Edit, Save, note, status-change, field-report-link, attachment, search, or
    PDF actions.
-4. Repeat the list/detail API checks as `ic_operator` and `ic_lead` and confirm
-   both can read incidents.
-5. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
+4. Repeat the detail check as `ic_operator` and `ic_lead`, add a plain-text
+   operational note, and confirm the new note appears in the timeline with the
+   actor and timestamp.
+5. Confirm blank timeline notes are rejected, the original timeline entries
+   remain unchanged, the incident last-updated timestamp advances after a valid
+   note, and an `incident.note_appended` audit row is created.
+6. Repeat as `ic_viewer` and confirm the timeline is visible but the add-note
+   form/command is unavailable.
+7. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
    revoked IC grant, unauthenticated user, and normal staff. Confirm no incident
-   row or detail content is exposed and restricted access messaging appears.
-6. Request an incident detail under the wrong event URL and confirm the server
-   fails closed.
-7. Confirm permitted detail views create `incident.viewed` audit rows, while
+   row, detail content, or note mutation is exposed and restricted access
+   messaging appears.
+8. Request an incident detail or append-note command under the wrong event URL
+   and confirm the server fails closed.
+9. Confirm permitted detail views create `incident.viewed` audit rows, while
    denied reads do not create incident-view audit rows.
 
 ## Alpha 1 Department operations UX smoke
