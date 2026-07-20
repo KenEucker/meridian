@@ -1965,7 +1965,7 @@ Rules:
 - Field Reports are not stricken
 - Field Reports may exist independently
 - Field Reports may be attached to one or more incidents
-- when a Field Report is attached to an incident, content is copied into incident notes as `Field Report: <title>` followed by the body
+- when a Field Report is attached to an incident, content is copied into incident notes as `Field Report: <title>`, followed by the Field Report author and body
 - users see only their own Field Reports by default
 - IC roles see all Field Reports for the event
 - department leads, organizers, and shift leads do not automatically see Field Reports from their department/shifts
@@ -2092,7 +2092,7 @@ Rules:
 
 - IC leads and IC operators can link/unlink Field Reports
 - link/unlink activity appears on the incident timeline only
-- when a Field Report is attached, Field Report content is copied into incident notes as `Field Report: <title>` followed by the body
+- when a Field Report is attached, Field Report content is copied into incident notes as `Field Report: <title>`, followed by the Field Report author and body
 - when removed from an incident, the incident history shows that relationship as stricken
 
 #### `incident_staff`

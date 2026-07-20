@@ -5,11 +5,13 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import {
+  availableFieldReportOptionsForSession,
   availableLinkedIncidentOptionsForSession,
   clearIncidentSession,
   createIncidentFromAutosaveForm,
   installIncidentSession,
   LOCAL_IMS_EVENT_ID,
+  linkFieldReportForSession,
   type IncidentSessionContext,
 } from "@/ims/incidentReadModel";
 import { routes } from "@/router";
@@ -95,6 +97,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(names).toContain("ims.incidents.create");
     expect(names).toContain("ims.incidents.show");
     expect(names).toContain("ims.incidents.edit");
+    expect(names).toContain("ims.field-reports.index");
     expect(names).toContain("ims.restricted");
   });
 
@@ -116,12 +119,117 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("INC-2027-000041");
     expect(wrapper.text()).toContain("Routine");
     expect(wrapper.text()).toContain("Radio");
+    expect(wrapper.text()).not.toContain("Closed supply handoff");
+    expect(wrapper.get(".ims-list__secondary-link").attributes("href")).toBe("/");
+    expect(
+      wrapper
+        .findAll(".ims-list__secondary-link")
+        .some((link) => link.attributes("href") === "/ims/field-reports"),
+    ).toBe(true);
     expect(wrapper.text()).toContain("07-04-2027");
     expect(wrapper.text()).toMatch(/07-04-2027 \d{2}:\d{2}/u);
     expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
       "/ims/incidents/incident-gate-medical",
     );
     expect(wrapper.text()).not.toContain("Create incident");
+  });
+
+  it("filters incidents by state and priority and sorts by headings", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents");
+
+    expect(wrapper.text()).not.toContain("Closed supply handoff");
+
+    await wrapper.get("#ims-list-state").setValue("all");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.state).toBe("all");
+    expect(wrapper.text()).toContain("Closed supply handoff");
+
+    await wrapper.get("#ims-list-priority").setValue("Serious");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+    expect(wrapper.text()).not.toContain("Closed supply handoff");
+
+    await router.push("/ims/incidents");
+    await flushPromises();
+
+    const incidentSort = wrapper
+      .findAll("thead a")
+      .find((link) => link.text() === "Incident");
+    expect(incidentSort).toBeDefined();
+    await incidentSort?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.findAll(".ims-list__incident-link")[0]?.text()).toContain(
+      "INC-2027-000041",
+    );
+  });
+
+  it("renders the IC Field Reports list with cross-links, filters, and sorting", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+    linkFieldReportForSession(
+      IC_OPERATOR_SESSION,
+      "incident-gate-medical",
+      "field-report-medical-gate",
+      new Date("2027-07-04T20:50:00.000Z"),
+    );
+
+    const { wrapper, router } = await mountAt("/ims/field-reports");
+
+    expect(wrapper.get("#ims-field-reports-heading").text()).toBe(
+      "Field Reports",
+    );
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("Vera Ranger");
+    expect(wrapper.text()).toContain("INC-2027-000042");
+    expect(wrapper.text()).toContain("FRA-2027-000124");
+    expect(wrapper.get(".ims-fr-list__secondary-link").attributes("href")).toBe(
+      "/",
+    );
+    expect(
+      wrapper
+        .findAll(".ims-fr-list__secondary-link")
+        .some((link) => link.attributes("href") === "/ims/incidents"),
+    ).toBe(true);
+
+    await wrapper.get("#ims-fr-list-link").setValue("linked");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.link).toBe("linked");
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).not.toContain("FRA-2027-000124");
+
+    await wrapper.get("#ims-fr-list-link").setValue("not_linked");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.link).toBe("not_linked");
+    expect(wrapper.text()).not.toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("FRA-2027-000124");
+
+    await wrapper.get("#ims-fr-list-link").setValue("all");
+    await flushPromises();
+
+    await wrapper.get("#ims-fr-list-priority").setValue("Serious");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).not.toContain("FRA-2027-000124");
+
+    await router.push("/ims/field-reports");
+    await flushPromises();
+
+    const authorSort = wrapper
+      .findAll("thead a")
+      .find((link) => link.text() === "Author");
+    expect(authorSort).toBeDefined();
+    await authorSort?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.findAll("tbody tr")[0]?.text()).toContain("Ingrid ICLead");
   });
 
   it("shows create entry points only to IC operators and leads", async () => {
@@ -364,6 +472,73 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Incidents are already linked.");
   });
 
+  it("lets IC operators link and unlink Field Reports from edit", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper, router } = await mountAt(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+
+    expect(wrapper.text()).toContain("Attached Field Reports");
+    expect(wrapper.text()).toContain("No attached Field Reports.");
+
+    await addBySearch(
+      wrapper,
+      "#ims-edit-field-report-add",
+      "medical",
+      "FRA-2027-000123 - Medical observation near Gate A",
+    );
+
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("Medical observation near Gate A");
+    expect(wrapper.text()).toContain(
+      "Field Report: Medical observation near Gate A",
+    );
+    expect(wrapper.text()).toContain("Author: Vera Ranger");
+    expect(wrapper.text()).toContain(
+      "Observed medical response near Gate A for @Blue-Hat.",
+    );
+    expect(wrapper.text()).not.toContain("No attached Field Reports.");
+
+    await wrapper.get("#ims-edit-field-report-add").trigger("focus");
+    await wrapper.get("#ims-edit-field-report-add").setValue("medical");
+    await flushPromises();
+
+    expect(
+      wrapper
+        .findAll(".ims-edit__add-results button")
+        .some(
+          (button) =>
+            button.text() ===
+            "FRA-2027-000123 - Medical observation near Gate A",
+        ),
+    ).toBe(false);
+
+    await router.push("/ims/incidents/incident-gate-medical");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Attached Field Reports");
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("Medical observation near Gate A");
+
+    await router.push("/ims/incidents/incident-gate-medical/edit");
+    await flushPromises();
+
+    await wrapper
+      .get('button[aria-label="Unlink Field Report FRA-2027-000123"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Removed Field Report FRA-2027-000123: Medical observation near Gate A.",
+    );
+    expect(wrapper.text()).toContain("Field Report removed from incident.");
+    expect(wrapper.text()).toContain("No attached Field Reports.");
+    expect(wrapper.get(".ims-edit__timeline-body--stricken").text()).toContain(
+      "Field Report: Medical observation near Gate A",
+    );
+  });
+
   it("orders linked incident candidates by shared tags first then newest created", () => {
     installIncidentSession(IC_OPERATOR_SESSION);
 
@@ -429,6 +604,21 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(options.map((incident) => incident.id)).not.toContain(
       "incident-radio-check",
     );
+  });
+
+  it("orders Field Report candidates by shared tags first then newest created", () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const options = availableFieldReportOptionsForSession(
+      IC_OPERATOR_SESSION,
+      "incident-gate-medical",
+    );
+
+    expect(options.map((report) => report.id)).toEqual([
+      "field-report-medical-gate",
+      "field-report-newer-logistics",
+      "field-report-radio-relay",
+    ]);
   });
 
   it("records a concise location address edit without a phantom started change", async () => {

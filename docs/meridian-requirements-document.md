@@ -995,7 +995,7 @@ Field reports may exist independently.
 
 Field reports may be attached to one or more incidents.
 
-When a field report is attached to an incident, the field report content is copied into the incident notes as `Field Report: <title>` followed by the body.
+When a field report is attached to an incident, the field report content is copied into the incident notes as `Field Report: <title>`, followed by the Field Report author and body.
 
 When a field report is appended to, only the added content is copied into associated incidents.
 
@@ -2942,7 +2942,7 @@ Field reports may be attached to multiple incidents.
 
 ### FR-012
 
-When attached to an incident, field report content shall be copied into incident notes as `Field Report: <title>` followed by the body.
+When attached to an incident, field report content shall be copied into incident notes as `Field Report: <title>`, followed by the Field Report author and body.
 
 ### FR-013
 

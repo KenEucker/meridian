@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
@@ -137,6 +138,7 @@ final class IncidentReadController extends Controller
                 ->values()
                 ->all(),
             'linked_incidents' => $this->linkedIncidentPayload($incident),
+            'attached_field_reports' => $this->attachedFieldReportPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_by_name' => $incident->createdByUser?->name,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
@@ -198,6 +200,41 @@ final class IncidentReadController extends Controller
                     'incident_number' => $linkedIncident->incident_number,
                     'title' => $linkedIncident->title,
                     'status' => $linkedIncident->status,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{id: string, field_report_id: string, incident_field_report_id: string, display_number: string, title: string, author_name: string, body: string, linked_at: ?string}>
+     */
+    private function attachedFieldReportPayload(Incident $incident): array
+    {
+        return IncidentFieldReport::query()
+            ->with(['fieldReport.staff', 'fieldReport.submittedByUser'])
+            ->where('incident_id', $incident->id)
+            ->whereNull('unlinked_at')
+            ->orderBy('linked_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (IncidentFieldReport $link): array {
+                $fieldReport = $link->fieldReport;
+
+                return [
+                    'id' => $fieldReport->id,
+                    'field_report_id' => $fieldReport->id,
+                    'incident_field_report_id' => $link->id,
+                    'display_number' => $fieldReport->fra_number
+                        ?? $fieldReport->temporary_local_number
+                        ?? 'Field Report',
+                    'title' => $fieldReport->title,
+                    'author_name' => $fieldReport->staff?->preferred_name
+                        ?? $fieldReport->staff?->legal_name
+                        ?? $fieldReport->submittedByUser?->name
+                        ?? 'Unknown author',
+                    'body' => $fieldReport->body,
+                    'linked_at' => optional($link->linked_at)?->toIso8601String(),
                 ];
             })
             ->values()

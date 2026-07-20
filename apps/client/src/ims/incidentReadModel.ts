@@ -24,11 +24,15 @@ export interface IncidentTimelineEntry {
     | "operational_note"
     | "incident_field_updated"
     | "incident_linked"
-    | "incident_unlinked";
+    | "incident_unlinked"
+    | "field_report_linked"
+    | "field_report_unlinked";
   readonly body: string | null;
   readonly previousValue?: Record<string, string | null>;
   readonly newValue?: Record<string, string | null>;
   readonly createdAt: string;
+  readonly strickenAt?: string | null;
+  readonly strickenReason?: string | null;
 }
 
 export interface NameReferenceChip {
@@ -60,6 +64,35 @@ export interface LinkedIncidentSummary {
   readonly status: ImsIncident["status"];
 }
 
+export interface AttachedFieldReportSummary {
+  readonly id: string;
+  readonly displayNumber: string;
+  readonly title: string;
+  readonly authorName: string;
+  readonly body: string;
+  readonly linkedAt: string;
+}
+
+export interface FieldReportLinkCandidate {
+  readonly id: string;
+  readonly eventId: string;
+  readonly displayNumber: string;
+  readonly title: string;
+  readonly authorName: string;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface ImsFieldReportListItem extends FieldReportLinkCandidate {
+  readonly relatedIncidents: readonly {
+    readonly id: string;
+    readonly incidentNumber: string;
+    readonly title: string;
+    readonly status: ImsIncident["status"];
+    readonly priorityLabel: IncidentPriorityLabel;
+  }[];
+}
+
 export interface ImsIncident {
   readonly id: string;
   readonly eventId: string;
@@ -70,6 +103,7 @@ export interface ImsIncident {
   readonly incidentTypeNames: readonly string[];
   readonly responders: readonly IncidentResponder[];
   readonly linkedIncidents: readonly LinkedIncidentSummary[];
+  readonly attachedFieldReports: readonly AttachedFieldReportSummary[];
   readonly startedAt: string;
   readonly locationName: string | null;
   readonly locationAddress: string | null;
@@ -164,6 +198,7 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
         status: "monitoring",
       }),
     ]),
+    attachedFieldReports: Object.freeze([]),
     startedAt: "2027-07-04T20:15:00.000Z",
     locationName: "Gate A",
     locationAddress: "North entry road",
@@ -223,6 +258,7 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
         status: "on_scene",
       }),
     ]),
+    attachedFieldReports: Object.freeze([]),
     startedAt: "2027-07-04T19:40:00.000Z",
     locationName: "Ranger HQ",
     locationAddress: null,
@@ -251,6 +287,80 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
       }),
     ]),
   }),
+  Object.freeze({
+    id: "incident-closed-supply",
+    eventId: LOCAL_IMS_EVENT_ID,
+    incidentNumber: "INC-2027-000040",
+    title: "Closed supply handoff",
+    status: "closed",
+    priorityLabel: "Important",
+    incidentTypeNames: Object.freeze(["Logistics"]),
+    responders: Object.freeze([]),
+    linkedIncidents: Object.freeze([]),
+    attachedFieldReports: Object.freeze([]),
+    startedAt: "2027-07-04T18:05:00.000Z",
+    locationName: "Depot",
+    locationAddress: null,
+    locationDetails: "Resolved supply handoff at the depot.",
+    createdByName: "Ingrid ICLead",
+    createdAt: "2027-07-04T18:10:00.000Z",
+    updatedAt: "2027-07-04T18:45:00.000Z",
+    nameReferenceChips: Object.freeze([]),
+    tagChips: Object.freeze([
+      Object.freeze({
+        tag: "logistics",
+        normalizedTag: "logistics",
+      }),
+    ]),
+    timelineEntries: Object.freeze([
+      Object.freeze({
+        id: "timeline-closed-supply-opened",
+        incidentId: "incident-closed-supply",
+        actorName: "Ingrid ICLead",
+        entryType: "incident_opened",
+        body: "Incident INC-2027-000040 opened.",
+        createdAt: "2027-07-04T18:10:00.000Z",
+      }),
+      Object.freeze({
+        id: "timeline-closed-supply-note",
+        incidentId: "incident-closed-supply",
+        actorName: "Ingrid ICLead",
+        entryType: "operational_note",
+        body: "Closed after supplies were handed off. #logistics",
+        createdAt: "2027-07-04T18:45:00.000Z",
+      }),
+    ]),
+  }),
+]);
+
+const LOCAL_FIELD_REPORTS: readonly FieldReportLinkCandidate[] = Object.freeze([
+  Object.freeze({
+    id: "field-report-medical-gate",
+    eventId: LOCAL_IMS_EVENT_ID,
+    displayNumber: "FRA-2027-000123",
+    title: "Medical observation near Gate A",
+    authorName: "Vera Ranger",
+    body: "Observed medical response near Gate A for @Blue-Hat. Follow-up requested. #medical",
+    createdAt: "2027-07-04T20:34:00.000Z",
+  }),
+  Object.freeze({
+    id: "field-report-radio-relay",
+    eventId: LOCAL_IMS_EVENT_ID,
+    displayNumber: "FRA-2027-000122",
+    title: "Radio relay notes",
+    authorName: "Omar Operator",
+    body: "West-side relay heard intermittent traffic from Ranger HQ. #radio",
+    createdAt: "2027-07-04T20:36:00.000Z",
+  }),
+  Object.freeze({
+    id: "field-report-newer-logistics",
+    eventId: LOCAL_IMS_EVENT_ID,
+    displayNumber: "FRA-2027-000124",
+    title: "Supply cart movement",
+    authorName: "Ingrid ICLead",
+    body: "Logistics moved shade supplies toward the north road. #logistics",
+    createdAt: "2027-07-04T20:38:00.000Z",
+  }),
 ]);
 
 let session: IncidentSessionContext | null = null;
@@ -258,6 +368,7 @@ let noteSequence = 0;
 let incidentSequence = 42;
 let fieldUpdateSequence = 0;
 let incidentLinkSequence = 0;
+let incidentFieldReportLinkSequence = 0;
 
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
 const localIncidentUpdatedAt = new Map<string, string>();
@@ -282,6 +393,7 @@ export function clearIncidentSession(): void {
   incidentSequence = 42;
   fieldUpdateSequence = 0;
   incidentLinkSequence = 0;
+  incidentFieldReportLinkSequence = 0;
 }
 
 export function resolveIncidentSession(): IncidentSessionContext | null {
@@ -323,6 +435,43 @@ export function listIncidentsForSession(
     )
     .filter((incident) => incidentMatchesSearch(incident, normalizedSearch))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export function listFieldReportsForSession(
+  context: IncidentSessionContext | null,
+): ImsFieldReportListItem[] {
+  if (!hasIncidentCommandAccess(context)) {
+    return [];
+  }
+
+  const incidents = listIncidentsForSession(context);
+
+  return LOCAL_FIELD_REPORTS.filter(
+    (report) => report.eventId === context?.eventId,
+  )
+    .map((report) =>
+      Object.freeze({
+        ...report,
+        relatedIncidents: Object.freeze(
+          incidents
+            .filter((incident) =>
+              incident.attachedFieldReports.some(
+                (attached) => attached.id === report.id,
+              ),
+            )
+            .map((incident) =>
+              Object.freeze({
+                id: incident.id,
+                incidentNumber: incident.incidentNumber,
+                title: incident.title,
+                status: incident.status,
+                priorityLabel: incident.priorityLabel,
+              }),
+            ),
+        ),
+      }),
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export function findIncidentForSession(
@@ -442,6 +591,7 @@ export function createIncidentFromAutosaveForm(
     incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
     responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
     linkedIncidents: Object.freeze([]),
+    attachedFieldReports: Object.freeze([]),
     startedAt,
     locationName: nullableText(form.locationName),
     locationAddress: nullableText(form.locationAddress),
@@ -578,6 +728,34 @@ export function availableLinkedIncidentOptionsForSession(
     .slice(0, 6);
 }
 
+export function availableFieldReportOptionsForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  search = "",
+): FieldReportLinkCandidate[] {
+  const incident = findIncidentForSession(context, incidentId);
+
+  if (!incident) {
+    return [];
+  }
+
+  const selectedIds = new Set(
+    incident.attachedFieldReports.map((report) => report.id),
+  );
+  const normalizedSearch = normalizeIncidentSearch(search);
+  const incidentTags = linkSuggestionTagSet(incident);
+
+  return LOCAL_FIELD_REPORTS.filter(
+    (report) => report.eventId === context?.eventId,
+  )
+    .filter((report) => !selectedIds.has(report.id))
+    .filter((report) => fieldReportMatchesSearch(report, normalizedSearch))
+    .sort((left, right) =>
+      compareFieldReportSuggestionCandidates(left, right, incidentTags),
+    )
+    .slice(0, 6);
+}
+
 export function linkIncidentForSession(
   context: IncidentSessionContext | null,
   incidentId: string,
@@ -638,6 +816,124 @@ export function unlinkIncidentForSession(
   writeLinkedIncidentPair(incident, target, timestamp, "incident_unlinked", context);
 
   return findIncidentForSession(context, incidentId) ?? incident;
+}
+
+export function linkFieldReportForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  fieldReportId: string,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may link Field Reports.");
+  }
+
+  const incident = findStoredIncidentForSession(context, incidentId);
+  const report = LOCAL_FIELD_REPORTS.find(
+    (candidate) => candidate.id === fieldReportId,
+  );
+
+  if (!incident) {
+    throw new Error("Incident not found for this event.");
+  }
+
+  if (!report || report.eventId !== context?.eventId) {
+    throw new Error("Field Report not found for this event.");
+  }
+
+  if (incident.eventId !== report.eventId) {
+    throw new Error("Field Report must belong to the same event as the incident.");
+  }
+
+  if (incident.attachedFieldReports.some((attached) => attached.id === report.id)) {
+    throw new Error("Field Report is already linked to this incident.");
+  }
+
+  const timestamp = createdAt.toISOString();
+  const linkId = `local-incident-field-report-link-${++incidentFieldReportLinkSequence}`;
+  const nextIncident = Object.freeze({
+    ...incident,
+    attachedFieldReports: Object.freeze(
+      mergeAttachedFieldReports([
+        ...incident.attachedFieldReports,
+        attachedFieldReportSummary(report, timestamp),
+      ]),
+    ),
+    updatedAt: timestamp,
+  });
+
+  localIncidentOverrides.set(incident.id, nextIncident);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+  localTimelineEntries.set(incident.id, [
+    ...(localTimelineEntries.get(incident.id) ?? []),
+    fieldReportLinkedTimelineEntry(incident, report, linkId, timestamp, context),
+  ]);
+
+  return findIncidentForSession(context, incidentId) ?? nextIncident;
+}
+
+export function unlinkFieldReportForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  fieldReportId: string,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may link Field Reports.");
+  }
+
+  const incident = findStoredIncidentForSession(context, incidentId);
+  const report = LOCAL_FIELD_REPORTS.find(
+    (candidate) => candidate.id === fieldReportId,
+  );
+
+  if (!incident) {
+    throw new Error("Incident not found for this event.");
+  }
+
+  if (!report || report.eventId !== context?.eventId) {
+    throw new Error("Field Report not found for this event.");
+  }
+
+  if (incident.eventId !== report.eventId) {
+    throw new Error("Field Report must belong to the same event as the incident.");
+  }
+
+  if (!incident.attachedFieldReports.some((attached) => attached.id === report.id)) {
+    throw new Error("Field Report is not currently linked to this incident.");
+  }
+
+  const timestamp = createdAt.toISOString();
+  const nextIncident = Object.freeze({
+    ...incident,
+    attachedFieldReports: Object.freeze(
+      incident.attachedFieldReports.filter(
+        (attached) => attached.id !== report.id,
+      ),
+    ),
+    updatedAt: timestamp,
+  });
+  const strickenReason = "Field Report removed from incident.";
+  const timelineEntries = localTimelineEntries.get(incident.id) ?? [];
+
+  localIncidentOverrides.set(incident.id, nextIncident);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+  localTimelineEntries.set(incident.id, [
+    ...timelineEntries.map((entry) =>
+      entry.entryType === "field_report_linked" &&
+      entry.newValue?.fieldReportId === report.id &&
+      !entry.strickenAt
+        ? Object.freeze({
+            ...entry,
+            strickenAt: timestamp,
+            strickenReason,
+          })
+        : entry,
+    ),
+    fieldReportUnlinkedTimelineEntry(incident, report, timestamp, context),
+  ]);
+
+  return findIncidentForSession(context, incidentId) ?? nextIncident;
 }
 
 export function statusLabel(status: ImsIncident["status"]): string {
@@ -774,6 +1070,20 @@ function linkedIncidentSummary(incident: ImsIncident): LinkedIncidentSummary {
   });
 }
 
+function attachedFieldReportSummary(
+  report: FieldReportLinkCandidate,
+  linkedAt: string,
+): AttachedFieldReportSummary {
+  return Object.freeze({
+    id: report.id,
+    displayNumber: report.displayNumber,
+    title: report.title,
+    authorName: report.authorName,
+    body: report.body,
+    linkedAt,
+  });
+}
+
 function mergeLinkedIncidents(
   linkedIncidents: readonly LinkedIncidentSummary[],
 ): LinkedIncidentSummary[] {
@@ -788,6 +1098,64 @@ function mergeLinkedIncidents(
   return [...byId.values()].sort((left, right) =>
     left.incidentNumber.localeCompare(right.incidentNumber),
   );
+}
+
+function mergeAttachedFieldReports(
+  attachedFieldReports: readonly AttachedFieldReportSummary[],
+): AttachedFieldReportSummary[] {
+  const byId = new Map<string, AttachedFieldReportSummary>();
+
+  for (const report of attachedFieldReports) {
+    if (!byId.has(report.id)) {
+      byId.set(report.id, report);
+    }
+  }
+
+  return [...byId.values()].sort((left, right) =>
+    left.displayNumber.localeCompare(right.displayNumber),
+  );
+}
+
+function fieldReportLinkedTimelineEntry(
+  incident: ImsIncident,
+  report: FieldReportLinkCandidate,
+  linkId: string,
+  timestamp: string,
+  context: IncidentSessionContext | null,
+): IncidentTimelineEntry {
+  return Object.freeze({
+    id: `local-field-report-linked-${incidentFieldReportLinkSequence}`,
+    incidentId: incident.id,
+    actorName: context?.roleLabel ?? null,
+    entryType: "field_report_linked",
+    body: `Field Report: ${report.title}\nAuthor: ${report.authorName}\n${report.body}`,
+    newValue: {
+      fieldReportId: report.id,
+      incidentFieldReportId: linkId,
+    },
+    createdAt: timestamp,
+    strickenAt: null,
+    strickenReason: null,
+  });
+}
+
+function fieldReportUnlinkedTimelineEntry(
+  incident: ImsIncident,
+  report: FieldReportLinkCandidate,
+  timestamp: string,
+  context: IncidentSessionContext | null,
+): IncidentTimelineEntry {
+  return Object.freeze({
+    id: `local-field-report-unlinked-${++incidentFieldReportLinkSequence}`,
+    incidentId: incident.id,
+    actorName: context?.roleLabel ?? null,
+    entryType: "field_report_unlinked",
+    body: `Removed Field Report ${report.displayNumber}: ${report.title}.`,
+    previousValue: {
+      fieldReportId: report.id,
+    },
+    createdAt: timestamp,
+  });
 }
 
 function compareLinkSuggestionCandidates(
@@ -809,6 +1177,25 @@ function compareLinkSuggestionCandidates(
     : createdAtComparison;
 }
 
+function compareFieldReportSuggestionCandidates(
+  left: FieldReportLinkCandidate,
+  right: FieldReportLinkCandidate,
+  incidentTags: ReadonlySet<string>,
+): number {
+  const leftSharesTags = sharesFieldReportSuggestionTag(left, incidentTags);
+  const rightSharesTags = sharesFieldReportSuggestionTag(right, incidentTags);
+
+  if (leftSharesTags !== rightSharesTags) {
+    return leftSharesTags ? -1 : 1;
+  }
+
+  const createdAtComparison = right.createdAt.localeCompare(left.createdAt);
+
+  return createdAtComparison === 0
+    ? right.displayNumber.localeCompare(left.displayNumber)
+    : createdAtComparison;
+}
+
 function sharesLinkSuggestionTag(
   incident: ImsIncident,
   incidentTags: ReadonlySet<string>,
@@ -822,6 +1209,19 @@ function sharesLinkSuggestionTag(
   );
 }
 
+function sharesFieldReportSuggestionTag(
+  report: FieldReportLinkCandidate,
+  incidentTags: ReadonlySet<string>,
+): boolean {
+  if (incidentTags.size === 0) {
+    return false;
+  }
+
+  return [...fieldReportSuggestionTagSet(report)].some((tag) =>
+    incidentTags.has(tag),
+  );
+}
+
 function linkSuggestionTagSet(incident: ImsIncident): Set<string> {
   return new Set(
     [
@@ -830,9 +1230,21 @@ function linkSuggestionTagSet(incident: ImsIncident): Set<string> {
         incident.title,
         ...incident.incidentTypeNames,
         ...incident.responders.map((responder) => responder.displayName),
-        ...incident.timelineEntries.map((entry) => entry.body ?? ""),
+        ...incident.attachedFieldReports.map((report) => report.body),
+        ...incident.timelineEntries
+          .filter((entry) => !entry.strickenAt)
+          .map((entry) => entry.body ?? ""),
       ].flatMap(parseTags).map((chip) => chip.normalizedTag),
     ].filter((tag) => tag.length > 0),
+  );
+}
+
+function fieldReportSuggestionTagSet(report: FieldReportLinkCandidate): Set<string> {
+  return new Set(
+    [report.title, report.body]
+      .flatMap(parseTags)
+      .map((chip) => chip.normalizedTag)
+      .filter((tag) => tag.length > 0),
   );
 }
 
@@ -842,6 +1254,27 @@ function normalizeIncidentSearch(search: string): string {
   return trimmed.startsWith("@") || trimmed.startsWith("#")
     ? trimmed.slice(1).toLowerCase()
     : trimmed.toLowerCase();
+}
+
+function fieldReportMatchesSearch(
+  report: FieldReportLinkCandidate,
+  normalizedSearch: string,
+): boolean {
+  if (normalizedSearch.length === 0) {
+    return true;
+  }
+
+  const searchableText = [
+    report.displayNumber,
+    report.title,
+    report.authorName,
+    report.body,
+  ].join(" ").toLowerCase();
+
+  return (
+    searchableText.includes(normalizedSearch) ||
+    parseTags(report.body).some((chip) => chip.normalizedTag === normalizedSearch)
+  );
 }
 
 function incidentMatchesSearch(
@@ -882,7 +1315,11 @@ function extractIncidentNameReferences(
     incident.locationDetails ?? "",
     ...incident.incidentTypeNames,
     ...incident.responders.map((responder) => responder.displayName),
-    ...timelineEntries.map((entry) => entry.body ?? ""),
+    ...incident.attachedFieldReports.map((report) => report.body),
+    ...timelineEntries
+      .filter((entry) => entry.entryType !== "field_report_linked")
+      .filter((entry) => !entry.strickenAt)
+      .map((entry) => entry.body ?? ""),
   ].flatMap(parseNameReferences);
 }
 
@@ -894,7 +1331,11 @@ function extractIncidentTags(
     incident.title,
     ...incident.incidentTypeNames,
     ...incident.responders.map((responder) => responder.displayName),
-    ...timelineEntries.map((entry) => entry.body ?? ""),
+    ...incident.attachedFieldReports.map((report) => report.body),
+    ...timelineEntries
+      .filter((entry) => entry.entryType !== "field_report_linked")
+      .filter((entry) => !entry.strickenAt)
+      .map((entry) => entry.body ?? ""),
   ].flatMap(parseTags);
 }
 

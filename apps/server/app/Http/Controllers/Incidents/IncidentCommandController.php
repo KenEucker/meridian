@@ -3,16 +3,20 @@
 namespace App\Http\Controllers\Incidents;
 
 use App\Exceptions\IncidentCreationException;
+use App\Exceptions\IncidentFieldReportLinkException;
 use App\Exceptions\IncidentLinkException;
 use App\Exceptions\IncidentTimelineException;
 use App\Exceptions\IncidentUpdateException;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
+use App\Models\FieldReport;
 use App\Models\Incident;
+use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Services\Incidents\IncidentCreationAccess;
 use App\Services\Incidents\IncidentCreationService;
+use App\Services\Incidents\IncidentFieldReportLinkService;
 use App\Services\Incidents\IncidentLinkService;
 use App\Services\Incidents\IncidentNoteAccess;
 use App\Services\Incidents\IncidentTimelineService;
@@ -29,6 +33,8 @@ use Illuminate\Http\Request;
  * POST /api/commands/update-incident for online autosaved current-field edits.
  * M11.7B adds POST /api/commands/link-incident and
  * POST /api/commands/unlink-incident for same-event incident relationships.
+ * M11.8 adds POST /api/commands/link-field-report and
+ * POST /api/commands/unlink-field-report for Field Report relationships.
  * Technical spec 19.2 requires active server connection for incident mutations.
  */
 final class IncidentCommandController extends Controller
@@ -186,6 +192,22 @@ final class IncidentCommandController extends Controller
         return $this->mutateIncidentLink($request, $access, $links, unlink: true);
     }
 
+    public function linkFieldReport(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentFieldReportLinkService $links,
+    ): JsonResponse {
+        return $this->mutateFieldReportLink($request, $access, $links, unlink: false);
+    }
+
+    public function unlinkFieldReport(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentFieldReportLinkService $links,
+    ): JsonResponse {
+        return $this->mutateFieldReportLink($request, $access, $links, unlink: true);
+    }
+
     public function appendNote(
         Request $request,
         IncidentNoteAccess $access,
@@ -310,6 +332,63 @@ final class IncidentCommandController extends Controller
             'unlinked_at' => optional($link->unlinked_at)?->toIso8601String(),
             'linked_incidents' => $this->linkedIncidentPayload($incident->refresh()),
         ], $unlink ? 200 : 201);
+    }
+
+    private function mutateFieldReportLink(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentFieldReportLinkService $links,
+        bool $unlink,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+            'field_report_id' => ['required', 'uuid', 'exists:field_reports,id'],
+        ]);
+
+        $event = Event::query()->findOrFail((string) $validated['event_id']);
+        $incident = Incident::query()->findOrFail((string) $validated['incident_id']);
+        $fieldReport = FieldReport::query()->findOrFail((string) $validated['field_report_id']);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canUpdateIncident($user, $event)) {
+            return response()->json([
+                'message' => 'Only IC operators and IC leads for this event may link Field Reports.',
+            ], 403);
+        }
+
+        try {
+            $link = $unlink
+                ? $links->unlink($incident, $fieldReport, $user, sourceContext: AuditEvent::SOURCE_API)
+                : $links->link($incident, $fieldReport, $user, sourceContext: AuditEvent::SOURCE_API);
+        } catch (IncidentFieldReportLinkException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($this->fieldReportLinkPayload($link), $unlink ? 200 : 201);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fieldReportLinkPayload(IncidentFieldReport $link): array
+    {
+        return [
+            'id' => $link->id,
+            'incident_id' => $link->incident_id,
+            'field_report_id' => $link->field_report_id,
+            'linked_by_user_id' => $link->linked_by_user_id,
+            'linked_at' => optional($link->linked_at)?->toIso8601String(),
+            'unlinked_by_user_id' => $link->unlinked_by_user_id,
+            'unlinked_at' => optional($link->unlinked_at)?->toIso8601String(),
+            'stricken_reason' => $link->stricken_reason,
+        ];
     }
 
     /**

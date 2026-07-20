@@ -906,6 +906,10 @@ Routine field-change audit entries should be hidden unless expanded.
 
 Incident-level Name Reference chips should appear near existing incident tags or metadata when extracted from incident notes or attached Field Reports. They should be visually distinct from `#tags`, and clicking one should run normal permission-filtered search.
 
+Linked Incident and Field Report add controls should list only same-event records not already linked to the current incident. Candidates sharing current incident `#tags` appear first, location text does not affect that priority, each group sorts newest-added first, and search may find records linked to other incidents.
+
+Incident and IC Field Report list pages should include explicit Home links and cross-links to each other. List headings should be sortable. Incident lists should default to active states, allow Closed incidents to be included, and filter by state and priority. IC Field Report list state/priority filters should use related incidents until Field Reports have their own state/priority fields, and IC Field Reports should also filter by linked or not-linked status.
+
 ### 19.5 Speed of actions
 
 Incident actions should not be deliberately slower than normal operational actions.

@@ -10,6 +10,7 @@ import {
   resolveIncidentSession,
   statusLabel,
   type IncidentPriorityLabel,
+  type ImsIncident,
 } from "@/ims/incidentReadModel";
 
 const session = computed(() => resolveIncidentSession());
@@ -20,10 +21,25 @@ const router = useRouter();
 const searchQuery = computed(() =>
   typeof route.query.search === "string" ? route.query.search : "",
 );
-const searchDraft = ref(searchQuery.value);
-const incidents = computed(() =>
-  listIncidentsForSession(session.value, searchQuery.value),
+const stateFilter = computed(() =>
+  typeof route.query.state === "string" ? route.query.state : "active",
 );
+const priorityFilter = computed(() =>
+  typeof route.query.priority === "string" ? route.query.priority : "all",
+);
+const sortKey = computed(() =>
+  typeof route.query.sort === "string" ? route.query.sort : "updated",
+);
+const sortDirection = computed(() =>
+  route.query.direction === "asc" ? "asc" : "desc",
+);
+const searchDraft = ref(searchQuery.value);
+const incidents = computed(() => {
+  return listIncidentsForSession(session.value, searchQuery.value)
+    .filter((incident) => matchesStateFilter(incident, stateFilter.value))
+    .filter((incident) => matchesPriorityFilter(incident, priorityFilter.value))
+    .sort(compareIncidents);
+});
 
 watch(searchQuery, (value) => {
   searchDraft.value = value;
@@ -41,12 +57,130 @@ function typeText(typeNames: readonly string[]): string {
   return typeNames.length > 0 ? typeNames.join(", ") : "Types not set";
 }
 
+function activeSortDirection(key: string): "ascending" | "descending" | "none" {
+  if (sortKey.value !== key) {
+    return "none";
+  }
+
+  return sortDirection.value === "asc" ? "ascending" : "descending";
+}
+
+function nextSortQuery(key: string) {
+  const nextDirection =
+    sortKey.value === key && sortDirection.value === "asc" ? "desc" : "asc";
+
+  return {
+    ...route.query,
+    sort: key,
+    direction: nextDirection,
+  };
+}
+
+function onStateFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: { ...route.query, state: target.value },
+  });
+}
+
+function onPriorityFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: { ...route.query, priority: target.value },
+  });
+}
+
+function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "active") {
+    return incident.status !== "closed";
+  }
+
+  return incident.status === filter;
+}
+
+function matchesPriorityFilter(incident: ImsIncident, filter: string): boolean {
+  return filter === "all" || incident.priorityLabel === filter;
+}
+
+function statusSortValue(status: ImsIncident["status"]): number {
+  return {
+    open: 0,
+    on_scene: 1,
+    monitoring: 2,
+    on_hold: 3,
+    closed: 4,
+  }[status];
+}
+
+function prioritySortValue(priority: IncidentPriorityLabel): number {
+  return {
+    Critical: 0,
+    Serious: 1,
+    Important: 2,
+    Routine: 3,
+  }[priority];
+}
+
+function compareText(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { sensitivity: "base" });
+}
+
+function compareIncidents(left: ImsIncident, right: ImsIncident): number {
+  const direction = sortDirection.value === "asc" ? 1 : -1;
+  let result = 0;
+
+  switch (sortKey.value) {
+    case "incident":
+      result =
+        compareText(left.incidentNumber, right.incidentNumber) ||
+        compareText(left.title, right.title);
+      break;
+    case "state":
+      result = statusSortValue(left.status) - statusSortValue(right.status);
+      break;
+    case "priority":
+      result =
+        prioritySortValue(left.priorityLabel) -
+        prioritySortValue(right.priorityLabel);
+      break;
+    case "types":
+      result = compareText(
+        typeText(left.incidentTypeNames),
+        typeText(right.incidentTypeNames),
+      );
+      break;
+    case "location":
+      result = compareText(left.locationName ?? "", right.locationName ?? "");
+      break;
+    case "updated":
+    default:
+      result = left.updatedAt.localeCompare(right.updatedAt);
+      break;
+  }
+
+  return result === 0
+    ? right.updatedAt.localeCompare(left.updatedAt)
+    : result * direction;
+}
+
 async function onSearchSubmit(): Promise<void> {
   const search = searchDraft.value.trim();
 
   await router.push({
     name: "ims.incidents.index",
-    query: search ? { search } : {},
+    query: {
+      ...route.query,
+      ...(search ? { search } : {}),
+      ...(!search ? { search: undefined } : {}),
+    },
   });
 }
 </script>
@@ -60,13 +194,24 @@ async function onSearchSubmit(): Promise<void> {
           Incidents
         </h1>
       </div>
-      <RouterLink
-        v-if="canEdit"
-        class="ims-list__create"
-        :to="{ name: 'ims.incidents.create' }"
-      >
-        Create incident
-      </RouterLink>
+      <nav class="ims-list__links" aria-label="Incident list links">
+        <RouterLink class="ims-list__secondary-link" :to="{ name: 'home' }">
+          Home
+        </RouterLink>
+        <RouterLink
+          class="ims-list__secondary-link"
+          :to="{ name: 'ims.field-reports.index' }"
+        >
+          Field Reports
+        </RouterLink>
+        <RouterLink
+          v-if="canEdit"
+          class="ims-list__create"
+          :to="{ name: 'ims.incidents.create' }"
+        >
+          Create incident
+        </RouterLink>
+      </nav>
       <dl v-if="session" class="ims-list__context">
         <div>
           <dt>Organization</dt>
@@ -116,6 +261,36 @@ async function onSearchSubmit(): Promise<void> {
         </RouterLink>
       </form>
 
+      <form class="ims-list__filters" aria-label="Filter incidents">
+        <label for="ims-list-state">State</label>
+        <select
+          id="ims-list-state"
+          :value="stateFilter"
+          @change="onStateFilterChange"
+        >
+          <option value="active">Active states</option>
+          <option value="open">Open</option>
+          <option value="on_scene">On Scene</option>
+          <option value="monitoring">Monitoring</option>
+          <option value="on_hold">On Hold</option>
+          <option value="closed">Closed</option>
+          <option value="all">All states</option>
+        </select>
+
+        <label for="ims-list-priority">Priority</label>
+        <select
+          id="ims-list-priority"
+          :value="priorityFilter"
+          @change="onPriorityFilterChange"
+        >
+          <option value="all">All priorities</option>
+          <option value="Critical">Critical</option>
+          <option value="Serious">Serious</option>
+          <option value="Important">Important</option>
+          <option value="Routine">Routine</option>
+        </select>
+      </form>
+
       <p
         v-if="incidents.length === 0"
         class="ims-list__empty"
@@ -146,12 +321,36 @@ async function onSearchSubmit(): Promise<void> {
           </caption>
           <thead>
             <tr>
-              <th scope="col">Incident</th>
-              <th scope="col">State</th>
-              <th scope="col">Priority</th>
-              <th scope="col">Types</th>
-              <th scope="col">Location</th>
-              <th scope="col">Last update</th>
+              <th scope="col" :aria-sort="activeSortDirection('incident')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('incident') }">
+                  Incident
+                </RouterLink>
+              </th>
+              <th scope="col" :aria-sort="activeSortDirection('state')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('state') }">
+                  State
+                </RouterLink>
+              </th>
+              <th scope="col" :aria-sort="activeSortDirection('priority')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('priority') }">
+                  Priority
+                </RouterLink>
+              </th>
+              <th scope="col" :aria-sort="activeSortDirection('types')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('types') }">
+                  Types
+                </RouterLink>
+              </th>
+              <th scope="col" :aria-sort="activeSortDirection('location')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('location') }">
+                  Location
+                </RouterLink>
+              </th>
+              <th scope="col" :aria-sort="activeSortDirection('updated')">
+                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('updated') }">
+                  Last update
+                </RouterLink>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -215,6 +414,22 @@ async function onSearchSubmit(): Promise<void> {
   text-decoration: none;
 }
 
+.ims-list__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+}
+
+.ims-list__secondary-link {
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-3);
+  color: var(--m-action-secondary-bg);
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .ims-list__eyebrow,
 .ims-list__heading,
 .ims-list__empty {
@@ -266,20 +481,25 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__restricted a,
 .ims-list__incident-link,
 .ims-list__search-context a,
-.ims-list__clear-search {
+.ims-list__clear-search,
+.ims-list__table thead a {
   color: var(--m-action-secondary-bg);
   font-weight: 700;
 }
 
 .ims-list__create:focus-visible,
+.ims-list__secondary-link:focus-visible,
 .ims-list__search-form input:focus-visible,
 .ims-list__search-form button:focus-visible,
-.ims-list__clear-search:focus-visible {
+.ims-list__filters select:focus-visible,
+.ims-list__clear-search:focus-visible,
+.ims-list__table thead a:focus-visible {
   outline: 3px solid var(--m-focus-ring);
   outline-offset: 2px;
 }
 
-.ims-list__search-form {
+.ims-list__search-form,
+.ims-list__filters {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) auto auto;
   gap: var(--m-space-2);
@@ -290,14 +510,25 @@ async function onSearchSubmit(): Promise<void> {
   background: var(--m-surface-raised);
 }
 
-.ims-list__search-form label {
+.ims-list__filters {
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.ims-list__search-form label,
+.ims-list__filters label {
   grid-column: 1 / -1;
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
   font-weight: 800;
 }
 
-.ims-list__search-form input {
+.ims-list__filters label {
+  grid-column: auto;
+  align-self: center;
+}
+
+.ims-list__search-form input,
+.ims-list__filters select {
   min-width: 0;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
@@ -367,6 +598,10 @@ async function onSearchSubmit(): Promise<void> {
   font-size: var(--m-text-sm);
 }
 
+.ims-list__table thead a {
+  text-decoration: none;
+}
+
 .ims-list__incident-link {
   display: grid;
   gap: var(--m-space-1);
@@ -420,7 +655,8 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 @media (max-width: 43.99rem) {
-  .ims-list__search-form {
+  .ims-list__search-form,
+  .ims-list__filters {
     grid-template-columns: 1fr;
   }
 

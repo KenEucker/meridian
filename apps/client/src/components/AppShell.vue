@@ -176,7 +176,7 @@ watch(
   align-content: start;
   justify-items: center;
   gap: var(--m-space-6);
-  padding: var(--m-space-6) 0
+  padding: var(--m-space-6) var(--m-space-4)
     max(var(--m-space-8), env(safe-area-inset-bottom));
 }
 </style>

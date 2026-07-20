@@ -58,6 +58,9 @@ function syncLabel(report: OfflineFieldReport): string {
         Field Reports.
       </p>
       <p class="field-reports__actions">
+        <RouterLink class="field-reports__secondary-link" :to="{ name: 'home' }">
+          Home
+        </RouterLink>
         <RouterLink
           class="field-reports__create"
           :to="{ name: 'staff.field-reports.create' }"
@@ -131,19 +134,35 @@ function syncLabel(report: OfflineFieldReport): string {
   color: var(--m-text-muted);
 }
 
-.field-reports__create {
-  display: block;
+.field-reports__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.field-reports__create,
+.field-reports__secondary-link {
+  display: inline-block;
   min-height: 2.75rem;
   padding: var(--m-space-2) var(--m-space-4);
-  background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-text);
   text-decoration: none;
   border-radius: var(--m-radius-sm);
   font-weight: 600;
   text-align: center;
 }
 
-.field-reports__create:focus-visible {
+.field-reports__create {
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+}
+
+.field-reports__secondary-link {
+  border: 1px solid var(--m-border-default);
+  color: var(--m-action-secondary-bg);
+}
+
+.field-reports__create:focus-visible,
+.field-reports__secondary-link:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
 }
@@ -199,7 +218,6 @@ function syncLabel(report: OfflineFieldReport): string {
 
 @media (min-width: 44rem) {
   .field-reports__create {
-    display: inline-block;
     width: auto;
   }
 }

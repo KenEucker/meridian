@@ -29,6 +29,9 @@ const planningRoute = {
 const imsIncidentsRoute = {
   name: "ims.incidents.index",
 };
+const imsFieldReportsRoute = {
+  name: "ims.field-reports.index",
+};
 </script>
 
 <template>
@@ -54,16 +57,26 @@ const imsIncidentsRoute = {
 
       <section class="home__section" aria-labelledby="home-secondary-heading">
         <h2 id="home-secondary-heading" class="home__section-heading">
-          Supporting tools
+          Incident Management
         </h2>
         <div class="home__links home__links--secondary">
           <RouterLink :to="{ name: 'staff.field-reports.index' }"
             >My Field Reports</RouterLink
           >
-          <RouterLink :to="imsIncidentsRoute">IMS incidents</RouterLink>
+          <RouterLink :to="imsIncidentsRoute">Incidents</RouterLink>
+          <RouterLink :to="imsFieldReportsRoute">Field Reports</RouterLink>
+        </div>
+      </section>
+
+      <section class="home__section" aria-labelledby="home-tools-heading">
+        <h2 id="home-tools-heading" class="home__section-heading">
+          Supporting tools
+        </h2>
+        <div class="home__links home__links--secondary">
           <RouterLink :to="{ name: 'readiness' }"
             >Check device readiness</RouterLink
           >
+          <RouterLink :to="{ name: 'settings.about' }">Health</RouterLink>
         </div>
       </section>
     </div>

@@ -1323,6 +1323,8 @@ Certain roles under the selected IC department may view all field reports if gra
 
 Field reports attached to incidents become visible within that incident only to users who can view the incident.
 
+When a field report is attached to an incident, the incident timeline copy includes the Field Report title, author, and body.
+
 The original field report submitter is not shown that their field report has been attached to an incident.
 
 ## 17.7 Name References in Field Reports

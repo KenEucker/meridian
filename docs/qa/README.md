@@ -35,8 +35,8 @@ adds append-only operational timeline notes. M11.6A adds incident Name Reference
 chips and chip-driven permission-filtered search. M11.7 adds the online-only
 incident create/edit autosave surface for IC operators/leads. M11.7A adds
 priority, incident types, and involved Rangers/responders to create/edit. M11.7B
-adds linked incidents. The full `QA-INC-01` incident-management script remains
-owned by M11.11.
+adds linked incidents. M11.8 adds Field Report attach/unlink from incidents.
+The full `QA-INC-01` incident-management script remains owned by M11.11.
 
 1. Seed or create an event with a configured Incident Command department,
    an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
@@ -64,7 +64,18 @@ owned by M11.11.
    block editing; field/link edits appear in history/audit; and incident notes
    remain append-only. After M11.8, repeat the already-linked exclusion,
    shared-tag-first, newest-added ordering check for Field Report attachment
-   candidates.
+   candidates. For both linked Incident and Field Report add controls, confirm
+   search can find same-event records linked to other incidents when they are
+   not already linked to the current incident. Attach one Field Report, confirm
+   it appears in current state and as a copied timeline note headed
+   `Field Report: <title>` with the Field Report author listed, then unlink it
+   and confirm the copied note is struck while removal history remains visible.
+   Confirm the Incident list links to IC Field Reports, the IC Field Reports
+   list links back to Incidents, both list pages have Home links, table headings
+   sort, Incident state/priority filters work, Closed incidents are filtered out
+   by default but can be included, and IC Field Report state/priority filters
+   follow related incidents. Confirm the IC Field Reports link-status filter can
+   show linked and not-linked reports.
 7. Simulate offline/no-network state on the create/edit screen and confirm
    incident mutation is blocked without queued-offline language while the typed
    form state remains on the screen.

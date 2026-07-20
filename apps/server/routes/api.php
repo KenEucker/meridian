@@ -49,6 +49,12 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/unlink-incident', [IncidentCommandController::class, 'unlinkIncident'])
         ->name('api.commands.unlink-incident');
 
+    Route::post('/commands/link-field-report', [IncidentCommandController::class, 'linkFieldReport'])
+        ->name('api.commands.link-field-report');
+
+    Route::post('/commands/unlink-field-report', [IncidentCommandController::class, 'unlinkFieldReport'])
+        ->name('api.commands.unlink-field-report');
+
     Route::post('/commands/append-incident-note', [IncidentCommandController::class, 'appendNote'])
         ->name('api.commands.append-incident-note');
 

@@ -41,6 +41,9 @@ describe("shared client shell", () => {
       "Department operations",
     );
     expect(wrapper.get("#home-secondary-heading").text()).toBe(
+      "Incident Management",
+    );
+    expect(wrapper.get("#home-tools-heading").text()).toBe(
       "Supporting tools",
     );
     expect(document.title).toBe("Meridian Admin");

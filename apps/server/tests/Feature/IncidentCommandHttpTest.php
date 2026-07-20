@@ -6,7 +6,9 @@ use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
+use App\Models\FieldReport;
 use App\Models\Incident;
+use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Models\IncidentTimelineEntry;
 use App\Models\Organization;
@@ -933,6 +935,246 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_links', 0);
     }
 
+    public function test_ic_operator_can_link_and_unlink_field_report_with_copied_note_and_stricken_history(): void
+    {
+        Carbon::setTestNow('2027-07-04 23:45:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000020',
+            'updated_at' => Carbon::parse('2027-07-04T22:00:00Z'),
+        ]);
+        $secondIncident = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000021',
+        ]);
+        $fieldReportAuthor = Staff::factory()->create([
+            'preferred_name' => 'Vera',
+            'legal_name' => 'Vera Ranger',
+        ]);
+        $report = FieldReport::factory()
+            ->forEvent($event)
+            ->forAuthor(User::factory()->create(['name' => 'Vera User']), $fieldReportAuthor)
+            ->receivedByServer()
+            ->create([
+                'fra_number' => 'FRA-2027-000123',
+                'title' => 'Medical assist near Gate A',
+                'body' => "Observed a medical assist near Gate A.\nRanger requested follow-up.",
+            ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('incident_id', $incident->id)
+            ->assertJsonPath('field_report_id', $report->id)
+            ->assertJsonPath('linked_by_user_id', $actor->id)
+            ->assertJsonPath('unlinked_at', null);
+
+        $link = IncidentFieldReport::query()->where('incident_id', $incident->id)->sole();
+        $copiedEntry = IncidentTimelineEntry::query()
+            ->where('incident_id', $incident->id)
+            ->where('entry_type', IncidentTimelineEntry::TYPE_FIELD_REPORT_LINKED)
+            ->sole();
+
+        $this->assertSame($actor->id, $link->linked_by_user_id);
+        $this->assertNull($link->unlinked_at);
+        $this->assertSame(
+            "Field Report: Medical assist near Gate A\nAuthor: Vera\nObserved a medical assist near Gate A.\nRanger requested follow-up.",
+            $copiedEntry->body,
+        );
+        $this->assertSame($link->id, $copiedEntry->new_value['incident_field_report_id']);
+        $this->assertNull($copiedEntry->stricken_at);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'incident.field_report_linked',
+            'entity_id' => $link->id,
+            'actor_user_id' => $actor->id,
+            'event_id' => $event->id,
+            'department_id' => $event->ic_department_id,
+            'source_context' => AuditEvent::SOURCE_API,
+        ]);
+        $this->assertTrue($incident->refresh()->updated_at->equalTo(Carbon::parse('2027-07-04T23:45:00Z')));
+        $this->assertDatabaseHas('field_reports', [
+            'id' => $report->id,
+            'title' => 'Medical assist near Gate A',
+            'body' => "Observed a medical assist near Gate A.\nRanger requested follow-up.",
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $secondIncident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('incident_id', $secondIncident->id)
+            ->assertJsonPath('field_report_id', $report->id);
+
+        $this->assertDatabaseCount('incident_field_reports', 2);
+
+        Carbon::setTestNow('2027-07-05 00:05:00 UTC');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('id', $link->id)
+            ->assertJsonPath('unlinked_by_user_id', $actor->id)
+            ->assertJsonPath('stricken_reason', 'Field Report removed from incident.');
+
+        $link->refresh();
+        $copiedEntry->refresh();
+        $unlinkEntry = IncidentTimelineEntry::query()
+            ->where('incident_id', $incident->id)
+            ->where('entry_type', IncidentTimelineEntry::TYPE_FIELD_REPORT_UNLINKED)
+            ->sole();
+
+        $this->assertNotNull($link->unlinked_at);
+        $this->assertSame($actor->id, $link->unlinked_by_user_id);
+        $this->assertSame('Field Report removed from incident.', $link->stricken_reason);
+        $this->assertNotNull($copiedEntry->stricken_at);
+        $this->assertSame('Field Report removed from incident.', $copiedEntry->stricken_reason);
+        $this->assertSame('Removed Field Report FRA-2027-000123: Medical assist near Gate A.', $unlinkEntry->body);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'incident.field_report_unlinked',
+            'entity_id' => $link->id,
+            'actor_user_id' => $actor->id,
+            'event_id' => $event->id,
+            'department_id' => $event->ic_department_id,
+            'source_context' => AuditEvent::SOURCE_API,
+        ]);
+        $this->assertDatabaseHas('incident_field_reports', [
+            'incident_id' => $secondIncident->id,
+            'field_report_id' => $report->id,
+            'unlinked_at' => null,
+        ]);
+    }
+
+    public function test_link_field_report_rejects_duplicate_and_cross_event_links(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+        $otherEventReport = FieldReport::factory()->forEvent($otherEvent)->receivedByServer()->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Field Report is already linked to this incident.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $otherEventReport->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Field Report must belong to the same event as the incident.');
+
+        $this->assertDatabaseCount('incident_field_reports', 1);
+    }
+
+    public function test_unlink_field_report_rejects_missing_and_cross_event_relationships(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+        $otherEventReport = FieldReport::factory()->forEvent($otherEvent)->receivedByServer()->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Field Report is not currently linked to this incident.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $otherEventReport->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Field Report must belong to the same event as the incident.');
+
+        $this->assertDatabaseCount('incident_field_reports', 0);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_ic_viewer_and_non_ic_roles_cannot_link_field_reports(): void
+    {
+        $this->assertRoleCannotLinkFieldReport('ic_viewer');
+        $this->assertRoleCannotLinkFieldReport('organizer', eventScoped: false);
+        $this->assertRoleCannotLinkFieldReport('department_lead', eventScoped: false);
+    }
+
+    public function test_wrong_event_or_revoked_ic_grant_cannot_link_field_reports(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $wrongEventActor = $this->userWithEventRole('ic_operator', $otherEvent);
+        $revokedActor = $this->userWithEventRole('ic_lead', $event, revoked: true);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+
+        foreach ([$wrongEventActor, $revokedActor] as $actor) {
+            $this->actingAs($actor)
+                ->postJson('/api/commands/link-field-report', [
+                    'event_id' => $event->id,
+                    'incident_id' => $incident->id,
+                    'field_report_id' => $report->id,
+                ])
+                ->assertForbidden()
+                ->assertJsonPath('message', 'Only IC operators and IC leads for this event may link Field Reports.');
+        }
+
+        $this->assertDatabaseCount('incident_field_reports', 0);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_link_and_unlink_field_report_commands_require_authentication(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $incident = Incident::factory()->forEvent($event)->create();
+        $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+
+        $payload = [
+            'event_id' => $event->id,
+            'incident_id' => $incident->id,
+            'field_report_id' => $report->id,
+        ];
+
+        $this->postJson('/api/commands/link-field-report', $payload)->assertUnauthorized();
+        $this->postJson('/api/commands/unlink-field-report', $payload)->assertUnauthorized();
+
+        $this->assertDatabaseCount('incident_field_reports', 0);
+    }
+
     private function assertRoleCannotCreateIncident(string $roleCode, bool $eventScoped = true): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
@@ -965,6 +1207,27 @@ class IncidentCommandHttpTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('message', 'Only IC operators and IC leads for this event may add incident notes.');
 
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    private function assertRoleCannotLinkFieldReport(string $roleCode, bool $eventScoped = true): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-field-report', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'field_report_id' => $report->id,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Only IC operators and IC leads for this event may link Field Reports.');
+
+        $this->assertDatabaseCount('incident_field_reports', 0);
         $this->assertDatabaseCount('incident_timeline_entries', 0);
         $this->assertDatabaseCount('audit_events', 0);
     }

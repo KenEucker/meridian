@@ -6,7 +6,9 @@ use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
+use App\Models\FieldReport;
 use App\Models\Incident;
+use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
@@ -93,6 +95,35 @@ class IncidentReadHttpTest extends TestCase
             'created_by_user_id' => $actor->id,
             'created_at' => Carbon::parse('2027-07-04T20:22:00Z'),
         ]);
+        $fieldReportAuthor = Staff::factory()->create(['preferred_name' => 'Vera']);
+        $fieldReport = FieldReport::factory()
+            ->forEvent($event)
+            ->forAuthor(User::factory()->create(['name' => 'Vera User']), $fieldReportAuthor)
+            ->receivedByServer()
+            ->create([
+                'fra_number' => 'FRA-2027-000123',
+                'title' => 'Gate A medical observation',
+                'body' => 'Observed @Blue-Hat near Gate A.',
+            ]);
+        $fieldReportLink = IncidentFieldReport::query()->create([
+            'incident_id' => $incident->id,
+            'field_report_id' => $fieldReport->id,
+            'linked_by_user_id' => $actor->id,
+            'linked_at' => Carbon::parse('2027-07-04T20:25:00Z'),
+        ]);
+        $unlinkedReport = FieldReport::factory()->forEvent($event)->receivedByServer()->create([
+            'fra_number' => 'FRA-2027-000124',
+            'title' => 'Removed observation',
+        ]);
+        IncidentFieldReport::query()->create([
+            'incident_id' => $incident->id,
+            'field_report_id' => $unlinkedReport->id,
+            'linked_by_user_id' => $actor->id,
+            'linked_at' => Carbon::parse('2027-07-04T20:26:00Z'),
+            'unlinked_by_user_id' => $actor->id,
+            'unlinked_at' => Carbon::parse('2027-07-04T20:27:00Z'),
+            'stricken_reason' => 'Field Report removed from incident.',
+        ]);
         $unlinkedIncident = Incident::factory()->forEvent($event)->create([
             'incident_number' => 'INC-2027-000005',
             'title' => 'Unlinked relay',
@@ -132,6 +163,14 @@ class IncidentReadHttpTest extends TestCase
             ->assertJsonPath('incident.linked_incidents.0.title', 'Related radio relay')
             ->assertJsonPath('incident.linked_incidents.0.status', Incident::STATUS_ON_HOLD)
             ->assertJsonCount(1, 'incident.linked_incidents')
+            ->assertJsonPath('incident.attached_field_reports.0.id', $fieldReport->id)
+            ->assertJsonPath('incident.attached_field_reports.0.field_report_id', $fieldReport->id)
+            ->assertJsonPath('incident.attached_field_reports.0.incident_field_report_id', $fieldReportLink->id)
+            ->assertJsonPath('incident.attached_field_reports.0.display_number', 'FRA-2027-000123')
+            ->assertJsonPath('incident.attached_field_reports.0.title', 'Gate A medical observation')
+            ->assertJsonPath('incident.attached_field_reports.0.author_name', 'Vera')
+            ->assertJsonPath('incident.attached_field_reports.0.body', 'Observed @Blue-Hat near Gate A.')
+            ->assertJsonCount(1, 'incident.attached_field_reports')
             ->assertJsonPath('incident.title', 'Radio check at Gate A')
             ->assertJsonPath('incident.location_name', 'Gate A')
             ->assertJsonPath('incident.location_details', 'North side of entry.')
