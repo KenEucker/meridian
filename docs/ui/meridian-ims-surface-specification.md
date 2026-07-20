@@ -203,7 +203,9 @@ and cross-links to each other. Incident list headings should be sortable, with
 state and priority filters that exclude Closed incidents by default while still
 allowing Closed incidents to be included. IC Field Report list headings should
 be sortable; until Field Reports gain their own state/priority fields, Field
-Report state and priority filters are based on related incidents.
+Report state and priority filters are based on related incidents. IC Field
+Report lists should also filter by link status, including linked and not-linked
+reports.
 
 ## 9.1 Name References
 

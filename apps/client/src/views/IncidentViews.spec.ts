@@ -196,6 +196,23 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
         .some((link) => link.attributes("href") === "/ims/incidents"),
     ).toBe(true);
 
+    await wrapper.get("#ims-fr-list-link").setValue("linked");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.link).toBe("linked");
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).not.toContain("FRA-2027-000124");
+
+    await wrapper.get("#ims-fr-list-link").setValue("not_linked");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.link).toBe("not_linked");
+    expect(wrapper.text()).not.toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("FRA-2027-000124");
+
+    await wrapper.get("#ims-fr-list-link").setValue("all");
+    await flushPromises();
+
     await wrapper.get("#ims-fr-list-priority").setValue("Serious");
     await flushPromises();
 

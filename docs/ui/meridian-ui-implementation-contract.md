@@ -1185,7 +1185,8 @@ are excluded, and allow Closed incidents to be included. IC Field Report lists
 must link back to Incidents, Incident lists must link to IC Field Reports, and
 both list surfaces must include a Home link. Because Field Reports do not have
 their own Alpha 1 state or priority fields, IC Field Report list state/priority
-filters use related incident state/priority.
+filters use related incident state/priority. IC Field Report lists must also
+offer link-status filtering for linked and not-linked reports.
 
 ### 15.2 Autosave
 

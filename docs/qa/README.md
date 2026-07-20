@@ -74,7 +74,8 @@ The full `QA-INC-01` incident-management script remains owned by M11.11.
    list links back to Incidents, both list pages have Home links, table headings
    sort, Incident state/priority filters work, Closed incidents are filtered out
    by default but can be included, and IC Field Report state/priority filters
-   follow related incidents.
+   follow related incidents. Confirm the IC Field Reports link-status filter can
+   show linked and not-linked reports.
 7. Simulate offline/no-network state on the create/edit screen and confirm
    incident mutation is blocked without queued-offline language while the typed
    form state remains on the screen.

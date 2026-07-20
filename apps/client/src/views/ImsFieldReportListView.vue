@@ -22,6 +22,9 @@ const stateFilter = computed(() =>
 const priorityFilter = computed(() =>
   typeof route.query.priority === "string" ? route.query.priority : "all",
 );
+const linkFilter = computed(() =>
+  typeof route.query.link === "string" ? route.query.link : "all",
+);
 const sortKey = computed(() =>
   typeof route.query.sort === "string" ? route.query.sort : "submitted",
 );
@@ -31,6 +34,7 @@ const sortDirection = computed(() =>
 
 const reports = computed(() =>
   listFieldReportsForSession(session.value)
+    .filter((report) => matchesLinkFilter(report, linkFilter.value))
     .filter((report) => matchesRelatedStateFilter(report, stateFilter.value))
     .filter((report) =>
       matchesRelatedPriorityFilter(report, priorityFilter.value),
@@ -98,6 +102,21 @@ function matchesRelatedPriorityFilter(
   );
 }
 
+function matchesLinkFilter(
+  report: ImsFieldReportListItem,
+  filter: string,
+): boolean {
+  if (filter === "linked") {
+    return report.relatedIncidents.length > 0;
+  }
+
+  if (filter === "not_linked") {
+    return report.relatedIncidents.length === 0;
+  }
+
+  return true;
+}
+
 function activeSortDirection(key: string): "ascending" | "descending" | "none" {
   if (sortKey.value !== key) {
     return "none";
@@ -132,6 +151,15 @@ function onPriorityFilterChange(event: Event): void {
   void router.push({
     name: "ims.field-reports.index",
     query: { ...route.query, priority: target.value },
+  });
+}
+
+function onLinkFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.field-reports.index",
+    query: { ...route.query, link: target.value },
   });
 }
 
@@ -226,6 +254,17 @@ function compareReports(
 
     <template v-else>
       <form class="ims-fr-list__filters" aria-label="Filter Field Reports">
+        <label for="ims-fr-list-link">Link status</label>
+        <select
+          id="ims-fr-list-link"
+          :value="linkFilter"
+          @change="onLinkFilterChange"
+        >
+          <option value="all">All reports</option>
+          <option value="linked">Linked</option>
+          <option value="not_linked">Not linked</option>
+        </select>
+
         <label for="ims-fr-list-state">Related state</label>
         <select
           id="ims-fr-list-state"
