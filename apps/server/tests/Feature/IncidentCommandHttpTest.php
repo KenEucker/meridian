@@ -40,6 +40,7 @@ class IncidentCommandHttpTest extends TestCase
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => '  Medical assist at Gate A  ',
+                'priority_label' => Incident::PRIORITY_SERIOUS,
                 'started_at' => '2027-07-04T20:15:00Z',
                 'location_name' => ' Gate A ',
                 'location_address' => '',
@@ -48,6 +49,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('incident_number', 'INC-2027-000001')
             ->assertJsonPath('status', Incident::STATUS_OPEN)
+            ->assertJsonPath('priority_label', Incident::PRIORITY_SERIOUS)
             ->assertJsonPath('title', 'Medical assist at Gate A')
             ->assertJsonPath('location_name', 'Gate A')
             ->assertJsonPath('location_address', null)
@@ -65,6 +67,7 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertSame(AuditEvent::SOURCE_API, $audit->source_context);
         $this->assertSame($incident->id, $audit->entity_id);
         $this->assertSame('INC-2027-000001', $audit->after_json['incident_number']);
+        $this->assertSame(Incident::PRIORITY_SERIOUS, $audit->after_json['priority_label']);
         $this->assertSame($incident->id, $timelineEntry->incident_id);
         $this->assertSame($actor->id, $timelineEntry->actor_user_id);
         $this->assertSame(IncidentTimelineEntry::TYPE_INCIDENT_OPENED, $timelineEntry->entry_type);
@@ -90,6 +93,74 @@ class IncidentCommandHttpTest extends TestCase
         ]);
     }
 
+    public function test_ic_lead_can_create_incident_with_priority_types_and_responders(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $responder = Staff::factory()->create([
+            'preferred_name' => 'Vera',
+            'handle' => 'vera-ranger',
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-incident', [
+                'event_id' => $event->id,
+                'title' => 'Responder dispatch',
+                'priority_label' => Incident::PRIORITY_CRITICAL,
+                'incident_type_names' => ['Medical', 'Safety', 'Medical'],
+                'responder_staff_ids' => [$responder->id],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('priority_label', Incident::PRIORITY_CRITICAL)
+            ->assertJsonPath('incident_type_names.0', 'Medical')
+            ->assertJsonPath('incident_type_names.1', 'Safety')
+            ->assertJsonCount(2, 'incident_type_names')
+            ->assertJsonPath('responders.0.staff_id', $responder->id)
+            ->assertJsonPath('responders.0.display_name', 'Vera')
+            ->assertJsonPath('responders.0.relationship_label', 'Responder');
+
+        $incident = Incident::query()->with(['incidentTypes', 'incidentStaff.staff'])->sole();
+
+        $this->assertSame(Incident::PRIORITY_CRITICAL, $incident->priority_label);
+        $this->assertSame(['Medical', 'Safety'], $incident->incidentTypes->pluck('name')->all());
+        $this->assertSame($responder->id, $incident->incidentStaff->sole()->staff_id);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'incident.created',
+            'entity_id' => $incident->id,
+        ]);
+    }
+
+    public function test_incident_create_records_opening_then_initial_field_change_timeline_entries(): void
+    {
+        Carbon::setTestNow('2027-07-04 20:30:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-incident', [
+                'event_id' => $event->id,
+                'priority_label' => Incident::PRIORITY_IMPORTANT,
+                'initial_field_update_fields' => ['priority_label'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('priority_label', Incident::PRIORITY_IMPORTANT);
+
+        $incident = Incident::query()->sole();
+        $timelineEntries = IncidentTimelineEntry::query()
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $timelineEntries);
+        $this->assertSame(IncidentTimelineEntry::TYPE_INCIDENT_OPENED, $timelineEntries[0]->entry_type);
+        $this->assertSame('Incident INC-2027-000001 opened.', $timelineEntries[0]->body);
+        $this->assertSame(IncidentTimelineEntry::TYPE_FIELD_UPDATED, $timelineEntries[1]->entry_type);
+        $this->assertSame('Changed priority: Important', $timelineEntries[1]->body);
+        $this->assertSame(Incident::PRIORITY_ROUTINE, $timelineEntries[1]->previous_value['priority_label']);
+        $this->assertSame(Incident::PRIORITY_IMPORTANT, $timelineEntries[1]->new_value['priority_label']);
+        $this->assertSame($incident->id, $timelineEntries[1]->incident_id);
+    }
+
     public function test_ic_operator_can_autosave_edit_closed_incident_fields_online(): void
     {
         Carbon::setTestNow('2027-07-04 22:45:00 UTC');
@@ -109,6 +180,7 @@ class IncidentCommandHttpTest extends TestCase
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
                 'title' => '  Updated closed title  ',
+                'priority_label' => Incident::PRIORITY_IMPORTANT,
                 'location_name' => ' Ranger HQ ',
                 'location_address' => '',
                 'location_details' => 'Updated details.',
@@ -116,6 +188,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('id', $incident->id)
             ->assertJsonPath('status', Incident::STATUS_CLOSED)
+            ->assertJsonPath('priority_label', Incident::PRIORITY_IMPORTANT)
             ->assertJsonPath('title', 'Updated closed title')
             ->assertJsonPath('location_name', 'Ranger HQ')
             ->assertJsonPath('location_address', null)
@@ -137,6 +210,7 @@ class IncidentCommandHttpTest extends TestCase
             $entry->body,
         );
         $this->assertStringContainsString('Changed location name: Ranger HQ', $entry->body);
+        $this->assertStringContainsString('Changed priority: Important', $entry->body);
         $this->assertStringNotContainsString('Updated at', $entry->body);
         $this->assertStringNotContainsString('field changed from', $entry->body);
         $this->assertStringNotContainsString('Changed started', $entry->body);
@@ -148,6 +222,82 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertSame(AuditEvent::SOURCE_API, $audit->source_context);
         $this->assertSame('Original closed title', $audit->before_json['title']);
         $this->assertSame('Updated closed title', $audit->after_json['title']);
+        $this->assertSame(Incident::PRIORITY_ROUTINE, $audit->before_json['priority_label']);
+        $this->assertSame(Incident::PRIORITY_IMPORTANT, $audit->after_json['priority_label']);
+    }
+
+    public function test_ic_operator_can_autosave_types_and_responders_with_history(): void
+    {
+        Carbon::setTestNow('2027-07-04 22:45:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $firstResponder = Staff::factory()->create(['preferred_name' => 'Vera']);
+        $secondResponder = Staff::factory()->create(['preferred_name' => 'Omar']);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'priority_label' => Incident::PRIORITY_ROUTINE,
+            'updated_at' => Carbon::parse('2027-07-04T20:00:00Z'),
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'priority_label' => Incident::PRIORITY_SERIOUS,
+                'incident_type_names' => ['Medical', 'Logistics'],
+                'responder_staff_ids' => [$firstResponder->id, $secondResponder->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('priority_label', Incident::PRIORITY_SERIOUS)
+            ->assertJsonPath('incident_type_names.0', 'Medical')
+            ->assertJsonPath('incident_type_names.1', 'Logistics')
+            ->assertJsonPath('responders.0.display_name', 'Vera')
+            ->assertJsonPath('responders.1.display_name', 'Omar');
+
+        $incident->refresh()->load(['incidentTypes', 'incidentStaff.staff']);
+        $entry = IncidentTimelineEntry::query()->sole();
+        $audit = AuditEvent::query()->where('action', 'incident.updated')->sole();
+
+        $this->assertSame(Incident::PRIORITY_SERIOUS, $incident->priority_label);
+        $this->assertSame(['Medical', 'Logistics'], $incident->incidentTypes->pluck('name')->all());
+        $this->assertSame([$firstResponder->id, $secondResponder->id], $incident->incidentStaff->pluck('staff_id')->all());
+        $this->assertSame(IncidentTimelineEntry::TYPE_FIELD_UPDATED, $entry->entry_type);
+        $this->assertStringContainsString('Changed priority: Serious', $entry->body);
+        $this->assertStringContainsString('Changed incident types: Medical, Logistics', $entry->body);
+        $this->assertStringContainsString('Changed responders: Vera, Omar', $entry->body);
+        $this->assertSame([], $audit->before_json['incident_type_names']);
+        $this->assertSame(['Medical', 'Logistics'], $audit->after_json['incident_type_names']);
+        $this->assertSame('Vera', $audit->after_json['responders'][0]['display_name']);
+    }
+
+    public function test_incident_autosave_rejects_invalid_priority_and_responder_ids(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'priority_label' => Incident::PRIORITY_ROUTINE,
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'priority_label' => 'Attention',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident priority label is invalid.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'responder_staff_ids' => ['11111111-1111-4111-8111-111111111111'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident responder staff IDs are invalid.');
+
+        $this->assertSame(Incident::PRIORITY_ROUTINE, $incident->refresh()->priority_label);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
     }
 
     public function test_ic_lead_can_autosave_status_change_and_reopen_without_retroactive_started_at_change(): void
@@ -342,7 +492,7 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_timeline_entries', 0);
     }
 
-    public function test_incident_create_validation_failure_creates_no_record(): void
+    public function test_incident_create_allows_blank_title(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_lead', $event);
@@ -352,15 +502,15 @@ class IncidentCommandHttpTest extends TestCase
                 'event_id' => $event->id,
                 'title' => '   ',
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'The title field is required.');
+            ->assertCreated()
+            ->assertJsonPath('title', '');
 
-        $this->assertDatabaseCount('incidents', 0);
-        $this->assertDatabaseCount('incident_timeline_entries', 0);
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertDatabaseCount('incidents', 1);
+        $this->assertDatabaseCount('incident_timeline_entries', 1);
+        $this->assertDatabaseCount('audit_events', 1);
     }
 
-    public function test_incident_update_rejects_blank_title_and_wrong_event_incident_id(): void
+    public function test_incident_update_allows_blank_title_and_rejects_wrong_event_incident_id(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
         $otherEvent = $this->eventWithIncidentCommandDepartment();
@@ -376,8 +526,8 @@ class IncidentCommandHttpTest extends TestCase
                 'incident_id' => $incident->id,
                 'title' => '   ',
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'Incident title is required.');
+            ->assertOk()
+            ->assertJsonPath('title', '');
 
         $this->actingAs($actor)
             ->postJson('/api/commands/update-incident', [
@@ -387,9 +537,9 @@ class IncidentCommandHttpTest extends TestCase
             ])
             ->assertNotFound();
 
-        $this->assertSame('Original title', $incident->refresh()->title);
-        $this->assertDatabaseCount('incident_timeline_entries', 0);
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertSame('', $incident->refresh()->title);
+        $this->assertDatabaseCount('incident_timeline_entries', 1);
+        $this->assertDatabaseCount('audit_events', 1);
     }
 
     public function test_ic_operator_can_append_incident_note_online(): void

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import AutosaveStatus, {
@@ -13,7 +13,10 @@ import {
   findIncidentForSession,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
+  INCIDENT_PRIORITY_LABELS,
+  INCIDENT_TYPE_OPTIONS,
   incidentToAutosaveForm,
+  RESPONDER_OPTIONS,
   resolveIncidentSession,
   statusLabel,
   updateIncidentFromAutosaveForm,
@@ -42,6 +45,14 @@ const noteBody = ref("");
 const noteError = ref<string | null>(null);
 const revision = ref(0);
 const lastSavedSignature = ref<string | null>(null);
+const lastSavedForm = ref<IncidentAutosaveForm | null>(null);
+const autosaveQueued = ref(false);
+const incidentTypeAddQuery = ref("");
+const responderAddQuery = ref("");
+const incidentTypeAddOpen = ref(false);
+const responderAddOpen = ref(false);
+const incidentTypePicker = ref<HTMLElement | null>(null);
+const responderPicker = ref<HTMLElement | null>(null);
 
 const incident = computed(() => {
   revision.value;
@@ -54,6 +65,29 @@ const isOfflineBlocked = computed(() => connectivity.value !== "online");
 const timelineEntries = computed(() => incident.value?.timelineEntries ?? []);
 const showAutosaveStatus = computed(
   () => autosaveState.value !== "saved" || autosaveMessage.value !== null,
+);
+const selectedIncidentTypes = computed(() => form.incidentTypeNames);
+const availableIncidentTypeOptions = computed(() =>
+  filteredAddOptions(
+    INCIDENT_TYPE_OPTIONS.filter(
+      (typeName) => !form.incidentTypeNames.includes(typeName),
+    ),
+    incidentTypeAddQuery.value,
+  ),
+);
+const selectedResponders = computed(() =>
+  RESPONDER_OPTIONS.filter((responder) =>
+    form.responderStaffIds.includes(responder.staffId),
+  ),
+);
+const availableResponderOptions = computed(() =>
+  filteredAddOptions(
+    RESPONDER_OPTIONS.filter(
+      (responder) => !form.responderStaffIds.includes(responder.staffId),
+    ),
+    responderAddQuery.value,
+    (responder) => responder.displayName,
+  ),
 );
 
 watch(
@@ -72,7 +106,8 @@ watch(
       ? "Incident create/edit requires server connection. Your typed form remains on this screen."
       : null;
     lastSavedAt.value = existing?.updatedAt ?? null;
-    lastSavedSignature.value = existing ? formSignature(form) : null;
+    lastSavedSignature.value = formSignature(form);
+    lastSavedForm.value = cloneAutosaveForm(form);
   },
   { immediate: true },
 );
@@ -86,6 +121,14 @@ watch(isOfflineBlocked, (blocked) => {
     autosaveState.value = "saved";
     autosaveMessage.value = null;
   }
+});
+
+onMounted(() => {
+  document.addEventListener("pointerdown", onDocumentPointerDown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onDocumentPointerDown);
 });
 
 function timelineEntryBody(entry: IncidentTimelineEntry): string | null {
@@ -132,15 +175,14 @@ function commitAutosave(): void {
     return;
   }
 
-  if (!savedIncidentId.value && form.title.trim() === "") {
+  if (formSignature(form) === lastSavedSignature.value) {
     autosaveState.value = "saved";
     autosaveMessage.value = null;
     return;
   }
 
-  if (formSignature(form) === lastSavedSignature.value) {
-    autosaveState.value = "saved";
-    autosaveMessage.value = null;
+  if (autosaveState.value === "saving") {
+    autosaveQueued.value = true;
     return;
   }
 
@@ -158,19 +200,22 @@ function commitAutosave(): void {
 
 async function autosave(): Promise<void> {
   const signature = formSignature(form);
+  autosaveQueued.value = false;
 
   try {
+    const previousForm = lastSavedForm.value;
     const saved = savedIncidentId.value
       ? updateIncidentFromAutosaveForm(
           session.value,
           savedIncidentId.value,
           form,
         )
-      : createIncidentFromAutosaveForm(session.value, form);
+      : createIncidentFromAutosaveForm(session.value, form, previousForm);
 
     savedIncidentId.value = saved.id;
     lastSavedAt.value = saved.updatedAt;
     lastSavedSignature.value = signature;
+    lastSavedForm.value = cloneAutosaveForm(form);
     autosaveState.value = "saved";
     autosaveMessage.value = null;
     revision.value += 1;
@@ -181,6 +226,10 @@ async function autosave(): Promise<void> {
         params: { incidentId: saved.id },
       });
     }
+
+    if (formSignature(form) !== signature || autosaveQueued.value) {
+      commitAutosave();
+    }
   } catch (error) {
     autosaveState.value = "failed";
     autosaveMessage.value =
@@ -188,10 +237,114 @@ async function autosave(): Promise<void> {
   }
 }
 
+function filteredAddOptions<T>(
+  options: readonly T[],
+  query: string,
+  labelForOption: (option: T) => string = (option) => String(option),
+): T[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered =
+    normalizedQuery.length === 0
+      ? options
+      : options.filter((option) =>
+          labelForOption(option).toLowerCase().includes(normalizedQuery),
+        );
+
+  return filtered.slice(0, 6);
+}
+
+function addIncidentType(typeName: string): void {
+  if (form.incidentTypeNames.includes(typeName)) {
+    return;
+  }
+
+  form.incidentTypeNames = [...form.incidentTypeNames, typeName];
+  incidentTypeAddQuery.value = "";
+  incidentTypeAddOpen.value = false;
+  commitAutosave();
+}
+
+function openIncidentTypeAdd(): void {
+  incidentTypeAddOpen.value = true;
+  responderAddOpen.value = false;
+}
+
+function addFirstIncidentTypeOption(): void {
+  const [typeName] = availableIncidentTypeOptions.value;
+
+  if (typeName) {
+    addIncidentType(typeName);
+  }
+}
+
+function removeIncidentType(typeName: string): void {
+  form.incidentTypeNames = form.incidentTypeNames.filter(
+    (selectedTypeName) => selectedTypeName !== typeName,
+  );
+  commitAutosave();
+}
+
+function addResponder(staffId: string): void {
+  if (form.responderStaffIds.includes(staffId)) {
+    return;
+  }
+
+  form.responderStaffIds = [...form.responderStaffIds, staffId];
+  responderAddQuery.value = "";
+  responderAddOpen.value = false;
+  commitAutosave();
+}
+
+function openResponderAdd(): void {
+  responderAddOpen.value = true;
+  incidentTypeAddOpen.value = false;
+}
+
+function addFirstResponderOption(): void {
+  const [responder] = availableResponderOptions.value;
+
+  if (responder) {
+    addResponder(responder.staffId);
+  }
+}
+
+function removeResponder(staffId: string): void {
+  form.responderStaffIds = form.responderStaffIds.filter(
+    (selectedStaffId) => selectedStaffId !== staffId,
+  );
+  commitAutosave();
+}
+
+function closeAddPopups(): void {
+  incidentTypeAddOpen.value = false;
+  responderAddOpen.value = false;
+}
+
+function onDocumentPointerDown(event: PointerEvent): void {
+  const target = event.target;
+
+  if (!(target instanceof Node)) {
+    closeAddPopups();
+    return;
+  }
+
+  if (
+    incidentTypePicker.value?.contains(target) ||
+    responderPicker.value?.contains(target)
+  ) {
+    return;
+  }
+
+  closeAddPopups();
+}
+
 function formSignature(value: IncidentAutosaveForm): string {
   return JSON.stringify({
     title: value.title.trim(),
     status: value.status,
+    priorityLabel: value.priorityLabel,
+    incidentTypeNames: [...value.incidentTypeNames].sort(),
+    responderStaffIds: [...value.responderStaffIds].sort(),
     startedAt: value.startedAt,
     locationName: value.locationName.trim(),
     locationAddress: value.locationAddress.trim(),
@@ -199,10 +352,27 @@ function formSignature(value: IncidentAutosaveForm): string {
   });
 }
 
+function cloneAutosaveForm(value: IncidentAutosaveForm): IncidentAutosaveForm {
+  return {
+    title: value.title,
+    status: value.status,
+    priorityLabel: value.priorityLabel,
+    incidentTypeNames: [...value.incidentTypeNames],
+    responderStaffIds: [...value.responderStaffIds],
+    startedAt: value.startedAt,
+    locationName: value.locationName,
+    locationAddress: value.locationAddress,
+    locationDetails: value.locationDetails,
+  };
+}
+
 function fieldLabel(field: string): string {
   const labels: Record<string, string> = {
     title: "Title",
     status: "State",
+    priorityLabel: "Priority",
+    incidentTypeNames: "Incident types",
+    responders: "Responders",
     startedAt: "Started",
     started_at: "Started",
     locationName: "Location name",
@@ -324,78 +494,249 @@ function onAppendNote(): void {
       />
 
       <form class="ims-edit__form" aria-label="Incident autosave form">
-        <label>
-          <span>Title</span>
-          <input
-            id="ims-edit-title"
-            v-model="form.title"
-            type="text"
-            maxlength="200"
-            required
-            :disabled="isOfflineBlocked"
-            @blur="commitAutosave"
-          />
-        </label>
+        <section class="ims-edit__panel" aria-label="Incident details">
+          <div class="ims-edit__detail-grid">
+            <div class="ims-edit__field ims-edit__field--readonly">
+              <span>IMS #</span>
+              <output>{{ incident?.incidentNumber ?? "Not assigned yet" }}</output>
+            </div>
 
-        <label>
-          <span>State</span>
-          <select
-            id="ims-edit-status"
-            v-model="form.status"
-            :disabled="isOfflineBlocked"
-            @change="commitAutosave"
+            <label class="ims-edit__field">
+              <span>State</span>
+              <select
+                id="ims-edit-status"
+                v-model="form.status"
+                :disabled="isOfflineBlocked"
+                @change="commitAutosave"
+              >
+                <option value="open">{{ statusLabel("open") }}</option>
+                <option value="on_scene">{{ statusLabel("on_scene") }}</option>
+                <option value="monitoring">
+                  {{ statusLabel("monitoring") }}
+                </option>
+                <option value="on_hold">{{ statusLabel("on_hold") }}</option>
+                <option value="closed">{{ statusLabel("closed") }}</option>
+              </select>
+            </label>
+
+            <label class="ims-edit__field">
+              <span>Priority</span>
+              <select
+                id="ims-edit-priority"
+                v-model="form.priorityLabel"
+                class="ims-edit__priority-select"
+                :disabled="isOfflineBlocked"
+                @change="commitAutosave"
+              >
+                <option
+                  v-for="priority in INCIDENT_PRIORITY_LABELS"
+                  :key="priority"
+                  :value="priority"
+                >
+                  {{ priority }}
+                </option>
+              </select>
+            </label>
+
+            <label class="ims-edit__field ims-edit__field--started">
+              <span>Started</span>
+              <input
+                id="ims-edit-started"
+                v-model="form.startedAt"
+                type="datetime-local"
+                :disabled="isOfflineBlocked"
+                @blur="commitAutosave"
+              />
+            </label>
+          </div>
+
+          <label class="ims-edit__field ims-edit__field--summary">
+            <span>Summary</span>
+            <input
+              id="ims-edit-title"
+              v-model="form.title"
+              type="text"
+              maxlength="200"
+              required
+              :disabled="isOfflineBlocked"
+              @blur="commitAutosave"
+            />
+          </label>
+        </section>
+
+        <div class="ims-edit__panel-grid">
+          <section
+            ref="responderPicker"
+            class="ims-edit__panel"
+            :class="{ 'ims-edit__panel--popup-open': responderAddOpen }"
+            role="group"
+            aria-labelledby="ims-edit-responders-heading"
           >
-            <option value="open">{{ statusLabel("open") }}</option>
-            <option value="on_scene">{{ statusLabel("on_scene") }}</option>
-            <option value="monitoring">{{ statusLabel("monitoring") }}</option>
-            <option value="on_hold">{{ statusLabel("on_hold") }}</option>
-            <option value="closed">{{ statusLabel("closed") }}</option>
-          </select>
-        </label>
+            <div class="ims-edit__panel-heading">
+              <h2 id="ims-edit-responders-heading">Responders</h2>
+            </div>
+            <div id="ims-edit-responders" class="ims-edit__selected-list">
+              <div
+                v-for="responder in selectedResponders"
+                :key="responder.staffId"
+                class="ims-edit__selected-row"
+              >
+                <span>{{ responder.displayName }}</span>
+                <button
+                  type="button"
+                  class="ims-edit__remove-button"
+                  :disabled="isOfflineBlocked"
+                  :aria-label="`Remove responder ${responder.displayName}`"
+                  @click="removeResponder(responder.staffId)"
+                >
+                  X
+                </button>
+              </div>
+              <p
+                v-if="selectedResponders.length === 0"
+                class="ims-edit__empty-row"
+              >
+                No responders selected.
+              </p>
+            </div>
+            <label class="ims-edit__add-row">
+              <span>Add</span>
+              <input
+                id="ims-edit-responder-add"
+                v-model="responderAddQuery"
+                type="search"
+                autocomplete="off"
+                :disabled="isOfflineBlocked"
+                @focus="openResponderAdd"
+                @click="openResponderAdd"
+                @input="openResponderAdd"
+                @keydown.enter.prevent="addFirstResponderOption"
+                @keydown.escape.prevent="closeAddPopups"
+              />
+            </label>
+            <div
+              v-if="responderAddOpen && availableResponderOptions.length > 0"
+              class="ims-edit__add-results"
+              aria-label="Responder matches"
+            >
+              <button
+                v-for="responder in availableResponderOptions"
+                :key="responder.staffId"
+                type="button"
+                :disabled="isOfflineBlocked"
+                @click="addResponder(responder.staffId)"
+              >
+                {{ responder.displayName }}
+              </button>
+            </div>
+          </section>
 
-        <label>
-          <span>Started</span>
-          <input
-            id="ims-edit-started"
-            v-model="form.startedAt"
-            type="datetime-local"
-            :disabled="isOfflineBlocked"
-            @blur="commitAutosave"
-          />
-        </label>
+          <section
+            ref="incidentTypePicker"
+            class="ims-edit__panel"
+            :class="{ 'ims-edit__panel--popup-open': incidentTypeAddOpen }"
+            role="group"
+            aria-labelledby="ims-edit-types-heading"
+          >
+            <div class="ims-edit__panel-heading">
+              <h2 id="ims-edit-types-heading">Incident types</h2>
+            </div>
+            <div id="ims-edit-types" class="ims-edit__selected-list">
+              <div
+                v-for="typeName in selectedIncidentTypes"
+                :key="typeName"
+                class="ims-edit__selected-row"
+              >
+                <span>{{ typeName }}</span>
+                <button
+                  type="button"
+                  class="ims-edit__remove-button"
+                  :disabled="isOfflineBlocked"
+                  :aria-label="`Remove incident type ${typeName}`"
+                  @click="removeIncidentType(typeName)"
+                >
+                  X
+                </button>
+              </div>
+              <p
+                v-if="selectedIncidentTypes.length === 0"
+                class="ims-edit__empty-row"
+              >
+                No incident types selected.
+              </p>
+            </div>
+            <label class="ims-edit__add-row">
+              <span>Add</span>
+              <input
+                id="ims-edit-type-add"
+                v-model="incidentTypeAddQuery"
+                type="search"
+                autocomplete="off"
+                :disabled="isOfflineBlocked"
+                @focus="openIncidentTypeAdd"
+                @click="openIncidentTypeAdd"
+                @input="openIncidentTypeAdd"
+                @keydown.enter.prevent="addFirstIncidentTypeOption"
+                @keydown.escape.prevent="closeAddPopups"
+              />
+            </label>
+            <div
+              v-if="incidentTypeAddOpen && availableIncidentTypeOptions.length > 0"
+              class="ims-edit__add-results"
+              aria-label="Incident type matches"
+            >
+              <button
+                v-for="typeName in availableIncidentTypeOptions"
+                :key="typeName"
+                type="button"
+                :disabled="isOfflineBlocked"
+                @click="addIncidentType(typeName)"
+              >
+                {{ typeName }}
+              </button>
+            </div>
+          </section>
+        </div>
 
-        <label>
-          <span>Location name</span>
-          <input
-            id="ims-edit-location-name"
-            v-model="form.locationName"
-            type="text"
-            :disabled="isOfflineBlocked"
-            @blur="commitAutosave"
-          />
-        </label>
+        <section class="ims-edit__panel" aria-labelledby="ims-edit-location-heading">
+          <div class="ims-edit__panel-heading">
+            <h2 id="ims-edit-location-heading">Location</h2>
+          </div>
+          <div class="ims-edit__location-grid">
+            <label class="ims-edit__field">
+              <span>Name</span>
+              <input
+                id="ims-edit-location-name"
+                v-model="form.locationName"
+                type="text"
+                :disabled="isOfflineBlocked"
+                @blur="commitAutosave"
+              />
+            </label>
 
-        <label>
-          <span>Location address</span>
-          <input
-            id="ims-edit-location-address"
-            v-model="form.locationAddress"
-            type="text"
-            :disabled="isOfflineBlocked"
-            @blur="commitAutosave"
-          />
-        </label>
+            <label class="ims-edit__field">
+              <span>Address</span>
+              <input
+                id="ims-edit-location-address"
+                v-model="form.locationAddress"
+                type="text"
+                :disabled="isOfflineBlocked"
+                @blur="commitAutosave"
+              />
+            </label>
 
-        <label class="ims-edit__wide">
-          <span>Location details</span>
-          <textarea
-            id="ims-edit-location-details"
-            v-model="form.locationDetails"
-            rows="4"
-            :disabled="isOfflineBlocked"
-            @blur="commitAutosave"
-          />
-        </label>
+            <label class="ims-edit__field ims-edit__field--details">
+              <span>Details</span>
+              <input
+                id="ims-edit-location-details"
+                v-model="form.locationDetails"
+                type="text"
+                :disabled="isOfflineBlocked"
+                @blur="commitAutosave"
+              />
+            </label>
+          </div>
+        </section>
       </form>
 
       <section
@@ -529,35 +870,111 @@ function onAppendNote(): void {
   outline-offset: 2px;
 }
 
-.ims-edit__form,
+.ims-edit__form {
+  display: grid;
+  gap: var(--m-space-3);
+}
+
+.ims-edit__panel,
 .ims-edit__timeline {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-raised);
 }
 
-.ims-edit__form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  gap: var(--m-space-4);
-  padding: var(--m-space-5);
+.ims-edit__timeline {
+  overflow: hidden;
 }
 
-.ims-edit__form label,
-.ims-edit__note-form {
+.ims-edit__panel {
+  display: grid;
+  position: relative;
+  overflow: visible;
+}
+
+.ims-edit__panel--popup-open {
+  z-index: 20;
+}
+
+.ims-edit__panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.25rem;
+  border-bottom: 1px solid var(--m-border-default);
+  padding: var(--m-space-1) var(--m-space-3);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-raised) 84%,
+    var(--m-border-default)
+  );
+}
+
+.ims-edit__panel-heading h2,
+.ims-edit__timeline h2 {
+  margin: 0;
+  font-size: var(--m-text-md);
+  font-weight: 900;
+}
+
+.ims-edit__detail-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(6rem, 0.75fr) minmax(7.5rem, 1fr)
+    minmax(7.5rem, 1fr) minmax(11rem, 1.35fr);
+  gap: var(--m-space-2);
+  padding: var(--m-space-2);
+}
+
+.ims-edit__panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--m-space-3);
+}
+
+.ims-edit__location-grid {
   display: grid;
   gap: var(--m-space-2);
+  padding: var(--m-space-2);
 }
 
-.ims-edit__wide {
-  grid-column: 1 / -1;
+.ims-edit__field {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  min-width: 0;
+  min-height: 2.75rem;
+  overflow: hidden;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-primary);
 }
 
-.ims-edit__form span,
+.ims-edit__field--summary {
+  margin: 0 var(--m-space-2) var(--m-space-2);
+}
+
+.ims-edit__field--details {
+  min-height: 4.5rem;
+}
+
+.ims-edit__field span,
 .ims-edit__note-form label {
+  display: flex;
+  align-items: center;
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
   font-weight: 800;
+}
+
+.ims-edit__field span {
+  border-right: 1px solid var(--m-border-default);
+  padding: var(--m-space-2) var(--m-space-3);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-raised) 88%,
+    var(--m-border-default)
+  );
+  white-space: nowrap;
 }
 
 .ims-edit__form input,
@@ -565,12 +982,143 @@ function onAppendNote(): void {
 .ims-edit__form textarea,
 .ims-edit__note-form textarea {
   width: 100%;
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  padding: var(--m-space-3);
-  background: var(--m-surface-primary);
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  background: transparent;
   color: var(--m-text-primary);
   font: inherit;
+}
+
+.ims-edit__field output {
+  min-width: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  overflow: hidden;
+  color: var(--m-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ims-edit__priority-select {
+  font-weight: 800;
+}
+
+.ims-edit__selected-list {
+  display: grid;
+  gap: 0;
+  padding: 0 var(--m-space-3);
+}
+
+.ims-edit__selected-row,
+.ims-edit__empty-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--m-space-2);
+  align-items: center;
+  min-height: 2.625rem;
+  margin: 0;
+  border-bottom: 1px solid var(--m-border-default);
+  padding: var(--m-space-1) var(--m-space-1);
+  background: transparent;
+  color: var(--m-text-primary);
+}
+
+.ims-edit__selected-row:last-child,
+.ims-edit__empty-row:last-child {
+  border-bottom: 0;
+}
+
+.ims-edit__selected-row span,
+.ims-edit__empty-row {
+  color: var(--m-text-primary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.ims-edit__empty-row {
+  grid-template-columns: 1fr;
+  color: var(--m-text-muted);
+}
+
+.ims-edit__remove-button {
+  display: inline-grid;
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: var(--m-radius-sm);
+  background: var(--m-status-danger);
+  color: var(--m-action-primary-text);
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.ims-edit__add-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  min-height: 3rem;
+  margin: 0 var(--m-space-3) var(--m-space-2);
+  overflow: hidden;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-primary);
+}
+
+.ims-edit__add-row span {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  border-right: 1px solid var(--m-border-default);
+  padding: var(--m-space-2) var(--m-space-3);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ims-edit__add-results {
+  display: grid;
+  position: absolute;
+  inset-inline: var(--m-space-3);
+  top: calc(100% - var(--m-space-1));
+  z-index: 30;
+  max-height: 12rem;
+  overflow-y: auto;
+  margin: 0;
+  border: 1px solid var(--m-border-strong);
+  border-radius: var(--m-radius-sm);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-overlay) 78%,
+    var(--m-action-secondary-bg)
+  );
+  box-shadow: var(--m-shadow-overlay);
+}
+
+.ims-edit__add-results button {
+  min-height: 2.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--m-border-default);
+  padding: var(--m-space-2) var(--m-space-3);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-overlay) 78%,
+    var(--m-action-secondary-bg)
+  );
+  color: var(--m-text-primary);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  text-align: left;
+}
+
+.ims-edit__add-results button:last-child {
+  border-bottom: 0;
 }
 
 .ims-edit__form textarea,
@@ -581,6 +1129,8 @@ function onAppendNote(): void {
 .ims-edit__form input:focus-visible,
 .ims-edit__form select:focus-visible,
 .ims-edit__form textarea:focus-visible,
+.ims-edit__remove-button:focus-visible,
+.ims-edit__add-results button:focus-visible,
 .ims-edit__note-form textarea:focus-visible,
 .ims-edit__note-form button:focus-visible {
   outline: 3px solid var(--m-focus-ring);
@@ -589,30 +1139,27 @@ function onAppendNote(): void {
 
 .ims-edit__timeline {
   display: grid;
-  gap: var(--m-space-4);
-  padding: var(--m-space-5);
+  gap: var(--m-space-3);
+  padding-bottom: var(--m-space-3);
 }
 
-.ims-edit__timeline h2 {
-  margin: 0;
-  font-size: var(--m-text-lg);
+.ims-edit__timeline > h2 {
+  min-height: 2.25rem;
+  border-bottom: 1px solid var(--m-border-default);
+  padding: var(--m-space-1) var(--m-space-3);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-raised) 84%,
+    var(--m-border-default)
+  );
 }
 
 .ims-edit__timeline ol {
-  position: relative;
   display: grid;
-  gap: var(--m-space-4);
+  gap: var(--m-space-3);
   margin: 0;
-  padding: 0 0 0 var(--m-space-5);
+  padding: 0 var(--m-space-3) 0 var(--m-space-6);
   list-style: none;
-}
-
-.ims-edit__timeline ol::before {
-  position: absolute;
-  inset: 0 auto 0 var(--m-space-2);
-  width: 2px;
-  background: var(--m-border-default);
-  content: "";
 }
 
 .ims-edit__timeline li {
@@ -621,7 +1168,16 @@ function onAppendNote(): void {
   gap: var(--m-space-2);
   width: 100%;
   min-width: 0;
-  padding: 0 0 var(--m-space-1) var(--m-space-2);
+  padding: var(--m-space-1) 0 var(--m-space-2) var(--m-space-4);
+}
+
+.ims-edit__timeline li::before {
+  position: absolute;
+  inset: var(--m-space-1) auto var(--m-space-1) 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--m-border-strong);
+  content: "";
 }
 
 .ims-edit__timeline-meta {
@@ -644,8 +1200,17 @@ function onAppendNote(): void {
 }
 
 .ims-edit__note-form {
-  padding-top: var(--m-space-5);
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 var(--m-space-3);
+  padding-top: var(--m-space-3);
   border-top: 1px solid var(--m-border-default);
+}
+
+.ims-edit__note-form textarea {
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-primary);
 }
 
 .ims-edit__note-form button {
@@ -679,17 +1244,20 @@ function onAppendNote(): void {
     justify-self: start;
   }
 
-  .ims-edit__form,
-  .ims-edit__timeline {
-    padding: var(--m-space-4);
-  }
-
   .ims-edit__timeline ol {
-    padding-left: var(--m-space-4);
+    padding-left: var(--m-space-5);
   }
+}
 
-  .ims-edit__timeline ol::before {
-    left: var(--m-space-1);
+@media (max-width: 42rem) {
+  .ims-edit__detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 34rem) {
+  .ims-edit__panel-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -25,6 +25,7 @@ class IncidentFactory extends Factory
             'event_id' => Event::factory(),
             'incident_number' => sprintf('INC-%04d-%06d', now()->year, fake()->unique()->numberBetween(1, 999999)),
             'status' => Incident::STATUS_OPEN,
+            'priority_label' => Incident::PRIORITY_ROUTINE,
             'started_at' => now(),
             'title' => $this->faker->sentence(4),
             'location_name' => $this->faker->optional()->streetName(),

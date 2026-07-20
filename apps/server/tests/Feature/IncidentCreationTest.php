@@ -121,18 +121,18 @@ class IncidentCreationTest extends TestCase
         ], $actor);
     }
 
-    public function test_incident_creation_requires_title(): void
+    public function test_incident_creation_allows_blank_title(): void
     {
         $actor = User::factory()->create();
         $event = Event::factory()->create();
 
-        $this->expectException(IncidentCreationException::class);
-        $this->expectExceptionMessage('Incident title is required.');
-
-        app(IncidentCreationService::class)->create([
+        $incident = app(IncidentCreationService::class)->create([
             'event_id' => $event->id,
             'title' => '   ',
         ], $actor);
+
+        $this->assertSame('', $incident->title);
+        $this->assertMatchesRegularExpression('/^INC-\d{4}-000001$/', $incident->incident_number);
     }
 
     public function test_incident_creation_requires_scheduled_event_for_number_assignment(): void

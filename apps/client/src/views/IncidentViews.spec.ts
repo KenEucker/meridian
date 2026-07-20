@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import type { VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
@@ -53,6 +54,25 @@ async function mountAt(path: string) {
   return { wrapper, router };
 }
 
+async function addBySearch(
+  wrapper: VueWrapper,
+  inputSelector: string,
+  query: string,
+  optionText: string,
+): Promise<void> {
+  await wrapper.get(inputSelector).trigger("focus");
+  await wrapper.get(inputSelector).setValue(query);
+  await flushPromises();
+
+  const option = wrapper
+    .findAll(".ims-edit__add-results button")
+    .find((button) => button.text() === optionText);
+
+  expect(option).toBeDefined();
+  await option?.trigger("click");
+  await flushPromises();
+}
+
 afterEach(() => {
   clearIncidentSession();
   setNavigatorOnline(true);
@@ -90,8 +110,10 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Medical assist near Gate A");
     expect(wrapper.text()).toContain("On Scene");
     expect(wrapper.text()).toContain("Serious");
+    expect(wrapper.text()).toContain("Medical, Safety");
     expect(wrapper.text()).toContain("INC-2027-000041");
-    expect(wrapper.text()).toContain("Priority not set");
+    expect(wrapper.text()).toContain("Routine");
+    expect(wrapper.text()).toContain("Radio");
     expect(wrapper.text()).toContain("07-04-2027");
     expect(wrapper.text()).toMatch(/07-04-2027 \d{2}:\d{2}/u);
     expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
@@ -142,6 +164,9 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("INC-2027-000042");
     expect(wrapper.text()).toContain("On Scene");
     expect(wrapper.text()).toContain("Serious");
+    expect(wrapper.text()).toContain("Medical");
+    expect(wrapper.text()).toContain("Safety");
+    expect(wrapper.text()).toContain("Vera Ranger");
     expect(wrapper.text()).toContain("Gate A");
     expect(wrapper.text()).toContain("#medical");
     expect(wrapper.text()).toContain("@Blue-Hat");
@@ -165,12 +190,30 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
 
     expect(wrapper.text()).toContain("Create incident");
     expect(wrapper.text()).toContain("Not assigned yet");
+    expect(wrapper.text()).toContain("Responders");
+    expect(wrapper.text()).not.toContain("Rangers/responders");
 
-    await wrapper.get("#ims-edit-title").setValue("  Perimeter assist  ");
+    await wrapper.get("#ims-edit-priority").setValue("Important");
     await flushPromises();
 
-    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
-    expect(wrapper.text()).toContain("Not assigned yet");
+    expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
+    expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
+    expect(wrapper.text()).toContain("Changed priority: Important");
+
+    const openingTimelineEntries = wrapper.findAll(".ims-edit__timeline li");
+    expect(openingTimelineEntries[0]?.text()).toContain(
+      "Incident INC-2027-000043 opened.",
+    );
+    expect(openingTimelineEntries[1]?.text()).toContain(
+      "Changed priority: Important",
+    );
+
+    await addBySearch(wrapper, "#ims-edit-type-add", "Log", "Logistics");
+    await addBySearch(wrapper, "#ims-edit-type-add", "Rad", "Radio");
+    await addBySearch(wrapper, "#ims-edit-responder-add", "Omar", "Omar Operator");
+    await wrapper.get("#ims-edit-title").setValue("  Perimeter assist  ");
+    await flushPromises();
 
     await wrapper.get("#ims-edit-title").trigger("blur");
     await flushPromises();
@@ -178,16 +221,17 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
     expect(wrapper.text()).toContain("INC-2027-000043");
     expect(wrapper.text()).not.toContain("Saved INC-2027-000043.");
-    expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
 
     await router.push("/ims/incidents");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Perimeter assist");
     expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.text()).toContain("Important");
+    expect(wrapper.text()).toContain("Logistics, Radio");
   });
 
-  it("waits for a title before creating from the autosave form", async () => {
+  it("waits for a committed field change before creating from the autosave form", async () => {
     installIncidentSession(IC_OPERATOR_SESSION);
 
     const { wrapper } = await mountAt("/ims/incidents/create");
@@ -198,6 +242,43 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Autosave failed");
     expect(wrapper.text()).not.toContain("Incident title is required.");
     expect(wrapper.text()).toContain("Not assigned yet");
+
+    await wrapper.get("#ims-edit-location-name").trigger("blur");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.get<HTMLInputElement>("#ims-edit-title").element.value).toBe(
+      "",
+    );
+  });
+
+  it("shows add choices in a dismissible popup", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical/edit");
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await wrapper.get("#ims-edit-type-add").setValue("Wea");
+    await flushPromises();
+
+    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Weather");
+
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    await flushPromises();
+
+    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(false);
+
+    await wrapper.get("#ims-edit-responder-add").trigger("focus");
+    await wrapper.get("#ims-edit-responder-add").setValue("Ingrid");
+    await flushPromises();
+
+    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(true);
+
+    await wrapper.get("#ims-edit-responder-add").trigger("keydown.escape");
+    await flushPromises();
+
+    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(false);
   });
 
   it("lets IC operators autosave current fields for an existing incident", async () => {
@@ -213,6 +294,12 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await wrapper
       .get("#ims-edit-title")
       .setValue("Gate A medical follow-up #followup @RangerHQ");
+    await wrapper.get("#ims-edit-priority").setValue("Critical");
+    await wrapper
+      .get('button[aria-label="Remove incident type Safety"]')
+      .trigger("click");
+    await addBySearch(wrapper, "#ims-edit-type-add", "Wea", "Weather");
+    await addBySearch(wrapper, "#ims-edit-responder-add", "Ingrid", "Ingrid ICLead");
     await flushPromises();
 
     expect(wrapper.text()).not.toContain("Incident field changed");
@@ -224,6 +311,10 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain(
       "Changed title: Gate A medical follow-up #followup @RangerHQ",
     );
+    expect(wrapper.text()).toContain("Changed priority: Critical");
+    expect(wrapper.text()).toContain("Changed incident types: Medical, Weather");
+    expect(wrapper.text()).toContain("Changed responders: Vera Ranger, Ingrid ICLead");
+    expect(wrapper.text().match(/Changed priority: Critical/gu)).toHaveLength(1);
     expect(wrapper.text()).not.toContain("Incident field changed");
     expect(wrapper.text()).not.toContain("field changed from");
     expect(wrapper.text()).toContain("#followup");

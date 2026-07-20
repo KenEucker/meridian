@@ -6,12 +6,16 @@ use App\Exceptions\IncidentUpdateException;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
+use App\Models\IncidentType;
+use App\Models\Staff;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Autosaved online incident field edits (M11.7).
@@ -27,12 +31,15 @@ final class IncidentUpdateService
      * @param  array{
      *     title?: string|null,
      *     status?: string|null,
+     *     priority_label?: string|null,
      *     started_at?: DateTimeInterface|string|null,
      *     location_name?: string|null,
      *     location_address?: string|null,
      *     location_details?: string|null,
      *     camp_id?: string|null,
-     *     map_location_id?: string|null
+     *     map_location_id?: string|null,
+     *     incident_type_names?: list<string>|null,
+     *     responder_staff_ids?: list<string>|null
      * }  $attributes
      */
     public function update(
@@ -45,6 +52,7 @@ final class IncidentUpdateService
         return DB::transaction(function () use ($incident, $actor, $attributes, $updatedAt, $sourceContext): Incident {
             /** @var Incident $lockedIncident */
             $lockedIncident = Incident::query()
+                ->with(['incidentTypes', 'incidentStaff.staff'])
                 ->whereKey($incident->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -53,19 +61,40 @@ final class IncidentUpdateService
             $now = CarbonImmutable::instance($updatedAt ?? now());
             $changes = $this->changes($lockedIncident, $attributes, $now);
 
-            if ($changes === []) {
+            $before = $this->snapshot($lockedIncident);
+
+            if ($changes !== []) {
+                $lockedIncident->forceFill($changes)->save();
+            }
+
+            if (array_key_exists('incident_type_names', $attributes)) {
+                $this->syncIncidentTypes($lockedIncident, $event, $attributes['incident_type_names'], $now);
+            }
+
+            if (array_key_exists('responder_staff_ids', $attributes)) {
+                $this->syncIncidentStaff($lockedIncident, $attributes['responder_staff_ids'], $now);
+            }
+
+            $after = $this->snapshot($lockedIncident->refresh());
+            $deltaBefore = [];
+            $deltaAfter = [];
+
+            foreach ($after as $field => $value) {
+                if (($before[$field] ?? null) !== $value) {
+                    $deltaBefore[$field] = $before[$field] ?? null;
+                    $deltaAfter[$field] = $value;
+                }
+            }
+
+            unset($deltaBefore['updated_at'], $deltaAfter['updated_at']);
+
+            if ($deltaAfter === []) {
                 return $lockedIncident->refresh();
             }
 
-            $before = $this->snapshot($lockedIncident);
-
-            $lockedIncident->forceFill($changes)->save();
-
+            $lockedIncident->forceFill(['updated_at' => $now])->save();
             $after = $this->snapshot($lockedIncident->refresh());
-            $fieldChanges = $changes;
-            unset($fieldChanges['updated_at']);
-            $deltaBefore = array_intersect_key($before, $fieldChanges);
-            $deltaAfter = array_intersect_key($after, $fieldChanges);
+            $deltaAfter = array_intersect_key($after, $deltaBefore);
 
             IncidentTimelineEntry::query()->create([
                 'incident_id' => $lockedIncident->id,
@@ -116,6 +145,10 @@ final class IncidentUpdateService
             }
         }
 
+        if (array_key_exists('priority_label', $attributes)) {
+            $changes['priority_label'] = $this->priorityLabel($attributes['priority_label']);
+        }
+
         if (array_key_exists('started_at', $attributes)) {
             $changes['started_at'] = $this->startedAt($attributes['started_at']);
         }
@@ -147,15 +180,15 @@ final class IncidentUpdateService
 
     private function title(mixed $value): string
     {
+        if ($value === null) {
+            return '';
+        }
+
         if (! is_string($value)) {
-            throw IncidentUpdateException::invalid('Incident title is required.');
+            throw IncidentUpdateException::invalid('Incident title is invalid.');
         }
 
         $title = trim($value);
-
-        if ($title === '') {
-            throw IncidentUpdateException::invalid('Incident title is required.');
-        }
 
         if (mb_strlen($title) > 200) {
             throw IncidentUpdateException::invalid('Incident title may not be greater than 200 characters.');
@@ -168,6 +201,15 @@ final class IncidentUpdateService
     {
         if (! is_string($value) || ! in_array($value, Incident::statuses(), true)) {
             throw IncidentUpdateException::invalid('Incident status is invalid.');
+        }
+
+        return $value;
+    }
+
+    private function priorityLabel(mixed $value): string
+    {
+        if (! is_string($value) || ! in_array($value, Incident::priorityLabels(), true)) {
+            throw IncidentUpdateException::invalid('Incident priority label is invalid.');
         }
 
         return $value;
@@ -195,6 +237,126 @@ final class IncidentUpdateService
         $text = trim((string) $value);
 
         return $text === '' ? null : $text;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringList(mixed $value, string $message, int $maxLength): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (! is_array($value)) {
+            throw IncidentUpdateException::invalid($message);
+        }
+
+        $seen = [];
+        $items = [];
+
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                throw IncidentUpdateException::invalid($message);
+            }
+
+            $trimmed = trim($item);
+
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (mb_strlen($trimmed) > $maxLength) {
+                throw IncidentUpdateException::invalid($message);
+            }
+
+            $key = mb_strtolower($trimmed);
+
+            if (array_key_exists($key, $seen)) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $items[] = $trimmed;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function uuidList(mixed $value, string $message): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (! is_array($value)) {
+            throw IncidentUpdateException::invalid($message);
+        }
+
+        $ids = [];
+
+        foreach ($value as $item) {
+            if (! is_string($item) || ! Str::isUuid($item)) {
+                throw IncidentUpdateException::invalid($message);
+            }
+
+            $ids[$item] = $item;
+        }
+
+        return array_values($ids);
+    }
+
+    private function syncIncidentTypes(Incident $incident, Event $event, mixed $typeNames, CarbonImmutable $now): void
+    {
+        $names = $this->stringList($typeNames, 'Incident type names are invalid.', 100);
+        $typeIds = [];
+
+        foreach ($names as $name) {
+            $type = IncidentType::query()
+                ->where('organization_id', $event->organization_id)
+                ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
+                ->first();
+
+            if ($type === null) {
+                $type = IncidentType::query()->create([
+                    'organization_id' => $event->organization_id,
+                    'name' => $name,
+                    'created_at' => $now,
+                ]);
+            }
+
+            $typeIds[$type->id] = ['id' => (string) Str::uuid(), 'created_at' => $now];
+        }
+
+        $incident->incidentTypes()->sync($typeIds);
+    }
+
+    private function syncIncidentStaff(Incident $incident, mixed $staffIds, CarbonImmutable $now): void
+    {
+        $ids = $this->uuidList($staffIds, 'Incident responder staff IDs are invalid.');
+
+        $existingStaffIds = Staff::query()
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->all();
+
+        if (count($existingStaffIds) !== count($ids)) {
+            throw IncidentUpdateException::invalid('Incident responder staff IDs are invalid.');
+        }
+
+        IncidentStaff::query()->where('incident_id', $incident->id)->delete();
+
+        foreach ($ids as $staffId) {
+            IncidentStaff::query()->create([
+                'incident_id' => $incident->id,
+                'staff_id' => $staffId,
+                'relationship_label' => 'Responder',
+                'created_at' => $now,
+            ]);
+        }
     }
 
     private function changed(Incident $incident, string $field, mixed $value): bool
@@ -226,6 +388,9 @@ final class IncidentUpdateService
     {
         return match ($field) {
             'started_at' => 'Started',
+            'priority_label' => 'Priority',
+            'incident_type_names' => 'Incident types',
+            'responders' => 'Responders',
             'location_name' => 'Location name',
             'location_address' => 'Location address',
             'location_details' => 'Location details',
@@ -254,6 +419,20 @@ final class IncidentUpdateService
             };
         }
 
+        if (is_array($value)) {
+            if ($value === []) {
+                return 'none';
+            }
+
+            return collect($value)->map(function (mixed $item): string {
+                if (is_array($item)) {
+                    return (string) ($item['display_name'] ?? $item['name'] ?? $item['staff_id'] ?? 'Responder');
+                }
+
+                return (string) $item;
+            })->implode(', ');
+        }
+
         return (string) $value;
     }
 
@@ -264,6 +443,7 @@ final class IncidentUpdateService
     {
         return [
             'status' => $incident->status,
+            'priority_label' => $incident->priority_label,
             'started_at' => optional($incident->started_at)?->toIso8601String(),
             'title' => $incident->title,
             'location_name' => $incident->location_name,
@@ -271,6 +451,23 @@ final class IncidentUpdateService
             'location_details' => $incident->location_details,
             'camp_id' => $incident->camp_id,
             'map_location_id' => $incident->map_location_id,
+            'incident_type_names' => $incident->incidentTypes()
+                ->pluck('name')
+                ->values()
+                ->all(),
+            'responders' => $incident->incidentStaff()
+                ->with('staff')
+                ->get()
+                ->map(fn (IncidentStaff $staff): array => [
+                    'staff_id' => $staff->staff_id,
+                    'display_name' => $staff->staff?->preferred_name
+                        ?? $staff->staff?->handle
+                        ?? $staff->staff?->legal_name
+                        ?? 'Unknown responder',
+                    'relationship_label' => $staff->relationship_label,
+                ])
+                ->values()
+                ->all(),
             'closed_at' => optional($incident->closed_at)?->toIso8601String(),
             'updated_at' => optional($incident->updated_at)?->toIso8601String(),
         ];

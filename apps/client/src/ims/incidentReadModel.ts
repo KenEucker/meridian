@@ -39,13 +39,27 @@ export interface IncidentTagChip {
   readonly normalizedTag: string;
 }
 
+export type IncidentPriorityLabel =
+  | "Routine"
+  | "Important"
+  | "Serious"
+  | "Critical";
+
+export interface IncidentResponder {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly relationshipLabel: string;
+}
+
 export interface ImsIncident {
   readonly id: string;
   readonly eventId: string;
   readonly incidentNumber: string;
   readonly title: string;
   readonly status: "open" | "on_scene" | "monitoring" | "on_hold" | "closed";
-  readonly priorityLabel: string | null;
+  readonly priorityLabel: IncidentPriorityLabel;
+  readonly incidentTypeNames: readonly string[];
+  readonly responders: readonly IncidentResponder[];
   readonly startedAt: string;
   readonly locationName: string | null;
   readonly locationAddress: string | null;
@@ -61,6 +75,9 @@ export interface ImsIncident {
 export interface IncidentAutosaveForm {
   title: string;
   status: ImsIncident["status"];
+  priorityLabel: IncidentPriorityLabel;
+  incidentTypeNames: string[];
+  responderStaffIds: string[];
   startedAt: string;
   locationName: string;
   locationAddress: string;
@@ -68,6 +85,35 @@ export interface IncidentAutosaveForm {
 }
 
 export const LOCAL_IMS_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+
+export const INCIDENT_PRIORITY_LABELS: readonly IncidentPriorityLabel[] =
+  Object.freeze(["Routine", "Important", "Serious", "Critical"]);
+
+export const INCIDENT_TYPE_OPTIONS: readonly string[] = Object.freeze([
+  "Medical",
+  "Safety",
+  "Logistics",
+  "Radio",
+  "Weather",
+]);
+
+export const RESPONDER_OPTIONS: readonly IncidentResponder[] = Object.freeze([
+  Object.freeze({
+    staffId: "22222222-2222-4222-8222-222222222201",
+    displayName: "Vera Ranger",
+    relationshipLabel: "Responder",
+  }),
+  Object.freeze({
+    staffId: "22222222-2222-4222-8222-222222222202",
+    displayName: "Omar Operator",
+    relationshipLabel: "Responder",
+  }),
+  Object.freeze({
+    staffId: "22222222-2222-4222-8222-222222222203",
+    displayName: "Ingrid ICLead",
+    relationshipLabel: "Responder",
+  }),
+]);
 
 const IC_ROLES: readonly IncidentRole[] = [
   "ic_viewer",
@@ -92,6 +138,14 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     title: "Medical assist near Gate A",
     status: "on_scene",
     priorityLabel: "Serious",
+    incidentTypeNames: Object.freeze(["Medical", "Safety"]),
+    responders: Object.freeze([
+      Object.freeze({
+        staffId: "22222222-2222-4222-8222-222222222201",
+        displayName: "Vera Ranger",
+        relationshipLabel: "Responder",
+      }),
+    ]),
     startedAt: "2027-07-04T20:15:00.000Z",
     locationName: "Gate A",
     locationAddress: "North entry road",
@@ -140,7 +194,9 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     incidentNumber: "INC-2027-000041",
     title: "Radio relay check",
     status: "monitoring",
-    priorityLabel: null,
+    priorityLabel: "Routine",
+    incidentTypeNames: Object.freeze(["Radio"]),
+    responders: Object.freeze([]),
     startedAt: "2027-07-04T19:40:00.000Z",
     locationName: "Ranger HQ",
     locationAddress: null,
@@ -252,6 +308,23 @@ export function findIncidentForSession(
   );
 }
 
+function findStoredIncidentForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+): ImsIncident | null {
+  if (!hasIncidentCommandAccess(context)) {
+    return null;
+  }
+
+  const incident =
+    localIncidentOverrides.get(incidentId) ??
+    localCreatedIncidents.get(incidentId) ??
+    LOCAL_INCIDENTS.find((candidate) => candidate.id === incidentId) ??
+    null;
+
+  return incident?.eventId === context?.eventId ? incident : null;
+}
+
 export function appendIncidentNoteForSession(
   context: IncidentSessionContext | null,
   incidentId: string,
@@ -267,7 +340,7 @@ export function appendIncidentNoteForSession(
     throw new Error("Incident note body is required.");
   }
 
-  const incident = findIncidentForSession(context, incidentId);
+  const incident = findStoredIncidentForSession(context, incidentId);
   if (!incident) {
     throw new Error("Incident not found for this event.");
   }
@@ -295,6 +368,9 @@ export function blankIncidentAutosaveForm(now = new Date()): IncidentAutosaveFor
   return {
     title: "",
     status: "open",
+    priorityLabel: "Routine",
+    incidentTypeNames: [],
+    responderStaffIds: [],
     startedAt: toDatetimeLocalValue(now),
     locationName: "",
     locationAddress: "",
@@ -308,6 +384,9 @@ export function incidentToAutosaveForm(
   return {
     title: incident.title,
     status: incident.status,
+    priorityLabel: incident.priorityLabel,
+    incidentTypeNames: [...incident.incidentTypeNames],
+    responderStaffIds: incident.responders.map((responder) => responder.staffId),
     startedAt: toDatetimeLocalValue(new Date(incident.startedAt)),
     locationName: incident.locationName ?? "",
     locationAddress: incident.locationAddress ?? "",
@@ -318,26 +397,38 @@ export function incidentToAutosaveForm(
 export function createIncidentFromAutosaveForm(
   context: IncidentSessionContext | null,
   form: IncidentAutosaveForm,
+  previousForm: IncidentAutosaveForm | null = null,
   createdAt = new Date(),
 ): ImsIncident {
   if (!canEditIncident(context)) {
     throw new Error("Only IC operators and IC leads may create incidents.");
   }
 
-  const title = validatedTitle(form.title);
   const timestamp = createdAt.toISOString();
   const id = `local-incident-${++incidentSequence}`;
+  const startedAt = fromDatetimeLocalValue(form.startedAt, createdAt);
+  const nextValues = {
+    title: normalizedTitle(form.title),
+    status: form.status,
+    priorityLabel: validatedPriorityLabel(form.priorityLabel),
+    incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
+    responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
+    startedAt,
+    locationName: nullableText(form.locationName),
+    locationAddress: nullableText(form.locationAddress),
+    locationDetails: nullableText(form.locationDetails),
+  };
+  const previousValue = previousForm
+    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "before")
+    : {};
+  const newValue = previousForm
+    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "after")
+    : {};
   const incident: ImsIncident = Object.freeze({
     id,
     eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
     incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
-    title,
-    status: form.status,
-    priorityLabel: null,
-    startedAt: fromDatetimeLocalValue(form.startedAt, createdAt),
-    locationName: nullableText(form.locationName),
-    locationAddress: nullableText(form.locationAddress),
-    locationDetails: nullableText(form.locationDetails),
+    ...nextValues,
     createdByName: context?.roleLabel ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -352,6 +443,20 @@ export function createIncidentFromAutosaveForm(
         body: `Incident INC-2027-${String(incidentSequence).padStart(6, "0")} opened.`,
         createdAt: timestamp,
       }),
+      ...(Object.keys(newValue).length > 0
+        ? [
+            Object.freeze({
+              id: `local-incident-field-${++fieldUpdateSequence}`,
+              incidentId: id,
+              actorName: context?.roleLabel ?? null,
+              entryType: "incident_field_updated" as const,
+              body: timelineFieldUpdateBody(newValue),
+              previousValue,
+              newValue,
+              createdAt: timestamp,
+            }),
+          ]
+        : []),
     ]),
   });
 
@@ -370,15 +475,18 @@ export function updateIncidentFromAutosaveForm(
     throw new Error("Only IC operators and IC leads may edit incidents.");
   }
 
-  const incident = findIncidentForSession(context, incidentId);
+  const incident = findStoredIncidentForSession(context, incidentId);
   if (!incident) {
     throw new Error("Incident not found for this event.");
   }
 
   const timestamp = updatedAt.toISOString();
   const nextValues = {
-    title: validatedTitle(form.title),
+    title: normalizedTitle(form.title),
     status: form.status,
+    priorityLabel: validatedPriorityLabel(form.priorityLabel),
+    incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
+    responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
     startedAt: fromDatetimeLocalValue(form.startedAt, updatedAt),
     locationName: nullableText(form.locationName),
     locationAddress: nullableText(form.locationAddress),
@@ -489,6 +597,8 @@ function incidentMatchesSearch(
     incident.locationName ?? "",
     incident.locationAddress ?? "",
     incident.locationDetails ?? "",
+    ...incident.incidentTypeNames,
+    ...incident.responders.map((responder) => responder.displayName),
   ].join(" ").toLowerCase();
 
   return (
@@ -509,6 +619,8 @@ function extractIncidentNameReferences(
     incident.locationName ?? "",
     incident.locationAddress ?? "",
     incident.locationDetails ?? "",
+    ...incident.incidentTypeNames,
+    ...incident.responders.map((responder) => responder.displayName),
     ...timelineEntries.map((entry) => entry.body ?? ""),
   ].flatMap(parseNameReferences);
 }
@@ -522,6 +634,8 @@ function extractIncidentTags(
     incident.locationName ?? "",
     incident.locationAddress ?? "",
     incident.locationDetails ?? "",
+    ...incident.incidentTypeNames,
+    ...incident.responders.map((responder) => responder.displayName),
     ...timelineEntries.map((entry) => entry.body ?? ""),
   ].flatMap(parseTags);
 }
@@ -582,18 +696,54 @@ function mergeTagChips(chips: readonly IncidentTagChip[]): IncidentTagChip[] {
   return [...byNormalizedTag.values()];
 }
 
-function validatedTitle(value: string): string {
+function normalizedTitle(value: string): string {
   const title = value.trim();
-
-  if (title.length === 0) {
-    throw new Error("Incident title is required.");
-  }
 
   if (title.length > 200) {
     throw new Error("Incident title may not be greater than 200 characters.");
   }
 
   return title;
+}
+
+function validatedPriorityLabel(value: IncidentPriorityLabel): IncidentPriorityLabel {
+  if (!INCIDENT_PRIORITY_LABELS.includes(value)) {
+    throw new Error("Incident priority label is invalid.");
+  }
+
+  return value;
+}
+
+function normalizedStringList(values: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const nextValues: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    const key = trimmed.toLowerCase();
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    nextValues.push(trimmed);
+  }
+
+  return nextValues;
+}
+
+function respondersForStaffIds(staffIds: readonly string[]): IncidentResponder[] {
+  const selectedIds = new Set(staffIds);
+
+  return RESPONDER_OPTIONS.filter((responder) =>
+    selectedIds.has(responder.staffId),
+  );
 }
 
 function nullableText(value: string): string | null {
@@ -630,10 +780,15 @@ function autosaveDiffSnapshot(
   return {
     title: incident.title,
     status: incident.status,
+    priorityLabel: incident.priorityLabel,
     startedAt: incident.startedAt,
     locationName: incident.locationName,
     locationAddress: incident.locationAddress,
     locationDetails: incident.locationDetails,
+    incidentTypeNames: incident.incidentTypeNames.join(", "),
+    responders: incident.responders
+      .map((responder) => responder.displayName)
+      .join(", "),
   };
 }
 
@@ -643,6 +798,9 @@ function changedAutosaveFields(
     ImsIncident,
     | "title"
     | "status"
+    | "priorityLabel"
+    | "incidentTypeNames"
+    | "responders"
     | "startedAt"
     | "locationName"
     | "locationAddress"
@@ -654,10 +812,70 @@ function changedAutosaveFields(
   const after: Record<string, string | null> = {
     title: nextValues.title,
     status: nextValues.status,
+    priorityLabel: nextValues.priorityLabel,
     startedAt: nextValues.startedAt,
     locationName: nextValues.locationName,
     locationAddress: nextValues.locationAddress,
     locationDetails: nextValues.locationDetails,
+    incidentTypeNames: nextValues.incidentTypeNames.join(", "),
+    responders: nextValues.responders
+      .map((responder) => responder.displayName)
+      .join(", "),
+  };
+  const values = direction === "before" ? before : after;
+  const changed: Record<string, string | null> = {};
+
+  for (const field of Object.keys(after)) {
+    if (before[field] !== after[field]) {
+      changed[field] = values[field] ?? null;
+    }
+  }
+
+  return changed;
+}
+
+function changedInitialAutosaveFields(
+  previousForm: IncidentAutosaveForm,
+  nextValues: Pick<
+    ImsIncident,
+    | "title"
+    | "status"
+    | "priorityLabel"
+    | "incidentTypeNames"
+    | "responders"
+    | "startedAt"
+    | "locationName"
+    | "locationAddress"
+    | "locationDetails"
+  >,
+  fallback: Date,
+  direction: "before" | "after",
+): Record<string, string | null> {
+  const before: Record<string, string | null> = {
+    title: normalizedTitle(previousForm.title),
+    status: previousForm.status,
+    priorityLabel: previousForm.priorityLabel,
+    startedAt: fromDatetimeLocalValue(previousForm.startedAt, fallback),
+    locationName: nullableText(previousForm.locationName),
+    locationAddress: nullableText(previousForm.locationAddress),
+    locationDetails: nullableText(previousForm.locationDetails),
+    incidentTypeNames: normalizedStringList(previousForm.incidentTypeNames).join(", "),
+    responders: respondersForStaffIds(previousForm.responderStaffIds)
+      .map((responder) => responder.displayName)
+      .join(", "),
+  };
+  const after: Record<string, string | null> = {
+    title: nextValues.title,
+    status: nextValues.status,
+    priorityLabel: nextValues.priorityLabel,
+    startedAt: nextValues.startedAt,
+    locationName: nextValues.locationName,
+    locationAddress: nextValues.locationAddress,
+    locationDetails: nextValues.locationDetails,
+    incidentTypeNames: nextValues.incidentTypeNames.join(", "),
+    responders: nextValues.responders
+      .map((responder) => responder.displayName)
+      .join(", "),
   };
   const values = direction === "before" ? before : after;
   const changed: Record<string, string | null> = {};
@@ -688,6 +906,9 @@ function fieldLabel(field: string): string {
   const labels: Record<string, string> = {
     title: "Title",
     status: "State",
+    priorityLabel: "Priority",
+    incidentTypeNames: "Incident types",
+    responders: "Responders",
     startedAt: "Started",
     locationName: "Location name",
     locationAddress: "Location address",
