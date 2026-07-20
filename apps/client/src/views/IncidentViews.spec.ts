@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
@@ -7,11 +7,14 @@ import App from "@/App.vue";
 import {
   availableFieldReportOptionsForSession,
   availableLinkedIncidentOptionsForSession,
+  blankIncidentAutosaveForm,
   clearIncidentSession,
   createIncidentFromAutosaveForm,
   installIncidentSession,
   LOCAL_IMS_EVENT_ID,
   linkFieldReportForSession,
+  updateIncidentFromAutosaveForm,
+  type IncidentAutosaveForm,
   type IncidentSessionContext,
 } from "@/ims/incidentReadModel";
 import { routes } from "@/router";
@@ -77,7 +80,18 @@ async function addBySearch(
   await flushPromises();
 }
 
+async function showFullHistory(wrapper: VueWrapper): Promise<void> {
+  const button = wrapper
+    .findAll("button")
+    .find((candidate) => candidate.text() === "Show full history");
+
+  expect(button).toBeDefined();
+  await button?.trigger("click");
+  await flushPromises();
+}
+
 afterEach(() => {
+  vi.restoreAllMocks();
   clearIncidentSession();
   setNavigatorOnline(true);
 });
@@ -312,13 +326,17 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
     expect(wrapper.text()).toContain("INC-2027-000043");
     expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
-    expect(wrapper.text()).toContain("Changed priority: Important");
+    expect(wrapper.text()).not.toContain("Changed priority: Important");
 
     const openingTimelineEntries = wrapper.findAll(".ims-edit__timeline li");
     expect(openingTimelineEntries[0]?.text()).toContain(
       "Incident INC-2027-000043 opened.",
     );
-    expect(openingTimelineEntries[1]?.text()).toContain(
+
+    await showFullHistory(wrapper);
+
+    expect(wrapper.text()).toContain("Changed priority: Important");
+    expect(wrapper.findAll(".ims-edit__timeline li")[1]?.text()).toContain(
       "Changed priority: Important",
     );
 
@@ -421,6 +439,12 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await flushPromises();
 
     expect(wrapper.text()).not.toContain("Saved INC-2027-000042.");
+    expect(wrapper.text()).not.toContain(
+      "Changed title: Gate A medical follow-up #followup @RangerHQ",
+    );
+
+    await showFullHistory(wrapper);
+
     expect(wrapper.text()).toContain(
       "Changed title: Gate A medical follow-up #followup @RangerHQ",
     );
@@ -452,6 +476,11 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
       .get('button[aria-label="Unlink incident INC-2027-000041"]')
       .trigger("click");
     await flushPromises();
+
+    expect(wrapper.text()).not.toContain(
+      "Unlinked related incident INC-2027-000041: Radio relay check.",
+    );
+    await showFullHistory(wrapper);
 
     expect(wrapper.text()).toContain(
       "Unlinked related incident INC-2027-000041: Radio relay check.",
@@ -529,14 +558,56 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
       .trigger("click");
     await flushPromises();
 
+    expect(wrapper.text()).not.toContain(
+      "Removed Field Report FRA-2027-000123: Medical observation near Gate A.",
+    );
+    expect(wrapper.text()).not.toContain("Field Report removed from incident.");
+    expect(wrapper.text()).toContain("No attached Field Reports.");
+
+    await showFullHistory(wrapper);
+
     expect(wrapper.text()).toContain(
       "Removed Field Report FRA-2027-000123: Medical observation near Gate A.",
     );
     expect(wrapper.text()).toContain("Field Report removed from incident.");
-    expect(wrapper.text()).toContain("No attached Field Reports.");
     expect(wrapper.get(".ims-edit__timeline-body--stricken").text()).toContain(
       "Field Report: Medical observation near Gate A",
     );
+  });
+
+  it("hides routine history by default and can show full detail history", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+    const createdAt = new Date("2027-07-04T21:00:00.000Z");
+    const form: IncidentAutosaveForm = {
+      ...blankIncidentAutosaveForm(createdAt),
+      title: "Timeline visibility check",
+      priorityLabel: "Routine",
+    };
+    const incident = createIncidentFromAutosaveForm(
+      IC_OPERATOR_SESSION,
+      form,
+      null,
+      createdAt,
+    );
+    updateIncidentFromAutosaveForm(
+      IC_OPERATOR_SESSION,
+      incident.id,
+      {
+        ...form,
+        priorityLabel: "Serious",
+      },
+      new Date("2027-07-04T21:05:00.000Z"),
+    );
+
+    const { wrapper } = await mountAt(`/ims/incidents/${incident.id}`);
+
+    expect(wrapper.text()).toContain(`Incident ${incident.incidentNumber} opened.`);
+    expect(wrapper.text()).not.toContain("Changed priority");
+
+    await showFullHistory(wrapper);
+
+    expect(wrapper.text()).toContain("Hide full history");
+    expect(wrapper.text()).toContain("Changed priority");
   });
 
   it("orders linked incident candidates by shared tags first then newest created", () => {
@@ -630,6 +701,9 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await wrapper.get("#ims-edit-location-address").trigger("blur");
     await flushPromises();
 
+    expect(wrapper.text()).not.toContain("Changed location address: North entry road");
+    await showFullHistory(wrapper);
+
     expect(wrapper.text()).toContain("Changed location address: North entry road");
     expect(wrapper.text()).not.toContain("Started field changed");
     expect(wrapper.text()).not.toContain("Changed started:");
@@ -705,6 +779,40 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Search: Radio relay confirmed.");
     expect(wrapper.get<HTMLTextAreaElement>("#ims-note-body").element.value).toBe(
       "",
+    );
+  });
+
+  it("lets IC operators strike operational timeline notes", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+    vi.spyOn(window, "prompt").mockReturnValue("Wrong incident note.");
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+
+    await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
+    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Radio relay confirmed.");
+
+    const appendedNoteRow = wrapper
+      .findAll(".ims-detail__timeline li")
+      .find((row) => row.text().includes("Radio relay confirmed."));
+    const strikeButton = appendedNoteRow
+      ?.findAll("button")
+      .find((button) => button.text() === "Strike note");
+
+    expect(strikeButton).toBeDefined();
+    await strikeButton?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("Radio relay confirmed.");
+
+    await showFullHistory(wrapper);
+
+    expect(wrapper.text()).toContain("Radio relay confirmed.");
+    expect(wrapper.text()).toContain("Stricken: Wrong incident note.");
+    expect(wrapper.get(".ims-detail__timeline-body--stricken").text()).toContain(
+      "Radio relay confirmed.",
     );
   });
 

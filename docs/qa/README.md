@@ -50,7 +50,9 @@ The full `QA-INC-01` incident-management script remains owned by M11.11.
    actions.
 4. Repeat the detail check as `ic_operator` and `ic_lead`, add a plain-text
    operational note containing at least one `@name` marker, and confirm the new
-   note appears in the timeline with the actor and timestamp.
+   note appears in the timeline with the actor and timestamp. Strike that note,
+   provide a reason, confirm compact history hides it, and confirm full history
+   shows the original note text struck through with the reason.
 5. As `ic_operator` or `ic_lead`, open `/ims/incidents/create`. Confirm the
    blank autosave form shows no IMS number until the first valid title autosaves,
    then assigns an IMS number and moves to the edit route.
@@ -61,8 +63,10 @@ The full `QA-INC-01` incident-management script remains owned by M11.11.
    links are rejected; already-linked incident candidates are hidden; candidates
    with shared `#tags` appear before location-only matches; autosave status is
    visible; failed validation is visible for a blank title; status does not
-   block editing; field/link edits appear in history/audit; and incident notes
-   remain append-only. After M11.8, repeat the already-linked exclusion,
+   block editing; field/link edits appear in history/audit; compact history
+   hides routine and stricken entries; full history shows them; and incident
+   notes preserve original text when struck. After M11.8, repeat the
+   already-linked exclusion,
    shared-tag-first, newest-added ordering check for Field Report attachment
    candidates. For both linked Incident and Field Report add controls, confirm
    search can find same-event records linked to other incidents when they are
@@ -86,9 +90,10 @@ The full `QA-INC-01` incident-management script remains owned by M11.11.
    distinct from any `#tag` treatment, and clicking a chip returns to the
    incident list with normal permission-filtered search results for the
    reference text without opening a Name Reference profile/detail page.
-10. Confirm blank timeline notes are rejected, the original timeline entries
-   remain unchanged, the incident last-updated timestamp advances after a valid
-   note, and an `incident.note_appended` audit row is created.
+10. Confirm blank timeline notes and blank strike reasons are rejected, the
+   original timeline entry bodies remain unchanged, the incident last-updated
+   timestamp advances after a valid note and after striking a note, and
+   `incident.note_appended` / `incident.note_stricken` audit rows are created.
 11. Repeat as `ic_viewer` and confirm the timeline is visible but the add-note
    form/command is unavailable.
 12. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,

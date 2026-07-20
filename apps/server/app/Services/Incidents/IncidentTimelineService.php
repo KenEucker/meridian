@@ -89,6 +89,72 @@ final class IncidentTimelineService
         });
     }
 
+    public function strikeNote(
+        Incident $incident,
+        IncidentTimelineEntry $entry,
+        User $actor,
+        string $reason,
+        ?DateTimeInterface $strickenAt = null,
+        string $sourceContext = AuditEvent::SOURCE_SYSTEM,
+    ): IncidentTimelineEntry {
+        $reason = $this->strikeReason($reason);
+
+        return DB::transaction(function () use ($incident, $entry, $actor, $reason, $strickenAt, $sourceContext): IncidentTimelineEntry {
+            /** @var Incident $lockedIncident */
+            $lockedIncident = Incident::query()
+                ->whereKey($incident->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            /** @var IncidentTimelineEntry $lockedEntry */
+            $lockedEntry = IncidentTimelineEntry::query()
+                ->whereKey($entry->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((string) $lockedEntry->incident_id !== (string) $lockedIncident->id) {
+                throw IncidentTimelineException::invalid('Incident note must belong to this incident.');
+            }
+
+            if ($lockedEntry->entry_type !== IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE) {
+                throw IncidentTimelineException::invalid('Only operational notes may be stricken.');
+            }
+
+            if ($lockedEntry->stricken_at !== null) {
+                throw IncidentTimelineException::invalid('Incident note is already stricken.');
+            }
+
+            $before = $this->timelineAuditPayload($lockedEntry);
+            $now = CarbonImmutable::instance($strickenAt ?? now());
+
+            IncidentTimelineEntry::query()
+                ->whereKey($lockedEntry->id)
+                ->update([
+                    'stricken_at' => $now,
+                    'stricken_reason' => $reason,
+                ]);
+
+            $lockedIncident->forceFill(['updated_at' => $now])->save();
+            $strickenEntry = $lockedEntry->refresh();
+            $this->nameReferences->synchronizeIncidentTimelineEntry($strickenEntry);
+            $event = Event::query()->findOrFail($lockedIncident->event_id);
+
+            $this->audit->recordForEntity(
+                entity: $strickenEntry,
+                action: 'incident.note_stricken',
+                actorUser: $actor,
+                organizationId: $event->organization_id,
+                eventId: $event->id,
+                departmentId: $this->effectiveIncidentCommandDepartmentId($event),
+                before: $before,
+                after: $this->timelineAuditPayload($strickenEntry),
+                reason: $reason,
+                sourceContext: $sourceContext,
+            );
+
+            return $strickenEntry;
+        });
+    }
+
     private function body(string $value): string
     {
         $body = trim($value);
@@ -102,6 +168,37 @@ final class IncidentTimelineService
         }
 
         return $body;
+    }
+
+    private function strikeReason(string $value): string
+    {
+        $reason = trim($value);
+
+        if ($reason === '') {
+            throw IncidentTimelineException::invalid('Incident note strike reason is required.');
+        }
+
+        if (mb_strlen($reason) > 1000) {
+            throw IncidentTimelineException::invalid('Incident note strike reason may not be greater than 1000 characters.');
+        }
+
+        return $reason;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function timelineAuditPayload(IncidentTimelineEntry $entry): array
+    {
+        return [
+            'incident_id' => $entry->incident_id,
+            'timeline_entry_id' => $entry->id,
+            'actor_user_id' => $entry->actor_user_id,
+            'entry_type' => $entry->entry_type,
+            'body' => $entry->body,
+            'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
+            'stricken_reason' => $entry->stricken_reason,
+        ];
     }
 
     private function effectiveIncidentCommandDepartmentId(Event $event): ?string

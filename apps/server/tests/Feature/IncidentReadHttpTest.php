@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -124,6 +125,15 @@ class IncidentReadHttpTest extends TestCase
             'unlinked_at' => Carbon::parse('2027-07-04T20:27:00Z'),
             'stricken_reason' => 'Field Report removed from incident.',
         ]);
+        $activeAttachment = Attachment::factory()->forIncident($incident, $actor)->create([
+            'filename' => 'INC-2027-000003_2027-07-04T20-28-00Z_01.webp',
+            'created_at' => Carbon::parse('2027-07-04T20:28:00Z'),
+        ]);
+        Attachment::factory()->forIncident($incident, $actor)->create([
+            'filename' => 'INC-2027-000003_2027-07-04T20-29-00Z_02.webp',
+            'created_at' => Carbon::parse('2027-07-04T20:29:00Z'),
+            'stricken_at' => Carbon::parse('2027-07-04T20:31:00Z'),
+        ]);
         $unlinkedIncident = Incident::factory()->forEvent($event)->create([
             'incident_number' => 'INC-2027-000005',
             'title' => 'Unlinked relay',
@@ -171,6 +181,10 @@ class IncidentReadHttpTest extends TestCase
             ->assertJsonPath('incident.attached_field_reports.0.author_name', 'Vera')
             ->assertJsonPath('incident.attached_field_reports.0.body', 'Observed @Blue-Hat near Gate A.')
             ->assertJsonCount(1, 'incident.attached_field_reports')
+            ->assertJsonPath('incident.attachments.0.id', $activeAttachment->id)
+            ->assertJsonPath('incident.attachments.0.filename', 'INC-2027-000003_2027-07-04T20-28-00Z_01.webp')
+            ->assertJsonPath('incident.attachments.0.mime_type', 'image/webp')
+            ->assertJsonCount(1, 'incident.attachments')
             ->assertJsonPath('incident.title', 'Radio check at Gate A')
             ->assertJsonPath('incident.location_name', 'Gate A')
             ->assertJsonPath('incident.location_details', 'North side of entry.')

@@ -23,9 +23,11 @@ import {
   RESPONDER_OPTIONS,
   resolveIncidentSession,
   statusLabel,
+  strikeIncidentNoteForSession,
   unlinkFieldReportForSession,
   unlinkIncidentForSession,
   updateIncidentFromAutosaveForm,
+  visibleIncidentTimelineEntries,
   type IncidentAutosaveForm,
   type IncidentTagChip,
   type IncidentTimelineEntry,
@@ -50,6 +52,7 @@ const lastSavedAt = ref<string | null>(null);
 const noteBody = ref("");
 const noteError = ref<string | null>(null);
 const revision = ref(0);
+const showFullHistory = ref(false);
 const lastSavedSignature = ref<string | null>(null);
 const lastSavedForm = ref<IncidentAutosaveForm | null>(null);
 const autosaveQueued = ref(false);
@@ -74,7 +77,12 @@ const incident = computed(() => {
     : null;
 });
 const isOfflineBlocked = computed(() => connectivity.value !== "online");
-const timelineEntries = computed(() => incident.value?.timelineEntries ?? []);
+const timelineEntries = computed(() =>
+  visibleIncidentTimelineEntries(
+    incident.value?.timelineEntries ?? [],
+    showFullHistory.value,
+  ),
+);
 const showAutosaveStatus = computed(
   () => autosaveState.value !== "saved" || autosaveMessage.value !== null,
 );
@@ -511,6 +519,41 @@ function formatTimelineChangedValue(
   }
 
   return field === "status" ? statusLabel(value as IncidentAutosaveForm["status"]) : value;
+}
+
+function canStrikeTimelineEntry(entry: IncidentTimelineEntry): boolean {
+  return (
+    canEdit.value &&
+    entry.entryType === "operational_note" &&
+    !entry.strickenAt
+  );
+}
+
+function onStrikeNote(entry: IncidentTimelineEntry): void {
+  noteError.value = null;
+
+  if (!savedIncidentId.value) {
+    noteError.value = "Create the incident before striking notes.";
+    return;
+  }
+
+  const reason = window.prompt("Reason for striking this note");
+  if (reason === null) {
+    return;
+  }
+
+  try {
+    strikeIncidentNoteForSession(
+      session.value,
+      savedIncidentId.value,
+      entry.id,
+      reason,
+    );
+    revision.value += 1;
+  } catch (error) {
+    noteError.value =
+      error instanceof Error ? error.message : "Unable to strike incident note.";
+  }
 }
 
 function onAppendNote(): void {
@@ -1004,7 +1047,12 @@ function onAppendNote(): void {
         class="ims-edit__timeline"
         aria-labelledby="ims-edit-timeline-heading"
       >
-        <h2 id="ims-edit-timeline-heading">Timeline</h2>
+        <div class="ims-edit__timeline-heading">
+          <h2 id="ims-edit-timeline-heading">Timeline</h2>
+          <button type="button" @click="showFullHistory = !showFullHistory">
+            {{ showFullHistory ? "Hide full history" : "Show full history" }}
+          </button>
+        </div>
         <ol>
           <li v-for="entry in timelineEntries" :key="entry.id">
             <div class="ims-edit__timeline-meta">
@@ -1027,6 +1075,14 @@ function onAppendNote(): void {
             >
               Stricken: {{ entry.strickenReason ?? "Removed from incident." }}
             </p>
+            <button
+              v-if="canStrikeTimelineEntry(entry)"
+              class="ims-edit__timeline-strike"
+              type="button"
+              @click="onStrikeNote(entry)"
+            >
+              Strike note
+            </button>
           </li>
         </ol>
 
@@ -1456,7 +1512,12 @@ function onAppendNote(): void {
   padding-bottom: var(--m-space-3);
 }
 
-.ims-edit__timeline > h2 {
+.ims-edit__timeline-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
   min-height: 2.25rem;
   border-bottom: 1px solid var(--m-border-default);
   padding: var(--m-space-1) var(--m-space-3);
@@ -1465,6 +1526,27 @@ function onAppendNote(): void {
     var(--m-surface-raised) 84%,
     var(--m-border-default)
   );
+}
+
+.ims-edit__timeline-heading h2 {
+  margin: 0;
+  font-size: var(--m-text-lg);
+}
+
+.ims-edit__timeline-heading button {
+  min-height: 2.25rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-3);
+  background: var(--m-surface);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+}
+
+.ims-edit__timeline-heading button:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .ims-edit__timeline ol {
@@ -1481,7 +1563,7 @@ function onAppendNote(): void {
   gap: var(--m-space-2);
   width: 100%;
   min-width: 0;
-  padding: var(--m-space-1) 0 var(--m-space-2) var(--m-space-4);
+  padding: var(--m-space-1) 5.5rem var(--m-space-2) var(--m-space-4);
 }
 
 .ims-edit__timeline li::before {
@@ -1521,6 +1603,25 @@ function onAppendNote(): void {
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
   font-weight: 800;
+}
+
+.ims-edit__timeline-strike {
+  position: absolute;
+  top: var(--m-space-1);
+  right: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--m-status-danger);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.ims-edit__timeline-strike:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .ims-edit__note-form {

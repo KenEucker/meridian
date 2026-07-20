@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers\Incidents;
 
+use App\Exceptions\IncidentAttachmentStrikeException;
 use App\Exceptions\IncidentCreationException;
 use App\Exceptions\IncidentFieldReportLinkException;
 use App\Exceptions\IncidentLinkException;
 use App\Exceptions\IncidentTimelineException;
 use App\Exceptions\IncidentUpdateException;
 use App\Http\Controllers\Controller;
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\FieldReport;
 use App\Models\Incident;
 use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
+use App\Models\IncidentTimelineEntry;
+use App\Services\Incidents\IncidentAttachmentStrikeService;
 use App\Services\Incidents\IncidentCreationAccess;
 use App\Services\Incidents\IncidentCreationService;
 use App\Services\Incidents\IncidentFieldReportLinkService;
@@ -35,6 +39,10 @@ use Illuminate\Http\Request;
  * POST /api/commands/unlink-incident for same-event incident relationships.
  * M11.8 adds POST /api/commands/link-field-report and
  * POST /api/commands/unlink-field-report for Field Report relationships.
+ * M11.9 adds POST /api/commands/strike-incident-attachment for preserved
+ * incident attachment strike history.
+ * Follow-up adds POST /api/commands/strike-incident-note for preserved
+ * operational note strike history.
  * Technical spec 19.2 requires active server connection for incident mutations.
  */
 final class IncidentCommandController extends Controller
@@ -208,6 +216,61 @@ final class IncidentCommandController extends Controller
         return $this->mutateFieldReportLink($request, $access, $links, unlink: true);
     }
 
+    public function strikeAttachment(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentAttachmentStrikeService $attachments,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+            'attachment_id' => ['required', 'uuid', 'exists:attachments,id'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Incident attachment strike reason is required.',
+        ]);
+
+        $event = Event::query()->findOrFail((string) $validated['event_id']);
+        $incident = Incident::query()->findOrFail((string) $validated['incident_id']);
+        $attachment = Attachment::query()->findOrFail((string) $validated['attachment_id']);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canUpdateIncident($user, $event)) {
+            return response()->json([
+                'message' => 'Only IC operators and IC leads for this event may strike incident attachments.',
+            ], 403);
+        }
+
+        try {
+            $attachment = $attachments->strike(
+                incident: $incident,
+                attachment: $attachment,
+                actor: $user,
+                reason: (string) $validated['reason'],
+                sourceContext: AuditEvent::SOURCE_API,
+            );
+        } catch (IncidentAttachmentStrikeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'id' => $attachment->id,
+            'incident_id' => $attachment->attachable_id,
+            'filename' => $attachment->filename,
+            'mime_type' => $attachment->mime_type,
+            'byte_size' => $attachment->byte_size,
+            'created_at' => optional($attachment->created_at)?->toIso8601String(),
+            'stricken_at' => optional($attachment->stricken_at)?->toIso8601String(),
+            'deleted_at' => optional($attachment->deleted_at)?->toIso8601String(),
+        ]);
+    }
+
     public function appendNote(
         Request $request,
         IncidentNoteAccess $access,
@@ -264,6 +327,52 @@ final class IncidentCommandController extends Controller
         ], 201);
     }
 
+    public function strikeNote(
+        Request $request,
+        IncidentNoteAccess $access,
+        IncidentTimelineService $timeline,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+            'timeline_entry_id' => ['required', 'uuid', 'exists:incident_timeline_entries,id'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Incident note strike reason is required.',
+        ]);
+
+        $event = Event::query()->findOrFail((string) $validated['event_id']);
+        $incident = Incident::query()->findOrFail((string) $validated['incident_id']);
+        $entry = IncidentTimelineEntry::query()->findOrFail((string) $validated['timeline_entry_id']);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canAppendNote($user, $event)) {
+            return response()->json([
+                'message' => 'Only IC operators and IC leads for this event may strike incident notes.',
+            ], 403);
+        }
+
+        try {
+            $entry = $timeline->strikeNote(
+                incident: $incident,
+                entry: $entry,
+                actor: $user,
+                reason: (string) $validated['reason'],
+                sourceContext: AuditEvent::SOURCE_API,
+            );
+        } catch (IncidentTimelineException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($this->timelineEntryResponse($entry));
+    }
+
     /**
      * @return list<array{staff_id: string, display_name: string, relationship_label: string}>
      */
@@ -282,6 +391,27 @@ final class IncidentCommandController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function timelineEntryResponse(IncidentTimelineEntry $entry): array
+    {
+        return [
+            'id' => $entry->id,
+            'incident_id' => $entry->incident_id,
+            'actor_user_id' => $entry->actor_user_id,
+            'actor_name' => $entry->actorUser?->name,
+            'entry_type' => $entry->entry_type,
+            'body' => $entry->body,
+            'previous_value' => $entry->previous_value,
+            'new_value' => $entry->new_value,
+            'reason' => $entry->reason,
+            'created_at' => optional($entry->created_at)?->toIso8601String(),
+            'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
+            'stricken_reason' => $entry->stricken_reason,
+        ];
     }
 
     private function mutateIncidentLink(

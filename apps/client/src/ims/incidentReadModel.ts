@@ -26,7 +26,8 @@ export interface IncidentTimelineEntry {
     | "incident_linked"
     | "incident_unlinked"
     | "field_report_linked"
-    | "field_report_unlinked";
+    | "field_report_unlinked"
+    | "incident_attachment_stricken";
   readonly body: string | null;
   readonly previousValue?: Record<string, string | null>;
   readonly newValue?: Record<string, string | null>;
@@ -371,6 +372,7 @@ let incidentLinkSequence = 0;
 let incidentFieldReportLinkSequence = 0;
 
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
+const localTimelineEntryOverrides = new Map<string, IncidentTimelineEntry>();
 const localIncidentUpdatedAt = new Map<string, string>();
 const localIncidentOverrides = new Map<string, ImsIncident>();
 const localCreatedIncidents = new Map<string, ImsIncident>();
@@ -386,6 +388,7 @@ export function installIncidentSession(context: IncidentSessionContext): void {
 export function clearIncidentSession(): void {
   session = null;
   localTimelineEntries.clear();
+  localTimelineEntryOverrides.clear();
   localIncidentUpdatedAt.clear();
   localIncidentOverrides.clear();
   localCreatedIncidents.clear();
@@ -536,6 +539,56 @@ export function appendIncidentNoteForSession(
     ...(localTimelineEntries.get(incident.id) ?? []),
     entry,
   ]);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+
+  return findIncidentForSession(context, incidentId) ?? incident;
+}
+
+export function strikeIncidentNoteForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  timelineEntryId: string,
+  reason: string,
+  strickenAt = new Date(),
+): ImsIncident {
+  if (!canAppendIncidentNote(context)) {
+    throw new Error("Only IC operators and IC leads may strike incident notes.");
+  }
+
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length === 0) {
+    throw new Error("Incident note strike reason is required.");
+  }
+
+  const incident = findIncidentForSession(context, incidentId);
+  if (!incident) {
+    throw new Error("Incident not found for this event.");
+  }
+
+  const entry = incident.timelineEntries.find(
+    (candidate) => candidate.id === timelineEntryId,
+  );
+  if (!entry) {
+    throw new Error("Incident note not found for this event.");
+  }
+
+  if (entry.entryType !== "operational_note") {
+    throw new Error("Only operational notes may be stricken.");
+  }
+
+  if (entry.strickenAt) {
+    throw new Error("Incident note is already stricken.");
+  }
+
+  const timestamp = strickenAt.toISOString();
+  localTimelineEntryOverrides.set(
+    entry.id,
+    Object.freeze({
+      ...entry,
+      strickenAt: timestamp,
+      strickenReason: trimmedReason,
+    }),
+  );
   localIncidentUpdatedAt.set(incident.id, timestamp);
 
   return findIncidentForSession(context, incidentId) ?? incident;
@@ -962,11 +1015,56 @@ export function formatIncidentDateTime(value: string): string {
   return `${month}-${day}-${year} ${hour}:${minute}`;
 }
 
+export function visibleIncidentTimelineEntries(
+  entries: readonly IncidentTimelineEntry[],
+  showFullHistory: boolean,
+): readonly IncidentTimelineEntry[] {
+  if (showFullHistory) {
+    return entries;
+  }
+
+  const latestOpenCloseEntryId = latestOpenCloseStatusEntry(entries)?.id ?? null;
+
+  return entries.filter((entry) => {
+    if (entry.strickenAt) {
+      return false;
+    }
+
+    if (
+      entry.entryType === "incident_opened" ||
+      entry.entryType === "operational_note" ||
+      entry.entryType === "field_report_linked"
+    ) {
+      return true;
+    }
+
+    return entry.id === latestOpenCloseEntryId;
+  });
+}
+
+function latestOpenCloseStatusEntry(
+  entries: readonly IncidentTimelineEntry[],
+): IncidentTimelineEntry | null {
+  const statusEntries = entries.filter((entry) => {
+    if (entry.strickenAt || entry.entryType !== "incident_field_updated") {
+      return false;
+    }
+
+    const status = entry.newValue?.status;
+
+    return status === "open" || status === "closed";
+  });
+
+  return statusEntries[statusEntries.length - 1] ?? null;
+}
+
 function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
   const timelineEntries = [
     ...incident.timelineEntries,
     ...(localTimelineEntries.get(incident.id) ?? []),
-  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  ]
+    .map((entry) => localTimelineEntryOverrides.get(entry.id) ?? entry)
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 
   return Object.freeze({
     ...incident,
