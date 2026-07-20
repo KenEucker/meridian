@@ -33,7 +33,7 @@ final class IncidentCreationService
     /**
      * @param  array{
      *     event_id: string,
-     *     title: string,
+     *     title?: string|null,
      *     status?: string|null,
      *     priority_label?: string|null,
      *     started_at?: DateTimeInterface|string|null,
@@ -138,15 +138,15 @@ final class IncidentCreationService
 
     private function title(mixed $value): string
     {
+        if ($value === null) {
+            return '';
+        }
+
         if (! is_string($value)) {
-            throw IncidentCreationException::invalid('Incident title is required.');
+            throw IncidentCreationException::invalid('Incident title is invalid.');
         }
 
         $title = trim($value);
-
-        if ($title === '') {
-            throw IncidentCreationException::invalid('Incident title is required.');
-        }
 
         if (mb_strlen($title) > 200) {
             throw IncidentCreationException::invalid('Incident title may not be greater than 200 characters.');

@@ -194,14 +194,17 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Rangers/responders");
 
     await wrapper.get("#ims-edit-priority").setValue("Important");
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
+    expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
+
     await addBySearch(wrapper, "#ims-edit-type-add", "Log", "Logistics");
     await addBySearch(wrapper, "#ims-edit-type-add", "Rad", "Radio");
     await addBySearch(wrapper, "#ims-edit-responder-add", "Omar", "Omar Operator");
     await wrapper.get("#ims-edit-title").setValue("  Perimeter assist  ");
     await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
-    expect(wrapper.text()).toContain("Not assigned yet");
 
     await wrapper.get("#ims-edit-title").trigger("blur");
     await flushPromises();
@@ -209,7 +212,6 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
     expect(wrapper.text()).toContain("INC-2027-000043");
     expect(wrapper.text()).not.toContain("Saved INC-2027-000043.");
-    expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
 
     await router.push("/ims/incidents");
     await flushPromises();
@@ -220,7 +222,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Logistics, Radio");
   });
 
-  it("waits for a title before creating from the autosave form", async () => {
+  it("waits for a committed field change before creating from the autosave form", async () => {
     installIncidentSession(IC_OPERATOR_SESSION);
 
     const { wrapper } = await mountAt("/ims/incidents/create");
@@ -231,6 +233,14 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Autosave failed");
     expect(wrapper.text()).not.toContain("Incident title is required.");
     expect(wrapper.text()).toContain("Not assigned yet");
+
+    await wrapper.get("#ims-edit-location-name").trigger("blur");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.get<HTMLInputElement>("#ims-edit-title").element.value).toBe(
+      "",
+    );
   });
 
   it("shows add choices in a dismissible popup", async () => {

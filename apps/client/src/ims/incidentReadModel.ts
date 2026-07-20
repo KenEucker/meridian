@@ -403,14 +403,13 @@ export function createIncidentFromAutosaveForm(
     throw new Error("Only IC operators and IC leads may create incidents.");
   }
 
-  const title = validatedTitle(form.title);
   const timestamp = createdAt.toISOString();
   const id = `local-incident-${++incidentSequence}`;
   const incident: ImsIncident = Object.freeze({
     id,
     eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
     incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
-    title,
+    title: normalizedTitle(form.title),
     status: form.status,
     priorityLabel: validatedPriorityLabel(form.priorityLabel),
     incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
@@ -458,7 +457,7 @@ export function updateIncidentFromAutosaveForm(
 
   const timestamp = updatedAt.toISOString();
   const nextValues = {
-    title: validatedTitle(form.title),
+    title: normalizedTitle(form.title),
     status: form.status,
     priorityLabel: validatedPriorityLabel(form.priorityLabel),
     incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
@@ -672,12 +671,8 @@ function mergeTagChips(chips: readonly IncidentTagChip[]): IncidentTagChip[] {
   return [...byNormalizedTag.values()];
 }
 
-function validatedTitle(value: string): string {
+function normalizedTitle(value: string): string {
   const title = value.trim();
-
-  if (title.length === 0) {
-    throw new Error("Incident title is required.");
-  }
 
   if (title.length > 200) {
     throw new Error("Incident title may not be greater than 200 characters.");

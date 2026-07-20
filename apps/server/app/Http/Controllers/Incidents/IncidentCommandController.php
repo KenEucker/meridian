@@ -38,7 +38,7 @@ final class IncidentCommandController extends Controller
 
         $validated = $request->validate([
             'event_id' => ['required', 'uuid', 'exists:events,id'],
-            'title' => ['required', 'string'],
+            'title' => ['nullable', 'string'],
             'status' => ['nullable', 'string'],
             'priority_label' => ['nullable', 'string'],
             'started_at' => ['nullable', 'date'],
@@ -98,7 +98,7 @@ final class IncidentCommandController extends Controller
         $validated = $request->validate([
             'event_id' => ['required', 'uuid', 'exists:events,id'],
             'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
-            'title' => ['sometimes', 'required', 'string'],
+            'title' => ['sometimes', 'nullable', 'string'],
             'status' => ['sometimes', 'required', 'string'],
             'priority_label' => ['sometimes', 'required', 'string'],
             'started_at' => ['sometimes', 'required', 'date'],
@@ -111,8 +111,6 @@ final class IncidentCommandController extends Controller
             'incident_type_names.*' => ['string'],
             'responder_staff_ids' => ['sometimes', 'array'],
             'responder_staff_ids.*' => ['uuid'],
-        ], [
-            'title.required' => 'Incident title is required.',
         ]);
 
         $event = Event::query()->findOrFail((string) $validated['event_id']);

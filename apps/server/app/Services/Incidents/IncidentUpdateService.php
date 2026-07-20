@@ -180,15 +180,15 @@ final class IncidentUpdateService
 
     private function title(mixed $value): string
     {
+        if ($value === null) {
+            return '';
+        }
+
         if (! is_string($value)) {
-            throw IncidentUpdateException::invalid('Incident title is required.');
+            throw IncidentUpdateException::invalid('Incident title is invalid.');
         }
 
         $title = trim($value);
-
-        if ($title === '') {
-            throw IncidentUpdateException::invalid('Incident title is required.');
-        }
 
         if (mb_strlen($title) > 200) {
             throw IncidentUpdateException::invalid('Incident title may not be greater than 200 characters.');

@@ -394,9 +394,9 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 .ims-list__priority--important {
-  border-color: #b7791f;
-  background: #fff3bf;
-  color: #7a4a00;
+  border-color: #facc15;
+  background: #fef08a;
+  color: #3f3000;
 }
 
 .ims-list__priority--serious {

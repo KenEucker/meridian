@@ -461,7 +461,7 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_timeline_entries', 0);
     }
 
-    public function test_incident_create_validation_failure_creates_no_record(): void
+    public function test_incident_create_allows_blank_title(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_lead', $event);
@@ -471,15 +471,15 @@ class IncidentCommandHttpTest extends TestCase
                 'event_id' => $event->id,
                 'title' => '   ',
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'The title field is required.');
+            ->assertCreated()
+            ->assertJsonPath('title', '');
 
-        $this->assertDatabaseCount('incidents', 0);
-        $this->assertDatabaseCount('incident_timeline_entries', 0);
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertDatabaseCount('incidents', 1);
+        $this->assertDatabaseCount('incident_timeline_entries', 1);
+        $this->assertDatabaseCount('audit_events', 1);
     }
 
-    public function test_incident_update_rejects_blank_title_and_wrong_event_incident_id(): void
+    public function test_incident_update_allows_blank_title_and_rejects_wrong_event_incident_id(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
         $otherEvent = $this->eventWithIncidentCommandDepartment();
@@ -495,8 +495,8 @@ class IncidentCommandHttpTest extends TestCase
                 'incident_id' => $incident->id,
                 'title' => '   ',
             ])
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'Incident title is required.');
+            ->assertOk()
+            ->assertJsonPath('title', '');
 
         $this->actingAs($actor)
             ->postJson('/api/commands/update-incident', [
@@ -506,9 +506,9 @@ class IncidentCommandHttpTest extends TestCase
             ])
             ->assertNotFound();
 
-        $this->assertSame('Original title', $incident->refresh()->title);
-        $this->assertDatabaseCount('incident_timeline_entries', 0);
-        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertSame('', $incident->refresh()->title);
+        $this->assertDatabaseCount('incident_timeline_entries', 1);
+        $this->assertDatabaseCount('audit_events', 1);
     }
 
     public function test_ic_operator_can_append_incident_note_online(): void

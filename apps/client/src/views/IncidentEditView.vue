@@ -105,7 +105,7 @@ watch(
       ? "Incident create/edit requires server connection. Your typed form remains on this screen."
       : null;
     lastSavedAt.value = existing?.updatedAt ?? null;
-    lastSavedSignature.value = existing ? formSignature(form) : null;
+    lastSavedSignature.value = formSignature(form);
   },
   { immediate: true },
 );
@@ -170,12 +170,6 @@ function tagSearchTarget(chip: IncidentTagChip) {
 
 function commitAutosave(): void {
   if (!canEdit.value) {
-    return;
-  }
-
-  if (!savedIncidentId.value && form.title.trim() === "") {
-    autosaveState.value = "saved";
-    autosaveMessage.value = null;
     return;
   }
 
