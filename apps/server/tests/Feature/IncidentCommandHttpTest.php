@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentLink;
 use App\Models\IncidentTimelineEntry;
 use App\Models\Organization;
 use App\Models\PermissionRole;
@@ -707,6 +708,231 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_timeline_entries', 0);
     }
 
+    public function test_ic_operator_can_link_and_unlink_same_event_incidents_with_history(): void
+    {
+        Carbon::setTestNow('2027-07-04 23:15:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000010',
+            'title' => 'Gate A medical',
+            'updated_at' => Carbon::parse('2027-07-04T22:00:00Z'),
+        ]);
+        $target = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000011',
+            'title' => 'Radio relay',
+            'updated_at' => Carbon::parse('2027-07-04T22:05:00Z'),
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('source_incident_id', $incident->id)
+            ->assertJsonPath('target_incident_id', $target->id)
+            ->assertJsonPath('link_type', IncidentLink::TYPE_RELATED)
+            ->assertJsonPath('linked_incidents.0.id', $target->id)
+            ->assertJsonPath('linked_incidents.0.incident_number', 'INC-2027-000011');
+
+        $link = IncidentLink::query()->sole();
+        $this->assertNull($link->unlinked_at);
+        $this->assertSame($actor->id, $link->created_by_user_id);
+        $this->assertDatabaseHas('incident_timeline_entries', [
+            'incident_id' => $incident->id,
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_LINKED,
+            'body' => 'Linked related incident INC-2027-000011: Radio relay.',
+        ]);
+        $this->assertDatabaseHas('incident_timeline_entries', [
+            'incident_id' => $target->id,
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_LINKED,
+            'body' => 'Linked related incident INC-2027-000010: Gate A medical.',
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'incident.linked',
+            'entity_id' => $link->id,
+            'actor_user_id' => $actor->id,
+            'event_id' => $event->id,
+            'department_id' => $event->ic_department_id,
+            'source_context' => AuditEvent::SOURCE_API,
+        ]);
+        $this->assertTrue($incident->refresh()->updated_at->equalTo(Carbon::parse('2027-07-04T23:15:00Z')));
+        $this->assertTrue($target->refresh()->updated_at->equalTo(Carbon::parse('2027-07-04T23:15:00Z')));
+
+        Carbon::setTestNow('2027-07-04 23:30:00 UTC');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('id', $link->id)
+            ->assertJsonPath('unlinked_by_user_id', $actor->id)
+            ->assertJsonPath('linked_incidents', []);
+
+        $this->assertDatabaseCount('incident_links', 1);
+        $this->assertNotNull($link->refresh()->unlinked_at);
+        $this->assertSame($actor->id, $link->unlinked_by_user_id);
+        $this->assertDatabaseHas('incident_timeline_entries', [
+            'incident_id' => $incident->id,
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_UNLINKED,
+            'body' => 'Unlinked related incident INC-2027-000011: Radio relay.',
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'incident.unlinked',
+            'entity_id' => $link->id,
+            'actor_user_id' => $actor->id,
+            'event_id' => $event->id,
+            'department_id' => $event->ic_department_id,
+            'source_context' => AuditEvent::SOURCE_API,
+        ]);
+    }
+
+    public function test_link_incident_rejects_self_duplicate_reverse_duplicate_and_cross_event_links(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $target = Incident::factory()->forEvent($event)->create();
+        $otherEventIncident = Incident::factory()->forEvent($otherEvent)->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $incident->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'An incident cannot be linked to itself.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertCreated();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incidents are already linked.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $target->id,
+                'target_incident_id' => $incident->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incidents are already linked.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $otherEventIncident->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Linked incidents must belong to the same event.');
+
+        $this->assertDatabaseCount('incident_links', 1);
+    }
+
+    public function test_unlink_incident_rejects_missing_and_cross_event_relationships(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $target = Incident::factory()->forEvent($event)->create();
+        $otherEventIncident = Incident::factory()->forEvent($otherEvent)->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incidents are not currently linked.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/unlink-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $otherEventIncident->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Linked incidents must belong to the same event.');
+
+        $this->assertDatabaseCount('incident_links', 0);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_ic_viewer_and_non_ic_roles_cannot_link_incidents(): void
+    {
+        $this->assertRoleCannotLinkIncident('ic_viewer');
+        $this->assertRoleCannotLinkIncident('organizer', eventScoped: false);
+        $this->assertRoleCannotLinkIncident('department_lead', eventScoped: false);
+    }
+
+    public function test_wrong_event_or_revoked_ic_grant_cannot_link_incidents(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $wrongEventActor = $this->userWithEventRole('ic_operator', $otherEvent);
+        $revokedActor = $this->userWithEventRole('ic_lead', $event, revoked: true);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $target = Incident::factory()->forEvent($event)->create();
+
+        foreach ([$wrongEventActor, $revokedActor] as $actor) {
+            $this->actingAs($actor)
+                ->postJson('/api/commands/link-incident', [
+                    'event_id' => $event->id,
+                    'incident_id' => $incident->id,
+                    'target_incident_id' => $target->id,
+                ])
+                ->assertForbidden()
+                ->assertJsonPath('message', 'Only IC operators and IC leads for this event may link incidents.');
+        }
+
+        $this->assertDatabaseCount('incident_links', 0);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_link_and_unlink_incident_commands_require_authentication(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $incident = Incident::factory()->forEvent($event)->create();
+        $target = Incident::factory()->forEvent($event)->create();
+
+        $payload = [
+            'event_id' => $event->id,
+            'incident_id' => $incident->id,
+            'target_incident_id' => $target->id,
+        ];
+
+        $this->postJson('/api/commands/link-incident', $payload)->assertUnauthorized();
+        $this->postJson('/api/commands/unlink-incident', $payload)->assertUnauthorized();
+
+        $this->assertDatabaseCount('incident_links', 0);
+    }
+
     private function assertRoleCannotCreateIncident(string $roleCode, bool $eventScoped = true): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
@@ -761,6 +987,27 @@ class IncidentCommandHttpTest extends TestCase
             ->assertJsonPath('message', 'Only IC operators and IC leads for this event may edit incidents.');
 
         $this->assertSame('Original title', $incident->refresh()->title);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    private function assertRoleCannotLinkIncident(string $roleCode, bool $eventScoped = true): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $target = Incident::factory()->forEvent($event)->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/link-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'target_incident_id' => $target->id,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Only IC operators and IC leads for this event may link incidents.');
+
+        $this->assertDatabaseCount('incident_links', 0);
         $this->assertDatabaseCount('incident_timeline_entries', 0);
         $this->assertDatabaseCount('audit_events', 0);
     }

@@ -7,6 +7,7 @@ import AutosaveStatus, {
 } from "@/components/AutosaveStatus.vue";
 import {
   appendIncidentNoteForSession,
+  availableLinkedIncidentOptionsForSession,
   blankIncidentAutosaveForm,
   canEditIncident,
   createIncidentFromAutosaveForm,
@@ -16,9 +17,11 @@ import {
   INCIDENT_PRIORITY_LABELS,
   INCIDENT_TYPE_OPTIONS,
   incidentToAutosaveForm,
+  linkIncidentForSession,
   RESPONDER_OPTIONS,
   resolveIncidentSession,
   statusLabel,
+  unlinkIncidentForSession,
   updateIncidentFromAutosaveForm,
   type IncidentAutosaveForm,
   type IncidentTagChip,
@@ -51,8 +54,11 @@ const incidentTypeAddQuery = ref("");
 const responderAddQuery = ref("");
 const incidentTypeAddOpen = ref(false);
 const responderAddOpen = ref(false);
+const linkedIncidentAddQuery = ref("");
+const linkedIncidentAddOpen = ref(false);
 const incidentTypePicker = ref<HTMLElement | null>(null);
 const responderPicker = ref<HTMLElement | null>(null);
+const linkedIncidentPicker = ref<HTMLElement | null>(null);
 
 const incident = computed(() => {
   revision.value;
@@ -80,6 +86,7 @@ const selectedResponders = computed(() =>
     form.responderStaffIds.includes(responder.staffId),
   ),
 );
+const selectedLinkedIncidents = computed(() => incident.value?.linkedIncidents ?? []);
 const availableResponderOptions = computed(() =>
   filteredAddOptions(
     RESPONDER_OPTIONS.filter(
@@ -88,6 +95,15 @@ const availableResponderOptions = computed(() =>
     responderAddQuery.value,
     (responder) => responder.displayName,
   ),
+);
+const availableLinkedIncidentOptions = computed(() =>
+  savedIncidentId.value
+    ? availableLinkedIncidentOptionsForSession(
+        session.value,
+        savedIncidentId.value,
+        linkedIncidentAddQuery.value,
+      )
+    : [],
 );
 
 watch(
@@ -267,6 +283,7 @@ function addIncidentType(typeName: string): void {
 function openIncidentTypeAdd(): void {
   incidentTypeAddOpen.value = true;
   responderAddOpen.value = false;
+  linkedIncidentAddOpen.value = false;
 }
 
 function addFirstIncidentTypeOption(): void {
@@ -298,6 +315,7 @@ function addResponder(staffId: string): void {
 function openResponderAdd(): void {
   responderAddOpen.value = true;
   incidentTypeAddOpen.value = false;
+  linkedIncidentAddOpen.value = false;
 }
 
 function addFirstResponderOption(): void {
@@ -315,9 +333,44 @@ function removeResponder(staffId: string): void {
   commitAutosave();
 }
 
+function openLinkedIncidentAdd(): void {
+  linkedIncidentAddOpen.value = true;
+  incidentTypeAddOpen.value = false;
+  responderAddOpen.value = false;
+}
+
+function addFirstLinkedIncidentOption(): void {
+  const [linkedIncident] = availableLinkedIncidentOptions.value;
+
+  if (linkedIncident) {
+    addLinkedIncident(linkedIncident.id);
+  }
+}
+
+function addLinkedIncident(targetIncidentId: string): void {
+  if (!savedIncidentId.value) {
+    return;
+  }
+
+  linkIncidentForSession(session.value, savedIncidentId.value, targetIncidentId);
+  linkedIncidentAddQuery.value = "";
+  linkedIncidentAddOpen.value = false;
+  revision.value += 1;
+}
+
+function removeLinkedIncident(targetIncidentId: string): void {
+  if (!savedIncidentId.value) {
+    return;
+  }
+
+  unlinkIncidentForSession(session.value, savedIncidentId.value, targetIncidentId);
+  revision.value += 1;
+}
+
 function closeAddPopups(): void {
   incidentTypeAddOpen.value = false;
   responderAddOpen.value = false;
+  linkedIncidentAddOpen.value = false;
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -330,7 +383,8 @@ function onDocumentPointerDown(event: PointerEvent): void {
 
   if (
     incidentTypePicker.value?.contains(target) ||
-    responderPicker.value?.contains(target)
+    responderPicker.value?.contains(target) ||
+    linkedIncidentPicker.value?.contains(target)
   ) {
     return;
   }
@@ -698,6 +752,85 @@ function onAppendNote(): void {
           </section>
         </div>
 
+        <section
+          v-if="incident"
+          ref="linkedIncidentPicker"
+          class="ims-edit__panel"
+          :class="{ 'ims-edit__panel--popup-open': linkedIncidentAddOpen }"
+          role="group"
+          aria-labelledby="ims-edit-linked-heading"
+        >
+          <div class="ims-edit__panel-heading">
+            <h2 id="ims-edit-linked-heading">Linked incidents</h2>
+          </div>
+          <div id="ims-edit-linked" class="ims-edit__selected-list">
+            <div
+              v-for="linkedIncident in selectedLinkedIncidents"
+              :key="linkedIncident.id"
+              class="ims-edit__selected-row ims-edit__selected-row--linked"
+            >
+              <RouterLink
+                :to="{
+                  name: 'ims.incidents.show',
+                  params: { incidentId: linkedIncident.id },
+                }"
+              >
+                <span>{{ linkedIncident.incidentNumber }}</span>
+                <strong>{{ linkedIncident.title || "Untitled incident" }}</strong>
+                <em>{{ statusLabel(linkedIncident.status) }}</em>
+              </RouterLink>
+              <button
+                type="button"
+                class="ims-edit__remove-button"
+                :disabled="isOfflineBlocked"
+                :aria-label="`Unlink incident ${linkedIncident.incidentNumber}`"
+                @click="removeLinkedIncident(linkedIncident.id)"
+              >
+                X
+              </button>
+            </div>
+            <p
+              v-if="selectedLinkedIncidents.length === 0"
+              class="ims-edit__empty-row"
+            >
+              No linked incidents.
+            </p>
+          </div>
+          <label class="ims-edit__add-row">
+            <span>Add</span>
+            <input
+              id="ims-edit-linked-add"
+              v-model="linkedIncidentAddQuery"
+              type="search"
+              autocomplete="off"
+              :disabled="isOfflineBlocked"
+              @focus="openLinkedIncidentAdd"
+              @click="openLinkedIncidentAdd"
+              @input="openLinkedIncidentAdd"
+              @keydown.enter.prevent="addFirstLinkedIncidentOption"
+              @keydown.escape.prevent="closeAddPopups"
+            />
+          </label>
+          <div
+            v-if="
+              linkedIncidentAddOpen && availableLinkedIncidentOptions.length > 0
+            "
+            class="ims-edit__add-results"
+            aria-label="Linked incident matches"
+          >
+            <button
+              v-for="linkedIncident in availableLinkedIncidentOptions"
+              :key="linkedIncident.id"
+              type="button"
+              :disabled="isOfflineBlocked"
+              @click="addLinkedIncident(linkedIncident.id)"
+            >
+              {{ linkedIncident.incidentNumber }} -
+              {{ linkedIncident.title || "Untitled incident" }}
+            </button>
+          </div>
+        </section>
+
         <section class="ims-edit__panel" aria-labelledby="ims-edit-location-heading">
           <div class="ims-edit__panel-heading">
             <h2 id="ims-edit-location-heading">Location</h2>
@@ -1037,6 +1170,39 @@ function onAppendNote(): void {
   overflow-wrap: anywhere;
 }
 
+.ims-edit__selected-row--linked > a {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: var(--m-space-2);
+  align-items: center;
+  min-width: 0;
+  color: var(--m-text-primary);
+  text-decoration: none;
+}
+
+.ims-edit__selected-row--linked > a span,
+.ims-edit__selected-row--linked > a strong,
+.ims-edit__selected-row--linked > a em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ims-edit__selected-row--linked > a span,
+.ims-edit__selected-row--linked > a em {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+}
+
+.ims-edit__selected-row--linked > a em {
+  font-style: normal;
+}
+
+.ims-edit__selected-row--linked > a:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
 .ims-edit__empty-row {
   grid-template-columns: 1fr;
   color: var(--m-text-muted);
@@ -1257,6 +1423,10 @@ function onAppendNote(): void {
 
 @media (max-width: 34rem) {
   .ims-edit__panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ims-edit__selected-row--linked > a {
     grid-template-columns: 1fr;
   }
 }
