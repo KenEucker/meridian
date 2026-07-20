@@ -130,6 +130,11 @@ class FieldReport extends Model
         return $this->hasMany(NameReferenceToken::class);
     }
 
+    public function incidentLinks(): HasMany
+    {
+        return $this->hasMany(IncidentFieldReport::class);
+    }
+
     public function attachments(): MorphMany
     {
         return $this->morphMany(Attachment::class, 'attachable')

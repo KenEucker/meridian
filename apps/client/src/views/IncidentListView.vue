@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import {
   hasIncidentCommandAccess,
@@ -11,7 +11,13 @@ import {
 
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
-const incidents = computed(() => listIncidentsForSession(session.value));
+const route = useRoute();
+const searchQuery = computed(() =>
+  typeof route.query.search === "string" ? route.query.search : "",
+);
+const incidents = computed(() =>
+  listIncidentsForSession(session.value, searchQuery.value),
+);
 
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
@@ -58,10 +64,24 @@ function priorityText(priorityLabel: string | null): string {
       class="ims-list__empty"
       role="status"
     >
-      No incidents are recorded for this event.
+      {{
+        searchQuery
+          ? "No incidents match this search."
+          : "No incidents are recorded for this event."
+      }}
     </p>
 
-    <div v-else class="ims-list__table-wrap">
+    <div v-else class="ims-list__results">
+      <div
+        v-if="searchQuery"
+        class="ims-list__search-context"
+        role="status"
+      >
+        <span>Search: {{ searchQuery }}</span>
+        <RouterLink :to="{ name: 'ims.incidents.index' }">Clear</RouterLink>
+      </div>
+
+      <div class="ims-list__table-wrap">
       <table class="ims-list__table">
         <caption>
           Restricted incident list for the configured Incident Command
@@ -101,6 +121,7 @@ function priorityText(priorityLabel: string | null): string {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
   </section>
 </template>
@@ -166,8 +187,24 @@ function priorityText(priorityLabel: string | null): string {
 }
 
 .ims-list__restricted a,
-.ims-list__incident-link {
+.ims-list__incident-link,
+.ims-list__search-context a {
   color: var(--m-action-secondary-bg);
+  font-weight: 700;
+}
+
+.ims-list__results {
+  display: grid;
+  gap: var(--m-space-3);
+}
+
+.ims-list__search-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
   font-weight: 700;
 }
 

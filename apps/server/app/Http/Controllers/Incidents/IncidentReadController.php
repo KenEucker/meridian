@@ -9,6 +9,7 @@ use App\Models\Incident;
 use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
 use App\Services\Incidents\IncidentReadAccess;
+use App\Services\NameReferences\NameReferenceSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,7 +22,12 @@ use Illuminate\Http\Request;
  */
 final class IncidentReadController extends Controller
 {
-    public function index(Request $request, Event $event, IncidentReadAccess $access): JsonResponse
+    public function index(
+        Request $request,
+        Event $event,
+        IncidentReadAccess $access,
+        NameReferenceSearchService $nameReferences,
+    ): JsonResponse
     {
         $user = $request->user();
         abort_unless($user !== null, 401);
@@ -30,13 +36,18 @@ final class IncidentReadController extends Controller
             return $this->restrictedResponse();
         }
 
-        $incidents = Incident::query()
-            ->with('createdByUser')
-            ->forEvent($event)
-            ->orderByDesc('updated_at')
-            ->orderByDesc('started_at')
-            ->get()
-            ->map(fn (Incident $incident): array => $this->incidentPayload($incident))
+        $search = $request->query('search');
+        $incidents = is_string($search) && trim($search) !== ''
+            ? $nameReferences->searchIncidents($user, $search, $event)
+            : Incident::query()
+                ->with('createdByUser')
+                ->forEvent($event)
+                ->orderByDesc('updated_at')
+                ->orderByDesc('started_at')
+                ->get();
+
+        $incidents = $incidents
+            ->map(fn (Incident $incident): array => $this->incidentPayload($incident, $nameReferences))
             ->values();
 
         return response()->json([
@@ -51,6 +62,7 @@ final class IncidentReadController extends Controller
         Incident $incident,
         IncidentReadAccess $access,
         AuditService $audit,
+        NameReferenceSearchService $nameReferences,
     ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
@@ -77,7 +89,7 @@ final class IncidentReadController extends Controller
 
         return response()->json([
             'event_id' => $event->id,
-            'incident' => $this->incidentPayload($incident),
+            'incident' => $this->incidentPayload($incident, $nameReferences),
         ]);
     }
 
@@ -91,7 +103,7 @@ final class IncidentReadController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function incidentPayload(Incident $incident): array
+    private function incidentPayload(Incident $incident, NameReferenceSearchService $nameReferences): array
     {
         return [
             'id' => $incident->id,
@@ -111,6 +123,7 @@ final class IncidentReadController extends Controller
             'created_at' => optional($incident->created_at)?->toIso8601String(),
             'updated_at' => optional($incident->updated_at)?->toIso8601String(),
             'closed_at' => optional($incident->closed_at)?->toIso8601String(),
+            'name_reference_chips' => $nameReferences->incidentChips($incident),
             'timeline_entries' => $incident->relationLoaded('timelineEntries')
                 ? $incident->timelineEntries->map(
                     fn (IncidentTimelineEntry $entry): array => $this->timelineEntryPayload($entry),

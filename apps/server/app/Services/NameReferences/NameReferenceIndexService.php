@@ -4,14 +4,16 @@ namespace App\Services\NameReferences;
 
 use App\Models\FieldReport;
 use App\Models\FieldReportAppend;
+use App\Models\IncidentTimelineEntry;
 use App\Models\NameReferenceToken;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * Maintains the rebuildable derived Name Reference index for Field Reports
- * and appends (NR-003, NR-004, NR-007, NR-011 through NR-014; technical
- * spec 17.7; data/API 10.16 Name Reference derived index).
+ * Maintains the rebuildable derived Name Reference index for Field Reports,
+ * appends, and Incident notes (NR-003, NR-004, NR-007 through NR-014;
+ * technical spec 17.7, 19.9, and 19.10; data/API 10.16 Name Reference
+ * derived index).
  */
 final class NameReferenceIndexService
 {
@@ -30,6 +32,7 @@ final class NameReferenceIndexService
             NameReferenceToken::SOURCE_TYPE_FIELD_REPORT,
             (string) $report->id,
             (string) $report->id,
+            null,
             (string) $report->body,
         );
     }
@@ -47,12 +50,31 @@ final class NameReferenceIndexService
             NameReferenceToken::SOURCE_TYPE_FIELD_REPORT_APPEND,
             (string) $append->id,
             (string) $append->field_report_id,
+            null,
             (string) $append->body,
         );
     }
 
     /**
-     * Clear and regenerate the Field Report Name Reference index from source text.
+     * @return list<NameReferenceToken>
+     */
+    public function synchronizeIncidentTimelineEntry(IncidentTimelineEntry $entry): array
+    {
+        if (! $entry->exists) {
+            throw new LogicException('Persist the Incident timeline entry before synchronizing Name References.');
+        }
+
+        return $this->synchronizeSource(
+            NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
+            (string) $entry->id,
+            null,
+            (string) $entry->incident_id,
+            (string) $entry->body,
+        );
+    }
+
+    /**
+     * Clear and regenerate the Name Reference index from source text.
      */
     public function rebuild(): int
     {
@@ -73,6 +95,14 @@ final class NameReferenceIndexService
                 },
             );
 
+            IncidentTimelineEntry::query()
+                ->whereNotNull('body')
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->each(function (IncidentTimelineEntry $entry) use (&$count): void {
+                    $count += count($this->synchronizeIncidentTimelineEntry($entry));
+                });
+
             return $count;
         });
     }
@@ -83,12 +113,13 @@ final class NameReferenceIndexService
     private function synchronizeSource(
         string $sourceType,
         string $sourceId,
-        string $fieldReportId,
+        ?string $fieldReportId,
+        ?string $incidentId,
         string $body,
     ): array {
         $parsed = $this->parser->parse($body);
 
-        return DB::transaction(function () use ($sourceType, $sourceId, $fieldReportId, $parsed): array {
+        return DB::transaction(function () use ($sourceType, $sourceId, $fieldReportId, $incidentId, $parsed): array {
             $normalizedTokens = array_column($parsed, 'normalized_token');
 
             $stale = NameReferenceToken::query()
@@ -103,19 +134,23 @@ final class NameReferenceIndexService
 
             $stale->whereNotIn('normalized_token', $normalizedTokens)->delete();
 
-            return array_map(function (array $reference) use ($sourceType, $sourceId, $fieldReportId): NameReferenceToken {
-                return NameReferenceToken::query()->updateOrCreate(
-                    [
-                        'source_type' => $sourceType,
-                        'source_id' => $sourceId,
-                        'normalized_token' => $reference['normalized_token'],
-                    ],
-                    [
-                        'field_report_id' => $fieldReportId,
-                        'token' => $reference['token'],
-                    ],
-                );
-            }, $parsed);
+            return array_map(
+                function (array $reference) use ($sourceType, $sourceId, $fieldReportId, $incidentId): NameReferenceToken {
+                    return NameReferenceToken::query()->updateOrCreate(
+                        [
+                            'source_type' => $sourceType,
+                            'source_id' => $sourceId,
+                            'normalized_token' => $reference['normalized_token'],
+                        ],
+                        [
+                            'field_report_id' => $fieldReportId,
+                            'incident_id' => $incidentId,
+                            'token' => $reference['token'],
+                        ],
+                    );
+                },
+                $parsed,
+            );
         });
     }
 }

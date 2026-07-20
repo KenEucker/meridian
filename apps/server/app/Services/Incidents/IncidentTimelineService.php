@@ -9,6 +9,7 @@ use App\Models\Incident;
 use App\Models\IncidentTimelineEntry;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\NameReferences\NameReferenceIndexService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class IncidentTimelineService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly NameReferenceIndexService $nameReferences,
+    ) {}
 
     public function recordIncidentOpened(
         Incident $incident,
@@ -60,6 +64,8 @@ final class IncidentTimelineService
                 'body' => $body,
                 'created_at' => $createdAt,
             ]);
+
+            $this->nameReferences->synchronizeIncidentTimelineEntry($entry);
 
             $lockedIncident->forceFill(['updated_at' => $createdAt])->save();
             $event = Event::query()->findOrFail($lockedIncident->event_id);

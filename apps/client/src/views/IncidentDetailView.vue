@@ -10,6 +10,7 @@ import {
   resolveIncidentSession,
   statusLabel,
   type IncidentTimelineEntry,
+  type NameReferenceChip,
 } from "@/ims/incidentReadModel";
 
 const route = useRoute();
@@ -36,6 +37,13 @@ function timelineEntryLabel(entry: IncidentTimelineEntry): string {
   return entry.entryType === "incident_opened"
     ? "Incident opened"
     : "Operational note";
+}
+
+function chipSearchTarget(chip: NameReferenceChip) {
+  return {
+    name: "ims.incidents.index",
+    query: { search: chip.token },
+  };
 }
 
 function onAppendNote(): void {
@@ -101,6 +109,21 @@ function onAppendNote(): void {
             <dd>{{ incident.updatedAt }}</dd>
           </div>
         </dl>
+        <nav
+          v-if="incident.nameReferenceChips.length > 0"
+          class="ims-detail__name-references"
+          aria-label="Incident Name References"
+        >
+          <RouterLink
+            v-for="chip in incident.nameReferenceChips"
+            :key="chip.normalizedToken"
+            class="ims-detail__name-reference"
+            :to="chipSearchTarget(chip)"
+            :aria-label="`Search incidents for Name Reference ${chip.token}`"
+          >
+            @{{ chip.token }}
+          </RouterLink>
+        </nav>
       </header>
 
       <div class="ims-detail__layout">
@@ -243,6 +266,32 @@ function onAppendNote(): void {
 .ims-detail__status-row dd,
 .ims-detail__definition dd {
   margin: var(--m-space-1) 0 0;
+}
+
+.ims-detail__name-references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+}
+
+.ims-detail__name-reference {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  border: 1px solid var(--m-action-secondary-bg);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-2);
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.ims-detail__name-reference:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .ims-detail__layout {
