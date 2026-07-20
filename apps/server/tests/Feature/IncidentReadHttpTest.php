@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Models\IncidentType;
@@ -83,6 +84,25 @@ class IncidentReadHttpTest extends TestCase
             'staff_id' => $responder->id,
             'created_at' => Carbon::parse('2027-07-04T20:21:00Z'),
         ]);
+        $linkedIncident = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000004',
+            'status' => Incident::STATUS_ON_HOLD,
+            'title' => 'Related radio relay',
+        ]);
+        IncidentLink::factory()->forIncidents($incident, $linkedIncident)->create([
+            'created_by_user_id' => $actor->id,
+            'created_at' => Carbon::parse('2027-07-04T20:22:00Z'),
+        ]);
+        $unlinkedIncident = Incident::factory()->forEvent($event)->create([
+            'incident_number' => 'INC-2027-000005',
+            'title' => 'Unlinked relay',
+        ]);
+        IncidentLink::factory()->forIncidents($incident, $unlinkedIncident)->create([
+            'created_by_user_id' => $actor->id,
+            'created_at' => Carbon::parse('2027-07-04T20:23:00Z'),
+            'unlinked_by_user_id' => $actor->id,
+            'unlinked_at' => Carbon::parse('2027-07-04T20:24:00Z'),
+        ]);
         $opened = IncidentTimelineEntry::factory()->forIncident($incident)->create([
             'actor_user_id' => $actor->id,
             'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_OPENED,
@@ -107,6 +127,11 @@ class IncidentReadHttpTest extends TestCase
             ->assertJsonPath('incident.incident_type_names.0', 'Radio')
             ->assertJsonPath('incident.responders.0.staff_id', $responder->id)
             ->assertJsonPath('incident.responders.0.display_name', 'Vera')
+            ->assertJsonPath('incident.linked_incidents.0.id', $linkedIncident->id)
+            ->assertJsonPath('incident.linked_incidents.0.incident_number', 'INC-2027-000004')
+            ->assertJsonPath('incident.linked_incidents.0.title', 'Related radio relay')
+            ->assertJsonPath('incident.linked_incidents.0.status', Incident::STATUS_ON_HOLD)
+            ->assertJsonCount(1, 'incident.linked_incidents')
             ->assertJsonPath('incident.title', 'Radio check at Gate A')
             ->assertJsonPath('incident.location_name', 'Gate A')
             ->assertJsonPath('incident.location_details', 'North side of entry.')

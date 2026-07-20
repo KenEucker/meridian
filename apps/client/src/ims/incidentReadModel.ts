@@ -22,7 +22,9 @@ export interface IncidentTimelineEntry {
   readonly entryType:
     | "incident_opened"
     | "operational_note"
-    | "incident_field_updated";
+    | "incident_field_updated"
+    | "incident_linked"
+    | "incident_unlinked";
   readonly body: string | null;
   readonly previousValue?: Record<string, string | null>;
   readonly newValue?: Record<string, string | null>;
@@ -51,6 +53,13 @@ export interface IncidentResponder {
   readonly relationshipLabel: string;
 }
 
+export interface LinkedIncidentSummary {
+  readonly id: string;
+  readonly incidentNumber: string;
+  readonly title: string;
+  readonly status: ImsIncident["status"];
+}
+
 export interface ImsIncident {
   readonly id: string;
   readonly eventId: string;
@@ -60,6 +69,7 @@ export interface ImsIncident {
   readonly priorityLabel: IncidentPriorityLabel;
   readonly incidentTypeNames: readonly string[];
   readonly responders: readonly IncidentResponder[];
+  readonly linkedIncidents: readonly LinkedIncidentSummary[];
   readonly startedAt: string;
   readonly locationName: string | null;
   readonly locationAddress: string | null;
@@ -146,6 +156,14 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
         relationshipLabel: "Responder",
       }),
     ]),
+    linkedIncidents: Object.freeze([
+      Object.freeze({
+        id: "incident-radio-check",
+        incidentNumber: "INC-2027-000041",
+        title: "Radio relay check",
+        status: "monitoring",
+      }),
+    ]),
     startedAt: "2027-07-04T20:15:00.000Z",
     locationName: "Gate A",
     locationAddress: "North entry road",
@@ -197,6 +215,14 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     priorityLabel: "Routine",
     incidentTypeNames: Object.freeze(["Radio"]),
     responders: Object.freeze([]),
+    linkedIncidents: Object.freeze([
+      Object.freeze({
+        id: "incident-gate-medical",
+        incidentNumber: "INC-2027-000042",
+        title: "Medical assist near Gate A",
+        status: "on_scene",
+      }),
+    ]),
     startedAt: "2027-07-04T19:40:00.000Z",
     locationName: "Ranger HQ",
     locationAddress: null,
@@ -231,6 +257,7 @@ let session: IncidentSessionContext | null = null;
 let noteSequence = 0;
 let incidentSequence = 42;
 let fieldUpdateSequence = 0;
+let incidentLinkSequence = 0;
 
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
 const localIncidentUpdatedAt = new Map<string, string>();
@@ -254,6 +281,7 @@ export function clearIncidentSession(): void {
   noteSequence = 0;
   incidentSequence = 42;
   fieldUpdateSequence = 0;
+  incidentLinkSequence = 0;
 }
 
 export function resolveIncidentSession(): IncidentSessionContext | null {
@@ -413,6 +441,7 @@ export function createIncidentFromAutosaveForm(
     priorityLabel: validatedPriorityLabel(form.priorityLabel),
     incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
     responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
+    linkedIncidents: Object.freeze([]),
     startedAt,
     locationName: nullableText(form.locationName),
     locationAddress: nullableText(form.locationAddress),
@@ -524,6 +553,93 @@ export function updateIncidentFromAutosaveForm(
   return findIncidentForSession(context, incidentId) ?? nextIncident;
 }
 
+export function availableLinkedIncidentOptionsForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  search = "",
+): ImsIncident[] {
+  const incident = findIncidentForSession(context, incidentId);
+
+  if (!incident) {
+    return [];
+  }
+
+  const selectedIds = new Set(incident.linkedIncidents.map((linked) => linked.id));
+  const normalizedSearch = normalizeIncidentSearch(search);
+  const incidentTags = linkSuggestionTagSet(incident);
+
+  return listIncidentsForSession(context)
+    .filter((candidate) => candidate.id !== incident.id)
+    .filter((candidate) => !selectedIds.has(candidate.id))
+    .filter((candidate) => incidentMatchesSearch(candidate, normalizedSearch))
+    .sort((left, right) =>
+      compareLinkSuggestionCandidates(left, right, incidentTags),
+    )
+    .slice(0, 6);
+}
+
+export function linkIncidentForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  targetIncidentId: string,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may link incidents.");
+  }
+
+  if (incidentId === targetIncidentId) {
+    throw new Error("An incident cannot be linked to itself.");
+  }
+
+  const incident = findStoredIncidentForSession(context, incidentId);
+  const target = findStoredIncidentForSession(context, targetIncidentId);
+
+  if (!incident || !target) {
+    throw new Error("Linked incident not found for this event.");
+  }
+
+  if (incident.eventId !== target.eventId) {
+    throw new Error("Linked incidents must belong to the same event.");
+  }
+
+  if (incident.linkedIncidents.some((linked) => linked.id === target.id)) {
+    throw new Error("Incidents are already linked.");
+  }
+
+  const timestamp = createdAt.toISOString();
+  writeLinkedIncidentPair(incident, target, timestamp, "incident_linked", context);
+
+  return findIncidentForSession(context, incidentId) ?? incident;
+}
+
+export function unlinkIncidentForSession(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  targetIncidentId: string,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may link incidents.");
+  }
+
+  const incident = findStoredIncidentForSession(context, incidentId);
+  const target = findStoredIncidentForSession(context, targetIncidentId);
+
+  if (!incident || !target) {
+    throw new Error("Linked incident not found for this event.");
+  }
+
+  if (!incident.linkedIncidents.some((linked) => linked.id === target.id)) {
+    throw new Error("Incidents are not currently linked.");
+  }
+
+  const timestamp = createdAt.toISOString();
+  writeLinkedIncidentPair(incident, target, timestamp, "incident_unlinked", context);
+
+  return findIncidentForSession(context, incidentId) ?? incident;
+}
+
 export function statusLabel(status: ImsIncident["status"]): string {
   return {
     open: "Open",
@@ -573,6 +689,151 @@ function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
     ),
     timelineEntries: Object.freeze(timelineEntries),
   });
+}
+
+function writeLinkedIncidentPair(
+  incident: ImsIncident,
+  target: ImsIncident,
+  timestamp: string,
+  entryType: "incident_linked" | "incident_unlinked",
+  context: IncidentSessionContext | null,
+): void {
+  const link = entryType === "incident_linked";
+  const nextIncident = Object.freeze({
+    ...incident,
+    linkedIncidents: Object.freeze(
+      link
+        ? mergeLinkedIncidents([
+            ...incident.linkedIncidents,
+            linkedIncidentSummary(target),
+          ])
+        : incident.linkedIncidents.filter((linked) => linked.id !== target.id),
+    ),
+    updatedAt: timestamp,
+  });
+  const nextTarget = Object.freeze({
+    ...target,
+    linkedIncidents: Object.freeze(
+      link
+        ? mergeLinkedIncidents([
+            ...target.linkedIncidents,
+            linkedIncidentSummary(incident),
+          ])
+        : target.linkedIncidents.filter((linked) => linked.id !== incident.id),
+    ),
+    updatedAt: timestamp,
+  });
+
+  localIncidentOverrides.set(incident.id, nextIncident);
+  localIncidentOverrides.set(target.id, nextTarget);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+  localIncidentUpdatedAt.set(target.id, timestamp);
+  localTimelineEntries.set(incident.id, [
+    ...(localTimelineEntries.get(incident.id) ?? []),
+    linkedIncidentTimelineEntry(incident, target, timestamp, entryType, context),
+  ]);
+  localTimelineEntries.set(target.id, [
+    ...(localTimelineEntries.get(target.id) ?? []),
+    linkedIncidentTimelineEntry(target, incident, timestamp, entryType, context),
+  ]);
+}
+
+function linkedIncidentTimelineEntry(
+  incident: ImsIncident,
+  target: ImsIncident,
+  timestamp: string,
+  entryType: "incident_linked" | "incident_unlinked",
+  context: IncidentSessionContext | null,
+): IncidentTimelineEntry {
+  const verb = entryType === "incident_linked" ? "Linked" : "Unlinked";
+
+  return Object.freeze({
+    id: `local-incident-link-${++incidentLinkSequence}`,
+    incidentId: incident.id,
+    actorName: context?.roleLabel ?? null,
+    entryType,
+    body: `${verb} related incident ${target.incidentNumber}: ${target.title || "Untitled incident"}.`,
+    previousValue:
+      entryType === "incident_unlinked"
+        ? { linkedIncidentId: target.id }
+        : undefined,
+    newValue:
+      entryType === "incident_linked"
+        ? { linkedIncidentId: target.id }
+        : undefined,
+    createdAt: timestamp,
+  });
+}
+
+function linkedIncidentSummary(incident: ImsIncident): LinkedIncidentSummary {
+  return Object.freeze({
+    id: incident.id,
+    incidentNumber: incident.incidentNumber,
+    title: incident.title,
+    status: incident.status,
+  });
+}
+
+function mergeLinkedIncidents(
+  linkedIncidents: readonly LinkedIncidentSummary[],
+): LinkedIncidentSummary[] {
+  const byId = new Map<string, LinkedIncidentSummary>();
+
+  for (const incident of linkedIncidents) {
+    if (!byId.has(incident.id)) {
+      byId.set(incident.id, incident);
+    }
+  }
+
+  return [...byId.values()].sort((left, right) =>
+    left.incidentNumber.localeCompare(right.incidentNumber),
+  );
+}
+
+function compareLinkSuggestionCandidates(
+  left: ImsIncident,
+  right: ImsIncident,
+  incidentTags: ReadonlySet<string>,
+): number {
+  const leftSharesTags = sharesLinkSuggestionTag(left, incidentTags);
+  const rightSharesTags = sharesLinkSuggestionTag(right, incidentTags);
+
+  if (leftSharesTags !== rightSharesTags) {
+    return leftSharesTags ? -1 : 1;
+  }
+
+  const createdAtComparison = right.createdAt.localeCompare(left.createdAt);
+
+  return createdAtComparison === 0
+    ? right.incidentNumber.localeCompare(left.incidentNumber)
+    : createdAtComparison;
+}
+
+function sharesLinkSuggestionTag(
+  incident: ImsIncident,
+  incidentTags: ReadonlySet<string>,
+): boolean {
+  if (incidentTags.size === 0) {
+    return false;
+  }
+
+  return [...linkSuggestionTagSet(incident)].some((tag) =>
+    incidentTags.has(tag),
+  );
+}
+
+function linkSuggestionTagSet(incident: ImsIncident): Set<string> {
+  return new Set(
+    [
+      ...incident.tagChips.map((chip) => chip.normalizedTag),
+      ...[
+        incident.title,
+        ...incident.incidentTypeNames,
+        ...incident.responders.map((responder) => responder.displayName),
+        ...incident.timelineEntries.map((entry) => entry.body ?? ""),
+      ].flatMap(parseTags).map((chip) => chip.normalizedTag),
+    ].filter((tag) => tag.length > 0),
+  );
 }
 
 function normalizeIncidentSearch(search: string): string {
@@ -631,9 +892,6 @@ function extractIncidentTags(
 ): IncidentTagChip[] {
   return [
     incident.title,
-    incident.locationName ?? "",
-    incident.locationAddress ?? "",
-    incident.locationDetails ?? "",
     ...incident.incidentTypeNames,
     ...incident.responders.map((responder) => responder.displayName),
     ...timelineEntries.map((entry) => entry.body ?? ""),

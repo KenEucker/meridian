@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentLink;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
@@ -140,6 +141,38 @@ class IncidentSchemaTest extends TestCase
         foreach (['id', 'incident_id', 'staff_id', 'relationship_label', 'created_at'] as $column) {
             $this->assertTrue(Schema::hasColumn('incident_staff', $column));
         }
+    }
+
+    public function test_incident_links_storage_exists_and_preserves_records(): void
+    {
+        $this->assertTrue(Schema::hasTable('incident_links'));
+
+        foreach ([
+            'id',
+            'source_incident_id',
+            'target_incident_id',
+            'link_type',
+            'created_by_user_id',
+            'created_at',
+            'unlinked_by_user_id',
+            'unlinked_at',
+        ] as $column) {
+            $this->assertTrue(Schema::hasColumn('incident_links', $column));
+        }
+
+        $source = Incident::factory()->create();
+        $target = Incident::factory()->forEvent($source->event)->create();
+        $link = IncidentLink::factory()->forIncidents($source, $target)->create();
+
+        $this->assertTrue($link->sourceIncident->is($source));
+        $this->assertTrue($link->targetIncident->is($target));
+        $this->assertSame($link->id, $source->sourceIncidentLinks()->sole()->id);
+        $this->assertSame($link->id, $target->targetIncidentLinks()->sole()->id);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Incident links are operational history and cannot be deleted.');
+
+        $link->delete();
     }
 
     public function test_incidents_cannot_be_deleted(): void

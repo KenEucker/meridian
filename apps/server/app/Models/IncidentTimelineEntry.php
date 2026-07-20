@@ -26,6 +26,10 @@ class IncidentTimelineEntry extends Model
 
     public const TYPE_FIELD_UPDATED = 'incident_field_updated';
 
+    public const TYPE_INCIDENT_LINKED = 'incident_linked';
+
+    public const TYPE_INCIDENT_UNLINKED = 'incident_unlinked';
+
     public $incrementing = false;
 
     protected $keyType = 'string';

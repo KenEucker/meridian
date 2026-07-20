@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Incidents;
 
 use App\Exceptions\IncidentCreationException;
+use App\Exceptions\IncidentLinkException;
 use App\Exceptions\IncidentTimelineException;
 use App\Exceptions\IncidentUpdateException;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentLink;
 use App\Services\Incidents\IncidentCreationAccess;
 use App\Services\Incidents\IncidentCreationService;
+use App\Services\Incidents\IncidentLinkService;
 use App\Services\Incidents\IncidentNoteAccess;
 use App\Services\Incidents\IncidentTimelineService;
 use App\Services\Incidents\IncidentUpdateAccess;
@@ -24,6 +27,8 @@ use Illuminate\Http\Request;
  * Data/API section 5.2 documents POST /api/commands/create-incident and
  * POST /api/commands/append-incident-note. M11.7 adds
  * POST /api/commands/update-incident for online autosaved current-field edits.
+ * M11.7B adds POST /api/commands/link-incident and
+ * POST /api/commands/unlink-incident for same-event incident relationships.
  * Technical spec 19.2 requires active server connection for incident mutations.
  */
 final class IncidentCommandController extends Controller
@@ -84,6 +89,7 @@ final class IncidentCommandController extends Controller
             'map_location_id' => $incident->map_location_id,
             'incident_type_names' => $incident->incidentTypes()->pluck('name')->values()->all(),
             'responders' => $this->responderPayload($incident),
+            'linked_incidents' => $this->linkedIncidentPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
         ], 201);
@@ -156,11 +162,28 @@ final class IncidentCommandController extends Controller
             'map_location_id' => $incident->map_location_id,
             'incident_type_names' => $incident->incidentTypes()->pluck('name')->values()->all(),
             'responders' => $this->responderPayload($incident),
+            'linked_incidents' => $this->linkedIncidentPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
             'updated_at' => optional($incident->updated_at)?->toIso8601String(),
             'closed_at' => optional($incident->closed_at)?->toIso8601String(),
         ]);
+    }
+
+    public function linkIncident(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentLinkService $links,
+    ): JsonResponse {
+        return $this->mutateIncidentLink($request, $access, $links, unlink: false);
+    }
+
+    public function unlinkIncident(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentLinkService $links,
+    ): JsonResponse {
+        return $this->mutateIncidentLink($request, $access, $links, unlink: true);
     }
 
     public function appendNote(
@@ -235,6 +258,88 @@ final class IncidentCommandController extends Controller
                     ?? 'Unknown responder',
                 'relationship_label' => $staff->relationship_label,
             ])
+            ->values()
+            ->all();
+    }
+
+    private function mutateIncidentLink(
+        Request $request,
+        IncidentUpdateAccess $access,
+        IncidentLinkService $links,
+        bool $unlink,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+            'target_incident_id' => ['required', 'uuid', 'exists:incidents,id'],
+        ]);
+
+        $event = Event::query()->findOrFail((string) $validated['event_id']);
+        $incident = Incident::query()->findOrFail((string) $validated['incident_id']);
+        $target = Incident::query()->findOrFail((string) $validated['target_incident_id']);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canUpdateIncident($user, $event)) {
+            return response()->json([
+                'message' => 'Only IC operators and IC leads for this event may link incidents.',
+            ], 403);
+        }
+
+        try {
+            $link = $unlink
+                ? $links->unlink($incident, $target, $user, sourceContext: AuditEvent::SOURCE_API)
+                : $links->link($incident, $target, $user, sourceContext: AuditEvent::SOURCE_API);
+        } catch (IncidentLinkException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'id' => $link->id,
+            'source_incident_id' => $link->source_incident_id,
+            'target_incident_id' => $link->target_incident_id,
+            'link_type' => $link->link_type,
+            'created_by_user_id' => $link->created_by_user_id,
+            'created_at' => optional($link->created_at)?->toIso8601String(),
+            'unlinked_by_user_id' => $link->unlinked_by_user_id,
+            'unlinked_at' => optional($link->unlinked_at)?->toIso8601String(),
+            'linked_incidents' => $this->linkedIncidentPayload($incident->refresh()),
+        ], $unlink ? 200 : 201);
+    }
+
+    /**
+     * @return list<array{id: string, incident_number: string, title: string, status: string}>
+     */
+    private function linkedIncidentPayload(Incident $incident): array
+    {
+        return IncidentLink::query()
+            ->with(['sourceIncident', 'targetIncident'])
+            ->whereNull('unlinked_at')
+            ->where(function ($query) use ($incident): void {
+                $query
+                    ->where('source_incident_id', $incident->id)
+                    ->orWhere('target_incident_id', $incident->id);
+            })
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (IncidentLink $link) use ($incident): array {
+                $linkedIncident = (string) $link->source_incident_id === (string) $incident->id
+                    ? $link->targetIncident
+                    : $link->sourceIncident;
+
+                return [
+                    'id' => $linkedIncident->id,
+                    'incident_number' => $linkedIncident->incident_number,
+                    'title' => $linkedIncident->title,
+                    'status' => $linkedIncident->status,
+                ];
+            })
             ->values()
             ->all();
     }

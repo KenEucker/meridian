@@ -271,6 +271,28 @@ function onAppendNote(): void {
               <dd>{{ responderText() }}</dd>
             </div>
             <div>
+              <dt>Linked incidents</dt>
+              <dd
+                v-if="incident.linkedIncidents.length > 0"
+                class="ims-detail__linked-list"
+              >
+                <RouterLink
+                  v-for="linkedIncident in incident.linkedIncidents"
+                  :key="linkedIncident.id"
+                  class="ims-detail__linked-row"
+                  :to="{
+                    name: 'ims.incidents.show',
+                    params: { incidentId: linkedIncident.id },
+                  }"
+                >
+                  <span>{{ linkedIncident.incidentNumber }}</span>
+                  <strong>{{ linkedIncident.title || "Untitled incident" }}</strong>
+                  <em>{{ statusLabel(linkedIncident.status) }}</em>
+                </RouterLink>
+              </dd>
+              <dd v-else>No linked incidents</dd>
+            </div>
+            <div>
               <dt>Created by</dt>
               <dd>{{ incident.createdByName ?? "Creator unavailable" }}</dd>
             </div>
@@ -462,6 +484,49 @@ function onAppendNote(): void {
   gap: var(--m-space-2);
 }
 
+.ims-detail__linked-list {
+  display: grid;
+  gap: var(--m-space-2);
+}
+
+.ims-detail__linked-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: var(--m-space-2);
+  align-items: center;
+  min-height: 2.25rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2);
+  color: var(--m-text-primary);
+  text-decoration: none;
+}
+
+.ims-detail__linked-row span,
+.ims-detail__linked-row strong,
+.ims-detail__linked-row em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ims-detail__linked-row span {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+}
+
+.ims-detail__linked-row em {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.ims-detail__linked-row:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
 .ims-detail__type-chip {
   border: 1px solid var(--m-action-secondary-bg);
   background: var(--m-surface-primary);
@@ -643,6 +708,10 @@ function onAppendNote(): void {
 
   .ims-detail__timeline {
     padding-left: var(--m-space-5);
+  }
+
+  .ims-detail__linked-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

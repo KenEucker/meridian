@@ -57,9 +57,14 @@ owned by M11.11.
 6. Edit title, state, started timestamp, and free-text location fields on an
    open incident and on a closed incident. After M11.7A, also edit priority,
    incident types, and involved Rangers/responders. After M11.7B, link and
-   unlink another same-event incident. Confirm autosave status is visible,
-   failed validation is visible for a blank title, status does not block editing,
-   field edits appear in history/audit, and incident notes remain append-only.
+   unlink another same-event incident. Confirm duplicate, self, and cross-event
+   links are rejected; already-linked incident candidates are hidden; candidates
+   with shared `#tags` appear before location-only matches; autosave status is
+   visible; failed validation is visible for a blank title; status does not
+   block editing; field/link edits appear in history/audit; and incident notes
+   remain append-only. After M11.8, repeat the already-linked exclusion,
+   shared-tag-first, newest-added ordering check for Field Report attachment
+   candidates.
 7. Simulate offline/no-network state on the create/edit screen and confirm
    incident mutation is blocked without queued-offline language while the typed
    form state remains on the screen.

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
@@ -135,6 +136,7 @@ final class IncidentReadController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'linked_incidents' => $this->linkedIncidentPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_by_name' => $incident->createdByUser?->name,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
@@ -168,6 +170,38 @@ final class IncidentReadController extends Controller
             'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
             'stricken_reason' => $entry->stricken_reason,
         ];
+    }
+
+    /**
+     * @return list<array{id: string, incident_number: string, title: string, status: string}>
+     */
+    private function linkedIncidentPayload(Incident $incident): array
+    {
+        return IncidentLink::query()
+            ->with(['sourceIncident', 'targetIncident'])
+            ->whereNull('unlinked_at')
+            ->where(function ($query) use ($incident): void {
+                $query
+                    ->where('source_incident_id', $incident->id)
+                    ->orWhere('target_incident_id', $incident->id);
+            })
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (IncidentLink $link) use ($incident): array {
+                $linkedIncident = (string) $link->source_incident_id === (string) $incident->id
+                    ? $link->targetIncident
+                    : $link->sourceIncident;
+
+                return [
+                    'id' => $linkedIncident->id,
+                    'incident_number' => $linkedIncident->incident_number,
+                    'title' => $linkedIncident->title,
+                    'status' => $linkedIncident->status,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function effectiveIncidentCommandDepartmentId(Event $event): ?string

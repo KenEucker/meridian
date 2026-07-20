@@ -158,6 +158,20 @@ class Incident extends Model
             ->orderBy('id');
     }
 
+    public function sourceIncidentLinks(): HasMany
+    {
+        return $this->hasMany(IncidentLink::class, 'source_incident_id')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
+    public function targetIncidentLinks(): HasMany
+    {
+        return $this->hasMany(IncidentLink::class, 'target_incident_id')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
     /**
      * Scope incidents to a single event (INC-001).
      *

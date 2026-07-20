@@ -1171,6 +1171,11 @@ Incident create/edit must support:
 
 The camp/location selector chooses from known camps/map locations only. It must be optional, must never block incident creation, must not introduce arbitrary dropped pins, and must be hidden when the user lacks map permissions or no published map exists. Incident detail may display linked camp/location details where permitted, following existing IMS permissions.
 
+Linked Incident and attached Field Report picker candidates must exclude records
+already actively linked to the current incident. Candidates sharing current
+incident `#tags` sort before non-matching candidates, but location text must not
+be used for that tag-priority rule. Each group sorts newest added first.
+
 ### 15.2 Autosave
 
 Incident create/edit is the only autosaving form in Meridian Alpha 1, and it requires an active server connection.

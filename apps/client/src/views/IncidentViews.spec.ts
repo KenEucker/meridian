@@ -5,7 +5,9 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import {
+  availableLinkedIncidentOptionsForSession,
   clearIncidentSession,
+  createIncidentFromAutosaveForm,
   installIncidentSession,
   LOCAL_IMS_EVENT_ID,
   type IncidentSessionContext,
@@ -167,6 +169,9 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Medical");
     expect(wrapper.text()).toContain("Safety");
     expect(wrapper.text()).toContain("Vera Ranger");
+    expect(wrapper.text()).toContain("Linked incidents");
+    expect(wrapper.text()).toContain("INC-2027-000041");
+    expect(wrapper.text()).toContain("Radio relay check");
     expect(wrapper.text()).toContain("Gate A");
     expect(wrapper.text()).toContain("#medical");
     expect(wrapper.text()).toContain("@Blue-Hat");
@@ -322,6 +327,108 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
 
     const titleInput = wrapper.get<HTMLInputElement>("#ims-edit-title");
     expect(titleInput.element.value).toBe("Gate A medical follow-up #followup @RangerHQ");
+  });
+
+  it("lets IC operators unlink and relink same-event incidents from edit", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+
+    expect(wrapper.text()).toContain("Linked incidents");
+    expect(wrapper.text()).toContain("INC-2027-000041");
+    expect(wrapper.text()).toContain("Radio relay check");
+
+    await wrapper
+      .get('button[aria-label="Unlink incident INC-2027-000041"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Unlinked related incident INC-2027-000041: Radio relay check.",
+    );
+    expect(wrapper.text()).toContain("No linked incidents.");
+
+    await addBySearch(
+      wrapper,
+      "#ims-edit-linked-add",
+      "Radio",
+      "INC-2027-000041 - Radio relay check",
+    );
+
+    expect(wrapper.text()).toContain(
+      "Linked related incident INC-2027-000041: Radio relay check.",
+    );
+    expect(wrapper.text()).toContain("INC-2027-000041");
+    expect(wrapper.text()).not.toContain("Incidents are already linked.");
+  });
+
+  it("orders linked incident candidates by shared tags first then newest created", () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const sharedTagIncident = createIncidentFromAutosaveForm(
+      IC_OPERATOR_SESSION,
+      {
+        title: "Older matching incident #medical",
+        status: "open",
+        priorityLabel: "Routine",
+        incidentTypeNames: [],
+        responderStaffIds: [],
+        startedAt: "2027-07-04T20:40",
+        locationName: "",
+        locationAddress: "",
+        locationDetails: "",
+      },
+      null,
+      new Date("2027-07-04T20:40:00.000Z"),
+    );
+    const unrelatedIncident = createIncidentFromAutosaveForm(
+      IC_OPERATOR_SESSION,
+      {
+        title: "Old unrelated incident #logistics",
+        status: "open",
+        priorityLabel: "Routine",
+        incidentTypeNames: [],
+        responderStaffIds: [],
+        startedAt: "2027-07-04T20:45",
+        locationName: "",
+        locationAddress: "",
+        locationDetails: "",
+      },
+      null,
+      new Date("2027-07-04T20:45:00.000Z"),
+    );
+    const locationOnlyIncident = createIncidentFromAutosaveForm(
+      IC_OPERATOR_SESSION,
+      {
+        title: "Newest location-only candidate",
+        status: "open",
+        priorityLabel: "Routine",
+        incidentTypeNames: [],
+        responderStaffIds: [],
+        startedAt: "2027-07-04T20:55",
+        locationName: "#medical",
+        locationAddress: "",
+        locationDetails: "",
+      },
+      null,
+      new Date("2027-07-04T20:55:00.000Z"),
+    );
+
+    const options = availableLinkedIncidentOptionsForSession(
+      IC_OPERATOR_SESSION,
+      "incident-gate-medical",
+    );
+
+    expect(options.map((incident) => incident.id).slice(0, 3)).toEqual([
+      sharedTagIncident.id,
+      locationOnlyIncident.id,
+      unrelatedIncident.id,
+    ]);
+    expect(options.map((incident) => incident.id)).not.toContain(
+      "incident-radio-check",
+    );
   });
 
   it("records a concise location address edit without a phantom started change", async () => {
