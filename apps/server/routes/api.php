@@ -6,6 +6,7 @@ use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\Incidents\IncidentCommandController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -34,6 +35,9 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/upload-field-report-photo', [FieldReportPhotoController::class, 'upload'])
         ->name('api.commands.upload-field-report-photo');
+
+    Route::post('/commands/create-incident', [IncidentCommandController::class, 'create'])
+        ->name('api.commands.create-incident');
 
     Route::post('/field-report-photos/{attachment}/preview-url', [FieldReportPhotoController::class, 'issuePreviewUrl'])
         ->name('api.field-report-photos.preview-url');

@@ -3,9 +3,11 @@
 namespace App\Services\Incidents;
 
 use App\Exceptions\IncidentCreationException;
+use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -15,12 +17,13 @@ use Illuminate\Support\Str;
  * Creates event-specific incident records and assigns chronological IMS numbers
  * (INC-001, INC-003, INC-004; technical spec 19.4; data/API 4.4 and 10.16).
  *
- * Permission checks, HTTP command handling, timelines, attachments, and sync
- * projections are later M11 tasks; this service owns only the model-level
- * creation and numbering contract.
+ * Permission checks happen before this service is called by command transport.
+ * Timelines, attachments, and sync projections are later M11 tasks.
  */
 final class IncidentCreationService
 {
+    public function __construct(private readonly AuditService $audit) {}
+
     /**
      * @param  array{
      *     event_id: string,
@@ -34,9 +37,14 @@ final class IncidentCreationService
      *     map_location_id?: string|null
      * }  $attributes
      */
-    public function create(array $attributes, User $actor, ?DateTimeInterface $createdAt = null): Incident
+    public function create(
+        array $attributes,
+        User $actor,
+        ?DateTimeInterface $createdAt = null,
+        string $sourceContext = AuditEvent::SOURCE_SYSTEM,
+    ): Incident
     {
-        return DB::transaction(function () use ($attributes, $actor, $createdAt): Incident {
+        return DB::transaction(function () use ($attributes, $actor, $createdAt, $sourceContext): Incident {
             $event = Event::query()
                 ->whereKey($this->requiredUuid($attributes, 'event_id', 'Incident event_id must be a valid UUID.'))
                 ->lockForUpdate()
@@ -69,6 +77,17 @@ final class IncidentCreationService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            $this->audit->recordForEntity(
+                entity: $incident,
+                action: 'incident.created',
+                actorUser: $actor,
+                organizationId: $event->organization_id,
+                eventId: $event->id,
+                departmentId: $this->effectiveIncidentCommandDepartmentId($event),
+                after: $this->auditSnapshot($incident),
+                sourceContext: $sourceContext,
+            );
 
             return $incident->refresh();
         });
@@ -183,5 +202,32 @@ final class IncidentCreationService
         $eventYear = $event->starts_at->copy()->setTimezone($event->timezone)->year;
 
         return sprintf('INC-%04d-%06d', $eventYear, $nextSequence);
+    }
+
+    private function effectiveIncidentCommandDepartmentId(Event $event): ?string
+    {
+        $event->loadMissing('organization');
+
+        return $event->ic_department_id ?? $event->organization?->default_ic_department_id;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function auditSnapshot(Incident $incident): array
+    {
+        return [
+            'event_id' => $incident->event_id,
+            'incident_number' => $incident->incident_number,
+            'status' => $incident->status,
+            'started_at' => optional($incident->started_at)?->toIso8601String(),
+            'title' => $incident->title,
+            'location_name' => $incident->location_name,
+            'location_address' => $incident->location_address,
+            'location_details' => $incident->location_details,
+            'camp_id' => $incident->camp_id,
+            'map_location_id' => $incident->map_location_id,
+            'created_by_user_id' => $incident->created_by_user_id,
+        ];
     }
 }
