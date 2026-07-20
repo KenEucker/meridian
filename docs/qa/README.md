@@ -32,8 +32,11 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 
 M11.5 adds the first restricted IMS incident list/detail read surfaces. M11.6
 adds append-only operational timeline notes. M11.6A adds incident Name Reference
-chips and chip-driven permission-filtered search. The full `QA-INC-01`
-incident-management script remains owned by M11.11.
+chips and chip-driven permission-filtered search. M11.7 adds the online-only
+incident create/edit autosave surface for IC operators/leads. M11.7A adds
+priority, incident types, and involved Rangers/responders to create/edit. M11.7B
+adds linked incidents. The full `QA-INC-01` incident-management script remains
+owned by M11.11.
 
 1. Seed or create an event with a configured Incident Command department,
    an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
@@ -48,22 +51,37 @@ incident-management script remains owned by M11.11.
 4. Repeat the detail check as `ic_operator` and `ic_lead`, add a plain-text
    operational note containing at least one `@name` marker, and confirm the new
    note appears in the timeline with the actor and timestamp.
-5. Confirm Name Reference chips appear near incident metadata, are visually
+5. As `ic_operator` or `ic_lead`, open `/ims/incidents/create`. Confirm the
+   blank autosave form shows no IMS number until the first valid title autosaves,
+   then assigns an IMS number and moves to the edit route.
+6. Edit title, state, started timestamp, and free-text location fields on an
+   open incident and on a closed incident. After M11.7A, also edit priority,
+   incident types, and involved Rangers/responders. After M11.7B, link and
+   unlink another same-event incident. Confirm autosave status is visible,
+   failed validation is visible for a blank title, status does not block editing,
+   field edits appear in history/audit, and incident notes remain append-only.
+7. Simulate offline/no-network state on the create/edit screen and confirm
+   incident mutation is blocked without queued-offline language while the typed
+   form state remains on the screen.
+8. Repeat create/edit as `ic_viewer`, organizer-only, department lead outside IC,
+   wrong-event IC grant, revoked IC grant, unauthenticated user, and normal staff.
+   Confirm no create/edit form or mutation action is exposed.
+9. Confirm Name Reference chips appear near incident metadata, are visually
    distinct from any `#tag` treatment, and clicking a chip returns to the
    incident list with normal permission-filtered search results for the
    reference text without opening a Name Reference profile/detail page.
-6. Confirm blank timeline notes are rejected, the original timeline entries
+10. Confirm blank timeline notes are rejected, the original timeline entries
    remain unchanged, the incident last-updated timestamp advances after a valid
    note, and an `incident.note_appended` audit row is created.
-7. Repeat as `ic_viewer` and confirm the timeline is visible but the add-note
+11. Repeat as `ic_viewer` and confirm the timeline is visible but the add-note
    form/command is unavailable.
-8. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
+12. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
    revoked IC grant, unauthenticated user, and normal staff. Confirm no incident
    row, detail content, Name Reference chip/search result, or note mutation is
    exposed and restricted access messaging appears.
-9. Request an incident detail or append-note command under the wrong event URL
-   and confirm the server fails closed.
-10. Confirm permitted detail views create `incident.viewed` audit rows, while
+13. Request an incident detail, update, or append-note command under the wrong
+   event URL and confirm the server fails closed.
+14. Confirm permitted detail views create `incident.viewed` audit rows, while
    denied reads do not create incident-view audit rows.
 
 ## Alpha 1 Department operations UX smoke

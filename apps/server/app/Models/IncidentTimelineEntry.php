@@ -24,6 +24,8 @@ class IncidentTimelineEntry extends Model
 
     public const TYPE_OPERATIONAL_NOTE = 'operational_note';
 
+    public const TYPE_FIELD_UPDATED = 'incident_field_updated';
+
     public $incrementing = false;
 
     protected $keyType = 'string';

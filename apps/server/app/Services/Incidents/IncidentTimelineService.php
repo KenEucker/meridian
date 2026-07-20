@@ -35,7 +35,7 @@ final class IncidentTimelineService
             'incident_id' => $incident->id,
             'actor_user_id' => $actor->id,
             'entry_type' => IncidentTimelineEntry::TYPE_INCIDENT_OPENED,
-            'body' => null,
+            'body' => "Incident {$incident->incident_number} opened.",
             'created_at' => $createdAt,
         ]);
     }

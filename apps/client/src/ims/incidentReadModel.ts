@@ -19,14 +19,24 @@ export interface IncidentTimelineEntry {
   readonly id: string;
   readonly incidentId: string;
   readonly actorName: string | null;
-  readonly entryType: "incident_opened" | "operational_note";
+  readonly entryType:
+    | "incident_opened"
+    | "operational_note"
+    | "incident_field_updated";
   readonly body: string | null;
+  readonly previousValue?: Record<string, string | null>;
+  readonly newValue?: Record<string, string | null>;
   readonly createdAt: string;
 }
 
 export interface NameReferenceChip {
   readonly token: string;
   readonly normalizedToken: string;
+}
+
+export interface IncidentTagChip {
+  readonly tag: string;
+  readonly normalizedTag: string;
 }
 
 export interface ImsIncident {
@@ -44,10 +54,20 @@ export interface ImsIncident {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly nameReferenceChips: readonly NameReferenceChip[];
+  readonly tagChips: readonly IncidentTagChip[];
   readonly timelineEntries: readonly IncidentTimelineEntry[];
 }
 
-export const LOCAL_IMS_EVENT_ID = "event-ims-local";
+export interface IncidentAutosaveForm {
+  title: string;
+  status: ImsIncident["status"];
+  startedAt: string;
+  locationName: string;
+  locationAddress: string;
+  locationDetails: string;
+}
+
+export const LOCAL_IMS_EVENT_ID = "11111111-1111-4111-8111-111111111111";
 
 const IC_ROLES: readonly IncidentRole[] = [
   "ic_viewer",
@@ -57,11 +77,11 @@ const IC_ROLES: readonly IncidentRole[] = [
 
 const LOCAL_SESSION: IncidentSessionContext = Object.freeze({
   eventId: LOCAL_IMS_EVENT_ID,
-  eventLabel: "Idaho Decompression 2026",
-  organizationLabel: "Idaho Burners",
+  eventLabel: "Local Field Event",
+  organizationLabel: "Local Field Organization",
   icDepartmentLabel: "Rangers",
-  role: "ic_viewer",
-  roleLabel: "Incident Command Viewer",
+  role: "ic_operator",
+  roleLabel: "Incident Command Operator",
 });
 
 const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
@@ -89,13 +109,19 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
         normalizedToken: "gate_a",
       }),
     ]),
+    tagChips: Object.freeze([
+      Object.freeze({
+        tag: "medical",
+        normalizedTag: "medical",
+      }),
+    ]),
     timelineEntries: Object.freeze([
       Object.freeze({
         id: "timeline-gate-opened",
         incidentId: "incident-gate-medical",
         actorName: "Ingrid ICLead",
         entryType: "incident_opened",
-        body: null,
+        body: "Incident INC-2027-000042 opened.",
         createdAt: "2027-07-04T20:18:00.000Z",
       }),
       Object.freeze({
@@ -123,13 +149,14 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
     createdAt: "2027-07-04T19:45:00.000Z",
     updatedAt: "2027-07-04T19:56:00.000Z",
     nameReferenceChips: Object.freeze([]),
+    tagChips: Object.freeze([]),
     timelineEntries: Object.freeze([
       Object.freeze({
         id: "timeline-radio-opened",
         incidentId: "incident-radio-check",
         actorName: "Omar ICOperator",
         entryType: "incident_opened",
-        body: null,
+        body: "Incident INC-2027-000041 opened.",
         createdAt: "2027-07-04T19:45:00.000Z",
       }),
       Object.freeze({
@@ -146,9 +173,13 @@ const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
 
 let session: IncidentSessionContext | null = null;
 let noteSequence = 0;
+let incidentSequence = 42;
+let fieldUpdateSequence = 0;
 
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
 const localIncidentUpdatedAt = new Map<string, string>();
+const localIncidentOverrides = new Map<string, ImsIncident>();
+const localCreatedIncidents = new Map<string, ImsIncident>();
 
 export function installDevelopmentIncidentSession(): void {
   session = LOCAL_SESSION;
@@ -162,7 +193,11 @@ export function clearIncidentSession(): void {
   session = null;
   localTimelineEntries.clear();
   localIncidentUpdatedAt.clear();
+  localIncidentOverrides.clear();
+  localCreatedIncidents.clear();
   noteSequence = 0;
+  incidentSequence = 42;
+  fieldUpdateSequence = 0;
 }
 
 export function resolveIncidentSession(): IncidentSessionContext | null {
@@ -181,6 +216,12 @@ export function canAppendIncidentNote(
   return context?.role === "ic_operator" || context?.role === "ic_lead";
 }
 
+export function canEditIncident(
+  context: IncidentSessionContext | null,
+): boolean {
+  return canAppendIncidentNote(context);
+}
+
 export function listIncidentsForSession(
   context: IncidentSessionContext | null,
   search = "",
@@ -189,12 +230,14 @@ export function listIncidentsForSession(
     return [];
   }
 
-  const normalizedSearch = normalizeNameReferenceSearch(search);
+  const normalizedSearch = normalizeIncidentSearch(search);
 
-  return [...LOCAL_INCIDENTS]
+  return [...LOCAL_INCIDENTS, ...localCreatedIncidents.values()]
     .filter((incident) => incident.eventId === context?.eventId)
-    .map((incident) => incidentWithLocalTimeline(incident))
-    .filter((incident) => incidentMatchesNameReferenceSearch(incident, normalizedSearch))
+    .map((incident) =>
+      incidentWithLocalTimeline(localIncidentOverrides.get(incident.id) ?? incident),
+    )
+    .filter((incident) => incidentMatchesSearch(incident, normalizedSearch))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -248,6 +291,131 @@ export function appendIncidentNoteForSession(
   return findIncidentForSession(context, incidentId) ?? incident;
 }
 
+export function blankIncidentAutosaveForm(now = new Date()): IncidentAutosaveForm {
+  return {
+    title: "",
+    status: "open",
+    startedAt: toDatetimeLocalValue(now),
+    locationName: "",
+    locationAddress: "",
+    locationDetails: "",
+  };
+}
+
+export function incidentToAutosaveForm(
+  incident: ImsIncident,
+): IncidentAutosaveForm {
+  return {
+    title: incident.title,
+    status: incident.status,
+    startedAt: toDatetimeLocalValue(new Date(incident.startedAt)),
+    locationName: incident.locationName ?? "",
+    locationAddress: incident.locationAddress ?? "",
+    locationDetails: incident.locationDetails ?? "",
+  };
+}
+
+export function createIncidentFromAutosaveForm(
+  context: IncidentSessionContext | null,
+  form: IncidentAutosaveForm,
+  createdAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may create incidents.");
+  }
+
+  const title = validatedTitle(form.title);
+  const timestamp = createdAt.toISOString();
+  const id = `local-incident-${++incidentSequence}`;
+  const incident: ImsIncident = Object.freeze({
+    id,
+    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
+    incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
+    title,
+    status: form.status,
+    priorityLabel: null,
+    startedAt: fromDatetimeLocalValue(form.startedAt, createdAt),
+    locationName: nullableText(form.locationName),
+    locationAddress: nullableText(form.locationAddress),
+    locationDetails: nullableText(form.locationDetails),
+    createdByName: context?.roleLabel ?? null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    nameReferenceChips: Object.freeze([]),
+    tagChips: Object.freeze([]),
+    timelineEntries: Object.freeze([
+      Object.freeze({
+        id: `local-incident-opened-${incidentSequence}`,
+        incidentId: id,
+        actorName: context?.roleLabel ?? null,
+        entryType: "incident_opened",
+        body: `Incident INC-2027-${String(incidentSequence).padStart(6, "0")} opened.`,
+        createdAt: timestamp,
+      }),
+    ]),
+  });
+
+  localCreatedIncidents.set(incident.id, incident);
+
+  return incident;
+}
+
+export function updateIncidentFromAutosaveForm(
+  context: IncidentSessionContext | null,
+  incidentId: string,
+  form: IncidentAutosaveForm,
+  updatedAt = new Date(),
+): ImsIncident {
+  if (!canEditIncident(context)) {
+    throw new Error("Only IC operators and IC leads may edit incidents.");
+  }
+
+  const incident = findIncidentForSession(context, incidentId);
+  if (!incident) {
+    throw new Error("Incident not found for this event.");
+  }
+
+  const timestamp = updatedAt.toISOString();
+  const nextValues = {
+    title: validatedTitle(form.title),
+    status: form.status,
+    startedAt: fromDatetimeLocalValue(form.startedAt, updatedAt),
+    locationName: nullableText(form.locationName),
+    locationAddress: nullableText(form.locationAddress),
+    locationDetails: nullableText(form.locationDetails),
+  };
+  const previousValue = changedAutosaveFields(incident, nextValues, "before");
+  const newValue = changedAutosaveFields(incident, nextValues, "after");
+
+  if (Object.keys(newValue).length === 0) {
+    return incident;
+  }
+
+  const nextIncident: ImsIncident = Object.freeze({
+    ...incident,
+    ...nextValues,
+    updatedAt: timestamp,
+  });
+
+  localIncidentOverrides.set(incident.id, nextIncident);
+  localIncidentUpdatedAt.set(incident.id, timestamp);
+  localTimelineEntries.set(incident.id, [
+    ...(localTimelineEntries.get(incident.id) ?? []),
+    Object.freeze({
+      id: `local-incident-field-${++fieldUpdateSequence}`,
+      incidentId: incident.id,
+      actorName: context?.roleLabel ?? null,
+      entryType: "incident_field_updated",
+      body: timelineFieldUpdateBody(newValue),
+      previousValue,
+      newValue,
+      createdAt: timestamp,
+    }),
+  ]);
+
+  return findIncidentForSession(context, incidentId) ?? nextIncident;
+}
+
 export function statusLabel(status: ImsIncident["status"]): string {
   return {
     open: "Open",
@@ -256,6 +424,22 @@ export function statusLabel(status: ImsIncident["status"]): string {
     on_hold: "On Hold",
     closed: "Closed",
   }[status];
+}
+
+export function formatIncidentDateTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = String(date.getFullYear());
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+
+  return `${month}-${day}-${year} ${hour}:${minute}`;
 }
 
 function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
@@ -270,22 +454,28 @@ function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
     nameReferenceChips: Object.freeze(
       mergeNameReferenceChips([
         ...incident.nameReferenceChips,
-        ...timelineEntries.flatMap((entry) => parseNameReferences(entry.body ?? "")),
+        ...extractIncidentNameReferences(incident, timelineEntries),
+      ]),
+    ),
+    tagChips: Object.freeze(
+      mergeTagChips([
+        ...incident.tagChips,
+        ...extractIncidentTags(incident, timelineEntries),
       ]),
     ),
     timelineEntries: Object.freeze(timelineEntries),
   });
 }
 
-function normalizeNameReferenceSearch(search: string): string {
+function normalizeIncidentSearch(search: string): string {
   const trimmed = search.trim();
 
-  return trimmed.startsWith("@")
+  return trimmed.startsWith("@") || trimmed.startsWith("#")
     ? trimmed.slice(1).toLowerCase()
     : trimmed.toLowerCase();
 }
 
-function incidentMatchesNameReferenceSearch(
+function incidentMatchesSearch(
   incident: ImsIncident,
   normalizedSearch: string,
 ): boolean {
@@ -293,9 +483,47 @@ function incidentMatchesNameReferenceSearch(
     return true;
   }
 
-  return incident.nameReferenceChips.some(
-    (chip) => chip.normalizedToken === normalizedSearch,
+  const searchableText = [
+    incident.incidentNumber,
+    incident.title,
+    incident.locationName ?? "",
+    incident.locationAddress ?? "",
+    incident.locationDetails ?? "",
+  ].join(" ").toLowerCase();
+
+  return (
+    searchableText.includes(normalizedSearch) ||
+    incident.nameReferenceChips.some(
+      (chip) => chip.normalizedToken === normalizedSearch,
+    ) ||
+    incident.tagChips.some((chip) => chip.normalizedTag === normalizedSearch)
   );
+}
+
+function extractIncidentNameReferences(
+  incident: ImsIncident,
+  timelineEntries: readonly IncidentTimelineEntry[],
+): NameReferenceChip[] {
+  return [
+    incident.title,
+    incident.locationName ?? "",
+    incident.locationAddress ?? "",
+    incident.locationDetails ?? "",
+    ...timelineEntries.map((entry) => entry.body ?? ""),
+  ].flatMap(parseNameReferences);
+}
+
+function extractIncidentTags(
+  incident: ImsIncident,
+  timelineEntries: readonly IncidentTimelineEntry[],
+): IncidentTagChip[] {
+  return [
+    incident.title,
+    incident.locationName ?? "",
+    incident.locationAddress ?? "",
+    incident.locationDetails ?? "",
+    ...timelineEntries.map((entry) => entry.body ?? ""),
+  ].flatMap(parseTags);
 }
 
 function parseNameReferences(text: string): NameReferenceChip[] {
@@ -305,6 +533,17 @@ function parseNameReferences(text: string): NameReferenceChip[] {
     [...matches].map((match) => ({
       token: match[1] ?? "",
       normalizedToken: (match[1] ?? "").toLowerCase(),
+    })),
+  );
+}
+
+function parseTags(text: string): IncidentTagChip[] {
+  const matches = text.matchAll(/#([A-Za-z0-9_-]+)/gu);
+
+  return mergeTagChips(
+    [...matches].map((match) => ({
+      tag: match[1] ?? "",
+      normalizedTag: (match[1] ?? "").toLowerCase(),
     })),
   );
 }
@@ -325,4 +564,146 @@ function mergeNameReferenceChips(
   }
 
   return [...byNormalizedToken.values()];
+}
+
+function mergeTagChips(chips: readonly IncidentTagChip[]): IncidentTagChip[] {
+  const byNormalizedTag = new Map<string, IncidentTagChip>();
+
+  for (const chip of chips) {
+    if (chip.normalizedTag.length === 0) {
+      continue;
+    }
+
+    if (!byNormalizedTag.has(chip.normalizedTag)) {
+      byNormalizedTag.set(chip.normalizedTag, chip);
+    }
+  }
+
+  return [...byNormalizedTag.values()];
+}
+
+function validatedTitle(value: string): string {
+  const title = value.trim();
+
+  if (title.length === 0) {
+    throw new Error("Incident title is required.");
+  }
+
+  if (title.length > 200) {
+    throw new Error("Incident title may not be greater than 200 characters.");
+  }
+
+  return title;
+}
+
+function nullableText(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function toDatetimeLocalValue(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+}
+
+function fromDatetimeLocalValue(value: string, fallback: Date): string {
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime())
+    ? fallback.toISOString()
+    : parsed.toISOString();
+}
+
+function autosaveDiffSnapshot(
+  incident: ImsIncident,
+): Record<string, string | null> {
+  return {
+    title: incident.title,
+    status: incident.status,
+    startedAt: incident.startedAt,
+    locationName: incident.locationName,
+    locationAddress: incident.locationAddress,
+    locationDetails: incident.locationDetails,
+  };
+}
+
+function changedAutosaveFields(
+  incident: ImsIncident,
+  nextValues: Pick<
+    ImsIncident,
+    | "title"
+    | "status"
+    | "startedAt"
+    | "locationName"
+    | "locationAddress"
+    | "locationDetails"
+  >,
+  direction: "before" | "after",
+): Record<string, string | null> {
+  const before = autosaveDiffSnapshot(incident);
+  const after: Record<string, string | null> = {
+    title: nextValues.title,
+    status: nextValues.status,
+    startedAt: nextValues.startedAt,
+    locationName: nextValues.locationName,
+    locationAddress: nextValues.locationAddress,
+    locationDetails: nextValues.locationDetails,
+  };
+  const values = direction === "before" ? before : after;
+  const changed: Record<string, string | null> = {};
+
+  for (const field of Object.keys(after)) {
+    if (before[field] !== after[field]) {
+      changed[field] = values[field] ?? null;
+    }
+  }
+
+  return changed;
+}
+
+function timelineFieldUpdateBody(
+  newValue: Record<string, string | null>,
+): string {
+  return Object.keys(newValue)
+    .map((field) => {
+      const label = fieldLabel(field).toLowerCase();
+      const value = formatTimelineChangedValue(field, newValue[field] ?? null);
+
+      return `Changed ${label}: ${value}`;
+    })
+    .join("\n");
+}
+
+function fieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    title: "Title",
+    status: "State",
+    startedAt: "Started",
+    locationName: "Location name",
+    locationAddress: "Location address",
+    locationDetails: "Location details",
+  };
+
+  return labels[field] ?? field;
+}
+
+function formatTimelineChangedValue(
+  field: string,
+  value: string | null,
+): string {
+  if (value === null || value === "") {
+    return "not set";
+  }
+
+  return field === "status" ? statusLabel(value as ImsIncident["status"]) : value;
 }

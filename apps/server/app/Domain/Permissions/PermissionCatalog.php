@@ -47,6 +47,8 @@ final class PermissionCatalog
 
     public const PERMISSION_INCIDENTS_CREATE = 'incidents.create';
 
+    public const PERMISSION_INCIDENTS_UPDATE = 'incidents.update';
+
     public const PERMISSION_INCIDENTS_ADD_NOTE = 'incidents.add_note';
 
     public const PERMISSION_INCIDENTS_CLOSE = 'incidents.close';
@@ -112,6 +114,7 @@ final class PermissionCatalog
         return [
             self::PERMISSION_INCIDENTS_VIEW => 'View incidents.',
             self::PERMISSION_INCIDENTS_CREATE => 'Create incidents.',
+            self::PERMISSION_INCIDENTS_UPDATE => 'Update incident fields.',
             self::PERMISSION_INCIDENTS_ADD_NOTE => 'Add incident notes.',
             self::PERMISSION_INCIDENTS_CLOSE => 'Close incidents.',
             self::PERMISSION_INCIDENTS_REOPEN => 'Reopen incidents.',
@@ -144,6 +147,7 @@ final class PermissionCatalog
             self::ROLE_IC_LEAD => [
                 self::PERMISSION_INCIDENTS_VIEW,
                 self::PERMISSION_INCIDENTS_CREATE,
+                self::PERMISSION_INCIDENTS_UPDATE,
                 self::PERMISSION_INCIDENTS_ADD_NOTE,
                 self::PERMISSION_INCIDENTS_CLOSE,
                 self::PERMISSION_INCIDENTS_REOPEN,
@@ -154,6 +158,7 @@ final class PermissionCatalog
             self::ROLE_IC_OPERATOR => [
                 self::PERMISSION_INCIDENTS_VIEW,
                 self::PERMISSION_INCIDENTS_CREATE,
+                self::PERMISSION_INCIDENTS_UPDATE,
                 self::PERMISSION_INCIDENTS_ADD_NOTE,
                 self::PERMISSION_INCIDENTS_CLOSE,
                 self::PERMISSION_INCIDENTS_REOPEN,
