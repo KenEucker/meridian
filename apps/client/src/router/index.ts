@@ -10,6 +10,13 @@ import FieldReportCreateView from "@/views/FieldReportCreateView.vue";
 import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
 import HomeView from "@/views/HomeView.vue";
+import {
+  installDevelopmentIncidentSession,
+  resolveIncidentSession,
+} from "@/ims/incidentReadModel";
+import IncidentDetailView from "@/views/IncidentDetailView.vue";
+import IncidentListView from "@/views/IncidentListView.vue";
+import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
 import LogisticsDeskView from "@/views/LogisticsDeskView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
@@ -24,6 +31,17 @@ import ReadinessView from "@/views/ReadinessView.vue";
 function ensureFieldSession(): void {
   if (!resolveFieldSession()) {
     installDevelopmentFieldSession();
+  }
+}
+
+/**
+ * Development IMS session until auth/event selection own the real IC context.
+ * The screen components still fail closed when the installed role lacks IC
+ * authority (M11.5).
+ */
+function ensureIncidentSession(): void {
+  if (!resolveIncidentSession()) {
+    installDevelopmentIncidentSession();
   }
 }
 
@@ -106,6 +124,24 @@ export const routes: RouteRecordRaw[] = [
     name: "staff.field-reports.show",
     component: FieldReportDetailView,
     beforeEnter: ensureFieldSession,
+  },
+  {
+    path: "/ims/incidents",
+    name: "ims.incidents.index",
+    component: IncidentListView,
+    beforeEnter: ensureIncidentSession,
+  },
+  {
+    path: "/ims/incidents/:incidentId",
+    name: "ims.incidents.show",
+    component: IncidentDetailView,
+    beforeEnter: ensureIncidentSession,
+  },
+  {
+    path: "/ims/restricted",
+    name: "ims.restricted",
+    component: ImsRestrictedView,
+    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/:pathMatch(.*)*",

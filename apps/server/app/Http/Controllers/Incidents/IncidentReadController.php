@@ -1,0 +1,122 @@
+<?php
+
+namespace App\Http\Controllers\Incidents;
+
+use App\Http\Controllers\Controller;
+use App\Models\AuditEvent;
+use App\Models\Event;
+use App\Models\Incident;
+use App\Services\Audit\AuditService;
+use App\Services\Incidents\IncidentReadAccess;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * Restricted IMS incident read transport (M11.5).
+ *
+ * Data/API section 5.1 documents resource reads under
+ * GET /api/events/{event}/incidents. Section 6.5 requires incident rows to be
+ * returned only to IC-authorized users; UI hiding alone is insufficient.
+ */
+final class IncidentReadController extends Controller
+{
+    public function index(Request $request, Event $event, IncidentReadAccess $access): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        if (! $access->canViewIncidents($user, $event)) {
+            return $this->restrictedResponse();
+        }
+
+        $incidents = Incident::query()
+            ->with('createdByUser')
+            ->forEvent($event)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('started_at')
+            ->get()
+            ->map(fn (Incident $incident): array => $this->incidentPayload($incident))
+            ->values();
+
+        return response()->json([
+            'event_id' => $event->id,
+            'incidents' => $incidents,
+        ]);
+    }
+
+    public function show(
+        Request $request,
+        Event $event,
+        Incident $incident,
+        IncidentReadAccess $access,
+        AuditService $audit,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        if ((string) $incident->event_id !== (string) $event->id) {
+            abort(404);
+        }
+
+        if (! $access->canViewIncidents($user, $event)) {
+            return $this->restrictedResponse();
+        }
+
+        $incident->loadMissing('createdByUser');
+
+        $audit->recordForEntity(
+            entity: $incident,
+            action: 'incident.viewed',
+            actorUser: $user,
+            organizationId: $event->organization_id,
+            eventId: $event->id,
+            departmentId: $this->effectiveIncidentCommandDepartmentId($event),
+            sourceContext: AuditEvent::SOURCE_API,
+        );
+
+        return response()->json([
+            'event_id' => $event->id,
+            'incident' => $this->incidentPayload($incident),
+        ]);
+    }
+
+    private function restrictedResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'This page requires Incident Command access for the event configured IC department.',
+        ], 403);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function incidentPayload(Incident $incident): array
+    {
+        return [
+            'id' => $incident->id,
+            'event_id' => $incident->event_id,
+            'incident_number' => $incident->incident_number,
+            'status' => $incident->status,
+            'priority_label' => null,
+            'started_at' => optional($incident->started_at)?->toIso8601String(),
+            'title' => $incident->title,
+            'location_name' => $incident->location_name,
+            'location_address' => $incident->location_address,
+            'location_details' => $incident->location_details,
+            'camp_id' => $incident->camp_id,
+            'map_location_id' => $incident->map_location_id,
+            'created_by_user_id' => $incident->created_by_user_id,
+            'created_by_name' => $incident->createdByUser?->name,
+            'created_at' => optional($incident->created_at)?->toIso8601String(),
+            'updated_at' => optional($incident->updated_at)?->toIso8601String(),
+            'closed_at' => optional($incident->closed_at)?->toIso8601String(),
+        ];
+    }
+
+    private function effectiveIncidentCommandDepartmentId(Event $event): ?string
+    {
+        $event->loadMissing('organization');
+
+        return $event->ic_department_id ?? $event->organization?->default_ic_department_id;
+    }
+}
