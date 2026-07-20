@@ -7,7 +7,9 @@ use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
+use App\Models\IncidentType;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
@@ -48,7 +50,7 @@ class IncidentReadHttpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('event_id', $event->id)
             ->assertJsonPath('incidents.0.id', $newer->id)
-            ->assertJsonPath('incidents.0.priority_label', null)
+            ->assertJsonPath('incidents.0.priority_label', Incident::PRIORITY_ROUTINE)
             ->assertJsonPath('incidents.1.id', $older->id)
             ->assertJsonCount(2, 'incidents')
             ->assertJsonMissing(['title' => 'Other event incident']);
@@ -61,10 +63,25 @@ class IncidentReadHttpTest extends TestCase
         $incident = Incident::factory()->forEvent($event)->create([
             'incident_number' => 'INC-2027-000003',
             'status' => Incident::STATUS_MONITORING,
+            'priority_label' => Incident::PRIORITY_SERIOUS,
             'title' => 'Radio check at Gate A',
             'location_name' => 'Gate A',
             'location_details' => 'North side of entry.',
             'created_by_user_id' => $actor->id,
+        ]);
+        $type = IncidentType::factory()->create([
+            'organization_id' => $event->organization_id,
+            'name' => 'Radio',
+        ]);
+        $incident->incidentTypes()->attach($type->id, [
+            'id' => '11111111-1111-4111-8111-111111111111',
+            'created_at' => Carbon::parse('2027-07-04T20:20:00Z'),
+        ]);
+        $responder = Staff::factory()->create(['preferred_name' => 'Vera']);
+        IncidentStaff::factory()->create([
+            'incident_id' => $incident->id,
+            'staff_id' => $responder->id,
+            'created_at' => Carbon::parse('2027-07-04T20:21:00Z'),
         ]);
         $opened = IncidentTimelineEntry::factory()->forIncident($incident)->create([
             'actor_user_id' => $actor->id,
@@ -86,6 +103,10 @@ class IncidentReadHttpTest extends TestCase
             ->assertJsonPath('incident.id', $incident->id)
             ->assertJsonPath('incident.incident_number', 'INC-2027-000003')
             ->assertJsonPath('incident.status', Incident::STATUS_MONITORING)
+            ->assertJsonPath('incident.priority_label', Incident::PRIORITY_SERIOUS)
+            ->assertJsonPath('incident.incident_type_names.0', 'Radio')
+            ->assertJsonPath('incident.responders.0.staff_id', $responder->id)
+            ->assertJsonPath('incident.responders.0.display_name', 'Vera')
             ->assertJsonPath('incident.title', 'Radio check at Gate A')
             ->assertJsonPath('incident.location_name', 'Gate A')
             ->assertJsonPath('incident.location_details', 'North side of entry.')

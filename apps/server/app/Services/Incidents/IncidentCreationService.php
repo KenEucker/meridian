@@ -6,6 +6,9 @@ use App\Exceptions\IncidentCreationException;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentStaff;
+use App\Models\IncidentType;
+use App\Models\Staff;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use Carbon\CarbonImmutable;
@@ -32,12 +35,15 @@ final class IncidentCreationService
      *     event_id: string,
      *     title: string,
      *     status?: string|null,
+     *     priority_label?: string|null,
      *     started_at?: DateTimeInterface|string|null,
      *     location_name?: string|null,
      *     location_address?: string|null,
      *     location_details?: string|null,
      *     camp_id?: string|null,
-     *     map_location_id?: string|null
+     *     map_location_id?: string|null,
+     *     incident_type_names?: list<string>|null,
+     *     responder_staff_ids?: list<string>|null
      * }  $attributes
      */
     public function create(
@@ -59,11 +65,13 @@ final class IncidentCreationService
             $now = CarbonImmutable::instance($createdAt ?? now());
             $startedAt = $this->startedAt($attributes['started_at'] ?? null, $now);
             $status = $this->status($attributes['status'] ?? Incident::STATUS_OPEN);
+            $priorityLabel = $this->priorityLabel($attributes['priority_label'] ?? Incident::PRIORITY_ROUTINE);
 
             $incident = Incident::query()->create([
                 'event_id' => $event->id,
                 'incident_number' => $this->nextIncidentNumber($event),
                 'status' => $status,
+                'priority_label' => $priorityLabel,
                 'started_at' => $startedAt,
                 'title' => $this->title($attributes['title'] ?? null),
                 'location_name' => $this->nullableString($attributes['location_name'] ?? null),
@@ -79,6 +87,10 @@ final class IncidentCreationService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            $this->syncIncidentTypes($incident, $event, $attributes['incident_type_names'] ?? [], $now);
+            $this->syncIncidentStaff($incident, $attributes['responder_staff_ids'] ?? [], $now);
+            $incident->loadMissing(['incidentTypes', 'incidentStaff.staff']);
 
             $this->audit->recordForEntity(
                 entity: $incident,
@@ -152,6 +164,15 @@ final class IncidentCreationService
         return $value;
     }
 
+    private function priorityLabel(mixed $value): string
+    {
+        if (! is_string($value) || ! in_array($value, Incident::priorityLabels(), true)) {
+            throw IncidentCreationException::invalid('Incident priority label is invalid.');
+        }
+
+        return $value;
+    }
+
     private function startedAt(mixed $value, CarbonImmutable $default): CarbonImmutable
     {
         if ($value === null || $value === '') {
@@ -178,6 +199,132 @@ final class IncidentCreationService
         $text = trim((string) $value);
 
         return $text === '' ? null : $text;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stringList(mixed $value, string $message, int $maxLength): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (! is_array($value)) {
+            throw IncidentCreationException::invalid($message);
+        }
+
+        $seen = [];
+        $items = [];
+
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                throw IncidentCreationException::invalid($message);
+            }
+
+            $trimmed = trim($item);
+
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (mb_strlen($trimmed) > $maxLength) {
+                throw IncidentCreationException::invalid($message);
+            }
+
+            $key = mb_strtolower($trimmed);
+
+            if (array_key_exists($key, $seen)) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $items[] = $trimmed;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function uuidList(mixed $value, string $message): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (! is_array($value)) {
+            throw IncidentCreationException::invalid($message);
+        }
+
+        $ids = [];
+
+        foreach ($value as $item) {
+            if (! is_string($item) || ! Str::isUuid($item)) {
+                throw IncidentCreationException::invalid($message);
+            }
+
+            $ids[$item] = $item;
+        }
+
+        return array_values($ids);
+    }
+
+    /**
+     * @param  list<string>|mixed  $typeNames
+     */
+    private function syncIncidentTypes(Incident $incident, Event $event, mixed $typeNames, CarbonImmutable $now): void
+    {
+        $names = $this->stringList($typeNames, 'Incident type names are invalid.', 100);
+        $typeIds = [];
+
+        foreach ($names as $name) {
+            $type = IncidentType::query()
+                ->where('organization_id', $event->organization_id)
+                ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
+                ->first();
+
+            if ($type === null) {
+                $type = IncidentType::query()->create([
+                    'organization_id' => $event->organization_id,
+                    'name' => $name,
+                    'created_at' => $now,
+                ]);
+            }
+
+            $typeIds[$type->id] = ['id' => (string) Str::uuid(), 'created_at' => $now];
+        }
+
+        $incident->incidentTypes()->sync($typeIds);
+    }
+
+    /**
+     * @param  list<string>|mixed  $staffIds
+     */
+    private function syncIncidentStaff(Incident $incident, mixed $staffIds, CarbonImmutable $now): void
+    {
+        $ids = $this->uuidList($staffIds, 'Incident responder staff IDs are invalid.');
+
+        $existingStaffIds = Staff::query()
+            ->whereIn('id', $ids)
+            ->pluck('id')
+            ->all();
+
+        if (count($existingStaffIds) !== count($ids)) {
+            throw IncidentCreationException::invalid('Incident responder staff IDs are invalid.');
+        }
+
+        IncidentStaff::query()->where('incident_id', $incident->id)->delete();
+
+        foreach ($ids as $staffId) {
+            IncidentStaff::query()->create([
+                'incident_id' => $incident->id,
+                'staff_id' => $staffId,
+                'relationship_label' => 'Responder',
+                'created_at' => $now,
+            ]);
+        }
     }
 
     private function nextIncidentNumber(Event $event): string
@@ -224,6 +371,7 @@ final class IncidentCreationService
             'event_id' => $incident->event_id,
             'incident_number' => $incident->incident_number,
             'status' => $incident->status,
+            'priority_label' => $incident->priority_label,
             'started_at' => optional($incident->started_at)?->toIso8601String(),
             'title' => $incident->title,
             'location_name' => $incident->location_name,
@@ -231,6 +379,18 @@ final class IncidentCreationService
             'location_details' => $incident->location_details,
             'camp_id' => $incident->camp_id,
             'map_location_id' => $incident->map_location_id,
+            'incident_type_names' => $incident->incidentTypes->pluck('name')->values()->all(),
+            'responders' => $incident->incidentStaff
+                ->map(fn (IncidentStaff $staff): array => [
+                    'staff_id' => $staff->staff_id,
+                    'display_name' => $staff->staff?->preferred_name
+                        ?? $staff->staff?->handle
+                        ?? $staff->staff?->legal_name
+                        ?? 'Unknown responder',
+                    'relationship_label' => $staff->relationship_label,
+                ])
+                ->values()
+                ->all(),
             'created_by_user_id' => $incident->created_by_user_id,
         ];
     }

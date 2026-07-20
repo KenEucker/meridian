@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
+use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
 use App\Services\Incidents\IncidentReadAccess;
@@ -27,8 +28,7 @@ final class IncidentReadController extends Controller
         Event $event,
         IncidentReadAccess $access,
         NameReferenceSearchService $nameReferences,
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
 
@@ -40,7 +40,7 @@ final class IncidentReadController extends Controller
         $incidents = is_string($search) && trim($search) !== ''
             ? $nameReferences->searchIncidents($user, $search, $event)
             : Incident::query()
-                ->with('createdByUser')
+                ->with(['createdByUser', 'incidentTypes', 'incidentStaff.staff'])
                 ->forEvent($event)
                 ->orderByDesc('updated_at')
                 ->orderByDesc('started_at')
@@ -75,7 +75,12 @@ final class IncidentReadController extends Controller
             return $this->restrictedResponse();
         }
 
-        $incident->loadMissing(['createdByUser', 'timelineEntries.actorUser']);
+        $incident->loadMissing([
+            'createdByUser',
+            'incidentTypes',
+            'incidentStaff.staff',
+            'timelineEntries.actorUser',
+        ]);
 
         $audit->recordForEntity(
             entity: $incident,
@@ -110,7 +115,7 @@ final class IncidentReadController extends Controller
             'event_id' => $incident->event_id,
             'incident_number' => $incident->incident_number,
             'status' => $incident->status,
-            'priority_label' => null,
+            'priority_label' => $incident->priority_label,
             'started_at' => optional($incident->started_at)?->toIso8601String(),
             'title' => $incident->title,
             'location_name' => $incident->location_name,
@@ -118,6 +123,18 @@ final class IncidentReadController extends Controller
             'location_details' => $incident->location_details,
             'camp_id' => $incident->camp_id,
             'map_location_id' => $incident->map_location_id,
+            'incident_type_names' => $incident->incidentTypes->pluck('name')->values()->all(),
+            'responders' => $incident->incidentStaff
+                ->map(fn (IncidentStaff $staff): array => [
+                    'staff_id' => $staff->staff_id,
+                    'display_name' => $staff->staff?->preferred_name
+                        ?? $staff->staff?->handle
+                        ?? $staff->staff?->legal_name
+                        ?? 'Unknown responder',
+                    'relationship_label' => $staff->relationship_label,
+                ])
+                ->values()
+                ->all(),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_by_name' => $incident->createdByUser?->name,
             'created_at' => optional($incident->created_at)?->toIso8601String(),

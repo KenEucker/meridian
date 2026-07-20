@@ -9,6 +9,7 @@ import {
   listIncidentsForSession,
   resolveIncidentSession,
   statusLabel,
+  type IncidentPriorityLabel,
 } from "@/ims/incidentReadModel";
 
 const session = computed(() => resolveIncidentSession());
@@ -30,6 +31,14 @@ watch(searchQuery, (value) => {
 
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
+}
+
+function priorityClass(priorityLabel: IncidentPriorityLabel): string {
+  return `ims-list__priority--${priorityLabel.toLowerCase()}`;
+}
+
+function typeText(typeNames: readonly string[]): string {
+  return typeNames.length > 0 ? typeNames.join(", ") : "Types not set";
 }
 
 async function onSearchSubmit(): Promise<void> {
@@ -140,6 +149,7 @@ async function onSearchSubmit(): Promise<void> {
               <th scope="col">Incident</th>
               <th scope="col">State</th>
               <th scope="col">Priority</th>
+              <th scope="col">Types</th>
               <th scope="col">Location</th>
               <th scope="col">Last update</th>
             </tr>
@@ -163,7 +173,15 @@ async function onSearchSubmit(): Promise<void> {
                   statusLabel(incident.status)
                 }}</span>
               </td>
-              <td>{{ priorityText(incident.priorityLabel) }}</td>
+              <td>
+                <span
+                  class="ims-list__priority"
+                  :class="priorityClass(incident.priorityLabel)"
+                >
+                  {{ priorityText(incident.priorityLabel) }}
+                </span>
+              </td>
+              <td>{{ typeText(incident.incidentTypeNames) }}</td>
               <td>{{ incident.locationName ?? "Location not set" }}</td>
               <td>{{ formatIncidentDateTime(incident.updatedAt) }}</td>
             </tr>
@@ -359,6 +377,38 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__status {
   font-size: var(--m-text-sm);
   font-weight: 700;
+}
+
+.ims-list__priority {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ims-list__priority--routine {
+  background: color-mix(in srgb, var(--m-border-default) 22%, transparent);
+  color: var(--m-text-secondary);
+}
+
+.ims-list__priority--important {
+  border-color: #b7791f;
+  background: #fff3bf;
+  color: #7a4a00;
+}
+
+.ims-list__priority--serious {
+  border-color: #c05621;
+  background: #fed7aa;
+  color: #7c2d12;
+}
+
+.ims-list__priority--critical {
+  border-color: #b42318;
+  background: #f04438;
+  color: #ffffff;
 }
 
 .ims-list__status {

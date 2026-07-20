@@ -40,12 +40,17 @@ final class IncidentCommandController extends Controller
             'event_id' => ['required', 'uuid', 'exists:events,id'],
             'title' => ['required', 'string'],
             'status' => ['nullable', 'string'],
+            'priority_label' => ['nullable', 'string'],
             'started_at' => ['nullable', 'date'],
             'location_name' => ['nullable', 'string'],
             'location_address' => ['nullable', 'string'],
             'location_details' => ['nullable', 'string'],
             'camp_id' => ['nullable', 'uuid'],
             'map_location_id' => ['nullable', 'uuid'],
+            'incident_type_names' => ['nullable', 'array'],
+            'incident_type_names.*' => ['string'],
+            'responder_staff_ids' => ['nullable', 'array'],
+            'responder_staff_ids.*' => ['uuid'],
         ]);
 
         $event = Event::query()->findOrFail((string) $validated['event_id']);
@@ -67,6 +72,7 @@ final class IncidentCommandController extends Controller
             'event_id' => $incident->event_id,
             'incident_number' => $incident->incident_number,
             'status' => $incident->status,
+            'priority_label' => $incident->priority_label,
             'started_at' => optional($incident->started_at)?->toIso8601String(),
             'title' => $incident->title,
             'location_name' => $incident->location_name,
@@ -74,6 +80,8 @@ final class IncidentCommandController extends Controller
             'location_details' => $incident->location_details,
             'camp_id' => $incident->camp_id,
             'map_location_id' => $incident->map_location_id,
+            'incident_type_names' => $incident->incidentTypes()->pluck('name')->values()->all(),
+            'responders' => $this->responderPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
         ], 201);
@@ -92,12 +100,17 @@ final class IncidentCommandController extends Controller
             'incident_id' => ['required', 'uuid', 'exists:incidents,id'],
             'title' => ['sometimes', 'required', 'string'],
             'status' => ['sometimes', 'required', 'string'],
+            'priority_label' => ['sometimes', 'required', 'string'],
             'started_at' => ['sometimes', 'required', 'date'],
             'location_name' => ['sometimes', 'nullable', 'string'],
             'location_address' => ['sometimes', 'nullable', 'string'],
             'location_details' => ['sometimes', 'nullable', 'string'],
             'camp_id' => ['sometimes', 'nullable', 'uuid'],
             'map_location_id' => ['sometimes', 'nullable', 'uuid'],
+            'incident_type_names' => ['sometimes', 'array'],
+            'incident_type_names.*' => ['string'],
+            'responder_staff_ids' => ['sometimes', 'array'],
+            'responder_staff_ids.*' => ['uuid'],
         ], [
             'title.required' => 'Incident title is required.',
         ]);
@@ -133,6 +146,7 @@ final class IncidentCommandController extends Controller
             'event_id' => $incident->event_id,
             'incident_number' => $incident->incident_number,
             'status' => $incident->status,
+            'priority_label' => $incident->priority_label,
             'started_at' => optional($incident->started_at)?->toIso8601String(),
             'title' => $incident->title,
             'location_name' => $incident->location_name,
@@ -140,6 +154,8 @@ final class IncidentCommandController extends Controller
             'location_details' => $incident->location_details,
             'camp_id' => $incident->camp_id,
             'map_location_id' => $incident->map_location_id,
+            'incident_type_names' => $incident->incidentTypes()->pluck('name')->values()->all(),
+            'responders' => $this->responderPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
             'updated_at' => optional($incident->updated_at)?->toIso8601String(),
@@ -201,5 +217,25 @@ final class IncidentCommandController extends Controller
             'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
             'stricken_reason' => $entry->stricken_reason,
         ], 201);
+    }
+
+    /**
+     * @return list<array{staff_id: string, display_name: string, relationship_label: string}>
+     */
+    private function responderPayload(Incident $incident): array
+    {
+        return $incident->incidentStaff()
+            ->with('staff')
+            ->get()
+            ->map(fn ($staff): array => [
+                'staff_id' => $staff->staff_id,
+                'display_name' => $staff->staff?->preferred_name
+                    ?? $staff->staff?->handle
+                    ?? $staff->staff?->legal_name
+                    ?? 'Unknown responder',
+                'relationship_label' => $staff->relationship_label,
+            ])
+            ->values()
+            ->all();
     }
 }

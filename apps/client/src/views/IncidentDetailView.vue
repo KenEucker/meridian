@@ -11,6 +11,7 @@ import {
   hasIncidentCommandAccess,
   resolveIncidentSession,
   statusLabel,
+  type IncidentPriorityLabel,
   type IncidentTagChip,
   type IncidentTimelineEntry,
   type NameReferenceChip,
@@ -35,6 +36,18 @@ const timelineEntries = computed(() => incident.value?.timelineEntries ?? []);
 
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
+}
+
+function priorityClass(priorityLabel: IncidentPriorityLabel): string {
+  return `ims-detail__priority-pill--${priorityLabel.toLowerCase()}`;
+}
+
+function responderText(): string {
+  return incident.value && incident.value.responders.length > 0
+    ? incident.value.responders
+        .map((responder) => responder.displayName)
+        .join(", ")
+    : "Responders not set";
 }
 
 function timelineEntryBody(entry: IncidentTimelineEntry): string | null {
@@ -66,6 +79,9 @@ function fieldLabel(field: string): string {
   const labels: Record<string, string> = {
     title: "Title",
     status: "State",
+    priorityLabel: "Priority",
+    incidentTypeNames: "Incident types",
+    responders: "Responders",
     startedAt: "Started",
     locationName: "Location name",
     locationAddress: "Location address",
@@ -155,11 +171,22 @@ function onAppendNote(): void {
         <dl class="ims-detail__status-row">
           <div>
             <dt>State</dt>
-            <dd>{{ statusLabel(incident.status) }}</dd>
+            <dd>
+              <span class="ims-detail__state-pill">
+                {{ statusLabel(incident.status) }}
+              </span>
+            </dd>
           </div>
           <div>
             <dt>Priority</dt>
-            <dd>{{ priorityText(incident.priorityLabel) }}</dd>
+            <dd>
+              <span
+                class="ims-detail__priority-pill"
+                :class="priorityClass(incident.priorityLabel)"
+              >
+                {{ priorityText(incident.priorityLabel) }}
+              </span>
+            </dd>
           </div>
           <div>
             <dt>Started</dt>
@@ -222,6 +249,26 @@ function onAppendNote(): void {
             <div v-if="incident.locationDetails">
               <dt>Location details</dt>
               <dd>{{ incident.locationDetails }}</dd>
+            </div>
+            <div>
+              <dt>Incident types</dt>
+              <dd
+                v-if="incident.incidentTypeNames.length > 0"
+                class="ims-detail__type-list"
+              >
+                <span
+                  v-for="typeName in incident.incidentTypeNames"
+                  :key="typeName"
+                  class="ims-detail__type-chip"
+                >
+                  {{ typeName }}
+                </span>
+              </dd>
+              <dd v-else>Types not set</dd>
+            </div>
+            <div>
+              <dt>Rangers/responders</dt>
+              <dd>{{ responderText() }}</dd>
             </div>
             <div>
               <dt>Created by</dt>
@@ -363,6 +410,62 @@ function onAppendNote(): void {
 .ims-detail__definition dd {
   margin: var(--m-space-1) 0 0;
   overflow-wrap: anywhere;
+}
+
+.ims-detail__state-pill,
+.ims-detail__priority-pill,
+.ims-detail__type-chip {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-2);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ims-detail__state-pill {
+  border: 1px solid var(--m-border-default);
+  color: var(--m-text-primary);
+}
+
+.ims-detail__priority-pill {
+  border: 1px solid var(--m-border-default);
+}
+
+.ims-detail__priority-pill--routine {
+  background: color-mix(in srgb, var(--m-border-default) 22%, transparent);
+  color: var(--m-text-secondary);
+}
+
+.ims-detail__priority-pill--important {
+  border-color: #b7791f;
+  background: #fff3bf;
+  color: #7a4a00;
+}
+
+.ims-detail__priority-pill--serious {
+  border-color: #c05621;
+  background: #fed7aa;
+  color: #7c2d12;
+}
+
+.ims-detail__priority-pill--critical {
+  border-color: #b42318;
+  background: #f04438;
+  color: #ffffff;
+}
+
+.ims-detail__type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.ims-detail__type-chip {
+  border: 1px solid var(--m-action-secondary-bg);
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
 }
 
 .ims-detail__chips {

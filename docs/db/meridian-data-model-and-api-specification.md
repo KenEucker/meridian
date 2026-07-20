@@ -2010,6 +2010,7 @@ Key fields:
 - `event_id`
 - `incident_number`
 - `status`
+- `priority_label`
 - `started_at`
 - `title`
 - `location_name`
@@ -2043,6 +2044,7 @@ Rules:
 - incidents are not merged away
 - incidents may be edited regardless of status
 - status affects filtering/status, not editability
+- priority label, incident type labels, and involved/responding staff are current incident fields and their changes are preserved in history
 - incident timestamps are not retroactively changed
 - incident title edits create timeline entries
 - incident body/history is append-only

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use RuntimeException;
@@ -35,6 +36,14 @@ class Incident extends Model
 
     public const STATUS_CLOSED = 'closed';
 
+    public const PRIORITY_ROUTINE = 'Routine';
+
+    public const PRIORITY_IMPORTANT = 'Important';
+
+    public const PRIORITY_SERIOUS = 'Serious';
+
+    public const PRIORITY_CRITICAL = 'Critical';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -47,6 +56,7 @@ class Incident extends Model
         'event_id',
         'incident_number',
         'status',
+        'priority_label',
         'started_at',
         'title',
         'location_name',
@@ -83,6 +93,19 @@ class Incident extends Model
         ];
     }
 
+    /**
+     * @return list<string>
+     */
+    public static function priorityLabels(): array
+    {
+        return [
+            self::PRIORITY_ROUTINE,
+            self::PRIORITY_IMPORTANT,
+            self::PRIORITY_SERIOUS,
+            self::PRIORITY_CRITICAL,
+        ];
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (): void {
@@ -111,6 +134,21 @@ class Incident extends Model
         return $this->hasMany(IncidentTimelineEntry::class)
             ->orderBy('created_at')
             ->orderBy('id');
+    }
+
+    public function incidentStaff(): HasMany
+    {
+        return $this->hasMany(IncidentStaff::class)
+            ->with('staff')
+            ->orderBy('created_at')
+            ->orderBy('id');
+    }
+
+    public function incidentTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(IncidentType::class, 'incident_incident_types')
+            ->withPivot(['id', 'created_at'])
+            ->orderBy('incident_incident_types.created_at');
     }
 
     public function fieldReportLinks(): HasMany
