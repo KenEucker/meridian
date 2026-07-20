@@ -184,6 +184,9 @@ Field Reports have one required title and one unstructured body text field and m
 
 Corrections must be append-only, audit-aware, or represented as follow-up notes where allowed. IC users may attach Field Reports to incidents when permitted. Attaching or unlinking a Field Report is audit-aware and should appear in the incident timeline.
 
+When a Field Report is attached to an incident, the copied incident timeline
+note should include the Field Report title, author, and body.
+
 Linked Incident and Field Report picker lists must show only same-event records
 that are not already actively linked to the current incident. Candidate records
 that share one or more `#tags` with the current incident should be listed first;
@@ -191,6 +194,16 @@ free-text location matches must not affect this prioritization. Within the
 shared-tag group and the remaining group, candidates should be ordered by most
 recently added first: incident `created_at` for linked Incident candidates and
 Field Report submission/acceptance time for Field Report candidates.
+Picker search must be able to find same-event Incident and Field Report records
+that are already linked to other incidents, provided the record is not already
+actively linked to the current incident.
+
+IMS Incident and IC Field Report list pages should expose explicit Home links
+and cross-links to each other. Incident list headings should be sortable, with
+state and priority filters that exclude Closed incidents by default while still
+allowing Closed incidents to be included. IC Field Report list headings should
+be sortable; until Field Reports gain their own state/priority fields, Field
+Report state and priority filters are based on related incidents.
 
 ## 9.1 Name References
 

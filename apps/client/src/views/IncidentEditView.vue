@@ -7,6 +7,7 @@ import AutosaveStatus, {
 } from "@/components/AutosaveStatus.vue";
 import {
   appendIncidentNoteForSession,
+  availableFieldReportOptionsForSession,
   availableLinkedIncidentOptionsForSession,
   blankIncidentAutosaveForm,
   canEditIncident,
@@ -18,9 +19,11 @@ import {
   INCIDENT_TYPE_OPTIONS,
   incidentToAutosaveForm,
   linkIncidentForSession,
+  linkFieldReportForSession,
   RESPONDER_OPTIONS,
   resolveIncidentSession,
   statusLabel,
+  unlinkFieldReportForSession,
   unlinkIncidentForSession,
   updateIncidentFromAutosaveForm,
   type IncidentAutosaveForm,
@@ -56,9 +59,12 @@ const incidentTypeAddOpen = ref(false);
 const responderAddOpen = ref(false);
 const linkedIncidentAddQuery = ref("");
 const linkedIncidentAddOpen = ref(false);
+const fieldReportAddQuery = ref("");
+const fieldReportAddOpen = ref(false);
 const incidentTypePicker = ref<HTMLElement | null>(null);
 const responderPicker = ref<HTMLElement | null>(null);
 const linkedIncidentPicker = ref<HTMLElement | null>(null);
+const fieldReportPicker = ref<HTMLElement | null>(null);
 
 const incident = computed(() => {
   revision.value;
@@ -87,6 +93,9 @@ const selectedResponders = computed(() =>
   ),
 );
 const selectedLinkedIncidents = computed(() => incident.value?.linkedIncidents ?? []);
+const selectedAttachedFieldReports = computed(
+  () => incident.value?.attachedFieldReports ?? [],
+);
 const availableResponderOptions = computed(() =>
   filteredAddOptions(
     RESPONDER_OPTIONS.filter(
@@ -102,6 +111,15 @@ const availableLinkedIncidentOptions = computed(() =>
         session.value,
         savedIncidentId.value,
         linkedIncidentAddQuery.value,
+      )
+    : [],
+);
+const availableFieldReportOptions = computed(() =>
+  savedIncidentId.value
+    ? availableFieldReportOptionsForSession(
+        session.value,
+        savedIncidentId.value,
+        fieldReportAddQuery.value,
       )
     : [],
 );
@@ -284,6 +302,7 @@ function openIncidentTypeAdd(): void {
   incidentTypeAddOpen.value = true;
   responderAddOpen.value = false;
   linkedIncidentAddOpen.value = false;
+  fieldReportAddOpen.value = false;
 }
 
 function addFirstIncidentTypeOption(): void {
@@ -316,6 +335,7 @@ function openResponderAdd(): void {
   responderAddOpen.value = true;
   incidentTypeAddOpen.value = false;
   linkedIncidentAddOpen.value = false;
+  fieldReportAddOpen.value = false;
 }
 
 function addFirstResponderOption(): void {
@@ -337,6 +357,7 @@ function openLinkedIncidentAdd(): void {
   linkedIncidentAddOpen.value = true;
   incidentTypeAddOpen.value = false;
   responderAddOpen.value = false;
+  fieldReportAddOpen.value = false;
 }
 
 function addFirstLinkedIncidentOption(): void {
@@ -367,10 +388,46 @@ function removeLinkedIncident(targetIncidentId: string): void {
   revision.value += 1;
 }
 
+function openFieldReportAdd(): void {
+  fieldReportAddOpen.value = true;
+  incidentTypeAddOpen.value = false;
+  responderAddOpen.value = false;
+  linkedIncidentAddOpen.value = false;
+}
+
+function addFirstFieldReportOption(): void {
+  const [fieldReport] = availableFieldReportOptions.value;
+
+  if (fieldReport) {
+    addFieldReport(fieldReport.id);
+  }
+}
+
+function addFieldReport(fieldReportId: string): void {
+  if (!savedIncidentId.value) {
+    return;
+  }
+
+  linkFieldReportForSession(session.value, savedIncidentId.value, fieldReportId);
+  fieldReportAddQuery.value = "";
+  fieldReportAddOpen.value = false;
+  revision.value += 1;
+}
+
+function removeFieldReport(fieldReportId: string): void {
+  if (!savedIncidentId.value) {
+    return;
+  }
+
+  unlinkFieldReportForSession(session.value, savedIncidentId.value, fieldReportId);
+  revision.value += 1;
+}
+
 function closeAddPopups(): void {
   incidentTypeAddOpen.value = false;
   responderAddOpen.value = false;
   linkedIncidentAddOpen.value = false;
+  fieldReportAddOpen.value = false;
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
@@ -384,7 +441,8 @@ function onDocumentPointerDown(event: PointerEvent): void {
   if (
     incidentTypePicker.value?.contains(target) ||
     responderPicker.value?.contains(target) ||
-    linkedIncidentPicker.value?.contains(target)
+    linkedIncidentPicker.value?.contains(target) ||
+    fieldReportPicker.value?.contains(target)
   ) {
     return;
   }
@@ -831,6 +889,75 @@ function onAppendNote(): void {
           </div>
         </section>
 
+        <section
+          v-if="incident"
+          ref="fieldReportPicker"
+          class="ims-edit__panel"
+          :class="{ 'ims-edit__panel--popup-open': fieldReportAddOpen }"
+          role="group"
+          aria-labelledby="ims-edit-field-reports-heading"
+        >
+          <div class="ims-edit__panel-heading">
+            <h2 id="ims-edit-field-reports-heading">Attached Field Reports</h2>
+          </div>
+          <div id="ims-edit-field-reports" class="ims-edit__selected-list">
+            <div
+              v-for="fieldReport in selectedAttachedFieldReports"
+              :key="fieldReport.id"
+              class="ims-edit__selected-row ims-edit__selected-row--field-report"
+            >
+              <span>{{ fieldReport.displayNumber }}</span>
+              <strong>{{ fieldReport.title }}</strong>
+              <button
+                type="button"
+                class="ims-edit__remove-button"
+                :disabled="isOfflineBlocked"
+                :aria-label="`Unlink Field Report ${fieldReport.displayNumber}`"
+                @click="removeFieldReport(fieldReport.id)"
+              >
+                X
+              </button>
+            </div>
+            <p
+              v-if="selectedAttachedFieldReports.length === 0"
+              class="ims-edit__empty-row"
+            >
+              No attached Field Reports.
+            </p>
+          </div>
+          <label class="ims-edit__add-row">
+            <span>Add</span>
+            <input
+              id="ims-edit-field-report-add"
+              v-model="fieldReportAddQuery"
+              type="search"
+              autocomplete="off"
+              :disabled="isOfflineBlocked"
+              @focus="openFieldReportAdd"
+              @click="openFieldReportAdd"
+              @input="openFieldReportAdd"
+              @keydown.enter.prevent="addFirstFieldReportOption"
+              @keydown.escape.prevent="closeAddPopups"
+            />
+          </label>
+          <div
+            v-if="fieldReportAddOpen && availableFieldReportOptions.length > 0"
+            class="ims-edit__add-results"
+            aria-label="Field Report matches"
+          >
+            <button
+              v-for="fieldReport in availableFieldReportOptions"
+              :key="fieldReport.id"
+              type="button"
+              :disabled="isOfflineBlocked"
+              @click="addFieldReport(fieldReport.id)"
+            >
+              {{ fieldReport.displayNumber }} -
+              {{ fieldReport.title }}
+            </button>
+          </div>
+        </section>
+
         <section class="ims-edit__panel" aria-labelledby="ims-edit-location-heading">
           <div class="ims-edit__panel-heading">
             <h2 id="ims-edit-location-heading">Location</h2>
@@ -886,8 +1013,19 @@ function onAppendNote(): void {
               </time>
               <strong v-if="entry.actorName">{{ entry.actorName }}</strong>
             </div>
-            <p v-if="timelineEntryBody(entry)">
+            <p
+              v-if="timelineEntryBody(entry)"
+              :class="{
+                'ims-edit__timeline-body--stricken': entry.strickenAt,
+              }"
+            >
               {{ timelineEntryBody(entry) }}
+            </p>
+            <p
+              v-if="entry.strickenAt"
+              class="ims-edit__timeline-stricken-reason"
+            >
+              Stricken: {{ entry.strickenReason ?? "Removed from incident." }}
             </p>
           </li>
         </ol>
@@ -1203,6 +1341,15 @@ function onAppendNote(): void {
   outline-offset: 2px;
 }
 
+.ims-edit__selected-row--field-report {
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+}
+
+.ims-edit__selected-row--field-report strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .ims-edit__empty-row {
   grid-template-columns: 1fr;
   color: var(--m-text-muted);
@@ -1365,6 +1512,17 @@ function onAppendNote(): void {
   overflow-wrap: anywhere;
 }
 
+.ims-edit__timeline-body--stricken {
+  color: var(--m-text-muted);
+  text-decoration: line-through;
+}
+
+.ims-edit__timeline-stricken-reason {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
 .ims-edit__note-form {
   display: grid;
   gap: var(--m-space-2);
@@ -1428,6 +1586,10 @@ function onAppendNote(): void {
 
   .ims-edit__selected-row--linked > a {
     grid-template-columns: 1fr;
+  }
+
+  .ims-edit__selected-row--field-report {
+    grid-template-columns: max-content minmax(0, 1fr) auto;
   }
 }
 </style>

@@ -9,6 +9,7 @@ use App\Models\FieldReport;
 use App\Models\FieldReportAppend;
 use App\Models\Incident;
 use App\Models\IncidentFieldReport;
+use App\Models\IncidentTimelineEntry;
 use App\Models\NameReferenceToken;
 use App\Models\Organization;
 use App\Models\PermissionRole;
@@ -81,6 +82,31 @@ class NameReferenceIncidentTest extends TestCase
             'source_id' => $entry->id,
             'incident_id' => $incident->id,
             'normalized_token' => 'rebuild_target',
+        ]);
+    }
+
+    public function test_field_report_copy_timeline_entries_are_not_name_reference_sources(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+
+        $entry = IncidentTimelineEntry::query()->create([
+            'incident_id' => $incident->id,
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_FIELD_REPORT_LINKED,
+            'body' => "Field Report: @TitleToken\nBody mentions @BodyToken.",
+            'created_at' => now(),
+        ]);
+
+        $tokens = app(NameReferenceIndexService::class)->synchronizeIncidentTimelineEntry($entry);
+        $this->assertSame([], $tokens);
+
+        NameReferenceToken::query()->delete();
+        $this->assertSame(0, app(NameReferenceIndexService::class)->rebuild());
+        $this->assertDatabaseMissing('name_reference_tokens', [
+            'source_type' => NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
+            'source_id' => $entry->id,
         ]);
     }
 

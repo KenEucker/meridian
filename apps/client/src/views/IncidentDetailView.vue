@@ -293,6 +293,23 @@ function onAppendNote(): void {
               <dd v-else>No linked incidents</dd>
             </div>
             <div>
+              <dt>Attached Field Reports</dt>
+              <dd
+                v-if="incident.attachedFieldReports.length > 0"
+                class="ims-detail__field-report-list"
+              >
+                <div
+                  v-for="fieldReport in incident.attachedFieldReports"
+                  :key="fieldReport.id"
+                  class="ims-detail__field-report-row"
+                >
+                  <span>{{ fieldReport.displayNumber }}</span>
+                  <strong>{{ fieldReport.title }}</strong>
+                </div>
+              </dd>
+              <dd v-else>No attached Field Reports</dd>
+            </div>
+            <div>
               <dt>Created by</dt>
               <dd>{{ incident.createdByName ?? "Creator unavailable" }}</dd>
             </div>
@@ -312,8 +329,19 @@ function onAppendNote(): void {
                 </time>
                 <strong v-if="entry.actorName">{{ entry.actorName }}</strong>
               </div>
-              <p v-if="timelineEntryBody(entry)">
+              <p
+                v-if="timelineEntryBody(entry)"
+                :class="{
+                  'ims-detail__timeline-body--stricken': entry.strickenAt,
+                }"
+              >
                 {{ timelineEntryBody(entry) }}
+              </p>
+              <p
+                v-if="entry.strickenAt"
+                class="ims-detail__timeline-stricken-reason"
+              >
+                Stricken: {{ entry.strickenReason ?? "Removed from incident." }}
               </p>
             </li>
           </ol>
@@ -484,14 +512,15 @@ function onAppendNote(): void {
   gap: var(--m-space-2);
 }
 
-.ims-detail__linked-list {
+.ims-detail__linked-list,
+.ims-detail__field-report-list {
   display: grid;
   gap: var(--m-space-2);
 }
 
-.ims-detail__linked-row {
+.ims-detail__linked-row,
+.ims-detail__field-report-row {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
   gap: var(--m-space-2);
   align-items: center;
   min-height: 2.25rem;
@@ -502,14 +531,25 @@ function onAppendNote(): void {
   text-decoration: none;
 }
 
+.ims-detail__linked-row {
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+}
+
+.ims-detail__field-report-row {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
 .ims-detail__linked-row span,
 .ims-detail__linked-row strong,
-.ims-detail__linked-row em {
+.ims-detail__linked-row em,
+.ims-detail__field-report-row span,
+.ims-detail__field-report-row strong {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.ims-detail__linked-row span {
+.ims-detail__linked-row span,
+.ims-detail__field-report-row span {
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
   font-weight: 900;
@@ -634,6 +674,17 @@ function onAppendNote(): void {
   overflow-wrap: anywhere;
 }
 
+.ims-detail__timeline-body--stricken {
+  color: var(--m-text-muted);
+  text-decoration: line-through;
+}
+
+.ims-detail__timeline-stricken-reason {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
 .ims-detail__note-form {
   display: grid;
   gap: var(--m-space-3);
@@ -710,7 +761,8 @@ function onAppendNote(): void {
     padding-left: var(--m-space-5);
   }
 
-  .ims-detail__linked-row {
+  .ims-detail__linked-row,
+  .ims-detail__field-report-row {
     grid-template-columns: 1fr;
   }
 }

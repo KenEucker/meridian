@@ -51,18 +51,33 @@ describe("department operations surfaces", () => {
     expect(names).toContain("events.departments.operations");
     expect(names).toContain("events.departments.planning");
     expect(names).toContain("ims.incidents.index");
+    expect(names).toContain("ims.field-reports.index");
 
     const { wrapper } = await mountAt("/");
     expect(wrapper.text()).toContain("Department overview");
     expect(wrapper.text()).toContain("Logistics desk");
     expect(wrapper.text()).toContain("Operations center");
     expect(wrapper.text()).toContain("Planning table");
+    expect(wrapper.text()).toContain("Incident Management");
+    expect(wrapper.text()).toContain("Supporting tools");
     expect(
       wrapper
         .findAll(".home__links a")
-        .find((item) => item.text() === "IMS incidents")
+        .find((item) => item.text() === "Incidents")
         ?.attributes("href"),
     ).toBe("/ims/incidents");
+    expect(
+      wrapper
+        .findAll(".home__links a")
+        .find((item) => item.text() === "Field Reports")
+        ?.attributes("href"),
+    ).toBe("/ims/field-reports");
+    expect(
+      wrapper
+        .findAll(".home__links a")
+        .find((item) => item.text() === "Health")
+        ?.attributes("href"),
+    ).toBe("/settings/about");
   });
 
   it("redirects legacy shift-board routes to the new surfaces", async () => {

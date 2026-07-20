@@ -1175,6 +1175,17 @@ Linked Incident and attached Field Report picker candidates must exclude records
 already actively linked to the current incident. Candidates sharing current
 incident `#tags` sort before non-matching candidates, but location text must not
 be used for that tag-priority rule. Each group sorts newest added first.
+Picker search must include same-event Incident and Field Report records that are
+already linked to other incidents, as long as they are not already actively
+linked to the current incident.
+
+Incident and IC Field Report list headings must be sortable. Incident lists must
+offer state and priority filters, default to active states so Closed incidents
+are excluded, and allow Closed incidents to be included. IC Field Report lists
+must link back to Incidents, Incident lists must link to IC Field Reports, and
+both list surfaces must include a Home link. Because Field Reports do not have
+their own Alpha 1 state or priority fields, IC Field Report list state/priority
+filters use related incident state/priority.
 
 ### 15.2 Autosave
 
