@@ -57,6 +57,7 @@ class PermissionCatalogTest extends TestCase
     {
         $this->assertSame([
             'incidents.view',
+            'incidents.create',
             'incidents.add_note',
             'incidents.close',
             'incidents.reopen',
@@ -68,6 +69,7 @@ class PermissionCatalogTest extends TestCase
         // ic_operator matches ic_lead except it cannot download field report photos.
         $this->assertSame([
             'incidents.view',
+            'incidents.create',
             'incidents.add_note',
             'incidents.close',
             'incidents.reopen',
@@ -94,6 +96,7 @@ class PermissionCatalogTest extends TestCase
             // ORG-015: membership in the Organizers Department does not grant
             // access to all incidents or all field reports.
             $this->assertNotContains('incidents.view', $permissions);
+            $this->assertNotContains('incidents.create', $permissions);
             $this->assertNotContains('field_reports.view_event', $permissions);
         }
     }
