@@ -4,10 +4,54 @@ import type {
   LogisticsSearchHit,
   LogisticsShiftCard,
   LogisticsStaffWorkspace,
+  ShiftOption,
 } from "@/department-ops/types";
+
+/** Early/late buffer around scheduled start/end for “current” desk listing. */
+export const CURRENT_SHIFT_WINDOW_MINUTES = 15;
+
+const CURRENT_SHIFT_WINDOW_MS = CURRENT_SHIFT_WINDOW_MINUTES * 60 * 1000;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/**
+ * True when asOf is inside [startsAt − 15 minutes, endsAt + 15 minutes].
+ * Covers shifts in progress, ones that ended up to 15 minutes ago, and ones
+ * that start up to 15 minutes from now.
+ */
+export function isShiftCurrentlyGoing(
+  shift: Pick<ShiftOption, "startsAt" | "endsAt">,
+  asOf: string,
+): boolean {
+  const now = Date.parse(asOf);
+  const startsAt = Date.parse(shift.startsAt);
+  const endsAt = Date.parse(shift.endsAt);
+
+  if (
+    Number.isNaN(now) ||
+    Number.isNaN(startsAt) ||
+    Number.isNaN(endsAt) ||
+    endsAt < startsAt
+  ) {
+    return false;
+  }
+
+  return (
+    now >= startsAt - CURRENT_SHIFT_WINDOW_MS &&
+    now <= endsAt + CURRENT_SHIFT_WINDOW_MS
+  );
+}
+
+export function currentLogisticsShifts(
+  desk: LogisticsDeskModel,
+  asOf: string = desk.context.asOf,
+): readonly ShiftOption[] {
+  return desk.searchableShifts
+    .filter((shift) => isShiftCurrentlyGoing(shift, asOf))
+    .slice()
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
 }
 
 export function searchLogisticsDesk(

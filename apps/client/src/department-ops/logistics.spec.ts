@@ -6,6 +6,8 @@ import {
   addLogisticsStaffToShift,
   checkInLogisticsStaff,
   checkOutLogisticsEquipment,
+  currentLogisticsShifts,
+  isShiftCurrentlyGoing,
   logisticsShiftSections,
   markLogisticsStaffOffSite,
   markLogisticsStaffOnSite,
@@ -17,6 +19,25 @@ import {
 } from "@/department-ops/logistics";
 
 describe("logistics desk model", () => {
+  it("lists shifts currently going within a 15-minute start/end window", () => {
+    // Fixture asOf is 2027-07-04T18:00Z; day shift runs 16:00–22:00.
+    expect(
+      currentLogisticsShifts(LOCAL_LOGISTICS_DESK).map((shift) => shift.title),
+    ).toEqual(["Ranger Dirt Day Shift"]);
+
+    const day = LOCAL_LOGISTICS_DESK.searchableShifts[0]!;
+    expect(isShiftCurrentlyGoing(day, "2027-07-04T15:46:00.000Z")).toBe(true);
+    expect(isShiftCurrentlyGoing(day, "2027-07-04T15:44:00.000Z")).toBe(false);
+    expect(isShiftCurrentlyGoing(day, "2027-07-04T22:14:00.000Z")).toBe(true);
+    expect(isShiftCurrentlyGoing(day, "2027-07-04T22:16:00.000Z")).toBe(false);
+
+    const swing = LOCAL_LOGISTICS_DESK.searchableShifts[1]!;
+    expect(isShiftCurrentlyGoing(swing, "2027-07-04T21:46:00.000Z")).toBe(true);
+    expect(isShiftCurrentlyGoing(swing, "2027-07-04T21:44:00.000Z")).toBe(
+      false,
+    );
+  });
+
   it("searches department-scoped staff, equipment, and shifts", () => {
     expect(LOCAL_LOGISTICS_DESK.searchCache.scopeLabel).toBe(
       "Idaho Decompression 2026 / Rangers",

@@ -13,10 +13,12 @@ import {
   presenceStateLabel,
 } from "@/department-ops/labels";
 import {
+  CURRENT_SHIFT_WINDOW_MINUTES,
   addLogisticsStaffToShift,
   checkInLogisticsStaff,
   checkOutLogisticsEquipment,
   checkOutLogisticsStaff,
+  currentLogisticsShifts,
   logisticsShiftSections,
   markLogisticsStaffOffSite,
   markLogisticsStaffOnSite,
@@ -30,6 +32,7 @@ import type {
   EquipmentReturnCondition,
   LogisticsSearchHit,
   LogisticsStaffWorkspace,
+  ShiftOption,
 } from "@/department-ops/types";
 
 const desk = ref(LOCAL_LOGISTICS_DESK);
@@ -47,6 +50,7 @@ const equipmentReturnConditions = ref<Record<string, EquipmentReturnCondition>>(
 );
 
 const workspace = computed(() => selectedLogisticsWorkspace(desk.value));
+const currentShifts = computed(() => currentLogisticsShifts(desk.value));
 const searchContext = computed(() => desk.value.selectedSearchContext);
 const searchContextStaff = computed(() => {
   const context = searchContext.value;
@@ -101,6 +105,15 @@ function onSelect(hit: LogisticsSearchHit): void {
   }
   query.value = "";
   hits.value = [];
+}
+
+function onSelectCurrentShift(shift: ShiftOption): void {
+  onSelect({
+    id: shift.shiftId,
+    kind: "shift",
+    label: shift.title,
+    detail: `${shift.teamLabel} · ${lifecycleLabel(shift.lifecycle)}`,
+  });
 }
 
 function openStaff(staffId: string): void {
@@ -244,6 +257,41 @@ function addToShift(shiftId: string): void {
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back to Home</RouterLink>
     </template>
+
+    <section
+      class="logistics__current-shifts"
+      aria-labelledby="current-shifts-heading"
+    >
+      <h2 id="current-shifts-heading">Current shifts</h2>
+      <p class="logistics__current-shifts-lede">
+        Shifts underway now, plus any that ended within the last
+        {{ CURRENT_SHIFT_WINDOW_MINUTES }} minutes or start within the next
+        {{ CURRENT_SHIFT_WINDOW_MINUTES }} minutes.
+      </p>
+      <p
+        v-if="currentShifts.length === 0"
+        class="logistics__note"
+        role="status"
+      >
+        No shifts are currently going for this department.
+      </p>
+      <ul v-else class="logistics__current-shift-list">
+        <li v-for="shift in currentShifts" :key="shift.shiftId">
+          <button
+            type="button"
+            class="logistics__current-shift"
+            @click="onSelectCurrentShift(shift)"
+          >
+            <span class="logistics__current-shift-title">{{ shift.title }}</span>
+            <span class="logistics__current-shift-meta">
+              {{ shift.teamLabel }} ·
+              {{ formatTimestamp(shift.startsAt, desk.context.timeZone) }} –
+              {{ formatTimestamp(shift.endsAt, desk.context.timeZone) }}
+            </span>
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <EntitySearch
       :hits="hits"
@@ -559,6 +607,55 @@ function addToShift(shiftId: string): void {
 .logistics__note {
   margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.logistics__current-shifts {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-5);
+}
+
+.logistics__current-shifts h2 {
+  margin: 0;
+  font-size: var(--m-text-base);
+}
+
+.logistics__current-shifts-lede,
+.logistics__current-shifts .logistics__note {
+  margin: 0;
+  color: var(--m-text-muted);
+}
+
+.logistics__current-shift-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--m-space-2);
+}
+
+.logistics__current-shift {
+  display: grid;
+  gap: var(--m-space-1);
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.logistics__current-shift-title {
+  font-weight: 600;
+}
+
+.logistics__current-shift-meta {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .logistics__workspace {
