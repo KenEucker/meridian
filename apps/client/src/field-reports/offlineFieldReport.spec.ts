@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTemporaryLocalNumber,
   createOfflineFieldReport,
+  createOfflineFieldReportAppend,
   fieldReportSubmissionView,
   FIELD_REPORT_PENDING_SYNC,
   isPendingSync,
@@ -141,6 +142,33 @@ describe("createOfflineFieldReport", () => {
   it("rejects empty body text", () => {
     expect(() => createWith({ body: "   " })).toThrow(
       "Field Report body text is required.",
+    );
+  });
+
+  it("starts with an empty append timeline", () => {
+    expect(createWith().appends).toEqual([]);
+  });
+});
+
+describe("createOfflineFieldReportAppend", () => {
+  it("creates a pending append without a title", () => {
+    const append = createOfflineFieldReportAppend("Later detail.", {
+      generateId: () => "aaaaaaaa-1111-2222-3333-444455556666",
+      now: () => new Date("2027-06-01T13:00:00.000Z"),
+    });
+
+    expect(append).toEqual({
+      id: "aaaaaaaa-1111-2222-3333-444455556666",
+      body: "Later detail.",
+      deviceSubmittedAt: "2027-06-01T13:00:00.000Z",
+      syncStatus: FIELD_REPORT_PENDING_SYNC,
+    });
+    expect(Object.isFrozen(append)).toBe(true);
+  });
+
+  it("rejects blank append body text", () => {
+    expect(() => createOfflineFieldReportAppend("   ")).toThrow(
+      "Field Report append body text is required.",
     );
   });
 });

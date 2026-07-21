@@ -15,6 +15,7 @@
 import {
   FIELD_REPORT_ACCEPTED,
   type OfflineFieldReport,
+  type OfflineFieldReportAppend,
 } from "@/field-reports/offlineFieldReport";
 
 export class AuthorFieldReportCatalogError extends Error {
@@ -133,11 +134,43 @@ export class AuthorFieldReportCatalog {
       fraNumber: acceptance.fraNumber,
       serverReceivedAt: acceptance.serverReceivedAt,
       syncStatus: FIELD_REPORT_ACCEPTED,
+      appends: existing.appends,
     });
 
     this.reports.set(id, accepted);
 
     return accepted;
+  }
+
+  /**
+   * Append a correction for the author without rewriting title/body (FR-007,
+   * FR-009). Non-authors and unknown reports fail closed.
+   */
+  recordAppend(
+    fieldReportId: string,
+    authorUserId: string,
+    append: OfflineFieldReportAppend,
+  ): OfflineFieldReport {
+    const existing = this.getForAuthor(fieldReportId, authorUserId);
+
+    if (!existing) {
+      throw new AuthorFieldReportCatalogError(
+        "Only the original Field Report author may append to the report.",
+      );
+    }
+
+    if (existing.appends.some((entry) => entry.id === append.id)) {
+      return existing;
+    }
+
+    const updated: OfflineFieldReport = Object.freeze({
+      ...existing,
+      appends: Object.freeze([...existing.appends, Object.freeze({ ...append })]),
+    });
+
+    this.reports.set(fieldReportId, updated);
+
+    return updated;
   }
 
   /** Number of author-visible reports currently held. */
@@ -158,7 +191,15 @@ export class AuthorFieldReportCatalog {
     this.reports.clear();
 
     for (const report of reports) {
-      this.reports.set(report.id, Object.freeze({ ...report }));
+      this.reports.set(
+        report.id,
+        Object.freeze({
+          ...report,
+          appends: Object.freeze(
+            (report.appends ?? []).map((append) => Object.freeze({ ...append })),
+          ),
+        }),
+      );
     }
   }
 

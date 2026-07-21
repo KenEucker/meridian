@@ -199,11 +199,18 @@ function slug(value: string): string {
     .replace(/^-+|-+$/gu, "");
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+}
+
 function downloadBlob(contents: Blob | Uint8Array, filename: string): void {
   const blob =
     contents instanceof Blob
       ? contents
-      : new Blob([contents], { type: "application/pdf" });
+      : new Blob([toArrayBuffer(contents)], { type: "application/pdf" });
   const objectUrl = URL.createObjectURL(blob);
 
   try {

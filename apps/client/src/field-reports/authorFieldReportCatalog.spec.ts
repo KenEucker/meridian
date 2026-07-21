@@ -6,6 +6,7 @@ import {
 } from "@/field-reports/authorFieldReportCatalog";
 import {
   createOfflineFieldReport,
+  createOfflineFieldReportAppend,
   FIELD_REPORT_ACCEPTED,
   FIELD_REPORT_PENDING_SYNC,
   type CreateOfflineFieldReportInput,
@@ -105,6 +106,37 @@ describe("AuthorFieldReportCatalog", () => {
         fraNumber: "FRA-2027-000001",
         serverReceivedAt: "2027-06-01T12:05:00.000Z",
       }),
+    ).toThrow(AuthorFieldReportCatalogError);
+  });
+
+  it("appends for the author without rewriting title or body (FR-007/FR-009)", () => {
+    const catalog = new AuthorFieldReportCatalog();
+    const pending = report();
+    catalog.recordSubmitted(pending);
+
+    const append = createOfflineFieldReportAppend("Additional detail.", {
+      generateId: () => "cccccccc-1111-2222-3333-444455556666",
+      now: () => new Date("2027-06-01T13:00:00.000Z"),
+    });
+    const updated = catalog.recordAppend(pending.id, "user-1", append);
+
+    expect(updated.body).toBe(pending.body);
+    expect(updated.title).toBe(pending.title);
+    expect(updated.appends).toHaveLength(1);
+    expect(updated.appends[0]?.body).toBe("Additional detail.");
+    expect(pending.appends).toEqual([]);
+  });
+
+  it("denies appends from non-authors", () => {
+    const catalog = new AuthorFieldReportCatalog();
+    const pending = report();
+    catalog.recordSubmitted(pending);
+    const append = createOfflineFieldReportAppend("Should not land.", {
+      generateId: () => "dddddddd-1111-2222-3333-444455556666",
+    });
+
+    expect(() =>
+      catalog.recordAppend(pending.id, "user-2", append),
     ).toThrow(AuthorFieldReportCatalogError);
   });
 });
