@@ -118,6 +118,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(names).toContain("ims.incidents.show");
     expect(names).toContain("ims.incidents.edit");
     expect(names).toContain("ims.field-reports.index");
+    expect(names).toContain("ims.field-reports.show");
     expect(names).toContain("ims.restricted");
   });
 
@@ -215,6 +216,30 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
         .findAll(".ims-fr-list__secondary-link")
         .some((link) => link.attributes("href") === "/ims/incidents"),
     ).toBe(true);
+    const medicalReportLink = wrapper
+      .findAll(".ims-fr-list__report-link")
+      .find(
+        (link) =>
+          link.attributes("href") ===
+          "/ims/field-reports/field-report-medical-gate",
+      );
+    expect(medicalReportLink).toBeDefined();
+
+    await medicalReportLink?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("ims.field-reports.show");
+    expect(wrapper.get("#ims-fr-detail-heading").text()).toBe(
+      "Medical observation near Gate A",
+    );
+    expect(wrapper.text()).toContain("Vera Ranger");
+    expect(wrapper.text()).toContain(
+      "Observed medical response near Gate A for @Blue-Hat.",
+    );
+    expect(wrapper.text()).toContain("INC-2027-000042");
+
+    await router.push("/ims/field-reports");
+    await flushPromises();
 
     await wrapper.get("#ims-fr-list-link").setValue("linked");
     await flushPromises();
@@ -263,12 +288,12 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     );
   });
 
-  it("installs an IC operator development session so create/edit can be exercised locally", async () => {
+  it("installs an IC lead development session so create/edit/print can be exercised locally", async () => {
     const { wrapper } = await mountAt("/ims/incidents");
 
     expect(wrapper.text()).toContain("Local Field Organization");
     expect(wrapper.text()).toContain("Local Field Event");
-    expect(wrapper.text()).toContain("Incident Command Operator");
+    expect(wrapper.text()).toContain("Incident Command Lead");
     expect(wrapper.text()).toContain("Create incident");
   });
 
@@ -281,6 +306,18 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Department Lead");
     expect(wrapper.text()).not.toContain("Medical assist near Gate A");
     expect(wrapper.text()).not.toContain("INC-2027-000042");
+  });
+
+  it("denies IC Field Report detail to non-IC roles", async () => {
+    installIncidentSession(NON_IC_SESSION);
+
+    const { wrapper } = await mountAt(
+      "/ims/field-reports/field-report-medical-gate",
+    );
+
+    expect(wrapper.text()).toContain("Incident Command access required");
+    expect(wrapper.text()).not.toContain("Medical observation near Gate A");
+    expect(wrapper.text()).not.toContain("FRA-2027-000123");
   });
 
   it("renders read-only incident detail for IC roles", async () => {
@@ -581,6 +618,17 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Attached Field Reports");
     expect(wrapper.text()).toContain("FRA-2027-000123");
     expect(wrapper.text()).toContain("Medical observation near Gate A");
+    expect(
+      wrapper.get(".ims-detail__field-report-row").attributes("href"),
+    ).toBe("/ims/field-reports/field-report-medical-gate");
+
+    await wrapper.get(".ims-detail__field-report-row").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("ims.field-reports.show");
+    expect(wrapper.get("#ims-fr-detail-heading").text()).toBe(
+      "Medical observation near Gate A",
+    );
 
     await router.push("/ims/incidents/incident-gate-medical/edit");
     await flushPromises();

@@ -19,6 +19,7 @@ import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
 import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
 import ImsFieldReportListView from "@/views/ImsFieldReportListView.vue";
+import ImsFieldReportDetailView from "@/views/ImsFieldReportDetailView.vue";
 import LogisticsDeskView from "@/views/LogisticsDeskView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
@@ -137,6 +138,12 @@ export const routes: RouteRecordRaw[] = [
     path: "/ims/field-reports",
     name: "ims.field-reports.index",
     component: ImsFieldReportListView,
+    beforeEnter: ensureIncidentSession,
+  },
+  {
+    path: "/ims/field-reports/:fieldReportId",
+    name: "ims.field-reports.show",
+    component: ImsFieldReportDetailView,
     beforeEnter: ensureIncidentSession,
   },
   {

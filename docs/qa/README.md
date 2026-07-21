@@ -36,8 +36,9 @@ chips and chip-driven permission-filtered search. M11.7 adds the online-only
 incident create/edit autosave surface for IC operators/leads. M11.7A adds
 priority, incident types, and involved Rangers/responders to create/edit. M11.7B
 adds linked incidents. M11.8 adds Field Report attach/unlink from incidents.
-M11.10 adds IC-lead-only incident PDF print. The full `QA-INC-01`
-incident-management script remains owned by M11.11.
+M11.10 adds IC-lead-only incident PDF print and wires the IC Field Report detail
+route so list and incident-detail FR rows open a read-only IC detail surface.
+The full `QA-INC-01` incident-management script remains owned by M11.11.
 
 1. Seed or create an event with a configured Incident Command department,
    an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
@@ -80,7 +81,10 @@ incident-management script remains owned by M11.11.
    sort, Incident state/priority filters work, Closed incidents are filtered out
    by default but can be included, and IC Field Report state/priority filters
    follow related incidents. Confirm the IC Field Reports link-status filter can
-   show linked and not-linked reports.
+   show linked and not-linked reports. Open an IC Field Report from the list
+   and from an attached Field Report on incident detail; confirm the read-only
+   IC detail shows FRA number, title, author, body, and related-incident links,
+   and that non-IC roles cannot open that detail.
 7. Simulate offline/no-network state on the create/edit screen and confirm
    incident mutation is blocked without queued-offline language while the typed
    form state remains on the screen.

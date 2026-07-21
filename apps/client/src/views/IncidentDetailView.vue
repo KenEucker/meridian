@@ -403,14 +403,19 @@ async function onPrintPdf(): Promise<void> {
                 v-if="incident.attachedFieldReports.length > 0"
                 class="ims-detail__field-report-list"
               >
-                <div
+                <RouterLink
                   v-for="fieldReport in incident.attachedFieldReports"
                   :key="fieldReport.id"
                   class="ims-detail__field-report-row"
+                  :to="{
+                    name: 'ims.field-reports.show',
+                    params: { fieldReportId: fieldReport.id },
+                  }"
+                  :aria-label="`Open Field Report ${fieldReport.displayNumber}`"
                 >
                   <span>{{ fieldReport.displayNumber }}</span>
                   <strong>{{ fieldReport.title }}</strong>
-                </div>
+                </RouterLink>
               </dd>
               <dd v-else>No attached Field Reports</dd>
             </div>
@@ -710,7 +715,8 @@ async function onPrintPdf(): Promise<void> {
   font-weight: 800;
 }
 
-.ims-detail__linked-row:focus-visible {
+.ims-detail__linked-row:focus-visible,
+.ims-detail__field-report-row:focus-visible {
   outline: 3px solid var(--m-focus-ring);
   outline-offset: 2px;
 }

@@ -371,10 +371,19 @@ function compareReports(
           <tbody>
             <tr v-for="report in reports" :key="report.id">
               <th scope="row">
-                <span class="ims-fr-list__number">{{
-                  report.displayNumber
-                }}</span>
-                <span class="ims-fr-list__title">{{ report.title }}</span>
+                <RouterLink
+                  class="ims-fr-list__report-link"
+                  :to="{
+                    name: 'ims.field-reports.show',
+                    params: { fieldReportId: report.id },
+                  }"
+                  :aria-label="`Open Field Report ${report.displayNumber}`"
+                >
+                  <span class="ims-fr-list__number">{{
+                    report.displayNumber
+                  }}</span>
+                  <span class="ims-fr-list__title">{{ report.title }}</span>
+                </RouterLink>
               </th>
               <td>{{ report.authorName }}</td>
               <td>{{ relatedStateText(report) }}</td>
@@ -534,6 +543,18 @@ function compareReports(
 .ims-fr-list__number,
 .ims-fr-list__title {
   display: block;
+}
+
+.ims-fr-list__report-link {
+  display: grid;
+  gap: var(--m-space-1);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ims-fr-list__report-link:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .ims-fr-list__number {
