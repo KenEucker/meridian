@@ -28,95 +28,19 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
 
-## Alpha 1 IMS list/detail and timeline smoke
+## Alpha 1 Incident management script
 
-M11.5 adds the first restricted IMS incident list/detail read surfaces. M11.6
-adds append-only operational timeline notes. M11.6A adds incident Name Reference
-chips and chip-driven permission-filtered search. M11.7 adds the online-only
-incident create/edit autosave surface for IC operators/leads. M11.7A adds
-priority, incident types, and involved Rangers/responders to create/edit. M11.7B
-adds linked incidents. M11.8 adds Field Report attach/unlink from incidents.
-M11.10 adds IC-lead-only incident PDF print and wires the IC Field Report detail
-route so list and incident-detail FR rows open a read-only IC detail surface.
-The full `QA-INC-01` incident-management script remains owned by M11.11.
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-INC-01-incident-management.md`](QA-INC-01-incident-management.md) | IC-only incident access, online create/edit with the full IMS current-field set, notes/strikes, Name Reference chips, linked incidents, Field Report attach/unlink, history, list/IC Field Report cross-links/filters, attachment-strike automated evidence, and IC-lead PDF print | M11.11 |
 
-1. Seed or create an event with a configured Incident Command department,
-   an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
-   department lead outside IC, a revoked IC grant, and at least two incidents.
-2. As `ic_viewer`, open `/ims/incidents` in the shared client and confirm the
-   list shows only that event's incidents with IMS number, title, state,
-   priority text, location, and last update.
-3. Open an incident detail and confirm the current state, event/IC department
-   context, location, creator, and initial timeline entry are visible without
-   Edit, Save, note, status-change, field-report-link, attachment, or PDF
-   actions.
-4. Repeat the detail check as `ic_operator` and `ic_lead`, add a plain-text
-   operational note containing at least one `@name` marker, and confirm the new
-   note appears in the timeline with the actor and timestamp. Strike that note,
-   provide a reason, confirm compact history hides it, and confirm full history
-   shows the original note text struck through with the reason.
-5. As `ic_operator` or `ic_lead`, open `/ims/incidents/create`. Confirm the
-   blank autosave form shows no IMS number until the first valid title autosaves,
-   then assigns an IMS number and moves to the edit route.
-6. Edit title, state, started timestamp, and free-text location fields on an
-   open incident and on a closed incident. After M11.7A, also edit priority,
-   incident types, and involved Rangers/responders. After M11.7B, link and
-   unlink another same-event incident. Confirm duplicate, self, and cross-event
-   links are rejected; already-linked incident candidates are hidden; candidates
-   with shared `#tags` appear before location-only matches; autosave status is
-   visible; failed validation is visible for a blank title; status does not
-   block editing; field/link edits appear in history/audit; compact history
-   hides routine and stricken entries; full history shows them; and incident
-   notes preserve original text when struck. After M11.8, repeat the
-   already-linked exclusion,
-   shared-tag-first, newest-added ordering check for Field Report attachment
-   candidates. For both linked Incident and Field Report add controls, confirm
-   search can find same-event records linked to other incidents when they are
-   not already linked to the current incident. Attach one Field Report, confirm
-   it appears in current state and as a copied timeline note headed
-   `Field Report: <title>` with the Field Report author listed, then unlink it
-   and confirm the copied note is struck while removal history remains visible.
-   Confirm the Incident list links to IC Field Reports, the IC Field Reports
-   list links back to Incidents, both list pages have Home links, table headings
-   sort, Incident state/priority filters work, Closed incidents are filtered out
-   by default but can be included, and IC Field Report state/priority filters
-   follow related incidents. Confirm the IC Field Reports link-status filter can
-   show linked and not-linked reports. Open an IC Field Report from the list
-   and from an attached Field Report on incident detail; confirm the read-only
-   IC detail shows FRA number, title, author, body, and related-incident links,
-   and that non-IC roles cannot open that detail.
-7. Simulate offline/no-network state on the create/edit screen and confirm
-   incident mutation is blocked without queued-offline language while the typed
-   form state remains on the screen.
-8. Repeat create/edit as `ic_viewer`, organizer-only, department lead outside IC,
-   wrong-event IC grant, revoked IC grant, unauthenticated user, and normal staff.
-   Confirm no create/edit form or mutation action is exposed.
-9. Confirm Name Reference chips appear near incident metadata, are visually
-   distinct from any `#tag` treatment, and clicking a chip returns to the
-   incident list with normal permission-filtered search results for the
-   reference text without opening a Name Reference profile/detail page.
-10. Confirm blank timeline notes and blank strike reasons are rejected, the
-   original timeline entry bodies remain unchanged, the incident last-updated
-   timestamp advances after a valid note and after striking a note, and
-   `incident.note_appended` / `incident.note_stricken` audit rows are created.
-11. Repeat as `ic_viewer` and confirm the timeline is visible but the add-note
-   form/command is unavailable.
-12. Repeat as organizer-only, department lead outside IC, wrong-event IC grant,
-   revoked IC grant, unauthenticated user, and normal staff. Confirm no incident
-   row, detail content, Name Reference chip/search result, or note mutation is
-   exposed and restricted access messaging appears.
-13. Request an incident detail, update, or append-note command under the wrong
-   event URL and confirm the server fails closed.
-14. Confirm permitted detail views create `incident.viewed` audit rows, while
-   denied reads do not create incident-view audit rows.
-15. As `ic_lead`, open an incident detail and select **Print PDF**. Confirm a
-   PDF downloads that includes the IMS number, title, state, priority, types,
-   responders, location, timeline notes, linked incidents, attached Field
-   Reports, and an export timestamp, and that an `incident.exported` audit row
-   is recorded with `format=pdf`. Repeat as `ic_operator` and `ic_viewer` and
-   confirm the Print PDF control is absent; confirm a direct PDF URL request is
-   forbidden without an export audit row. Confirm offline/no-network state
-   disables Print PDF with a server-connection explanation.
+M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
+Name Reference chips, online create/edit autosave, priority/types/responders,
+linked incidents, Field Report attach/unlink, attachment strike, and IC-lead
+PDF print surfaces covered by `QA-INC-01`. Richer incident search/filter UI
+remains with M11.19. The shared-client IMS screens still use a development
+local fixture for human UI steps; multi-role HTTP/audit boundaries are retained
+as automated evidence inside that script.
 
 ## Alpha 1 Department operations UX smoke
 
