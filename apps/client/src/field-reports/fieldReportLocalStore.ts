@@ -10,6 +10,7 @@ import {
   FIELD_REPORT_ACCEPTED,
   FIELD_REPORT_PENDING_SYNC,
   type OfflineFieldReport,
+  type OfflineFieldReportAppend,
 } from "@/field-reports/offlineFieldReport";
 
 export const FIELD_REPORT_LOCAL_STORE_KEY =
@@ -30,12 +31,59 @@ function isSyncStatus(value: unknown): value is OfflineFieldReport["syncStatus"]
   return value === FIELD_REPORT_PENDING_SYNC || value === FIELD_REPORT_ACCEPTED;
 }
 
+function isOfflineFieldReportAppend(
+  value: unknown,
+): value is OfflineFieldReportAppend {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const append = value as Record<string, unknown>;
+
+  return (
+    typeof append.id === "string" &&
+    typeof append.body === "string" &&
+    typeof append.deviceSubmittedAt === "string" &&
+    isSyncStatus(append.syncStatus)
+  );
+}
+
+function normalizeAppends(
+  value: unknown,
+): readonly OfflineFieldReportAppend[] | null {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  if (!value.every(isOfflineFieldReportAppend)) {
+    return null;
+  }
+
+  return value.map((append) =>
+    Object.freeze({
+      id: append.id,
+      body: append.body,
+      deviceSubmittedAt: append.deviceSubmittedAt,
+      syncStatus: append.syncStatus,
+    }),
+  );
+}
+
 function isOfflineFieldReport(value: unknown): value is OfflineFieldReport {
   if (typeof value !== "object" || value === null) {
     return false;
   }
 
   const report = value as Record<string, unknown>;
+  const appends = normalizeAppends(report.appends);
+
+  if (appends === null) {
+    return false;
+  }
 
   return (
     typeof report.id === "string" &&
@@ -58,6 +106,22 @@ function isOfflineFieldReport(value: unknown): value is OfflineFieldReport {
   );
 }
 
+function coerceOfflineFieldReport(value: unknown): OfflineFieldReport | null {
+  if (!isOfflineFieldReport(value)) {
+    return null;
+  }
+
+  const report = value as OfflineFieldReport & {
+    readonly appends?: readonly OfflineFieldReportAppend[];
+  };
+  const appends = normalizeAppends(report.appends) ?? [];
+
+  return Object.freeze({
+    ...report,
+    appends: Object.freeze([...appends]),
+  });
+}
+
 function readStorage(): Storage | null {
   try {
     return globalThis.localStorage ?? null;
@@ -75,7 +139,9 @@ export function createFieldReportLocalStore(
   return {
     load(): OfflineFieldReport[] {
       if (!storage) {
-        return memoryFallback.map((report) => Object.freeze({ ...report }));
+        return memoryFallback
+          .map(coerceOfflineFieldReport)
+          .filter((report): report is OfflineFieldReport => report !== null);
       }
 
       try {
@@ -90,8 +156,8 @@ export function createFieldReportLocalStore(
         }
 
         return parsed.reports
-          .filter(isOfflineFieldReport)
-          .map((report) => Object.freeze({ ...report }));
+          .map(coerceOfflineFieldReport)
+          .filter((report): report is OfflineFieldReport => report !== null);
       } catch {
         return [];
       }

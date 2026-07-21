@@ -10,8 +10,9 @@ original title and body unchanged.
 
 This script also records automated evidence for append-only corrections, Name
 Reference indexing, IC visibility, non-IC denial, and `ic_lead`-only photo
-download. Those boundaries do not yet have reviewer-facing IC or append UI, so
-the script does not invent those later Milestone 11 surfaces.
+download. Author detail now exposes local append UI; HTTP append-command
+transport remains deferred. Broader IC review surfaces are covered by IMS
+smoke where delivered.
 
 ## Requirements covered
 
@@ -218,31 +219,36 @@ later sync tasks.
 ### E. Immutability and explicit UI boundaries
 
 24. On report detail, confirm there is no Edit, Save, Delete, Strike, title
-    change, or body change action.
-25. Refresh and navigate away/back. Confirm the original title/body and FRA
-    number remain unchanged.
-26. Confirm the submitted body displays `@Blue-Hat`, `@Gate_A`, and
+    change, or body change action. Confirm an **Append update** form is present
+    for the author.
+25. Enter append text and submit Append. Confirm the original title/body stay
+    unchanged, the append appears under **Appended updates**, and Clear empties
+    the form without writing.
+26. Refresh and navigate away/back. Confirm the original title/body, FRA
+    number, and local appends remain unchanged.
+27. Confirm the submitted body displays `@Blue-Hat`, `@Gate_A`, and
     `@blue-hat` as source text. The author entry/detail path must not show
     autocomplete, existing-reference suggestions, notifications, profile
     links, context menus, a dedicated Name Reference page, or additional
     records revealed by those tokens.
-27. Confirm no append UI is claimed by this build. Author-only append,
-    non-author denial, immutable append records, timeline ordering, and Name
-    Reference indexing are verified by `FieldReportAppendTest` and
-    `NameReferenceFieldReportTest` until their owning UI/transport exists.
-28. Confirm no IC Field Report review UI is claimed by this build. IC event
-    visibility, non-IC denial, preview authorization, and `ic_lead`-only
-    downloads are verified by `FieldReportPolicyTest` and
-    `FieldReportPhotoDownloadTest` until Milestone 11 adds IMS review surfaces.
+28. Confirm author-only append domain rules (non-author denial, immutable
+    append records, timeline ordering, Name Reference indexing) remain covered
+    by `FieldReportAppendTest` and `NameReferenceFieldReportTest`. Local author
+    append UI does not yet claim HTTP `append-field-report` command transport.
+29. Confirm IC Field Report review for incident attachment is covered by the
+    IMS Field Reports list/detail smoke. Broader IC photo-download and
+    non-IC denial evidence remain in `FieldReportPolicyTest` and
+    `FieldReportPhotoDownloadTest`.
 
 ### F. Explicit non-goals
 
-29. Confirm this script did not require incident creation/linking, incident
+30. Confirm this script did not require incident creation/linking, incident
     Name Reference chips, node-to-node blob sync, PowerSync transport,
-    downloadable failed-sync export, or append photos.
-30. Confirm no photo delete/redact action exists, no image binaries are synced
+    downloadable failed-sync export, append photos, or HTTP append-command
+    sync for local appends.
+31. Confirm no photo delete/redact action exists, no image binaries are synced
     down as general device cache data, and no public storage path is exposed.
-31. Confirm Field Reports remain independent records with one immutable title,
+32. Confirm Field Reports remain independent records with one immutable title,
     one unstructured original body, optional photos, and no GPS, categories,
     configurable form structure, map selector, camp selector, coordinates, or
     dropped-pin workflow.
@@ -263,8 +269,9 @@ later sync tasks.
   non-IC leads do not gain visibility. Only `ic_lead` may download photos.
 - Name References remain source text and rebuildable derived index rows; they
   do not become identity/profile data or grant visibility.
-- Later IMS review, append UI/transport, incident linking, PowerSync transport,
-  and node-to-node blob sync are not represented as implemented UI.
+- Author detail exposes local append UI; HTTP append-command transport,
+  PowerSync transport, and node-to-node blob sync are not represented as
+  implemented sync paths.
 
 ## Evidence to capture
 

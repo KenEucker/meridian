@@ -126,10 +126,40 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     );
     expect(wrapper.text()).toContain("Retry sync");
     expect(wrapper.text()).toContain(
-      "This original title and body are finalized and cannot be edited.",
+      "This original title and body are finalized and cannot be edited. You can append an update below.",
     );
+    expect(wrapper.get("#fr-append-heading").text()).toBe("Append update");
+    expect(wrapper.get("#fr-append-body").element).toBeTruthy();
+    expect(wrapper.get(".fr-detail__append-submit").text()).toBe("Append");
     expect(wrapper.text()).not.toContain("Edit");
     expect(wrapper.text()).not.toContain("Save");
+  });
+
+  it("lets the author append without rewriting the original body", async () => {
+    const { wrapper, router } = await mountAt("/staff/field-reports/create");
+
+    await wrapper.get("#fr-title").setValue("Gate assist");
+    await wrapper.get("#fr-body").setValue("Original report body.");
+    await wrapper.get(".fr-create__form").trigger("submit");
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("staff.field-reports.show");
+
+    await wrapper.get("#fr-append-body").setValue("Later update from author.");
+    await wrapper.get(".fr-detail__append-form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.get(".fr-detail__body").text()).toBe("Original report body.");
+    expect(wrapper.get('[aria-label="Field Report appends"]').text()).toContain(
+      "Later update from author.",
+    );
+    expect(wrapper.get("#fr-append-body").element).toHaveProperty("value", "");
+
+    const reportId = String(router.currentRoute.value.params.fieldReportId);
+    const stored = authorFieldReportCatalog.get(reportId);
+    expect(stored?.body).toBe("Original report body.");
+    expect(stored?.appends).toHaveLength(1);
+    expect(stored?.appends[0]?.body).toBe("Later update from author.");
   });
 
   it("lists only the author's submitted reports on the index", async () => {
@@ -160,6 +190,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         originNodeId: "node-1",
         syncStatus: "pending_sync" as const,
         createdAt: "2027-06-01T12:00:00.000Z",
+        appends: [],
       }),
     );
 
@@ -194,6 +225,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         originNodeId: "node-1",
         syncStatus: "pending_sync" as const,
         createdAt: "2027-06-01T12:00:00.000Z",
+        appends: [],
       }),
     );
 

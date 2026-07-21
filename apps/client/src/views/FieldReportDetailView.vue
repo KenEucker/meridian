@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, ref, watchEffect } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import { appendFieldReport } from "@/field-reports/appendFieldReport";
+import { AuthorFieldReportCatalogError } from "@/field-reports/authorFieldReportCatalog";
 import {
   authorFieldReportCatalog,
   fieldReportCatalogRevision,
@@ -9,16 +11,20 @@ import {
   bumpFieldReportPhotoRevision,
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
-import { fieldReportSubmissionView } from "@/field-reports/offlineFieldReport";
+import {
+  fieldReportSubmissionView,
+  OfflineFieldReportError,
+} from "@/field-reports/offlineFieldReport";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 
 // View submitted Field Report — UI contract 12.3 `staff.field-reports.show`
 // (M9.4 / M9.7A / M9.8). Authors may view their own reports (FR-004). Original
 // title and body are view-only; no Edit/Save/autosave (FR-007; IMS surface §11;
-// UI contract 14.2). Incident attachment state is not shown to the submitter
-// (technical spec 17.6). Local photo previews and pending upload state come
-// from the durable encrypted photo queue until sync clears it.
+// UI contract 14.2). Authors may append corrections (FR-007–FR-009). Incident
+// attachment state is not shown to the submitter (technical spec 17.6). Local
+// photo previews and pending upload state come from the durable encrypted photo
+// queue until sync clears it.
 const route = useRoute();
 const session = computed(() => resolveFieldSession());
 
@@ -41,6 +47,54 @@ const report = computed(() => {
 const submission = computed(() =>
   report.value ? fieldReportSubmissionView(report.value) : null,
 );
+
+const appendBody = ref("");
+const appendError = ref<string | null>(null);
+const appending = ref(false);
+
+const canAppend = computed(
+  () =>
+    Boolean(session.value) &&
+    Boolean(report.value) &&
+    appendBody.value.trim().length > 0 &&
+    !appending.value,
+);
+
+function onClearAppend(): void {
+  appendBody.value = "";
+  appendError.value = null;
+}
+
+function onAppend(): void {
+  const current = session.value;
+  const existing = report.value;
+  if (!current || !existing) {
+    return;
+  }
+
+  appendError.value = null;
+  appending.value = true;
+
+  try {
+    appendFieldReport({
+      fieldReportId: existing.id,
+      authorUserId: current.submittedByUserId,
+      body: appendBody.value,
+    });
+    appendBody.value = "";
+  } catch (error) {
+    if (
+      error instanceof OfflineFieldReportError ||
+      error instanceof AuthorFieldReportCatalogError
+    ) {
+      appendError.value = error.message;
+    } else {
+      appendError.value = "Unable to append to this Field Report.";
+    }
+  } finally {
+    appending.value = false;
+  }
+}
 
 interface LocalPhotoPreview {
   readonly id: string;
@@ -195,6 +249,26 @@ async function onRetrySync(): Promise<void> {
       <pre class="fr-detail__body" tabindex="0">{{ report.body }}</pre>
 
       <div
+        v-if="report.appends.length > 0"
+        class="fr-detail__appends"
+        aria-label="Field Report appends"
+      >
+        <h2 class="fr-detail__body-heading">Appended updates</h2>
+        <ol class="fr-detail__append-list">
+          <li
+            v-for="append in report.appends"
+            :key="append.id"
+            class="fr-detail__append-item"
+          >
+            <p class="fr-detail__append-meta">
+              {{ append.deviceSubmittedAt }}
+            </p>
+            <pre class="fr-detail__body" tabindex="0">{{ append.body }}</pre>
+          </li>
+        </ol>
+      </div>
+
+      <div
         v-if="localPhotoPreviews.length > 0"
         class="fr-detail__photos"
         aria-label="Local Field Report photos"
@@ -228,8 +302,59 @@ async function onRetrySync(): Promise<void> {
       </div>
 
       <p class="fr-detail__immutable">
-        This original title and body are finalized and cannot be edited.
+        This original title and body are finalized and cannot be edited. You can
+        append an update below.
       </p>
+
+      <form
+        class="fr-detail__append-form"
+        aria-labelledby="fr-append-heading"
+        @submit.prevent="onAppend"
+      >
+        <h2 id="fr-append-heading" class="fr-detail__body-heading">
+          Append update
+        </h2>
+        <p class="fr-detail__append-help" id="fr-append-help">
+          Appends add a new timestamped entry. They do not change the original
+          title or report text.
+        </p>
+        <label class="fr-detail__append-label" for="fr-append-body"
+          >Append text</label
+        >
+        <textarea
+          id="fr-append-body"
+          v-model="appendBody"
+          class="fr-detail__append-input"
+          rows="5"
+          required
+          aria-describedby="fr-append-help"
+          :disabled="appending"
+        />
+        <p
+          v-if="appendError"
+          class="fr-detail__append-error"
+          role="alert"
+        >
+          {{ appendError }}
+        </p>
+        <div class="fr-detail__append-actions">
+          <button
+            type="submit"
+            class="fr-detail__append-submit"
+            :disabled="!canAppend"
+          >
+            {{ appending ? "Appending…" : "Append" }}
+          </button>
+          <button
+            type="button"
+            class="fr-detail__append-clear"
+            :disabled="appending || appendBody.length === 0"
+            @click="onClearAppend"
+          >
+            Clear
+          </button>
+        </div>
+      </form>
 
       <h2 class="fr-detail__debug-heading">Field Report details</h2>
       <dl class="fr-detail__meta">
@@ -354,9 +479,16 @@ async function onRetrySync(): Promise<void> {
 .fr-detail__immutable,
 .fr-detail__photo-status,
 .fr-detail__photo-error,
-.fr-detail__sync-message {
+.fr-detail__sync-message,
+.fr-detail__append-help,
+.fr-detail__append-meta {
   margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.fr-detail__append-error {
+  margin: 0 0 var(--m-space-3);
+  color: var(--m-text-danger, #b42318);
 }
 
 .fr-detail__photo-error {
@@ -411,6 +543,84 @@ async function onRetrySync(): Promise<void> {
   font: inherit;
 }
 
+.fr-detail__appends {
+  margin: 0 0 var(--m-space-4);
+}
+
+.fr-detail__append-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--m-space-4);
+}
+
+.fr-detail__append-item {
+  margin: 0;
+}
+
+.fr-detail__append-meta {
+  margin: 0 0 var(--m-space-2);
+  font-size: var(--m-text-sm);
+}
+
+.fr-detail__append-form {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-6);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.fr-detail__append-label {
+  font-weight: 600;
+}
+
+.fr-detail__append-input {
+  width: 100%;
+  min-height: 7rem;
+  padding: var(--m-space-2);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.fr-detail__append-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.fr-detail__append-submit,
+.fr-detail__append-clear,
+.fr-detail__retry {
+  min-height: 2.75rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fr-detail__append-submit {
+  background: var(--m-surface-base);
+  font-weight: 600;
+}
+
+.fr-detail__append-submit:disabled,
+.fr-detail__append-clear:disabled,
+.fr-detail__retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .fr-detail__sync-panel {
   display: grid;
   gap: var(--m-space-2);
@@ -457,20 +667,7 @@ async function onRetrySync(): Promise<void> {
 }
 
 .fr-detail__retry {
-  min-height: 2.75rem;
   width: 100%;
-  padding: var(--m-space-2) var(--m-space-3);
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
-  color: var(--m-text-primary);
-  font: inherit;
-  cursor: pointer;
-}
-
-.fr-detail__retry:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 @media (min-width: 44rem) {

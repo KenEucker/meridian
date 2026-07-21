@@ -37,6 +37,19 @@ export type FieldReportSyncStatus =
   | typeof FIELD_REPORT_ACCEPTED;
 
 /**
+ * Local append-only correction on a submitted Field Report (FR-007–FR-009;
+ * data/API 10.15 `field_report_appends`). Appends have no title and never
+ * rewrite the original body. Server command transport remains a later task;
+ * local author detail persists appends on-device with the author catalog.
+ */
+export interface OfflineFieldReportAppend {
+  readonly id: string;
+  readonly body: string;
+  readonly deviceSubmittedAt: string;
+  readonly syncStatus: FieldReportSyncStatus;
+}
+
+/**
  * Local Field Report record, mirroring the `field_reports` columns from
  * data/API section 10.15 that exist at device-create time. `fraNumber` and
  * `serverReceivedAt` stay `null` until the server accepts the report (M9.3).
@@ -58,6 +71,7 @@ export interface OfflineFieldReport {
   readonly originNodeId: string;
   readonly syncStatus: FieldReportSyncStatus;
   readonly createdAt: string;
+  readonly appends: readonly OfflineFieldReportAppend[];
 }
 
 /**
@@ -209,6 +223,33 @@ export function createOfflineFieldReport(
     originNodeId: input.originNodeId,
     syncStatus: FIELD_REPORT_PENDING_SYNC,
     createdAt: submittedAt,
+    appends: Object.freeze([] as OfflineFieldReportAppend[]),
+  });
+}
+
+/**
+ * Build an immutable local append entry. Body is required after trim; title is
+ * never accepted (FR-007 / data/API 10.15).
+ */
+export function createOfflineFieldReportAppend(
+  body: string,
+  dependencies: OfflineFieldReportDependencies = {},
+): OfflineFieldReportAppend {
+  if (typeof body !== "string" || body.trim().length === 0) {
+    throw new OfflineFieldReportError(
+      "Field Report append body text is required.",
+    );
+  }
+
+  const generateId = dependencies.generateId ?? defaultGenerateId;
+  const now = dependencies.now ?? (() => new Date());
+  const id = requireNonEmpty(generateId(), "id");
+
+  return Object.freeze({
+    id,
+    body: body.trim(),
+    deviceSubmittedAt: now().toISOString(),
+    syncStatus: FIELD_REPORT_PENDING_SYNC,
   });
 }
 

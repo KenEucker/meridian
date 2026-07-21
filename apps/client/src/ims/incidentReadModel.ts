@@ -171,8 +171,8 @@ const LOCAL_SESSION: IncidentSessionContext = Object.freeze({
   eventLabel: "Local Field Event",
   organizationLabel: "Local Field Organization",
   icDepartmentLabel: "Rangers",
-  role: "ic_operator",
-  roleLabel: "Incident Command Operator",
+  role: "ic_lead",
+  roleLabel: "Incident Command Lead",
 });
 
 const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
@@ -421,6 +421,12 @@ export function canEditIncident(
   return canAppendIncidentNote(context);
 }
 
+export function canPrintIncidentPdf(
+  context: IncidentSessionContext | null,
+): boolean {
+  return context?.role === "ic_lead";
+}
+
 export function listIncidentsForSession(
   context: IncidentSessionContext | null,
   search = "",
@@ -484,6 +490,17 @@ export function findIncidentForSession(
   return (
     listIncidentsForSession(context).find(
       (incident) => incident.id === incidentId,
+    ) ?? null
+  );
+}
+
+export function findFieldReportForSession(
+  context: IncidentSessionContext | null,
+  fieldReportId: string,
+): ImsFieldReportListItem | null {
+  return (
+    listFieldReportsForSession(context).find(
+      (report) => report.id === fieldReportId,
     ) ?? null
   );
 }
