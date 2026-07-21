@@ -57,6 +57,8 @@ final class PermissionCatalog
 
     public const PERMISSION_INCIDENTS_LINK_FIELD_REPORT = 'incidents.link_field_report';
 
+    public const PERMISSION_INCIDENTS_PRINT = 'incidents.print';
+
     public const PERMISSION_FIELD_REPORTS_VIEW_EVENT = 'field_reports.view_event';
 
     public const PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO = 'field_reports.download_photo';
@@ -119,6 +121,7 @@ final class PermissionCatalog
             self::PERMISSION_INCIDENTS_CLOSE => 'Close incidents.',
             self::PERMISSION_INCIDENTS_REOPEN => 'Reopen incidents.',
             self::PERMISSION_INCIDENTS_LINK_FIELD_REPORT => 'Link and unlink field reports from incidents.',
+            self::PERMISSION_INCIDENTS_PRINT => 'Print incidents to PDF.',
             self::PERMISSION_FIELD_REPORTS_VIEW_EVENT => 'View all field reports for the event.',
             self::PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO => 'Download field report photos.',
             self::PERMISSION_POLICIES_VIEW_PUBLISHED => 'View all published policy and procedure documents in the organization.',
@@ -134,10 +137,12 @@ final class PermissionCatalog
     /**
      * Mapping of role code to the permission codes it grants.
      *
-     * IC mappings follow technical spec section 16.2. Organizer mappings follow
-     * ORG-016 while honouring ORG-015 by deliberately excluding incident and
-     * field report capabilities. Roles without an entry intentionally have no
-     * catalog permissions yet and are populated by their owning milestones.
+     * IC mappings follow technical spec section 16.2, with `incidents.print`
+     * granted only to `ic_lead` per INC-015 / requirements section 4.10.
+     * Organizer mappings follow ORG-016 while honouring ORG-015 by deliberately
+     * excluding incident and field report capabilities. Roles without an entry
+     * intentionally have no catalog permissions yet and are populated by their
+     * owning milestones.
      *
      * @return array<string, list<string>>
      */
@@ -152,6 +157,7 @@ final class PermissionCatalog
                 self::PERMISSION_INCIDENTS_CLOSE,
                 self::PERMISSION_INCIDENTS_REOPEN,
                 self::PERMISSION_INCIDENTS_LINK_FIELD_REPORT,
+                self::PERMISSION_INCIDENTS_PRINT,
                 self::PERMISSION_FIELD_REPORTS_VIEW_EVENT,
                 self::PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO,
             ],

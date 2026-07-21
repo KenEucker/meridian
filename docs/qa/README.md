@@ -36,7 +36,8 @@ chips and chip-driven permission-filtered search. M11.7 adds the online-only
 incident create/edit autosave surface for IC operators/leads. M11.7A adds
 priority, incident types, and involved Rangers/responders to create/edit. M11.7B
 adds linked incidents. M11.8 adds Field Report attach/unlink from incidents.
-The full `QA-INC-01` incident-management script remains owned by M11.11.
+M11.10 adds IC-lead-only incident PDF print. The full `QA-INC-01`
+incident-management script remains owned by M11.11.
 
 1. Seed or create an event with a configured Incident Command department,
    an `ic_viewer`, `ic_operator`, `ic_lead`, an organizer without IC role, a
@@ -104,6 +105,14 @@ The full `QA-INC-01` incident-management script remains owned by M11.11.
    event URL and confirm the server fails closed.
 14. Confirm permitted detail views create `incident.viewed` audit rows, while
    denied reads do not create incident-view audit rows.
+15. As `ic_lead`, open an incident detail and select **Print PDF**. Confirm a
+   PDF downloads that includes the IMS number, title, state, priority, types,
+   responders, location, timeline notes, linked incidents, attached Field
+   Reports, and an export timestamp, and that an `incident.exported` audit row
+   is recorded with `format=pdf`. Repeat as `ic_operator` and `ic_viewer` and
+   confirm the Print PDF control is absent; confirm a direct PDF URL request is
+   forbidden without an export audit row. Confirm offline/no-network state
+   disables Print PDF with a server-connection explanation.
 
 ## Alpha 1 Department operations UX smoke
 

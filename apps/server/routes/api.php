@@ -7,6 +7,7 @@ use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Incidents\IncidentCommandController;
+use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use Illuminate\Support\Facades\Route;
 
@@ -69,6 +70,9 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/events/{event}/incidents/{incident}', [IncidentReadController::class, 'show'])
         ->name('api.events.incidents.show');
+
+    Route::get('/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'download'])
+        ->name('api.events.incidents.pdf');
 
     Route::post('/field-report-photos/{attachment}/preview-url', [FieldReportPhotoController::class, 'issuePreviewUrl'])
         ->name('api.field-report-photos.preview-url');

@@ -312,6 +312,7 @@ GET /api/events/{event}/departments/{department}/operations
 GET /api/events/{event}/departments/{department}/planning
 GET /api/events/{event}/field-reports
 GET /api/events/{event}/incidents
+GET /api/events/{event}/incidents/{incident}/pdf
 GET /api/policy-documents
 GET /api/procedure-documents
 GET /api/document-fragments
@@ -333,6 +334,11 @@ Department operations read models are purpose-built and separate:
   include staff identities, signup lists, or team-member lists.
 
 Incident APIs must return data only to IC-authorized users.
+
+Incident PDF print (`GET /api/events/{event}/incidents/{incident}/pdf`) is
+server-generated, online-only, and restricted to IC leads (`incidents.print`).
+Successful exports are audited. Incidents remain excluded from general
+spreadsheet exports for MVP.
 
 APIs may include derived Name Reference tokens or chips on permitted Field Report and Incident resources. There is no dedicated Name Reference detail API for Alpha 1.
 
@@ -2050,6 +2056,8 @@ Rules:
 - incident body/history is append-only
 - closing requires a note/reason
 - reopening is allowed
+- IC department leads may print a single incident to a server-generated PDF; IC operators and viewers cannot
+- incidents are not part of general spreadsheet exports for MVP
 - `camp_id` and `map_location_id` are optional and must not be required to create an incident
 - a camp/map-location reference does not replace the free-text `location_*` fields and does not introduce arbitrary dropped pins
 - when an incident references a camp, the IMS view may show camp location details to permitted IC roles

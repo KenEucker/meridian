@@ -40,6 +40,12 @@ const IC_OPERATOR_SESSION: IncidentSessionContext = {
   roleLabel: "Incident Command Operator",
 };
 
+const IC_LEAD_SESSION: IncidentSessionContext = {
+  ...IC_SESSION,
+  role: "ic_lead",
+  roleLabel: "Incident Command Lead",
+};
+
 function buildRouter() {
   return createRouter({
     history: createWebHistory(),
@@ -305,9 +311,35 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Add note");
     expect(wrapper.text()).not.toContain("Save");
     expect(wrapper.text()).not.toContain("Edit");
+    expect(wrapper.text()).not.toContain("Print PDF");
     expect(
       wrapper.get(".ims-detail__chip--name-reference").attributes("href"),
     ).toBe("/ims/incidents?search=Blue-Hat");
+  });
+
+  it("shows Print PDF only for IC leads and blocks it while offline", async () => {
+    installIncidentSession(IC_LEAD_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+
+    expect(wrapper.text()).toContain("Print PDF");
+    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeUndefined();
+
+    setNavigatorOnline(false);
+    window.dispatchEvent(new Event("offline"));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Incident PDF print requires a server connection.",
+    );
+    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeDefined();
+
+    clearIncidentSession();
+    installIncidentSession(IC_OPERATOR_SESSION);
+    const operatorMount = await mountAt("/ims/incidents/incident-gate-medical");
+
+    expect(operatorMount.wrapper.text()).toContain("Edit incident");
+    expect(operatorMount.wrapper.text()).not.toContain("Print PDF");
   });
 
   it("lets IC operators create an incident from a blank autosave form", async () => {

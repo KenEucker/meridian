@@ -421,6 +421,12 @@ export function canEditIncident(
   return canAppendIncidentNote(context);
 }
 
+export function canPrintIncidentPdf(
+  context: IncidentSessionContext | null,
+): boolean {
+  return context?.role === "ic_lead";
+}
+
 export function listIncidentsForSession(
   context: IncidentSessionContext | null,
   search = "",

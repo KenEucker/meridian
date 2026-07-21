@@ -2,10 +2,13 @@
 import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import { MeridianApiError } from "@/api/meridianApi";
+import { downloadIncidentPdf } from "@/ims/downloadIncidentPdf";
 import {
   appendIncidentNoteForSession,
   canAppendIncidentNote,
   canEditIncident,
+  canPrintIncidentPdf,
   findIncidentForSession,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
@@ -18,16 +21,24 @@ import {
   type NameReferenceChip,
   visibleIncidentTimelineEntries,
 } from "@/ims/incidentReadModel";
+import { useConnectivity } from "@/offline/useConnectivity";
 
 const route = useRoute();
+const connectivity = useConnectivity();
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
 const canAppendNote = computed(() => canAppendIncidentNote(session.value));
 const canEdit = computed(() => canEditIncident(session.value));
+const canPrintPdf = computed(() => canPrintIncidentPdf(session.value));
+const isPrintOfflineBlocked = computed(
+  () => connectivity.value !== "online",
+);
 const timelineRevision = ref(0);
 const showFullHistory = ref(false);
 const noteBody = ref("");
 const noteError = ref<string | null>(null);
+const printError = ref<string | null>(null);
+const printBusy = ref(false);
 const incident = computed(() => {
   // Recompute after local append-note writes in the development IMS surface.
   // Real server reads will replace this session fixture in the auth/API slice.
@@ -180,6 +191,36 @@ function onAppendNote(): void {
       error instanceof Error ? error.message : "Unable to add incident note.";
   }
 }
+
+async function onPrintPdf(): Promise<void> {
+  printError.value = null;
+
+  if (!incident.value || !session.value) {
+    printError.value = "Incident not found for this event.";
+    return;
+  }
+
+  if (isPrintOfflineBlocked.value) {
+    printError.value =
+      "Incident PDF print requires a server connection. Reconnect and try again.";
+    return;
+  }
+
+  printBusy.value = true;
+
+  try {
+    await downloadIncidentPdf(session.value.eventId, incident.value.id);
+  } catch (error) {
+    printError.value =
+      error instanceof MeridianApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "Unable to print incident PDF.";
+  } finally {
+    printBusy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -211,6 +252,27 @@ function onAppendNote(): void {
         >
           Edit incident
         </RouterLink>
+        <div v-if="canPrintPdf" class="ims-detail__print">
+          <button
+            type="button"
+            class="ims-detail__print-button"
+            :disabled="printBusy || isPrintOfflineBlocked"
+            :aria-busy="printBusy"
+            @click="onPrintPdf"
+          >
+            {{ printBusy ? "Preparing PDF…" : "Print PDF" }}
+          </button>
+          <p
+            v-if="isPrintOfflineBlocked"
+            class="ims-detail__print-hint"
+            role="status"
+          >
+            Incident PDF print requires a server connection.
+          </p>
+          <p v-if="printError" class="ims-detail__print-error" role="alert">
+            {{ printError }}
+          </p>
+        </div>
         <dl class="ims-detail__status-row">
           <div>
             <dt>State</dt>
@@ -450,17 +512,47 @@ function onAppendNote(): void {
 
 .ims-detail__back,
 .ims-detail__restricted a,
-.ims-detail__edit {
+.ims-detail__edit,
+.ims-detail__print-button {
   color: var(--m-action-secondary-bg);
   font-weight: 700;
 }
 
-.ims-detail__edit {
+.ims-detail__edit,
+.ims-detail__print-button {
   justify-self: start;
   border: 1px solid var(--m-action-secondary-bg);
   border-radius: var(--m-radius-sm);
   padding: var(--m-space-2) var(--m-space-4);
   text-decoration: none;
+}
+
+.ims-detail__print {
+  display: grid;
+  gap: var(--m-space-2);
+  justify-items: start;
+}
+
+.ims-detail__print-button {
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ims-detail__print-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ims-detail__print-hint,
+.ims-detail__print-error {
+  margin: 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.ims-detail__print-error {
+  color: var(--m-status-danger-fg, var(--m-text-muted));
 }
 
 .ims-detail__restricted,

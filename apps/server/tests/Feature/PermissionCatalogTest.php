@@ -64,11 +64,13 @@ class PermissionCatalogTest extends TestCase
             'incidents.close',
             'incidents.reopen',
             'incidents.link_field_report',
+            'incidents.print',
             'field_reports.view_event',
             'field_reports.download_photo',
         ], $this->permissionCodesFor('ic_lead'));
 
-        // ic_operator matches ic_lead except it cannot download field report photos.
+        // ic_operator matches ic_lead except it cannot download field report
+        // photos or print incident PDFs.
         $this->assertSame([
             'incidents.view',
             'incidents.create',
@@ -80,12 +82,14 @@ class PermissionCatalogTest extends TestCase
             'field_reports.view_event',
         ], $this->permissionCodesFor('ic_operator'));
         $this->assertNotContains('field_reports.download_photo', $this->permissionCodesFor('ic_operator'));
+        $this->assertNotContains('incidents.print', $this->permissionCodesFor('ic_operator'));
 
         // ic_viewer can only view incidents and field reports.
         $this->assertSame([
             'incidents.view',
             'field_reports.view_event',
         ], $this->permissionCodesFor('ic_viewer'));
+        $this->assertNotContains('incidents.print', $this->permissionCodesFor('ic_viewer'));
     }
 
     public function test_organizer_can_view_published_policies_but_not_incidents_or_field_reports(): void

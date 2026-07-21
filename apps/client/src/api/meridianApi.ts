@@ -49,7 +49,10 @@ export async function meridianFetch(
 ): Promise<Response> {
   const config = meridianApiConfig();
   const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
+
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
 
   if (!headers.has("Content-Type") && init.body !== undefined) {
     headers.set("Content-Type", "application/json");
