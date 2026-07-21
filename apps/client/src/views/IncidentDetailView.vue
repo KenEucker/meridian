@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import { MeridianApiError } from "@/api/meridianApi";
-import { downloadIncidentPdf } from "@/ims/downloadIncidentPdf";
+import { downloadIncidentPdfForSession } from "@/ims/downloadIncidentPdf";
 import {
   appendIncidentNoteForSession,
   canAppendIncidentNote,
@@ -12,6 +12,7 @@ import {
   findIncidentForSession,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
+  LOCAL_IMS_EVENT_ID,
   resolveIncidentSession,
   statusLabel,
   strikeIncidentNoteForSession,
@@ -30,8 +31,11 @@ const canView = computed(() => hasIncidentCommandAccess(session.value));
 const canAppendNote = computed(() => canAppendIncidentNote(session.value));
 const canEdit = computed(() => canEditIncident(session.value));
 const canPrintPdf = computed(() => canPrintIncidentPdf(session.value));
+const isLocalImsFixture = computed(
+  () => session.value?.eventId === LOCAL_IMS_EVENT_ID,
+);
 const isPrintOfflineBlocked = computed(
-  () => connectivity.value !== "online",
+  () => !isLocalImsFixture.value && connectivity.value !== "online",
 );
 const timelineRevision = ref(0);
 const showFullHistory = ref(false);
@@ -209,7 +213,7 @@ async function onPrintPdf(): Promise<void> {
   printBusy.value = true;
 
   try {
-    await downloadIncidentPdf(session.value.eventId, incident.value.id);
+    await downloadIncidentPdfForSession(session.value, incident.value);
   } catch (error) {
     printError.value =
       error instanceof MeridianApiError

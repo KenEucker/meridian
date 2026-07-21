@@ -354,7 +354,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     ).toBe("/ims/incidents?search=Blue-Hat");
   });
 
-  it("shows Print PDF only for IC leads and blocks it while offline", async () => {
+  it("shows Print PDF only for IC leads and keeps local fixture print available offline", async () => {
     installIncidentSession(IC_LEAD_SESSION);
 
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
@@ -366,10 +366,10 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     window.dispatchEvent(new Event("offline"));
     await flushPromises();
 
-    expect(wrapper.text()).toContain(
+    expect(wrapper.text()).not.toContain(
       "Incident PDF print requires a server connection.",
     );
-    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeUndefined();
 
     clearIncidentSession();
     installIncidentSession(IC_OPERATOR_SESSION);
