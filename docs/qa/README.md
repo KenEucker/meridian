@@ -34,6 +34,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-INC-01-incident-management.md`](QA-INC-01-incident-management.md) | IC-only incident access, online create/edit with the full IMS current-field set, notes/strikes, Name Reference chips, linked incidents, Field Report attach/unlink, history, list/IC Field Report cross-links/filters, attachment-strike automated evidence, and IC-lead PDF print | M11.11 |
 
+## Alpha 1 Organizer department administration script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-ORG-02-organizer-department-admin.md`](QA-ORG-02-organizer-department-admin.md) | Organizer Meridian Admin create/edit/archive/restore/list for organization departments outside Orchid/God Mode | M11.12 |
+
 M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
 Name Reference chips, online create/edit autosave, priority/types/responders,
 linked incidents, Field Report attach/unlink, attachment strike, and IC-lead

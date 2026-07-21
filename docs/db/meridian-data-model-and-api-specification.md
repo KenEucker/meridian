@@ -300,6 +300,8 @@ Examples:
 GET /api/me
 GET /api/organizations
 GET /api/organizations/{organization}
+GET /api/organizations/{organization}/departments
+GET /api/organizations/{organization}/departments/{department}
 GET /api/events
 GET /api/events/{event}
 GET /api/events/{event}/departments
@@ -391,9 +393,15 @@ POST /api/commands/designate-placement-department
 POST /api/commands/publish-event-map
 POST /api/commands/archive-event-map
 POST /api/commands/override-locked-map-data
+POST /api/commands/create-department
+POST /api/commands/update-department
+POST /api/commands/archive-department
+POST /api/commands/restore-department
 ```
 
 Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment publish/archive commands are not part of the Alpha 1 command surface.
+
+Organization department administration commands (`create-department`, `update-department`, `archive-department`, `restore-department`) are organizer/lead-organizer scoped through `organization.departments.manage` and preserve history via soft archive (`archived_at`).
 
 Map publishing, archiving, Placement department designation, and locked-map data overrides use command-style writes because their business rules (operations-window locking, Placement-assignment validation, and elevated override authority) matter. Routine creation/editing of draft maps, camps, map locations, and map assets before the operations window may use the resource API under map permissions. Map records are not offline-writable for MVP.
 

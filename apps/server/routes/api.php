@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\Deployments\DeploymentCommandController;
+use App\Http\Controllers\Departments\DepartmentCommandController;
+use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
@@ -64,6 +66,24 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/strike-incident-note', [IncidentCommandController::class, 'strikeNote'])
         ->name('api.commands.strike-incident-note');
+
+    Route::post('/commands/create-department', [DepartmentCommandController::class, 'create'])
+        ->name('api.commands.create-department');
+
+    Route::post('/commands/update-department', [DepartmentCommandController::class, 'update'])
+        ->name('api.commands.update-department');
+
+    Route::post('/commands/archive-department', [DepartmentCommandController::class, 'archive'])
+        ->name('api.commands.archive-department');
+
+    Route::post('/commands/restore-department', [DepartmentCommandController::class, 'restore'])
+        ->name('api.commands.restore-department');
+
+    Route::get('/organizations/{organization}/departments', [DepartmentReadController::class, 'index'])
+        ->name('api.organizations.departments.index');
+
+    Route::get('/organizations/{organization}/departments/{department}', [DepartmentReadController::class, 'show'])
+        ->name('api.organizations.departments.show');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

@@ -14,6 +14,7 @@ use App\Models\PermissionRole;
  * - Technical spec section 16.2 (IC role capabilities).
  * - Requirements ORG-015 (organizers do not get all incidents/field reports)
  *   and ORG-016 (organizers may view all published policy/procedure documents).
+ * - Requirement ORG-002 / M11.12 (organizers manage organization departments).
  */
 final class PermissionCatalog
 {
@@ -64,6 +65,8 @@ final class PermissionCatalog
     public const PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO = 'field_reports.download_photo';
 
     public const PERMISSION_POLICIES_VIEW_PUBLISHED = 'policies.view_published';
+
+    public const PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE = 'organization.departments.manage';
 
     public const PERMISSION_DEPARTMENT_PRESENCE_MANAGE = 'department.presence.manage';
 
@@ -125,6 +128,7 @@ final class PermissionCatalog
             self::PERMISSION_FIELD_REPORTS_VIEW_EVENT => 'View all field reports for the event.',
             self::PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO => 'Download field report photos.',
             self::PERMISSION_POLICIES_VIEW_PUBLISHED => 'View all published policy and procedure documents in the organization.',
+            self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE => 'Create, edit, archive, restore, and list organization departments.',
             self::PERMISSION_DEPARTMENT_PRESENCE_MANAGE => 'Mark eligible department staff on-site or off-site.',
             self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE => 'Check department staff in and out of shifts.',
             self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
@@ -139,10 +143,10 @@ final class PermissionCatalog
      *
      * IC mappings follow technical spec section 16.2, with `incidents.print`
      * granted only to `ic_lead` per INC-015 / requirements section 4.10.
-     * Organizer mappings follow ORG-016 while honouring ORG-015 by deliberately
-     * excluding incident and field report capabilities. Roles without an entry
-     * intentionally have no catalog permissions yet and are populated by their
-     * owning milestones.
+     * Organizer mappings follow ORG-016 and ORG-002/M11.12 while honouring
+     * ORG-015 by deliberately excluding incident and field report capabilities.
+     * Roles without an entry intentionally have no catalog permissions yet and
+     * are populated by their owning milestones.
      *
      * @return array<string, list<string>>
      */
@@ -191,9 +195,11 @@ final class PermissionCatalog
             ],
             self::ROLE_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
+                self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
+                self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
             ],
         ];
     }

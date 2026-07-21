@@ -40,6 +40,9 @@ describe("shared client shell", () => {
     expect(wrapper.get("#home-primary-heading").text()).toBe(
       "Department operations",
     );
+    expect(wrapper.get("#home-organizer-heading").text()).toBe(
+      "Organizer administration",
+    );
     expect(wrapper.get("#home-secondary-heading").text()).toBe(
       "Incident Management",
     );

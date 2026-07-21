@@ -23,8 +23,14 @@ import ImsFieldReportDetailView from "@/views/ImsFieldReportDetailView.vue";
 import LogisticsDeskView from "@/views/LogisticsDeskView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
+import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
+import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import {
+  installDevelopmentOrganizerDepartmentSession,
+  resolveOrganizerDepartmentSession,
+} from "@/organizer-departments/departmentAdminModel";
 
 /**
  * Until auth and event selection land, author Field Report surfaces install a
@@ -45,6 +51,17 @@ function ensureFieldSession(): void {
 function ensureIncidentSession(): void {
   if (!resolveIncidentSession()) {
     installDevelopmentIncidentSession();
+  }
+}
+
+/**
+ * Development organizer session until auth and organization selection own the
+ * real organizer context. Screen components still fail closed when the
+ * installed role lacks organizer authority (M11.12).
+ */
+function ensureOrganizerDepartmentSession(): void {
+  if (!resolveOrganizerDepartmentSession()) {
+    installDevelopmentOrganizerDepartmentSession();
   }
 }
 
@@ -169,6 +186,24 @@ export const routes: RouteRecordRaw[] = [
     name: "ims.restricted",
     component: ImsRestrictedView,
     beforeEnter: ensureIncidentSession,
+  },
+  {
+    path: "/organizer/departments",
+    name: "organizer.departments.index",
+    component: OrganizerDepartmentListView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/departments/create",
+    name: "organizer.departments.create",
+    component: OrganizerDepartmentEditView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/departments/:departmentId/edit",
+    name: "organizer.departments.edit",
+    component: OrganizerDepartmentEditView,
+    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/:pathMatch(.*)*",

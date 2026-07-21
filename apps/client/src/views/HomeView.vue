@@ -32,6 +32,9 @@ const imsIncidentsRoute = {
 const imsFieldReportsRoute = {
   name: "ims.field-reports.index",
 };
+const organizerDepartmentsRoute = {
+  name: "organizer.departments.index",
+};
 </script>
 
 <template>
@@ -52,6 +55,15 @@ const imsFieldReportsRoute = {
           <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
           <RouterLink :to="operationsRoute">Operations center</RouterLink>
           <RouterLink :to="planningRoute">Planning table</RouterLink>
+        </div>
+      </section>
+
+      <section class="home__section" aria-labelledby="home-organizer-heading">
+        <h2 id="home-organizer-heading" class="home__section-heading">
+          Organizer administration
+        </h2>
+        <div class="home__links home__links--secondary">
+          <RouterLink :to="organizerDepartmentsRoute">Departments</RouterLink>
         </div>
       </section>
 
