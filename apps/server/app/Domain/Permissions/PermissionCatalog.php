@@ -134,7 +134,7 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
             self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN => 'Assign current or planned shift deployments.',
             self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'View identity-free Planning Table aggregates comparing plan versus actual.',
-            self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer department settings and team membership.',
+            self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer permitted department details and teams (team membership assignment remains a separate workflow).',
         ];
     }
 
@@ -145,6 +145,8 @@ final class PermissionCatalog
      * granted only to `ic_lead` per INC-015 / requirements section 4.10.
      * Organizer mappings follow ORG-016 and ORG-002/M11.12 while honouring
      * ORG-015 by deliberately excluding incident and field report capabilities.
+     * Department lead and department_administration share department.administer
+     * for M11.13 department self-administration (UI contract 12.4 / tech spec 15.2).
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -153,6 +155,9 @@ final class PermissionCatalog
     public static function rolePermissions(): array
     {
         return [
+            self::ROLE_DEPARTMENT_LEAD => [
+                self::PERMISSION_DEPARTMENT_ADMINISTER,
+            ],
             self::ROLE_IC_LEAD => [
                 self::PERMISSION_INCIDENTS_VIEW,
                 self::PERMISSION_INCIDENTS_CREATE,

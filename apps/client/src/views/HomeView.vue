@@ -35,6 +35,10 @@ const imsFieldReportsRoute = {
 const organizerDepartmentsRoute = {
   name: "organizer.departments.index",
 };
+const departmentTeamsRoute = {
+  name: "events.departments.teams.index",
+  params: departmentRouteParams,
+};
 </script>
 
 <template>
@@ -55,6 +59,7 @@ const organizerDepartmentsRoute = {
           <RouterLink :to="logisticsRoute">Logistics desk</RouterLink>
           <RouterLink :to="operationsRoute">Operations center</RouterLink>
           <RouterLink :to="planningRoute">Planning table</RouterLink>
+          <RouterLink :to="departmentTeamsRoute">Teams</RouterLink>
         </div>
       </section>
 

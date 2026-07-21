@@ -130,6 +130,10 @@ describe("department operations surfaces", () => {
     const { wrapper } = await mountAt(logisticsPath());
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Logistics Desk");
+    expect(wrapper.get("#current-shifts-heading").text()).toBe(
+      "Current shifts",
+    );
+    expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
     expect(wrapper.get("#search-cache-heading").text()).toBe(
       "Offline search cache",
     );

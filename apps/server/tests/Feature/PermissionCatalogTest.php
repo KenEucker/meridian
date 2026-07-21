@@ -128,6 +128,11 @@ class PermissionCatalogTest extends TestCase
             'department.administer',
         ], $this->permissionCodesFor('department_administration'));
 
+        // M11.13: department leads share department.administer for self-admin.
+        $this->assertSame([
+            'department.administer',
+        ], $this->permissionCodesFor('department_lead'));
+
         $this->assertSame([
             'department.schedule.manage',
         ], $this->permissionCodesFor('department_planning'));
