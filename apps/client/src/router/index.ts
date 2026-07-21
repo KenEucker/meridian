@@ -25,12 +25,18 @@ import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
+import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
+import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import {
   installDevelopmentOrganizerDepartmentSession,
   resolveOrganizerDepartmentSession,
 } from "@/organizer-departments/departmentAdminModel";
+import {
+  installDevelopmentDepartmentSelfAdminSession,
+  resolveDepartmentSelfAdminSession,
+} from "@/department-teams/teamAdminModel";
 
 /**
  * Until auth and event selection land, author Field Report surfaces install a
@@ -62,6 +68,17 @@ function ensureIncidentSession(): void {
 function ensureOrganizerDepartmentSession(): void {
   if (!resolveOrganizerDepartmentSession()) {
     installDevelopmentOrganizerDepartmentSession();
+  }
+}
+
+/**
+ * Development department self-admin session until auth owns the real
+ * department-lead context. Screens still fail closed without administer
+ * authority (M11.13).
+ */
+function ensureDepartmentSelfAdminSession(): void {
+  if (!resolveDepartmentSelfAdminSession()) {
+    installDevelopmentDepartmentSelfAdminSession();
   }
 }
 
@@ -122,6 +139,24 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/planning",
     name: "events.departments.planning",
     component: PlanningTableView,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/teams",
+    name: "events.departments.teams.index",
+    component: DepartmentTeamsListView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/teams/create",
+    name: "events.departments.teams.create",
+    component: DepartmentTeamEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/teams/:teamId/edit",
+    name: "events.departments.teams.edit",
+    component: DepartmentTeamEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
   },
   legacyShiftBoardRedirect("current"),
   legacyShiftBoardRedirect("logistics"),

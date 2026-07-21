@@ -4,7 +4,10 @@ use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
+use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
+use App\Http\Controllers\Teams\TeamCommandController;
+use App\Http\Controllers\Teams\TeamReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -79,11 +82,32 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/restore-department', [DepartmentCommandController::class, 'restore'])
         ->name('api.commands.restore-department');
 
+    Route::post('/commands/update-department-details', [DepartmentSelfAdminCommandController::class, 'updateDetails'])
+        ->name('api.commands.update-department-details');
+
+    Route::post('/commands/create-team', [TeamCommandController::class, 'create'])
+        ->name('api.commands.create-team');
+
+    Route::post('/commands/update-team', [TeamCommandController::class, 'update'])
+        ->name('api.commands.update-team');
+
+    Route::post('/commands/archive-team', [TeamCommandController::class, 'archive'])
+        ->name('api.commands.archive-team');
+
+    Route::post('/commands/restore-team', [TeamCommandController::class, 'restore'])
+        ->name('api.commands.restore-team');
+
     Route::get('/organizations/{organization}/departments', [DepartmentReadController::class, 'index'])
         ->name('api.organizations.departments.index');
 
     Route::get('/organizations/{organization}/departments/{department}', [DepartmentReadController::class, 'show'])
         ->name('api.organizations.departments.show');
+
+    Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
+        ->name('api.departments.teams.index');
+
+    Route::get('/departments/{department}/teams/{team}', [TeamReadController::class, 'show'])
+        ->name('api.departments.teams.show');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

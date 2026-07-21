@@ -40,6 +40,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-ORG-02-organizer-department-admin.md`](QA-ORG-02-organizer-department-admin.md) | Organizer Meridian Admin create/edit/archive/restore/list for organization departments outside Orchid/God Mode | M11.12 |
 
+## Alpha 1 Department self-administration script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-TEAM-02-department-self-admin.md`](QA-TEAM-02-department-self-admin.md) | Department lead / department administration Meridian Admin department details and team create/edit/archive/restore (default rename; non-default archive) outside Orchid/God Mode | M11.13 |
+
 M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
 Name Reference chips, online create/edit autosave, priority/types/responders,
 linked incidents, Field Report attach/unlink, attachment strike, and IC-lead
