@@ -11,10 +11,12 @@ import {
   hasIncidentCommandAccess,
   resolveIncidentSession,
   statusLabel,
+  strikeIncidentNoteForSession,
   type IncidentPriorityLabel,
   type IncidentTagChip,
   type IncidentTimelineEntry,
   type NameReferenceChip,
+  visibleIncidentTimelineEntries,
 } from "@/ims/incidentReadModel";
 
 const route = useRoute();
@@ -23,6 +25,7 @@ const canView = computed(() => hasIncidentCommandAccess(session.value));
 const canAppendNote = computed(() => canAppendIncidentNote(session.value));
 const canEdit = computed(() => canEditIncident(session.value));
 const timelineRevision = ref(0);
+const showFullHistory = ref(false);
 const noteBody = ref("");
 const noteError = ref<string | null>(null);
 const incident = computed(() => {
@@ -32,7 +35,12 @@ const incident = computed(() => {
 
   return findIncidentForSession(session.value, String(route.params.incidentId));
 });
-const timelineEntries = computed(() => incident.value?.timelineEntries ?? []);
+const timelineEntries = computed(() =>
+  visibleIncidentTimelineEntries(
+    incident.value?.timelineEntries ?? [],
+    showFullHistory.value,
+  ),
+);
 
 function priorityText(priorityLabel: string | null): string {
   return priorityLabel ?? "Priority not set";
@@ -114,6 +122,41 @@ function tagSearchTarget(chip: IncidentTagChip) {
     name: "ims.incidents.index",
     query: { search: `#${chip.tag}` },
   };
+}
+
+function canStrikeTimelineEntry(entry: IncidentTimelineEntry): boolean {
+  return (
+    canAppendNote.value &&
+    entry.entryType === "operational_note" &&
+    !entry.strickenAt
+  );
+}
+
+function onStrikeNote(entry: IncidentTimelineEntry): void {
+  noteError.value = null;
+
+  if (!incident.value) {
+    noteError.value = "Incident not found for this event.";
+    return;
+  }
+
+  const reason = window.prompt("Reason for striking this note");
+  if (reason === null) {
+    return;
+  }
+
+  try {
+    strikeIncidentNoteForSession(
+      session.value,
+      incident.value.id,
+      entry.id,
+      reason,
+    );
+    timelineRevision.value += 1;
+  } catch (error) {
+    noteError.value =
+      error instanceof Error ? error.message : "Unable to strike incident note.";
+  }
 }
 
 function onAppendNote(): void {
@@ -320,7 +363,12 @@ function onAppendNote(): void {
           aria-labelledby="ims-timeline-heading"
           class="ims-detail__panel"
         >
-          <h2 id="ims-timeline-heading">Timeline</h2>
+          <div class="ims-detail__timeline-heading">
+            <h2 id="ims-timeline-heading">Timeline</h2>
+            <button type="button" @click="showFullHistory = !showFullHistory">
+              {{ showFullHistory ? "Hide full history" : "Show full history" }}
+            </button>
+          </div>
           <ol class="ims-detail__timeline">
             <li v-for="entry in timelineEntries" :key="entry.id">
               <div class="ims-detail__timeline-meta">
@@ -343,6 +391,14 @@ function onAppendNote(): void {
               >
                 Stricken: {{ entry.strickenReason ?? "Removed from incident." }}
               </p>
+              <button
+                v-if="canStrikeTimelineEntry(entry)"
+                class="ims-detail__timeline-strike"
+                type="button"
+                @click="onStrikeNote(entry)"
+              >
+                Strike note
+              </button>
             </li>
           </ol>
 
@@ -624,6 +680,35 @@ function onAppendNote(): void {
   font-size: var(--m-text-lg);
 }
 
+.ims-detail__timeline-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  margin-bottom: var(--m-space-3);
+}
+
+.ims-detail__timeline-heading h2 {
+  margin: 0;
+}
+
+.ims-detail__timeline-heading button {
+  min-height: 2.5rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-3);
+  background: var(--m-surface);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+}
+
+.ims-detail__timeline-heading button:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
 .ims-detail__definition {
   display: grid;
   gap: var(--m-space-3);
@@ -643,7 +728,7 @@ function onAppendNote(): void {
   display: grid;
   gap: var(--m-space-2);
   min-width: 0;
-  padding: var(--m-space-1) 0 var(--m-space-2) var(--m-space-4);
+  padding: var(--m-space-1) 5.5rem var(--m-space-2) var(--m-space-4);
 }
 
 .ims-detail__timeline li::before {
@@ -683,6 +768,25 @@ function onAppendNote(): void {
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
   font-weight: 800;
+}
+
+.ims-detail__timeline-strike {
+  position: absolute;
+  top: var(--m-space-1);
+  right: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--m-status-danger);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.ims-detail__timeline-strike:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .ims-detail__note-form {

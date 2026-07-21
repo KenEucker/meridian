@@ -64,6 +64,16 @@ final class NameReferenceIndexService
             throw new LogicException('Persist the Incident timeline entry before synchronizing Name References.');
         }
 
+        if ($entry->stricken_at !== null) {
+            return $this->synchronizeSource(
+                NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
+                (string) $entry->id,
+                null,
+                (string) $entry->incident_id,
+                '',
+            );
+        }
+
         if ($entry->entry_type === IncidentTimelineEntry::TYPE_FIELD_REPORT_LINKED) {
             return $this->synchronizeSource(
                 NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
@@ -107,6 +117,7 @@ final class NameReferenceIndexService
 
             IncidentTimelineEntry::query()
                 ->whereNotNull('body')
+                ->whereNull('stricken_at')
                 ->orderBy('created_at')
                 ->orderBy('id')
                 ->each(function (IncidentTimelineEntry $entry) use (&$count): void {

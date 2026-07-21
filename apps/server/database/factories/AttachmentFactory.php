@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\Attachment;
 use App\Models\Device;
 use App\Models\FieldReport;
+use App\Models\Incident;
 use App\Models\Node;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -57,6 +58,17 @@ class AttachmentFactory extends Factory
             'uploaded_by_user_id' => $report->submitted_by_user_id,
             'origin_device_id' => $report->origin_device_id,
             'origin_node_id' => $report->origin_node_id,
+        ]);
+    }
+
+    public function forIncident(Incident $incident, ?User $uploadedBy = null): static
+    {
+        return $this->state(fn (): array => [
+            'attachable_type' => Attachment::MORPH_INCIDENT,
+            'attachable_id' => $incident->id,
+            'uploaded_by_user_id' => $uploadedBy?->id ?? User::factory(),
+            'filename' => 'INC-2027-000001_2027-07-04T13-22-10Z_01.webp',
+            'storage_path' => 'incidents/INC-2027-000001_2027-07-04T13-22-10Z_01.webp',
         ]);
     }
 }

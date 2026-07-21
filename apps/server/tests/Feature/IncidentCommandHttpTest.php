@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -11,6 +12,7 @@ use App\Models\Incident;
 use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Models\IncidentTimelineEntry;
+use App\Models\NameReferenceToken;
 use App\Models\Organization;
 use App\Models\PermissionRole;
 use App\Models\Staff;
@@ -18,6 +20,7 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\NameReferences\NameReferenceIndexService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -710,6 +713,183 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_timeline_entries', 0);
     }
 
+    public function test_ic_operator_can_strike_operational_note_without_deleting_it(): void
+    {
+        Carbon::setTestNow('2027-07-04 21:45:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'updated_at' => Carbon::parse('2027-07-04T20:00:00Z'),
+        ]);
+        $entry = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'actor_user_id' => $actor->id,
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+            'body' => 'Wrong note with @HiddenName.',
+            'created_at' => Carbon::parse('2027-07-04T21:15:00Z'),
+        ]);
+        app(NameReferenceIndexService::class)->synchronizeIncidentTimelineEntry($entry);
+
+        $this->assertDatabaseHas('name_reference_tokens', [
+            'source_type' => NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
+            'source_id' => $entry->id,
+            'normalized_token' => 'hiddenname',
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => $entry->id,
+                'reason' => 'Note belonged to a different incident.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('id', $entry->id)
+            ->assertJsonPath('incident_id', $incident->id)
+            ->assertJsonPath('entry_type', IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE)
+            ->assertJsonPath('body', 'Wrong note with @HiddenName.')
+            ->assertJsonPath('stricken_reason', 'Note belonged to a different incident.');
+
+        $entry->refresh();
+        $audit = AuditEvent::query()->where('action', 'incident.note_stricken')->sole();
+
+        $this->assertNotNull($entry->stricken_at);
+        $this->assertSame('Wrong note with @HiddenName.', $entry->body);
+        $this->assertSame('Note belonged to a different incident.', $entry->stricken_reason);
+        $this->assertSame($entry->id, $audit->entity_id);
+        $this->assertSame($actor->id, $audit->actor_user_id);
+        $this->assertSame($event->organization_id, $audit->organization_id);
+        $this->assertSame($event->id, $audit->event_id);
+        $this->assertSame($event->ic_department_id, $audit->department_id);
+        $this->assertSame('Note belonged to a different incident.', $audit->reason);
+        $this->assertSame(AuditEvent::SOURCE_API, $audit->source_context);
+        $this->assertNull($audit->before_json['stricken_at']);
+        $this->assertNotNull($audit->after_json['stricken_at']);
+        $this->assertSame('Wrong note with @HiddenName.', $audit->after_json['body']);
+        $this->assertTrue($incident->refresh()->updated_at->equalTo(Carbon::parse('2027-07-04T21:45:00Z')));
+        $this->assertDatabaseMissing('name_reference_tokens', [
+            'source_type' => NameReferenceToken::SOURCE_TYPE_INCIDENT_TIMELINE_ENTRY,
+            'source_id' => $entry->id,
+            'normalized_token' => 'hiddenname',
+        ]);
+    }
+
+    public function test_strike_incident_note_rejects_duplicate_non_note_and_other_incident_entries(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $otherIncident = Incident::factory()->forEvent($event)->create();
+        $strickenNote = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+            'stricken_at' => Carbon::parse('2027-07-04T21:15:00Z'),
+            'stricken_reason' => 'Already handled.',
+        ]);
+        $fieldUpdate = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_FIELD_UPDATED,
+            'body' => 'Changed title: Gate A.',
+        ]);
+        $otherIncidentNote = IncidentTimelineEntry::factory()->forIncident($otherIncident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => $strickenNote->id,
+                'reason' => 'Already handled.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident note is already stricken.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => $fieldUpdate->id,
+                'reason' => 'Not a note.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Only operational notes may be stricken.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => $otherIncidentNote->id,
+                'reason' => 'Wrong incident.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident note must belong to this incident.');
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => IncidentTimelineEntry::factory()->forIncident($incident)->create()->id,
+                'reason' => '   ',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident note strike reason is required.');
+
+        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertNull($fieldUpdate->refresh()->stricken_at);
+        $this->assertNull($otherIncidentNote->refresh()->stricken_at);
+    }
+
+    public function test_ic_viewer_and_non_ic_roles_cannot_strike_incident_notes(): void
+    {
+        $this->assertRoleCannotStrikeIncidentNote('ic_viewer');
+        $this->assertRoleCannotStrikeIncidentNote('organizer', eventScoped: false);
+        $this->assertRoleCannotStrikeIncidentNote('department_lead', eventScoped: false);
+    }
+
+    public function test_wrong_event_or_revoked_ic_grant_cannot_strike_incident_notes(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $wrongEventActor = $this->userWithEventRole('ic_operator', $otherEvent);
+        $revokedActor = $this->userWithEventRole('ic_lead', $event, revoked: true);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $entry = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+        ]);
+
+        foreach ([$wrongEventActor, $revokedActor] as $actor) {
+            $this->actingAs($actor)
+                ->postJson('/api/commands/strike-incident-note', [
+                    'event_id' => $event->id,
+                    'incident_id' => $incident->id,
+                    'timeline_entry_id' => $entry->id,
+                    'reason' => 'No authority.',
+                ])
+                ->assertForbidden()
+                ->assertJsonPath('message', 'Only IC operators and IC leads for this event may strike incident notes.');
+        }
+
+        $this->assertNull($entry->refresh()->stricken_at);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_strike_incident_note_requires_authentication(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $incident = Incident::factory()->forEvent($event)->create();
+        $entry = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+        ]);
+
+        $this->postJson('/api/commands/strike-incident-note', [
+            'event_id' => $event->id,
+            'incident_id' => $incident->id,
+            'timeline_entry_id' => $entry->id,
+            'reason' => 'Unauthenticated attempt.',
+        ])->assertUnauthorized();
+
+        $this->assertNull($entry->refresh()->stricken_at);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
     public function test_ic_operator_can_link_and_unlink_same_event_incidents_with_history(): void
     {
         Carbon::setTestNow('2027-07-04 23:15:00 UTC');
@@ -1175,6 +1355,150 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_field_reports', 0);
     }
 
+    public function test_ic_operator_can_strike_incident_attachment_without_deleting_it(): void
+    {
+        Carbon::setTestNow('2027-07-05 01:15:00 UTC');
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $incident = Incident::factory()->forEvent($event)->create([
+            'updated_at' => Carbon::parse('2027-07-05T00:45:00Z'),
+        ]);
+        $attachment = Attachment::factory()->forIncident($incident, $actor)->create([
+            'filename' => 'INC-2027-000020_2027-07-05T01-00-00Z_01.webp',
+            'storage_path' => 'incidents/INC-2027-000020_2027-07-05T01-00-00Z_01.webp',
+            'checksum' => hash('sha256', 'incident-photo'),
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-attachment', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'attachment_id' => $attachment->id,
+                'reason' => 'Duplicate image uploaded by mistake.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('id', $attachment->id)
+            ->assertJsonPath('incident_id', $incident->id)
+            ->assertJsonPath('filename', 'INC-2027-000020_2027-07-05T01-00-00Z_01.webp')
+            ->assertJsonPath('deleted_at', null);
+
+        $attachment->refresh();
+        $timelineEntry = IncidentTimelineEntry::query()->sole();
+        $audit = AuditEvent::query()->sole();
+
+        $this->assertNotNull($attachment->stricken_at);
+        $this->assertNull($attachment->deleted_at);
+        $this->assertSame('incidents/INC-2027-000020_2027-07-05T01-00-00Z_01.webp', $attachment->storage_path);
+        $this->assertSame(IncidentTimelineEntry::TYPE_ATTACHMENT_STRICKEN, $timelineEntry->entry_type);
+        $this->assertSame('Struck incident attachment INC-2027-000020_2027-07-05T01-00-00Z_01.webp.', $timelineEntry->body);
+        $this->assertSame('Duplicate image uploaded by mistake.', $timelineEntry->reason);
+        $this->assertSame($attachment->id, $timelineEntry->new_value['attachment_id']);
+        $this->assertSame('incident.attachment_stricken', $audit->action);
+        $this->assertSame($attachment->id, $audit->entity_id);
+        $this->assertSame($actor->id, $audit->actor_user_id);
+        $this->assertSame($event->organization_id, $audit->organization_id);
+        $this->assertSame($event->id, $audit->event_id);
+        $this->assertSame($event->ic_department_id, $audit->department_id);
+        $this->assertSame('Duplicate image uploaded by mistake.', $audit->reason);
+        $this->assertSame(AuditEvent::SOURCE_API, $audit->source_context);
+        $this->assertNull($audit->before_json['stricken_at']);
+        $this->assertNotNull($audit->after_json['stricken_at']);
+        $this->assertNull($audit->after_json['deleted_at']);
+        $this->assertTrue($incident->refresh()->updated_at->equalTo(Carbon::parse('2027-07-05T01:15:00Z')));
+    }
+
+    public function test_strike_incident_attachment_rejects_duplicate_non_incident_and_other_incident_attachments(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $otherIncident = Incident::factory()->forEvent($event)->create();
+        $attachment = Attachment::factory()->forIncident($incident, $actor)->create([
+            'stricken_at' => Carbon::parse('2027-07-05T01:00:00Z'),
+        ]);
+        $otherIncidentAttachment = Attachment::factory()->forIncident($otherIncident, $actor)->create();
+        $fieldReport = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
+        $fieldReportPhoto = Attachment::factory()->forFieldReport($fieldReport)->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-attachment', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'attachment_id' => $attachment->id,
+                'reason' => 'Already handled.',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Incident attachment is already stricken.');
+
+        foreach ([$otherIncidentAttachment, $fieldReportPhoto] as $invalidAttachment) {
+            $this->actingAs($actor)
+                ->postJson('/api/commands/strike-incident-attachment', [
+                    'event_id' => $event->id,
+                    'incident_id' => $incident->id,
+                    'attachment_id' => $invalidAttachment->id,
+                    'reason' => 'Wrong attachment.',
+                ])
+                ->assertUnprocessable()
+                ->assertJsonPath('message', 'Attachment must belong to this incident.');
+        }
+
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+        $this->assertNull($otherIncidentAttachment->refresh()->stricken_at);
+        $this->assertNull($fieldReportPhoto->refresh()->stricken_at);
+    }
+
+    public function test_ic_viewer_and_non_ic_roles_cannot_strike_incident_attachments(): void
+    {
+        $this->assertRoleCannotStrikeAttachment('ic_viewer');
+        $this->assertRoleCannotStrikeAttachment('organizer', eventScoped: false);
+        $this->assertRoleCannotStrikeAttachment('department_lead', eventScoped: false);
+    }
+
+    public function test_wrong_event_or_revoked_ic_grant_cannot_strike_incident_attachments(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $wrongEventActor = $this->userWithEventRole('ic_operator', $otherEvent);
+        $revokedActor = $this->userWithEventRole('ic_lead', $event, revoked: true);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $attachment = Attachment::factory()->forIncident($incident)->create();
+
+        foreach ([$wrongEventActor, $revokedActor] as $actor) {
+            $this->actingAs($actor)
+                ->postJson('/api/commands/strike-incident-attachment', [
+                    'event_id' => $event->id,
+                    'incident_id' => $incident->id,
+                    'attachment_id' => $attachment->id,
+                    'reason' => 'No authority.',
+                ])
+                ->assertForbidden()
+                ->assertJsonPath('message', 'Only IC operators and IC leads for this event may strike incident attachments.');
+        }
+
+        $this->assertNull($attachment->refresh()->stricken_at);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_strike_incident_attachment_command_requires_authentication(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $incident = Incident::factory()->forEvent($event)->create();
+        $attachment = Attachment::factory()->forIncident($incident)->create();
+
+        $this->postJson('/api/commands/strike-incident-attachment', [
+            'event_id' => $event->id,
+            'incident_id' => $incident->id,
+            'attachment_id' => $attachment->id,
+            'reason' => 'Unauthenticated attempt.',
+        ])->assertUnauthorized();
+
+        $this->assertNull($attachment->refresh()->stricken_at);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
     private function assertRoleCannotCreateIncident(string $roleCode, bool $eventScoped = true): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
@@ -1211,6 +1535,29 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('audit_events', 0);
     }
 
+    private function assertRoleCannotStrikeIncidentNote(string $roleCode, bool $eventScoped = true): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $entry = IncidentTimelineEntry::factory()->forIncident($incident)->create([
+            'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-note', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'timeline_entry_id' => $entry->id,
+                'reason' => "{$roleCode} strike attempt.",
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Only IC operators and IC leads for this event may strike incident notes.');
+
+        $this->assertNull($entry->refresh()->stricken_at);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
     private function assertRoleCannotLinkFieldReport(string $roleCode, bool $eventScoped = true): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
@@ -1228,6 +1575,28 @@ class IncidentCommandHttpTest extends TestCase
             ->assertJsonPath('message', 'Only IC operators and IC leads for this event may link Field Reports.');
 
         $this->assertDatabaseCount('incident_field_reports', 0);
+        $this->assertDatabaseCount('incident_timeline_entries', 0);
+        $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    private function assertRoleCannotStrikeAttachment(string $roleCode, bool $eventScoped = true): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
+        $incident = Incident::factory()->forEvent($event)->create();
+        $attachment = Attachment::factory()->forIncident($incident)->create();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/strike-incident-attachment', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'attachment_id' => $attachment->id,
+                'reason' => "{$roleCode} strike attempt.",
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Only IC operators and IC leads for this event may strike incident attachments.');
+
+        $this->assertNull($attachment->refresh()->stricken_at);
         $this->assertDatabaseCount('incident_timeline_entries', 0);
         $this->assertDatabaseCount('audit_events', 0);
     }

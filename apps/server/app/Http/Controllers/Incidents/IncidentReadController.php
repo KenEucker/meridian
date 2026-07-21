@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Incidents;
 
 use App\Http\Controllers\Controller;
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Event;
 use App\Models\Incident;
@@ -139,6 +140,7 @@ final class IncidentReadController extends Controller
                 ->all(),
             'linked_incidents' => $this->linkedIncidentPayload($incident),
             'attached_field_reports' => $this->attachedFieldReportPayload($incident),
+            'attachments' => $this->attachmentPayload($incident),
             'created_by_user_id' => $incident->created_by_user_id,
             'created_by_name' => $incident->createdByUser?->name,
             'created_at' => optional($incident->created_at)?->toIso8601String(),
@@ -172,6 +174,30 @@ final class IncidentReadController extends Controller
             'stricken_at' => optional($entry->stricken_at)?->toIso8601String(),
             'stricken_reason' => $entry->stricken_reason,
         ];
+    }
+
+    /**
+     * @return list<array{id: string, filename: string, mime_type: string, byte_size: int, created_at: ?string}>
+     */
+    private function attachmentPayload(Incident $incident): array
+    {
+        return Attachment::query()
+            ->where('attachable_type', Attachment::MORPH_INCIDENT)
+            ->where('attachable_id', $incident->id)
+            ->whereNull('stricken_at')
+            ->whereNull('deleted_at')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Attachment $attachment): array => [
+                'id' => $attachment->id,
+                'filename' => $attachment->filename,
+                'mime_type' => $attachment->mime_type,
+                'byte_size' => $attachment->byte_size,
+                'created_at' => optional($attachment->created_at)?->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**
