@@ -33,8 +33,8 @@ This document is intentionally an implementation contract, not an exhaustive mig
 
 This version aligns the data model with:
 
-- Meridian Requirements Document, Draft v0.3
-- Meridian Technical Specification, Draft v0.2
+- Meridian Requirements Document, Draft v0.3 (including The Briefing additive update)
+- Meridian Technical Specification, Draft v0.2 (including section 21B The Briefing)
 
 Important alignment changes from earlier data-model drafts:
 
@@ -395,6 +395,8 @@ POST /api/commands/designate-placement-department
 POST /api/commands/publish-event-map
 POST /api/commands/archive-event-map
 POST /api/commands/override-locked-map-data
+POST /api/commands/create-note
+POST /api/commands/add-note-to-briefing
 POST /api/commands/create-department
 POST /api/commands/update-department
 POST /api/commands/archive-department
@@ -407,6 +409,8 @@ POST /api/commands/restore-team
 ```
 
 Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment publish/archive commands are not part of the Alpha 1 command surface.
+
+`create-note` and `add-note-to-briefing` are the Alpha 1 Notes/Briefing write commands. Remaining Briefing commands in section 11A are post–Alpha 1.
 
 Organization department administration commands (`create-department`, `update-department`, `archive-department`, `restore-department`) are organizer/lead-organizer scoped through `organization.departments.manage` and preserve history via soft archive (`archived_at`).
 
@@ -608,7 +612,11 @@ Regular staff may cache:
 - published policies/procedures visible to them
 - published fragments referenced by those visible documents
 - their policy/procedure acknowledgment status
+- Notes they authored
+- Briefing-included Note presentations for events they can access
 - readiness/sync state
+
+Command-capable devices may additionally cache Command-visible Notes for the event (author+Command pool).
 
 Department Logistics users may additionally cache:
 
@@ -764,6 +772,10 @@ Audit applies to:
 - Placement department designation changes
 - locked-map data overrides
 - sensitive map reads/exports, where existing sensitive-read audit principles apply
+- Note creation
+- add-note-to-briefing / add-note-to-aar (reference or link)
+- AAR submit/publish/auto-assemble/freeze (post–Alpha 1)
+- Direction, Action Plan, and Notice mutations and Notice dismissals (post–Alpha 1)
 
 Audit entries should capture:
 
@@ -816,11 +828,12 @@ Meridian's Alpha 1 data model is organized into these domains:
 24. Document Acknowledgments
 25. Document Exports
 26. Event maps and geography
-27. Devices and trust
-28. Shared workstations
-29. Nodes and node sync
-30. Audit
-31. Sync conflicts
+27. Notes and The Briefing (Notes + Briefing inclusions; post–Alpha 1: AARs, Directions, Action Plans, Notices)
+28. Devices and trust
+29. Shared workstations
+30. Nodes and node sync
+31. Audit
+32. Sync conflicts
 
 ---
 
@@ -2718,6 +2731,256 @@ The mobile app includes a Policies & Procedures area.
 The app shows document scope and version subtly, such as near the bottom of the document view.
 
 The app does not need to show a special notice that the document includes automatically updated fragments.
+
+---
+
+## 11A. The Briefing and Notes
+
+### 11A.1 Purpose
+
+Notes are a standalone event-scoped domain. The Briefing is a hub that displays Command-added Note inclusions plus AARs, Directions, Action Plans, and Notices.
+
+Alpha 1 persists Notes, Briefing Note inclusions (reference/link), and hub shell read models for the other types. Full AAR/Directions/Action Plan/Notice tables and commands are specified for post–Alpha 1 implementation.
+
+### 11A.2 `notes`
+
+Key fields:
+
+- `id` (UUID)
+- `event_id`
+- `author_staff_id`
+- `author_user_id`
+- `title`, nullable
+- `body_markdown`
+- `created_at`
+- `origin_node_id`, nullable
+- `origin_device_id`, nullable
+
+Rules:
+
+- immutable after insert (no update of body/title)
+- no soft-edit or append table
+- creatable by department leads, team leads, `ic_lead`, and `ic_operator`
+- readable by author and Command until included in The Briefing
+- not owned by The Briefing or AARs
+
+### 11A.3 `briefing_note_inclusions`
+
+Represents Command adding a Note to The Briefing.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `note_id`
+- `inclusion_mode` (`reference` | `link`)
+- `audience` (`event_staff` | `department_leads_only`), default `event_staff`
+- `summary_markdown`, nullable (required when mode is `reference`)
+- `linked_body_markdown`, nullable (optional snapshot when mode is `link`)
+- `credited_author_staff_id`
+- `added_by_staff_id`
+- `position`, nullable
+- `created_at`
+
+Rules:
+
+- `reference`: Command summary is shown; readers may open the original Note; credit to original author
+- `link`: Note body shown verbatim as Command-attributed content credited to original author
+- `event_staff` audience: visible to all approved event staff for the event
+- `department_leads_only` audience: visible to department leads for the event, Command, and organizers; team leads excluded unless they also hold one of those roles
+- same Note may also be included in an AAR via `after_action_report_note_inclusions`
+
+### 11A.4 `after_action_reports`
+
+Key fields:
+
+- `id`
+- `event_id`
+- `kind` (`submission` | `final`)
+- `scope_type` (`department` | `team` | `event`)
+- `department_id`, nullable
+- `team_id`, nullable
+- `status` (`draft` | `submitted` | `published` | `frozen`)
+- `document_revision`
+- `submitted_at`, nullable
+- `published_at`, nullable
+- `frozen_at`, nullable
+- `created_by_staff_id`
+- `updated_at`
+- `created_at`
+
+ICS section content (JSON or related `after_action_report_sections` rows):
+
+- `command`
+- `operations`
+- `logistics`
+- `planning`
+- `admin`
+
+Each section stores Markdown body.
+
+Rules:
+
+- Submission AARs scoped to department or team of the authoring lead
+- Final AAR is event-scoped (`scope_type=event`, `kind=final`)
+- One logical Final AAR per event (new revisions bump `document_revision`)
+- Submission window: through event end + 30 days
+- Auto-assemble Final at event end + 45 days if none published
+- Peer leads cannot read other submissions until Final is published/frozen
+
+### 11A.5 `after_action_report_note_inclusions`
+
+Key fields:
+
+- `id`
+- `after_action_report_id`
+- `note_id`
+- `inclusion_mode` (`reference` | `link`)
+- `summary_markdown`, nullable (required when mode is `reference`)
+- `linked_body_markdown`, nullable (optional snapshot when mode is `link`)
+- `credited_author_staff_id`
+- `ics_section` (`command` | `operations` | `logistics` | `planning` | `admin`)
+- `position`
+- `created_at`
+- `created_by_staff_id`
+
+Rules mirror Briefing inclusions: reference = summary + view original; link = verbatim with author credit.
+
+### 11A.6 `briefing_directions`
+
+Key fields:
+
+- `id`
+- `event_id`
+- `title`
+- `body_markdown`
+- `target_scope` (`event` | `department` | `team` | `multi`)
+- `audience` (`event_staff` | `department_leads_only`), default `event_staff`
+- `status` (`draft` | `published` | `archived`)
+- `created_by_staff_id`
+- `published_at`, nullable
+- `created_at`
+- `updated_at`
+
+Related: `briefing_direction_targets` (`direction_id`, `department_id` nullable, `team_id` nullable)
+
+Related: `briefing_direction_links` (`direction_id`, `link_type`, `link_id`, `label` nullable, `position`)
+
+`department_leads_only` audience visibility matches Briefing Note inclusions (department leads + Command + organizers; team leads excluded unless also holding one of those roles).
+
+### 11A.7 `action_plans` and sections
+
+`action_plans`:
+
+- `id`
+- `event_id`
+- `title`
+- `status` (`draft` | `published` | `archived`)
+- `audience` (`event_staff` | `department_leads_only`), default `event_staff`
+- `document_revision`
+- `published_at`, nullable
+- `created_by_staff_id`
+- `created_at`
+- `updated_at`
+
+`action_plan_sections`:
+
+- `id`
+- `action_plan_id`
+- `title`
+- `body_markdown`
+- `target_department_id`, nullable
+- `target_team_id`, nullable
+- `audience` (`event_staff` | `department_leads_only`), default `event_staff`
+- `banner_enabled` (bool)
+- `banner_screen_ids` (JSON array of UI contract screen IDs from fixed allowlist)
+- `position`
+
+Rules:
+
+- banners only during active event window and only for allowlisted screen IDs
+- department-leads-only plan/section content and banners only for permitted viewers
+- publishing/updating may create `briefing_notices` rows
+
+### 11A.8 `briefing_notices` and dismissals
+
+`briefing_notices`:
+
+- `id`
+- `event_id`
+- `title`
+- `body_markdown`
+- `severity` (`info` | `process` | `emergency`)
+- `source_type` (`manual` | `action_plan`)
+- `source_action_plan_id`, nullable
+- `target_scope` (`event` | `department` | `team` | `multi`)
+- `audience` (`event_staff` | `department_leads_only`), default `event_staff`
+- `expires_at`, nullable
+- `created_by_staff_id`, nullable
+- `created_at`
+
+`briefing_notice_targets` mirrors direction targets.
+
+`briefing_notice_dismissals`:
+
+- `id`
+- `notice_id`
+- `user_id`
+- `dismissed_at`
+
+### 11A.9 API surface
+
+Reads:
+
+```text
+GET /api/events/{event}/briefing
+GET /api/events/{event}/notes
+GET /api/notes/{id}
+GET /api/events/{event}/briefing-note-inclusions
+GET /api/events/{event}/after-action-reports
+GET /api/after-action-reports/{id}
+GET /api/events/{event}/briefing-directions
+GET /api/events/{event}/action-plans
+GET /api/events/{event}/briefing-notices
+```
+
+Commands (Alpha 1 requires create-note and add-note-to-briefing):
+
+```text
+POST /api/commands/create-note
+POST /api/commands/add-note-to-briefing
+POST /api/commands/create-aar-submission
+POST /api/commands/update-aar-submission
+POST /api/commands/submit-aar-submission
+POST /api/commands/publish-aar-final
+POST /api/commands/add-note-to-aar
+POST /api/commands/create-briefing-direction
+POST /api/commands/update-briefing-direction
+POST /api/commands/create-action-plan
+POST /api/commands/update-action-plan
+POST /api/commands/publish-action-plan
+POST /api/commands/create-briefing-notice
+POST /api/commands/dismiss-briefing-notice
+```
+
+### 11A.10 Sync rules
+
+Alpha 1:
+
+- sync `notes` to author and Command
+- sync `briefing_note_inclusions` (and linked Note content needed for presentation) according to each inclusion’s audience
+- Note create and add-to-Briefing are online-only via Laravel command acceptance
+
+Post–Alpha 1:
+
+- sync published Directions, Action Plans, Notices, Final AARs to users permitted by their audience and targeting rules
+- sync Submission AARs to author, IC, and organizers
+- sync notice dismissals for the authenticated user
+- Action Plan banner payloads are derived from synced sections; hub access does not expand cache authority
+
+### 11A.11 Audit
+
+Audit Note create, Briefing/AAR Note add (reference or link), AAR submit/publish/auto-assemble/freeze, Direction/Action Plan/Notice mutations, and Notice dismissals.
 
 ---
 

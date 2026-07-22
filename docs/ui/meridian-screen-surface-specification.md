@@ -29,6 +29,7 @@ Meridian screens should generally fit one of these surface categories:
 - record detail surfaces;
 - create and edit form surfaces;
 - IMS surfaces;
+- Briefing surfaces;
 - kiosk and shared workstation surfaces;
 - policy, procedure, and fragment surfaces;
 - reports and review surfaces;

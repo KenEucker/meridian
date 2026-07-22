@@ -43,6 +43,7 @@ Work must stay inside the scope described by these documents.
 - `docs/ui/meridian-component-library-specification.md`
 - `docs/ui/meridian-dashboard-widget-specification.md`
 - `docs/ui/meridian-ims-surface-specification.md`
+- `docs/ui/meridian-briefing-surface-specification.md`
 - `docs/ui/meridian-kiosk-and-field-hardware-ux-guide.md`
 - `docs/ui/meridian-accessibility-checklist.md`
 
@@ -486,7 +487,41 @@ This milestone is placed after IMS (Milestone 11), offline foundations (Mileston
 
 ---
 
-### Milestone 15: Packaging, Event-Mode Safeguards, and Release Candidate QA
+### Milestone 15: Notes and The Briefing (Alpha 1 slice)
+
+**Goal:** Ship standalone immutable Notes (author+Command visibility), Command add-to-Briefing by reference or link, Briefing hub display of added Notes for approved event staff, and empty shells for AARs, Directions, Action Plan, and Notices. Full AAR/Directions/Action Plan/Notice workflows remain post–Alpha 1 but are specified in source docs.
+
+**Primary source docs:** Requirements 3.36–3.41, 5.18, 7.19 (BRF-001–BRF-030); technical spec 21B; data/API 11A; UI Briefing surface spec; UI contract 12.7A.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M15.1 Note model | Add `notes` table/model/factory with immutability (no update path). | BRF-004–BRF-006; data/API 11A.2 | Model/domain tests |
+| M15.2 Notes/Briefing permissions | Catalog `notes.*` / `briefing.*` capabilities: create, author view, Command view, add-to-briefing, hub view. | BRF-003–BRF-008C; technical spec 21B.2 | PermissionCatalog / policy tests |
+| M15.3 Create Note command | Add online-only `POST /api/commands/create-note` with authz and audit. | BRF-004–BRF-006, BRF-029–BRF-030; data/API 11A.9 | Feature/policy/audit tests |
+| M15.4 Note read APIs | Add Notes list/detail for author and Command only (pre-inclusion). | BRF-007 | HTTP/policy tests |
+| M15.5 Add-to-Briefing command | Add online-only `POST /api/commands/add-note-to-briefing` for reference/link modes with credit and audience (`event_staff` \| `department_leads_only`). | BRF-008–BRF-008C2; data/API 11A.3 | Feature/policy/audit tests |
+| M15.6 Briefing hub UI | Add `briefing.hub` showing Command-added Notes plus shells for AAR/Directions/Action Plan/Notices. | BRF-001, BRF-027; Briefing surface spec 4 | UI tests |
+| M15.7 Notes + add UI | Add `notes.create` / `notes.index` / `notes.detail` and `briefing.add-note` (reference/link + audience). | BRF-005–BRF-008C2; UI contract 12.7A | UI/policy tests |
+| M15.8 Orchid Note scaffold | Add Orchid Note list/detail repair visibility. | Technical spec 21B.7; UI contract `orchid.notes` | Orchid feature tests |
+| M15.9 Notes/Briefing PowerSync | Sync Notes to author+Command; sync Briefing inclusions by audience. | Technical spec 21B.8; data/API 11A.10 | Sync/policy tests |
+| M15.10 Briefing QA script | Add/update `QA-BRF-01-briefing-notes-hub.md`. | QA README | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- department lead, team lead, and IC can create an immutable Note while connected;
+- author and Command can read the Note; ordinary event staff cannot before Briefing add;
+- Command can add the Note to The Briefing by reference or link with author credit and event-staff or department-leads-only audience;
+- permitted viewers then see the inclusion in the hub; team leads without department-lead/Command/organizer roles do not see department-leads-only inclusions;
+- Note body cannot be edited or appended after create;
+- hub shows clear shells for AAR, Directions, Action Plan, and Notices;
+- Orchid exposes Note list/detail for repair visibility;
+- unauthorized users cannot create Notes or add to Briefing.
+
+**QA gate:** A human can create an immutable Note as a lead, confirm ordinary staff cannot read it, have Command add it by reference (event staff) and by link (department leads only), confirm visibility boundaries, and see shells for the remaining Briefing types.
+
+---
+
+### Milestone 16: Packaging, Event-Mode Safeguards, and Release Candidate QA
 
 **Goal:** Produce versioned Alpha 1 builds and verify release readiness.
 
@@ -494,13 +529,13 @@ This milestone is placed after IMS (Milestone 11), offline foundations (Mileston
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M15.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
-| M15.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
-| M15.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
-| M15.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
-| M15.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
-| M15.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
-| M15.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
+| M16.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
+| M16.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
+| M16.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
+| M16.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
+| M16.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
+| M16.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
+| M16.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
 
 **QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness.
 
@@ -521,7 +556,8 @@ QA should run in this order:
 9. Central/on-site sync QA.
 10. Export/reporting QA.
 11. Event geography and maps QA.
-12. Release candidate QA.
+12. The Briefing Notes + add-to-Briefing + hub shells QA.
+13. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 

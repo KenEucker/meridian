@@ -27,6 +27,7 @@ When documents conflict, use this order:
    - Component Library Specification;
    - Dashboard Widget Specification;
    - IMS Surface Specification;
+   - Briefing Surface Specification;
    - Kiosk and Field Hardware UX Guide;
    - Screen Surface Specification.
 
@@ -843,6 +844,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `staff.documents` | `staff.documents.index` | Policies & Procedures library | Authenticated staff with visible documents |
 | `staff.document-detail` | `staff.documents.show` | Rendered policy/procedure document | Authenticated staff with document visibility |
 | `staff.document-acknowledgments` | `staff.documents.acknowledgments` | My required document acknowledgments | Authenticated staff |
+| `briefing.hub` | `events.briefing` | The Briefing hub (Command-added Notes + shells) | Approved event staff |
 
 ### 12.4 Department Screens
 
@@ -959,6 +961,25 @@ Organizer screens must not display IMS incidents unless the user also has IC tea
 
 Incident create/edit routes require active server connection in Alpha 1.
 
+### 12.7A Notes and Briefing Screens
+
+| Screen ID | Route name | Purpose | Access |
+|---|---|---|---|
+| `briefing.hub` | `events.briefing` | Event Briefing hub (Command-added Notes + type sections) | Approved event staff |
+| `notes.index` | `events.notes.index` | Notes list (own Notes; Command sees all event Notes) | Note author or Command |
+| `notes.create` | `events.notes.create` | Create immutable Note | Department lead, team lead, `ic_lead`, `ic_operator` |
+| `notes.detail` | `events.notes.show` | View Note | Author or Command; also via Briefing reference “view original” |
+| `briefing.add-note` | `events.briefing.notes.add` | Command add Note to Briefing (reference/link + audience) | `ic_lead`, `ic_operator` |
+| `briefing.aar` | `events.briefing.aar.index` | AAR list (shell in Alpha 1) | Per AAR visibility rules |
+| `briefing.aar-detail` | `events.briefing.aar.show` | AAR detail (shell in Alpha 1) | Per AAR visibility rules |
+| `briefing.directions` | `events.briefing.directions.index` | Directions list (shell in Alpha 1) | Per Direction visibility |
+| `briefing.action-plan` | `events.briefing.action-plan` | Action Plan (shell in Alpha 1) | Approved event staff |
+| `briefing.notices` | `events.briefing.notices.index` | Notices list (shell in Alpha 1) | Per Notice visibility |
+
+Alpha 1 implements `briefing.hub`, Notes list/create/detail with author+Command visibility, Command `briefing.add-note` (reference/link + `event_staff` or `department_leads_only` audience), hub display of added Notes to permitted viewers, and empty shells for AAR, Directions, Action Plan, and Notices. Note create and add-to-Briefing require server connection.
+
+Orchid Note repair screen ID: `orchid.notes`.
+
 ### 12.8 Kiosk Screens
 
 | Screen ID | Route name | Purpose | Access |
@@ -979,6 +1000,7 @@ Incident create/edit routes require active server connection in Alpha 1.
 | `orchid.document-acknowledgments` | Orchid screen | Acknowledgment review | Authorized maintainer/god mode |
 | `orchid.events` | Orchid screen | Event administration including IC and Placement department designation | Organizer/god mode |
 | `orchid.event-maps` | Orchid screen | Event maps, map assets/packages, camps, and map locations administration | Authorized maintainer/god mode |
+| `orchid.notes` | Orchid screen | Note list/detail repair visibility | God mode / authorized repair |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
 | `orchid.node-config` | Orchid screen | Node configuration and source display | God mode |
 
@@ -1065,6 +1087,7 @@ Placement department designation is configured on the event admin surface (`orga
 | `staff.assigned_departments` | Assigned Departments | user/org/event | authenticated staff | No assigned departments | View departments |
 | `staff.shift_alerts` | Shift Alerts | user/event | authenticated staff | No shift alerts | View alert source |
 | `staff.document_acknowledgments` | Documents to Acknowledge | user/org/department | authenticated staff | No documents need acknowledgment | Review documents |
+| `staff.briefing` | The Briefing | user/event | approved event staff | No Briefing items | Open Briefing hub |
 | `staff.quiet_state` | Nothing Needs Action | user/event | authenticated staff | calm reassurance | None |
 
 ### 13.2 Department Lead Widgets
@@ -1110,6 +1133,7 @@ Organizer widgets must not surface IMS incidents, restricted Field Reports, acti
 | `ic.on_scene` | On Scene | event/IC department | IC viewer/operator/lead | No incidents on scene | Open incidents |
 | `ic.monitoring` | Monitoring | event/IC department | IC viewer/operator/lead | No monitoring incidents | Open incidents |
 | `ic.unresolved_field_reports` | Field Reports to Review | event/IC department | IC viewer/operator/lead | No Field Reports awaiting IC review | Review Field Reports |
+| `ic.briefing` | The Briefing | event/IC department | IC viewer/operator/lead | Briefing quiet | Open Briefing hub |
 
 ### 13.6 Kiosk Widgets
 
