@@ -15,7 +15,6 @@ import {
   installDevelopmentIncidentSession,
   resolveIncidentSession,
 } from "@/ims/incidentReadModel";
-import IncidentDetailView from "@/views/IncidentDetailView.vue";
 import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
 import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
@@ -243,7 +242,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/ims/incidents/:incidentId",
     name: "ims.incidents.show",
-    component: IncidentDetailView,
+    component: IncidentEditView,
     beforeEnter: ensureIncidentSession,
   },
   {

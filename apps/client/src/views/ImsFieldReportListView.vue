@@ -531,7 +531,7 @@ function compareReports(
 
 <style scoped>
 .ims-fr-list {
-  width: min(100%, 72rem);
+  width: 100%;
   display: grid;
   gap: var(--m-space-5);
 }

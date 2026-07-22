@@ -12,9 +12,12 @@ import {
   canEditIncident,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
+  resolveIncidentListOpenMode,
   listIncidentsForSession,
   resolveIncidentSession,
+  setIncidentListOpenMode,
   statusLabel,
+  type IncidentListOpenMode,
   type IncidentPriorityLabel,
   type ImsIncident,
 } from "@/ims/incidentReadModel";
@@ -51,6 +54,7 @@ const sortDirection = computed(() =>
   route.query.direction === "asc" ? "asc" : "desc",
 );
 const searchDraft = ref(searchQuery.value);
+const listOpenMode = ref<IncidentListOpenMode>(resolveIncidentListOpenMode());
 const incidents = computed(() => {
   return listIncidentsForSession(session.value, searchQuery.value)
     .filter((incident) => matchesStateFilter(incident, stateFilter.value))
@@ -122,6 +126,28 @@ function onShiftFilterChange(event: Event): void {
       shift: target.value === "current" ? "current" : undefined,
     },
   });
+}
+
+function onListOpenModeChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+  const mode: IncidentListOpenMode = target.value === "edit" ? "edit" : "view";
+
+  listOpenMode.value = mode;
+  setIncidentListOpenMode(mode);
+}
+
+function incidentOpenTarget(incident: ImsIncident) {
+  if (canEdit.value && listOpenMode.value === "edit") {
+    return {
+      name: "ims.incidents.edit",
+      params: { incidentId: incident.id },
+    };
+  }
+
+  return {
+    name: "ims.incidents.show",
+    params: { incidentId: incident.id },
+  };
 }
 
 function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
@@ -361,6 +387,17 @@ async function onSearchSubmit(): Promise<void> {
           <option value="all">All shifts</option>
           <option value="current">Current shift</option>
         </select>
+
+        <label v-if="canEdit" for="ims-list-open-mode">Open incidents as</label>
+        <select
+          v-if="canEdit"
+          id="ims-list-open-mode"
+          :value="listOpenMode"
+          @change="onListOpenModeChange"
+        >
+          <option value="view">View</option>
+          <option value="edit">Edit</option>
+        </select>
       </form>
 
       <p
@@ -430,10 +467,7 @@ async function onSearchSubmit(): Promise<void> {
               <th scope="row">
                 <RouterLink
                   class="ims-list__incident-link"
-                  :to="{
-                    name: 'ims.incidents.show',
-                    params: { incidentId: incident.id },
-                  }"
+                  :to="incidentOpenTarget(incident)"
                 >
                   <span>{{ incident.incidentNumber }}</span>
                   <span>{{ incident.title }}</span>
@@ -466,7 +500,7 @@ async function onSearchSubmit(): Promise<void> {
 
 <style scoped>
 .ims-list {
-  width: min(100%, 72rem);
+  width: 100%;
   display: grid;
   gap: var(--m-space-5);
 }

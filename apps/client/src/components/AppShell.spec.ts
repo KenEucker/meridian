@@ -190,6 +190,7 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.get(".app-shell__user-menu").text()).toContain(
       "Switch department",
     );
+    expect(wrapper.get(".app-shell__user-menu").text()).toContain("Organizer");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Gate");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("DPW");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain(

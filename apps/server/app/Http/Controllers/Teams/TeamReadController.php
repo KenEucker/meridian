@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Teams;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Team;
+use App\Models\TeamMembership;
 use App\Services\Departments\DepartmentSelfAdminAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,9 +20,12 @@ final class TeamReadController extends Controller
         $user = $request->user();
         abort_unless($user !== null, 401);
 
-        if (! $access->canAdministerDepartment($user, $department)) {
+        $canAdminister = $access->canAdministerDepartment($user, $department);
+        $ledTeamIds = $access->ledTeamIds($user, $department);
+
+        if (! $canAdminister && $ledTeamIds === []) {
             return response()->json([
-                'message' => 'You do not have permission to administer this department.',
+                'message' => 'You do not have permission to view department administration for this department.',
             ], 403);
         }
 
@@ -36,6 +40,10 @@ final class TeamReadController extends Controller
             ->where('department_id', $department->id)
             ->orderByDesc('is_default')
             ->orderBy('name');
+
+        if (! $canAdminister) {
+            $query->whereIn('id', $ledTeamIds);
+        }
 
         if ($status === 'active') {
             $query->active();
@@ -58,7 +66,13 @@ final class TeamReadController extends Controller
                     : null,
                 'archived_at' => $department->archived_at?->toIso8601String(),
             ],
+            'access' => [
+                'can_administer' => $canAdminister,
+                'can_view_led_teams' => $ledTeamIds !== [],
+                'led_team_ids' => $ledTeamIds,
+            ],
             'teams' => $teams->values()->all(),
+            'team_staff' => $this->teamStaffPayload($ledTeamIds),
         ]);
     }
 
@@ -75,13 +89,23 @@ final class TeamReadController extends Controller
             return response()->json(['message' => 'Team not found for this department.'], 404);
         }
 
-        if (! $access->canAdministerDepartment($user, $department)) {
+        $canAdminister = $access->canAdministerDepartment($user, $department);
+        $ledTeamIds = $access->ledTeamIds($user, $department);
+
+        if (! $canAdminister && ! in_array((string) $team->id, $ledTeamIds, true)) {
             return response()->json([
-                'message' => 'You do not have permission to administer this department.',
+                'message' => 'You do not have permission to view this team.',
             ], 403);
         }
 
-        return response()->json($this->payload($team));
+        return response()->json([
+            ...$this->payload($team),
+            'access' => [
+                'can_administer' => $canAdminister,
+                'can_view_led_team' => in_array((string) $team->id, $ledTeamIds, true),
+            ],
+            'team_staff' => $this->teamStaffPayload([(string) $team->id]),
+        ]);
     }
 
     /**
@@ -110,5 +134,44 @@ final class TeamReadController extends Controller
             'created_at' => $team->created_at?->toIso8601String(),
             'updated_at' => $team->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  list<string>  $teamIds
+     * @return list<array{
+     *     staff_id: string,
+     *     display_name: string,
+     *     handle: string|null,
+     *     team_id: string,
+     *     team_name: string,
+     *     membership_role: string|null
+     * }>
+     */
+    private function teamStaffPayload(array $teamIds): array
+    {
+        if ($teamIds === []) {
+            return [];
+        }
+
+        return TeamMembership::query()
+            ->active()
+            ->whereIn('team_id', $teamIds)
+            ->with(['staff', 'team'])
+            ->get()
+            ->map(fn (TeamMembership $membership): array => [
+                'staff_id' => (string) $membership->staff_id,
+                'display_name' => $membership->staff->preferred_name
+                    ?: $membership->staff->legal_name,
+                'handle' => $membership->staff->handle,
+                'team_id' => (string) $membership->team_id,
+                'team_name' => $membership->team->name,
+                'membership_role' => $membership->membership_role,
+            ])
+            ->sortBy([
+                ['team_name', 'asc'],
+                ['display_name', 'asc'],
+            ])
+            ->values()
+            ->all();
     }
 }

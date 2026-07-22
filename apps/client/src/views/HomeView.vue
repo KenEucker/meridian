@@ -9,6 +9,7 @@ import {
 import { formatTimestamp } from "@/department-ops/labels";
 import {
   fixtureDepartmentHasAdminAccess,
+  fixtureDepartmentHasOrganizerDepartmentAccess,
   selectedFixtureDepartment,
   selectedFixtureDepartmentRouteParams,
 } from "@/department-teams/fixtureDepartmentAccess";
@@ -47,6 +48,9 @@ const departmentAdminRoute = computed(() => ({
 }));
 const showAdminCard = computed(() =>
   fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value),
+);
+const showOrganizerDepartmentsCard = computed(() =>
+  fixtureDepartmentHasOrganizerDepartmentAccess(selectedFixtureDepartment.value),
 );
 const showOverviewCard = computed(
   () => selectedFixtureDepartment.value.isDepartmentLead,
@@ -184,7 +188,11 @@ const operationsWindowLabel = computed(() => {
         <h2>Admin</h2>
         <p>Department and team administration.</p>
       </RouterLink>
-      <RouterLink :to="organizerDepartmentsRoute" class="home__card">
+      <RouterLink
+        v-if="showOrganizerDepartmentsCard"
+        :to="organizerDepartmentsRoute"
+        class="home__card"
+      >
         <h2>Departments</h2>
         <p>Organizer department administration.</p>
       </RouterLink>

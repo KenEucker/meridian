@@ -155,6 +155,111 @@ class TeamAdminHttpTest extends TestCase
             ->assertJsonPath('code', 'PLAN_SUPPORT');
     }
 
+    public function test_team_lead_gets_scoped_read_only_team_and_staff_view(): void
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create([
+            'name' => 'Rangers',
+            'code' => 'RANGERS',
+        ]);
+        $ledTeam = Team::factory()->for($department)->create([
+            'name' => 'Dirt',
+            'code' => 'DIRT',
+        ]);
+        $peerTeam = Team::factory()->for($department)->create([
+            'name' => 'Operators',
+            'code' => 'OPERATORS',
+        ]);
+
+        $actor = User::factory()->create();
+        $actorStaff = Staff::factory()->create([
+            'preferred_name' => 'Sam',
+            'legal_name' => 'Sam Shiftlead',
+            'handle' => 'samshift',
+        ]);
+        $actor->staffProfiles()->attach($actorStaff->id);
+        $actorDepartmentMembership = DepartmentMembership::factory()
+            ->for($department)
+            ->for($actorStaff)
+            ->create();
+        TeamMembership::factory()->create([
+            'team_id' => $ledTeam->id,
+            'staff_id' => $actorStaff->id,
+            'department_membership_id' => $actorDepartmentMembership->id,
+            'membership_role' => 'lead',
+        ]);
+        TeamGrant::factory()->create([
+            'team_id' => $ledTeam->id,
+            'event_id' => null,
+            'permission_role_id' => PermissionRole::query()->where('code', 'shift_lead')->firstOrFail()->id,
+        ]);
+
+        $assignedStaff = Staff::factory()->create([
+            'preferred_name' => 'Vera',
+            'legal_name' => 'Vera Staff',
+            'handle' => 'verastaff',
+        ]);
+        $assignedDepartmentMembership = DepartmentMembership::factory()
+            ->for($department)
+            ->for($assignedStaff)
+            ->create();
+        TeamMembership::factory()->create([
+            'team_id' => $ledTeam->id,
+            'staff_id' => $assignedStaff->id,
+            'department_membership_id' => $assignedDepartmentMembership->id,
+            'membership_role' => 'member',
+        ]);
+
+        $peerStaff = Staff::factory()->create(['preferred_name' => 'Omar']);
+        $peerDepartmentMembership = DepartmentMembership::factory()
+            ->for($department)
+            ->for($peerStaff)
+            ->create();
+        TeamMembership::factory()->create([
+            'team_id' => $peerTeam->id,
+            'staff_id' => $peerStaff->id,
+            'department_membership_id' => $peerDepartmentMembership->id,
+            'membership_role' => 'member',
+        ]);
+
+        $this->actingAs($actor)
+            ->getJson("/api/departments/{$department->id}/teams")
+            ->assertOk()
+            ->assertJsonPath('access.can_administer', false)
+            ->assertJsonPath('access.can_view_led_teams', true)
+            ->assertJsonFragment(['id' => $ledTeam->id, 'code' => 'DIRT'])
+            ->assertJsonMissing(['id' => $peerTeam->id, 'code' => 'OPERATORS'])
+            ->assertJsonFragment([
+                'staff_id' => $assignedStaff->id,
+                'display_name' => 'Vera',
+                'handle' => 'verastaff',
+                'team_id' => $ledTeam->id,
+                'team_name' => 'Dirt',
+                'membership_role' => 'member',
+            ])
+            ->assertJsonMissing(['staff_id' => $peerStaff->id]);
+
+        $this->actingAs($actor)
+            ->getJson("/api/departments/{$department->id}/teams/{$ledTeam->id}")
+            ->assertOk()
+            ->assertJsonPath('access.can_administer', false)
+            ->assertJsonPath('access.can_view_led_team', true)
+            ->assertJsonPath('id', $ledTeam->id)
+            ->assertJsonFragment(['staff_id' => $assignedStaff->id]);
+
+        $this->actingAs($actor)
+            ->getJson("/api/departments/{$department->id}/teams/{$peerTeam->id}")
+            ->assertForbidden();
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-team', [
+                'department_id' => $department->id,
+                'name' => 'Denied',
+                'code' => 'DENIED',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_non_admin_is_forbidden(): void
     {
         $organization = Organization::factory()->create();
