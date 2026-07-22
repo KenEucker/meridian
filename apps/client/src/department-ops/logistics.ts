@@ -7,7 +7,7 @@ import type {
   ShiftOption,
 } from "@/department-ops/types";
 
-/** Early/late buffer around scheduled start/end for “current” desk listing. */
+/** Early/late buffer around scheduled start/end for “current- desk listing. */
 export const CURRENT_SHIFT_WINDOW_MINUTES = 15;
 
 const CURRENT_SHIFT_WINDOW_MS = CURRENT_SHIFT_WINDOW_MINUTES * 60 * 1000;
@@ -76,7 +76,7 @@ export function searchLogisticsDesk(
           id: staff.staffId,
           kind: "staff",
           label: staff.displayName,
-          detail: `${staff.teamLabel} · ${staff.presenceState === "on_site" ? "On-site" : "Off-site"}`,
+          detail: `${staff.teamLabel} / ${staff.presenceState === "on_site" ? "On-site" : "Off-site"}`,
         }) satisfies LogisticsSearchHit,
     );
 
@@ -110,7 +110,7 @@ export function searchLogisticsDesk(
           id: shift.shiftId,
           kind: "shift",
           label: shift.title,
-          detail: `${shift.teamLabel} · ${shift.lifecycle}`,
+          detail: `${shift.teamLabel} / ${shift.lifecycle}`,
         }) satisfies LogisticsSearchHit,
     );
 
@@ -166,7 +166,9 @@ export function selectLogisticsHit(
 
   const relatedStaffIds = Object.values(desk.staffWorkspaces)
     .filter((workspace) =>
-      workspace.shiftCards.some((card) => card.shiftId === hit.id),
+      workspace.shiftCards.some(
+        (card) => card.shiftId === hit.id && card.attendanceState !== null,
+      ),
     )
     .map((workspace) => workspace.staffId);
 

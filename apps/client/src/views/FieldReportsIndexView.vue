@@ -42,6 +42,10 @@ function syncLabel(report: OfflineFieldReport): string {
 
 <template>
   <section class="field-reports" aria-labelledby="field-reports-heading">
+    <p class="field-reports__nav">
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
+    </p>
+
     <header class="field-reports__header">
       <h1 id="field-reports-heading" class="field-reports__heading">
         My Field Reports
@@ -58,9 +62,6 @@ function syncLabel(report: OfflineFieldReport): string {
         Field Reports.
       </p>
       <p class="field-reports__actions">
-        <RouterLink class="field-reports__secondary-link" :to="{ name: 'home' }">
-          Home
-        </RouterLink>
         <RouterLink
           class="field-reports__create"
           :to="{ name: 'staff.field-reports.create' }"
@@ -113,6 +114,18 @@ function syncLabel(report: OfflineFieldReport): string {
   width: var(--m-content-narrow);
 }
 
+.field-reports__nav {
+  margin: 0 0 var(--m-space-4);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.field-reports__nav a {
+  color: var(--m-text-secondary);
+  text-decoration: none;
+}
+
 .field-reports__heading {
   margin: 0 0 var(--m-space-2);
   font-family: var(--m-font-heading);
@@ -142,13 +155,17 @@ function syncLabel(report: OfflineFieldReport): string {
 
 .field-reports__create,
 .field-reports__secondary-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-height: 2.75rem;
-  padding: var(--m-space-2) var(--m-space-4);
-  text-decoration: none;
   border-radius: var(--m-radius-sm);
-  font-weight: 600;
+  padding: 0 var(--m-space-4);
+  font-weight: 800;
+  line-height: 1;
   text-align: center;
+  text-decoration: none;
 }
 
 .field-reports__create {
@@ -162,6 +179,7 @@ function syncLabel(report: OfflineFieldReport): string {
 }
 
 .field-reports__create:focus-visible,
+.field-reports__nav a:focus-visible,
 .field-reports__secondary-link:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;

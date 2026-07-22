@@ -30,7 +30,7 @@ defineEmits<{
         :key="shift.shiftId"
         :value="shift.shiftId"
       >
-        {{ shift.title }} · {{ lifecycleLabel(shift.lifecycle) }} ·
+        {{ shift.title }} / {{ lifecycleLabel(shift.lifecycle) }} /
         {{ formatTimestamp(shift.startsAt, timeZone) }}
       </option>
     </select>
@@ -42,6 +42,8 @@ defineEmits<{
   display: grid;
   gap: var(--m-space-2);
   margin: 0 0 var(--m-space-5);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
   font-weight: 700;
 }
 
@@ -49,10 +51,11 @@ defineEmits<{
   min-height: 2.75rem;
   padding: var(--m-space-2) var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
+  border-radius: 8px;
+  background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
+  font-weight: 700;
 }
 
 .shift-selector select:focus-visible {

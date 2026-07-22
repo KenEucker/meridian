@@ -4,6 +4,8 @@ import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import ShiftSelector from "@/components/department-ops/ShiftSelector.vue";
+import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
+import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import { LOCAL_DEPARTMENT_OVERVIEW } from "@/department-ops/fixtures";
 import {
   attendanceStateLabel,
@@ -22,7 +24,6 @@ const overview = ref(LOCAL_DEPARTMENT_OVERVIEW);
 const shift = computed(() => selectedShift(overview.value));
 const summary = computed(() => overviewSummary(overview.value));
 const checkedIn = computed(() => checkedInAssignments(overview.value));
-
 const routeParams = computed(() => ({
   eventId: String(route.params.eventId ?? overview.value.context.eventId),
   departmentId: String(
@@ -43,27 +44,56 @@ function onShiftChange(shiftId: string): void {
     :freshness="overview.context.dataFreshnessLabel"
   >
     <template #nav>
-      <RouterLink :to="{ name: 'home' }">Back to Home</RouterLink>
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
     </template>
 
-    <dl class="overview__context" aria-label="Department context">
-      <div>
-        <dt>Event</dt>
-        <dd>{{ overview.context.eventLabel }}</dd>
-      </div>
-      <div>
-        <dt>Department</dt>
-        <dd>{{ overview.context.departmentLabel }}</dd>
-      </div>
-      <div>
-        <dt>Scope</dt>
-        <dd>
-          {{
-            overview.context.selectedTeamLabel ?? "Department (all teams)"
-          }}
-        </dd>
-      </div>
-    </dl>
+    <template #navigation>
+      <RouterLink
+        :to="{
+          name: overview.drillThrough.logisticsRouteName,
+          params: routeParams,
+        }"
+      >
+        Open Logistics Window
+      </RouterLink>
+      <RouterLink
+        :to="{
+          name: overview.drillThrough.operationsRouteName,
+          params: routeParams,
+        }"
+      >
+        Open Operations Center
+      </RouterLink>
+      <RouterLink
+        :to="{
+          name: overview.drillThrough.planningRouteName,
+          params: routeParams,
+        }"
+      >
+        Open Planning Table
+      </RouterLink>
+    </template>
+
+    <template #heading-cards>
+      <WorkflowHeadingCardGrid>
+        <WorkflowHeadingCard
+          label="Shift assignments"
+          :value="String(summary.assignmentCount)"
+        />
+        <WorkflowHeadingCard
+          label="Checked in"
+          :value="String(summary.checkedInCount)"
+        />
+        <WorkflowHeadingCard
+          label="On-site"
+          :value="String(summary.onSiteCount)"
+        />
+        <WorkflowHeadingCard
+          label="Equipment out"
+          :value="String(summary.equipmentOutCount)"
+        />
+      </WorkflowHeadingCardGrid>
+    </template>
 
     <ShiftSelector
       :shifts="overview.shifts"
@@ -76,25 +106,6 @@ function onShiftChange(shiftId: string): void {
       {{ formatTimestamp(shift.startsAt, overview.context.timeZone) }} -
       {{ formatTimestamp(shift.endsAt, overview.context.timeZone) }}
     </p>
-
-    <dl class="overview__summary" aria-label="Overview summary">
-      <div>
-        <dt>Shift assignments</dt>
-        <dd>{{ summary.assignmentCount }}</dd>
-      </div>
-      <div>
-        <dt>Checked in</dt>
-        <dd>{{ summary.checkedInCount }}</dd>
-      </div>
-      <div>
-        <dt>On-site</dt>
-        <dd>{{ summary.onSiteCount }}</dd>
-      </div>
-      <div>
-        <dt>Equipment out</dt>
-        <dd>{{ summary.equipmentOutCount }}</dd>
-      </div>
-    </dl>
 
     <section aria-labelledby="exceptions-heading" class="overview__section">
       <h2 id="exceptions-heading">Exceptions needing attention</h2>
@@ -122,7 +133,7 @@ function onShiftChange(shiftId: string): void {
         <li v-for="member in checkedIn" :key="member.assignmentId">
           <span>{{ member.displayName }}</span>
           <span>
-            {{ attendanceStateLabel(member.attendanceState) }} ·
+            {{ attendanceStateLabel(member.attendanceState) }} /
             {{ deploymentLabel(overview, member.currentDeploymentId) }}
           </span>
         </li>
@@ -177,65 +188,10 @@ function onShiftChange(shiftId: string): void {
       </ul>
     </section>
 
-    <nav class="overview__drill" aria-label="Drill-through workflows">
-      <RouterLink
-        :to="{
-          name: overview.drillThrough.logisticsRouteName,
-          params: routeParams,
-        }"
-      >
-        Open Logistics Desk
-      </RouterLink>
-      <RouterLink
-        :to="{
-          name: overview.drillThrough.operationsRouteName,
-          params: routeParams,
-        }"
-      >
-        Open Operations Center
-      </RouterLink>
-      <RouterLink
-        :to="{
-          name: overview.drillThrough.planningRouteName,
-          params: routeParams,
-        }"
-      >
-        Open Planning Table
-      </RouterLink>
-    </nav>
   </DeptOpsShell>
 </template>
 
 <style scoped>
-.overview__context,
-.overview__summary {
-  display: grid;
-  gap: var(--m-space-3);
-  margin: 0 0 var(--m-space-5);
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.overview__context div,
-.overview__summary div {
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
-  padding: var(--m-space-3);
-}
-
-.overview__context dt,
-.overview__summary dt {
-  margin: 0 0 var(--m-space-1);
-  color: var(--m-text-muted);
-  font-size: var(--m-text-sm);
-}
-
-.overview__context dd,
-.overview__summary dd {
-  margin: 0;
-  font-weight: 700;
-}
-
 .overview__window {
   margin: 0 0 var(--m-space-5);
   color: var(--m-text-muted);
@@ -247,7 +203,10 @@ function onShiftChange(shiftId: string): void {
 
 .overview__section h2 {
   margin: 0 0 var(--m-space-3);
-  font-size: var(--m-text-lg);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .overview__exceptions,
@@ -265,18 +224,24 @@ function onShiftChange(shiftId: string): void {
   gap: 0.25rem;
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
   background: var(--m-surface-raised);
+  box-shadow: var(--m-shadow-sm);
 }
 
 .overview__exceptions li[data-severity="warning"] {
-  border-color: var(--m-text-primary);
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-warning) 55%,
+    var(--m-border-default)
+  );
 }
 
 .overview__table-frame {
   overflow-x: auto;
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
 }
 
 .overview__table-frame table {
@@ -291,36 +256,16 @@ function onShiftChange(shiftId: string): void {
   border-bottom: 1px solid var(--m-border-default);
 }
 
-.overview__drill {
-  display: grid;
-  gap: var(--m-space-2);
+.overview__table-frame thead th {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+  text-transform: uppercase;
 }
 
-.overview__drill a {
-  display: block;
-  min-height: 2.75rem;
-  padding: var(--m-space-3);
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
+.overview__table-frame tbody th {
   color: var(--m-text-primary);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.overview__drill a:focus-visible {
-  outline: 2px solid var(--m-focus-ring);
-  outline-offset: 2px;
 }
 
 @media (min-width: 48rem) {
-  .overview__context,
-  .overview__summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overview__drill {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 </style>

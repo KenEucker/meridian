@@ -21,7 +21,7 @@ import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 // View submitted Field Report — UI contract 12.3 `staff.field-reports.show`
 // (M9.4 / M9.7A / M9.8). Authors may view their own reports (FR-004). Original
 // title and body are view-only; no Edit/Save/autosave (FR-007; IMS surface §11;
-// UI contract 14.2). Authors may append corrections (FR-007–FR-009). Incident
+// UI contract 14.2). Authors may append corrections (FR-007-FR-009). Incident
 // attachment state is not shown to the submitter (technical spec 17.6). Local
 // photo previews and pending upload state come from the durable encrypted photo
 // queue until sync clears it.

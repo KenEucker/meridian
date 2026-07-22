@@ -30,6 +30,7 @@ describe("readiness surface", () => {
     const wrapper = await mountAt("/readiness");
 
     expect(wrapper.get("#readiness-heading").text()).toBe("Device readiness");
+    expect(wrapper.get(".readiness__nav a").attributes("href")).toBe("/");
   });
 
   it("renders every section 14 readiness item", async () => {
@@ -52,6 +53,25 @@ describe("readiness surface", () => {
     }
   });
 
+  it("orders readiness cards by ready, failed, and pending", async () => {
+    const wrapper = await mountAt("/readiness");
+
+    const statuses = wrapper
+      .findAll(".readiness-checklist__item")
+      .map((row) => row.attributes("data-status"));
+
+    const order = { ready: 0, "not-ready": 1, pending: 2 };
+    const rankFor = (status: string | undefined) =>
+      order[status as keyof typeof order] ?? Number.POSITIVE_INFINITY;
+
+    expect(
+      statuses.every((status, index) => {
+        const previous = statuses[index - 1];
+        return index === 0 || rankFor(previous) <= rankFor(status);
+      }),
+    ).toBe(true);
+  });
+
   it("states that readiness is advisory and user-private, not organizer-visible", async () => {
     const wrapper = await mountAt("/readiness");
 
@@ -70,19 +90,25 @@ describe("readiness surface", () => {
     );
   });
 
-  it("links to the readiness surface from the home placeholder", async () => {
+  it("links to the readiness surface from the home dashboard", async () => {
     const wrapper = await mountAt("/");
 
     const link = wrapper
-      .findAll(".home__links a")
-      .find((item) => item.text() === "Check device readiness");
+      .findAll(".home__card")
+      .find((item) => item.text().includes("Readiness"));
 
-    expect(link?.text()).toBe("Check device readiness");
+    expect(link?.text()).toContain("Readiness");
     expect(link?.attributes("href")).toBe("/readiness");
   });
 
   it("probes the current client scope when the surface renders", () => {
-    const wrapper = mount(ReadinessView);
+    const wrapper = mount(ReadinessView, {
+      global: {
+        stubs: {
+          RouterLink: { template: "<a><slot /></a>" },
+        },
+      },
+    });
 
     expect(wrapper.findAll(".readiness-checklist__item")).toHaveLength(8);
   });

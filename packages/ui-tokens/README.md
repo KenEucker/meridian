@@ -15,7 +15,16 @@ values, per `docs/ui/meridian-component-library-specification.md` section 3.
 
 Values trace to `docs/ui/meridian-style-guide.md` (color section 4, typography
 section 5, spacing/radius section 10, status section 11, accessibility
-section 13). Brand colors and status/severity colors are kept distinct.
+section 13). Platform accent values are the four logo colors only:
+`#475157`, `#6B7562`, `#A58667`, and `#CC792F`. Background,
+foreground/text, border, and focus/highlight tokens may use neutral
+accessibility values; action, status, attention/priority, and department accent
+tokens resolve to the platform palette.
+
+Action color semantics are intentional: creation uses `--m-action-primary-*`,
+search/filter and page navigation buttons below headings use
+`--m-action-secondary-*`, and delete/archive/remove/strike actions use
+`--m-action-destructive-*`.
 
 ## Consuming the tokens
 

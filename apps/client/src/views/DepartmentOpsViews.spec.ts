@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
@@ -43,6 +43,12 @@ function planningPath(): string {
   return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId}/planning`;
 }
 
+function homeCardByHeading(wrapper: VueWrapper, heading: string) {
+  return wrapper
+    .findAll(".home__card")
+    .find((item) => item.find("h2").text() === heading);
+}
+
 describe("department operations surfaces", () => {
   it("registers workflow routes and home links", async () => {
     const names = routes.map((route) => route.name);
@@ -50,34 +56,62 @@ describe("department operations surfaces", () => {
     expect(names).toContain("events.departments.logistics");
     expect(names).toContain("events.departments.operations");
     expect(names).toContain("events.departments.planning");
+    expect(names).toContain("staff.me");
+    expect(names).toContain("events.info");
     expect(names).toContain("ims.incidents.index");
     expect(names).toContain("ims.field-reports.index");
 
     const { wrapper } = await mountAt("/");
-    expect(wrapper.text()).toContain("Department overview");
-    expect(wrapper.text()).toContain("Logistics desk");
-    expect(wrapper.text()).toContain("Operations center");
-    expect(wrapper.text()).toContain("Planning table");
-    expect(wrapper.text()).toContain("Incident Management");
-    expect(wrapper.text()).toContain("Supporting tools");
+    expect(wrapper.get("#home-heading").text()).toBe(
+      LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
+    );
+    const eventCard = wrapper.get(".home__event-card");
+    expect(eventCard.find(".home__eyebrow").exists()).toBe(false);
+    expect(eventCard.text()).not.toContain("Admin");
+    expect(eventCard.get(".home__status").text()).toBe("ongoing");
+    expect(eventCard.text()).toContain("Operations");
+    expect(eventCard.text()).toContain("Location");
+    expect(eventCard.text()).toContain("Description");
+    expect(eventCard.text()).not.toContain("active");
+    expect(wrapper.text()).toContain("Overview");
+    expect(wrapper.text()).toContain("Logistics");
+    expect(wrapper.text()).toContain("Operations Center");
+    expect(wrapper.text()).toContain("Incidents");
+    expect(wrapper.text()).toContain("My Field Reports");
+    expect(wrapper.text()).toContain("Readiness");
+    expect(homeCardByHeading(wrapper, "Incidents")?.attributes("href")).toBe(
+      "/ims/incidents",
+    );
     expect(
-      wrapper
-        .findAll(".home__links a")
-        .find((item) => item.text() === "Incidents")
-        ?.attributes("href"),
-    ).toBe("/ims/incidents");
-    expect(
-      wrapper
-        .findAll(".home__links a")
-        .find((item) => item.text() === "Field Reports")
-        ?.attributes("href"),
+      homeCardByHeading(wrapper, "Field Reports")?.attributes("href"),
     ).toBe("/ims/field-reports");
+    expect(homeCardByHeading(wrapper, "Health")?.attributes("href")).toBe(
+      "/settings/about",
+    );
+  });
+
+  it("renders the staff Me page with profile links and current schedule", async () => {
+    const { wrapper } = await mountAt("/staff/me");
+
+    expect(wrapper.get("#me-heading").text()).toBe("Local Field Author");
+    expect(wrapper.get(".me__nav a").attributes("href")).toBe("/");
+    expect(wrapper.get(".me__photo").attributes("aria-label")).toContain(
+      "Local Field Author profile photo",
+    );
+    expect(wrapper.text()).toContain("Years of service");
+    expect(wrapper.text()).toContain("Events worked");
+    expect(wrapper.text()).toContain("My Field Reports");
     expect(
       wrapper
-        .findAll(".home__links a")
-        .find((item) => item.text() === "Health")
-        ?.attributes("href"),
-    ).toBe("/settings/about");
+        .findAll(".me__links a")
+        .some((link) => link.attributes("href") === "/staff/field-reports"),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Schedule for ongoing event");
+    expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
+    expect(wrapper.text()).toContain("Ranger Dirt Swing Shift");
+    expect(wrapper.get(".me__event").attributes("href")).toBe(
+      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId}/overview`,
+    );
   });
 
   it("redirects legacy shift-board routes to the new surfaces", async () => {
@@ -129,7 +163,7 @@ describe("department operations surfaces", () => {
   it("opens a staff-first logistics workspace from search", async () => {
     const { wrapper } = await mountAt(logisticsPath());
 
-    expect(wrapper.get("#dept-ops-heading").text()).toBe("Logistics Desk");
+    expect(wrapper.get("#dept-ops-heading").text()).toBe("Logistics Window");
     expect(wrapper.get("#current-shifts-heading").text()).toBe(
       "Current shifts",
     );
@@ -138,6 +172,8 @@ describe("department operations surfaces", () => {
       "Offline search cache",
     );
     expect(wrapper.text()).toContain("Offline usable");
+    expect(wrapper.text()).toContain("Find staff");
+    expect(wrapper.text().toLowerCase()).not.toContain("agent");
 
     await wrapper.get('input[type="search"]').setValue("swing");
     const shiftButton = wrapper
@@ -148,6 +184,9 @@ describe("department operations surfaces", () => {
 
     expect(wrapper.get("#search-context-heading").text()).toBe(
       "Ranger Dirt Swing Shift",
+    );
+    expect(wrapper.get("#selected-shift-staff-heading").text()).toBe(
+      "Scheduled staff",
     );
     expect(wrapper.text()).toContain("Open Local Field Author");
     expect(wrapper.text()).toContain("Open Ari Ranger");
@@ -282,7 +321,7 @@ describe("department operations surfaces", () => {
   });
 
   it("keeps operations center modules capability-composed", async () => {
-    const { wrapper } = await mountAt(operationsPath());
+    const { wrapper, router } = await mountAt(operationsPath());
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Operations Center");
     expect(wrapper.text()).toContain("Deployments");
@@ -299,10 +338,55 @@ describe("department operations surfaces", () => {
         .findAll("a")
         .some((link) => link.text() === "Open IMS incidents"),
     ).toBe(true);
+    const metricCards = wrapper.findAll(".ops__metric-card");
+    const incidentCards = metricCards.slice(0, 4);
+    expect(incidentCards).toHaveLength(4);
+    expect(
+      incidentCards.find((card) => card.text().includes("Event total"))?.text(),
+    ).toContain("3");
+    expect(
+      incidentCards
+        .find((card) => card.text().includes("Current shift"))
+        ?.text(),
+    ).toContain("3");
+    expect(
+      incidentCards.find((card) => card.text().includes("Active"))?.text(),
+    ).toContain("2");
+    expect(
+      incidentCards
+        .find((card) => card.text().includes("Critical priority"))
+        ?.text(),
+    ).toContain("0");
+    const fieldReportCards = metricCards.slice(4);
+    expect(fieldReportCards).toHaveLength(4);
+    expect(
+      fieldReportCards.find((card) => card.text().includes("This shift"))?.text(),
+    ).toContain("3");
+    expect(
+      fieldReportCards.find((card) => card.text().includes("Linked"))?.text(),
+    ).toContain("0");
+    expect(
+      fieldReportCards.find((card) => card.text().includes("Unlinked"))?.text(),
+    ).toContain("3");
+    expect(
+      fieldReportCards.find((card) => card.text().includes("Event total"))?.text(),
+    ).toContain("3");
+    expect(wrapper.text()).not.toContain("My Field Reports");
     expect(wrapper.text()).not.toContain(
       "Incident overview requires event-scoped Incident Command capability.",
     );
     expect(wrapper.find("#deployments-heading").exists()).toBe(true);
+
+    await incidentCards
+      .find((card) => card.text().includes("Current shift"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("ims.incidents.index");
+    expect(router.currentRoute.value.query).toMatchObject({
+      state: "all",
+      shift: "current",
+    });
   });
 
   it("renders an identity-free planning table", async () => {
@@ -316,11 +400,40 @@ describe("department operations surfaces", () => {
     expect(wrapper.text()).toContain("Completed");
     expect(wrapper.text()).toContain("Actual hours");
     expect(wrapper.text()).toContain("Variance");
-    expect(wrapper.text()).not.toContain("Local Field Author");
-    expect(wrapper.text()).not.toContain("Vera Staff");
-    expect(wrapper.text()).not.toContain("Team members");
+    expect(wrapper.get("#planning-gantt-heading").text()).toBe(
+      "Scheduled shifts",
+    );
+    expect(wrapper.findAll(".planning__gantt-row")).toHaveLength(3);
+    expect(wrapper.get("#planning-shift-detail-heading").text()).toBe(
+      "Shift detail",
+    );
+    expect(wrapper.get(".planning__drilldown").text()).toContain(
+      "Ranger Dirt Day Shift",
+    );
+    expect(wrapper.get(".planning__drilldown").text()).toContain(
+      "Local Field Author",
+    );
+    expect(wrapper.get(".planning__drilldown").text()).toContain("Vera Staff");
+    expect(wrapper.get(".planning__drilldown").text()).toContain(
+      "Sam Shiftlead",
+    );
     expect(wrapper.text()).toContain(
-      "does not show individual staff identities",
+      "Aggregate rows remain identity-free",
+    );
+
+    await wrapper
+      .findAll(".planning__gantt-row")
+      .find((button) => button.text().includes("Ranger Dirt Swing Shift"))!
+      .trigger("click");
+
+    expect(wrapper.get(".planning__drilldown").text()).toContain(
+      "Ranger Dirt Swing Shift",
+    );
+    expect(wrapper.get(".planning__drilldown").text()).toContain(
+      "Ari Ranger",
+    );
+    expect(wrapper.get(".planning__drilldown").text()).not.toContain(
+      "Vera Staff",
     );
 
     expect(wrapper.findAll("tbody tr")).toHaveLength(3);

@@ -142,7 +142,7 @@ async function onRestore(): Promise<void> {
       {{ heading }}
     </h1>
     <p v-if="session" class="dept-team-edit__lede">
-      {{ session.departmentLabel }} · {{ session.roleLabel }}
+      {{ session.departmentLabel }} / {{ session.roleLabel }}
     </p>
 
     <p v-if="!canAdminister" class="dept-team-edit__restricted" role="status">
@@ -193,6 +193,7 @@ async function onRestore(): Promise<void> {
           <button
             v-if="existing && !existing.isDefault && existing.archivedAt === null"
             type="button"
+            class="dept-team-edit__archive"
             :disabled="busy"
             @click="onArchive"
           >
@@ -251,10 +252,10 @@ async function onRestore(): Promise<void> {
 .dept-team-edit__error {
   border-color: color-mix(
     in srgb,
-    var(--m-status-danger, #b42318) 40%,
+    var(--m-status-danger, #cc792f) 40%,
     var(--m-border-default)
   );
-  color: var(--m-status-danger, #b42318);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .dept-team-edit__form {
@@ -305,11 +306,17 @@ async function onRestore(): Promise<void> {
 .dept-team-edit__actions button[type="submit"] {
   border: 0;
   background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-fg);
+  color: var(--m-action-primary-text);
 }
 
 .dept-team-edit__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.dept-team-edit__actions .dept-team-edit__archive {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
 }
 </style>

@@ -53,6 +53,10 @@ function buildRouter() {
   });
 }
 
+function findLinkByText(wrapper: VueWrapper, text: string) {
+  return wrapper.findAll("a").find((link) => link.text() === text);
+}
+
 async function mountAt(path: string) {
   const router = buildRouter();
   await router.push(path);
@@ -141,7 +145,9 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Routine");
     expect(wrapper.text()).toContain("Radio");
     expect(wrapper.text()).not.toContain("Closed supply handoff");
-    expect(wrapper.get(".ims-list__secondary-link").attributes("href")).toBe("/");
+    expect(findLinkByText(wrapper, "Back To Home")?.attributes("href")).toBe(
+      "/",
+    );
     expect(
       wrapper
         .findAll(".ims-list__secondary-link")
@@ -166,6 +172,12 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.query.state).toBe("all");
+    expect(wrapper.text()).toContain("Closed supply handoff");
+
+    await wrapper.get("#ims-list-shift").setValue("current");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.shift).toBe("current");
     expect(wrapper.text()).toContain("Closed supply handoff");
 
     await wrapper.get("#ims-list-priority").setValue("Serious");
@@ -208,7 +220,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Vera Ranger");
     expect(wrapper.text()).toContain("INC-2027-000042");
     expect(wrapper.text()).toContain("FRA-2027-000124");
-    expect(wrapper.get(".ims-fr-list__secondary-link").attributes("href")).toBe(
+    expect(findLinkByText(wrapper, "Back To Home")?.attributes("href")).toBe(
       "/",
     );
     expect(
@@ -248,6 +260,11 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("FRA-2027-000123");
     expect(wrapper.text()).not.toContain("FRA-2027-000124");
 
+    await wrapper.get("#ims-fr-list-shift").setValue("current");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.shift).toBe("current");
+
     await wrapper.get("#ims-fr-list-link").setValue("not_linked");
     await flushPromises();
 
@@ -283,7 +300,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents");
 
     expect(wrapper.text()).toContain("Create incident");
-    expect(wrapper.get(".ims-list__create").attributes("href")).toBe(
+    expect(findLinkByText(wrapper, "Create incident")?.attributes("href")).toBe(
       "/ims/incidents/create",
     );
   });

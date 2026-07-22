@@ -22,7 +22,7 @@ import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 
 // Submit Field Report — UI contract 12.3 `staff.field-reports.create` and
-// section 14.1–14.3 (M9.4 / M9.7 / M9.7A). Submit/Cancel only; finalize on
+// section 14.1-14.3 (M9.4 / M9.7 / M9.7A). Submit/Cancel only; finalize on
 // submit; no drafts or autosave. Required title + body; title and original body
 // are immutable after submit. Photos: max 2, images only, no GIFs, processed to
 // Alpha 1 limits before submit. Name Reference autocomplete is intentionally
@@ -479,6 +479,12 @@ async function onSubmit(): Promise<void> {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.fr-create__photo-remove {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
 }
 
 .fr-create__add-photo:disabled {

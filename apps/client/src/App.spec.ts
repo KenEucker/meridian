@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("shared client shell", () => {
-  it("renders the app shell with the home placeholder", async () => {
+  it("renders the app shell with the operations home dashboard", async () => {
     const router = buildRouter();
     await router.push("/");
     await router.isReady();
@@ -36,19 +36,15 @@ describe("shared client shell", () => {
     });
 
     expect(wrapper.find(".app-shell").exists()).toBe(true);
-    expect(wrapper.get("#home-heading").text()).toBe("Meridian Admin");
-    expect(wrapper.get("#home-primary-heading").text()).toBe(
-      "Department operations",
+    expect(wrapper.get(".route-loader").attributes("aria-label")).toBe(
+      "Loading page data",
     );
-    expect(wrapper.get("#home-organizer-heading").text()).toBe(
-      "Organizer administration",
-    );
-    expect(wrapper.get("#home-secondary-heading").text()).toBe(
-      "Incident Management",
-    );
-    expect(wrapper.get("#home-tools-heading").text()).toBe(
-      "Supporting tools",
-    );
+    expect(wrapper.get("#home-heading").text()).toBe("Local Field Event");
+    expect(wrapper.text()).toContain("Rangers operations workspace.");
+    expect(wrapper.text()).toContain("Overview");
+    expect(wrapper.text()).toContain("Logistics");
+    expect(wrapper.text()).toContain("Operations Center");
+    expect(wrapper.text()).toContain("Readiness");
     expect(document.title).toBe("Meridian Admin");
   });
 

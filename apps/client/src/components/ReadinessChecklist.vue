@@ -74,6 +74,19 @@ const STATUS_GLYPH: Record<ReadinessItemStatus, string> = {
   border-radius: var(--m-radius-md);
 }
 
+.readiness-checklist__item[data-status="ready"] {
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-success) 38%,
+    var(--m-border-default)
+  );
+  background: color-mix(
+    in srgb,
+    var(--m-status-success) 18%,
+    var(--m-surface-raised)
+  );
+}
+
 .readiness-checklist__glyph {
   flex: none;
   width: 1.5rem;

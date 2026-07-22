@@ -12,7 +12,11 @@
  *
  * Rules:
  *   - Components consume semantic --m-* tokens, never raw brand hex values.
- *   - Brand colors and status/severity colors stay distinct.
+ *   - Platform colors are the four logo colors, defined in priority order.
+ *   - Action, status, severity/attention, and department accent tokens use
+ *     only the platform palette.
+ *   - Surface/background, text/foreground, border, and focus/highlight tokens
+ *     may use separate accessible values when needed.
  *   - Light and dark mode reuse the same token names with different values.
  *
  * Dark mode applies automatically with the OS preference and can be forced
@@ -24,6 +28,12 @@
  */
 
 :root {
+  /* Platform palette (logo colors in priority order) */
+  --m-platform-primary: #475157;
+  --m-platform-secondary: #6b7562;
+  --m-platform-tertiary: #a58667;
+  --m-platform-accent: #cc792f;
+
   /* Surfaces */
   --m-surface-app: #f6f1e8;
   --m-surface-base: #fffcf6;
@@ -32,7 +42,7 @@
 
   /* Text */
   --m-text-primary: #151a1f;
-  --m-text-secondary: #405665;
+  --m-text-secondary: var(--m-platform-primary);
   --m-text-muted: #7a817a;
   --m-text-inverse: #fffcf6;
 
@@ -42,32 +52,32 @@
   --m-border-subtle: #ded6c8;
 
   /* Actions */
-  --m-action-primary-bg: #d9822b;
-  --m-action-primary-text: #151a1f;
-  --m-action-secondary-bg: #405665;
+  --m-action-primary-bg: var(--m-platform-primary);
+  --m-action-primary-text: #fffcf6;
+  --m-action-secondary-bg: var(--m-platform-secondary);
   --m-action-secondary-text: #fffcf6;
-  --m-action-destructive-bg: #c24135;
-  --m-action-destructive-text: #fffcf6;
+  --m-action-destructive-bg: var(--m-platform-accent);
+  --m-action-destructive-text: #151a1f;
 
   /* Focus */
-  --m-focus-ring: #2b6cb0;
+  --m-focus-ring: var(--m-platform-accent);
 
   /* Status / severity */
-  --m-status-neutral: #405665;
-  --m-status-success: #2f855a;
-  --m-status-warning: #b7791f;
-  --m-status-danger: #c24135;
-  --m-status-restricted: #263039;
+  --m-status-neutral: var(--m-platform-primary);
+  --m-status-success: var(--m-platform-secondary);
+  --m-status-warning: var(--m-platform-tertiary);
+  --m-status-danger: var(--m-platform-accent);
+  --m-status-restricted: var(--m-platform-primary);
 
   /* Dashboard attention scale (UI urgency, not incident seriousness) */
-  --m-attention-routine: #71836d;
-  --m-attention-attention: #2b6cb0;
-  --m-attention-warning: #b7791f;
-  --m-attention-critical: #c24135;
-  --m-attention-restricted: #263039;
+  --m-attention-routine: var(--m-platform-secondary);
+  --m-attention-attention: var(--m-platform-primary);
+  --m-attention-warning: var(--m-platform-tertiary);
+  --m-attention-critical: var(--m-platform-accent);
+  --m-attention-restricted: var(--m-platform-primary);
 
   /* Department accent (per-department override arrives with org model) */
-  --m-department-accent: #405665;
+  --m-department-accent: var(--m-platform-secondary);
 
   /* Spacing (8px-centered scale with 4px fine adjustment) */
   --m-space-1: 0.25rem;
@@ -117,28 +127,28 @@
     --m-border-strong: #4a5765;
     --m-border-subtle: #2a343e;
 
-    --m-action-primary-bg: #d9822b;
-    --m-action-primary-text: #151a1f;
-    --m-action-secondary-bg: #56707f;
+    --m-action-primary-bg: var(--m-platform-primary);
+    --m-action-primary-text: #fffcf6;
+    --m-action-secondary-bg: var(--m-platform-secondary);
     --m-action-secondary-text: #fffcf6;
-    --m-action-destructive-bg: #d2554a;
+    --m-action-destructive-bg: var(--m-platform-accent);
     --m-action-destructive-text: #151a1f;
 
-    --m-focus-ring: #5a9bd8;
+    --m-focus-ring: var(--m-platform-accent);
 
-    --m-status-neutral: #9aa5ae;
-    --m-status-success: #48bb78;
-    --m-status-warning: #d69e2e;
-    --m-status-danger: #e06a5e;
-    --m-status-restricted: #cbd5e1;
+    --m-status-neutral: var(--m-platform-primary);
+    --m-status-success: var(--m-platform-secondary);
+    --m-status-warning: var(--m-platform-tertiary);
+    --m-status-danger: var(--m-platform-accent);
+    --m-status-restricted: var(--m-platform-primary);
 
-    --m-attention-routine: #8ba585;
-    --m-attention-attention: #5a9bd8;
-    --m-attention-warning: #d69e2e;
-    --m-attention-critical: #e06a5e;
-    --m-attention-restricted: #cbd5e1;
+    --m-attention-routine: var(--m-platform-secondary);
+    --m-attention-attention: var(--m-platform-primary);
+    --m-attention-warning: var(--m-platform-tertiary);
+    --m-attention-critical: var(--m-platform-accent);
+    --m-attention-restricted: var(--m-platform-primary);
 
-    --m-department-accent: #7d98aa;
+    --m-department-accent: var(--m-platform-secondary);
 
     --m-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -162,28 +172,28 @@
   --m-border-strong: #4a5765;
   --m-border-subtle: #2a343e;
 
-  --m-action-primary-bg: #d9822b;
-  --m-action-primary-text: #151a1f;
-  --m-action-secondary-bg: #56707f;
+  --m-action-primary-bg: var(--m-platform-primary);
+  --m-action-primary-text: #fffcf6;
+  --m-action-secondary-bg: var(--m-platform-secondary);
   --m-action-secondary-text: #fffcf6;
-  --m-action-destructive-bg: #d2554a;
+  --m-action-destructive-bg: var(--m-platform-accent);
   --m-action-destructive-text: #151a1f;
 
-  --m-focus-ring: #5a9bd8;
+  --m-focus-ring: var(--m-platform-accent);
 
-  --m-status-neutral: #9aa5ae;
-  --m-status-success: #48bb78;
-  --m-status-warning: #d69e2e;
-  --m-status-danger: #e06a5e;
-  --m-status-restricted: #cbd5e1;
+  --m-status-neutral: var(--m-platform-primary);
+  --m-status-success: var(--m-platform-secondary);
+  --m-status-warning: var(--m-platform-tertiary);
+  --m-status-danger: var(--m-platform-accent);
+  --m-status-restricted: var(--m-platform-primary);
 
-  --m-attention-routine: #8ba585;
-  --m-attention-attention: #5a9bd8;
-  --m-attention-warning: #d69e2e;
-  --m-attention-critical: #e06a5e;
-  --m-attention-restricted: #cbd5e1;
+  --m-attention-routine: var(--m-platform-secondary);
+  --m-attention-attention: var(--m-platform-primary);
+  --m-attention-warning: var(--m-platform-tertiary);
+  --m-attention-critical: var(--m-platform-accent);
+  --m-attention-restricted: var(--m-platform-primary);
 
-  --m-department-accent: #7d98aa;
+  --m-department-accent: var(--m-platform-secondary);
 
   --m-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --m-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

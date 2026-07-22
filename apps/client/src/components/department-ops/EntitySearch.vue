@@ -42,6 +42,10 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
 
 <template>
   <div class="entity-search">
+    <div class="entity-search__heading">
+      <strong>Find staff</strong>
+      <span>{{ hits.length }} matches</span>
+    </div>
     <label class="entity-search__field">
       <span>Search staff, equipment, or shifts</span>
       <input
@@ -81,36 +85,56 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
 <style scoped>
 .entity-search {
   display: grid;
-  gap: var(--m-space-3);
+  gap: var(--m-space-2);
   margin: 0 0 var(--m-space-5);
+}
+
+.entity-search__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  color: var(--m-text-primary);
+  font-size: var(--m-text-sm);
+}
+
+.entity-search__heading span {
+  color: var(--m-text-muted);
+  font-weight: 700;
 }
 
 .entity-search__field {
   display: grid;
-  gap: var(--m-space-2);
+  gap: var(--m-space-1);
   font-weight: 700;
 }
 
+.entity-search__field span {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+}
+
 .entity-search__field input {
-  min-height: 3rem;
-  padding: var(--m-space-3);
+  min-height: 3.25rem;
+  padding: 0 var(--m-space-4);
   border: 2px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
+  border-radius: 8px;
+  background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
 }
 
 .entity-search__field input:focus-visible {
-  outline: 2px solid var(--m-focus-ring);
-  outline-offset: 2px;
+  border-color: var(--m-focus-ring);
+  outline: 0;
 }
 
 .entity-search__results {
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
   background: var(--m-surface-raised);
   padding: var(--m-space-3);
+  box-shadow: var(--m-shadow-sm);
 }
 
 .entity-search__empty {
@@ -125,6 +149,7 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
 .entity-search__group-title {
   margin: 0 0 var(--m-space-2);
   font-size: var(--m-text-sm);
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -143,8 +168,8 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
   gap: 0.15rem;
   padding: var(--m-space-2) var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-app);
+  border-radius: 6px;
+  background: var(--m-surface-base);
   color: inherit;
   text-align: left;
   font: inherit;

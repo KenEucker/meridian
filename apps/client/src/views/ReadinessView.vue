@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
 
 import ReadinessChecklist from "@/components/ReadinessChecklist.vue";
 import {
   resolveReadinessChecklist,
   summarizeReadiness,
+  type ReadinessItemStatus,
 } from "@/readiness/checklist";
 
 // Technical spec section 14: readiness is tracked per user/device/event, is
@@ -12,11 +14,25 @@ import {
 // does not expire automatically and the app must avoid nagging. The checklist
 // is probed from the current client scope once when the surface renders.
 const items = resolveReadinessChecklist();
+const readinessStatusOrder: Record<ReadinessItemStatus, number> = {
+  ready: 0,
+  "not-ready": 1,
+  pending: 2,
+};
+const sortedItems = computed(() =>
+  [...items].sort(
+    (left, right) =>
+      readinessStatusOrder[left.status] - readinessStatusOrder[right.status],
+  ),
+);
 const summary = computed(() => summarizeReadiness(items));
 </script>
 
 <template>
   <section class="readiness" aria-labelledby="readiness-heading">
+    <p class="readiness__nav">
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
+    </p>
     <h1 id="readiness-heading" class="readiness__heading">Device readiness</h1>
     <p class="readiness__lede">
       This checklist is only for you. It is advisory, is not shared with
@@ -26,13 +42,25 @@ const summary = computed(() => summarizeReadiness(items));
     <p class="readiness__summary" role="status">
       {{ summary.ready }} of {{ summary.total }} checks ready.
     </p>
-    <ReadinessChecklist :items="items" />
+    <ReadinessChecklist :items="sortedItems" />
   </section>
 </template>
 
 <style scoped>
 .readiness {
   width: var(--m-content-narrow);
+}
+
+.readiness__nav {
+  margin: 0 0 var(--m-space-4);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.readiness__nav a {
+  color: var(--m-text-secondary);
+  text-decoration: none;
 }
 
 .readiness__heading {
@@ -50,5 +78,10 @@ const summary = computed(() => summarizeReadiness(items));
   margin: 0 0 var(--m-space-4);
   font-weight: 600;
   color: var(--m-text-secondary);
+}
+
+.readiness__nav a:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 </style>
