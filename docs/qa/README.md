@@ -22,6 +22,12 @@ scripts/process/check.sh
 
 On Windows, open Git Bash in the repository and run this command there so the same POSIX script is used across Windows, Linux, and macOS. Do not use Windows PowerShell, `cmd.exe`, or the WSL `bash.exe` shim for this check.
 
+## Alpha 1 Briefing script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-BRF-01-briefing-notes-hub.md`](QA-BRF-01-briefing-notes-hub.md) | Notes create with author+Command visibility, Command add-to-Briefing (reference/link), hub display, shells, Orchid Note scaffold | M15.10 |
+
 ## Alpha 1 Field Report script
 
 | ID | Coverage | Owning task |

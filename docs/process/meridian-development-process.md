@@ -40,6 +40,7 @@ The requirements document defines the product behavior and operational truth. It
 
 - volunteer operations concepts;
 - MVP scope and non-goals;
+- The Briefing and other additive feature requirements;
 - user roles and authority boundaries;
 - workflow expectations;
 - requirement IDs such as `ORG-001`, `SHIFT-016`, `FR-012`, and `INC-014`.

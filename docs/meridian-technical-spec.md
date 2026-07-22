@@ -6,6 +6,7 @@ Status: Working draft
 Additive Update: Policies and Procedures technical architecture added.
 Additive Update: Name References technical behavior added for IMS notes and Field Reports.
 Additive Update: Fixed UI modes and deployment-target build artifacts added.
+Additive Update: The Briefing technical architecture added (Alpha 1 Notes + Command add-to-Briefing + hub shells; full types post–Alpha 1).
 
 ---
 
@@ -13,7 +14,7 @@ Additive Update: Fixed UI modes and deployment-target build artifacts added.
 
 Meridian is a general-purpose, configurable volunteer operations platform for organizations and events. It is designed for field reliability, offline-capable operations, and trusted on-site coordination.
 
-Meridian supports organizations, events, departments, teams, staff, shifts, attendance, field reports, incidents, Name References in IMS text, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, node sync, and administrative data repair.
+Meridian supports organizations, events, departments, teams, staff, shifts, attendance, field reports, incidents, Name References in IMS text, credentials, permissions, policies, procedures, reusable governance fragments, policy/procedure acknowledgments, The Briefing (Command hub), node sync, and administrative data repair.
 
 The primary Alpha 1 goal is to prove that Meridian can operate reliably in a real event environment where internet connectivity may be limited, intermittent, or unavailable.
 
@@ -248,6 +249,12 @@ ProcedureDocuments
 DocumentFragments
 DocumentAcknowledgments
 DocumentExports
+Notes
+BriefingNoteInclusions
+AfterActionReports
+BriefingDirections
+ActionPlans
+BriefingNotices
 Devices
 SharedWorkstations
 NodeConfig
@@ -554,7 +561,10 @@ Regular staff should cache:
 - Published policies/procedures visible to them.
 - Published fragments referenced by those visible documents.
 - Their policy/procedure acknowledgment status.
+- Notes they authored, and Briefing-included Note presentations for events they can access.
 - Relevant readiness/sync state.
+
+Department Logistics / IC devices may additionally cache Command-visible Notes for events they can access (author+Command pool), per permission rules.
 
 Permitted users/devices should additionally cache the event map package by default:
 
@@ -1181,6 +1191,8 @@ Can:
 - Reopen incidents.
 - Add incident notes.
 - Link/unlink field reports from incidents.
+- Manage The Briefing for the event (add Notes by reference or link, Directions, Action Plan, Notices, Final AAR).
+- Create Notes and read Notes authored by others for the event (Command visibility).
 
 ### ic_operator
 
@@ -1192,6 +1204,8 @@ Can:
 - Reopen incidents.
 - Add incident notes.
 - Link/unlink field reports from incidents.
+- Manage The Briefing for the event (add Notes by reference or link, Directions, Action Plan, Notices, Final AAR).
+- Create Notes and read Notes authored by others for the event (Command visibility).
 
 Cannot:
 
@@ -2207,6 +2221,189 @@ Published placement maps, published topographic map packages, and permitted camp
 
 ---
 
+# 21B. The Briefing
+
+## 21B.1 Purpose
+
+The Briefing is an event-scoped Incident Command hub that shares Command-relevant operational information across departments.
+
+It is implemented as a hub surface aggregating five domain modules:
+
+```text
+Notes
+BriefingNoteInclusions
+AfterActionReports
+BriefingDirections
+ActionPlans
+BriefingNotices
+```
+
+The Briefing is not a single parent document table. Hub UI composes Briefing inclusions and the other types. Notes are a standalone module referenced by Briefing and AAR inclusion records.
+
+## 21B.2 Permissions
+
+Suggested capability codes:
+
+```text
+briefing.hub.view
+notes.create
+notes.view_own
+notes.view_command
+notes.add_to_briefing
+notes.add_to_aar
+briefing.aar.submission.manage
+briefing.aar.submission.view_own
+briefing.aar.submission.view_all
+briefing.aar.final.manage
+briefing.aar.final.view
+briefing.directions.manage
+briefing.directions.view
+briefing.action_plan.manage
+briefing.action_plan.view
+briefing.notices.manage
+briefing.notices.view
+briefing.notices.dismiss
+```
+
+Authority mapping:
+
+- `briefing.hub.view` — approved event staff
+- `notes.create` — department_lead, team lead, `ic_lead`, `ic_operator`
+- `notes.view_own` — Note author
+- `notes.view_command` — `ic_lead`, `ic_operator`, `ic_viewer` (Command pool visibility before Briefing inclusion)
+- `notes.add_to_briefing` / `notes.add_to_aar` — `ic_lead`, `ic_operator`
+- Briefing-included Note presentations are readable per inclusion audience (`event_staff` or `department_leads_only`)
+- `department_leads_only` audience = department leads for the event + Command + organizers; team leads excluded unless they also hold one of those roles
+- `briefing.aar.submission.manage` / `view_own` — department_lead and team lead for own scope
+- `briefing.aar.submission.view_all` / `briefing.aar.final.manage` / Directions / Action Plan / Notices manage — `ic_lead`, `ic_operator` (organizers may read Submission AARs and Final AAR per requirements)
+- `briefing.aar.final.view` / Action Plan view / Notices view — approved event staff after publish rules
+
+## 21B.3 Notes
+
+Notes are a **standalone** event-scoped Markdown domain.
+
+Rules:
+
+- Created once; immutable thereafter (no update/append commands).
+- Correction path is create a new Note.
+- Creators: department leads, team leads, `ic_lead`, `ic_operator`.
+- Pre-Briefing visibility: author + Command only.
+- Distinct from IMS incident timeline notes and policy/procedure fragments.
+- The Briefing and AARs do not own Notes; they store inclusion records.
+
+### Inclusion modes (Briefing and AAR)
+
+**Reference**
+
+- Command authors a summary text for readers.
+- Inclusion stores `note_id`, summary Markdown, and original-author credit.
+- Readers can open/view the original Note.
+- Used when Command restates/clarifies an idea while crediting the author.
+
+**Link (verbatim)**
+
+- Inclusion presents the Note body verbatim.
+- Credit goes to the original author.
+- Reads as Command communication attributed to that individual (including Command members).
+- Stores `note_id` and may snapshot body at link time for stable Briefing display while retaining author credit and original Note identity.
+
+Each Briefing inclusion also stores `audience`:
+
+- `event_staff` (default) — approved event staff
+- `department_leads_only` — department leads for the event, Command, and organizers (team leads excluded unless also dept lead/Command/organizer)
+
+Directions, Action Plans (whole and/or sections), and Notices use the same audience values.
+
+Alpha 1 implements Note create/list/detail, author+Command visibility, Command add-to-Briefing (reference and link) with audience mark, hub display of added Notes to permitted viewers, permissions, and Orchid list/detail scaffolding.
+
+## 21B.4 After Action Reports
+
+AARs are versioned Markdown documents with a fixed ICS section schema:
+
+```text
+command
+operations
+logistics
+planning
+admin
+```
+
+Kinds:
+
+- `submission` — scoped to a department or team; authored by that lead
+- `final` — one compiled event Final AAR
+
+Lifecycle:
+
+- Submission edit/submit/resubmit allowed through event end + 30 days
+- IC may publish Final after event end
+- At event end + 45 days, if no Final published, a job auto-assembles Final from latest submitted Submission versions and freezes it
+- Frozen Final is read-only except organizer/god_mode repair
+
+Note inclusion into AARs uses the same **reference** and **link** modes as The Briefing (post–Alpha 1 UI; model specified now).
+
+Alpha 1 ships AAR hub shell only; full AAR domain is post–Alpha 1.
+
+## 21B.5 Directions, Action Plans, and Notices
+
+**Directions:** IC Markdown with optional entity deep links and dept/team targeting. Optional `audience` (`event_staff` | `department_leads_only`). Hub-only; no banners.
+
+**Action Plans:** IC Markdown with optional dept/team sections. Whole plan and/or sections may set `audience`. During active event window, targeted sections may render banners on a fixed allowlist of screen IDs from the UI implementation contract; department-leads-only banners only for permitted viewers. Updates may emit Notices.
+
+**Notices:** Short records with optional targeting, expiry, and `audience`. Hub list plus dismissible per-user alert state (`briefing_notice_dismissals`).
+
+Alpha 1 ships hub shells only for these three types.
+
+## 21B.6 Commands (full design)
+
+```text
+POST /api/commands/create-note
+POST /api/commands/add-note-to-briefing
+POST /api/commands/create-aar-submission
+POST /api/commands/update-aar-submission
+POST /api/commands/submit-aar-submission
+POST /api/commands/publish-aar-final
+POST /api/commands/add-note-to-aar
+POST /api/commands/create-briefing-direction
+POST /api/commands/update-briefing-direction
+POST /api/commands/create-action-plan
+POST /api/commands/update-action-plan
+POST /api/commands/publish-action-plan
+POST /api/commands/create-briefing-notice
+POST /api/commands/dismiss-briefing-notice
+```
+
+`add-note-to-briefing` and `add-note-to-aar` accept `inclusion_mode` of `reference` or `link`. Reference mode requires Command summary text. Link mode includes the Note verbatim with author credit. `add-note-to-briefing` also accepts `audience` of `event_staff` (default) or `department_leads_only`.
+
+Alpha 1 requires `create-note` and `add-note-to-briefing` (and related reads). Remaining commands are post–Alpha 1.
+
+## 21B.7 Orchid / admin
+
+Alpha 1 Orchid (God Mode) should include Note list/detail for repair visibility.
+
+Post–Alpha 1 Orchid may include AAR, Direction, Action Plan, and Notice repair screens. Normal authoring belongs in product UI / Briefing hub, not Orchid.
+
+## 21B.8 Sync and offline
+
+Alpha 1:
+
+- Sync Notes to author and Command devices (pre-inclusion visibility)
+- Sync Briefing inclusion records and presented content for Notes added to The Briefing according to each inclusion’s audience
+- Note create and add-to-Briefing require server connection in Alpha 1
+
+Post–Alpha 1:
+
+- Sync visible Directions, Action Plans, Notices, and published Final AARs
+- Submission AARs sync to authors, IC, and organizers per visibility
+- Notice dismissals are user-scoped sync rows
+- Action Plan banners use synced Action Plan section payloads; they do not grant extra cache authority
+
+## 21B.9 Audit
+
+Audit Note create, add-note-to-briefing, add-note-to-aar, AAR submit/publish/auto-assemble/freeze, Direction/Action Plan/Notice mutations, and Notice dismissals.
+
+---
+
 # 22. Admin, Orchid, and God Mode
 
 ## 22.1 Orchid purpose
@@ -2248,6 +2445,7 @@ Map assets/packages
 Camps
 Map locations
 Placement department designation (on the Event screen)
+Notes
 Devices
 Shared workstations
 Node config
@@ -2542,6 +2740,11 @@ event-level Placement department designation with organization default
 operations-window map locking
 optional IMS incident camp/location reference
 offline map package/data sync to permitted devices
+The Briefing hub
+immutable Notes (create/list/detail; author+Command visibility)
+Command add-note-to-briefing (reference or link)
+Briefing hub display of added Notes to approved event staff
+Briefing hub shells for AAR, Directions, Action Plan, and Notices
 central/on-site node pairing
 bidirectional node sync
 sync conflict queue
@@ -2583,6 +2786,8 @@ Alpha 1 should prove:
 26. An authorized user can create/import a simple placement map, add camps with name/location, and publish the map before the operations window.
 27. A published map is visible to permitted lead/IC/kiosk users, camp names are not public to all volunteers, and the kiosk dashboard includes the map by default when published and permitted.
 28. Map geometry, camps, and locations lock when the event operations window begins, and the map package/permitted data syncs offline to permitted devices.
+29. An authorized lead or IC user can create an immutable Note; the author and Command can read it; other event staff cannot until Command adds it to The Briefing; edit/append is rejected.
+30. Command can add a Note to The Briefing by reference or link with event-staff or department-leads-only audience; permitted viewers then see it in the hub; hub shells remain for AAR, Directions, Action Plan, and Notices.
 
 Alpha 1 does not need to prove app-store distribution.
 
@@ -2629,6 +2834,11 @@ automatic backups to USB/second disk
 app-store distribution
 biometric/PIN local unlock
 password login
+full Submission/Final AAR workflows
+Directions deep-link authoring and targeting UI
+Action Plan banners and Notice alert delivery
+editable or appendable Notes
+broad event-staff visibility of Notes not added to The Briefing
 ```
 
 ---
@@ -2667,6 +2877,7 @@ Recommended order:
 25. Audit log hardening
 26. CSV/spreadsheet import/export
 27. Build/distribution packages
+28. The Briefing hub, immutable Notes, and Command add-to-Briefing (Alpha slice)
 ```
 
 Electron comes early because the on-site laptop experience is part of Alpha 1.
@@ -2711,6 +2922,10 @@ The following areas may need later detail:
 26. Exact effective-permission-level role codes for the Placement department (mint placement-specific codes mirroring IC roles, or reuse `department_lead` plus map-management grants). Resolved map behavior: Placement leads may publish/archive maps; non-lead Placement members get view by default and edit only via map-management grant; locked-map overrides are organizer/admin-only.
 27. Exact map asset/package storage, tiling, and topographic basemap package format.
 28. Exact GeoJSON/geometry storage representation and local-coordinate encoding for placement maps.
+29. Exact Action Plan banner screen-ID allowlist and banner component placement rules.
+30. Exact Direction deep-link entity allowlist and resolver UX.
+31. Exact Final AAR auto-assembly merge formatting from Submission AARs.
+32. Whether offline Note create / add-to-Briefing is required post–Alpha 1.
 
 ---
 
@@ -2747,6 +2962,30 @@ An IC-managed operational record requiring server connection. Incidents are visi
 ## IC department
 
 An event-selected department that functions as Incident Command for that event.
+
+## The Briefing
+
+An event-scoped Incident Command hub surface aggregating Command-added Notes, After Action Reports, Directions, Action Plans, and Notices for cross-department Command communication.
+
+## Note
+
+A standalone immutable event-scoped Markdown record created by department leads, team leads, or IC. Readable by author and Command until Command adds it to The Briefing. Briefing/AAR may include a Note by reference (Command summary + view original) or link (verbatim with author credit).
+
+## After Action Report
+
+A versioned ICS-sectioned debrief document. Submission AARs are lead-authored; the Final AAR is IC-published or auto-assembled at day 45.
+
+## Direction
+
+An IC-authored Briefing instruction that may deep-link into Meridian entities and target departments or teams, without page banners.
+
+## Action Plan
+
+An IC-authored event plan with optional department/team sections that may banner on allowlisted surfaces during the active event window.
+
+## Notice
+
+A short Briefing alert that may be manual or spawned from Action Plan updates, shown in the hub and as dismissible per-user alerts.
 
 ## IC role
 

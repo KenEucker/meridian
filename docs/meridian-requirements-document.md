@@ -11,6 +11,7 @@
 **Additive Update:** Event Geography & Maps (event maps, camps, map locations, and the event-level Placement department designation) added for MVP.
 **Additive Update:** Immutable Field Report titles added for MVP.
 **Additive Update:** Fixed Meridian UI modes and deployment target requirements added.
+**Additive Update:** The Briefing (Command hub: Notes, After Action Reports, Directions, Action Plan, Notices) added. Notes are standalone; Command adds them to The Briefing/AAR by reference or link. Alpha 1 implements Notes + add-to-Briefing + hub shells.
 
 ---
 
@@ -27,6 +28,8 @@ All operational users are referred to as Staff, including organizers, department
 Staff may include unpaid volunteers and paid personnel. Meridian tracks participation, eligibility, credentials, hours, credits, and operational history, but payment, wages, payroll, and employment status remain outside Meridian's scope.
 
 Meridian also supports policies and procedures as human-readable documents that may include reusable text fragments defined at organization, department, or team scope.
+
+Meridian supports The Briefing as an event-scoped Incident Command hub that shares Command-authored and Command-curated operational information across departments, including Notes, After Action Reports, Directions, Action Plans, and Notices.
 
 ---
 
@@ -48,6 +51,7 @@ The platform should avoid employee/payroll/HR framing and instead support:
 - credits earned
 - field reporting
 - incident management
+- Command briefing and after-action reporting
 
 ### 2.2 Data Lifecycle
 
@@ -1422,6 +1426,130 @@ A Kiosk context is a session/workstation constraint, not a user permission grant
 
 ---
 
+## 3.36 The Briefing
+
+The Briefing is an event-scoped Incident Command hub surface that aggregates Command-relevant operational communication shared across departments.
+
+The Briefing is a hub, not a single parent document. It aggregates:
+
+- Notes that Command has added to the Briefing (by reference or link)
+- After Action Reports (AARs)
+- Directions
+- Action Plans
+- Notices
+
+Notes themselves are a **standalone** domain type. The Briefing and AARs do not own Notes; they only reference or link Notes created by individuals.
+
+“Command” in this feature means the event’s Incident Command Department and IC-authorized roles (`ic_lead`, `ic_operator`, and where read-only visibility is required, `ic_viewer`), not merely a team whose display name is “Command.”
+
+The Briefing is distinct from:
+
+- IMS incident notes and field reports
+- organization/department/team Policies and Procedures
+- staff Event Info placeholders assembled from other documents
+- the standalone Notes pool (before Command adds a Note to the Briefing)
+
+---
+
+## 3.37 Note
+
+A Note is a standalone, event-scoped Markdown text block authored by an individual.
+
+Notes may be created by department leads, team leads, and IC operators/leads.
+
+Notes are **immutable after creation**. They cannot be edited or appended after create. Correction requires creating a new Note.
+
+Before Command adds a Note to The Briefing (or an AAR), Notes are readable only by:
+
+- the Note’s author
+- Command (IC operators/leads; `ic_viewer` may read for Command visibility where granted)
+
+Ordinary approved event staff who are not the author and not Command cannot read Notes that have not been added to The Briefing.
+
+Command may add a Note to The Briefing and/or to an AAR using one of two inclusion modes:
+
+1. **Reference** — Command writes a separate summary of the Note for Briefing/AAR readers. Readers can open/view the original Note. Credit remains with the original author. Used when Command wants to clarify or restate an idea while still attributing the suggestion to the author.
+2. **Link (verbatim)** — Command includes the Note body verbatim in The Briefing/AAR. Credit for that section goes to the original author. The linked content reads as Command communication attributed to that individual (including when the author is themselves a Command member).
+
+The same Note may be added to The Briefing, to an AAR, or to both.
+
+Once Command adds a Note to The Briefing, that Briefing inclusion becomes visible according to its audience mark:
+
+- **Event staff (default)** — all approved event staff for the event
+- **Department leads only** — all department leads for the event, plus Command, plus organizers; team leads are excluded unless they are also a department lead, Command, or organizer
+
+The same audience marks apply to Directions, Action Plans (whole plan and/or individual sections), and Notices.
+
+---
+
+## 3.38 After Action Report (AAR)
+
+An After Action Report is a versioned Markdown document used for operational debrief content within The Briefing.
+
+AARs use a fixed ICS section template on every submission:
+
+- Command
+- Operations
+- Logistics
+- Planning
+- Admin
+
+There are two AAR kinds:
+
+1. **Submission AAR** — created by a department lead or team lead for their department or team scope. Leads may edit, submit, and resubmit during the event and for **30 days after event end**.
+2. **Final AAR** — the event’s compiled Command after-action document. IC may publish a Final AAR after event end. If none is published by **45 days after event end**, Meridian auto-assembles a Final AAR from the latest submitted version of each Submission AAR and freezes it.
+
+AAR documents follow the same general versioning posture as Policies/Procedures (document revisions). Notes included in an AAR use the same reference or link (verbatim) inclusion modes as The Briefing. Because Notes are immutable, Note mutation cannot change included content after the fact.
+
+Visibility:
+
+- A submitter may read their own Submission AARs.
+- IC and organizers may read all Submission AARs for the event.
+- Peer department/team leads may not read other leads’ Submission AARs until the Final AAR is published.
+- After the Final AAR is published (or auto-assembled and frozen), it is readable by all approved event staff.
+
+---
+
+## 3.39 Direction
+
+A Direction is an IC-authored Markdown instruction block in The Briefing.
+
+Directions may deep-link to Meridian entities (for example departments, teams, shifts, maps, camps/locations, policies, procedures, deployments, and other Briefing items).
+
+Directions may target one or more departments or teams. Organization-wide Directions are visible to all approved event staff. Targeted Directions are visible to members of the targeted scopes and to IC/organizers.
+
+Directions may also be marked **department leads only**. When so marked, they are visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+Directions live in The Briefing hub. They do not surface as page banners.
+
+---
+
+## 3.40 Action Plan
+
+An Action Plan is an IC-authored event operational plan in The Briefing.
+
+An Action Plan may contain sections scoped to a department or team. All approved event staff may read the Action Plan when it is marked for event staff; targeted sections are emphasized for members of those scopes.
+
+The Action Plan as a whole, and/or individual sections, may be marked **department leads only**. When so marked, that plan or section is visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+During the active event window, targeted Action Plan sections may surface as **banners** on a fixed allowlist of product surfaces/pages (not free-form URL targeting). Department-leads-only sections banner only to users who can see them.
+
+Publishing or updating an Action Plan may spawn Notices.
+
+---
+
+## 3.41 Notice
+
+A Notice is a short, time-sensitive Briefing item used to disseminate emergency information or process updates.
+
+Notices may be created manually by IC, or auto-created from Action Plan publish/update events.
+
+Notices appear in The Briefing hub and as dismissible per-user alerts. Notices may be event-wide or targeted to departments/teams, and may carry an optional expiry.
+
+Notices may also be marked **department leads only**. When so marked, they are visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+---
+
 # 4. User Roles
 
 ## 4.1 Staff
@@ -1544,10 +1672,14 @@ Department Leads may:
 - maintain department-scoped fragments
 - publish department-scoped policy/procedure documents and fragments
 - view policy/procedure documents within their department
+- create immutable Notes for events their department participates in
+- create, edit, submit, and resubmit department-scoped After Action Report submissions for those events within the AAR window
 
 Department Leads cannot override organization-level blocking status.
 
 Department Leads cannot access field reports or incidents unless they are part of the Incident Command Department or explicitly authorized.
+
+Department Leads cannot read peer Notes they did not author unless they have Command authority. Department Leads cannot read peer department or team Submission AARs until the event Final AAR is published.
 
 ---
 
@@ -1578,8 +1710,12 @@ Team Leads may:
 - maintain team-scoped fragments for their team
 - help manage team-specific policy/procedure content
 - publish team-scoped policy/procedure documents and fragments
+- create immutable Notes for events their department participates in
+- create, edit, submit, and resubmit team-scoped After Action Report submissions for those events within the AAR window
 
 Team Lead authority does not override Department Lead authority.
+
+Team Leads cannot read peer Notes they did not author unless they have Command authority. Team Leads cannot read peer department or team Submission AARs until the event Final AAR is published.
 
 ---
 
@@ -1668,6 +1804,8 @@ IC Department Leads may:
 - revoke credentials
 - manage incident state
 - manage incident attachments as stricken when needed
+- manage The Briefing for the event, including adding Notes to The Briefing or AARs by reference or link, Directions, Action Plans, Notices, and Final AAR compile/publish
+- create Notes and read Notes authored by others for the event (Command visibility)
 
 IC Department Leads are the only users who may print incident PDFs.
 
@@ -1980,6 +2118,22 @@ Not required for October MVP:
 
 ---
 
+## 5.18 The Briefing
+
+1. Staff with event access open The Briefing hub for the event.
+2. Department leads, team leads, and IC create immutable Notes as needed. Before Briefing inclusion, Notes are visible only to the author and Command.
+3. Command adds selected Notes to The Briefing by **reference** (Command summary + view original, credited to author) or **link** (verbatim body, credited to author as Command-attributed content). Command may mark the inclusion **event staff** or **department leads only**.
+4. Command may also add Notes to AARs using the same reference or link modes.
+5. Department leads and team leads author Submission AARs with fixed ICS sections, submit them, and may resubmit within 30 days after event end.
+6. IC authors Directions and the Action Plan (with optional department-leads-only marks on Directions, Action Plan, and/or sections); targeted Action Plan sections may banner on allowlisted surfaces during the active event window.
+7. IC creates Notices (optionally department-leads-only), or Action Plan updates spawn Notices; staff dismiss Notices per user when visible to them.
+8. IC publishes a Final AAR after event end, or the system auto-assembles and freezes a Final AAR at day 45 from latest submitted Submission AARs.
+9. Approved event staff read published Final AAR and other Briefing items according to visibility rules.
+
+Alpha 1 implements Notes create/list/detail with author+Command visibility, Command add-to-Briefing (reference or link) with event-staff or department-leads-only audience so added Notes appear in the hub for permitted viewers, and hub shells for AAR, Directions, Action Plan, and Notices. Full AAR submit/compile, Directions linking, Action Plan banners, and Notices alerts are post–Alpha 1.
+
+---
+
 # 6. MVP Scope
 
 ## 6.1 MVP Target
@@ -2002,6 +2156,7 @@ The MVP should prioritize:
 - hours recording
 - post-event credit calculation
 - operational spreadsheet exports
+- The Briefing hub (Alpha 1: Notes plus shells; full Briefing types post–Alpha 1)
 
 ---
 
@@ -2014,6 +2169,7 @@ Priority operational screens:
 3. Department Overview / Logistics Desk / Operations Center / Planning Table
 4. Incident List / Incident Editor
 5. Field Report Creation
+6. The Briefing hub
 
 Generic admin CRUD screens may exist to support missing workflows during MVP development.
 
@@ -2221,6 +2377,31 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 - hours worked export
 - credits earned export
 
+### The Briefing
+
+Full product design (MVP target; Alpha 1 implements the thin slice noted below):
+
+- event-scoped Briefing hub aggregating Command-added Notes, AARs, Directions, Action Plans, and Notices
+- standalone immutable Notes created by department leads, team leads, and IC
+- Notes readable only by author + Command until added to The Briefing
+- Command adds Notes to The Briefing and/or AARs by **reference** (summary + view original, credited to author) or **link** (verbatim, credited to author as Command-attributed content)
+- Briefing Note inclusions, Directions, Action Plans (whole and/or sections), and Notices may be marked **department leads only** (visible to department leads + Command + organizers; team leads excluded)
+- Notes added to The Briefing become visible per their audience mark (event staff or department leads only)
+- Submission AARs by department leads and team leads with fixed ICS sections (Command, Operations, Logistics, Planning, Admin)
+- submit/resubmit window through 30 days after event end
+- Final AAR IC publish or auto-assemble/freeze at day 45
+- Directions with deep links and optional dept/team targeting (no page banners)
+- Action Plan with dept/team sections and allowlisted page banners during active event
+- Notices (manual and Action-Plan-spawned), dismissible per user
+
+Alpha 1 Briefing slice:
+
+- Notes create/list/detail with immutability and author+Command visibility
+- Briefing hub with Command add-to-Briefing (reference or link, with event-staff or department-leads-only audience) so added Notes appear for permitted viewers
+- empty shell / placeholder sections for AAR, Directions, Action Plan, and Notices
+- Orchid/admin and permission scaffolding for Notes
+- no full AAR submit/compile, Directions deep-link authoring, Action Plan banners, or Notices alerts in Alpha 1
+
 ---
 
 ## 6.4 MVP Out of Scope
@@ -2265,6 +2446,10 @@ The following are not required for October MVP:
 - camp notes, descriptions, contacts, or affiliation fields for MVP
 - multiple Placement departments per event
 - georeferencing requirement for placement maps
+- free-form Action Plan banner targeting outside the fixed surface allowlist
+- editable or appendable Notes after creation
+- broad event-staff visibility of Notes that Command has not added to The Briefing
+- peer visibility of Submission AARs before Final AAR publication
 
 ---
 
@@ -3744,6 +3929,10 @@ Readiness and About surfaces shall be available in every UI mode.
 
 Policy and procedure read surfaces shall be available in every UI mode where the authenticated user is permitted to view them.
 
+### UI-012A
+
+The Briefing hub shall be available in every UI mode where the authenticated user is permitted to view it. Note create and author/Command Note reads shall be available where the actor has authority. Notes Command has added to The Briefing shall be readable by approved event staff. Note create shall require server connection in Alpha 1.
+
 ### UI-013
 
 Policy and procedure write/maintenance surfaces shall be available only in Admin mode for MVP.
@@ -3799,6 +3988,166 @@ Incident reads may be available offline when synced and authorized, but incident
 ### UI-026
 
 Offline server rejections and conflicts shall be deferred to the God Mode conflict queue. Until that queue exists, product surfaces may fail silently after recording the local queued/sync-failed state needed for later repair.
+
+---
+
+## 7.19 The Briefing and Notes Requirements
+
+### BRF-001
+
+Meridian shall provide an event-scoped Briefing hub that aggregates Notes Command has added to The Briefing, After Action Reports, Directions, Action Plans, and Notices.
+
+### BRF-002
+
+The Briefing shall be Command-owned operational communication for the event’s Incident Command Department and shall be distinct from IMS incident notes, Field Reports, Policies/Procedures, and the standalone Notes pool.
+
+### BRF-003
+
+Approved event staff shall be able to open The Briefing hub for events they can access.
+
+### BRF-004
+
+Department leads, team leads, and IC operators/leads shall be able to create Notes for an event.
+
+### BRF-005
+
+Notes shall be standalone Markdown text blocks scoped to an event. The Briefing and AARs shall not own Notes; they shall only reference or link Notes.
+
+### BRF-006
+
+Notes shall be immutable after creation. Meridian shall not allow edit or append of an existing Note.
+
+### BRF-007
+
+Until Command adds a Note to The Briefing, that Note shall be readable only by its author and by Command (`ic_lead`, `ic_operator`, and `ic_viewer` where Command read visibility is granted).
+
+### BRF-008
+
+IC operators/leads shall be able to add a Note to The Briefing by **reference** or by **link**.
+
+### BRF-008A
+
+A **reference** inclusion shall present a Command-authored summary of the Note, credit the original author, and provide access to view the original Note.
+
+### BRF-008B
+
+A **link** inclusion shall present the Note body verbatim in The Briefing, credit the original author, and read as Command communication attributed to that individual (including when the author is a Command member).
+
+### BRF-008C
+
+Each Briefing Note inclusion shall carry an audience mark of **event staff** (default) or **department leads only**.
+
+### BRF-008C1
+
+Event-staff Briefing Note inclusions shall be visible to all approved event staff for the event.
+
+### BRF-008C2
+
+Department-leads-only Briefing Note inclusions shall be visible only to department leads for the event, Command, and organizers. Team leads shall not gain visibility from that mark unless they are also a department lead, Command, or organizer.
+
+### BRF-008D
+
+IC operators/leads shall be able to add the same Note to an AAR by reference or link, independently of whether it was added to The Briefing.
+
+### BRF-009
+
+Department leads and team leads shall be able to create Submission After Action Reports for their department or team scope for an event.
+
+### BRF-010
+
+Every After Action Report shall use a fixed ICS section template: Command, Operations, Logistics, Planning, and Admin.
+
+### BRF-011
+
+Submission AARs shall be versioned documents. Leads may edit and resubmit within the submission window.
+
+### BRF-012
+
+The Submission AAR window shall remain open through **30 days after event end**. After that window closes, leads shall not submit or resubmit Submission AARs.
+
+### BRF-013
+
+Submitters shall read their own Submission AARs. IC and organizers shall read all Submission AARs for the event. Peer department/team leads shall not read other leads’ Submission AARs until the Final AAR is published.
+
+### BRF-014
+
+IC operators/leads shall be able to publish a Final AAR for the event after event end.
+
+### BRF-015
+
+If no Final AAR is published by **45 days after event end**, Meridian shall auto-assemble a Final AAR from the latest submitted version of each Submission AAR and freeze it.
+
+### BRF-016
+
+After the Final AAR is published or auto-assembled and frozen, it shall be readable by all approved event staff. Frozen Final AARs shall be read-only except for organizer/god_mode repair paths.
+
+### BRF-017
+
+AAR Note inclusions shall use the same reference and link modes as The Briefing. Because Notes are immutable, document revision bumps shall not be caused by Note mutation.
+
+### BRF-018
+
+IC operators/leads shall be able to create Directions as Markdown instruction blocks in The Briefing.
+
+### BRF-019
+
+Directions may deep-link to Meridian entities and may target one or more departments or teams. Organization-wide Directions shall be visible to all approved event staff; targeted Directions shall be visible to targeted scopes plus IC/organizers.
+
+### BRF-019A
+
+Directions may be marked **department leads only**. When so marked, they shall be visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+### BRF-020
+
+Directions shall not surface as page banners.
+
+### BRF-021
+
+IC operators/leads shall be able to create and maintain an event Action Plan with optional department- or team-scoped sections.
+
+### BRF-022
+
+An Action Plan marked for event staff shall be readable by all approved event staff. Targeted sections shall be emphasized for members of those scopes.
+
+### BRF-022A
+
+An Action Plan as a whole, and/or individual Action Plan sections, may be marked **department leads only**. When so marked, that plan or section shall be visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+### BRF-023
+
+During the active event window, targeted Action Plan sections may surface as banners on a fixed allowlist of product surfaces. Free-form URL or arbitrary-page targeting shall not be supported. Department-leads-only sections shall banner only to users who can see them.
+
+### BRF-024
+
+Publishing or updating an Action Plan may spawn Notices.
+
+### BRF-025
+
+IC operators/leads shall be able to create Notices manually. Notices may also be auto-created from Action Plan publish/update events.
+
+### BRF-026
+
+Notices shall appear in The Briefing hub and as dismissible per-user alerts. Notices may be event-wide or targeted and may carry an optional expiry.
+
+### BRF-026A
+
+Notices may be marked **department leads only**. When so marked, they shall be visible only to department leads for the event, Command, and organizers (team leads excluded unless they also hold one of those roles).
+
+### BRF-027
+
+Alpha 1 shall implement Notes create/list/detail with immutability and author+Command visibility, Command add-to-Briefing by reference or link with event-staff or department-leads-only audience, Briefing hub display of added Notes to permitted viewers, Orchid/admin scaffolding for Notes, and empty shell/placeholder sections for AARs, Directions, Action Plans, and Notices.
+
+### BRF-028
+
+Alpha 1 shall not require full Submission/Final AAR workflows, AAR Note inclusion UI beyond what is needed for Briefing add, Directions deep-link authoring, Action Plan banners, or Notice alert delivery. Those behaviors remain specified for post–Alpha 1 implementation.
+
+### BRF-029
+
+Note and Briefing create/mutate operations during the active event window shall follow event authority rules (on-site primary authoritative for event-scoped operational records).
+
+### BRF-030
+
+Note create, Briefing/AAR Note add (reference or link), AAR submit/publish, Direction/Action Plan/Notice mutations, Notice dismissals, and freeze actions shall be audited.
 
 ---
 
@@ -3887,6 +4236,18 @@ Future versions may support:
 
 MVP only requires uploaded/imported maps, lightweight map metadata, camps with name and location, lightweight map locations, the Placement department designation, operations-window locking, optional IMS references, and offline sync to permitted devices.
 
+## The Briefing Beyond Alpha 1
+
+The full Briefing and Notes product design is specified in section 7.19. Alpha 1 ships Notes, Command add-to-Briefing, and hub shells (BRF-027, BRF-028).
+
+Post–Alpha 1 implementation shall deliver:
+
+- Submission and Final AAR workflows, including day-30 and day-45 windows
+- AAR Note inclusion UI (reference and link)
+- Directions deep links and targeting
+- Action Plan sections and allowlisted banners
+- Notices and per-user dismissible alerts
+
 ---
 
 # 9. Explicit Non-Goals
@@ -3906,6 +4267,8 @@ Meridian is not intended to be:
 - a public, unauthenticated map sharing or public volunteer navigation system in MVP
 - a public map correction platform
 - a map-pin-centric brand identity
+- a general-purpose editable collaborative notes wiki
+- free-form banner injection onto arbitrary URLs
 
 ---
 
@@ -3914,3 +4277,12 @@ Meridian is not intended to be:
 The current requirements are coherent enough to proceed from discovery into formal requirements refinement.
 
 Architecture, implementation planning, database modeling, API design, and screen design remain intentionally out of scope until the requirements artifacts are accepted.
+
+Briefing follow-ups that may need later refinement without blocking the Alpha 1 Notes + add-to-Briefing slice:
+
+- exact Action Plan banner surface allowlist
+- exact entity types permitted in Direction deep links
+- exact Final AAR auto-assembly merge formatting
+- whether organizers may author Directions/Action Plans/Notices without IC grants
+- exact Orchid vs product-UI split for Briefing admin beyond Notes
+- whether `ic_viewer` may add Notes to The Briefing or only read
