@@ -2,11 +2,18 @@
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
+import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import {
   archiveDepartmentTeam,
+  canAccessDepartmentAdmin,
   canAdministerDepartment,
+  canLeadDepartmentTeam,
+  getCurrentDepartment,
   getAdministeredDepartment,
   listDepartmentTeams,
+  listTeamLeadStaff,
+  listTeamLeadTeams,
   resolveDepartmentSelfAdminSession,
   restoreDepartmentTeam,
   updateDepartmentDetails,
@@ -15,6 +22,8 @@ import {
 
 const session = computed(() => resolveDepartmentSelfAdminSession());
 const canAdminister = computed(() => canAdministerDepartment(session.value));
+const canLeadTeam = computed(() => canLeadDepartmentTeam(session.value));
+const canAccessAdmin = computed(() => canAccessDepartmentAdmin(session.value));
 const route = useRoute();
 const router = useRouter();
 
@@ -27,10 +36,30 @@ const statusFilter = computed(() => {
   return "all";
 });
 
-const department = computed(() => getAdministeredDepartment(session.value));
+const department = computed(() => getCurrentDepartment(session.value));
+const adminLede = computed(() => {
+  const current = session.value;
+
+  if (!current) {
+    return "";
+  }
+
+  if (!canAccessAdmin.value) {
+    return "Admin access is not available for your current department role.";
+  }
+
+  return canAdminister.value
+    ? "Department details and team administration for your current department."
+    : "Team details and staff lists scoped to teams you lead.";
+});
+const administeredDepartment = computed(() =>
+  getAdministeredDepartment(session.value),
+);
 const teams = computed(() =>
   listDepartmentTeams(session.value, statusFilter.value),
 );
+const leadTeams = computed(() => listTeamLeadTeams(session.value));
+const leadStaff = computed(() => listTeamLeadStaff(session.value));
 
 const detailsDraft = reactive({
   name: "",
@@ -43,7 +72,7 @@ const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
 watch(
-  department,
+  administeredDepartment,
   (value) => {
     if (value === null) {
       detailsDraft.name = "";
@@ -156,32 +185,36 @@ function teamCreateRoute() {
 </script>
 
 <template>
-  <section class="dept-teams" aria-labelledby="dept-teams-heading">
-    <header class="dept-teams__header">
-      <div>
-        <p class="dept-teams__eyebrow">Department administration</p>
-        <h1 id="dept-teams-heading" class="dept-teams__heading">Teams</h1>
-        <p v-if="session" class="dept-teams__lede">
-          {{ department?.name ?? session.departmentLabel }} ·
-          {{ session.eventLabel }} · {{ session.roleLabel }}
-        </p>
-      </div>
-      <RouterLink
-        v-if="canAdminister"
-        class="dept-teams__primary"
-        :to="teamCreateRoute()"
-      >
-        Create team
-      </RouterLink>
-    </header>
+  <DeptOpsShell
+    class="dept-teams"
+    heading-id="dept-teams-heading"
+    title="Admin"
+    :eyebrow="department?.name ?? session?.departmentLabel ?? 'Department'"
+    :lede="adminLede"
+  >
+    <template #nav>
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
+    </template>
 
-    <p v-if="!canAdminister" class="dept-teams__restricted" role="status">
-      Department team administration requires department lead or department
-      administration authority for this department.
+    <template #actions>
+      <div class="dept-teams__header-actions">
+        <WorkflowActionButton
+          v-if="canAdminister"
+          :to="teamCreateRoute()"
+        >
+          Create team
+        </WorkflowActionButton>
+      </div>
+    </template>
+
+    <p v-if="!canAccessAdmin" class="dept-teams__restricted" role="status">
+      Admin access requires department lead or team lead authority for the
+      selected department.
     </p>
 
     <template v-else>
       <section
+        v-if="canAdminister"
         class="dept-teams__details"
         aria-labelledby="dept-details-heading"
       >
@@ -218,7 +251,67 @@ function teamCreateRoute() {
         </form>
       </section>
 
-      <div class="dept-teams__toolbar">
+      <section
+        v-if="canLeadTeam"
+        class="dept-teams__lead"
+        aria-labelledby="team-lead-heading"
+      >
+        <div>
+          <h2 id="team-lead-heading" class="dept-teams__subheading">
+            Team details
+          </h2>
+          <p class="dept-teams__hint">
+            Team lead view is limited to teams you lead in this department.
+          </p>
+        </div>
+        <ul class="dept-teams__lead-teams" aria-label="Teams you lead">
+          <li v-for="team in leadTeams" :key="team.id">
+            <strong>{{ team.name }}</strong>
+            <span>{{ team.description ?? "No description set." }}</span>
+            <small>{{ team.code }} - {{ formatArchived(team) }}</small>
+          </li>
+        </ul>
+
+        <div
+          class="dept-teams__table-wrap"
+          role="region"
+          aria-label="Team staff"
+        >
+          <table class="dept-teams__table">
+            <thead>
+              <tr>
+                <th scope="col">Staff</th>
+                <th scope="col">Team</th>
+                <th scope="col">Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="leadStaff.length === 0">
+                <td colspan="3">No staff are listed for your teams.</td>
+              </tr>
+              <tr v-for="member in leadStaff" :key="member.staffId">
+                <td>
+                  <strong>{{ member.displayName }}</strong>
+                  <span v-if="member.handle">@{{ member.handle }}</span>
+                </td>
+                <td>{{ member.teamLabel }}</td>
+                <td>{{ member.roleLabel }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section
+        v-if="canAdminister"
+        class="dept-teams__management"
+        aria-labelledby="team-management-heading"
+      >
+        <h2 id="team-management-heading" class="dept-teams__subheading">
+          Teams
+        </h2>
+
+        <div class="dept-teams__toolbar">
         <label class="dept-teams__filter">
           Status
           <select
@@ -231,14 +324,14 @@ function teamCreateRoute() {
             <option value="archived">Archived</option>
           </select>
         </label>
-      </div>
+        </div>
 
-      <p v-if="actionError" class="dept-teams__error" role="alert">
-        {{ actionError }}
-      </p>
+        <p v-if="actionError" class="dept-teams__error" role="alert">
+          {{ actionError }}
+        </p>
 
-      <div class="dept-teams__table-wrap" role="region" aria-label="Teams">
-        <table class="dept-teams__table">
+        <div class="dept-teams__table-wrap" role="region" aria-label="Teams">
+          <table class="dept-teams__table">
           <thead>
             <tr>
               <th scope="col">Name</th>
@@ -282,15 +375,17 @@ function teamCreateRoute() {
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
+          </table>
+        </div>
+      </section>
     </template>
-  </section>
+  </DeptOpsShell>
 </template>
 
 <style scoped>
 .dept-teams {
-  width: min(100%, 52rem);
+  width: min(100%, 76rem);
+  min-width: 0;
   display: grid;
   gap: var(--m-space-4);
 }
@@ -301,6 +396,24 @@ function teamCreateRoute() {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--m-space-3);
+}
+
+.dept-teams__nav {
+  margin: 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.dept-teams__nav a {
+  color: var(--m-text-secondary);
+  text-decoration: none;
+}
+
+.dept-teams__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
 }
 
 .dept-teams__eyebrow {
@@ -330,10 +443,11 @@ function teamCreateRoute() {
   font-size: var(--m-text-lg);
 }
 
-.dept-teams__primary,
 .dept-teams__save {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-height: 2.75rem;
   padding: 0 var(--m-space-4);
   border: 0;
@@ -346,9 +460,31 @@ function teamCreateRoute() {
   cursor: pointer;
 }
 
+.dept-teams__secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 0 var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  color: var(--m-action-secondary-bg);
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+}
+
 .dept-teams__save:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.dept-teams__nav a:focus-visible,
+.dept-teams__secondary:focus-visible,
+.dept-teams__save:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .dept-teams__restricted,
@@ -368,12 +504,43 @@ function teamCreateRoute() {
   color: var(--m-status-danger, #b42318);
 }
 
-.dept-teams__details {
+.dept-teams__details,
+.dept-teams__lead,
+.dept-teams__management {
   display: grid;
   gap: var(--m-space-3);
   padding: var(--m-space-4);
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
+}
+
+.dept-teams__lead-teams {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dept-teams__lead-teams li {
+  display: grid;
+  gap: var(--m-space-1);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.dept-teams__lead-teams strong {
+  color: var(--m-text-primary);
+}
+
+.dept-teams__lead-teams span,
+.dept-teams__lead-teams small,
+.dept-teams__table td span {
+  display: block;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .dept-teams__form {

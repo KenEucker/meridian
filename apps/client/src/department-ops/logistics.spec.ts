@@ -20,7 +20,7 @@ import {
 
 describe("logistics desk model", () => {
   it("lists shifts currently going within a 15-minute start/end window", () => {
-    // Fixture asOf is 2027-07-04T18:00Z; day shift runs 16:00–22:00.
+    // Fixture asOf is 2027-07-04T18:00Z; day shift runs 16:00-22:00.
     expect(
       currentLogisticsShifts(LOCAL_LOGISTICS_DESK).map((shift) => shift.title),
     ).toEqual(["Ranger Dirt Day Shift"]);

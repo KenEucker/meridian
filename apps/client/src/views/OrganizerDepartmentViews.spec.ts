@@ -35,6 +35,7 @@ describe("organizer department administration", () => {
     });
 
     expect(wrapper.get("#org-dept-heading").text()).toBe("Departments");
+    expect(wrapper.text()).toContain("DPW");
     expect(wrapper.text()).toContain("Rangers");
     expect(wrapper.text()).toContain("Gate");
 
@@ -60,7 +61,7 @@ describe("organizer department administration", () => {
     expect(
       wrapper.findAll("button").filter((button) => button.text() === "Archive")
         .length,
-    ).toBe(2);
+    ).toBe(3);
   });
 
   it("creates a department from the create form", async () => {

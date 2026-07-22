@@ -86,8 +86,8 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     const { wrapper } = await mountAt("/");
 
     const link = wrapper
-      .findAll(".home__links a")
-      .find((item) => item.text() === "My Field Reports");
+      .findAll(".home__card")
+      .find((item) => item.find("h2").text() === "My Field Reports");
 
     expect(link?.attributes("href")).toBe("/staff/field-reports");
   });

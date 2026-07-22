@@ -142,7 +142,7 @@ async function onRestore(): Promise<void> {
       {{ heading }}
     </h1>
     <p v-if="session" class="dept-team-edit__lede">
-      {{ session.departmentLabel }} · {{ session.roleLabel }}
+      {{ session.departmentLabel }} / {{ session.roleLabel }}
     </p>
 
     <p v-if="!canAdminister" class="dept-team-edit__restricted" role="status">

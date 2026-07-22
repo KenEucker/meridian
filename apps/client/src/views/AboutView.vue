@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import { meridianApiConfig, meridianFetch } from "@/api/meridianApi";
@@ -24,8 +24,12 @@ interface ServerHealth {
 }
 
 type ServerHealthState = "checking" | "reachable" | "unreachable";
+type ThemeChoice = "light" | "dark";
+
+const themeStorageKey = "meridian.ui.theme";
 
 const connectivity = useConnectivity();
+const theme = ref<ThemeChoice>(readPreferredTheme());
 const serverHealthState = ref<ServerHealthState>("checking");
 const serverHealth = ref<ServerHealth | null>(null);
 const serverHealthError = ref<string | null>(null);
@@ -135,6 +139,23 @@ const configSchemaVersion = computed(() =>
     : String(serverHealth.value.config_schema_version),
 );
 
+function readPreferredTheme(): ThemeChoice {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  try {
+    const saved = window.localStorage.getItem(themeStorageKey);
+    return saved === "light" || saved === "dark" ? saved : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function setTheme(value: ThemeChoice): void {
+  theme.value = value;
+}
+
 function isServerHealth(value: unknown): value is ServerHealth {
   return typeof value === "object" && value !== null;
 }
@@ -194,23 +215,59 @@ async function refreshDiagnostics(): Promise<void> {
 onMounted(() => {
   void refreshDiagnostics();
 });
+
+watch(
+  theme,
+  (value) => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = value;
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(themeStorageKey, value);
+      } catch {
+        // Theme persistence is best effort.
+      }
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
   <section class="about" aria-labelledby="about-heading">
     <p class="about__nav">
-      <RouterLink :to="{ name: 'home' }">Back to Home</RouterLink>
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
     </p>
 
     <h1 id="about-heading" class="about__heading">Settings</h1>
-    <h2 class="about__subheading">About Meridian</h2>
 
-    <dl class="about__meta" aria-label="Application version">
-      <div>
-        <dt>Client version</dt>
-        <dd>{{ CLIENT_VERSION }}</dd>
+    <section class="about__settings" aria-labelledby="settings-heading">
+      <h2 id="settings-heading" class="about__subheading">Display</h2>
+      <div class="about__setting-row">
+        <div>
+          <h3>Theme</h3>
+          <p>Choose how Meridian displays on this device.</p>
+        </div>
+        <div class="about__theme-toggle" aria-label="Theme">
+          <button
+            type="button"
+            :aria-pressed="theme === 'light'"
+            @click="setTheme('light')"
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            :aria-pressed="theme === 'dark'"
+            @click="setTheme('dark')"
+          >
+            Dark
+          </button>
+        </div>
       </div>
-    </dl>
+    </section>
 
     <section class="about__health" aria-labelledby="about-health-heading">
       <header class="about__section-header">
@@ -297,6 +354,16 @@ onMounted(() => {
         </div>
       </dl>
     </section>
+
+    <section class="about__about" aria-labelledby="about-app-heading">
+      <h2 id="about-app-heading" class="about__subheading">About Meridian</h2>
+      <dl class="about__meta" aria-label="Application version">
+        <div>
+          <dt>Client version</dt>
+          <dd>{{ CLIENT_VERSION }}</dd>
+        </div>
+      </dl>
+    </section>
   </section>
 </template>
 
@@ -328,6 +395,62 @@ onMounted(() => {
   margin: 0;
   font-family: var(--m-font-heading);
   font-size: var(--m-text-lg);
+}
+
+.about__settings,
+.about__about {
+  margin-top: var(--m-space-6);
+}
+
+.about__setting-row {
+  display: grid;
+  gap: var(--m-space-3);
+  margin-top: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.about__setting-row h3,
+.about__setting-row p {
+  margin: 0;
+}
+
+.about__setting-row p {
+  margin-top: var(--m-space-1);
+  color: var(--m-text-muted);
+}
+
+.about__theme-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--m-space-1);
+  padding: var(--m-space-1);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+}
+
+.about__theme-toggle button {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--m-text-secondary);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.about__theme-toggle button[aria-pressed="true"] {
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+}
+
+.about__theme-toggle button:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .about__meta {
@@ -393,6 +516,11 @@ onMounted(() => {
 }
 
 @media (min-width: 44rem) {
+  .about__setting-row {
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem);
+    align-items: center;
+  }
+
   .about__meta div {
     grid-template-columns: 10rem minmax(0, 1fr);
     gap: var(--m-space-2);

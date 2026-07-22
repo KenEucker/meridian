@@ -18,7 +18,7 @@ export const LOCAL_DEPARTMENT_OPS_CONTEXT: DepartmentOpsContext = {
   selectedTeamId: null,
   selectedTeamLabel: null,
   asOf: "2027-07-04T18:00:00.000Z",
-  dataFreshnessLabel: "Local fixture · refreshed just now",
+  dataFreshnessLabel: "Local fixture / refreshed just now",
 };
 
 export const LOCAL_CAPABILITIES: CapabilityContext = {

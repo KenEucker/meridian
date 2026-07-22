@@ -3,13 +3,25 @@ import { computed, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
-import { LOCAL_OPERATIONS_CENTER } from "@/department-ops/fixtures";
+import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
+import {
+  LOCAL_OPERATIONS_CENTER,
+  LOCAL_PLANNING_TABLE,
+} from "@/department-ops/fixtures";
 import {
   assignOperationsDeployment,
   availableOperationsModules,
   composeOperationsModules,
   deploymentName,
 } from "@/department-ops/operations";
+import {
+  installDevelopmentIncidentSession,
+  listFieldReportsForSession,
+  listIncidentsForSession,
+  resolveIncidentSession,
+  type ImsFieldReportListItem,
+  type ImsIncident,
+} from "@/ims/incidentReadModel";
 
 const center = ref(LOCAL_OPERATIONS_CENTER);
 const selectedAssignmentId = ref(
@@ -32,6 +44,141 @@ const modules = computed(() =>
 const availableModules = computed(() =>
   availableOperationsModules({ ...center.value, modules: modules.value }),
 );
+const incidentSession = computed(() => {
+  const current = resolveIncidentSession();
+
+  if (current) {
+    return current;
+  }
+
+  installDevelopmentIncidentSession();
+  return resolveIncidentSession();
+});
+const incidents = computed(() => listIncidentsForSession(incidentSession.value));
+const fieldReports = computed(() =>
+  listFieldReportsForSession(incidentSession.value),
+);
+const incidentCards = computed(() => {
+  const rows = incidents.value;
+  const currentShiftRows = rows.filter(createdDuringCurrentShift);
+
+  return [
+    {
+      id: "event-total",
+      label: "Event total",
+      value: rows.length,
+      hint: "Incidents created for this event",
+      to: { name: "ims.incidents.index", query: { state: "all" } },
+    },
+    {
+      id: "current-shift",
+      label: "Current shift",
+      value: currentShiftRows.length,
+      hint: "Incidents created during the active shift",
+      to: {
+        name: "ims.incidents.index",
+        query: { state: "all", shift: "current" },
+      },
+    },
+    {
+      id: "active",
+      label: "Active",
+      value: rows.filter((incident) => incident.status !== "closed").length,
+      hint: "Incidents not yet closed",
+      to: { name: "ims.incidents.index", query: { state: "active" } },
+    },
+    {
+      id: "critical",
+      label: "Critical priority",
+      value: rows.filter((incident) => incident.priorityLabel === "Critical")
+        .length,
+      hint: "Incidents marked critical",
+      to: {
+        name: "ims.incidents.index",
+        query: { state: "all", priority: "Critical" },
+      },
+    },
+  ];
+});
+const fieldReportCards = computed(() => {
+  const rows = fieldReports.value;
+  const currentShiftRows = rows.filter(createdDuringCurrentShift);
+
+  return [
+    {
+      id: "current-shift",
+      label: "This shift",
+      value: currentShiftRows.length,
+      hint: "Field Reports submitted during the active shift",
+      to: {
+        name: "ims.field-reports.index",
+        query: { state: "all", shift: "current" },
+      },
+    },
+    {
+      id: "linked",
+      label: "Linked",
+      value: rows.filter((report) => report.relatedIncidents.length > 0).length,
+      hint: "Field Reports linked to incidents",
+      to: {
+        name: "ims.field-reports.index",
+        query: { state: "all", link: "linked" },
+      },
+    },
+    {
+      id: "unlinked",
+      label: "Unlinked",
+      value: rows.filter((report) => report.relatedIncidents.length === 0)
+        .length,
+      hint: "Field Reports not linked to an incident",
+      to: {
+        name: "ims.field-reports.index",
+        query: { state: "all", link: "not_linked" },
+      },
+    },
+    {
+      id: "event-total",
+      label: "Event total",
+      value: rows.length,
+      hint: "Field Reports submitted for this event",
+      to: { name: "ims.field-reports.index", query: { state: "all" } },
+    },
+  ];
+});
+
+function activeShiftWindow():
+  | { readonly startsAt: number; readonly endsAt: number }
+  | null {
+  const activeShift =
+    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
+
+  if (!activeShift) {
+    return null;
+  }
+
+  const startsAt = Date.parse(activeShift.startsAt);
+  const endsAt = Date.parse(activeShift.endsAt);
+
+  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
+    return null;
+  }
+
+  return { startsAt, endsAt };
+}
+
+function createdDuringCurrentShift(
+  record: ImsIncident | ImsFieldReportListItem,
+): boolean {
+  const shiftWindow = activeShiftWindow();
+  const createdAt = Date.parse(record.createdAt);
+
+  return (
+    shiftWindow !== null &&
+    !Number.isNaN(createdAt) &&
+    createdAt >= shiftWindow.startsAt &&
+    createdAt <= shiftWindow.endsAt
+  );
+}
 
 function moveDeployment(): void {
   try {
@@ -55,6 +202,11 @@ function moveDeployment(): void {
       error instanceof Error ? error.message : "Unable to move deployment.";
   }
 }
+
+function addDeployment(): void {
+  status.value =
+    "Add Deployment is scaffolded for the Operations Center workflow.";
+}
 </script>
 
 <template>
@@ -65,24 +217,14 @@ function moveDeployment(): void {
     :freshness="center.context.dataFreshnessLabel"
   >
     <template #nav>
-      <RouterLink :to="{ name: 'home' }">Back to Home</RouterLink>
+      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
     </template>
 
-    <section aria-labelledby="modules-heading" class="ops__section">
-      <h2 id="modules-heading">Capability modules</h2>
-      <ul class="ops__modules">
-        <li v-for="module in modules" :key="module.id">
-          <div>
-            <strong>{{ module.title }}</strong>
-            <span>{{ module.summary }}</span>
-          </div>
-          <p v-if="!module.available" role="status">
-            {{ module.unavailableReason }}
-          </p>
-          <p v-else role="status">Available</p>
-        </li>
-      </ul>
-    </section>
+    <template #actions>
+      <WorkflowActionButton @click="addDeployment">
+        Add Deployment
+      </WorkflowActionButton>
+    </template>
 
     <section
       v-if="availableModules.some((module) => module.id === 'deployments')"
@@ -99,7 +241,7 @@ function moveDeployment(): void {
               :key="row.assignmentId"
               :value="row.assignmentId"
             >
-              {{ row.displayName }} ·
+              {{ row.displayName }} /
               {{ deploymentName(center, row.currentDeploymentId) }}
             </option>
           </select>
@@ -144,26 +286,6 @@ function moveDeployment(): void {
     </section>
 
     <section
-      v-if="availableModules.some((module) => module.id === 'field_reports')"
-      aria-labelledby="field-reports-heading"
-      class="ops__section"
-    >
-      <h2 id="field-reports-heading">Field Reports</h2>
-      <p role="status">
-        Shortcuts are shown from existing Field Report permission. The
-        Operations Center does not grant Field Report access.
-      </p>
-      <div class="ops__actions" aria-label="Field Report shortcuts">
-        <RouterLink :to="{ name: 'staff.field-reports.index' }">
-          My Field Reports
-        </RouterLink>
-        <RouterLink :to="{ name: 'staff.field-reports.create' }">
-          Submit Field Report
-        </RouterLink>
-      </div>
-    </section>
-
-    <section
       v-if="availableModules.some((module) => module.id === 'incidents')"
       aria-labelledby="incidents-heading"
       class="ops__section"
@@ -172,9 +294,50 @@ function moveDeployment(): void {
       <p role="status">
         Incident overview is available through the restricted IMS workspace.
       </p>
+      <div class="ops__metric-cards" aria-label="Incident counts">
+        <RouterLink
+          v-for="card in incidentCards"
+          :key="card.id"
+          class="ops__metric-card"
+          :to="card.to"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </RouterLink>
+      </div>
       <div class="ops__actions" aria-label="Incident Management System shortcuts">
         <RouterLink :to="{ name: 'ims.incidents.index' }">
           Open IMS incidents
+        </RouterLink>
+      </div>
+    </section>
+
+    <section
+      v-if="availableModules.some((module) => module.id === 'field_reports')"
+      aria-labelledby="field-reports-heading"
+      class="ops__section"
+    >
+      <h2 id="field-reports-heading">Field Reports</h2>
+      <p role="status">
+        Field Report overview is available only from the existing Field Report
+        permission. The Operations Center does not grant Field Report access.
+      </p>
+      <div class="ops__metric-cards" aria-label="Field Report counts">
+        <RouterLink
+          v-for="card in fieldReportCards"
+          :key="card.id"
+          class="ops__metric-card"
+          :to="card.to"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.hint }}</small>
+        </RouterLink>
+      </div>
+      <div class="ops__actions" aria-label="Field Report shortcuts">
+        <RouterLink :to="{ name: 'staff.field-reports.create' }">
+          Submit Field Report
         </RouterLink>
       </div>
     </section>
@@ -187,8 +350,24 @@ function moveDeployment(): void {
       <h2 id="equipment-overview-heading">Equipment overview</h2>
       <p role="status">
         Compact equipment readiness for this department. Staff-level handoff
-        remains on the Logistics Desk.
+        remains on the Logistics Window.
       </p>
+    </section>
+
+    <section aria-labelledby="modules-heading" class="ops__section">
+      <h2 id="modules-heading">Capability modules</h2>
+      <ul class="ops__modules">
+        <li v-for="module in modules" :key="module.id">
+          <div>
+            <strong>{{ module.title }}</strong>
+            <span>{{ module.summary }}</span>
+          </div>
+          <p v-if="!module.available" role="status">
+            {{ module.unavailableReason }}
+          </p>
+          <p v-else role="status">Available</p>
+        </li>
+      </ul>
     </section>
   </DeptOpsShell>
 </template>
@@ -200,6 +379,10 @@ function moveDeployment(): void {
 
 .ops__section h2 {
   margin: 0 0 var(--m-space-3);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .ops__modules {
@@ -213,10 +396,18 @@ function moveDeployment(): void {
 .ops__modules li {
   display: grid;
   gap: var(--m-space-2);
-  padding: var(--m-space-3);
+  min-height: 7rem;
+  padding: var(--m-space-4);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
   background: var(--m-surface-raised);
+  box-shadow: var(--m-shadow-sm);
+}
+
+.ops__modules strong {
+  display: block;
+  margin-bottom: var(--m-space-1);
+  color: var(--m-text-primary);
 }
 
 .ops__modules span,
@@ -233,11 +424,52 @@ function moveDeployment(): void {
   margin-top: var(--m-space-3);
 }
 
+.ops__metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--m-space-3);
+  margin-top: var(--m-space-3);
+}
+
+.ops__metric-card {
+  display: grid;
+  gap: var(--m-space-1);
+  min-height: 7rem;
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  text-decoration: none;
+  box-shadow: var(--m-shadow-sm);
+}
+
+.ops__metric-card span {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ops__metric-card strong {
+  color: var(--m-text-primary);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-xl);
+}
+
+.ops__metric-card small {
+  color: var(--m-text-muted);
+  line-height: 1.35;
+}
+
 .ops__actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   min-height: 2.75rem;
   padding: var(--m-space-2) var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
   background: var(--m-surface-raised);
   color: var(--m-text-primary);
   font-weight: 700;
@@ -248,6 +480,10 @@ function moveDeployment(): void {
   display: grid;
   gap: var(--m-space-3);
   margin-bottom: var(--m-space-4);
+  padding: var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-base);
 }
 
 .ops__form label {
@@ -261,7 +497,7 @@ function moveDeployment(): void {
   min-height: 2.75rem;
   padding: 0 var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 6px;
   background: var(--m-surface-raised);
   color: var(--m-text-primary);
   font: inherit;
@@ -274,6 +510,7 @@ function moveDeployment(): void {
 
 .ops__form select:focus-visible,
 .ops__form button:focus-visible,
+.ops__metric-card:focus-visible,
 .ops__actions a:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
@@ -282,7 +519,8 @@ function moveDeployment(): void {
 .ops__table-frame {
   overflow-x: auto;
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
 }
 
 .ops__table-frame table {
@@ -297,7 +535,17 @@ function moveDeployment(): void {
   border-bottom: 1px solid var(--m-border-default);
 }
 
+.ops__table-frame thead th {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+  text-transform: uppercase;
+}
+
 @media (min-width: 48rem) {
+  .ops__modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ops__form {
     grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
     align-items: end;

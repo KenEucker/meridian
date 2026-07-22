@@ -1,4 +1,4 @@
-// Author append orchestration for submitted Field Reports (FR-007–FR-009).
+// Author append orchestration for submitted Field Reports (FR-007-FR-009).
 //
 // Corrections are append-only: the original title and body stay immutable.
 // Only the signed-in author may append. Local catalog persistence is wired

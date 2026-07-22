@@ -9,6 +9,7 @@ import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import FieldReportCreateView from "@/views/FieldReportCreateView.vue";
 import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
+import EventInfoView from "@/views/EventInfoView.vue";
 import HomeView from "@/views/HomeView.vue";
 import {
   installDevelopmentIncidentSession,
@@ -21,6 +22,7 @@ import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
 import ImsFieldReportListView from "@/views/ImsFieldReportListView.vue";
 import ImsFieldReportDetailView from "@/views/ImsFieldReportDetailView.vue";
 import LogisticsDeskView from "@/views/LogisticsDeskView.vue";
+import MeView from "@/views/MeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
@@ -29,6 +31,7 @@ import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import { selectFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   installDevelopmentOrganizerDepartmentSession,
   resolveOrganizerDepartmentSession,
@@ -76,7 +79,13 @@ function ensureOrganizerDepartmentSession(): void {
  * department-lead context. Screens still fail closed without administer
  * authority (M11.13).
  */
-function ensureDepartmentSelfAdminSession(): void {
+function ensureDepartmentSelfAdminSession(to: {
+  params: Record<string, string | string[]>;
+}): void {
+  if (typeof to.params.departmentId === "string") {
+    selectFixtureDepartment(to.params.departmentId);
+  }
+
   if (!resolveDepartmentSelfAdminSession()) {
     installDevelopmentDepartmentSelfAdminSession();
   }
@@ -126,6 +135,11 @@ export const routes: RouteRecordRaw[] = [
     component: DepartmentOverviewView,
   },
   {
+    path: "/events/:eventId/info",
+    name: "events.info",
+    component: EventInfoView,
+  },
+  {
     path: "/events/:eventId/departments/:departmentId/logistics",
     name: "events.departments.logistics",
     component: LogisticsDeskView,
@@ -141,10 +155,20 @@ export const routes: RouteRecordRaw[] = [
     component: PlanningTableView,
   },
   {
-    path: "/events/:eventId/departments/:departmentId/teams",
+    path: "/events/:eventId/departments/:departmentId/admin",
     name: "events.departments.teams.index",
     component: DepartmentTeamsListView,
     beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/teams",
+    redirect: (to: { params: Record<string, string | string[]> }) => ({
+      name: "events.departments.teams.index",
+      params: {
+        eventId: to.params.eventId,
+        departmentId: to.params.departmentId,
+      },
+    }),
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams/create",
@@ -162,6 +186,12 @@ export const routes: RouteRecordRaw[] = [
   legacyShiftBoardRedirect("logistics"),
   legacyShiftBoardRedirect("operations"),
   legacyShiftBoardRedirect("planning"),
+  {
+    path: "/staff/me",
+    name: "staff.me",
+    component: MeView,
+    beforeEnter: ensureFieldSession,
+  },
   {
     path: "/staff/field-reports",
     name: "staff.field-reports.index",

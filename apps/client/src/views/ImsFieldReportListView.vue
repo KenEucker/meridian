@@ -2,6 +2,11 @@
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
+import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
+import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
+import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
+import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   formatIncidentDateTime,
   hasIncidentCommandAccess,
@@ -15,7 +20,11 @@ import {
 const route = useRoute();
 const router = useRouter();
 const session = computed(() => resolveIncidentSession());
-const canView = computed(() => hasIncidentCommandAccess(session.value));
+const canView = computed(
+  () =>
+    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
+    hasIncidentCommandAccess(session.value),
+);
 const stateFilter = computed(() =>
   typeof route.query.state === "string" ? route.query.state : "active",
 );
@@ -25,6 +34,9 @@ const priorityFilter = computed(() =>
 const linkFilter = computed(() =>
   typeof route.query.link === "string" ? route.query.link : "all",
 );
+const shiftFilter = computed(() =>
+  route.query.shift === "current" ? "current" : "all",
+);
 const sortKey = computed(() =>
   typeof route.query.sort === "string" ? route.query.sort : "submitted",
 );
@@ -32,15 +44,44 @@ const sortDirection = computed(() =>
   route.query.direction === "asc" ? "asc" : "desc",
 );
 
+const allReports = computed(() => listFieldReportsForSession(session.value));
 const reports = computed(() =>
-  listFieldReportsForSession(session.value)
+  allReports.value
     .filter((report) => matchesLinkFilter(report, linkFilter.value))
+    .filter((report) => matchesShiftFilter(report, shiftFilter.value))
     .filter((report) => matchesRelatedStateFilter(report, stateFilter.value))
     .filter((report) =>
       matchesRelatedPriorityFilter(report, priorityFilter.value),
     )
     .sort(compareReports),
 );
+const reportCards = computed(() => [
+  {
+    label: "Event total",
+    value: allReports.value.length,
+    detail: "Field Reports submitted for this event",
+  },
+  {
+    label: "This shift",
+    value: allReports.value.filter((report) =>
+      matchesShiftFilter(report, "current"),
+    ).length,
+    detail: "Submitted during the active shift",
+  },
+  {
+    label: "Linked",
+    value: allReports.value.filter((report) => report.relatedIncidents.length > 0)
+      .length,
+    detail: "Connected to incidents",
+  },
+  {
+    label: "Unlinked",
+    value: allReports.value.filter(
+      (report) => report.relatedIncidents.length === 0,
+    ).length,
+    detail: "Awaiting incident linkage",
+  },
+]);
 
 function relatedIncidentText(report: ImsFieldReportListItem): string {
   if (report.relatedIncidents.length === 0) {
@@ -117,6 +158,44 @@ function matchesLinkFilter(
   return true;
 }
 
+function activeShiftWindow():
+  | { readonly startsAt: number; readonly endsAt: number }
+  | null {
+  const activeShift =
+    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
+
+  if (!activeShift) {
+    return null;
+  }
+
+  const startsAt = Date.parse(activeShift.startsAt);
+  const endsAt = Date.parse(activeShift.endsAt);
+
+  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
+    return null;
+  }
+
+  return { startsAt, endsAt };
+}
+
+function matchesShiftFilter(
+  report: ImsFieldReportListItem,
+  filter: string,
+): boolean {
+  if (filter !== "current") {
+    return true;
+  }
+
+  const shiftWindow = activeShiftWindow();
+  const createdAt = Date.parse(report.createdAt);
+
+  if (!shiftWindow || Number.isNaN(createdAt)) {
+    return false;
+  }
+
+  return createdAt >= shiftWindow.startsAt && createdAt <= shiftWindow.endsAt;
+}
+
 function activeSortDirection(key: string): "ascending" | "descending" | "none" {
   if (sortKey.value !== key) {
     return "none";
@@ -160,6 +239,18 @@ function onLinkFilterChange(event: Event): void {
   void router.push({
     name: "ims.field-reports.index",
     query: { ...route.query, link: target.value },
+  });
+}
+
+function onShiftFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.field-reports.index",
+    query: {
+      ...route.query,
+      shift: target.value === "current" ? "current" : undefined,
+    },
   });
 }
 
@@ -225,26 +316,34 @@ function compareReports(
 </script>
 
 <template>
-  <section class="ims-fr-list" aria-labelledby="ims-field-reports-heading">
-    <header class="ims-fr-list__header">
-      <div>
-        <p class="ims-fr-list__eyebrow">Incident Management System</p>
-        <h1 id="ims-field-reports-heading" class="ims-fr-list__heading">
-          Field Reports
-        </h1>
-      </div>
-      <nav class="ims-fr-list__links" aria-label="Field Report list links">
-        <RouterLink class="ims-fr-list__secondary-link" :to="{ name: 'home' }">
-          Home
-        </RouterLink>
-        <RouterLink
-          class="ims-fr-list__secondary-link"
-          :to="{ name: 'ims.incidents.index' }"
-        >
-          Incidents
-        </RouterLink>
-      </nav>
-    </header>
+  <WorkflowPageShell
+    class="ims-fr-list"
+    heading-id="ims-field-reports-heading"
+    title="Field Reports"
+    :eyebrow="session?.icDepartmentLabel ?? 'Incident Command'"
+    lede="Restricted Field Reports available to Incident Command."
+  >
+    <template #navigation>
+      <RouterLink
+        v-if="canView"
+        class="ims-fr-list__secondary-link"
+        :to="{ name: 'ims.incidents.index' }"
+      >
+        Incidents
+      </RouterLink>
+    </template>
+
+    <template #heading-cards>
+      <WorkflowHeadingCardGrid v-if="canView">
+        <WorkflowHeadingCard
+          v-for="card in reportCards"
+          :key="card.label"
+          :label="card.label"
+          :value="card.value"
+          :detail="card.detail"
+        />
+      </WorkflowHeadingCardGrid>
+    </template>
 
     <div v-if="!canView" class="ims-fr-list__restricted" role="status">
       <RouterLink :to="{ name: 'ims.restricted' }">
@@ -254,44 +353,62 @@ function compareReports(
 
     <template v-else>
       <form class="ims-fr-list__filters" aria-label="Filter Field Reports">
-        <label for="ims-fr-list-link">Link status</label>
-        <select
-          id="ims-fr-list-link"
-          :value="linkFilter"
-          @change="onLinkFilterChange"
-        >
-          <option value="all">All reports</option>
-          <option value="linked">Linked</option>
-          <option value="not_linked">Not linked</option>
-        </select>
+        <label for="ims-fr-list-link">
+          <span>Link status</span>
+          <select
+            id="ims-fr-list-link"
+            :value="linkFilter"
+            @change="onLinkFilterChange"
+          >
+            <option value="all">All reports</option>
+            <option value="linked">Linked</option>
+            <option value="not_linked">Not linked</option>
+          </select>
+        </label>
 
-        <label for="ims-fr-list-state">Related state</label>
-        <select
-          id="ims-fr-list-state"
-          :value="stateFilter"
-          @change="onStateFilterChange"
-        >
-          <option value="active">Active states</option>
-          <option value="open">Open</option>
-          <option value="on_scene">On Scene</option>
-          <option value="monitoring">Monitoring</option>
-          <option value="on_hold">On Hold</option>
-          <option value="closed">Closed</option>
-          <option value="all">All states</option>
-        </select>
+        <label for="ims-fr-list-shift">
+          <span>Shift</span>
+          <select
+            id="ims-fr-list-shift"
+            :value="shiftFilter"
+            @change="onShiftFilterChange"
+          >
+            <option value="all">All shifts</option>
+            <option value="current">Current shift</option>
+          </select>
+        </label>
 
-        <label for="ims-fr-list-priority">Related priority</label>
-        <select
-          id="ims-fr-list-priority"
-          :value="priorityFilter"
-          @change="onPriorityFilterChange"
-        >
-          <option value="all">All priorities</option>
-          <option value="Critical">Critical</option>
-          <option value="Serious">Serious</option>
-          <option value="Important">Important</option>
-          <option value="Routine">Routine</option>
-        </select>
+        <label for="ims-fr-list-state">
+          <span>Related state</span>
+          <select
+            id="ims-fr-list-state"
+            :value="stateFilter"
+            @change="onStateFilterChange"
+          >
+            <option value="active">Active states</option>
+            <option value="open">Open</option>
+            <option value="on_scene">On Scene</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="on_hold">On Hold</option>
+            <option value="closed">Closed</option>
+            <option value="all">All states</option>
+          </select>
+        </label>
+
+        <label for="ims-fr-list-priority">
+          <span>Related priority</span>
+          <select
+            id="ims-fr-list-priority"
+            :value="priorityFilter"
+            @change="onPriorityFilterChange"
+          >
+            <option value="all">All priorities</option>
+            <option value="Critical">Critical</option>
+            <option value="Serious">Serious</option>
+            <option value="Important">Important</option>
+            <option value="Routine">Routine</option>
+          </select>
+        </label>
       </form>
 
       <p v-if="reports.length === 0" class="ims-fr-list__empty" role="status">
@@ -409,7 +526,7 @@ function compareReports(
         </table>
       </div>
     </template>
-  </section>
+  </WorkflowPageShell>
 </template>
 
 <style scoped>
@@ -422,6 +539,18 @@ function compareReports(
 .ims-fr-list__header {
   display: grid;
   gap: var(--m-space-4);
+}
+
+.ims-fr-list__nav {
+  margin: 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.ims-fr-list__nav a {
+  color: var(--m-text-secondary);
+  text-decoration: none;
 }
 
 .ims-fr-list__eyebrow,
@@ -470,6 +599,7 @@ function compareReports(
 }
 
 .ims-fr-list__secondary-link:focus-visible,
+.ims-fr-list__nav a:focus-visible,
 .ims-fr-list__filters select:focus-visible,
 .ims-fr-list__table a:focus-visible {
   outline: 3px solid var(--m-focus-ring);
@@ -478,28 +608,35 @@ function compareReports(
 
 .ims-fr-list__filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: var(--m-space-2);
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--m-space-3);
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
+  border-radius: 8px;
   background: var(--m-surface-raised);
 }
 
 .ims-fr-list__filters label {
-  align-self: center;
+  display: grid;
+  gap: var(--m-space-2);
+  min-width: 0;
+}
+
+.ims-fr-list__filters label span {
   color: var(--m-text-secondary);
-  font-size: var(--m-text-sm);
+  font-size: var(--m-text-xs);
   font-weight: 800;
+  text-transform: uppercase;
 }
 
 .ims-fr-list__filters select {
+  width: 100%;
   min-width: 0;
+  min-height: 2.75rem;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   padding: var(--m-space-2) var(--m-space-3);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
 }
@@ -568,9 +705,15 @@ function compareReports(
   font-weight: 700;
 }
 
+@media (min-width: 52rem) {
+  .ims-fr-list__filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 43.99rem) {
   .ims-fr-list__filters {
-    grid-template-columns: 1fr;
+    padding: var(--m-space-3);
   }
 
   .ims-fr-list__table-wrap {

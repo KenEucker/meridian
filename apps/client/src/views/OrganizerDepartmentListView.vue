@@ -85,7 +85,7 @@ function formatArchived(department: OrganizerDepartment): string {
         <p class="org-dept__eyebrow">Organizer administration</p>
         <h1 id="org-dept-heading" class="org-dept__heading">Departments</h1>
         <p v-if="session" class="org-dept__lede">
-          {{ session.organizationLabel }} · {{ session.roleLabel }}
+          {{ session.organizationLabel }} / {{ session.roleLabel }}
         </p>
       </div>
       <RouterLink

@@ -59,6 +59,17 @@ const INITIAL_DEPARTMENTS: OrganizerDepartment[] = [
     createdAt: "2026-07-01T12:05:00.000Z",
     updatedAt: "2026-07-01T12:05:00.000Z",
   },
+  {
+    id: "22222222-2222-4222-8222-222222222203",
+    organizationId: DEVELOPMENT_ORGANIZATION_ID,
+    name: "DPW",
+    code: "DPW",
+    description: "Build, roads, and event infrastructure.",
+    defaultTeamId: "77777777-7777-4777-8777-777777777790",
+    archivedAt: null,
+    createdAt: "2026-07-01T12:10:00.000Z",
+    updatedAt: "2026-07-01T12:10:00.000Z",
+  },
 ];
 
 let session: OrganizerDepartmentSession | null = null;

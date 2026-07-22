@@ -2,6 +2,12 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
+import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
+import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
+import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
+import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
+import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   canEditIncident,
   formatIncidentDateTime,
@@ -14,8 +20,16 @@ import {
 } from "@/ims/incidentReadModel";
 
 const session = computed(() => resolveIncidentSession());
-const canView = computed(() => hasIncidentCommandAccess(session.value));
-const canEdit = computed(() => canEditIncident(session.value));
+const canView = computed(
+  () =>
+    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
+    hasIncidentCommandAccess(session.value),
+);
+const canEdit = computed(
+  () =>
+    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
+    canEditIncident(session.value),
+);
 const route = useRoute();
 const router = useRouter();
 const searchQuery = computed(() =>
@@ -26,6 +40,9 @@ const stateFilter = computed(() =>
 );
 const priorityFilter = computed(() =>
   typeof route.query.priority === "string" ? route.query.priority : "all",
+);
+const shiftFilter = computed(() =>
+  route.query.shift === "current" ? "current" : "all",
 );
 const sortKey = computed(() =>
   typeof route.query.sort === "string" ? route.query.sort : "updated",
@@ -38,6 +55,7 @@ const incidents = computed(() => {
   return listIncidentsForSession(session.value, searchQuery.value)
     .filter((incident) => matchesStateFilter(incident, stateFilter.value))
     .filter((incident) => matchesPriorityFilter(incident, priorityFilter.value))
+    .filter((incident) => matchesShiftFilter(incident, shiftFilter.value))
     .sort(compareIncidents);
 });
 
@@ -94,6 +112,18 @@ function onPriorityFilterChange(event: Event): void {
   });
 }
 
+function onShiftFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      shift: target.value === "current" ? "current" : undefined,
+    },
+  });
+}
+
 function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
   if (filter === "all") {
     return true;
@@ -108,6 +138,41 @@ function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
 
 function matchesPriorityFilter(incident: ImsIncident, filter: string): boolean {
   return filter === "all" || incident.priorityLabel === filter;
+}
+
+function activeShiftWindow():
+  | { readonly startsAt: number; readonly endsAt: number }
+  | null {
+  const activeShift =
+    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
+
+  if (!activeShift) {
+    return null;
+  }
+
+  const startsAt = Date.parse(activeShift.startsAt);
+  const endsAt = Date.parse(activeShift.endsAt);
+
+  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
+    return null;
+  }
+
+  return { startsAt, endsAt };
+}
+
+function matchesShiftFilter(incident: ImsIncident, filter: string): boolean {
+  if (filter !== "current") {
+    return true;
+  }
+
+  const shiftWindow = activeShiftWindow();
+  const createdAt = Date.parse(incident.createdAt);
+
+  if (!shiftWindow || Number.isNaN(createdAt)) {
+    return false;
+  }
+
+  return createdAt >= shiftWindow.startsAt && createdAt <= shiftWindow.endsAt;
 }
 
 function statusSortValue(status: ImsIncident["status"]): number {
@@ -186,51 +251,48 @@ async function onSearchSubmit(): Promise<void> {
 </script>
 
 <template>
-  <section class="ims-list" aria-labelledby="ims-incidents-heading">
-    <header class="ims-list__header">
-      <div>
-        <p class="ims-list__eyebrow">Incident Management System</p>
-        <h1 id="ims-incidents-heading" class="ims-list__heading">
-          Incidents
-        </h1>
-      </div>
-      <nav class="ims-list__links" aria-label="Incident list links">
-        <RouterLink class="ims-list__secondary-link" :to="{ name: 'home' }">
-          Home
-        </RouterLink>
-        <RouterLink
-          class="ims-list__secondary-link"
-          :to="{ name: 'ims.field-reports.index' }"
-        >
-          Field Reports
-        </RouterLink>
-        <RouterLink
+  <WorkflowPageShell
+    class="ims-list"
+    heading-id="ims-incidents-heading"
+    title="Incidents"
+    :eyebrow="session?.icDepartmentLabel ?? 'Incident Command'"
+    lede="Restricted Incident Command workspace for event incident records."
+  >
+    <template #actions>
+      <div class="ims-list__links">
+        <WorkflowActionButton
           v-if="canEdit"
-          class="ims-list__create"
           :to="{ name: 'ims.incidents.create' }"
         >
           Create incident
-        </RouterLink>
-      </nav>
-      <dl v-if="session" class="ims-list__context">
-        <div>
-          <dt>Organization</dt>
-          <dd>{{ session.organizationLabel }}</dd>
-        </div>
-        <div>
-          <dt>Event</dt>
-          <dd>{{ session.eventLabel }}</dd>
-        </div>
-        <div>
-          <dt>IC department</dt>
-          <dd>{{ session.icDepartmentLabel }}</dd>
-        </div>
-        <div>
-          <dt>Role</dt>
-          <dd>{{ session.roleLabel }}</dd>
-        </div>
-      </dl>
-    </header>
+        </WorkflowActionButton>
+      </div>
+    </template>
+
+    <template #navigation>
+      <RouterLink
+        v-if="canView"
+        class="ims-list__secondary-link"
+        :to="{ name: 'ims.field-reports.index' }"
+      >
+        Field Reports
+      </RouterLink>
+    </template>
+
+    <template #heading-cards>
+      <WorkflowHeadingCardGrid v-if="session">
+        <WorkflowHeadingCard
+          label="Organization"
+          :value="session.organizationLabel"
+        />
+        <WorkflowHeadingCard label="Event" :value="session.eventLabel" />
+        <WorkflowHeadingCard
+          label="IC department"
+          :value="session.icDepartmentLabel"
+        />
+        <WorkflowHeadingCard label="Role" :value="session.roleLabel" />
+      </WorkflowHeadingCardGrid>
+    </template>
 
     <div v-if="!canView" class="ims-list__restricted" role="status">
       <RouterLink :to="{ name: 'ims.restricted' }">
@@ -288,6 +350,16 @@ async function onSearchSubmit(): Promise<void> {
           <option value="Serious">Serious</option>
           <option value="Important">Important</option>
           <option value="Routine">Routine</option>
+        </select>
+
+        <label for="ims-list-shift">Shift</label>
+        <select
+          id="ims-list-shift"
+          :value="shiftFilter"
+          @change="onShiftFilterChange"
+        >
+          <option value="all">All shifts</option>
+          <option value="current">Current shift</option>
         </select>
       </form>
 
@@ -389,7 +461,7 @@ async function onSearchSubmit(): Promise<void> {
         </div>
       </div>
     </template>
-  </section>
+  </WorkflowPageShell>
 </template>
 
 <style scoped>
@@ -402,6 +474,18 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__header {
   display: grid;
   gap: var(--m-space-4);
+}
+
+.ims-list__nav {
+  margin: 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.ims-list__nav a {
+  color: var(--m-text-secondary);
+  text-decoration: none;
 }
 
 .ims-list__create {
@@ -488,6 +572,7 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 .ims-list__create:focus-visible,
+.ims-list__nav a:focus-visible,
 .ims-list__secondary-link:focus-visible,
 .ims-list__search-form input:focus-visible,
 .ims-list__search-form button:focus-visible,
@@ -605,6 +690,7 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__incident-link {
   display: grid;
   gap: var(--m-space-1);
+  color: var(--m-text-primary);
   text-decoration: none;
 }
 
@@ -612,6 +698,15 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__status {
   font-size: var(--m-text-sm);
   font-weight: 700;
+}
+
+.ims-list__incident-link span:first-child {
+  color: var(--m-text-secondary);
+}
+
+.ims-list__incident-link span:last-child {
+  color: var(--m-text-primary);
+  font-weight: 800;
 }
 
 .ims-list__priority {
@@ -624,26 +719,27 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 .ims-list__priority--routine {
-  background: color-mix(in srgb, var(--m-border-default) 22%, transparent);
+  border-color: var(--m-status-neutral);
+  background: var(--m-surface-base);
   color: var(--m-text-secondary);
 }
 
 .ims-list__priority--important {
-  border-color: #facc15;
-  background: #fef08a;
-  color: #3f3000;
+  border-color: var(--m-attention-attention);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-list__priority--serious {
-  border-color: #c05621;
-  background: #fed7aa;
-  color: #7c2d12;
+  border-color: var(--m-attention-warning);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-list__priority--critical {
-  border-color: #b42318;
-  background: #f04438;
-  color: #ffffff;
+  border-color: var(--m-attention-critical);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-list__status {

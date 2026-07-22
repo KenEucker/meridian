@@ -166,7 +166,7 @@ Authorization still applies to every `primary`, `supported`, `adapted`,
 | Policy/procedure write/maintain | unavailable | unavailable | primary | Admin product UI for normal authoring; God Mode only for repair where needed. |
 | Department roster / teams / trainings / shifts / equipment / credits / documents | supported | adapted | primary | Available in every mode when authorized. |
 | Department Overview | supported | adapted | primary | Mode-specific shell and density only. |
-| Logistics Desk | supported | adapted | primary | Offline attendance operations may queue locally. |
+| Logistics Window | supported | adapted | primary | Offline attendance operations may queue locally. |
 | Operations Center | supported | adapted | primary | Kiosk emphasizes current pinned context. |
 | Planning Table | supported | adapted | primary | Presentation profile may choose compact/table-first or touch/card-first. |
 | Field Report authoring | primary | supported | supported | Field Reports can be created offline and sync later where local store is available. |
@@ -824,8 +824,10 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `staff.dashboard` | `staff.dashboard` | Staff task dashboard | Authenticated staff |
+| `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
 | `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
+| `event.info` | `events.info` | Staff-safe event information fallback with directions, arrival guidance, packing, food/housing, and document placeholders | Staff with event access |
 | `staff.field-reports` | `staff.field-reports.index` | My Field Reports | Authenticated author |
 | `staff.field-report-create` | `staff.field-reports.create` | Submit Field Report | Staff with FR permission |
 | `staff.field-report-detail` | `staff.field-reports.show` | View submitted Field Report | Author or permitted reviewer |
@@ -840,7 +842,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `department.dashboard` | `events.departments.show` | Department operational home | Department member/lead as permitted |
 | `department.overview` | `events.departments.overview` | Lead situational awareness for a selected shift | Department lead |
 | `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
-| `department.teams` | `events.departments.teams.index` | Manage teams and team membership | Department lead |
+| `department.teams` | `events.departments.teams.index` | Dynamic Admin page: department details and team management for department leads; scoped team details and staff lists for team leads | Department lead or team lead; hidden/fails closed for staff-only members |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
 | `department.shifts` | `events.departments.shifts.index` | Manage/view shifts | Department lead or permitted role |
 | `department.shift-create` | `events.departments.shifts.create` | Create shift | Department lead |
@@ -855,7 +857,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `department.overview` | `events.departments.overview` | Switchable-shift situational awareness: exceptions, checked-in staff, assignments, compact equipment/deployment summaries, and drill-throughs | Department lead |
-| `department.logistics` | `events.departments.logistics` | Staff-first Logistics Desk with offline department-scoped search and staff operational workspace | `department_logistics` |
+| `department.logistics` | `events.departments.logistics` | Staff-first Logistics Window with offline department-scoped search and staff operational workspace | `department_logistics` |
 | `department.operations` | `events.departments.operations` | Operations Center composed from the actor's existing capabilities | `department_operations` for the shell and deployments module |
 | `department.planning` | `events.departments.planning` | Identity-free Planning Table comparing plan versus actual by shift/team window | `department_planning` |
 
@@ -866,6 +868,12 @@ Shifts have exactly one team. Department Overview and Planning Table are
 department-scoped by default; optional team or date filters may narrow the view
 without changing authorization.
 
+The Admin page is permission-shaped. Department leads see editable department
+details and team create/manage actions. Team leads see only the teams they lead
+and the staff assigned to those teams. Staff with both department-lead and
+team-lead authority see both sections. Staff without either authority do not see
+Admin in the workflow menu and direct access fails closed.
+
 The Department Overview is a lead situational-awareness surface. Event and
 department identity appear as compact page context. The selected shift is
 prominent and switchable. Content order is: exceptions requiring attention;
@@ -873,7 +881,15 @@ summary counts; checked-in staff currently working; full shift assignments;
 compact equipment/deployment/readiness summaries; then drill-through links to
 owning workflows. Overview actions do not replace Logistics or Operations.
 
-The Logistics Desk is a staff-first service station. Search for staff, equipment,
+The Staff Me page is the staff-facing profile and personal work hub. Ongoing
+event clicks route by role: department leads go to Department Overview, team
+leads should go to a future team overview once that route is defined, and other
+staff go to Event Info. Event Info is an interim staff-safe surface until the
+document system can resolve and render the visible published event documents for
+directions, arrival instructions, packing guidance, food/housing, and event
+requirements.
+
+The Logistics Window is a staff-first service station. Search for staff, equipment,
 and shifts is front and center and works from department-scoped offline cache for
 the current event/department. Selecting a staff member opens one continuous
 workspace: identity/context; on-site/off-site; active/upcoming/outgoing shift;
@@ -1048,10 +1064,10 @@ Placement department designation is configured on the event admin surface (`orga
 |---|---|---|---|---|---|
 | `dept.coverage_issues` | Coverage Issues | department/event | department lead | All scheduled shifts covered | Open shifts |
 | `dept.shift_readiness` | Shift Readiness | department/event | department lead | Department shifts ready | Review shifts |
-| `dept.checkin_status` | Check-in Status | department/event | department logistics | No check-in issues | Open Logistics Desk |
+| `dept.checkin_status` | Check-in Status | department/event | department logistics | No check-in issues | Open Logistics Window |
 | `dept.training_readiness` | Training Readiness | department/event | department lead | Required trainings complete | Review trainings |
 | `dept.policy_readiness` | Policy Readiness | department | department lead | Department documents current | Review documents |
-| `dept.equipment_returns` | Equipment Returns | department/event | department logistics | No equipment returns pending | Open Logistics Desk |
+| `dept.equipment_returns` | Equipment Returns | department/event | department logistics | No equipment returns pending | Open Logistics Window |
 | `dept.event_map` | Event Map | department/event | department lead with map view permission; Placement dept lead gets management access | No published map | Open event map |
 
 ### 13.3 Department Operations Widgets
@@ -1061,7 +1077,7 @@ Placement department designation is configured on the event admin surface (`orga
 | `shift.current_assignments` | Current Assignments | shift/department/event | operational visibility | No current assignments | Open Department Overview |
 | `shift.late_missing` | Late or Missing Staff | shift/department/event | department logistics | No late or missing staff | Review check-in |
 | `shift.deployment_needs` | Deployment Needs | shift/department/event | department operations | Deployments look okay | Open Operations Center |
-| `shift.equipment_status` | Equipment Status | shift/department/event | department logistics | Equipment accounted for | Open Logistics Desk |
+| `shift.equipment_status` | Equipment Status | shift/department/event | department logistics | Equipment accounted for | Open Logistics Window |
 
 ### 13.4 Organizer Widgets
 

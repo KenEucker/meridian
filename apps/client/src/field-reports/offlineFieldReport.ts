@@ -37,7 +37,7 @@ export type FieldReportSyncStatus =
   | typeof FIELD_REPORT_ACCEPTED;
 
 /**
- * Local append-only correction on a submitted Field Report (FR-007–FR-009;
+ * Local append-only correction on a submitted Field Report (FR-007-FR-009;
  * data/API 10.15 `field_report_appends`). Appends have no title and never
  * rewrite the original body. Server command transport remains a later task;
  * local author detail persists appends on-device with the author catalog.
@@ -78,7 +78,7 @@ export interface OfflineFieldReport {
  * Caller-supplied fields for an offline Field Report submission. Department and
  * team context are optional ("if available", technical spec 17.3). The device,
  * node, author, staff, and event identifiers come from the authenticated field
- * session. Title is required plain text (trimmed, 1–200 characters).
+ * session. Title is required plain text (trimmed, 1-200 characters).
  */
 export interface CreateOfflineFieldReportInput {
   readonly eventId: string;
@@ -143,7 +143,7 @@ function requireNonEmpty(
 }
 
 /**
- * Normalize a Field Report title: trim outer whitespace, require 1–200 chars
+ * Normalize a Field Report title: trim outer whitespace, require 1-200 chars
  * (FR-003; technical spec 17.3; data/API 10.15; UI contract 14.2).
  */
 export function normalizeFieldReportTitle(value: string): string {

@@ -1,10 +1,18 @@
 import { shallowRef } from "vue";
 
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
+import {
+  fixtureDepartmentAccesses,
+  fixtureDepartmentById,
+  fixtureDepartmentHasAdminAccess,
+  selectedFixtureDepartment,
+  type FixtureDepartmentAccess,
+  type FixtureTeamStaffMember,
+} from "@/department-teams/fixtureDepartmentAccess";
 
 export type DepartmentSelfAdminRole =
   | "department_lead"
   | "department_administration"
+  | "team_lead"
   | "staff";
 
 export interface DepartmentSelfAdminSession {
@@ -14,6 +22,7 @@ export interface DepartmentSelfAdminSession {
   readonly departmentLabel: string;
   readonly role: DepartmentSelfAdminRole;
   readonly roleLabel: string;
+  readonly teamLeadTeamIds: readonly string[];
 }
 
 export interface DepartmentSelfAdminDepartment {
@@ -39,6 +48,11 @@ export interface DepartmentTeam {
   readonly updatedAt: string;
 }
 
+export interface DepartmentTeamStaffMember extends FixtureTeamStaffMember {
+  readonly teamId: string;
+  readonly teamLabel: string;
+}
+
 export interface DepartmentDetailsDraft {
   name: string;
   code: string;
@@ -52,59 +66,40 @@ export interface DepartmentTeamDraft {
 }
 
 const DEVELOPMENT_ORGANIZATION_ID = "11111111-1111-4111-8111-111111111111";
-const DEVELOPMENT_DEPARTMENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId;
-const DEVELOPMENT_DEFAULT_TEAM_ID = "77777777-7777-4777-8777-777777777770";
-const DEVELOPMENT_OPERATORS_TEAM_ID = "77777777-7777-4777-8777-777777777771";
+const FIXTURE_TIMESTAMP = "2026-07-01T12:00:00.000Z";
 
-const DEVELOPMENT_SESSION: DepartmentSelfAdminSession = {
-  eventId: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
-  eventLabel: LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
-  departmentId: DEVELOPMENT_DEPARTMENT_ID,
-  departmentLabel: LOCAL_DEPARTMENT_OPS_CONTEXT.departmentLabel,
-  role: "department_lead",
-  roleLabel: "Department lead",
-};
-
-const INITIAL_DEPARTMENT: DepartmentSelfAdminDepartment = {
-  id: DEVELOPMENT_DEPARTMENT_ID,
-  organizationId: DEVELOPMENT_ORGANIZATION_ID,
-  name: "Rangers",
-  code: "RANGERS",
-  description: "Field operations and volunteer support.",
-  defaultTeamId: DEVELOPMENT_DEFAULT_TEAM_ID,
-  archivedAt: null,
-  updatedAt: "2026-07-01T12:00:00.000Z",
-};
-
-const INITIAL_TEAMS: DepartmentTeam[] = [
-  {
-    id: DEVELOPMENT_DEFAULT_TEAM_ID,
-    departmentId: DEVELOPMENT_DEPARTMENT_ID,
-    name: "Rangers Default",
-    code: "DEFAULT",
-    description: "Default department team.",
-    isDefault: true,
+const INITIAL_DEPARTMENTS: DepartmentSelfAdminDepartment[] =
+  fixtureDepartmentAccesses.map((department) => ({
+    id: department.departmentId,
+    organizationId: DEVELOPMENT_ORGANIZATION_ID,
+    name: department.departmentLabel,
+    code: department.departmentCode,
+    description: department.description,
+    defaultTeamId:
+      department.teams.find((team) => team.isDefault)?.teamId ?? null,
     archivedAt: null,
-    createdAt: "2026-07-01T12:00:00.000Z",
-    updatedAt: "2026-07-01T12:00:00.000Z",
-  },
-  {
-    id: DEVELOPMENT_OPERATORS_TEAM_ID,
-    departmentId: DEVELOPMENT_DEPARTMENT_ID,
-    name: "Dirt",
-    code: "DIRT",
-    description: "Field patrol team.",
-    isDefault: false,
-    archivedAt: null,
-    createdAt: "2026-07-01T12:05:00.000Z",
-    updatedAt: "2026-07-01T12:05:00.000Z",
-  },
-];
+    updatedAt: FIXTURE_TIMESTAMP,
+  }));
+
+const INITIAL_TEAMS: DepartmentTeam[] = fixtureDepartmentAccesses.flatMap(
+  (department) =>
+    department.teams.map((team) => ({
+      id: team.teamId,
+      departmentId: department.departmentId,
+      name: team.teamLabel,
+      code: team.teamCode,
+      description: team.description,
+      isDefault: team.isDefault,
+      archivedAt: null,
+      createdAt: FIXTURE_TIMESTAMP,
+      updatedAt: FIXTURE_TIMESTAMP,
+    })),
+);
 
 let session: DepartmentSelfAdminSession | null = null;
-const department = shallowRef<DepartmentSelfAdminDepartment>({
-  ...INITIAL_DEPARTMENT,
-});
+const departments = shallowRef<DepartmentSelfAdminDepartment[]>(
+  INITIAL_DEPARTMENTS.map((department) => ({ ...department })),
+);
 const teams = shallowRef<DepartmentTeam[]>(
   INITIAL_TEAMS.map((team) => ({ ...team })),
 );
@@ -113,7 +108,7 @@ export function installDevelopmentDepartmentSelfAdminSession(
   overrides: Partial<DepartmentSelfAdminSession> = {},
 ): DepartmentSelfAdminSession {
   session = {
-    ...DEVELOPMENT_SESSION,
+    ...sessionForDepartment(selectedFixtureDepartment.value),
     ...overrides,
   };
 
@@ -121,7 +116,7 @@ export function installDevelopmentDepartmentSelfAdminSession(
 }
 
 export function resolveDepartmentSelfAdminSession(): DepartmentSelfAdminSession | null {
-  return session;
+  return session ?? sessionForDepartment(selectedFixtureDepartment.value);
 }
 
 export function clearDepartmentSelfAdminSession(): void {
@@ -138,6 +133,36 @@ export function canAdministerDepartment(
   );
 }
 
+export function canLeadDepartmentTeam(
+  current: DepartmentSelfAdminSession | null,
+): boolean {
+  return (
+    current !== null &&
+    current.role !== "staff" &&
+    current.teamLeadTeamIds.length > 0
+  );
+}
+
+export function canAccessDepartmentAdmin(
+  current: DepartmentSelfAdminSession | null,
+): boolean {
+  return canAdministerDepartment(current) || canLeadDepartmentTeam(current);
+}
+
+export function getCurrentDepartment(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentSelfAdminDepartment | null {
+  if (current === null) {
+    return null;
+  }
+
+  return (
+    departments.value.find(
+      (department) => department.id === current.departmentId,
+    ) ?? null
+  );
+}
+
 export function getAdministeredDepartment(
   current: DepartmentSelfAdminSession | null,
 ): DepartmentSelfAdminDepartment | null {
@@ -145,11 +170,7 @@ export function getAdministeredDepartment(
     return null;
   }
 
-  if (department.value.id !== current.departmentId) {
-    return null;
-  }
-
-  return department.value;
+  return getCurrentDepartment(current);
 }
 
 export function updateDepartmentDetails(
@@ -179,7 +200,9 @@ export function updateDepartmentDetails(
     updatedAt: new Date().toISOString(),
   };
 
-  department.value = updated;
+  departments.value = departments.value.map((department) =>
+    department.id === updated.id ? updated : department,
+  );
   session = {
     ...current,
     departmentLabel: updated.name,
@@ -217,6 +240,54 @@ export function listDepartmentTeams(
 
       return left.name.localeCompare(right.name);
     });
+}
+
+export function listTeamLeadTeams(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentTeam[] {
+  if (!canLeadDepartmentTeam(current) || current === null) {
+    return [];
+  }
+
+  const leadTeamIds = new Set(current.teamLeadTeamIds);
+
+  return teams.value
+    .filter(
+      (team) =>
+        team.departmentId === current.departmentId && leadTeamIds.has(team.id),
+    )
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function listTeamLeadStaff(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentTeamStaffMember[] {
+  if (!canLeadDepartmentTeam(current) || current === null) {
+    return [];
+  }
+
+  const access = fixtureDepartmentById(current.departmentId);
+  if (!access) {
+    return [];
+  }
+
+  const leadTeamIds = new Set(current.teamLeadTeamIds);
+
+  return access.teams
+    .filter((team) => leadTeamIds.has(team.teamId))
+    .flatMap((team) =>
+      team.staff.map((member) => ({
+        ...member,
+        teamId: team.teamId,
+        teamLabel: team.teamLabel,
+      })),
+    )
+    .sort(
+      (left, right) =>
+        left.teamLabel.localeCompare(right.teamLabel) ||
+        left.displayName.localeCompare(right.displayName),
+    );
 }
 
 export function getDepartmentTeam(
@@ -366,8 +437,33 @@ export function restoreDepartmentTeam(
 }
 
 export function resetDepartmentSelfAdminFixtures(): void {
-  department.value = { ...INITIAL_DEPARTMENT };
+  departments.value = INITIAL_DEPARTMENTS.map((department) => ({
+    ...department,
+  }));
   teams.value = INITIAL_TEAMS.map((team) => ({ ...team }));
+}
+
+function sessionForDepartment(
+  department: FixtureDepartmentAccess,
+): DepartmentSelfAdminSession {
+  const teamLeadTeamIds = department.teams
+    .filter((team) => team.isTeamLead)
+    .map((team) => team.teamId);
+  const hasAdminAccess = fixtureDepartmentHasAdminAccess(department);
+
+  return {
+    eventId: department.eventId,
+    eventLabel: department.eventLabel,
+    departmentId: department.departmentId,
+    departmentLabel: department.departmentLabel,
+    role: department.isDepartmentLead
+      ? "department_lead"
+      : teamLeadTeamIds.length > 0
+        ? "team_lead"
+        : "staff",
+    roleLabel: hasAdminAccess ? department.roleLabel : "Staff",
+    teamLeadTeamIds,
+  };
 }
 
 /**

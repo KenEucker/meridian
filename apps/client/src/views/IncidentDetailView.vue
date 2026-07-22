@@ -586,6 +586,7 @@ async function onPrintPdf(): Promise<void> {
 }
 
 .ims-detail__heading {
+  color: var(--m-text-primary);
   font-family: var(--m-font-heading);
   font-size: clamp(var(--m-text-lg), 5vw, var(--m-text-xl));
   line-height: 1.15;
@@ -641,26 +642,27 @@ async function onPrintPdf(): Promise<void> {
 }
 
 .ims-detail__priority-pill--routine {
-  background: color-mix(in srgb, var(--m-border-default) 22%, transparent);
+  border-color: var(--m-status-neutral);
+  background: var(--m-surface-base);
   color: var(--m-text-secondary);
 }
 
 .ims-detail__priority-pill--important {
-  border-color: #facc15;
-  background: #fef08a;
-  color: #3f3000;
+  border-color: var(--m-attention-attention);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-detail__priority-pill--serious {
-  border-color: #c05621;
-  background: #fed7aa;
-  color: #7c2d12;
+  border-color: var(--m-attention-warning);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-detail__priority-pill--critical {
-  border-color: #b42318;
-  background: #f04438;
-  color: #ffffff;
+  border-color: var(--m-attention-critical);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 .ims-detail__type-list {
