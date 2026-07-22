@@ -1419,8 +1419,8 @@ function onAppendNote(): void {
   place-items: center;
   border: 0;
   border-radius: var(--m-radius-sm);
-  background: var(--m-status-danger);
-  color: var(--m-action-primary-text);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
   font-size: var(--m-text-sm);
   font-weight: 900;
   line-height: 1;
@@ -1612,7 +1612,7 @@ function onAppendNote(): void {
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--m-status-danger);
+  color: var(--m-action-destructive-bg);
   font: inherit;
   font-size: var(--m-text-sm);
   font-weight: 800;

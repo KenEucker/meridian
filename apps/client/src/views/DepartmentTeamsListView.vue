@@ -359,6 +359,7 @@ function teamCreateRoute() {
                 <button
                   v-if="!team.isDefault && team.archivedAt === null"
                   type="button"
+                  class="dept-teams__archive"
                   :disabled="busyId === team.id"
                   @click="archiveTeam(team)"
                 >
@@ -453,7 +454,7 @@ function teamCreateRoute() {
   border: 0;
   border-radius: var(--m-radius-sm);
   background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-fg);
+  color: var(--m-action-primary-text);
   font: inherit;
   font-weight: 600;
   text-decoration: none;
@@ -498,10 +499,10 @@ function teamCreateRoute() {
 .dept-teams__error {
   border-color: color-mix(
     in srgb,
-    var(--m-status-danger, #b42318) 40%,
+    var(--m-status-danger, #cc792f) 40%,
     var(--m-border-default)
   );
-  color: var(--m-status-danger, #b42318);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .dept-teams__details,
@@ -640,6 +641,12 @@ function teamCreateRoute() {
 .dept-teams__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.dept-teams__actions .dept-teams__archive {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
 }
 
 @media (max-width: 40rem) {

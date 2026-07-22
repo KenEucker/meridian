@@ -481,6 +481,12 @@ async function onSubmit(): Promise<void> {
   cursor: pointer;
 }
 
+.fr-create__photo-remove {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
+}
+
 .fr-create__add-photo:disabled {
   opacity: 0.5;
   cursor: not-allowed;

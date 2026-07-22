@@ -1,9 +1,9 @@
 # Meridian Brand Guide
 
-Version: 0.2  
+Version: 0.3
 Status: Working Draft  
 Brand direction: Signal Camp / Participation Hex  
-Last updated: 2026-06-17
+Last updated: 2026-07-22
 
 ---
 
@@ -232,18 +232,18 @@ Avoid retaining thin contour lines in favicon-scale assets.
 
 ## 4. Color System
 
-The prior blue/cyan/teal identity should be retired for primary brand usage. Meridian’s new brand palette should use an **earth + signal** system: grounded neutrals, field tones, and one warm operational accent.
+The prior blue/cyan/teal identity should be retired for primary brand usage. Meridian's platform palette is the four-color logo palette, used in priority order for product accents, action color, status/severity color, priority indicators, chart series, and department accents.
 
-### 4.1 Core Brand Palette
+Background, foreground/text, border, and focus/highlight colors may continue to use neutral semantic tokens for readability and accessibility. New non-neutral accent colors must not be introduced without updating this guide and `@meridian/ui-tokens`.
+
+### 4.1 Core Platform Palette
 
 | Token | Name | Hex | Use |
 | --- | --- | --- | --- |
-| `brand.charcoal` | Field Charcoal | `#263039` | Primary text, dark UI surfaces, monochrome logo |
-| `brand.slate` | Weathered Slate | `#405665` | Secondary brand tone, panels, supporting icon segments |
-| `brand.sage` | Field Sage | `#71836D` | Staff/community tone, calm status accents |
-| `brand.tan` | Dust Tan | `#B89263` | Warm neutral, backgrounds, badge elements |
-| `brand.canvas` | Canvas | `#EFE8DA` | Warm page background, documentation surfaces |
-| `brand.signal` | Signal Amber | `#D9822B` | Primary brand accent, calls to action, logo highlight |
+| `brand.platform-primary` | Field Slate | `#475157` | Highest-priority platform color; creation actions; selected primary emphasis |
+| `brand.platform-secondary` | Field Sage | `#6B7562` | Highlighted navigation, page navigation buttons, search/filter actions, routine operational accents |
+| `brand.platform-tertiary` | Dust Umber | `#A58667` | Secondary priority/state accents and supporting data series |
+| `brand.platform-accent` | Signal Orange | `#CC792F` | Destructive/archive/delete actions and critical attention accents |
 
 ### 4.2 Extended Neutral Palette
 
@@ -257,25 +257,27 @@ The prior blue/cyan/teal identity should be retired for primary brand usage. Mer
 | `neutral.100` | Canvas Light | `#F6F1E8` | Light backgrounds |
 | `neutral.000` | Paper | `#FFFCF6` | Highest surfaces |
 
-### 4.3 Semantic Colors
+### 4.3 Semantic Accent Colors
 
-Semantic colors must remain distinct from brand colors. Do not rely only on the brand amber for warnings or the sage for success.
+Semantic accent tokens must resolve to the core platform palette. Communicate state with text, icons, structure, and accessible labels; never rely on color alone.
 
-| Token | Name | Hex | Use |
-| --- | --- | --- | --- |
-| `semantic.success` | Success | `#2F855A` | Completion, approved, checked in |
-| `semantic.warning` | Warning | `#B7791F` | Needs attention, waitlisted, late |
-| `semantic.critical` | Critical | `#C24135` | Error, blocked, DNS, high-risk incident state |
-| `semantic.info` | Info | `#2B6CB0` | Neutral system information |
-| `semantic.offline` | Offline | `#6B7280` | Offline or sync-pending state |
+| Token | Platform color | Use |
+| --- | --- | --- |
+| `semantic.neutral` | `#475157` | Neutral state accents |
+| `semantic.success` | `#6B7562` | Completion, approved, checked in |
+| `semantic.warning` | `#A58667` | Needs attention, waitlisted, late |
+| `semantic.critical` | `#CC792F` | Error, blocked, destructive, high-risk incident state |
+| `semantic.restricted` | `#475157` | Restricted/private state accents |
 
 ### 4.4 Color Usage Rules
 
-- Signal Amber should be used sparingly so it remains meaningful.
+- Creation buttons use the platform primary color.
+- Search/filter buttons and page navigation buttons below page headings use the platform secondary color, matching highlighted navigation.
+- Delete, archive, remove, strike, and other destructive action buttons use the platform accent color.
 - Use warm canvas backgrounds for brand and documentation surfaces.
 - Use white or near-white application surfaces when dense data readability matters.
 - Do not make the entire UI orange, tan, or earth-toned.
-- Avoid blue as the primary brand color unless needed for semantic information.
+- Avoid blue, cyan, teal, red, or green as product accent colors unless the color is a background, foreground/text, border, focus/highlight, or other accessibility-supporting neutral.
 - Preserve accessibility contrast for all text, controls, status chips, and links.
 
 ### 4.5 UI Color Relationship
@@ -285,21 +287,14 @@ The brand palette should inform the UI, but the UI should still use semantic des
 Recommended examples:
 
 ```css
---color-brand-primary: #D9822B;
---color-brand-primary-hover: #B9671F;
---color-brand-secondary: #405665;
---color-brand-community: #71836D;
+--m-platform-primary: #475157;
+--m-platform-secondary: #6b7562;
+--m-platform-tertiary: #a58667;
+--m-platform-accent: #cc792f;
 
---color-surface-page: #F6F1E8;
---color-surface-card: #FFFCF6;
---color-surface-raised: #FFFFFF;
-
---color-text-primary: #151A1F;
---color-text-secondary: #405665;
---color-text-muted: #7A817A;
-
---color-border-subtle: #DED6C8;
---color-border-strong: #CFC5B4;
+--m-action-primary-bg: var(--m-platform-primary);
+--m-action-secondary-bg: var(--m-platform-secondary);
+--m-action-destructive-bg: var(--m-platform-accent);
 ```
 
 ---
@@ -705,17 +700,15 @@ Avoid:
 
 ### 12.2 Data Colors
 
-Use brand colors sparingly in charts. Use semantic and categorical palettes designed for contrast.
+Use platform colors sparingly in charts. Use labels, shapes, and grouping before adding more hue.
 
 Recommended chart palette:
 
 ```text
-#405665  Slate
-#71836D  Sage
-#B89263  Tan
-#D9822B  Signal Amber
-#2B6CB0  Info Blue
-#8F5F3C  Earth Brown
+#475157  Platform primary
+#6B7562  Platform secondary
+#A58667  Platform tertiary
+#CC792F  Platform accent
 ```
 
 Ensure charts remain usable for color-vision differences.
@@ -735,8 +728,8 @@ Ensure charts remain usable for color-vision differences.
 
 ### 13.2 Brand Accessibility Notes
 
-- Signal Amber should not be used for small text on light backgrounds.
-- Dust Tan and Canvas should not be used as text colors.
+- Signal Orange and Dust Umber should not be used for small text on light backgrounds.
+- Canvas-style neutral surfaces should not be used as text colors.
 - Texture should not reduce legibility.
 - The logo should have simplified versions for small sizes and low contrast contexts.
 
@@ -836,7 +829,7 @@ The brand system should eventually include:
 When creating new Meridian visuals:
 
 1. Start with the brand tenets.
-2. Use the earth + signal palette.
+2. Use the exact four-color platform palette.
 3. Favor soft hex forms only in brand moments.
 4. Keep operational UI calm and readable.
 5. Test the design at GitHub-avatar and app-icon sizes.
@@ -847,8 +840,8 @@ When creating new Meridian visuals:
 When implementing UI:
 
 1. Use semantic tokens rather than raw hex values where possible.
-2. Keep brand colors separate from status colors.
-3. Do not use logo colors as arbitrary chart colors without checking contrast.
+2. Keep action, status, attention/priority, chart, and department accent colors on the platform palette.
+3. Do not use logo colors as arbitrary chart colors without checking contrast and non-color labeling.
 4. Provide simplified icon assets for favicons and mobile app icons.
 5. Keep texture out of dense application surfaces.
 6. Use accessible focus states and text labels for operational actions.
@@ -857,7 +850,7 @@ When implementing UI:
 
 When prompting an LLM to generate Meridian visuals, include:
 
-> Meridian is open-source public-good software for volunteer operations. It should feel field-ready, communal, cooperative, warm, useful, and trustworthy. The brand uses a soft hexagonal field emblem with a central hub and radiating paths, representing coordinated staff contribution around a shared source of truth. It should avoid military, police, emergency-service, corporate SaaS, startup, compass rose, shield, map pin, and generic monogram imagery. Use an earth + signal palette with canvas neutrals, charcoal, slate, sage, dust tan, and signal amber.
+> Meridian is open-source public-good software for volunteer operations. It should feel field-ready, communal, cooperative, warm, useful, and trustworthy. The brand uses a soft hexagonal field emblem with a central hub and radiating paths, representing coordinated staff contribution around a shared source of truth. It should avoid military, police, emergency-service, corporate SaaS, startup, compass rose, shield, map pin, and generic monogram imagery. Use the exact four-color platform palette: #475157, #6B7562, #A58667, and #CC792F, with neutral semantic surface/text/border values for accessibility.
 
 ---
 
@@ -889,7 +882,7 @@ These decisions should be finalized before producing a full 1.0 brand package:
 
 1. Final vector reconstruction of the Signal Camp mark.
 2. Exact wordmark typeface or custom lettering.
-3. Final color values after contrast testing.
+3. Final monochrome and reverse logo color treatments after contrast testing.
 4. Monochrome and reverse logo behavior.
 5. Small-size simplification rules.
 6. Patch/sticker badge details.

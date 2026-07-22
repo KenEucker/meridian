@@ -18,10 +18,10 @@
   box-sizing: border-box;
   min-height: 2.75rem;
   padding: var(--m-space-3);
-  border: 1px solid var(--m-border-default);
+  border: 1px solid var(--m-action-secondary-bg);
   border-radius: 8px;
-  background: var(--m-surface-raised);
-  color: var(--m-text-primary);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
   font: inherit;
   font-weight: 800;
   text-align: center;
@@ -31,12 +31,9 @@
 
 .workflow-page-navigation :deep(a.router-link-active),
 .workflow-page-navigation :deep(a.router-link-exact-active) {
-  border-color: var(--m-action-primary-bg);
-  background: color-mix(
-    in srgb,
-    var(--m-action-primary-bg) 14%,
-    var(--m-surface-raised)
-  );
+  border-color: var(--m-action-secondary-bg);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
 }
 
 .workflow-page-navigation :deep(a:focus-visible),

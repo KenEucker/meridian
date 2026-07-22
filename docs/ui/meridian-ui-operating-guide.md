@@ -81,6 +81,8 @@ The current style direction includes:
 
 UI implementation must use semantic design tokens rather than raw brand colors directly in component code.
 
+The platform accent palette is limited to the four logo colors: `#475157`, `#6B7562`, `#A58667`, and `#CC792F`. Background, foreground/text, border, and focus/highlight tokens may use neutral accessibility values. Other action, status, priority, chart, and department accent colors must resolve through the shared platform palette.
+
 Examples of required semantic token categories:
 
 - `surface`
@@ -1339,6 +1341,8 @@ Primary buttons should be used sparingly and should represent the main action fo
 
 Destructive buttons must be visually distinct and must route through a `ConfirmationDialog`.
 
+Creation buttons use the primary action token. Search/filter buttons and page navigation buttons below headings use the secondary action token so they match highlighted navigation. Delete, archive, remove, strike, and related destructive controls use the destructive action token consistently across the app.
+
 Document authoring actions should use specific verbs:
 
 - Save Draft
@@ -1368,7 +1372,7 @@ Developers and LLM coding agents must not silently create competing patterns for
 
 LLM coding agents working on Meridian UI must follow these rules:
 
-1. Do not invent new colors.
+1. Do not invent new colors outside the four platform palette colors, except for background, foreground/text, border, focus/highlight, and accessibility-supporting neutral tokens.
 2. Do not invent new statuses.
 3. Do not rename canonical statuses.
 4. Do not introduce new navigation models.

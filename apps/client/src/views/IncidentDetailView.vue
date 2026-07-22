@@ -881,7 +881,7 @@ async function onPrintPdf(): Promise<void> {
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--m-status-danger);
+  color: var(--m-action-destructive-bg);
   font: inherit;
   font-size: var(--m-text-sm);
   font-weight: 800;

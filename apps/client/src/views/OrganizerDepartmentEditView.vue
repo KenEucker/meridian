@@ -174,6 +174,7 @@ async function onRestore(): Promise<void> {
         <button
           v-if="existing && existing.archivedAt === null"
           type="button"
+          class="org-dept-edit__archive"
           :disabled="busy"
           @click="onArchive"
         >
@@ -232,8 +233,8 @@ async function onRestore(): Promise<void> {
 }
 
 .org-dept-edit__error {
-  border-color: color-mix(in srgb, var(--m-status-danger, #b42318) 40%, var(--m-border-default));
-  color: var(--m-status-danger, #b42318);
+  border-color: color-mix(in srgb, var(--m-status-danger, #cc792f) 40%, var(--m-border-default));
+  color: var(--m-status-danger, #cc792f);
 }
 
 .org-dept-edit__form {
@@ -285,11 +286,17 @@ async function onRestore(): Promise<void> {
 .org-dept-edit__actions button[type="submit"] {
   border-color: transparent;
   background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-fg);
+  color: var(--m-action-primary-text);
 }
 
 .org-dept-edit__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.org-dept-edit__actions .org-dept-edit__archive {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
 }
 </style>

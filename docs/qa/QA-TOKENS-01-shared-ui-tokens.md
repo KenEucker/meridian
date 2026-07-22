@@ -43,16 +43,19 @@ workflows, authentication, or offline behavior are expected at this stage.
 4. Confirm the package and admin copies are in sync: run
    `corepack pnpm run tokens:sync` and confirm
    `apps/server/public/css/meridian-tokens.css` has no pending git changes.
-5. Start the shared client dev server: `corepack pnpm run client:dev` and open the
+5. Confirm the platform palette tokens are exactly `#475157`, `#6B7562`,
+   `#A58667`, and `#CC792F`, and that action/status/attention/department
+   accent tokens resolve to those colors rather than ad hoc raw hex values.
+6. Start the shared client dev server: `corepack pnpm run client:dev` and open the
    dev URL (for example `http://localhost:5173/`). Confirm the home surface loads
    on the warm canvas surface with token-driven text and shell styling.
-6. Toggle the OS appearance between light and dark (or set
+7. Toggle the OS appearance between light and dark (or set
    `document.documentElement.dataset.theme = "dark"` in the browser console)
    and confirm the shared client surface switches to the dark token values.
-7. Start the server (`corepack pnpm run server:dev`) and open `/`. Confirm the
+8. Start the server (`corepack pnpm run server:dev`) and open `/`. Confirm the
    server landing page renders with the shared tokens (warm canvas in light
    mode, dark surface in dark mode).
-8. Open the admin login page at `/admin/login` and confirm (via view source or
+9. Open the admin login page at `/admin/login` and confirm (via view source or
    dev tools) that `css/meridian-tokens.css` is linked in the document head.
 
 ## Expected results
@@ -60,6 +63,8 @@ workflows, authentication, or offline behavior are expected at this stage.
 - `corepack pnpm run tokens:test` passes: every canonical `--m-*` token from
   contract section 10.1 is defined with a non-empty light value, dark mode
   redefines the same names, and the client/admin copies are byte-identical.
+- Platform-governed action, status, attention, focus, and department accent
+  tokens resolve to one of the four logo colors.
 - `corepack pnpm --filter @meridian/client run test` passes, including the
   shared client token-wiring checks.
 - `tokens:sync` produces no git diff (package and server copies match).

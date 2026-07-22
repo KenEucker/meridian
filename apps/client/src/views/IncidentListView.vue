@@ -624,11 +624,11 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 .ims-list__search-form button {
-  border: 0;
+  border: 1px solid var(--m-action-secondary-bg);
   border-radius: var(--m-radius-sm);
   padding: var(--m-space-2) var(--m-space-4);
-  background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-text);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
   font-weight: 800;
 }
 

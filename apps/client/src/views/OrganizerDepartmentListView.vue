@@ -161,6 +161,7 @@ function formatArchived(department: OrganizerDepartment): string {
                 <button
                   v-if="department.archivedAt === null"
                   type="button"
+                  class="org-dept__archive"
                   :disabled="busyId === department.id"
                   @click="archiveDepartment(department)"
                 >
@@ -225,7 +226,7 @@ function formatArchived(department: OrganizerDepartment): string {
   padding: 0 var(--m-space-4);
   border-radius: var(--m-radius-sm);
   background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-fg);
+  color: var(--m-action-primary-text);
   font-weight: 600;
   text-decoration: none;
 }
@@ -239,8 +240,8 @@ function formatArchived(department: OrganizerDepartment): string {
 }
 
 .org-dept__error {
-  border-color: color-mix(in srgb, var(--m-status-danger, #b42318) 40%, var(--m-border-default));
-  color: var(--m-status-danger, #b42318);
+  border-color: color-mix(in srgb, var(--m-status-danger, #cc792f) 40%, var(--m-border-default));
+  color: var(--m-status-danger, #cc792f);
 }
 
 .org-dept__toolbar {
@@ -313,5 +314,11 @@ function formatArchived(department: OrganizerDepartment): string {
 .org-dept__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.org-dept__actions .org-dept__archive {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
 }
 </style>

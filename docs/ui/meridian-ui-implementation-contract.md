@@ -461,6 +461,8 @@ These labels are product-reviewable. Until changed, use them consistently.
 
 Use semantic tokens. Do not hard-code raw brand colors in components when semantic tokens exist.
 
+Platform accent color is limited to the four logo colors: `#475157`, `#6B7562`, `#A58667`, and `#CC792F`. Background, foreground/text, border, and focus/highlight tokens may use neutral accessibility values. Action, status, priority/attention, chart, and department accent tokens must resolve to the platform palette.
+
 ### 10.1 CSS Custom Property Naming
 
 Initial Alpha 1 token names:
@@ -471,6 +473,11 @@ Initial Alpha 1 token names:
   --m-surface-base: ;
   --m-surface-raised: ;
   --m-surface-overlay: ;
+
+  --m-platform-primary: ;
+  --m-platform-secondary: ;
+  --m-platform-tertiary: ;
+  --m-platform-accent: ;
 
   --m-text-primary: ;
   --m-text-secondary: ;
@@ -529,6 +536,8 @@ Initial Alpha 1 token names:
   --m-text-xl: ;
 }
 ```
+
+Creation actions use `--m-action-primary-*`. Search/filter actions and page navigation buttons below headings use `--m-action-secondary-*`, matching highlighted navigation. Delete, archive, remove, strike, and other destructive actions use `--m-action-destructive-*` consistently.
 
 Light and dark mode must use the same semantic token names with different values.
 
