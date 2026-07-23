@@ -15,6 +15,8 @@ use App\Models\PermissionRole;
  * - Requirements ORG-015 (organizers do not get all incidents/field reports)
  *   and ORG-016 (organizers may view all published policy/procedure documents).
  * - Requirement ORG-002 / M11.12 (organizers manage organization departments).
+ * - Requirements VOL-001 through VOL-006 / M11.14 (organizers manage staff
+ *   intake and department lead selection).
  */
 final class PermissionCatalog
 {
@@ -67,6 +69,8 @@ final class PermissionCatalog
     public const PERMISSION_POLICIES_VIEW_PUBLISHED = 'policies.view_published';
 
     public const PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE = 'organization.departments.manage';
+
+    public const PERMISSION_ORGANIZATION_STAFF_MANAGE = 'organization.staff.manage';
 
     public const PERMISSION_DEPARTMENT_PRESENCE_MANAGE = 'department.presence.manage';
 
@@ -129,6 +133,7 @@ final class PermissionCatalog
             self::PERMISSION_FIELD_REPORTS_DOWNLOAD_PHOTO => 'Download field report photos.',
             self::PERMISSION_POLICIES_VIEW_PUBLISHED => 'View all published policy and procedure documents in the organization.',
             self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE => 'Create, edit, archive, restore, and list organization departments.',
+            self::PERMISSION_ORGANIZATION_STAFF_MANAGE => 'Add, invite, list, and assign organization staff and department leads.',
             self::PERMISSION_DEPARTMENT_PRESENCE_MANAGE => 'Mark eligible department staff on-site or off-site.',
             self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE => 'Check department staff in and out of shifts.',
             self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
@@ -145,6 +150,9 @@ final class PermissionCatalog
      * granted only to `ic_lead` per INC-015 / requirements section 4.10.
      * Organizer mappings follow ORG-016 and ORG-002/M11.12 while honouring
      * ORG-015 by deliberately excluding incident and field report capabilities.
+     * M11.14 adds organization.staff.manage to organizer roles for product-path
+     * staff intake and department lead selection without widening IMS or Field
+     * Report access.
      * Department lead and department_administration share department.administer
      * for M11.13 department self-administration (UI contract 12.4 / tech spec 15.2).
      * Roles without an entry intentionally have no catalog permissions yet and
@@ -201,10 +209,12 @@ final class PermissionCatalog
             self::ROLE_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
+                self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
+                self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
             ],
         ];
     }

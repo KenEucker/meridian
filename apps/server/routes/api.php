@@ -14,6 +14,8 @@ use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
+use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
+use App\Http\Controllers\Staffing\OrganizerStaffReadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -97,11 +99,23 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/restore-team', [TeamCommandController::class, 'restore'])
         ->name('api.commands.restore-team');
 
+    Route::post('/commands/add-organization-staff', [OrganizerStaffCommandController::class, 'addStaff'])
+        ->name('api.commands.add-organization-staff');
+
+    Route::post('/commands/select-department-lead', [OrganizerStaffCommandController::class, 'selectDepartmentLead'])
+        ->name('api.commands.select-department-lead');
+
+    Route::post('/commands/remove-department-lead', [OrganizerStaffCommandController::class, 'removeDepartmentLead'])
+        ->name('api.commands.remove-department-lead');
+
     Route::get('/organizations/{organization}/departments', [DepartmentReadController::class, 'index'])
         ->name('api.organizations.departments.index');
 
     Route::get('/organizations/{organization}/departments/{department}', [DepartmentReadController::class, 'show'])
         ->name('api.organizations.departments.show');
+
+    Route::get('/organizations/{organization}/staff', [OrganizerStaffReadController::class, 'index'])
+        ->name('api.organizations.staff.index');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
         ->name('api.departments.teams.index');

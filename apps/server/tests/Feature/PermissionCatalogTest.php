@@ -92,7 +92,7 @@ class PermissionCatalogTest extends TestCase
         $this->assertNotContains('incidents.print', $this->permissionCodesFor('ic_viewer'));
     }
 
-    public function test_organizer_can_view_published_policies_and_manage_departments_but_not_incidents_or_field_reports(): void
+    public function test_organizer_can_view_published_policies_and_manage_departments_and_staff_but_not_incidents_or_field_reports(): void
     {
         foreach (['organizer', 'lead_organizer'] as $code) {
             $permissions = $this->permissionCodesFor($code);
@@ -102,6 +102,10 @@ class PermissionCatalogTest extends TestCase
 
             // ORG-002 / M11.12: organizers manage organization departments.
             $this->assertContains('organization.departments.manage', $permissions);
+
+            // VOL-001 through VOL-006 / M11.14: organizers manage staff intake
+            // and department lead selection through the product path.
+            $this->assertContains('organization.staff.manage', $permissions);
 
             // ORG-015: membership in the Organizers Department does not grant
             // access to all incidents or all field reports.
