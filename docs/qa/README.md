@@ -53,6 +53,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-POL-02-product-document-authoring-sharing.md`](QA-POL-02-product-document-authoring-sharing.md) | Normal Meridian Admin policy/procedure/fragment authoring, preview, publish/archive, visibility review, and permitted export/share entry points outside Orchid/God Mode | M11.15 |
 
+## Alpha 1 Product training management script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-TRAIN-01-training-management.md`](QA-TRAIN-01-training-management.md) | Department/organizer Meridian Admin training create/edit, prerequisite/expiration setup, scheduled-attendance signup/roster, trainer/lead completion recording, and completion spreadsheet import outside Orchid/God Mode | M11.16 |
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |

@@ -1,16 +1,14 @@
 <?php
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
-use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
+use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Documents\DocumentCommandController;
 use App\Http\Controllers\Documents\DocumentExportController;
 use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
-use App\Http\Controllers\Teams\TeamCommandController;
-use App\Http\Controllers\Teams\TeamReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -19,6 +17,10 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
+use App\Http\Controllers\Teams\TeamCommandController;
+use App\Http\Controllers\Teams\TeamReadController;
+use App\Http\Controllers\Trainings\TrainingCommandController;
+use App\Http\Controllers\Trainings\TrainingReadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -132,6 +134,36 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/update-document-fragment', [DocumentCommandController::class, 'updateFragment'])
         ->name('api.commands.update-document-fragment');
 
+    Route::post('/commands/create-training', [TrainingCommandController::class, 'create'])
+        ->name('api.commands.create-training');
+
+    Route::post('/commands/update-training', [TrainingCommandController::class, 'update'])
+        ->name('api.commands.update-training');
+
+    Route::post('/commands/archive-training', [TrainingCommandController::class, 'archive'])
+        ->name('api.commands.archive-training');
+
+    Route::post('/commands/restore-training', [TrainingCommandController::class, 'restore'])
+        ->name('api.commands.restore-training');
+
+    Route::post('/commands/add-training-prerequisite', [TrainingCommandController::class, 'addPrerequisite'])
+        ->name('api.commands.add-training-prerequisite');
+
+    Route::post('/commands/remove-training-prerequisite', [TrainingCommandController::class, 'removePrerequisite'])
+        ->name('api.commands.remove-training-prerequisite');
+
+    Route::post('/commands/sign-up-for-training', [TrainingCommandController::class, 'signUp'])
+        ->name('api.commands.sign-up-for-training');
+
+    Route::post('/commands/cancel-training-signup', [TrainingCommandController::class, 'cancelSignup'])
+        ->name('api.commands.cancel-training-signup');
+
+    Route::post('/commands/record-training-completion', [TrainingCommandController::class, 'recordCompletion'])
+        ->name('api.commands.record-training-completion');
+
+    Route::post('/commands/import-training-completions', [TrainingCommandController::class, 'importCompletions'])
+        ->name('api.commands.import-training-completions');
+
     Route::post('/commands/add-organization-staff', [OrganizerStaffCommandController::class, 'addStaff'])
         ->name('api.commands.add-organization-staff');
 
@@ -169,6 +201,12 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/document-fragments/{fragment}', [DocumentReadController::class, 'fragment'])
         ->name('api.document-fragments.show');
+
+    Route::get('/departments/{department}/trainings', [TrainingReadController::class, 'index'])
+        ->name('api.departments.trainings.index');
+
+    Route::get('/departments/{department}/trainings/{training}', [TrainingReadController::class, 'show'])
+        ->name('api.departments.trainings.show');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
         ->name('api.departments.teams.index');

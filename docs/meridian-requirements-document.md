@@ -570,6 +570,13 @@ Trainings may be:
 - annual
 - one-off
 
+Trainings are delivered in-person or online:
+
+- In-person trainings with a scheduled session are listed as a shift signup for the training's team or department and are signed up for like other shifts.
+- Online trainings do not require signup and carry a URL where staff complete the training at their own pace.
+
+Every training has a training page where staff can read when and where the training is available, the time commitment, and what follows completion (for example unlocked shifts, team placement, or provisions that come with the training).
+
 Trainings may:
 
 - enable team membership
@@ -2774,6 +2781,14 @@ Meridian shall not model training waivers in MVP.
 ### TRAIN-008
 
 A staff member shall not sign up for or be added to a shift without required training completion.
+
+### TRAIN-009
+
+Trainings shall be marked as in-person or online. In-person trainings with a scheduled session are listed as a shift signup for the training's team or department; online trainings require no signup and carry a training URL.
+
+### TRAIN-010
+
+Every training shall have a training page describing when and where the training is available, the time commitment, and what follows completion.
 
 ### WAIVER-001
 

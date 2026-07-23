@@ -31,6 +31,9 @@ import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
+import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
+import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
+import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import { selectFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
@@ -178,6 +181,30 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/documents/:artifactKind/:artifactId/edit",
     name: "events.departments.documents.edit",
     component: DocumentEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings",
+    name: "events.departments.trainings.index",
+    component: DepartmentTrainingListView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/create",
+    name: "events.departments.trainings.create",
+    component: DepartmentTrainingEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/:trainingId/edit",
+    name: "events.departments.trainings.edit",
+    component: DepartmentTrainingEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/:trainingId",
+    name: "events.departments.trainings.show",
+    component: DepartmentTrainingDetailView,
     beforeEnter: ensureDepartmentSelfAdminSession,
   },
   {

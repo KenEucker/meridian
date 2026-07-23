@@ -56,11 +56,20 @@ const departmentDocumentsRoute = computed(() => ({
   name: "events.departments.documents.index",
   params: departmentRouteParams.value,
 }));
+const departmentTrainingsRoute = computed(() => ({
+  name: "events.departments.trainings.index",
+  params: departmentRouteParams.value,
+}));
 const showAdminCard = computed(() =>
   fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value),
 );
 const showOrganizerDepartmentsCard = computed(() =>
   fixtureDepartmentHasOrganizerDepartmentAccess(selectedFixtureDepartment.value),
+);
+const showTrainingsCard = computed(
+  () =>
+    fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value) ||
+    selectedFixtureDepartment.value.teams.some((team) => team.isMember),
 );
 const showOverviewCard = computed(
   () => selectedFixtureDepartment.value.isDepartmentLead,
@@ -205,6 +214,14 @@ const operationsWindowLabel = computed(() => {
       >
         <h2>Documents</h2>
         <p>Department and team policies, procedures, and fragments.</p>
+      </RouterLink>
+      <RouterLink
+        v-if="showTrainingsCard"
+        :to="departmentTrainingsRoute"
+        class="home__card"
+      >
+        <h2>Trainings</h2>
+        <p>Department training schedule, signup, and completion.</p>
       </RouterLink>
       <RouterLink
         v-if="showOrganizerDepartmentsCard"
