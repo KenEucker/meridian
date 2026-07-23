@@ -42,6 +42,9 @@ const imsFieldReportsRoute = {
 const organizerDepartmentsRoute = {
   name: "organizer.departments.index",
 };
+const organizerStaffRoute = {
+  name: "organizer.staff.index",
+};
 const departmentAdminRoute = computed(() => ({
   name: "events.departments.teams.index",
   params: departmentRouteParams.value,
@@ -187,6 +190,14 @@ const operationsWindowLabel = computed(() => {
       >
         <h2>Admin</h2>
         <p>Department and team administration.</p>
+      </RouterLink>
+      <RouterLink
+        v-if="showOrganizerDepartmentsCard"
+        :to="organizerStaffRoute"
+        class="home__card"
+      >
+        <h2>Staff</h2>
+        <p>Organizer staff intake and lead selection.</p>
       </RouterLink>
       <RouterLink
         v-if="showOrganizerDepartmentsCard"

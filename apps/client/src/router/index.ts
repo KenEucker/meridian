@@ -26,6 +26,7 @@ import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
+import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
@@ -250,6 +251,12 @@ export const routes: RouteRecordRaw[] = [
     name: "ims.restricted",
     component: ImsRestrictedView,
     beforeEnter: ensureIncidentSession,
+  },
+  {
+    path: "/organizer/staff",
+    name: "organizer.staff.index",
+    component: OrganizerStaffView,
+    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/departments",

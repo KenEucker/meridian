@@ -45,6 +45,7 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 | ID | Coverage | Owning task |
 |---|---|---|
 | [`QA-ORG-02-organizer-department-admin.md`](QA-ORG-02-organizer-department-admin.md) | Organizer Meridian Admin create/edit/archive/restore/list for organization departments outside Orchid/God Mode | M11.12 |
+| [`QA-ORG-03-organizer-staff-intake.md`](QA-ORG-03-organizer-staff-intake.md) | Organizer Meridian Admin add/invite staff, optional initial department assignment, and department lead selection/removal outside Orchid/God Mode | M11.14 |
 
 ## Alpha 1 Department self-administration script
 
