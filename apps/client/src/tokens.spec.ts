@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import mainTs from "@/main.ts?raw";
 import appShell from "@/components/AppShell.vue?raw";
 import homeView from "@/views/HomeView.vue?raw";
-import incidentDetailView from "@/views/IncidentDetailView.vue?raw";
+import incidentEditView from "@/views/IncidentEditView.vue?raw";
 import incidentListView from "@/views/IncidentListView.vue?raw";
 import notFoundView from "@/views/NotFoundView.vue?raw";
 
@@ -27,7 +27,7 @@ describe("shared client token wiring", () => {
   });
 
   it("keeps IMS priority styling on semantic tokens", () => {
-    for (const source of [incidentListView, incidentDetailView]) {
+    for (const source of [incidentListView, incidentEditView]) {
       expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(/);
       expect(source).toContain("var(--m-attention-warning)");
       expect(source).toContain("var(--m-text-primary)");

@@ -4,11 +4,15 @@ import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 
 export const FIXTURE_RANGERS_DEPARTMENT_ID =
   "66666666-6666-4666-8666-666666666666";
+export const FIXTURE_ORGANIZER_DEPARTMENT_ID =
+  "22222222-2222-4222-8222-222222222201";
 export const FIXTURE_GATE_DEPARTMENT_ID =
   "22222222-2222-4222-8222-222222222202";
 export const FIXTURE_DPW_DEPARTMENT_ID =
   "22222222-2222-4222-8222-222222222203";
 
+export const FIXTURE_ORGANIZER_DEFAULT_TEAM_ID =
+  "77777777-7777-4777-8777-777777777760";
 export const FIXTURE_RANGERS_DIRT_TEAM_ID =
   "77777777-7777-4777-8777-777777777771";
 export const FIXTURE_RANGERS_DEFAULT_TEAM_ID =
@@ -57,11 +61,50 @@ export interface FixtureDepartmentAccess {
     readonly hasFieldReportPermission: boolean;
     readonly hasIncidentCommand: boolean;
     readonly hasEquipmentVisibility: boolean;
+    readonly hasOrganizerDepartmentAdministration: boolean;
   };
 }
 
 export const fixtureDepartmentAccesses: readonly FixtureDepartmentAccess[] =
   Object.freeze([
+    Object.freeze({
+      eventId: LOCAL_FIELD_FIXTURE.eventId,
+      eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
+      departmentId: FIXTURE_ORGANIZER_DEPARTMENT_ID,
+      departmentLabel: "Organizer",
+      departmentCode: "ORG",
+      description: "Organization-level event administration.",
+      isDepartmentLead: false,
+      roleLabel: "Organizer",
+      teams: Object.freeze([
+        Object.freeze({
+          teamId: FIXTURE_ORGANIZER_DEFAULT_TEAM_ID,
+          teamLabel: "Organizer Default",
+          teamCode: "DEFAULT",
+          description: "Default organizer administration team.",
+          isDefault: true,
+          isTeamLead: false,
+          isMember: true,
+          staff: Object.freeze([
+            Object.freeze({
+              staffId: LOCAL_FIELD_FIXTURE.staffId,
+              displayName: "Local Field Author",
+              handle: "local-field-author",
+              roleLabel: "Organizer",
+            }),
+          ]),
+        }),
+      ]),
+      capabilities: Object.freeze({
+        hasLogistics: false,
+        hasOperations: false,
+        hasPlanning: false,
+        hasFieldReportPermission: false,
+        hasIncidentCommand: false,
+        hasEquipmentVisibility: false,
+        hasOrganizerDepartmentAdministration: true,
+      }),
+    }),
     Object.freeze({
       eventId: LOCAL_FIELD_FIXTURE.eventId,
       eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
@@ -119,6 +162,7 @@ export const fixtureDepartmentAccesses: readonly FixtureDepartmentAccess[] =
         hasFieldReportPermission: true,
         hasIncidentCommand: true,
         hasEquipmentVisibility: true,
+        hasOrganizerDepartmentAdministration: false,
       }),
     }),
     Object.freeze({
@@ -172,6 +216,7 @@ export const fixtureDepartmentAccesses: readonly FixtureDepartmentAccess[] =
         hasFieldReportPermission: true,
         hasIncidentCommand: false,
         hasEquipmentVisibility: false,
+        hasOrganizerDepartmentAdministration: false,
       }),
     }),
     Object.freeze({
@@ -231,11 +276,14 @@ export const fixtureDepartmentAccesses: readonly FixtureDepartmentAccess[] =
         hasFieldReportPermission: true,
         hasIncidentCommand: false,
         hasEquipmentVisibility: false,
+        hasOrganizerDepartmentAdministration: false,
       }),
     }),
   ]);
 
-const selectedDepartmentId = ref(FIXTURE_RANGERS_DEPARTMENT_ID);
+const fixtureDepartmentStorageKey = "meridian.fixture.departmentId";
+
+const selectedDepartmentId = ref(readSelectedFixtureDepartmentId());
 
 export const selectedFixtureDepartment = computed(
   () =>
@@ -265,10 +313,12 @@ export function selectFixtureDepartment(departmentId: string): void {
   }
 
   selectedDepartmentId.value = departmentId;
+  writeSelectedFixtureDepartmentId(departmentId);
 }
 
 export function resetSelectedFixtureDepartment(): void {
   selectedDepartmentId.value = FIXTURE_RANGERS_DEPARTMENT_ID;
+  clearSelectedFixtureDepartmentId();
 }
 
 export function fixtureDepartmentHasAdminAccess(
@@ -280,9 +330,19 @@ export function fixtureDepartmentHasAdminAccess(
   );
 }
 
+export function fixtureDepartmentHasOrganizerDepartmentAccess(
+  department: FixtureDepartmentAccess,
+): boolean {
+  return department.capabilities.hasOrganizerDepartmentAdministration;
+}
+
 export function fixtureDepartmentRoleSummary(
   department: FixtureDepartmentAccess,
 ): string {
+  if (fixtureDepartmentHasOrganizerDepartmentAccess(department)) {
+    return "Organizer";
+  }
+
   const leadTeams = department.teams
     .filter((team) => team.isTeamLead)
     .map((team) => team.teamLabel);
@@ -300,4 +360,45 @@ export function fixtureDepartmentRoleSummary(
   }
 
   return "Staff member";
+}
+
+function readSelectedFixtureDepartmentId(): string {
+  if (typeof window === "undefined") {
+    return FIXTURE_RANGERS_DEPARTMENT_ID;
+  }
+
+  try {
+    const saved = window.localStorage.getItem(fixtureDepartmentStorageKey);
+    if (saved === null || fixtureDepartmentById(saved) === null) {
+      return FIXTURE_RANGERS_DEPARTMENT_ID;
+    }
+
+    return saved;
+  } catch {
+    return FIXTURE_RANGERS_DEPARTMENT_ID;
+  }
+}
+
+function writeSelectedFixtureDepartmentId(departmentId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(fixtureDepartmentStorageKey, departmentId);
+  } catch {
+    // Fixture selection persistence is a local development convenience.
+  }
+}
+
+function clearSelectedFixtureDepartmentId(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(fixtureDepartmentStorageKey);
+  } catch {
+    // Fixture selection persistence is a local development convenience.
+  }
 }

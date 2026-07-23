@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import AutosaveStatus, {
   type AutosaveStatusState,
 } from "@/components/AutosaveStatus.vue";
+import { MeridianApiError } from "@/api/meridianApi";
+import { downloadIncidentPdfForSession } from "@/ims/downloadIncidentPdf";
 import {
   appendIncidentNoteForSession,
   availableFieldReportOptionsForSession,
   availableLinkedIncidentOptionsForSession,
   blankIncidentAutosaveForm,
   canEditIncident,
+  canPrintIncidentPdf,
   createIncidentFromAutosaveForm,
   findIncidentForSession,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
   INCIDENT_PRIORITY_LABELS,
   INCIDENT_TYPE_OPTIONS,
+  LOCAL_IMS_EVENT_ID,
   incidentToAutosaveForm,
   linkIncidentForSession,
   linkFieldReportForSession,
@@ -29,6 +33,7 @@ import {
   updateIncidentFromAutosaveForm,
   visibleIncidentTimelineEntries,
   type IncidentAutosaveForm,
+  type IncidentPriorityLabel,
   type IncidentTagChip,
   type IncidentTimelineEntry,
   type NameReferenceChip,
@@ -36,11 +41,28 @@ import {
 import { useConnectivity } from "@/offline/useConnectivity";
 
 const route = useRoute();
-const router = useRouter();
 const connectivity = useConnectivity();
 const session = computed(() => resolveIncidentSession());
 const canView = computed(() => hasIncidentCommandAccess(session.value));
 const canEdit = computed(() => canEditIncident(session.value));
+const canPrintPdf = computed(() => canPrintIncidentPdf(session.value));
+const isLocalImsFixture = computed(
+  () => session.value?.eventId === LOCAL_IMS_EVENT_ID,
+);
+const isPrintOfflineBlocked = computed(
+  () => !isLocalImsFixture.value && connectivity.value !== "online",
+);
+const routeName = computed(() =>
+  typeof route.name === "string" ? route.name : "",
+);
+const isIncidentShowRoute = computed(
+  () => routeName.value === "ims.incidents.show",
+);
+const requiresEditAccess = computed(
+  () =>
+    routeName.value === "ims.incidents.create" ||
+    routeName.value === "ims.incidents.edit",
+);
 const routeIncidentId = computed(() =>
   typeof route.params.incidentId === "string" ? route.params.incidentId : null,
 );
@@ -64,10 +86,15 @@ const linkedIncidentAddQuery = ref("");
 const linkedIncidentAddOpen = ref(false);
 const fieldReportAddQuery = ref("");
 const fieldReportAddOpen = ref(false);
+const displayMode = ref<"edit" | "view">(
+  isIncidentShowRoute.value ? "view" : "edit",
+);
 const incidentTypePicker = ref<HTMLElement | null>(null);
 const responderPicker = ref<HTMLElement | null>(null);
 const linkedIncidentPicker = ref<HTMLElement | null>(null);
 const fieldReportPicker = ref<HTMLElement | null>(null);
+const printError = ref<string | null>(null);
+const printBusy = ref(false);
 
 const incident = computed(() => {
   revision.value;
@@ -104,6 +131,21 @@ const selectedLinkedIncidents = computed(() => incident.value?.linkedIncidents ?
 const selectedAttachedFieldReports = computed(
   () => incident.value?.attachedFieldReports ?? [],
 );
+const isViewMode = computed(() => displayMode.value === "view" && incident.value !== null);
+const canToggleViewMode = computed(
+  () => canEdit.value && routeIncidentId.value !== null && incident.value !== null,
+);
+const heading = computed(() => {
+  if (routeIncidentId.value === null) {
+    return "Create incident";
+  }
+
+  if (isViewMode.value && incident.value) {
+    return incident.value.title || "Incident";
+  }
+
+  return "Edit incident";
+});
 const availableResponderOptions = computed(() =>
   filteredAddOptions(
     RESPONDER_OPTIONS.filter(
@@ -133,8 +175,9 @@ const availableFieldReportOptions = computed(() =>
 );
 
 watch(
-  () => routeIncidentId.value,
-  (incidentId) => {
+  () => [routeIncidentId.value, routeName.value] as const,
+  ([incidentId]) => {
+    displayMode.value = isIncidentShowRoute.value ? "view" : "edit";
     savedIncidentId.value = incidentId;
     const existing = incidentId
       ? findIncidentForSession(session.value, incidentId)
@@ -212,6 +255,32 @@ function tagSearchTarget(chip: IncidentTagChip) {
   };
 }
 
+function showViewState(): void {
+  if (incident.value) {
+    displayMode.value = "view";
+  }
+}
+
+function showEditState(): void {
+  displayMode.value = "edit";
+}
+
+function priorityText(priorityLabel: string | null): string {
+  return priorityLabel ?? "Priority not set";
+}
+
+function priorityClass(priorityLabel: IncidentPriorityLabel): string {
+  return `ims-edit__priority-pill--${priorityLabel.toLowerCase()}`;
+}
+
+function responderText(): string {
+  return incident.value && incident.value.responders.length > 0
+    ? incident.value.responders
+        .map((responder) => responder.displayName)
+        .join(", ")
+    : "Responders not set";
+}
+
 function commitAutosave(): void {
   if (!canEdit.value) {
     return;
@@ -261,13 +330,6 @@ async function autosave(): Promise<void> {
     autosaveState.value = "saved";
     autosaveMessage.value = null;
     revision.value += 1;
-
-    if (route.name === "ims.incidents.create") {
-      await router.replace({
-        name: "ims.incidents.edit",
-        params: { incidentId: saved.id },
-      });
-    }
 
     if (formSignature(form) !== signature || autosaveQueued.value) {
       commitAutosave();
@@ -559,6 +621,11 @@ function onStrikeNote(entry: IncidentTimelineEntry): void {
 function onAppendNote(): void {
   noteError.value = null;
 
+  if (!canEdit.value) {
+    noteError.value = "Incident note updates require IC operator or lead access.";
+    return;
+  }
+
   if (!savedIncidentId.value) {
     noteError.value = "Create the incident before adding notes.";
     return;
@@ -577,11 +644,51 @@ function onAppendNote(): void {
       error instanceof Error ? error.message : "Unable to add incident note.";
   }
 }
+
+async function onPrintPdf(): Promise<void> {
+  printError.value = null;
+
+  if (!incident.value || !session.value) {
+    printError.value = "Incident not found for this event.";
+    return;
+  }
+
+  if (isPrintOfflineBlocked.value) {
+    printError.value =
+      "Incident PDF print requires a server connection. Reconnect and try again.";
+    return;
+  }
+
+  printBusy.value = true;
+
+  try {
+    await downloadIncidentPdfForSession(session.value, incident.value);
+  } catch (error) {
+    printError.value =
+      error instanceof MeridianApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : "Unable to print incident PDF.";
+  } finally {
+    printBusy.value = false;
+  }
+}
 </script>
 
 <template>
   <section class="ims-edit" aria-labelledby="ims-edit-heading">
-    <div v-if="!canView || !canEdit" class="ims-edit__restricted" role="status">
+    <div v-if="!canView" class="ims-edit__restricted" role="status">
+      <RouterLink :to="{ name: 'ims.restricted' }">
+        Incident Command access required
+      </RouterLink>
+    </div>
+
+    <div
+      v-else-if="requiresEditAccess && !canEdit"
+      class="ims-edit__restricted"
+      role="status"
+    >
       <RouterLink :to="{ name: 'ims.restricted' }">
         IC operator or lead access required
       </RouterLink>
@@ -601,15 +708,35 @@ function onAppendNote(): void {
       </RouterLink>
 
       <header class="ims-edit__header">
-        <div>
+        <div class="ims-edit__title-block">
           <p class="ims-edit__eyebrow">Incident Management System</p>
           <h1 id="ims-edit-heading" class="ims-edit__heading">
-            {{ incident ? "Edit incident" : "Create incident" }}
+            {{ heading }}
           </h1>
         </div>
-        <p class="ims-edit__incident-number">
-          {{ incident?.incidentNumber ?? "Not assigned yet" }}
-        </p>
+        <div class="ims-edit__number-stack">
+          <p class="ims-edit__incident-number">
+            {{ incident?.incidentNumber ?? "Not assigned yet" }}
+          </p>
+          <div v-if="canToggleViewMode" class="ims-edit__mode-actions">
+            <button
+              v-if="!isViewMode"
+              type="button"
+              class="ims-edit__mode-button"
+              @click="showViewState"
+            >
+              View incident
+            </button>
+            <button
+              v-else
+              type="button"
+              class="ims-edit__mode-button"
+              @click="showEditState"
+            >
+              Edit incident
+            </button>
+          </div>
+        </div>
         <nav
           v-if="
             incident &&
@@ -648,7 +775,11 @@ function onAppendNote(): void {
         repair-href="/readiness"
       />
 
-      <form class="ims-edit__form" aria-label="Incident autosave form">
+      <form
+        v-if="!isViewMode"
+        class="ims-edit__form"
+        aria-label="Incident autosave form"
+      >
         <section class="ims-edit__panel" aria-label="Incident details">
           <div class="ims-edit__detail-grid">
             <div class="ims-edit__field ims-edit__field--readonly">
@@ -854,7 +985,6 @@ function onAppendNote(): void {
         </div>
 
         <section
-          v-if="incident"
           ref="linkedIncidentPicker"
           class="ims-edit__panel"
           :class="{ 'ims-edit__panel--popup-open': linkedIncidentAddOpen }"
@@ -904,7 +1034,7 @@ function onAppendNote(): void {
               v-model="linkedIncidentAddQuery"
               type="search"
               autocomplete="off"
-              :disabled="isOfflineBlocked"
+              :disabled="isOfflineBlocked || !savedIncidentId"
               @focus="openLinkedIncidentAdd"
               @click="openLinkedIncidentAdd"
               @input="openLinkedIncidentAdd"
@@ -923,7 +1053,7 @@ function onAppendNote(): void {
               v-for="linkedIncident in availableLinkedIncidentOptions"
               :key="linkedIncident.id"
               type="button"
-              :disabled="isOfflineBlocked"
+              :disabled="isOfflineBlocked || !savedIncidentId"
               @click="addLinkedIncident(linkedIncident.id)"
             >
               {{ linkedIncident.incidentNumber }} -
@@ -933,7 +1063,6 @@ function onAppendNote(): void {
         </section>
 
         <section
-          v-if="incident"
           ref="fieldReportPicker"
           class="ims-edit__panel"
           :class="{ 'ims-edit__panel--popup-open': fieldReportAddOpen }"
@@ -975,7 +1104,7 @@ function onAppendNote(): void {
               v-model="fieldReportAddQuery"
               type="search"
               autocomplete="off"
-              :disabled="isOfflineBlocked"
+              :disabled="isOfflineBlocked || !savedIncidentId"
               @focus="openFieldReportAdd"
               @click="openFieldReportAdd"
               @input="openFieldReportAdd"
@@ -992,7 +1121,7 @@ function onAppendNote(): void {
               v-for="fieldReport in availableFieldReportOptions"
               :key="fieldReport.id"
               type="button"
-              :disabled="isOfflineBlocked"
+              :disabled="isOfflineBlocked || !savedIncidentId"
               @click="addFieldReport(fieldReport.id)"
             >
               {{ fieldReport.displayNumber }} -
@@ -1043,7 +1172,147 @@ function onAppendNote(): void {
       </form>
 
       <section
-        v-if="incident"
+        v-if="isViewMode && incident"
+        class="ims-edit__view"
+        aria-labelledby="ims-edit-view-heading"
+      >
+        <div class="ims-edit__view-heading">
+          <h2 id="ims-edit-view-heading">Current state</h2>
+          <div v-if="canPrintPdf" class="ims-edit__print">
+            <button
+              type="button"
+              class="ims-edit__print-button"
+              :disabled="printBusy || isPrintOfflineBlocked"
+              :aria-busy="printBusy"
+              @click="onPrintPdf"
+            >
+              {{ printBusy ? "Preparing PDF..." : "Print PDF" }}
+            </button>
+            <p
+              v-if="isPrintOfflineBlocked"
+              class="ims-edit__print-hint"
+              role="status"
+            >
+              Incident PDF print requires a server connection.
+            </p>
+            <p v-if="printError" class="ims-edit__print-error" role="alert">
+              {{ printError }}
+            </p>
+          </div>
+        </div>
+        <dl class="ims-edit__view-grid">
+          <div>
+            <dt>IMS #</dt>
+            <dd>{{ incident.incidentNumber }}</dd>
+          </div>
+          <div>
+            <dt>State</dt>
+            <dd>
+              <span class="ims-edit__state-pill">
+                {{ statusLabel(incident.status) }}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>Priority</dt>
+            <dd>
+              <span
+                class="ims-edit__priority-pill"
+                :class="priorityClass(incident.priorityLabel)"
+              >
+                {{ priorityText(incident.priorityLabel) }}
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>Summary</dt>
+            <dd>{{ incident.title || "Untitled incident" }}</dd>
+          </div>
+          <div>
+            <dt>Started</dt>
+            <dd>{{ formatIncidentDateTime(incident.startedAt) }}</dd>
+          </div>
+          <div>
+            <dt>Location</dt>
+            <dd>{{ incident.locationName ?? "Location not set" }}</dd>
+          </div>
+          <div v-if="incident.locationAddress">
+            <dt>Address</dt>
+            <dd>{{ incident.locationAddress }}</dd>
+          </div>
+          <div v-if="incident.locationDetails">
+            <dt>Location details</dt>
+            <dd>{{ incident.locationDetails }}</dd>
+          </div>
+          <div>
+            <dt>Incident types</dt>
+            <dd
+              v-if="incident.incidentTypeNames.length > 0"
+              class="ims-edit__type-list"
+            >
+              <span
+                v-for="typeName in incident.incidentTypeNames"
+                :key="typeName"
+                class="ims-edit__type-chip"
+              >
+                {{ typeName }}
+              </span>
+            </dd>
+            <dd v-else>Types not set</dd>
+          </div>
+          <div>
+            <dt>Rangers/responders</dt>
+            <dd>{{ responderText() }}</dd>
+          </div>
+          <div>
+            <dt>Linked incidents</dt>
+            <dd
+              v-if="incident.linkedIncidents.length > 0"
+              class="ims-edit__view-list"
+            >
+              <RouterLink
+                v-for="linkedIncident in incident.linkedIncidents"
+                :key="linkedIncident.id"
+                class="ims-edit__view-linked-row"
+                :to="{
+                  name: 'ims.incidents.show',
+                  params: { incidentId: linkedIncident.id },
+                }"
+              >
+                {{ linkedIncident.incidentNumber }} -
+                {{ linkedIncident.title || "Untitled incident" }}
+              </RouterLink>
+            </dd>
+            <dd v-else>No linked incidents</dd>
+          </div>
+          <div>
+            <dt>Attached Field Reports</dt>
+            <dd
+              v-if="incident.attachedFieldReports.length > 0"
+              class="ims-edit__view-list"
+            >
+              <RouterLink
+                v-for="fieldReport in incident.attachedFieldReports"
+                :key="fieldReport.id"
+                class="ims-edit__view-field-report-row"
+                :to="{
+                  name: 'ims.field-reports.show',
+                  params: { fieldReportId: fieldReport.id },
+                }"
+              >
+                {{ fieldReport.displayNumber }} - {{ fieldReport.title }}
+              </RouterLink>
+            </dd>
+            <dd v-else>No attached Field Reports</dd>
+          </div>
+          <div>
+            <dt>Created by</dt>
+            <dd>{{ incident.createdByName ?? "Creator unavailable" }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section
         class="ims-edit__timeline"
         aria-labelledby="ims-edit-timeline-heading"
       >
@@ -1086,13 +1355,24 @@ function onAppendNote(): void {
           </li>
         </ol>
 
-        <form class="ims-edit__note-form" @submit.prevent="onAppendNote">
-          <label for="ims-edit-note">Operational note</label>
-          <textarea id="ims-edit-note" v-model="noteBody" rows="4" />
+        <form
+          v-if="canEdit"
+          class="ims-edit__note-form"
+          @submit.prevent="onAppendNote"
+        >
+          <label for="ims-note-body">Operational note</label>
+          <textarea
+            id="ims-note-body"
+            v-model="noteBody"
+            rows="4"
+            :disabled="isOfflineBlocked || !savedIncidentId"
+          />
           <p v-if="noteError" class="ims-edit__error" role="alert">
             {{ noteError }}
           </p>
-          <button type="submit">Add note</button>
+          <button type="submit" :disabled="isOfflineBlocked || !savedIncidentId">
+            Add note
+          </button>
         </form>
       </section>
     </template>
@@ -1102,7 +1382,7 @@ function onAppendNote(): void {
 <style scoped>
 .ims-edit {
   box-sizing: border-box;
-  width: min(calc(100% - var(--m-space-8)), 72rem);
+  width: min(100%, 76rem);
   margin-inline: auto;
   display: grid;
   gap: var(--m-space-4);
@@ -1115,9 +1395,60 @@ function onAppendNote(): void {
 }
 
 .ims-edit__back,
-.ims-edit__restricted a {
+.ims-edit__restricted a,
+.ims-edit__mode-button,
+.ims-edit__print-button {
   color: var(--m-action-secondary-bg);
   font-weight: 800;
+}
+
+.ims-edit__print-button {
+  justify-self: end;
+  border: 1px solid var(--m-action-secondary-bg);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ims-edit__mode-button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--m-action-secondary-bg);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-2);
+  background: var(--m-surface-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ims-edit__print {
+  display: grid;
+  gap: var(--m-space-2);
+  justify-items: end;
+}
+
+.ims-edit__print-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ims-edit__print-hint,
+.ims-edit__print-error {
+  margin: 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.ims-edit__print-error {
+  color: var(--m-status-danger-fg, var(--m-text-muted));
 }
 
 .ims-edit__restricted {
@@ -1128,11 +1459,22 @@ function onAppendNote(): void {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--m-space-3) var(--m-space-4);
+  gap: var(--m-space-2) var(--m-space-4);
 }
 
-.ims-edit__header > div {
+.ims-edit__title-block {
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
+}
+
+.ims-edit__number-stack {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  gap: var(--m-space-2);
+  justify-items: end;
+  min-width: max-content;
 }
 
 .ims-edit__eyebrow,
@@ -1154,15 +1496,21 @@ function onAppendNote(): void {
 }
 
 .ims-edit__incident-number {
-  align-self: center;
   color: var(--m-text-secondary);
   font-weight: 800;
   white-space: nowrap;
 }
 
+.ims-edit__mode-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .ims-edit__chips {
   display: flex;
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
   flex: 1 1 100%;
   flex-wrap: wrap;
   gap: var(--m-space-2);
@@ -1195,6 +1543,127 @@ function onAppendNote(): void {
 .ims-edit__chip:focus-visible {
   outline: 3px solid var(--m-focus-ring);
   outline-offset: 2px;
+}
+
+.ims-edit__mode-button:focus-visible,
+.ims-edit__print-button:focus-visible,
+.ims-edit__view-list a:focus-visible {
+  outline: 3px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.ims-edit__view {
+  display: grid;
+  gap: var(--m-space-3);
+  overflow: hidden;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.ims-edit__view-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  min-height: 2.25rem;
+  border-bottom: 1px solid var(--m-border-default);
+  padding: var(--m-space-1) var(--m-space-3);
+  background: color-mix(
+    in srgb,
+    var(--m-surface-raised) 84%,
+    var(--m-border-default)
+  );
+}
+
+.ims-edit__view-heading h2 {
+  margin: 0;
+  font-size: var(--m-text-md);
+  font-weight: 900;
+}
+
+.ims-edit__view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--m-space-3);
+  margin: 0;
+  padding: var(--m-space-3);
+}
+
+.ims-edit__view-grid div {
+  min-width: 0;
+}
+
+.ims-edit__view-grid dt {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ims-edit__view-grid dd {
+  margin: var(--m-space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ims-edit__state-pill,
+.ims-edit__priority-pill,
+.ims-edit__type-chip {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-2);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.ims-edit__priority-pill--routine {
+  border-color: var(--m-status-neutral);
+  color: var(--m-text-secondary);
+}
+
+.ims-edit__priority-pill--important {
+  border-color: var(--m-attention-attention);
+  color: var(--m-text-primary);
+}
+
+.ims-edit__priority-pill--serious {
+  border-color: var(--m-attention-warning);
+  color: var(--m-text-primary);
+}
+
+.ims-edit__priority-pill--critical {
+  border-color: var(--m-attention-critical);
+  color: var(--m-text-primary);
+}
+
+.ims-edit__type-list,
+.ims-edit__view-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.ims-edit__type-chip {
+  border-color: var(--m-action-secondary-bg);
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
+}
+
+.ims-edit__view-list a {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: 0 var(--m-space-2);
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .ims-edit__form {
@@ -1656,7 +2125,7 @@ function onAppendNote(): void {
 
 @media (max-width: 48rem) {
   .ims-edit {
-    width: min(calc(100% - var(--m-space-4)), 72rem);
+    width: 100%;
     gap: var(--m-space-4);
   }
 
@@ -1665,8 +2134,19 @@ function onAppendNote(): void {
     gap: var(--m-space-2);
   }
 
-  .ims-edit__incident-number {
+  .ims-edit__title-block,
+  .ims-edit__number-stack,
+  .ims-edit__incident-number,
+  .ims-edit__mode-actions,
+  .ims-edit__chips {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .ims-edit__number-stack {
     justify-self: start;
+    justify-items: start;
+    min-width: 0;
   }
 
   .ims-edit__timeline ol {

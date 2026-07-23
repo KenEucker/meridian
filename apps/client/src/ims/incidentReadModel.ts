@@ -15,6 +15,8 @@ export interface IncidentSessionContext {
   readonly roleLabel: string;
 }
 
+export type IncidentListOpenMode = "view" | "edit";
+
 export interface IncidentTimelineEntry {
   readonly id: string;
   readonly incidentId: string;
@@ -370,6 +372,7 @@ let incidentSequence = 42;
 let fieldUpdateSequence = 0;
 let incidentLinkSequence = 0;
 let incidentFieldReportLinkSequence = 0;
+let incidentListOpenMode: IncidentListOpenMode = "view";
 
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
 const localTimelineEntryOverrides = new Map<string, IncidentTimelineEntry>();
@@ -397,6 +400,7 @@ export function clearIncidentSession(): void {
   fieldUpdateSequence = 0;
   incidentLinkSequence = 0;
   incidentFieldReportLinkSequence = 0;
+  incidentListOpenMode = "view";
 }
 
 export function resolveIncidentSession(): IncidentSessionContext | null {
@@ -419,6 +423,14 @@ export function canEditIncident(
   context: IncidentSessionContext | null,
 ): boolean {
   return canAppendIncidentNote(context);
+}
+
+export function resolveIncidentListOpenMode(): IncidentListOpenMode {
+  return incidentListOpenMode;
+}
+
+export function setIncidentListOpenMode(mode: IncidentListOpenMode): void {
+  incidentListOpenMode = mode;
 }
 
 export function canPrintIncidentPdf(

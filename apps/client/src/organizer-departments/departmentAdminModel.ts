@@ -1,5 +1,10 @@
 import { shallowRef } from "vue";
 
+import {
+  fixtureDepartmentHasOrganizerDepartmentAccess,
+  selectedFixtureDepartment,
+} from "@/department-teams/fixtureDepartmentAccess";
+
 export type OrganizerDepartmentRole = "organizer" | "lead_organizer" | "staff";
 
 export interface OrganizerDepartmentSession {
@@ -39,6 +44,17 @@ const DEVELOPMENT_SESSION: OrganizerDepartmentSession = {
 const INITIAL_DEPARTMENTS: OrganizerDepartment[] = [
   {
     id: "22222222-2222-4222-8222-222222222201",
+    organizationId: DEVELOPMENT_ORGANIZATION_ID,
+    name: "Organizer",
+    code: "ORG",
+    description: "Organization-level event administration.",
+    defaultTeamId: "77777777-7777-4777-8777-777777777760",
+    archivedAt: null,
+    createdAt: "2026-07-01T11:55:00.000Z",
+    updatedAt: "2026-07-01T11:55:00.000Z",
+  },
+  {
+    id: "66666666-6666-4666-8666-666666666666",
     organizationId: DEVELOPMENT_ORGANIZATION_ID,
     name: "Rangers",
     code: "RANGERS",
@@ -99,6 +115,9 @@ export function canManageOrganizerDepartments(
 ): boolean {
   return (
     current !== null &&
+    fixtureDepartmentHasOrganizerDepartmentAccess(
+      selectedFixtureDepartment.value,
+    ) &&
     (current.role === "organizer" || current.role === "lead_organizer")
   );
 }

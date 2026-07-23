@@ -7,8 +7,8 @@ Verify that a department lead or department administration user can maintain per
 ## Requirements covered
 
 - `TEAM-001` through `TEAM-006`: Teams replace roles; default team; default rename; persistence across events; archive; archived visibility.
-- `TEAM-009`: Team membership may grant system authority (`department.administer` via department-scoped grants).
-- Technical spec section 15.2: department-scoped `department_lead` and `department_administration`.
+- `TEAM-009`: Team membership may grant system authority (`department.administer` via department-scoped grants; team-scoped lead visibility through `shift_lead`).
+- Technical spec section 15.2: department-scoped `department_lead` and `department_administration`; team-scoped `shift_lead`.
 - Technical spec section 22.1: Meridian Admin is the product admin surface; Orchid is God Mode/repair only.
 - Data/API spec section 10.6: `departments`, `teams`
 - Data/API spec sections 5.1 and 5.2: department team list reads and department/team self-admin commands
@@ -26,6 +26,7 @@ Verify that a department lead or department administration user can maintain per
 ## Personas
 
 - Department lead (or department administration) with `department.administer` for the target department
+- Team lead (`shift_lead`) for one team in the target department
 - Staff user without department administer authority
 - Department lead for a different department (cross-department denial)
 
@@ -53,9 +54,12 @@ Verify that a department lead or department administration user can maintain per
 12. Filter or confirm the archived team remains visible and is marked Archived.
 13. Restore the archived team and confirm it returns to Active.
 14. Attempt to create a second team with the same code `OPERATORS_QA` and confirm the duplicate is rejected.
-15. Sign out, then sign in as a staff user without department administer authority.
-16. Attempt to open the Teams route and attempt create/archive API commands for the department.
-17. As a lead for a different department, attempt create-team / update-department-details against the first department.
+15. Sign out, then sign in as a team lead (`shift_lead`) for one team in the same department.
+16. Open the Admin route and confirm only led team details and staff assigned to that led team are visible, with no department details form, create-team action, or peer-team staff list.
+17. Attempt create/archive API commands as the team lead and confirm they are denied.
+18. Sign out, then sign in as a staff user without department administer or team-lead authority.
+19. Attempt to open the Teams route and attempt create/archive API commands for the department.
+20. As a lead for a different department, attempt create-team / update-department-details against the first department.
 
 ## Expected results
 
@@ -67,6 +71,8 @@ Verify that a department lead or department administration user can maintain per
 - Duplicate codes within the same department are rejected.
 - Successful update/create/archive/restore actions produce audit events (`department.updated`, `team.created`, `team.updated`, `team.archived`, `team.restored`).
 - Staff without administer authority and leads of other departments cannot manage this department (restricted UI and/or HTTP 403).
+- Team leads can read only led teams and assigned staff through the Admin route/API and cannot mutate department details or team lifecycle.
+- Staff-only department members do not see an Admin entry point, and direct Admin access fails closed.
 - The workflow completes in Meridian Admin without opening Orchid.
 - Team membership assignment UI is not required for this script (deferred to M11.17).
 

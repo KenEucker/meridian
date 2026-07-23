@@ -305,6 +305,72 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     );
   });
 
+  it("lets incident editors choose whether list rows open view or edit", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents");
+
+    expect(wrapper.find("#ims-list-open-mode").exists()).toBe(true);
+    expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
+      "/ims/incidents/incident-gate-medical",
+    );
+
+    await wrapper.get("#ims-list-open-mode").setValue("edit");
+    await flushPromises();
+
+    expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+
+    clearIncidentSession();
+    installIncidentSession(IC_SESSION);
+    const viewerMount = await mountAt("/ims/incidents");
+
+    expect(viewerMount.wrapper.find("#ims-list-open-mode").exists()).toBe(
+      false,
+    );
+    expect(
+      viewerMount.wrapper.get(".ims-list__incident-link").attributes("href"),
+    ).toBe("/ims/incidents/incident-gate-medical");
+  });
+
+  it("toggles an edited incident to view state without changing pages", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    const { wrapper, router } = await mountAt(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+
+    expect(wrapper.find("#ims-edit-title").exists()).toBe(true);
+
+    const viewButton = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "View incident");
+    expect(viewButton).toBeDefined();
+    await viewButton?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+    expect(wrapper.find("#ims-edit-title").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Current state");
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).toContain("Rangers/responders");
+
+    const editButton = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Edit incident");
+    expect(editButton).toBeDefined();
+    await editButton?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe(
+      "/ims/incidents/incident-gate-medical/edit",
+    );
+    expect(wrapper.find("#ims-edit-title").exists()).toBe(true);
+  });
+
   it("installs an IC lead development session so create/edit/print can be exercised locally", async () => {
     const { wrapper } = await mountAt("/ims/incidents");
 
@@ -342,7 +408,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
 
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
 
-    expect(wrapper.get("#ims-detail-heading").text()).toBe(
+    expect(wrapper.get("#ims-edit-heading").text()).toBe(
       "Medical assist near Gate A",
     );
     expect(wrapper.text()).toContain("INC-2027-000042");
@@ -367,7 +433,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("Edit");
     expect(wrapper.text()).not.toContain("Print PDF");
     expect(
-      wrapper.get(".ims-detail__chip--name-reference").attributes("href"),
+      wrapper.get(".ims-edit__chip--name-reference").attributes("href"),
     ).toBe("/ims/incidents?search=Blue-Hat");
   });
 
@@ -377,7 +443,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
 
     expect(wrapper.text()).toContain("Print PDF");
-    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.get(".ims-edit__print-button").attributes("disabled")).toBeUndefined();
 
     setNavigatorOnline(false);
     window.dispatchEvent(new Event("offline"));
@@ -386,7 +452,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain(
       "Incident PDF print requires a server connection.",
     );
-    expect(wrapper.get(".ims-detail__print-button").attributes("disabled")).toBeUndefined();
+    expect(wrapper.get(".ims-edit__print-button").attributes("disabled")).toBeUndefined();
 
     clearIncidentSession();
     installIncidentSession(IC_OPERATOR_SESSION);
@@ -404,15 +470,23 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("Create incident");
     expect(wrapper.text()).toContain("Not assigned yet");
     expect(wrapper.text()).toContain("Responders");
+    expect(wrapper.text()).toContain("Linked incidents");
+    expect(wrapper.text()).toContain("Attached Field Reports");
+    expect(wrapper.text()).toContain("Timeline");
+    expect(wrapper.get("#ims-edit-linked-add").attributes("disabled")).toBe("");
+    expect(wrapper.get("#ims-edit-field-report-add").attributes("disabled")).toBe("");
     expect(wrapper.text()).not.toContain("Rangers/responders");
 
     await wrapper.get("#ims-edit-priority").setValue("Important");
     await flushPromises();
 
-    expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
+    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
     expect(wrapper.text()).toContain("INC-2027-000043");
+    expect(wrapper.text()).toContain("Create incident");
     expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
     expect(wrapper.text()).not.toContain("Changed priority: Important");
+    expect(wrapper.get("#ims-edit-linked-add").attributes("disabled")).toBeUndefined();
+    expect(wrapper.get("#ims-edit-field-report-add").attributes("disabled")).toBeUndefined();
 
     const openingTimelineEntries = wrapper.findAll(".ims-edit__timeline li");
     expect(openingTimelineEntries[0]?.text()).toContain(
@@ -435,7 +509,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await wrapper.get("#ims-edit-title").trigger("blur");
     await flushPromises();
 
-    expect(router.currentRoute.value.name).toBe("ims.incidents.edit");
+    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
     expect(wrapper.text()).toContain("INC-2027-000043");
     expect(wrapper.text()).not.toContain("Saved INC-2027-000043.");
 
@@ -636,10 +710,10 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("FRA-2027-000123");
     expect(wrapper.text()).toContain("Medical observation near Gate A");
     expect(
-      wrapper.get(".ims-detail__field-report-row").attributes("href"),
+      wrapper.get(".ims-edit__view-field-report-row").attributes("href"),
     ).toBe("/ims/field-reports/field-report-medical-gate");
 
-    await wrapper.get(".ims-detail__field-report-row").trigger("click");
+    await wrapper.get(".ims-edit__view-field-report-row").trigger("click");
     await flushPromises();
 
     expect(router.currentRoute.value.name).toBe("ims.field-reports.show");
@@ -869,7 +943,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
 
     await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
-    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await wrapper.get("form.ims-edit__note-form").trigger("submit");
 
     expect(wrapper.text()).toContain("Radio relay confirmed.");
     expect(wrapper.text()).toContain("Incident Command Operator");
@@ -886,13 +960,13 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
 
     await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
-    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await wrapper.get("form.ims-edit__note-form").trigger("submit");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Radio relay confirmed.");
 
     const appendedNoteRow = wrapper
-      .findAll(".ims-detail__timeline li")
+      .findAll(".ims-edit__timeline li")
       .find((row) => row.text().includes("Radio relay confirmed."));
     const strikeButton = appendedNoteRow
       ?.findAll("button")
@@ -908,7 +982,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
 
     expect(wrapper.text()).toContain("Radio relay confirmed.");
     expect(wrapper.text()).toContain("Stricken: Wrong incident note.");
-    expect(wrapper.get(".ims-detail__timeline-body--stricken").text()).toContain(
+    expect(wrapper.get(".ims-edit__timeline-body--stricken").text()).toContain(
       "Radio relay confirmed.",
     );
   });
@@ -921,11 +995,11 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).not.toContain("@RadioLead");
 
     await wrapper.get("#ims-note-body").setValue("Follow up with @RadioLead.");
-    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await wrapper.get("form.ims-edit__note-form").trigger("submit");
 
     expect(wrapper.text()).toContain("@RadioLead");
     expect(
-      wrapper.get(".ims-detail__chip--name-reference").attributes("href"),
+      wrapper.get(".ims-edit__chip--name-reference").attributes("href"),
     ).toBe("/ims/incidents?search=RadioLead");
   });
 
@@ -939,11 +1013,11 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     await wrapper
       .get("#ims-note-body")
       .setValue("Follow up at @RadioHQ for #radio.");
-    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await wrapper.get("form.ims-edit__note-form").trigger("submit");
 
     expect(wrapper.text()).toContain("@RadioHQ");
     expect(wrapper.text()).toContain("#radio");
-    expect(wrapper.get(".ims-detail__chip--tag").attributes("href")).toBe(
+    expect(wrapper.get(".ims-edit__chip--tag").attributes("href")).toBe(
       "/ims/incidents?search=%23radio",
     );
   });
@@ -954,7 +1028,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
 
     await wrapper.get("#ims-note-body").setValue("   ");
-    await wrapper.get("form.ims-detail__note-form").trigger("submit");
+    await wrapper.get("form.ims-edit__note-form").trigger("submit");
 
     expect(wrapper.text()).toContain("Incident note body is required.");
   });

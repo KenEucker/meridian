@@ -44,4 +44,38 @@ final class DepartmentSelfAdminAccess
 
         return false;
     }
+
+    /**
+     * @return list<string>
+     */
+    public function ledTeamIds(User $user, Department $department): array
+    {
+        $teamIds = [];
+
+        foreach ($user->staffProfiles()->get() as $staff) {
+            foreach ($this->roles->resolveForStaff($staff) as $role) {
+                if ($role->roleCode !== PermissionCatalog::ROLE_SHIFT_LEAD) {
+                    continue;
+                }
+
+                $team = Team::query()->find($role->teamId);
+
+                if ($team === null) {
+                    continue;
+                }
+
+                if ((string) $team->department_id === (string) $department->id) {
+                    $teamIds[] = (string) $team->id;
+                }
+            }
+        }
+
+        return array_values(array_unique($teamIds));
+    }
+
+    public function canViewDepartmentAdmin(User $user, Department $department): bool
+    {
+        return $this->canAdministerDepartment($user, $department)
+            || $this->ledTeamIds($user, $department) !== [];
+    }
 }
