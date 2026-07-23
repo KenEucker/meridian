@@ -5,6 +5,9 @@ use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
+use App\Http\Controllers\Documents\DocumentCommandController;
+use App\Http\Controllers\Documents\DocumentExportController;
+use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\Teams\TeamCommandController;
 use App\Http\Controllers\Teams\TeamReadController;
@@ -99,6 +102,36 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/restore-team', [TeamCommandController::class, 'restore'])
         ->name('api.commands.restore-team');
 
+    Route::post('/commands/create-policy-document', [DocumentCommandController::class, 'createPolicy'])
+        ->name('api.commands.create-policy-document');
+
+    Route::post('/commands/update-policy-document', [DocumentCommandController::class, 'updatePolicy'])
+        ->name('api.commands.update-policy-document');
+
+    Route::post('/commands/publish-policy-document', [DocumentCommandController::class, 'publishPolicy'])
+        ->name('api.commands.publish-policy-document');
+
+    Route::post('/commands/archive-policy-document', [DocumentCommandController::class, 'archivePolicy'])
+        ->name('api.commands.archive-policy-document');
+
+    Route::post('/commands/create-procedure-document', [DocumentCommandController::class, 'createProcedure'])
+        ->name('api.commands.create-procedure-document');
+
+    Route::post('/commands/update-procedure-document', [DocumentCommandController::class, 'updateProcedure'])
+        ->name('api.commands.update-procedure-document');
+
+    Route::post('/commands/publish-procedure-document', [DocumentCommandController::class, 'publishProcedure'])
+        ->name('api.commands.publish-procedure-document');
+
+    Route::post('/commands/archive-procedure-document', [DocumentCommandController::class, 'archiveProcedure'])
+        ->name('api.commands.archive-procedure-document');
+
+    Route::post('/commands/create-document-fragment', [DocumentCommandController::class, 'createFragment'])
+        ->name('api.commands.create-document-fragment');
+
+    Route::post('/commands/update-document-fragment', [DocumentCommandController::class, 'updateFragment'])
+        ->name('api.commands.update-document-fragment');
+
     Route::post('/commands/add-organization-staff', [OrganizerStaffCommandController::class, 'addStaff'])
         ->name('api.commands.add-organization-staff');
 
@@ -116,6 +149,26 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/organizations/{organization}/staff', [OrganizerStaffReadController::class, 'index'])
         ->name('api.organizations.staff.index');
+
+    Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
+        ->name('api.organizations.documents.index');
+
+    Route::get('/policy-documents/{policyDocument}', [DocumentReadController::class, 'policy'])
+        ->name('api.policy-documents.show');
+
+    Route::get('/policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'apiPolicy'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.policy-documents.export');
+
+    Route::get('/procedure-documents/{procedureDocument}', [DocumentReadController::class, 'procedure'])
+        ->name('api.procedure-documents.show');
+
+    Route::get('/procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'apiProcedure'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.procedure-documents.export');
+
+    Route::get('/document-fragments/{fragment}', [DocumentReadController::class, 'fragment'])
+        ->name('api.document-fragments.show');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
         ->name('api.departments.teams.index');

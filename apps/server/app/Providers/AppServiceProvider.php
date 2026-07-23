@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\MeridianOrchidAccess;
 use App\Models\Attachment;
 use App\Models\DeviceTrust;
 use App\Models\DocumentAcknowledgmentRequirement;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Orchid\Attachment\Models\Attachment as OrchidPlatformAttachment;
 use Orchid\Platform\Dashboard;
+use Orchid\Platform\Http\Middleware\Access as OrchidAccess;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,7 +26,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(OrchidAccess::class, MeridianOrchidAccess::class);
     }
 
     /**

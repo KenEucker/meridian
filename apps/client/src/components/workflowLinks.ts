@@ -76,6 +76,13 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
 
     if (fixtureDepartmentHasAdminAccess(department)) {
       links.push({
+        label: "Documents",
+        to: {
+          name: "events.departments.documents.index",
+          params: departmentRouteParams.value,
+        },
+      });
+      links.push({
         label: "Admin",
         to: {
           name: "events.departments.teams.index",
