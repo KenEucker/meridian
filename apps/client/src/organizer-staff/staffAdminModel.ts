@@ -3,6 +3,7 @@ import {
   resolveOrganizerDepartmentSession,
   type OrganizerDepartmentSession,
 } from "@/organizer-departments/departmentAdminModel";
+import { shallowRef } from "vue";
 import {
   fixtureDepartmentAccesses,
   FIXTURE_RANGERS_DEPARTMENT_ID,
@@ -290,4 +291,3 @@ function nullableTrim(value: string): string | null {
 
   return trimmed === "" ? null : trimmed;
 }
-import { shallowRef } from "vue";
