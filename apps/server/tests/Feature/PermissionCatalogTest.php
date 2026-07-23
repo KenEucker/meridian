@@ -107,6 +107,10 @@ class PermissionCatalogTest extends TestCase
             // and department lead selection through the product path.
             $this->assertContains('organization.staff.manage', $permissions);
 
+            // TRAIN-001 through TRAIN-006 / M11.16: organizers manage
+            // department trainings through the product path.
+            $this->assertContains('department.trainings.manage', $permissions);
+
             // ORG-015: membership in the Organizers Department does not grant
             // access to all incidents or all field reports.
             $this->assertNotContains('incidents.view', $permissions);
@@ -128,13 +132,17 @@ class PermissionCatalogTest extends TestCase
             'department.deployments.assign',
         ], $this->permissionCodesFor('department_operations'));
 
+        // M11.16: department administration and department leads also manage
+        // department trainings through the product path.
         $this->assertSame([
             'department.administer',
+            'department.trainings.manage',
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
         $this->assertSame([
             'department.administer',
+            'department.trainings.manage',
         ], $this->permissionCodesFor('department_lead'));
 
         $this->assertSame([

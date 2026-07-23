@@ -21,6 +21,10 @@ class Training extends Model
 
     protected $keyType = 'string';
 
+    public const DELIVERY_IN_PERSON = 'in_person';
+
+    public const DELIVERY_ONLINE = 'online';
+
     /**
      * @var list<string>
      */
@@ -32,6 +36,16 @@ class Training extends Model
         'name',
         'description',
         'expires_after_days',
+        'delivery',
+        'online_url',
+        'scheduled_start_at',
+        'scheduled_end_at',
+        'location',
+        'capacity',
+        'time_commitment',
+        'after_training',
+        'provisions',
+        'linked_shift_id',
         'archived_at',
     ];
 
@@ -42,6 +56,9 @@ class Training extends Model
     {
         return [
             'expires_after_days' => 'integer',
+            'scheduled_start_at' => 'datetime',
+            'scheduled_end_at' => 'datetime',
+            'capacity' => 'integer',
             'archived_at' => 'datetime',
         ];
     }
@@ -87,6 +104,45 @@ class Training extends Model
     public function completions(): HasMany
     {
         return $this->hasMany(TrainingCompletion::class);
+    }
+
+    public function signups(): HasMany
+    {
+        return $this->hasMany(TrainingSignup::class);
+    }
+
+    /**
+     * The shift this in-person training materialized as for shift-style
+     * signup (event-bound scheduled sessions).
+     */
+    public function linkedShift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class, 'linked_shift_id');
+    }
+
+    public function isOnline(): bool
+    {
+        return $this->delivery === self::DELIVERY_ONLINE;
+    }
+
+    /**
+     * Whether the MVP workflow requires scheduled attendance (and therefore a
+     * signup/roster) for this training. Online trainings never require
+     * signup; staff visit the training URL instead.
+     */
+    public function requiresScheduledAttendance(): bool
+    {
+        return ! $this->isOnline() && $this->scheduled_start_at !== null;
+    }
+
+    public function activeSignupCount(): int
+    {
+        return $this->signups()->active()->count();
+    }
+
+    public function isFull(): bool
+    {
+        return $this->capacity !== null && $this->activeSignupCount() >= $this->capacity;
     }
 
     /**

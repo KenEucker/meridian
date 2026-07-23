@@ -855,6 +855,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
 | `department.teams` | `events.departments.teams.index` | Dynamic Admin page: department details and team management for department leads; scoped team details and staff lists for team leads | Department lead or team lead; hidden/fails closed for staff-only members |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
+| `department.training-detail` | `events.departments.trainings.show` | Staff-facing training page: delivery (in-person/online), schedule or training URL, time commitment, prerequisites, signup state, and after-training information | Department member; managers additionally reach create/edit |
 | `department.shifts` | `events.departments.shifts.index` | Manage/view shifts | Department lead or permitted role |
 | `department.shift-create` | `events.departments.shifts.create` | Create shift | Department lead |
 | `department.shift-edit` | `events.departments.shifts.edit` | Edit shift | Department lead with time restrictions |

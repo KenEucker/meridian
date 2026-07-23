@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use App\Orchid\PlatformProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -28,5 +29,25 @@ class OrchidAdminRouteTest extends TestCase
     {
         $this->assertSame('/admin', config('platform.prefix'));
         $this->assertSame(PlatformProvider::class, config('platform.provider'));
+    }
+
+    public function test_authenticated_user_without_main_permission_can_reach_profile_logout_escape_hatch(): void
+    {
+        $user = User::factory()->create(['permissions' => []]);
+
+        $this->actingAs($user)
+            ->get(route('platform.main'))
+            ->assertRedirect(route('platform.profile'));
+
+        $this->actingAs($user)
+            ->get(route('platform.profile'))
+            ->assertOk()
+            ->assertSee('Sign out');
+
+        $this->actingAs($user)
+            ->post(route('platform.logout'))
+            ->assertRedirect('/');
+
+        $this->assertGuest();
     }
 }

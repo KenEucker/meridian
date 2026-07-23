@@ -1461,9 +1461,25 @@ Key fields:
 - `name`
 - `description`
 - `expires_after_days`, nullable
+- `delivery`, `in_person` or `online`
+- `online_url`, nullable; required for online trainings
+- `scheduled_start_at`, nullable; set when the MVP workflow requires scheduled training attendance
+- `scheduled_end_at`, nullable
+- `location`, nullable
+- `capacity`, nullable
+- `time_commitment`, nullable; shown on the training page
+- `after_training`, nullable; training page description of what follows completion
+- `provisions`, nullable; training page description of provisions that come with the training
+- `linked_shift_id`, nullable; the shift an event-bound in-person scheduled training materializes as
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+Rules:
+
+- in-person trainings with a scheduled session and an event materialize a linked shift (`Training: <name>`) for the training's team or the department default team, and signups flow through normal shift signup; the training's prerequisites are registered as the linked shift's training requirements
+- online trainings take no signups and carry the training URL instead
+- every training has a staff-visible training page presenting delivery, schedule/URL, time commitment, prerequisites, and after-training information
 
 #### `training_prerequisites`
 
@@ -1475,6 +1491,27 @@ Key fields:
 - `training_id`
 - `prerequisite_training_id`
 - `created_at`
+
+#### `training_signups`
+
+Represents a staff member's signup for a training that requires scheduled attendance.
+
+Key fields:
+
+- `id`
+- `training_id`
+- `staff_id`
+- `signed_up_at`
+- `cancelled_at`, nullable
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- signups exist only for in-person trainings with scheduled attendance
+- used when the training has no linked shift; event-bound in-person trainings take signups through the linked shift's normal shift assignments instead
+- one signup row per training/staff pair; cancellation is recorded, not deleted
+- active signups form the training roster used by authorized trainers/leads
 
 #### `training_completions`
 

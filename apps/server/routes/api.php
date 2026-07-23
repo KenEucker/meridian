@@ -1,13 +1,14 @@
 <?php
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
-use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
+use App\Http\Controllers\Deployments\DeploymentCommandController;
+use App\Http\Controllers\Documents\DocumentCommandController;
+use App\Http\Controllers\Documents\DocumentExportController;
+use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
-use App\Http\Controllers\Teams\TeamCommandController;
-use App\Http\Controllers\Teams\TeamReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -16,6 +17,10 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
+use App\Http\Controllers\Teams\TeamCommandController;
+use App\Http\Controllers\Teams\TeamReadController;
+use App\Http\Controllers\Trainings\TrainingCommandController;
+use App\Http\Controllers\Trainings\TrainingReadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -99,6 +104,66 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/restore-team', [TeamCommandController::class, 'restore'])
         ->name('api.commands.restore-team');
 
+    Route::post('/commands/create-policy-document', [DocumentCommandController::class, 'createPolicy'])
+        ->name('api.commands.create-policy-document');
+
+    Route::post('/commands/update-policy-document', [DocumentCommandController::class, 'updatePolicy'])
+        ->name('api.commands.update-policy-document');
+
+    Route::post('/commands/publish-policy-document', [DocumentCommandController::class, 'publishPolicy'])
+        ->name('api.commands.publish-policy-document');
+
+    Route::post('/commands/archive-policy-document', [DocumentCommandController::class, 'archivePolicy'])
+        ->name('api.commands.archive-policy-document');
+
+    Route::post('/commands/create-procedure-document', [DocumentCommandController::class, 'createProcedure'])
+        ->name('api.commands.create-procedure-document');
+
+    Route::post('/commands/update-procedure-document', [DocumentCommandController::class, 'updateProcedure'])
+        ->name('api.commands.update-procedure-document');
+
+    Route::post('/commands/publish-procedure-document', [DocumentCommandController::class, 'publishProcedure'])
+        ->name('api.commands.publish-procedure-document');
+
+    Route::post('/commands/archive-procedure-document', [DocumentCommandController::class, 'archiveProcedure'])
+        ->name('api.commands.archive-procedure-document');
+
+    Route::post('/commands/create-document-fragment', [DocumentCommandController::class, 'createFragment'])
+        ->name('api.commands.create-document-fragment');
+
+    Route::post('/commands/update-document-fragment', [DocumentCommandController::class, 'updateFragment'])
+        ->name('api.commands.update-document-fragment');
+
+    Route::post('/commands/create-training', [TrainingCommandController::class, 'create'])
+        ->name('api.commands.create-training');
+
+    Route::post('/commands/update-training', [TrainingCommandController::class, 'update'])
+        ->name('api.commands.update-training');
+
+    Route::post('/commands/archive-training', [TrainingCommandController::class, 'archive'])
+        ->name('api.commands.archive-training');
+
+    Route::post('/commands/restore-training', [TrainingCommandController::class, 'restore'])
+        ->name('api.commands.restore-training');
+
+    Route::post('/commands/add-training-prerequisite', [TrainingCommandController::class, 'addPrerequisite'])
+        ->name('api.commands.add-training-prerequisite');
+
+    Route::post('/commands/remove-training-prerequisite', [TrainingCommandController::class, 'removePrerequisite'])
+        ->name('api.commands.remove-training-prerequisite');
+
+    Route::post('/commands/sign-up-for-training', [TrainingCommandController::class, 'signUp'])
+        ->name('api.commands.sign-up-for-training');
+
+    Route::post('/commands/cancel-training-signup', [TrainingCommandController::class, 'cancelSignup'])
+        ->name('api.commands.cancel-training-signup');
+
+    Route::post('/commands/record-training-completion', [TrainingCommandController::class, 'recordCompletion'])
+        ->name('api.commands.record-training-completion');
+
+    Route::post('/commands/import-training-completions', [TrainingCommandController::class, 'importCompletions'])
+        ->name('api.commands.import-training-completions');
+
     Route::post('/commands/add-organization-staff', [OrganizerStaffCommandController::class, 'addStaff'])
         ->name('api.commands.add-organization-staff');
 
@@ -116,6 +181,32 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/organizations/{organization}/staff', [OrganizerStaffReadController::class, 'index'])
         ->name('api.organizations.staff.index');
+
+    Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
+        ->name('api.organizations.documents.index');
+
+    Route::get('/policy-documents/{policyDocument}', [DocumentReadController::class, 'policy'])
+        ->name('api.policy-documents.show');
+
+    Route::get('/policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'apiPolicy'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.policy-documents.export');
+
+    Route::get('/procedure-documents/{procedureDocument}', [DocumentReadController::class, 'procedure'])
+        ->name('api.procedure-documents.show');
+
+    Route::get('/procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'apiProcedure'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.procedure-documents.export');
+
+    Route::get('/document-fragments/{fragment}', [DocumentReadController::class, 'fragment'])
+        ->name('api.document-fragments.show');
+
+    Route::get('/departments/{department}/trainings', [TrainingReadController::class, 'index'])
+        ->name('api.departments.trainings.index');
+
+    Route::get('/departments/{department}/trainings/{training}', [TrainingReadController::class, 'show'])
+        ->name('api.departments.trainings.show');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
         ->name('api.departments.teams.index');

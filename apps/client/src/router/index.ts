@@ -6,6 +6,8 @@ import {
 } from "@/field-reports/fieldSession";
 import AboutView from "@/views/AboutView.vue";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
+import DocumentEditView from "@/views/DocumentEditView.vue";
+import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import FieldReportCreateView from "@/views/FieldReportCreateView.vue";
 import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
@@ -29,6 +31,9 @@ import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
+import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
+import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
+import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import { selectFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
@@ -161,6 +166,48 @@ export const routes: RouteRecordRaw[] = [
     beforeEnter: ensureDepartmentSelfAdminSession,
   },
   {
+    path: "/events/:eventId/departments/:departmentId/documents",
+    name: "events.departments.documents.index",
+    component: DocumentLibraryView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/documents/:artifactKind/create",
+    name: "events.departments.documents.create",
+    component: DocumentEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/documents/:artifactKind/:artifactId/edit",
+    name: "events.departments.documents.edit",
+    component: DocumentEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings",
+    name: "events.departments.trainings.index",
+    component: DepartmentTrainingListView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/create",
+    name: "events.departments.trainings.create",
+    component: DepartmentTrainingEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/:trainingId/edit",
+    name: "events.departments.trainings.edit",
+    component: DepartmentTrainingEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/trainings/:trainingId",
+    name: "events.departments.trainings.show",
+    component: DepartmentTrainingDetailView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
     path: "/events/:eventId/departments/:departmentId/teams",
     redirect: (to: { params: Record<string, string | string[]> }) => ({
       name: "events.departments.teams.index",
@@ -274,6 +321,24 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/departments/:departmentId/edit",
     name: "organizer.departments.edit",
     component: OrganizerDepartmentEditView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/documents",
+    name: "organizer.documents.index",
+    component: DocumentLibraryView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/documents/:artifactKind/create",
+    name: "organizer.documents.create",
+    component: DocumentEditView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/documents/:artifactKind/:artifactId/edit",
+    name: "organizer.documents.edit",
+    component: DocumentEditView,
     beforeEnter: ensureOrganizerDepartmentSession,
   },
   {

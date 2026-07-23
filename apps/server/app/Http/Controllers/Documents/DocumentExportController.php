@@ -33,6 +33,20 @@ class DocumentExportController extends Controller
         ));
     }
 
+    public function apiPolicy(
+        Request $request,
+        PolicyDocument $policyDocument,
+        string $format,
+        DocumentExportService $exports,
+    ): Response {
+        return $this->download($exports->export(
+            $policyDocument,
+            $request->user(),
+            $format,
+            AuditEvent::SOURCE_API,
+        ));
+    }
+
     public function procedure(
         Request $request,
         ProcedureDocument $procedureDocument,
@@ -44,6 +58,20 @@ class DocumentExportController extends Controller
             $request->user(),
             $format,
             AuditEvent::SOURCE_ORCHID,
+        ));
+    }
+
+    public function apiProcedure(
+        Request $request,
+        ProcedureDocument $procedureDocument,
+        string $format,
+        DocumentExportService $exports,
+    ): Response {
+        return $this->download($exports->export(
+            $procedureDocument,
+            $request->user(),
+            $format,
+            AuditEvent::SOURCE_API,
         ));
     }
 

@@ -74,7 +74,27 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       });
     }
 
+    if (
+      fixtureDepartmentHasAdminAccess(department) ||
+      department.teams.some((team) => team.isMember)
+    ) {
+      links.push({
+        label: "Trainings",
+        to: {
+          name: "events.departments.trainings.index",
+          params: departmentRouteParams.value,
+        },
+      });
+    }
+
     if (fixtureDepartmentHasAdminAccess(department)) {
+      links.push({
+        label: "Documents",
+        to: {
+          name: "events.departments.documents.index",
+          params: departmentRouteParams.value,
+        },
+      });
       links.push({
         label: "Admin",
         to: {

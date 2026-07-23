@@ -45,8 +45,19 @@ const organizerDepartmentsRoute = {
 const organizerStaffRoute = {
   name: "organizer.staff.index",
 };
+const organizerDocumentsRoute = {
+  name: "organizer.documents.index",
+};
 const departmentAdminRoute = computed(() => ({
   name: "events.departments.teams.index",
+  params: departmentRouteParams.value,
+}));
+const departmentDocumentsRoute = computed(() => ({
+  name: "events.departments.documents.index",
+  params: departmentRouteParams.value,
+}));
+const departmentTrainingsRoute = computed(() => ({
+  name: "events.departments.trainings.index",
   params: departmentRouteParams.value,
 }));
 const showAdminCard = computed(() =>
@@ -54,6 +65,11 @@ const showAdminCard = computed(() =>
 );
 const showOrganizerDepartmentsCard = computed(() =>
   fixtureDepartmentHasOrganizerDepartmentAccess(selectedFixtureDepartment.value),
+);
+const showTrainingsCard = computed(
+  () =>
+    fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value) ||
+    selectedFixtureDepartment.value.teams.some((team) => team.isMember),
 );
 const showOverviewCard = computed(
   () => selectedFixtureDepartment.value.isDepartmentLead,
@@ -192,6 +208,22 @@ const operationsWindowLabel = computed(() => {
         <p>Department and team administration.</p>
       </RouterLink>
       <RouterLink
+        v-if="showAdminCard"
+        :to="departmentDocumentsRoute"
+        class="home__card"
+      >
+        <h2>Documents</h2>
+        <p>Department and team policies, procedures, and fragments.</p>
+      </RouterLink>
+      <RouterLink
+        v-if="showTrainingsCard"
+        :to="departmentTrainingsRoute"
+        class="home__card"
+      >
+        <h2>Trainings</h2>
+        <p>Department training schedule, signup, and completion.</p>
+      </RouterLink>
+      <RouterLink
         v-if="showOrganizerDepartmentsCard"
         :to="organizerStaffRoute"
         class="home__card"
@@ -206,6 +238,14 @@ const operationsWindowLabel = computed(() => {
       >
         <h2>Departments</h2>
         <p>Organizer department administration.</p>
+      </RouterLink>
+      <RouterLink
+        v-if="showOrganizerDepartmentsCard"
+        :to="organizerDocumentsRoute"
+        class="home__card"
+      >
+        <h2>Documents</h2>
+        <p>Organization policies, procedures, fragments, and exports.</p>
       </RouterLink>
       <RouterLink :to="{ name: 'readiness' }" class="home__card">
         <h2>Readiness</h2>
