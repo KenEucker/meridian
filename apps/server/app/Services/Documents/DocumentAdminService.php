@@ -12,7 +12,7 @@ use App\Services\Audit\AuditService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Persists Orchid policy/procedure edits, keeping fragment references, version
+ * Persists policy/procedure edits, keeping fragment references, version
  * metadata, authorship, and audit history in one transaction.
  */
 class DocumentAdminService
@@ -31,8 +31,9 @@ class DocumentAdminService
         array $attributes,
         User $actor,
         ?string $reason = null,
+        string $sourceContext = AuditEvent::SOURCE_ORCHID,
     ): PolicyDocument|ProcedureDocument {
-        return DB::transaction(function () use ($document, $attributes, $actor, $reason): PolicyDocument|ProcedureDocument {
+        return DB::transaction(function () use ($document, $attributes, $actor, $reason, $sourceContext): PolicyDocument|ProcedureDocument {
             $isNew = ! $document->exists;
             $before = $isNew ? null : $this->snapshot($document);
 
@@ -76,7 +77,7 @@ class DocumentAdminService
                     before: $before,
                     after: $after,
                     reason: $reason,
-                    sourceContext: AuditEvent::SOURCE_ORCHID,
+                    sourceContext: $sourceContext,
                 );
             }
 

@@ -26,6 +26,7 @@ class DocumentExportService
         private readonly DocumentRenderer $renderer,
         private readonly DocumentScopeValidator $scopes,
         private readonly PdfDocumentRenderer $pdf,
+        private readonly DocumentProductAccess $access,
     ) {}
 
     public function export(
@@ -85,7 +86,7 @@ class DocumentExportService
             ? 'platform.policy-documents'
             : 'platform.procedure-documents';
 
-        if (! $actor->hasAccess($permission)) {
+        if (! $actor->hasAccess($permission) && ! $this->access->canMaintainDocument($actor, $document)) {
             throw new AuthorizationException('You are not authorized to export this document.');
         }
     }

@@ -11,7 +11,7 @@ use App\Services\Audit\AuditService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Persists Orchid fragment edits and their append-only audit metadata.
+ * Persists fragment edits and their append-only audit metadata.
  */
 class DocumentFragmentAdminService
 {
@@ -23,9 +23,14 @@ class DocumentFragmentAdminService
     /**
      * @param  array<string, string>  $attributes
      */
-    public function save(DocumentFragment $fragment, array $attributes, User $actor): DocumentFragment
+    public function save(
+        DocumentFragment $fragment,
+        array $attributes,
+        User $actor,
+        string $sourceContext = AuditEvent::SOURCE_ORCHID,
+    ): DocumentFragment
     {
-        return DB::transaction(function () use ($fragment, $attributes, $actor): DocumentFragment {
+        return DB::transaction(function () use ($fragment, $attributes, $actor, $sourceContext): DocumentFragment {
             $isNew = ! $fragment->exists;
             $before = $isNew ? null : $this->snapshot($fragment);
 
@@ -49,7 +54,7 @@ class DocumentFragmentAdminService
                     departmentId: $this->scopes->departmentId($fragment->scope_type, $fragment->scope_id),
                     before: $before,
                     after: $after,
-                    sourceContext: AuditEvent::SOURCE_ORCHID,
+                    sourceContext: $sourceContext,
                 );
             }
 
