@@ -171,6 +171,15 @@ class Department extends Model
         return $query->whereNull('archived_at');
     }
 
+    /**
+     * @param  Builder<Department>  $query
+     * @return Builder<Department>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->where('organization_id', $organizationId);
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;

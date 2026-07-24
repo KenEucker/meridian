@@ -1,0 +1,483 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Department;
+use App\Models\DepartmentMembership;
+use App\Models\Event;
+use App\Models\Organization;
+use App\Models\PermissionRole;
+use App\Models\Shift;
+use App\Models\ShiftAssignment;
+use App\Models\Staff;
+use App\Models\Team;
+use App\Models\TeamGrant;
+use App\Models\TeamMembership;
+use App\Models\Training;
+use App\Models\User;
+use App\Models\Waiver;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Tests\TestCase;
+
+/**
+ * Product-path shift administration for department and team leads (M11.17;
+ * SHIFT-001 through SHIFT-010; UI contract 12.4).
+ */
+class ShiftAdminHttpTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_department_lead_creates_updates_and_cancels_a_shift(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['name' => 'Dirt', 'code' => 'DIRT']);
+        $training = Training::factory()->create([
+            'organization_id' => $department->organization_id,
+            'department_id' => $department->id,
+        ]);
+        $waiver = Waiver::factory()->create([
+            'organization_id' => $department->organization_id,
+        ]);
+
+        $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
+
+        $create = $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $team->id,
+                'title' => '  Gate Watch  ',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'capacity' => 4,
+                'signup_opens_at' => Carbon::now()->addDay()->toIso8601String(),
+                'signup_closes_at' => Carbon::now()->addDays(5)->toIso8601String(),
+                'schedule_lock_at' => $startsAt->copy()->subDay()->toIso8601String(),
+                'required_training_ids' => [$training->id],
+                'required_waiver_ids' => [$waiver->id],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('title', 'Gate Watch')
+            ->assertJsonPath('eligible_team_id', $team->id)
+            ->assertJsonPath('capacity', 4)
+            ->assertJsonPath('required_training_ids.0', $training->id)
+            ->assertJsonPath('required_waiver_ids.0', $waiver->id);
+
+        $shiftId = (string) $create->json('id');
+
+        $this->assertDatabaseHas('shifts', [
+            'id' => $shiftId,
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'shift.created',
+            'entity_id' => $shiftId,
+            'actor_user_id' => $actor->id,
+        ]);
+
+        // Index lists the shift with team/requirement context.
+        $this->actingAs($actor)
+            ->getJson("/api/departments/{$department->id}/shifts")
+            ->assertOk()
+            ->assertJsonPath('access.can_administer', true)
+            ->assertJsonFragment(['id' => $shiftId, 'title' => 'Gate Watch']);
+
+        // Update keeps the schedule but drops the waiver requirement.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shiftId,
+                'eligible_team_id' => $team->id,
+                'title' => 'Gate Watch (Night)',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(8)->toIso8601String(),
+                'capacity' => 6,
+                'required_training_ids' => [$training->id],
+                'required_waiver_ids' => [],
+            ])
+            ->assertOk()
+            ->assertJsonPath('title', 'Gate Watch (Night)')
+            ->assertJsonPath('capacity', 6)
+            ->assertJsonPath('required_waiver_ids', []);
+
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'shift.updated',
+            'entity_id' => $shiftId,
+        ]);
+        $this->assertDatabaseMissing('shift_waiver_requirements', [
+            'shift_id' => $shiftId,
+            'waiver_id' => $waiver->id,
+        ]);
+
+        // Cancel and restore before start are soft transitions.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/cancel-shift', ['shift_id' => $shiftId])
+            ->assertOk();
+        $this->assertNotNull(Shift::query()->findOrFail($shiftId)->cancelled_at);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'shift.cancelled',
+            'entity_id' => $shiftId,
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/restore-shift', ['shift_id' => $shiftId])
+            ->assertOk()
+            ->assertJsonPath('cancelled_at', null);
+        $this->assertDatabaseHas('audit_events', [
+            'action' => 'shift.restored',
+            'entity_id' => $shiftId,
+        ]);
+    }
+
+    public function test_schedule_validation_rules_are_enforced(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $startsAt = Carbon::now()->addWeek();
+
+        $base = [
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Watch',
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+        ];
+
+        // End must be after start (SHIFT-002).
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'ends_at' => $startsAt->copy()->subHour()->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Shift end must be after shift start.');
+
+        // Signup close must be after open (SHIFT-008).
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'signup_opens_at' => Carbon::now()->addDays(3)->toIso8601String(),
+                'signup_closes_at' => Carbon::now()->addDay()->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Signup close must be after signup open.');
+
+        // Capacity must be positive when set (SHIFT-007).
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [...$base, 'capacity' => 0])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Capacity must be at least 1 when set.');
+
+        // Eligible team must belong to the department (SHIFT-004).
+        $foreignTeam = Team::factory()->create();
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'eligible_team_id' => $foreignTeam->id,
+            ])
+            ->assertForbidden();
+
+        // Event must belong to the department organization (SHIFT-001).
+        $foreignEvent = Event::factory()->create();
+        $this->actingAs($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'event_id' => $foreignEvent->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Shifts must belong to an event in the department organization.');
+    }
+
+    public function test_started_shifts_lock_schedule_team_and_cancellation(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $otherTeam = Team::factory()->for($department)->create(['code' => 'OPERATORS']);
+
+        $shift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Started Watch',
+            'starts_at' => Carbon::now()->subHours(2),
+            'ends_at' => Carbon::now()->addHours(4),
+        ]);
+
+        $payload = [
+            'shift_id' => $shift->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Started Watch',
+            'starts_at' => $shift->starts_at->toIso8601String(),
+            'ends_at' => $shift->ends_at->toIso8601String(),
+        ];
+
+        // Schedule changes are locked once the shift has started.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                ...$payload,
+                'ends_at' => Carbon::now()->addHours(6)->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Scheduled times are locked once the shift has started.');
+
+        // The eligible team is locked once the shift has started.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                ...$payload,
+                'eligible_team_id' => $otherTeam->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The eligible team is locked once the shift has started.');
+
+        // Non-schedule fields stay editable for permitted leads.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                ...$payload,
+                'title' => 'Started Watch (Renamed)',
+                'capacity' => 9,
+            ])
+            ->assertOk()
+            ->assertJsonPath('title', 'Started Watch (Renamed)');
+
+        // Started shifts cannot be cancelled.
+        $this->actingAs($actor)
+            ->postJson('/api/commands/cancel-shift', ['shift_id' => $shift->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Shifts cannot be cancelled once they have started.');
+    }
+
+    public function test_capacity_cannot_drop_below_active_assignments(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+
+        $shift = Shift::factory()->withCapacity(4)->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+        ShiftAssignment::factory()->count(3)->create([
+            'shift_id' => $shift->id,
+            'removed_at' => null,
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shift->id,
+                'eligible_team_id' => $team->id,
+                'title' => $shift->title,
+                'starts_at' => $shift->starts_at->toIso8601String(),
+                'ends_at' => $shift->ends_at->toIso8601String(),
+                'capacity' => 2,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Capacity cannot be set below the current number of assigned staff.');
+    }
+
+    public function test_cancelled_shifts_must_be_restored_before_editing(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+
+        $shift = Shift::factory()->cancelled()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+
+        $this->actingAs($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shift->id,
+                'eligible_team_id' => $team->id,
+                'title' => 'Renamed',
+                'starts_at' => $shift->starts_at->toIso8601String(),
+                'ends_at' => $shift->ends_at->toIso8601String(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Cancelled shifts must be restored before editing.');
+    }
+
+    public function test_team_lead_manages_only_led_team_shifts(): void
+    {
+        [$department, , $event] = $this->departmentWithLead();
+        $ledTeam = Team::factory()->for($department)->create(['name' => 'Dirt', 'code' => 'DIRT']);
+        $peerTeam = Team::factory()->for($department)->create(['name' => 'Operators', 'code' => 'OPERATORS']);
+        $teamLead = $this->teamLeadFor($ledTeam);
+
+        $ledShift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $ledTeam->id,
+            'title' => 'Led Shift',
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+        $peerShift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $peerTeam->id,
+            'title' => 'Peer Shift',
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+
+        // Index is scoped to led-team shifts.
+        $this->actingAs($teamLead)
+            ->getJson("/api/departments/{$department->id}/shifts")
+            ->assertOk()
+            ->assertJsonPath('access.can_administer', false)
+            ->assertJsonFragment(['id' => $ledShift->id])
+            ->assertJsonMissing(['id' => $peerShift->id]);
+
+        // Team lead can create shifts for the led team.
+        $startsAt = Carbon::now()->addWeeks(2);
+        $this->actingAs($teamLead)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $ledTeam->id,
+                'title' => 'New Led Shift',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+            ])
+            ->assertCreated();
+
+        // But not for peer teams.
+        $this->actingAs($teamLead)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $peerTeam->id,
+                'title' => 'Denied Shift',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($teamLead)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $peerShift->id,
+                'eligible_team_id' => $peerTeam->id,
+                'title' => 'Denied Edit',
+                'starts_at' => $peerShift->starts_at->toIso8601String(),
+                'ends_at' => $peerShift->ends_at->toIso8601String(),
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($teamLead)
+            ->getJson("/api/departments/{$department->id}/shifts/{$peerShift->id}")
+            ->assertForbidden();
+
+        // A led shift cannot be moved to a team the lead does not manage.
+        $this->actingAs($teamLead)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $ledShift->id,
+                'eligible_team_id' => $peerTeam->id,
+                'title' => 'Led Shift',
+                'starts_at' => $ledShift->starts_at->toIso8601String(),
+                'ends_at' => $ledShift->ends_at->toIso8601String(),
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_staff_without_authority_cannot_view_or_manage_shifts(): void
+    {
+        [$department, , $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+
+        $staff = Staff::factory()->create();
+        $plainUser = User::factory()->create();
+        $plainUser->staffProfiles()->attach($staff->id);
+        $membership = DepartmentMembership::factory()->for($department)->for($staff)->create();
+        TeamMembership::factory()->create([
+            'team_id' => $team->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $membership->id,
+        ]);
+
+        $this->actingAs($plainUser)
+            ->getJson("/api/departments/{$department->id}/shifts")
+            ->assertForbidden();
+
+        $startsAt = Carbon::now()->addWeek();
+        $this->actingAs($plainUser)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $team->id,
+                'title' => 'Denied',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+            ])
+            ->assertForbidden();
+    }
+
+    /**
+     * @return array{0: Department, 1: User, 2: Event}
+     */
+    private function departmentWithLead(): array
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $event = Event::factory()->for($organization)->create();
+
+        $team = Team::query()->where('department_id', $department->id)->where('is_default', true)->first()
+            ?? Team::factory()->for($department)->create(['is_default' => true]);
+
+        $staff = Staff::factory()->create();
+        $user = User::factory()->create();
+        $user->staffProfiles()->attach($staff->id);
+
+        $membership = DepartmentMembership::factory()
+            ->for($department)
+            ->for($staff)
+            ->create();
+
+        TeamMembership::factory()->create([
+            'team_id' => $team->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $membership->id,
+        ]);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'event_id' => null,
+            'permission_role_id' => PermissionRole::query()->where('code', 'department_lead')->firstOrFail()->id,
+        ]);
+
+        return [$department, $user, $event];
+    }
+
+    private function teamLeadFor(Team $team): User
+    {
+        $staff = Staff::factory()->create();
+        $user = User::factory()->create();
+        $user->staffProfiles()->attach($staff->id);
+
+        $membership = DepartmentMembership::factory()
+            ->for($team->department)
+            ->for($staff)
+            ->create();
+
+        TeamMembership::factory()->create([
+            'team_id' => $team->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $membership->id,
+            'membership_role' => 'lead',
+        ]);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'event_id' => null,
+            'permission_role_id' => PermissionRole::query()->where('code', 'shift_lead')->firstOrFail()->id,
+        ]);
+
+        return $user;
+    }
+}

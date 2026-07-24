@@ -34,12 +34,13 @@ class TeamMembershipService
         Staff $staff,
         Team $team,
         User $assigner,
+        string $sourceContext = AuditEvent::SOURCE_ORCHID,
     ): TeamMembership {
         if (! $this->teamAssignmentAccess->canAssignToTeam($assigner, $team)) {
             throw new TeamAssignmentException('You are not authorized to assign this staff member to the selected team.');
         }
 
-        return DB::transaction(function () use ($staff, $team, $assigner): TeamMembership {
+        return DB::transaction(function () use ($staff, $team, $assigner, $sourceContext): TeamMembership {
             $team = Team::query()
                 ->with('department')
                 ->whereKey($team->id)
@@ -115,10 +116,83 @@ class TeamMembershipService
                 before: $before,
                 after: $this->teamMembershipAuditSnapshot($teamMembership),
                 reason: $reason,
-                sourceContext: AuditEvent::SOURCE_ORCHID,
+                sourceContext: $sourceContext,
             );
 
             return $teamMembership->load('team');
+        });
+    }
+
+    /**
+     * Archive a staff member's membership on a non-default team while
+     * preserving history (M11.17). Default-team membership is structural and is
+     * removed only through department membership workflows.
+     *
+     * @throws TeamAssignmentException when removal is not permitted or valid
+     */
+    public function removeStaffFromTeam(
+        Staff $staff,
+        Team $team,
+        User $remover,
+        string $sourceContext = AuditEvent::SOURCE_API,
+    ): TeamMembership {
+        if (! $this->teamAssignmentAccess->canAssignToTeam($remover, $team)) {
+            throw new TeamAssignmentException('You are not authorized to remove this staff member from the selected team.');
+        }
+
+        return DB::transaction(function () use ($staff, $team, $remover, $sourceContext): TeamMembership {
+            $team = Team::query()
+                ->with('department')
+                ->whereKey($team->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($team->is_default) {
+                throw new TeamAssignmentException('Staff cannot be removed from the department default team.');
+            }
+
+            $membership = TeamMembership::query()
+                ->active()
+                ->where('team_id', $team->id)
+                ->where('staff_id', $staff->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($membership === null) {
+                throw new TeamAssignmentException('This staff member is not assigned to the selected team.');
+            }
+
+            $hasAnotherActiveMembership = TeamMembership::query()
+                ->where('department_membership_id', $membership->department_membership_id)
+                ->whereKeyNot($membership->getKey())
+                ->whereNull('archived_at')
+                ->exists();
+
+            if (! $hasAnotherActiveMembership) {
+                throw new TeamAssignmentException('Staff must keep at least one active team membership in the department.');
+            }
+
+            $before = $this->teamMembershipAuditSnapshot($membership);
+
+            $membership->forceFill([
+                'membership_role' => 'member',
+                'archived_at' => now(),
+            ])->save();
+            $membership->refresh();
+
+            $this->audit->recordForEntity(
+                entity: $membership,
+                action: 'team_membership.removed',
+                actorUser: $remover,
+                organizationId: $team->department?->organization_id,
+                departmentId: $team->department_id,
+                before: $before,
+                after: $this->teamMembershipAuditSnapshot($membership),
+                reason: 'Removed from '.$team->name.' in '.$team->department?->name.'.',
+                sourceContext: $sourceContext,
+            );
+
+            return $membership->load('team');
         });
     }
 

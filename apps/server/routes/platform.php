@@ -23,6 +23,8 @@ use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
 use App\Orchid\Screens\Role\RoleListScreen;
+use App\Orchid\Screens\Shift\ShiftEditScreen;
+use App\Orchid\Screens\Shift\ShiftListScreen;
 use App\Orchid\Screens\Staff\StaffEditScreen;
 use App\Orchid\Screens\Staff\StaffListScreen;
 use App\Orchid\Screens\Team\TeamEditScreen;
@@ -195,6 +197,27 @@ Route::screen('teams', TeamListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Teams'), route('platform.teams')));
+
+// Platform > Operations > Shifts > Shift
+Route::screen('shifts/{shift}/edit', ShiftEditScreen::class)
+    ->name('platform.shifts.edit')
+    ->breadcrumbs(fn (Trail $trail, $shift) => $trail
+        ->parent('platform.shifts')
+        ->push($shift->title, route('platform.shifts.edit', $shift)));
+
+// Platform > Operations > Shifts > Create
+Route::screen('shifts/create', ShiftEditScreen::class)
+    ->name('platform.shifts.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.shifts')
+        ->push(__('Create'), route('platform.shifts.create')));
+
+// Platform > Operations > Shifts
+Route::screen('shifts', ShiftListScreen::class)
+    ->name('platform.shifts')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Shifts'), route('platform.shifts')));
 
 // Platform > Operations > Staff > Staff
 Route::screen('staff/{staff}/edit', StaffEditScreen::class)

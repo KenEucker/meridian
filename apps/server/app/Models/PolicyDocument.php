@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltersByAudienceScope;
 use Database\Factories\PolicyDocumentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -23,6 +24,7 @@ class PolicyDocument extends Model
 {
     use AsSource;
     use Filterable;
+    use FiltersByAudienceScope;
 
     public const STATE_DRAFT = 'draft';
 

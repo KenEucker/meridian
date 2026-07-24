@@ -29,6 +29,8 @@ import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
+import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
+import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
@@ -216,6 +218,24 @@ export const routes: RouteRecordRaw[] = [
         departmentId: to.params.departmentId,
       },
     }),
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shifts",
+    name: "events.departments.shifts.index",
+    component: DepartmentShiftListView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shifts/create",
+    name: "events.departments.shifts.create",
+    component: DepartmentShiftEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/shifts/:shiftId/edit",
+    name: "events.departments.shifts.edit",
+    component: DepartmentShiftEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams/create",

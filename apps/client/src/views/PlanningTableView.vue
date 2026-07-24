@@ -6,6 +6,8 @@ import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
+import ShiftListSection from "@/components/sections/ShiftListSection.vue";
+import TrainingListSection from "@/components/sections/TrainingListSection.vue";
 import {
   LOCAL_DEPARTMENT_OVERVIEW,
   LOCAL_LOGISTICS_DESK,
@@ -236,7 +238,6 @@ function formatTimelineMarker(timestamp: number): string {
 
     <template #actions>
       <div class="planning__heading-actions">
-        <WorkflowActionButton disabled>Define shift</WorkflowActionButton>
         <WorkflowActionButton disabled>Add position</WorkflowActionButton>
       </div>
     </template>
@@ -459,6 +460,14 @@ function formatTimelineMarker(timestamp: number): string {
         local schedule fixture.
       </p>
     </section>
+
+    <!--
+      Planning is the forward-looking hub: the identity-free coverage table
+      above, the shifts that coverage is built from, and the trainings that
+      gate eligibility for them.
+    -->
+    <ShiftListSection variant="section" />
+    <TrainingListSection variant="section" />
   </DeptOpsShell>
 </template>
 

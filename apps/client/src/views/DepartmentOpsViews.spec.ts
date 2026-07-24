@@ -46,7 +46,7 @@ function planningPath(): string {
 function homeCardByHeading(wrapper: VueWrapper, heading: string) {
   return wrapper
     .findAll(".home__card")
-    .find((item) => item.find("h2").text() === heading);
+    .find((item) => item.find("h3").text() === heading);
 }
 
 describe("department operations surfaces", () => {
@@ -436,17 +436,17 @@ describe("department operations surfaces", () => {
       "Vera Staff",
     );
 
-    expect(wrapper.findAll("tbody tr")).toHaveLength(3);
+    expect(wrapper.findAll(".planning__table-frame tbody tr")).toHaveLength(3);
     await wrapper.get("select").setValue(
       "77777777-7777-4777-8777-777777777772",
     );
-    expect(wrapper.findAll("tbody tr")).toHaveLength(1);
+    expect(wrapper.findAll(".planning__table-frame tbody tr")).toHaveLength(1);
     expect(wrapper.text()).toContain("Ranger Command Overnight");
     expect(wrapper.text()).not.toContain("Ranger Dirt Day Shift");
 
     await wrapper.get("select").setValue("");
     await wrapper.get('input[type="date"]').setValue("2027-07-04");
-    expect(wrapper.findAll("tbody tr")).toHaveLength(2);
+    expect(wrapper.findAll(".planning__table-frame tbody tr")).toHaveLength(2);
     expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
     expect(wrapper.text()).toContain("Ranger Dirt Swing Shift");
     expect(wrapper.text()).not.toContain("Ranger Command Overnight");

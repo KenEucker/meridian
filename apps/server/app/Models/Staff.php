@@ -180,6 +180,44 @@ class Staff extends Model
         return $this->archived_at !== null;
     }
 
+    /**
+     * Staff who hold any organization status record in the organization.
+     *
+     * @param  Builder<Staff>  $query
+     * @return Builder<Staff>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->whereHas('organizationStatuses', fn (Builder $status) => $status
+            ->where('organization_id', $organizationId));
+    }
+
+    /**
+     * Staff with an active membership in the department.
+     *
+     * @param  Builder<Staff>  $query
+     * @return Builder<Staff>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->whereHas('departmentMemberships', fn (Builder $membership) => $membership
+            ->where('department_id', $departmentId)
+            ->whereNull('archived_at'));
+    }
+
+    /**
+     * Staff with an active membership on the team.
+     *
+     * @param  Builder<Staff>  $query
+     * @return Builder<Staff>
+     */
+    public function scopeInTeam(Builder $query, string $teamId): Builder
+    {
+        return $query->whereHas('teamMemberships', fn (Builder $membership) => $membership
+            ->where('team_id', $teamId)
+            ->whereNull('archived_at'));
+    }
+
     public function profilePictureUrl(): ?string
     {
         if ($this->profile_picture_path === null || $this->profile_picture_path === '') {

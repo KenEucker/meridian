@@ -43,7 +43,7 @@ describe("organizer staff administration", () => {
       global: { plugins: [router] },
     });
     const cardLabels = homeWrapper
-      .findAll(".home__card h2")
+      .findAll(".home__card h3")
       .map((heading) => heading.text());
 
     expect(cardLabels).toContain("Staff");

@@ -2,7 +2,6 @@ import { shallowRef } from "vue";
 
 import {
   fixtureDepartmentAccesses,
-  fixtureDepartmentById,
   fixtureDepartmentHasAdminAccess,
   selectedFixtureDepartment,
   type FixtureDepartmentAccess,
@@ -23,6 +22,8 @@ export interface DepartmentSelfAdminSession {
   readonly role: DepartmentSelfAdminRole;
   readonly roleLabel: string;
   readonly teamLeadTeamIds: readonly string[];
+  /** Teams the signed-in staff member belongs to, lead or not (TEAM-008). */
+  readonly memberTeamIds: readonly string[];
 }
 
 export interface DepartmentSelfAdminDepartment {
@@ -51,6 +52,27 @@ export interface DepartmentTeam {
 export interface DepartmentTeamStaffMember extends FixtureTeamStaffMember {
   readonly teamId: string;
   readonly teamLabel: string;
+}
+
+export type TeamMembershipRole = "member" | "lead";
+
+/**
+ * Mutable team staff membership managed from the Admin surface (M11.17):
+ * department leads designate team leads, and department/team leads assign or
+ * remove permitted staff on teams they manage.
+ */
+export interface ManagedTeamStaffMember {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly handle: string | null;
+  readonly teamId: string;
+  readonly membershipRole: TeamMembershipRole;
+}
+
+export interface DepartmentRosterMember {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly handle: string | null;
 }
 
 export interface DepartmentDetailsDraft {
@@ -96,12 +118,73 @@ const INITIAL_TEAMS: DepartmentTeam[] = fixtureDepartmentAccesses.flatMap(
     })),
 );
 
+const INITIAL_TEAM_STAFF: ManagedTeamStaffMember[] =
+  fixtureDepartmentAccesses.flatMap((department) =>
+    department.teams.flatMap((team) =>
+      team.staff.map((member) => ({
+        staffId: member.staffId,
+        displayName: member.displayName,
+        handle: member.handle,
+        teamId: team.teamId,
+        membershipRole:
+          member.roleLabel === "Team lead"
+            ? ("lead" as const)
+            : ("member" as const),
+      })),
+    ),
+  );
+
+/**
+ * Additional active department members without a non-default team yet, so the
+ * assignment workflow has realistic candidates in the development fixture.
+ */
+const INITIAL_DEPARTMENT_ROSTER: Record<string, DepartmentRosterMember[]> = {};
+
+for (const department of fixtureDepartmentAccesses) {
+  const seen = new Map<string, DepartmentRosterMember>();
+  for (const team of department.teams) {
+    for (const member of team.staff) {
+      seen.set(member.staffId, {
+        staffId: member.staffId,
+        displayName: member.displayName,
+        handle: member.handle,
+      });
+    }
+  }
+  INITIAL_DEPARTMENT_ROSTER[department.departmentId] = [...seen.values()];
+}
+
+INITIAL_DEPARTMENT_ROSTER[
+  fixtureDepartmentAccesses[1]!.departmentId
+]!.push(
+  {
+    staffId: "33333333-3333-4333-8333-333333333361",
+    displayName: "Riley Reserve",
+    handle: "riley-reserve",
+  },
+  {
+    staffId: "33333333-3333-4333-8333-333333333362",
+    displayName: "Noor Newstaff",
+    handle: "noor-newstaff",
+  },
+);
+INITIAL_DEPARTMENT_ROSTER[
+  fixtureDepartmentAccesses[3]!.departmentId
+]!.push({
+  staffId: "33333333-3333-4333-8333-333333333363",
+  displayName: "Pat Pathfinder",
+  handle: "pat-pathfinder",
+});
+
 let session: DepartmentSelfAdminSession | null = null;
 const departments = shallowRef<DepartmentSelfAdminDepartment[]>(
   INITIAL_DEPARTMENTS.map((department) => ({ ...department })),
 );
 const teams = shallowRef<DepartmentTeam[]>(
   INITIAL_TEAMS.map((team) => ({ ...team })),
+);
+const teamStaff = shallowRef<ManagedTeamStaffMember[]>(
+  INITIAL_TEAM_STAFF.map((member) => ({ ...member })),
 );
 
 export function installDevelopmentDepartmentSelfAdminSession(
@@ -267,27 +350,270 @@ export function listTeamLeadStaff(
     return [];
   }
 
-  const access = fixtureDepartmentById(current.departmentId);
-  if (!access) {
+  const leadTeamIds = new Set(current.teamLeadTeamIds);
+
+  return staffForTeams(current, leadTeamIds);
+}
+
+/**
+ * Team staff visible for management: department administer authority sees
+ * every department team; team leads see only teams they lead (M11.17).
+ */
+export function listManagedTeamStaff(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentTeamStaffMember[] {
+  if (current === null || !canAccessDepartmentAdmin(current)) {
     return [];
   }
 
-  const leadTeamIds = new Set(current.teamLeadTeamIds);
+  return staffForTeams(current, new Set(manageableTeamIds(current)));
+}
 
-  return access.teams
-    .filter((team) => leadTeamIds.has(team.teamId))
-    .flatMap((team) =>
-      team.staff.map((member) => ({
-        ...member,
-        teamId: team.teamId,
-        teamLabel: team.teamLabel,
-      })),
+/**
+ * Teams the current session may assign staff to (active teams only).
+ */
+export function listAssignableTeams(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentTeam[] {
+  if (current === null || !canAccessDepartmentAdmin(current)) {
+    return [];
+  }
+
+  const manageable = new Set(manageableTeamIds(current));
+
+  return teams.value
+    .filter(
+      (team) =>
+        team.departmentId === current.departmentId &&
+        team.archivedAt === null &&
+        manageable.has(team.id),
     )
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/**
+ * Active department members available as assignment candidates.
+ */
+export function listAssignableStaff(
+  current: DepartmentSelfAdminSession | null,
+): DepartmentRosterMember[] {
+  if (current === null || !canAccessDepartmentAdmin(current)) {
+    return [];
+  }
+
+  return (INITIAL_DEPARTMENT_ROSTER[current.departmentId] ?? [])
+    .slice()
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+export function assignStaffToTeam(
+  current: DepartmentSelfAdminSession | null,
+  teamId: string,
+  staffId: string,
+): void {
+  assertCanManageTeam(current, teamId);
+
+  const team = requireDepartmentTeam(current, teamId);
+  if (team.archivedAt !== null) {
+    throw new Error("Archived teams cannot receive new assignments.");
+  }
+
+  const candidate = (INITIAL_DEPARTMENT_ROSTER[current.departmentId] ?? []).find(
+    (member) => member.staffId === staffId,
+  );
+  if (!candidate) {
+    throw new Error("Staff must belong to the department before team assignment.");
+  }
+
+  const alreadyAssigned = teamStaff.value.some(
+    (member) => member.teamId === teamId && member.staffId === staffId,
+  );
+  if (alreadyAssigned) {
+    throw new Error("This staff member is already assigned to the selected team.");
+  }
+
+  teamStaff.value = [
+    ...teamStaff.value,
+    {
+      staffId: candidate.staffId,
+      displayName: candidate.displayName,
+      handle: candidate.handle,
+      teamId,
+      membershipRole: "member",
+    },
+  ];
+}
+
+export function removeStaffFromTeam(
+  current: DepartmentSelfAdminSession | null,
+  teamId: string,
+  staffId: string,
+): void {
+  assertCanManageTeam(current, teamId);
+
+  const team = requireDepartmentTeam(current, teamId);
+  if (team.isDefault) {
+    throw new Error("Staff cannot be removed from the department default team.");
+  }
+
+  const assigned = teamStaff.value.some(
+    (member) => member.teamId === teamId && member.staffId === staffId,
+  );
+  if (!assigned) {
+    throw new Error("This staff member is not assigned to the selected team.");
+  }
+
+  teamStaff.value = teamStaff.value.filter(
+    (member) => !(member.teamId === teamId && member.staffId === staffId),
+  );
+}
+
+/**
+ * Department leads designate an individual team lead (M11.17). The designated
+ * membership gains team-scoped lead authority; other members keep member role.
+ */
+export function selectTeamLead(
+  current: DepartmentSelfAdminSession | null,
+  teamId: string,
+  staffId: string,
+): void {
+  assertCanAdminister(current);
+  const team = requireDepartmentTeam(current, teamId);
+  if (team.archivedAt !== null) {
+    throw new Error("Archived teams cannot receive lead designations.");
+  }
+
+  const existing = teamStaff.value.find(
+    (member) => member.teamId === teamId && member.staffId === staffId,
+  );
+
+  if (existing?.membershipRole === "lead") {
+    throw new Error("This staff member is already a lead of the selected team.");
+  }
+
+  if (existing) {
+    teamStaff.value = teamStaff.value.map((member) =>
+      member.teamId === teamId && member.staffId === staffId
+        ? { ...member, membershipRole: "lead" }
+        : member,
+    );
+    return;
+  }
+
+  const candidate = (INITIAL_DEPARTMENT_ROSTER[current.departmentId] ?? []).find(
+    (member) => member.staffId === staffId,
+  );
+  if (!candidate) {
+    throw new Error(
+      "Staff must belong to the department before team lead designation.",
+    );
+  }
+
+  teamStaff.value = [
+    ...teamStaff.value,
+    {
+      staffId: candidate.staffId,
+      displayName: candidate.displayName,
+      handle: candidate.handle,
+      teamId,
+      membershipRole: "lead",
+    },
+  ];
+}
+
+export function removeTeamLead(
+  current: DepartmentSelfAdminSession | null,
+  teamId: string,
+  staffId: string,
+): void {
+  assertCanAdminister(current);
+  requireDepartmentTeam(current, teamId);
+
+  const existing = teamStaff.value.find(
+    (member) =>
+      member.teamId === teamId &&
+      member.staffId === staffId &&
+      member.membershipRole === "lead",
+  );
+  if (!existing) {
+    throw new Error("This staff member is not a lead of the selected team.");
+  }
+
+  teamStaff.value = teamStaff.value.map((member) =>
+    member.teamId === teamId && member.staffId === staffId
+      ? { ...member, membershipRole: "member" }
+      : member,
+  );
+}
+
+function manageableTeamIds(current: DepartmentSelfAdminSession): string[] {
+  if (canAdministerDepartment(current)) {
+    return teams.value
+      .filter((team) => team.departmentId === current.departmentId)
+      .map((team) => team.id);
+  }
+
+  return [...current.teamLeadTeamIds];
+}
+
+function staffForTeams(
+  current: DepartmentSelfAdminSession,
+  teamIds: Set<string>,
+): DepartmentTeamStaffMember[] {
+  const teamLabelById = new Map(
+    teams.value
+      .filter((team) => team.departmentId === current.departmentId)
+      .map((team) => [team.id, team.name]),
+  );
+
+  return teamStaff.value
+    .filter((member) => teamIds.has(member.teamId))
+    .map((member) => ({
+      staffId: member.staffId,
+      displayName: member.displayName,
+      handle: member.handle,
+      roleLabel: member.membershipRole === "lead" ? "Team lead" : "Staff",
+      teamId: member.teamId,
+      teamLabel: teamLabelById.get(member.teamId) ?? "Unknown team",
+    }))
     .sort(
       (left, right) =>
         left.teamLabel.localeCompare(right.teamLabel) ||
         left.displayName.localeCompare(right.displayName),
     );
+}
+
+function assertCanManageTeam(
+  current: DepartmentSelfAdminSession | null,
+  teamId: string,
+): asserts current is DepartmentSelfAdminSession {
+  if (current === null || !canAccessDepartmentAdmin(current)) {
+    throw new Error("You do not have permission to manage team staff.");
+  }
+
+  if (!manageableTeamIds(current).includes(teamId)) {
+    throw new Error(
+      "You are not authorized to manage staff for the selected team.",
+    );
+  }
+}
+
+function requireDepartmentTeam(
+  current: DepartmentSelfAdminSession,
+  teamId: string,
+): DepartmentTeam {
+  const team = teams.value.find(
+    (candidate) =>
+      candidate.id === teamId &&
+      candidate.departmentId === current.departmentId,
+  );
+
+  if (!team) {
+    throw new Error("Team not found.");
+  }
+
+  return team;
 }
 
 export function getDepartmentTeam(
@@ -441,6 +767,7 @@ export function resetDepartmentSelfAdminFixtures(): void {
     ...department,
   }));
   teams.value = INITIAL_TEAMS.map((team) => ({ ...team }));
+  teamStaff.value = INITIAL_TEAM_STAFF.map((member) => ({ ...member }));
 }
 
 function sessionForDepartment(
@@ -448,6 +775,9 @@ function sessionForDepartment(
 ): DepartmentSelfAdminSession {
   const teamLeadTeamIds = department.teams
     .filter((team) => team.isTeamLead)
+    .map((team) => team.teamId);
+  const memberTeamIds = department.teams
+    .filter((team) => team.isMember)
     .map((team) => team.teamId);
   const hasAdminAccess = fixtureDepartmentHasAdminAccess(department);
 
@@ -463,6 +793,7 @@ function sessionForDepartment(
         : "staff",
     roleLabel: hasAdminAccess ? department.roleLabel : "Staff",
     teamLeadTeamIds,
+    memberTeamIds,
   };
 }
 

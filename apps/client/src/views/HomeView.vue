@@ -7,85 +7,13 @@ import {
   LOCAL_PLANNING_TABLE,
 } from "@/department-ops/fixtures";
 import { formatTimestamp } from "@/department-ops/labels";
-import {
-  fixtureDepartmentHasAdminAccess,
-  fixtureDepartmentHasOrganizerDepartmentAccess,
-  selectedFixtureDepartment,
-  selectedFixtureDepartmentRouteParams,
-} from "@/department-teams/fixtureDepartmentAccess";
+import { useNavigationSections } from "@/components/workflowLinks";
+import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 
-const departmentRouteParams = computed(
-  () => selectedFixtureDepartmentRouteParams.value,
-);
-const overviewRoute = computed(() => ({
-  name: "events.departments.overview",
-  params: departmentRouteParams.value,
-}));
-const logisticsRoute = computed(() => ({
-  name: "events.departments.logistics",
-  params: departmentRouteParams.value,
-}));
-const operationsRoute = computed(() => ({
-  name: "events.departments.operations",
-  params: departmentRouteParams.value,
-}));
-const planningRoute = computed(() => ({
-  name: "events.departments.planning",
-  params: departmentRouteParams.value,
-}));
-const imsIncidentsRoute = {
-  name: "ims.incidents.index",
-};
-const imsFieldReportsRoute = {
-  name: "ims.field-reports.index",
-};
-const organizerDepartmentsRoute = {
-  name: "organizer.departments.index",
-};
-const organizerStaffRoute = {
-  name: "organizer.staff.index",
-};
-const organizerDocumentsRoute = {
-  name: "organizer.documents.index",
-};
-const departmentAdminRoute = computed(() => ({
-  name: "events.departments.teams.index",
-  params: departmentRouteParams.value,
-}));
-const departmentDocumentsRoute = computed(() => ({
-  name: "events.departments.documents.index",
-  params: departmentRouteParams.value,
-}));
-const departmentTrainingsRoute = computed(() => ({
-  name: "events.departments.trainings.index",
-  params: departmentRouteParams.value,
-}));
-const showAdminCard = computed(() =>
-  fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value),
-);
-const showOrganizerDepartmentsCard = computed(() =>
-  fixtureDepartmentHasOrganizerDepartmentAccess(selectedFixtureDepartment.value),
-);
-const showTrainingsCard = computed(
-  () =>
-    fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value) ||
-    selectedFixtureDepartment.value.teams.some((team) => team.isMember),
-);
-const showOverviewCard = computed(
-  () => selectedFixtureDepartment.value.isDepartmentLead,
-);
-const showPlanningCard = computed(
-  () => selectedFixtureDepartment.value.capabilities.hasPlanning,
-);
-const showLogisticsCard = computed(
-  () => selectedFixtureDepartment.value.capabilities.hasLogistics,
-);
-const showOperationsCard = computed(
-  () => selectedFixtureDepartment.value.capabilities.hasOperations,
-);
-const showIncidentCommandCards = computed(
-  () => selectedFixtureDepartment.value.capabilities.hasIncidentCommand,
-);
+// Home lists every page the current user can reach, grouped so workflows stay
+// distinguishable from the individual pages they contain.
+const navigationSections = useNavigationSections();
+
 const eventWindow = computed(() => {
   const sortedStarts = LOCAL_PLANNING_TABLE.rows
     .map((row) => row.startsAt)
@@ -162,100 +90,28 @@ const operationsWindowLabel = computed(() => {
       </span>
     </header>
 
-    <div class="home__grid" aria-label="Current operational surfaces">
-      <RouterLink v-if="showOverviewCard" :to="overviewRoute" class="home__card">
-        <h2>Overview</h2>
-        <p>Shift health, exceptions, and current staffing.</p>
-      </RouterLink>
-      <RouterLink v-if="showPlanningCard" :to="planningRoute" class="home__card">
-        <h2>Planning</h2>
-        <p>Position coverage across teams and time.</p>
-      </RouterLink>
-      <RouterLink v-if="showLogisticsCard" :to="logisticsRoute" class="home__card">
-        <h2>Logistics</h2>
-        <p>Roster, attendance, and equipment handoff.</p>
-      </RouterLink>
-      <RouterLink v-if="showOperationsCard" :to="operationsRoute" class="home__card">
-        <h2>Operations Center</h2>
-        <p>Deployments and capability-based shortcuts.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showIncidentCommandCards"
-        :to="imsIncidentsRoute"
-        class="home__card"
-      >
-        <h2>Incidents</h2>
-        <p>Restricted incident workspace for IC roles.</p>
-      </RouterLink>
-      <RouterLink :to="{ name: 'staff.field-reports.index' }" class="home__card">
-        <h2>My Field Reports</h2>
-        <p>Field report author workspace.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showIncidentCommandCards"
-        :to="imsFieldReportsRoute"
-        class="home__card"
-      >
-        <h2>Field Reports</h2>
-        <p>Submitted field reports for review.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showAdminCard"
-        :to="departmentAdminRoute"
-        class="home__card"
-      >
-        <h2>Admin</h2>
-        <p>Department and team administration.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showAdminCard"
-        :to="departmentDocumentsRoute"
-        class="home__card"
-      >
-        <h2>Documents</h2>
-        <p>Department and team policies, procedures, and fragments.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showTrainingsCard"
-        :to="departmentTrainingsRoute"
-        class="home__card"
-      >
-        <h2>Trainings</h2>
-        <p>Department training schedule, signup, and completion.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showOrganizerDepartmentsCard"
-        :to="organizerStaffRoute"
-        class="home__card"
-      >
-        <h2>Staff</h2>
-        <p>Organizer staff intake and lead selection.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showOrganizerDepartmentsCard"
-        :to="organizerDepartmentsRoute"
-        class="home__card"
-      >
-        <h2>Departments</h2>
-        <p>Organizer department administration.</p>
-      </RouterLink>
-      <RouterLink
-        v-if="showOrganizerDepartmentsCard"
-        :to="organizerDocumentsRoute"
-        class="home__card"
-      >
-        <h2>Documents</h2>
-        <p>Organization policies, procedures, fragments, and exports.</p>
-      </RouterLink>
-      <RouterLink :to="{ name: 'readiness' }" class="home__card">
-        <h2>Readiness</h2>
-        <p>Device readiness checks.</p>
-      </RouterLink>
-      <RouterLink :to="{ name: 'settings.about' }" class="home__card">
-        <h2>Health</h2>
-        <p>Client and local server diagnostics.</p>
-      </RouterLink>
-    </div>
+    <section
+      v-for="group in navigationSections"
+      :key="group.title"
+      class="home__section"
+      :aria-label="group.title"
+    >
+      <div class="home__section-heading">
+        <h2>{{ group.title }}</h2>
+        <p>{{ group.description }}</p>
+      </div>
+      <div class="home__grid">
+        <RouterLink
+          v-for="link in group.links"
+          :key="`${group.title}:${link.label}`"
+          :to="link.to"
+          class="home__card"
+        >
+          <h3>{{ link.pageLabel ?? link.label }}</h3>
+          <p>{{ link.description }}</p>
+        </RouterLink>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -339,6 +195,25 @@ const operationsWindowLabel = computed(() => {
   border-color: var(--m-text-muted);
 }
 
+.home__section {
+  display: grid;
+  gap: var(--m-space-3);
+  margin-bottom: var(--m-space-5);
+}
+
+.home__section-heading h2 {
+  margin: 0;
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-lg);
+  letter-spacing: 0;
+}
+
+.home__section-heading p {
+  margin: var(--m-space-1) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
 .home__grid {
   display: grid;
   gap: var(--m-space-3);
@@ -359,7 +234,7 @@ const operationsWindowLabel = computed(() => {
   box-shadow: var(--m-shadow-sm);
 }
 
-.home__card h2 {
+.home__card h3 {
   margin: 0;
   font-size: var(--m-text-md);
   letter-spacing: 0;

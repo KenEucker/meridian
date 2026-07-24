@@ -4,20 +4,28 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
+import DocumentLibrarySection from "@/components/sections/DocumentLibrarySection.vue";
 import {
   archiveDepartmentTeam,
+  assignStaffToTeam,
   canAccessDepartmentAdmin,
   canAdministerDepartment,
   canLeadDepartmentTeam,
   getCurrentDepartment,
   getAdministeredDepartment,
+  listAssignableStaff,
+  listAssignableTeams,
   listDepartmentTeams,
-  listTeamLeadStaff,
+  listManagedTeamStaff,
   listTeamLeadTeams,
+  removeStaffFromTeam,
+  removeTeamLead,
   resolveDepartmentSelfAdminSession,
   restoreDepartmentTeam,
+  selectTeamLead,
   updateDepartmentDetails,
   type DepartmentTeam,
+  type DepartmentTeamStaffMember,
 } from "@/department-teams/teamAdminModel";
 
 const session = computed(() => resolveDepartmentSelfAdminSession());
@@ -59,7 +67,11 @@ const teams = computed(() =>
   listDepartmentTeams(session.value, statusFilter.value),
 );
 const leadTeams = computed(() => listTeamLeadTeams(session.value));
-const leadStaff = computed(() => listTeamLeadStaff(session.value));
+const managedStaff = computed<DepartmentTeamStaffMember[]>(() =>
+  listManagedTeamStaff(session.value),
+);
+const assignableTeams = computed(() => listAssignableTeams(session.value));
+const assignableStaff = computed(() => listAssignableStaff(session.value));
 
 const detailsDraft = reactive({
   name: "",
@@ -153,6 +165,51 @@ async function restoreTeam(team: DepartmentTeam): Promise<void> {
     busyId.value = null;
   }
 }
+
+const staffError = ref<string | null>(null);
+const assignDraft = reactive({
+  staffId: "",
+  teamId: "",
+});
+
+function runStaffAction(action: () => void, fallback: string): void {
+  staffError.value = null;
+
+  try {
+    action();
+  } catch (error) {
+    staffError.value = error instanceof Error ? error.message : fallback;
+  }
+}
+
+function onAssignStaff(): void {
+  runStaffAction(() => {
+    assignStaffToTeam(session.value, assignDraft.teamId, assignDraft.staffId);
+    assignDraft.staffId = "";
+  }, "Unable to assign staff to the team.");
+}
+
+function onRemoveStaff(member: DepartmentTeamStaffMember): void {
+  runStaffAction(
+    () => removeStaffFromTeam(session.value, member.teamId, member.staffId),
+    "Unable to remove staff from the team.",
+  );
+}
+
+function onSelectLead(member: DepartmentTeamStaffMember): void {
+  runStaffAction(
+    () => selectTeamLead(session.value, member.teamId, member.staffId),
+    "Unable to designate the team lead.",
+  );
+}
+
+function onRemoveLead(member: DepartmentTeamStaffMember): void {
+  runStaffAction(
+    () => removeTeamLead(session.value, member.teamId, member.staffId),
+    "Unable to remove the team lead designation.",
+  );
+}
+
 
 function formatArchived(team: DepartmentTeam): string {
   return team.archivedAt === null ? "Active" : "Archived";
@@ -271,6 +328,58 @@ function teamCreateRoute() {
             <small>{{ team.code }} - {{ formatArchived(team) }}</small>
           </li>
         </ul>
+      </section>
+
+      <section
+        class="dept-teams__staffmgmt"
+        aria-labelledby="team-staff-heading"
+      >
+        <div>
+          <h2 id="team-staff-heading" class="dept-teams__subheading">
+            Team staff
+          </h2>
+          <p class="dept-teams__hint">
+            {{
+              canAdminister
+                ? "Assign permitted department staff to teams and designate individual team leads."
+                : "Assign permitted department staff to teams you lead."
+            }}
+          </p>
+        </div>
+
+        <p v-if="staffError" class="dept-teams__error" role="alert">
+          {{ staffError }}
+        </p>
+
+        <form class="dept-teams__assign" @submit.prevent="onAssignStaff">
+          <label class="dept-teams__field">
+            Staff
+            <select v-model="assignDraft.staffId" required>
+              <option value="" disabled>Select staff</option>
+              <option
+                v-for="member in assignableStaff"
+                :key="member.staffId"
+                :value="member.staffId"
+              >
+                {{ member.displayName }}
+              </option>
+            </select>
+          </label>
+          <label class="dept-teams__field">
+            Team
+            <select v-model="assignDraft.teamId" required>
+              <option value="" disabled>Select team</option>
+              <option
+                v-for="team in assignableTeams"
+                :key="team.id"
+                :value="team.id"
+              >
+                {{ team.name }}
+              </option>
+            </select>
+          </label>
+          <button class="dept-teams__save" type="submit">Assign to team</button>
+        </form>
 
         <div
           class="dept-teams__table-wrap"
@@ -283,19 +392,46 @@ function teamCreateRoute() {
                 <th scope="col">Staff</th>
                 <th scope="col">Team</th>
                 <th scope="col">Role</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="leadStaff.length === 0">
-                <td colspan="3">No staff are listed for your teams.</td>
+              <tr v-if="managedStaff.length === 0">
+                <td colspan="4">No staff are listed for your teams.</td>
               </tr>
-              <tr v-for="member in leadStaff" :key="member.staffId">
+              <tr
+                v-for="member in managedStaff"
+                :key="`${member.teamId}:${member.staffId}`"
+              >
                 <td>
                   <strong>{{ member.displayName }}</strong>
                   <span v-if="member.handle">@{{ member.handle }}</span>
                 </td>
                 <td>{{ member.teamLabel }}</td>
                 <td>{{ member.roleLabel }}</td>
+                <td class="dept-teams__actions">
+                  <button
+                    v-if="canAdminister && member.roleLabel !== 'Team lead'"
+                    type="button"
+                    @click="onSelectLead(member)"
+                  >
+                    Make team lead
+                  </button>
+                  <button
+                    v-if="canAdminister && member.roleLabel === 'Team lead'"
+                    type="button"
+                    @click="onRemoveLead(member)"
+                  >
+                    Remove lead
+                  </button>
+                  <button
+                    type="button"
+                    class="dept-teams__archive"
+                    @click="onRemoveStaff(member)"
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -379,6 +515,12 @@ function teamCreateRoute() {
           </table>
         </div>
       </section>
+
+      <!--
+        Admin is the department-setup hub: department details, teams and their
+        staff above, and the document library those teams publish and follow.
+      -->
+      <DocumentLibrarySection variant="section" surface="department" />
     </template>
   </DeptOpsShell>
 </template>
@@ -505,8 +647,31 @@ function teamCreateRoute() {
   color: var(--m-status-danger, #cc792f);
 }
 
+.dept-teams__assign {
+  display: grid;
+  gap: var(--m-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+}
+
+@media (max-width: 40rem) {
+  .dept-teams__assign {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dept-teams__field select {
+  min-height: 2.5rem;
+  padding: var(--m-space-2);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  font: inherit;
+  font-weight: 400;
+}
+
 .dept-teams__details,
 .dept-teams__lead,
+.dept-teams__staffmgmt,
 .dept-teams__management {
   display: grid;
   gap: var(--m-space-3);

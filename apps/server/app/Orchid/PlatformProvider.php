@@ -82,6 +82,11 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.teams')
                 ->permission('platform.teams'),
 
+            Menu::make(__('Shifts'))
+                ->icon('bs.calendar-week')
+                ->route('platform.shifts')
+                ->permission('platform.shifts'),
+
             Menu::make(__('Staff'))
                 ->icon('bs.person-lines-fill')
                 ->route('platform.staff')
@@ -146,6 +151,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.applications', __('Applications'))
                 ->addPermission('platform.departments', __('Departments'))
                 ->addPermission('platform.teams', __('Teams'))
+                ->addPermission('platform.shifts', __('Shifts'))
                 ->addPermission('platform.staff', __('Staff'))
                 ->addPermission('platform.equipment', __('Equipment'))
                 ->addPermission('platform.policy-documents', __('Policy documents'))

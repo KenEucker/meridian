@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltersByAudienceScope;
 use App\Jobs\BumpPublishedDocumentFragmentRevisions;
 use App\Services\Documents\DocumentFragmentReferenceParser;
 use Database\Factories\DocumentFragmentFactory;
@@ -24,6 +25,7 @@ class DocumentFragment extends Model
 {
     use AsSource;
     use Filterable;
+    use FiltersByAudienceScope;
 
     public const SCOPE_ORGANIZATION = 'organization';
 

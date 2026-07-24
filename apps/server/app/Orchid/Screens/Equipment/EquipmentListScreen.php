@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Equipment;
 
 use App\Models\EquipmentItem;
+use App\Orchid\Layouts\ScopeFiltersLayout;
 use App\Orchid\Layouts\Equipment\EquipmentListLayout;
 use Orchid\Screen\Action;
 use Orchid\Screen\Actions\Link;
@@ -13,6 +14,8 @@ use Orchid\Screen\Screen;
 
 class EquipmentListScreen extends Screen
 {
+    private ?ScopeFiltersLayout $scopeFilters = null;
+
     /**
      * @return array<string, mixed>
      */
@@ -21,7 +24,7 @@ class EquipmentListScreen extends Screen
         return [
             'equipmentItems' => EquipmentItem::query()
                 ->with(['organization', 'event', 'department'])
-                ->filters()
+                ->filters($this->scopeFilters()->filters())
                 ->defaultSort('name')
                 ->paginate(),
         ];
@@ -65,7 +68,17 @@ class EquipmentListScreen extends Screen
     public function layout(): iterable
     {
         return [
+            $this->scopeFilters(),
             EquipmentListLayout::class,
         ];
+    }
+
+    /**
+     * Organization / department / team narrowing shared by the query and the
+     * rendered filter controls.
+     */
+    private function scopeFilters(): ScopeFiltersLayout
+    {
+        return $this->scopeFilters ??= ScopeFiltersLayout::for(EquipmentItem::class);
     }
 }

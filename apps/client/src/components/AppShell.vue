@@ -4,7 +4,11 @@ import { RouterLink, routerKey } from "vue-router";
 
 import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
 import OfflineBanner from "@/components/OfflineBanner.vue";
-import { useWorkflowLinks } from "@/components/workflowLinks";
+import {
+  useShowStaffMenu,
+  useStaffLinks,
+  useWorkflowLinks,
+} from "@/components/workflowLinks";
 import {
   fixtureDepartmentAccesses,
   fixtureDepartmentRoleSummary,
@@ -35,6 +39,10 @@ const fixtureUserElement = ref<HTMLElement | null>(null);
 const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
 const workflowLinks = useWorkflowLinks();
+const staffLinks = useStaffLinks();
+const showStaffMenu = useShowStaffMenu();
+const staffMenuOpen = ref(false);
+const staffMenuElement = ref<HTMLElement | null>(null);
 const fixtureUserLabel = "Fixture user";
 const connectionStatus = computed(() =>
   connectionStatusFor(connectivity.value),
@@ -105,6 +113,28 @@ function handleWorkflowMenuOutsideClick(event: Event): void {
   }
 
   closeWorkflowMenu();
+}
+
+function toggleStaffMenu(): void {
+  staffMenuOpen.value = !staffMenuOpen.value;
+}
+
+function closeStaffMenu(): void {
+  staffMenuOpen.value = false;
+}
+
+function handleStaffMenuOutsideClick(event: Event): void {
+  const target = event.target;
+
+  if (
+    !staffMenuOpen.value ||
+    !(target instanceof Node) ||
+    staffMenuElement.value?.contains(target)
+  ) {
+    return;
+  }
+
+  closeStaffMenu();
 }
 
 function connectionStatusFor(state: ConnectivityState): {
@@ -206,10 +236,24 @@ watch(workflowMenuOpen, (isOpen) => {
   document.removeEventListener("pointerdown", handleWorkflowMenuOutsideClick);
 });
 
+watch(staffMenuOpen, (isOpen) => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  if (isOpen) {
+    document.addEventListener("pointerdown", handleStaffMenuOutsideClick);
+    return;
+  }
+
+  document.removeEventListener("pointerdown", handleStaffMenuOutsideClick);
+});
+
 onBeforeUnmount(() => {
   if (typeof document !== "undefined") {
     document.removeEventListener("pointerdown", handleFixtureUserOutsideClick);
     document.removeEventListener("pointerdown", handleWorkflowMenuOutsideClick);
+    document.removeEventListener("pointerdown", handleStaffMenuOutsideClick);
   }
 });
 </script>
@@ -461,6 +505,53 @@ onBeforeUnmount(() => {
             :to="link.to"
             class="app-shell__tab"
             @click="closeWorkflowMenu"
+          >
+            {{ link.label }}
+          </RouterLink>
+        </nav>
+      </div>
+
+      <div
+        v-if="showStaffMenu"
+        ref="staffMenuElement"
+        class="app-shell__workflow-menu app-shell__staff-menu"
+        :data-open="staffMenuOpen"
+      >
+        <button
+          type="button"
+          class="app-shell__workflow-button"
+          :aria-expanded="staffMenuOpen"
+          aria-controls="app-shell-staff-tabs"
+          @click="toggleStaffMenu"
+        >
+          <span>Staff</span>
+          <svg
+            class="app-shell__dropdown-icon app-shell__workflow-icon"
+            aria-hidden="true"
+            focusable="false"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="m6 9 6 6 6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+        <nav
+          id="app-shell-staff-tabs"
+          class="app-shell__tabs"
+          aria-label="Staff pages"
+        >
+          <RouterLink
+            v-for="link in staffLinks"
+            :key="link.label"
+            :to="link.to"
+            class="app-shell__tab app-shell__staff-tab"
+            @click="closeStaffMenu"
           >
             {{ link.label }}
           </RouterLink>

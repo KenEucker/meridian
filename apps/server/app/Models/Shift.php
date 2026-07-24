@@ -11,9 +11,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 
 class Shift extends Model
 {
+    use AsSource;
+    use Filterable;
+
     /** @use HasFactory<ShiftFactory> */
     use HasFactory, HasUuids;
 
@@ -38,6 +46,37 @@ class Shift extends Model
         'signup_closes_at',
         'schedule_lock_at',
         'cancelled_at',
+    ];
+
+    /**
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'id' => Where::class,
+        'event_id' => Where::class,
+        'department_id' => Where::class,
+        'eligible_team_id' => Where::class,
+        'title' => Like::class,
+        'starts_at' => WhereDateStartEnd::class,
+        'ends_at' => WhereDateStartEnd::class,
+        'updated_at' => WhereDateStartEnd::class,
+        'created_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'id',
+        'event_id',
+        'department_id',
+        'eligible_team_id',
+        'title',
+        'starts_at',
+        'ends_at',
+        'capacity',
+        'updated_at',
+        'created_at',
     ];
 
     /**
@@ -247,6 +286,34 @@ class Shift extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereNull('cancelled_at');
+    }
+
+    /**
+     * @param  Builder<Shift>  $query
+     * @return Builder<Shift>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->whereHas('department', fn (Builder $department) => $department
+            ->where('organization_id', $organizationId));
+    }
+
+    /**
+     * @param  Builder<Shift>  $query
+     * @return Builder<Shift>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->where('department_id', $departmentId);
+    }
+
+    /**
+     * @param  Builder<Shift>  $query
+     * @return Builder<Shift>
+     */
+    public function scopeInTeam(Builder $query, string $teamId): Builder
+    {
+        return $query->where('eligible_team_id', $teamId);
     }
 
     public function isCancelled(): bool

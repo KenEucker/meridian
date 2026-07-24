@@ -20,11 +20,11 @@ class EffectiveRoleResolverTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_resolves_role_from_active_grant_on_member_team_with_explanation(): void
+    public function test_resolves_shift_lead_from_active_grant_for_designated_lead_with_explanation(): void
     {
         $team = Team::factory()->create(['name' => 'Rangers']);
         $staff = Staff::factory()->create();
-        $this->addStaffToTeam($staff, $team);
+        $this->addStaffToTeam($staff, $team, 'lead');
 
         TeamGrant::factory()->create([
             'team_id' => $team->id,
@@ -39,8 +39,43 @@ class EffectiveRoleResolverTest extends TestCase
         $this->assertSame('shift_lead', $effective->roleCode);
         $this->assertSame($team->id, $effective->teamId);
         $this->assertSame(
-            'You have the Shift Lead role because you are a member of the Rangers team.',
+            'You have the Shift Lead role because you are a designated lead of the Rangers team.',
             $effective->reason,
+        );
+    }
+
+    public function test_shift_lead_grant_does_not_apply_to_undesignated_members(): void
+    {
+        $team = Team::factory()->create();
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'permission_role_id' => $this->role('shift_lead')->id,
+        ]);
+
+        $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff));
+    }
+
+    public function test_department_scoped_grant_applies_to_undesignated_members(): void
+    {
+        $team = Team::factory()->create(['name' => 'Rangers']);
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'permission_role_id' => $this->role('department_logistics')->id,
+        ]);
+
+        $roles = (new EffectiveRoleResolver)->resolveForStaff($staff);
+
+        $this->assertCount(1, $roles);
+        $this->assertSame('department_logistics', $roles->sole()->roleCode);
+        $this->assertSame(
+            'You have the Department Logistics role because you are a member of the Rangers team.',
+            $roles->sole()->reason,
         );
     }
 
@@ -48,7 +83,7 @@ class EffectiveRoleResolverTest extends TestCase
     {
         $team = Team::factory()->create();
         $staff = Staff::factory()->create();
-        $this->addStaffToTeam($staff, $team);
+        $this->addStaffToTeam($staff, $team, 'lead');
 
         TeamGrant::factory()->revoked()->create([
             'team_id' => $team->id,
@@ -63,7 +98,7 @@ class EffectiveRoleResolverTest extends TestCase
         $memberTeam = Team::factory()->create();
         $otherTeam = Team::factory()->create();
         $staff = Staff::factory()->create();
-        $this->addStaffToTeam($staff, $memberTeam);
+        $this->addStaffToTeam($staff, $memberTeam, 'lead');
 
         TeamGrant::factory()->create([
             'team_id' => $otherTeam->id,
@@ -171,7 +206,7 @@ class EffectiveRoleResolverTest extends TestCase
         return PermissionRole::query()->where('code', $code)->firstOrFail();
     }
 
-    private function addStaffToTeam(Staff $staff, Team $team): void
+    private function addStaffToTeam(Staff $staff, Team $team, string $membershipRole = 'member'): void
     {
         $departmentMembership = DepartmentMembership::factory()
             ->for($team->department)
@@ -182,6 +217,7 @@ class EffectiveRoleResolverTest extends TestCase
             'team_id' => $team->id,
             'staff_id' => $staff->id,
             'department_membership_id' => $departmentMembership->id,
+            'membership_role' => $membershipRole,
         ]);
     }
 
