@@ -59,25 +59,44 @@ describe("department self-administration", () => {
     expect(wrapper.text()).toContain("Team details");
     expect(wrapper.text()).toContain("Local Field Author");
 
+    // Scoped to the team management section: Admin also embeds the document
+    // library, which has its own Archive controls.
     const archiveButtons = wrapper
-      .findAll("button")
+      .findAll(".dept-teams__management button")
       .filter((button) => button.text() === "Archive");
     expect(archiveButtons.length).toBe(1);
     await archiveButtons[0]!.trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Archived");
+    expect(wrapper.get(".dept-teams__management").text()).toContain("Archived");
 
     const restoreButton = wrapper
-      .findAll("button")
+      .findAll(".dept-teams__management button")
       .find((button) => button.text() === "Restore");
     expect(restoreButton).toBeTruthy();
     await restoreButton!.trigger("click");
     await flushPromises();
 
     expect(
-      wrapper.findAll("button").some((button) => button.text() === "Restore"),
+      wrapper
+        .findAll(".dept-teams__management button")
+        .some((button) => button.text() === "Restore"),
     ).toBe(false);
+  });
+
+  it("embeds the document library as an Admin featureset", async () => {
+    installDevelopmentDepartmentSelfAdminSession();
+    const router = buildRouter();
+    await router.push(adminPath());
+    await router.isReady();
+
+    const wrapper = mount(DepartmentTeamsListView, {
+      global: { plugins: [router] },
+    });
+
+    expect(wrapper.get("#documents-section-heading").text()).toBe("Documents");
+    expect(wrapper.text()).toContain("Policies and procedures");
+    expect(wrapper.text()).toContain("Fragments");
   });
 
   it("updates department details from the teams surface", async () => {
@@ -146,6 +165,94 @@ describe("department self-administration", () => {
     expect(wrapper.text()).toContain(
       "Admin access requires department lead or team lead authority",
     );
+  });
+
+  it("designates and removes a team lead as department lead", async () => {
+    installDevelopmentDepartmentSelfAdminSession();
+    const router = buildRouter();
+    await router.push(adminPath());
+    await router.isReady();
+
+    const wrapper = mount(DepartmentTeamsListView, {
+      global: { plugins: [router] },
+    });
+
+    expect(wrapper.text()).toContain("Team staff");
+
+    const makeLeadButtons = wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Make team lead");
+    expect(makeLeadButtons.length).toBeGreaterThan(0);
+    await makeLeadButtons[0]!.trigger("click");
+    await flushPromises();
+
+    const removeLeadButtons = wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Remove lead");
+    expect(removeLeadButtons.length).toBeGreaterThan(0);
+    await removeLeadButtons[0]!.trigger("click");
+    await flushPromises();
+  });
+
+  it("assigns and removes staff on a managed team", async () => {
+    installDevelopmentDepartmentSelfAdminSession();
+    const router = buildRouter();
+    await router.push(adminPath());
+    await router.isReady();
+
+    const wrapper = mount(DepartmentTeamsListView, {
+      global: { plugins: [router] },
+    });
+
+    const selects = wrapper
+      .find('form[class*="assign"]')
+      .findAll("select");
+    expect(selects.length).toBe(2);
+
+    // Riley Reserve is an unassigned department roster member in the fixture.
+    await selects[0]!.setValue("33333333-3333-4333-8333-333333333361");
+    const teamSelect = selects[1]!;
+    const dirtOption = teamSelect
+      .findAll("option")
+      .find((option) => option.text() === "Dirt");
+    expect(dirtOption).toBeTruthy();
+    await teamSelect.setValue(dirtOption!.attributes("value"));
+    await wrapper
+      .findAll('button[type="submit"]')
+      .find((button) => button.text() === "Assign to team")!
+      .trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Riley Reserve");
+
+    const removeButtons = wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Remove");
+    expect(removeButtons.length).toBeGreaterThan(0);
+    await removeButtons[removeButtons.length - 1]!.trigger("click");
+    await flushPromises();
+  });
+
+  it("lets a team lead assign staff only to led teams", async () => {
+    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    installDevelopmentDepartmentSelfAdminSession();
+    const router = buildRouter();
+    await router.push(adminPath(FIXTURE_DPW_DEPARTMENT_ID));
+    await router.isReady();
+
+    const wrapper = mount(DepartmentTeamsListView, {
+      global: { plugins: [router] },
+    });
+
+    const selects = wrapper.find('form[class*="assign"]').findAll("select");
+    const teamOptions = selects[1]!
+      .findAll("option")
+      .map((option) => option.text());
+
+    // Only the led Bikes team is assignable; lead designation stays admin-only.
+    expect(teamOptions).toContain("Bikes");
+    expect(teamOptions).not.toContain("DPW Default");
+    expect(wrapper.text()).not.toContain("Make team lead");
   });
 
   it("shows only team details and team staff for a team lead", async () => {

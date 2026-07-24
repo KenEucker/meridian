@@ -207,27 +207,47 @@ class DevelopmentScenarioSeeder extends Seeder
                         : null,
                     $user,
                 );
+            } else {
+                $existingMembership->forceFill([
+                    'status' => $departmentStatus,
+                    'status_reason' => $departmentStatus === 'ineligible'
+                        ? 'Department eligibility review pending.'
+                        : null,
+                ])->save();
 
-                continue;
+                $existingMembership->teamMemberships()
+                    ->where('team_id', $team->id)
+                    ->whereNull('archived_at')
+                    ->first()
+                    ?? $existingMembership->teamMemberships()->create([
+                        'team_id' => $team->id,
+                        'staff_id' => $staff->id,
+                        'membership_role' => 'member',
+                    ]);
             }
 
-            $existingMembership->forceFill([
-                'status' => $departmentStatus,
-                'status_reason' => $departmentStatus === 'ineligible'
-                    ? 'Department eligibility review pending.'
-                    : null,
-            ])->save();
-
-            $existingMembership->teamMemberships()
-                ->where('team_id', $team->id)
-                ->whereNull('archived_at')
-                ->first()
-                ?? $existingMembership->teamMemberships()->create([
-                    'team_id' => $team->id,
-                    'staff_id' => $staff->id,
-                    'membership_role' => 'member',
-                ]);
+            // shift_lead applies only to designated lead memberships (M11.17).
+            if ($this->personaHoldsShiftLeadGrant($persona)) {
+                $staff->teamMemberships()
+                    ->where('team_id', $team->id)
+                    ->whereNull('archived_at')
+                    ->update(['membership_role' => 'lead']);
+            }
         }
+    }
+
+    /**
+     * @param  array{grants: list<array{role: string, event_scoped: bool}>}  $persona
+     */
+    private function personaHoldsShiftLeadGrant(array $persona): bool
+    {
+        foreach ($persona['grants'] as $grantDefinition) {
+            if ($grantDefinition['role'] === 'shift_lead') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

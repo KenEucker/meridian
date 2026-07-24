@@ -179,6 +179,27 @@ class EventApplication extends Model
         return $query->where('status', self::STATUS_SUBMITTED);
     }
 
+    /**
+     * @param  Builder<EventApplication>  $query
+     * @return Builder<EventApplication>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->where('organization_id', $organizationId);
+    }
+
+    /**
+     * Applications expressing interest in the department.
+     *
+     * @param  Builder<EventApplication>  $query
+     * @return Builder<EventApplication>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->whereHas('departmentInterests', fn (Builder $interest) => $interest
+            ->where('departments.id', $departmentId));
+    }
+
     public function isSubmitted(): bool
     {
         return $this->status === self::STATUS_SUBMITTED;

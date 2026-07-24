@@ -237,7 +237,12 @@ class TeamAdminHttpTest extends TestCase
                 'team_name' => 'Dirt',
                 'membership_role' => 'member',
             ])
-            ->assertJsonMissing(['staff_id' => $peerStaff->id]);
+            // Per-team staff lists stay scoped to led teams; the peer team's
+            // roster never appears with a team association. The flat
+            // department_staff list is the M11.17 assignment-candidate roster
+            // (names/handles only) team leads use to assign permitted staff.
+            ->assertJsonMissing(['team_id' => $peerTeam->id])
+            ->assertJsonPath('department_staff.2.staff_id', $assignedStaff->id);
 
         $this->actingAs($actor)
             ->getJson("/api/departments/{$department->id}/teams/{$ledTeam->id}")

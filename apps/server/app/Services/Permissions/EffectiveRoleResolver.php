@@ -12,6 +12,11 @@ use Illuminate\Support\Collection;
  * Resolves the effective roles a staff member holds through their active team
  * memberships and active team grants (TEAM-009). Grants that are revoked, or
  * event-scoped to a different event, are excluded.
+ *
+ * The team-scoped `shift_lead` role applies only to memberships designated
+ * `membership_role = 'lead'` in the grant-bearing team, so department leads can
+ * designate individual team leads without every team member gaining lead
+ * authority (M11.17; technical spec 15.2).
  */
 class EffectiveRoleResolver
 {
@@ -20,8 +25,13 @@ class EffectiveRoleResolver
      */
     public function resolveForStaff(Staff $staff, ?Event $event = null): Collection
     {
-        $teamIds = $staff->teamMemberships()
+        $memberships = $staff->teamMemberships()
             ->active()
+            ->get(['team_id', 'membership_role']);
+
+        $teamIds = $memberships->pluck('team_id')->unique()->values();
+        $leadTeamIds = $memberships
+            ->where('membership_role', 'lead')
             ->pluck('team_id')
             ->unique()
             ->values();
@@ -52,9 +62,19 @@ class EffectiveRoleResolver
                 return $icDepartmentId !== null
                     && (string) $grant->team->department_id === (string) $icDepartmentId;
             })
+            ->filter(function (TeamGrant $grant) use ($leadTeamIds): bool {
+                if ($grant->permissionRole->code !== PermissionCatalog::ROLE_SHIFT_LEAD) {
+                    return true;
+                }
+
+                return $leadTeamIds->contains((string) $grant->team_id);
+            })
             ->map(function (TeamGrant $grant): EffectiveRole {
                 $roleName = $grant->permissionRole->name;
                 $teamName = $grant->team->name;
+                $reason = $grant->permissionRole->code === PermissionCatalog::ROLE_SHIFT_LEAD
+                    ? "You have the {$roleName} role because you are a designated lead of the {$teamName} team."
+                    : "You have the {$roleName} role because you are a member of the {$teamName} team.";
 
                 return new EffectiveRole(
                     roleCode: $grant->permissionRole->code,
@@ -63,7 +83,7 @@ class EffectiveRoleResolver
                     teamName: $teamName,
                     teamGrantId: (string) $grant->id,
                     eventId: $grant->event_id,
-                    reason: "You have the {$roleName} role because you are a member of the {$teamName} team.",
+                    reason: $reason,
                 );
             })
             ->values();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Teams;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
+use App\Models\DepartmentMembership;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Services\Departments\DepartmentSelfAdminAccess;
@@ -53,6 +54,15 @@ final class TeamReadController extends Controller
 
         $teams = $query->get()->map(fn (Team $team): array => $this->payload($team));
 
+        $staffTeamIds = $canAdminister
+            ? Team::query()
+                ->where('department_id', $department->id)
+                ->pluck('id')
+                ->map(fn ($id): string => (string) $id)
+                ->values()
+                ->all()
+            : $ledTeamIds;
+
         return response()->json([
             'department_id' => (string) $department->id,
             'department' => [
@@ -72,7 +82,8 @@ final class TeamReadController extends Controller
                 'led_team_ids' => $ledTeamIds,
             ],
             'teams' => $teams->values()->all(),
-            'team_staff' => $this->teamStaffPayload($ledTeamIds),
+            'team_staff' => $this->teamStaffPayload($staffTeamIds),
+            'department_staff' => $this->departmentStaffPayload($department),
         ]);
     }
 
@@ -171,6 +182,33 @@ final class TeamReadController extends Controller
                 ['team_name', 'asc'],
                 ['display_name', 'asc'],
             ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Active department members available for team assignment (M11.17).
+     *
+     * @return list<array{
+     *     staff_id: string,
+     *     display_name: string,
+     *     handle: string|null
+     * }>
+     */
+    private function departmentStaffPayload(Department $department): array
+    {
+        return DepartmentMembership::query()
+            ->active()
+            ->where('department_id', $department->id)
+            ->with('staff')
+            ->get()
+            ->map(fn (DepartmentMembership $membership): array => [
+                'staff_id' => (string) $membership->staff_id,
+                'display_name' => $membership->staff->preferred_name
+                    ?: $membership->staff->legal_name,
+                'handle' => $membership->staff->handle,
+            ])
+            ->sortBy('display_name')
             ->values()
             ->all();
     }

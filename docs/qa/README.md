@@ -65,6 +65,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-TEAM-02-department-self-admin.md`](QA-TEAM-02-department-self-admin.md) | Department lead / department administration Meridian Admin department details and team create/edit/archive/restore (default rename; non-default archive) outside Orchid/God Mode | M11.13 |
 
+## Alpha 1 Team and shift administration script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-TEAM-03-team-shift-administration.md`](QA-TEAM-03-team-shift-administration.md) | Department lead team-lead designation, team-lead staff assignment on led teams, and department/team lead shift create/maintain with documented eligibility and time-window rules outside Orchid/God Mode | M11.17 |
+
 M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
 Name Reference chips, online create/edit autosave, priority/types/responders,
 linked incidents, Field Report attach/unlink, attachment strike, and IC-lead

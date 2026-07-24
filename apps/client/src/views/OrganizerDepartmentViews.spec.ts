@@ -127,7 +127,7 @@ describe("organizer department administration", () => {
       global: { plugins: [router] },
     });
     const homeCardLabels = homeWrapper
-      .findAll(".home__card h2")
+      .findAll(".home__card h3")
       .map((heading) => heading.text());
 
     expect(homeWrapper.text()).toContain("DPW operations workspace");

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Staff;
 
 use App\Models\Staff;
+use App\Orchid\Layouts\ScopeFiltersLayout;
 use App\Orchid\Layouts\Staff\StaffListLayout;
 use Orchid\Screen\Action;
 use Orchid\Screen\Actions\Link;
@@ -13,6 +14,8 @@ use Orchid\Screen\Screen;
 
 class StaffListScreen extends Screen
 {
+    private ?ScopeFiltersLayout $scopeFilters = null;
+
     /**
      * @return array<string, mixed>
      */
@@ -20,7 +23,7 @@ class StaffListScreen extends Screen
     {
         return [
             'staff' => Staff::query()
-                ->filters()
+                ->filters($this->scopeFilters()->filters())
                 ->defaultSort('legal_name')
                 ->paginate(),
         ];
@@ -64,7 +67,17 @@ class StaffListScreen extends Screen
     public function layout(): iterable
     {
         return [
+            $this->scopeFilters(),
             StaffListLayout::class,
         ];
+    }
+
+    /**
+     * Organization / department / team narrowing shared by the query and the
+     * rendered filter controls.
+     */
+    private function scopeFilters(): ScopeFiltersLayout
+    {
+        return $this->scopeFilters ??= ScopeFiltersLayout::for(Staff::class);
     }
 }

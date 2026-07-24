@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Event;
 
 use App\Models\Event;
+use App\Orchid\Layouts\ScopeFiltersLayout;
 use App\Orchid\Layouts\Event\EventListLayout;
 use Orchid\Screen\Action;
 use Orchid\Screen\Actions\Link;
@@ -13,6 +14,8 @@ use Orchid\Screen\Screen;
 
 class EventListScreen extends Screen
 {
+    private ?ScopeFiltersLayout $scopeFilters = null;
+
     /**
      * @return array<string, mixed>
      */
@@ -21,7 +24,7 @@ class EventListScreen extends Screen
         return [
             'events' => Event::query()
                 ->with('organization')
-                ->filters()
+                ->filters($this->scopeFilters()->filters())
                 ->defaultSort('starts_at')
                 ->paginate(),
         ];
@@ -65,7 +68,17 @@ class EventListScreen extends Screen
     public function layout(): iterable
     {
         return [
+            $this->scopeFilters(),
             EventListLayout::class,
         ];
+    }
+
+    /**
+     * Organization / department / team narrowing shared by the query and the
+     * rendered filter controls.
+     */
+    private function scopeFilters(): ScopeFiltersLayout
+    {
+        return $this->scopeFilters ??= ScopeFiltersLayout::for(Event::class);
     }
 }

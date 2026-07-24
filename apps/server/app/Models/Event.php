@@ -165,6 +165,15 @@ class Event extends Model
     }
 
     /**
+     * @param  Builder<Event>  $query
+     * @return Builder<Event>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->where('organization_id', $organizationId);
+    }
+
+    /**
      * Route parameters for public apply routes ({organization:slug}/{event:slug}/apply).
      *
      * @return array{organization: Organization, event: self}

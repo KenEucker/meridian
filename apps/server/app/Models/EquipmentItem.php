@@ -170,6 +170,24 @@ class EquipmentItem extends Model
         return $query->whereNull('archived_at');
     }
 
+    /**
+     * @param  Builder<EquipmentItem>  $query
+     * @return Builder<EquipmentItem>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->where('organization_id', $organizationId);
+    }
+
+    /**
+     * @param  Builder<EquipmentItem>  $query
+     * @return Builder<EquipmentItem>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->where('department_id', $departmentId);
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;

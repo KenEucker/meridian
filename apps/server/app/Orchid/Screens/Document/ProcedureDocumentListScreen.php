@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Document;
 
 use App\Models\ProcedureDocument;
+use App\Orchid\Layouts\ScopeFiltersLayout;
 use App\Orchid\Layouts\Document\DocumentListLayout;
 use Orchid\Screen\Action;
 use Orchid\Screen\Actions\Link;
@@ -13,6 +14,8 @@ use Orchid\Screen\Screen;
 
 class ProcedureDocumentListScreen extends Screen
 {
+    private ?ScopeFiltersLayout $scopeFilters = null;
+
     /**
      * @return array<string, mixed>
      */
@@ -21,7 +24,7 @@ class ProcedureDocumentListScreen extends Screen
         return [
             'documents' => ProcedureDocument::query()
                 ->with(['organization', 'organizationScope', 'departmentScope', 'teamScope'])
-                ->filters()
+                ->filters($this->scopeFilters()->filters())
                 ->defaultSort('title')
                 ->paginate(),
         ];
@@ -63,7 +66,17 @@ class ProcedureDocumentListScreen extends Screen
     public function layout(): iterable
     {
         return [
+            $this->scopeFilters(),
             new DocumentListLayout('platform.procedure-documents.edit'),
         ];
+    }
+
+    /**
+     * Organization / department / team narrowing shared by the query and the
+     * rendered filter controls.
+     */
+    private function scopeFilters(): ScopeFiltersLayout
+    {
+        return $this->scopeFilters ??= ScopeFiltersLayout::for(ProcedureDocument::class);
     }
 }

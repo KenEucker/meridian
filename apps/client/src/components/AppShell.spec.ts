@@ -263,6 +263,41 @@ describe("AppShell fixed UI mode display", () => {
     expect(workflowLabels).not.toContain("Incidents");
   });
 
+  it("gives non-lead department members a Staff menu", async () => {
+    const wrapper = mount(AppShell, {
+      props: {
+        config: appConfigForUiMode("admin"),
+      },
+      global: { stubs: routerLinkStub },
+    });
+
+    // Rangers fixture user is a department lead: pages live in the workflows.
+    expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+    await wrapper
+      .findAll(".app-shell__department-switch button")
+      .find((button) => button.text().includes("Gate"))!
+      .trigger("click");
+
+    // Gate fixture user is a plain member, so the Staff menu carries the
+    // department pages they can use themselves.
+    const staffMenu = wrapper.get(".app-shell__staff-menu");
+    const staffLabels = staffMenu
+      .findAll(".app-shell__staff-tab")
+      .map((tab) => tab.text());
+
+    expect(staffLabels).toEqual([
+      "Documents",
+      "Shifts",
+      "Trainings",
+      "My Field Reports",
+    ]);
+    expect(
+      wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
+    ).not.toContain("Admin");
+  });
+
   it("closes the fixture user dropdown after choosing an item", async () => {
     const wrapper = mount(AppShell, {
       props: {

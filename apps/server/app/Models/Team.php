@@ -121,6 +121,25 @@ class Team extends Model
         return $query->whereNull('archived_at');
     }
 
+    /**
+     * @param  Builder<Team>  $query
+     * @return Builder<Team>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->whereHas('department', fn (Builder $department) => $department
+            ->where('organization_id', $organizationId));
+    }
+
+    /**
+     * @param  Builder<Team>  $query
+     * @return Builder<Team>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->where('department_id', $departmentId);
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;

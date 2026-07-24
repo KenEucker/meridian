@@ -627,6 +627,8 @@ class TrainingAdminHttpTest extends TestCase
             'team_id' => $team->id,
             'staff_id' => $staff->id,
             'department_membership_id' => $membership->id,
+            // shift_lead authority requires a designated lead membership (M11.17).
+            'membership_role' => $roleCode === 'shift_lead' ? 'lead' : 'member',
         ]);
 
         if ($roleCode !== 'staff') {

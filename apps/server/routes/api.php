@@ -15,10 +15,13 @@ use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
+use App\Http\Controllers\Shifts\ShiftAdminCommandController;
+use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
 use App\Http\Controllers\Teams\TeamCommandController;
 use App\Http\Controllers\Teams\TeamReadController;
+use App\Http\Controllers\Teams\TeamStaffCommandController;
 use App\Http\Controllers\Trainings\TrainingCommandController;
 use App\Http\Controllers\Trainings\TrainingReadController;
 use Illuminate\Support\Facades\Route;
@@ -103,6 +106,30 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/restore-team', [TeamCommandController::class, 'restore'])
         ->name('api.commands.restore-team');
+
+    Route::post('/commands/select-team-lead', [TeamStaffCommandController::class, 'selectTeamLead'])
+        ->name('api.commands.select-team-lead');
+
+    Route::post('/commands/remove-team-lead', [TeamStaffCommandController::class, 'removeTeamLead'])
+        ->name('api.commands.remove-team-lead');
+
+    Route::post('/commands/assign-staff-to-team', [TeamStaffCommandController::class, 'assignStaffToTeam'])
+        ->name('api.commands.assign-staff-to-team');
+
+    Route::post('/commands/remove-staff-from-team', [TeamStaffCommandController::class, 'removeStaffFromTeam'])
+        ->name('api.commands.remove-staff-from-team');
+
+    Route::post('/commands/create-shift', [ShiftAdminCommandController::class, 'create'])
+        ->name('api.commands.create-shift');
+
+    Route::post('/commands/update-shift', [ShiftAdminCommandController::class, 'update'])
+        ->name('api.commands.update-shift');
+
+    Route::post('/commands/cancel-shift', [ShiftAdminCommandController::class, 'cancel'])
+        ->name('api.commands.cancel-shift');
+
+    Route::post('/commands/restore-shift', [ShiftAdminCommandController::class, 'restore'])
+        ->name('api.commands.restore-shift');
 
     Route::post('/commands/create-policy-document', [DocumentCommandController::class, 'createPolicy'])
         ->name('api.commands.create-policy-document');
@@ -213,6 +240,12 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/departments/{department}/teams/{team}', [TeamReadController::class, 'show'])
         ->name('api.departments.teams.show');
+
+    Route::get('/departments/{department}/shifts', [ShiftAdminReadController::class, 'index'])
+        ->name('api.departments.shifts.index');
+
+    Route::get('/departments/{department}/shifts/{shift}', [ShiftAdminReadController::class, 'show'])
+        ->name('api.departments.shifts.show');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

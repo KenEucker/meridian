@@ -406,6 +406,11 @@ POST /api/commands/create-team
 POST /api/commands/update-team
 POST /api/commands/archive-team
 POST /api/commands/restore-team
+POST /api/commands/select-team-lead
+POST /api/commands/remove-team-lead
+POST /api/commands/update-shift
+POST /api/commands/cancel-shift
+POST /api/commands/restore-shift
 ```
 
 Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment publish/archive commands are not part of the Alpha 1 command surface.
@@ -415,6 +420,12 @@ Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment pu
 Organization department administration commands (`create-department`, `update-department`, `archive-department`, `restore-department`) are organizer/lead-organizer scoped through `organization.departments.manage` and preserve history via soft archive (`archived_at`).
 
 Department self-administration commands (`update-department-details`, `create-team`, `update-team`, `archive-team`, `restore-team`) are department-scoped through `department.administer` (granted to `department_lead` and `department_administration`). Default teams may be renamed but cannot be archived. Team archive/restore preserves history via soft archive (`archived_at`).
+
+Team lead designation commands (`select-team-lead`, `remove-team-lead`) are department-scoped through `department.administer`. Designation sets the team membership `membership_role` to `lead` and ensures an active team-scoped `shift_lead` grant on that team; removal returns the membership to `member` while preserving team membership. Only designated lead memberships resolve the `shift_lead` effective role, so other members of a grant-bearing team do not gain lead authority.
+
+Team staff assignment commands (`assign-staff-to-team`, `remove-staff-from-team`) are open to department `department.administer` authority and to designated leads of the target team. Removal archives the membership (`archived_at`) rather than deleting it, cannot remove the department default-team membership, and cannot leave a department membership without at least one active team membership.
+
+Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 
 Map publishing, archiving, Placement department designation, and locked-map data overrides use command-style writes because their business rules (operations-window locking, Placement-assignment validation, and elevated override authority) matter. Routine creation/editing of draft maps, camps, map locations, and map assets before the operations window may use the resource API under map permissions. Map records are not offline-writable for MVP.
 

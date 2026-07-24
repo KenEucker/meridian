@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\FiltersByAudienceScope;
 use Database\Factories\ProcedureDocumentFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -24,6 +25,7 @@ class ProcedureDocument extends Model
 {
     use AsSource;
     use Filterable;
+    use FiltersByAudienceScope;
 
     public const STATE_DRAFT = 'draft';
 
