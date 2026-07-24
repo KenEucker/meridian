@@ -1,6 +1,8 @@
-# Codex Alpha 1 Task Prompt
+# Agent Alpha 1 Task Prompt
 
-Use this prompt when asking Codex to implement one Meridian Alpha 1 task from `docs/process/meridian-alpha-1-development-plan.md`.
+Use this prompt when asking a coding agent — Claude, Codex, Cursor, or any other — to implement one Meridian Alpha 1 task from `docs/process/meridian-alpha-1-development-plan.md`.
+
+This prompt is tool-neutral. Where it refers to "the agent", substitute whichever assistant is doing the work, and attribute the result to that assistant (see [Attribution](#attribution)).
 
 ## Mission
 
@@ -109,7 +111,7 @@ At the end, provide PR-ready output with:
 - automated test evidence;
 - human QA steps or updated QA doc references;
 - traceability notes, including whether `docs/process/traceability-matrix.md` changed;
-- suggested branch name;
+- suggested branch name following [Branch naming and attribution](#branch-naming-and-attribution);
 - suggested Conventional Commit message;
 - suggested PR title;
 - suggested PR body.
@@ -129,18 +131,61 @@ The PR body must follow `.github/pull_request_template.md` and include all requi
 - Human QA Plan
 - Risks
 - Follow-up Issues
+- Authorship
+
+## Branch naming and attribution
+
+Name the branch for the tool that produced the change, then the task slice:
+
+```text
+<agent>/<task-id-slug>
+```
+
+The `<agent>` segment names the assistant that did the work, lowercased: `claude`, `codex`, `cursor`, and so on. Use `human` when a person wrote the change without assistant help.
+
+```text
+claude/m11-17-team-shift-administration
+codex/m11-16-product-training-management
+cursor/m12-04-node-pairing-token
+human/fix-credential-blocked-after-waiver-expiry
+```
+
+For changes that are not driven by an Alpha 1 task ID, keep the agent prefix and describe the slice instead, following the slice-type vocabulary in `docs/process/meridian-development-process.md` section 7.1 (`feature`, `fix`, `test`, `docs`):
+
+```text
+claude/docs-process-agent-attribution
+human/fix-shift-overlap-warning
+```
+
+Do not use a prefix that names a different tool than the one that actually did the work. Branch names are the first place a reviewer looks to understand how a change was produced.
+
+## Attribution
+
+Attribute assistant-produced work in three places, always naming the actual tool:
+
+1. **Branch prefix**, as above.
+2. **Commit trailer**, on every commit the assistant authors:
+
+   ```text
+   Co-Authored-By: <Assistant Name> <noreply@example.com>
+   ```
+
+   For example `Co-Authored-By: Claude <noreply@anthropic.com>`.
+3. **PR body `Authorship` section**, stating whether the changeset was written by a human, by a human working with an assistant, or by an assistant under human review. Name the assistant.
+
+Never attribute work to a tool that did not produce it, and never omit assistant involvement.
 
 ## GitHub operations
 
-When creating, updating, reviewing, or publishing pull requests, use the GitHub connector (`mcp__codex_apps__github_*`) as the required path.
+Use whichever GitHub integration the current environment actually provides:
 
-Do not call `gh`, including `gh auth status`, as a prerequisite or blocker unless:
-1. the GitHub connector fails for the requested operation; or
-2. the user explicitly asks to use `gh`.
+- If a GitHub connector or MCP server is available (for example a `github_*` tool surface), prefer it.
+- If the environment provides the GitHub CLI instead, use `gh`. This is the normal path for terminal-based assistants.
+- If neither is available, stop and report the blocker rather than guessing.
 
-A local GitHub CLI authentication failure never blocks connector-based GitHub work.
+Do not treat any single integration as mandatory. A failure or absence of one path is a reason to use another, not a reason to stop, and a local `gh` authentication failure never blocks connector-based work.
 
-If I say "send it", that means I want you to push the changes and create the PR. It should be a review ready PR, not a draft, and I expect you to the use the github connector. I may have to ask you to make reviwsions before this point, so do not automatically push changes and create the PR before I ask.
+If I say "send it", that means I want you to push the changes and create the PR. It should be a review-ready PR, not a draft, using whichever GitHub integration this environment provides. I may ask for revisions before that point, so do not push changes or create the PR before I ask.
 
 You may have to make changes to the PR title or PR body, in order to pass validation, as this has been happening a lot. If you have to do this, you will need to also submit a chore commit in order for the updated title/body to be included in a new run of the actions.
 Update the PR title/body first, then push the chore commit, so the new pull request event evaluates the corrected metadata.

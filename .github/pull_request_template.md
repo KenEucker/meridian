@@ -51,3 +51,19 @@
 # Follow-up Issues
 
 <!-- Linked follow-up issues or "None." -->
+
+# Authorship
+
+<!--
+State how this changeset was produced and name any assistant involved. Pick one:
+
+- Written by a human without assistant help.
+- Written by a human with assistance from <assistant>.
+- Written by <assistant> under human review.
+-->
+
+- [ ] This changeset was written by a human without assistant help.
+- [ ] This changeset was written by a human with assistance from an LLM coding assistant (name it below).
+- [ ] This changeset was written by an LLM coding assistant under human review (name it below).
+
+Assistant used: <!-- e.g. Claude, Codex, Cursor, or "None" -->

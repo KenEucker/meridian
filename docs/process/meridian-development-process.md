@@ -476,6 +476,16 @@ test/fr-incident-link-coverage
 docs/development-process
 ```
 
+When a coding agent produces the change, prefix the branch with the tool that did the work instead of the slice type, so a reviewer can see how the change was produced before opening it:
+
+```text
+claude/m11-17-team-shift-administration
+codex/m11-16-product-training-management
+cursor/m12-04-node-pairing-token
+```
+
+Name the tool that actually did the work — never a different one. Assistant attribution also belongs in the commit trailer and the PR `Authorship` section; see `docs/process/agent-alpha-task-prompt.md`.
+
 ### 7.2 Commit style
 
 Use Conventional Commit messages that name the changed behavior.
@@ -1947,8 +1957,8 @@ The milestone-0 process baseline is represented by:
 - `docs/process/traceability-matrix.md`;
 - `docs/qa/QA-BOOT-01-fresh-checkout-boots.md`;
 - `docs/process/meridian-alpha-1-development-plan.md`;
-- `docs/process/codex-alpha-task-prompt.md`.
+- `docs/process/agent-alpha-task-prompt.md`.
 
-After milestone 0, select the next PR-sized task from `docs/process/meridian-alpha-1-development-plan.md`. For Codex or another LLM, use `docs/process/codex-alpha-task-prompt.md` and provide exactly one task ID plus any course-correction notes.
+After milestone 0, select the next PR-sized task from `docs/process/meridian-alpha-1-development-plan.md`. For Claude, Codex, Cursor, or another coding agent, use `docs/process/agent-alpha-task-prompt.md` and provide exactly one task ID plus any course-correction notes.
 
 Do not ask an implementation agent to infer the next slice from this document alone. The Alpha 1 development plan is the current task sequence.

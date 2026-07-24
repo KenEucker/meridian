@@ -25,6 +25,7 @@ REQUIRED_SECTIONS = [
     "Human QA Plan",
     "Risks",
     "Follow-up Issues",
+    "Authorship",
 ]
 
 REQUIREMENT_ID_RE = re.compile(

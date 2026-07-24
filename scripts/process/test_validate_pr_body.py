@@ -21,6 +21,7 @@ REQUIRED_SECTIONS = [
     "Human QA Plan",
     "Risks",
     "Follow-up Issues",
+    "Authorship",
 ]
 
 
@@ -53,6 +54,17 @@ def expect_invalid(traceability):
         raise AssertionError("Expected PR body validation to fail.")
 
 
+def expect_missing_section_invalid(section):
+    sections = [name for name in REQUIRED_SECTIONS if name != section]
+    pr_body = "\n\n".join(
+        f"# {name}\n\n{'- POL-028' if name == 'Traceability' else 'Present.'}"
+        for name in sections
+    )
+    result = validate(pr_body)
+    if result.returncode == 0:
+        raise AssertionError(f"Expected a body without '{section}' to fail validation.")
+
+
 def main():
     # POL-028 was a valid ID rejected by the former hard-coded prefix list.
     expect_valid("- POL-028")
@@ -60,6 +72,8 @@ def main():
     expect_valid("- Technical spec: Sections 21.7 and 21.12")
     # A syntactically similar, but undocumented, ID is not traceability.
     expect_invalid("- UNKNOWN-999")
+    # Every changeset must declare whether an assistant helped produce it.
+    expect_missing_section_invalid("Authorship")
     print("PR body validator regression checks passed.")
 
 

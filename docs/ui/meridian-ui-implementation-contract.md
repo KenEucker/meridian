@@ -1499,7 +1499,7 @@ Automated tooling should be configured separately in CI. If not configured yet, 
 
 ## 21. LLM Code-Generation Rules
 
-When using this document as input for Codex or another coding agent:
+When using this document as input for Claude, Codex, Cursor, or another coding agent:
 
 1. Generate product workflows in the shared Vue client for the fixed Admin, Field, and Kiosk artifacts; use Orchid only for God Mode / repair tooling; use Capacitor/Electron only as platform packaging wrappers.
 2. Do not invent new statuses.
