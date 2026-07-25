@@ -59,6 +59,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-TRAIN-01-training-management.md`](QA-TRAIN-01-training-management.md) | Department/organizer Meridian Admin training create/edit, prerequisite/expiration setup, scheduled-attendance signup/roster, trainer/lead completion recording, and completion spreadsheet import outside Orchid/God Mode | M11.16 |
 
+## Alpha 1 Equipment inventory script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-EQUIP-01-equipment-inventory-setup.md`](QA-EQUIP-01-equipment-inventory-setup.md) | Department logistics/administration Meridian Admin equipment inventory create/edit/archive/restore and bulk CSV import before operations, feeding Logistics checkout/check-in, outside Orchid/God Mode | M11.18 |
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |

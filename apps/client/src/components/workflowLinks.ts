@@ -260,6 +260,19 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       });
     }
 
+    // Equipment inventory setup is department logistics/administration work
+    // that feeds the Logistics checkout/check-in workflow (M11.18).
+    if (department.isDepartmentLead || department.capabilities.hasLogistics) {
+      departmentPages.push({
+        label: "Equipment",
+        description: "Department equipment inventory and bulk CSV import.",
+        to: {
+          name: "events.departments.equipment.index",
+          params: departmentRouteParams.value,
+        },
+      });
+    }
+
     departmentPages.push({
       label: "My Field Reports",
       description: "Field report author workspace.",

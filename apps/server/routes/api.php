@@ -9,6 +9,8 @@ use App\Http\Controllers\Documents\DocumentCommandController;
 use App\Http\Controllers\Documents\DocumentExportController;
 use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
+use App\Http\Controllers\Equipment\EquipmentInventoryCommandController;
+use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -46,6 +48,21 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/return-equipment', [EquipmentCommandController::class, 'returnEquipment'])
         ->name('api.commands.return-equipment');
+
+    Route::post('/commands/create-equipment-item', [EquipmentInventoryCommandController::class, 'create'])
+        ->name('api.commands.create-equipment-item');
+
+    Route::post('/commands/update-equipment-item', [EquipmentInventoryCommandController::class, 'update'])
+        ->name('api.commands.update-equipment-item');
+
+    Route::post('/commands/archive-equipment-item', [EquipmentInventoryCommandController::class, 'archive'])
+        ->name('api.commands.archive-equipment-item');
+
+    Route::post('/commands/restore-equipment-item', [EquipmentInventoryCommandController::class, 'restore'])
+        ->name('api.commands.restore-equipment-item');
+
+    Route::post('/commands/import-equipment-inventory', [EquipmentInventoryCommandController::class, 'import'])
+        ->name('api.commands.import-equipment-inventory');
 
     Route::post('/commands/submit-field-report', [FieldReportCommandController::class, 'submit'])
         ->name('api.commands.submit-field-report');
@@ -234,6 +251,9 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/departments/{department}/trainings/{training}', [TrainingReadController::class, 'show'])
         ->name('api.departments.trainings.show');
+
+    Route::get('/departments/{department}/equipment', [EquipmentInventoryReadController::class, 'index'])
+        ->name('api.departments.equipment.index');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
         ->name('api.departments.teams.index');

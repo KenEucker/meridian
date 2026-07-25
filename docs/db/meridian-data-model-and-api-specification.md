@@ -369,6 +369,11 @@ POST /api/commands/mark-no-show
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
 POST /api/commands/return-equipment
+POST /api/commands/create-equipment-item
+POST /api/commands/update-equipment-item
+POST /api/commands/archive-equipment-item
+POST /api/commands/restore-equipment-item
+POST /api/commands/import-equipment-inventory
 POST /api/commands/submit-field-report
 POST /api/commands/append-field-report
 POST /api/commands/create-incident
@@ -424,6 +429,8 @@ Department self-administration commands (`update-department-details`, `create-te
 Team lead designation commands (`select-team-lead`, `remove-team-lead`) are department-scoped through `department.administer`. Designation sets the team membership `membership_role` to `lead` and ensures an active team-scoped `shift_lead` grant on that team; removal returns the membership to `member` while preserving team membership. Only designated lead memberships resolve the `shift_lead` effective role, so other members of a grant-bearing team do not gain lead authority.
 
 Team staff assignment commands (`assign-staff-to-team`, `remove-staff-from-team`) are open to department `department.administer` authority and to designated leads of the target team. Removal archives the membership (`archived_at`) rather than deleting it, cannot remove the department default-team membership, and cannot leave a department membership without at least one active team membership.
+
+Equipment inventory setup commands (`create-equipment-item`, `update-equipment-item`, `archive-equipment-item`, `restore-equipment-item`, `import-equipment-inventory`) build the department inventory that the Logistics checkout/check-in commands consume. They are department-scoped and event-independent, authorized by `department.equipment.manage` (`department_logistics`) or `department.administer` (`department_lead`, `department_administration`) on a team in the target department. Equipment without a department stays Orchid/God Mode repair tooling, and no command accepts a department other than the one that owns the item, so department-to-department allotments remain excluded by EQUIP-006. New equipment is always created `available`; inventory setup may set only `available`, `missing`, or `damaged`, because `checked_out` and `returned` are produced by `checkout-equipment`/`return-equipment`. State changes and archiving are refused while an item has an open checkout. Asset tags are unique among equipment in a department, which lets a re-run of the same import skip rows instead of duplicating equipment. Archiving is a soft transition on `archived_at` that preserves checkout history. `import-equipment-inventory` accepts spreadsheet CSV text with a required `name` header column plus optional `asset_tag` and `serial_number` columns, takes event scope from the request rather than the file, processes each row independently, and returns per-row imported/skipped results with reasons.
 
 Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 
@@ -1959,6 +1966,15 @@ Rules:
 - checkout department scope is derived from the shift when present, otherwise from the equipment item's event/department scope
 - `department_logistics` authorizes equipment checkout/check-in
 - department-to-department allotments and full custody chains are out of scope
+- inventory setup (create/edit/archive/restore/import of `equipment_items`) is a
+  separate product path from checkout: it is department-scoped and
+  event-independent, authorized by `department.equipment.manage` or
+  `department.administer`, never writes `checked_out`/`returned`, and refuses to
+  change state or archive an item that has an open checkout
+- `asset_tag` is unique among equipment items in a department, so bulk import is
+  re-runnable without duplicating equipment
+- equipment is archived (`archived_at`), never deleted, so checkout history and
+  historical labels survive
 
 ---
 

@@ -381,10 +381,18 @@ function onAddStaff(): void {
     "Add Staff is available to Logistics leads; the create workflow is scaffolded.";
 }
 
-function onAddEquipment(): void {
-  status.value =
-    "Add Equipment is available to Logistics leads; the create workflow is scaffolded.";
-}
+/**
+ * Equipment inventory setup lives on its own `department.equipment` page
+ * (M11.18); the Logistics Window stays the service station that checks that
+ * inventory out and back in.
+ */
+const equipmentInventoryRoute = computed(() => ({
+  name: "events.departments.equipment.index",
+  params: {
+    eventId: desk.value.context.eventId,
+    departmentId: desk.value.context.departmentId,
+  },
+}));
 </script>
 
 <template>
@@ -401,8 +409,8 @@ function onAddEquipment(): void {
     <template #actions>
       <div v-if="canManageLogisticsCatalog" class="logistics__heading-actions">
         <WorkflowActionButton @click="onAddStaff">Add Staff</WorkflowActionButton>
-        <WorkflowActionButton @click="onAddEquipment">
-          Add Equipment
+        <WorkflowActionButton :to="equipmentInventoryRoute">
+          Manage Equipment
         </WorkflowActionButton>
       </div>
     </template>
