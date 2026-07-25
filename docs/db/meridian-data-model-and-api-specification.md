@@ -339,6 +339,32 @@ Department operations read models are purpose-built and separate:
 
 Incident APIs must return data only to IC-authorized users.
 
+The incident list (`GET /api/events/{event}/incidents`) accepts explicit search,
+filter, and sort query parameters and echoes the applied selection plus the
+event's filter options:
+
+- `search` matches the incident number, title, location fields, incident type
+  labels, responder names, active timeline notes, actively attached Field
+  Reports, and Name Reference tokens. A leading `@` or `#` is stripped, so Name
+  Reference chips and tag pills route through the same list search. Stricken
+  notes and unlinked Field Reports never match.
+- `state` is `active` (default, excludes Closed), `all`, or one canonical
+  incident status.
+- `priority` is `all` (default) or one priority label.
+- `type` is `all` (default) or one incident type label, matched
+  case-insensitively.
+- `responder` is `all` (default) or one `staff_id`.
+- `started_from` and `started_to` bound `started_at`; a bare date upper bound
+  covers that whole day.
+- `sort` is one of `updated` (default), `incident`, `state`, `priority`,
+  `started`, or `location`, with `direction` `asc` or `desc`. State and priority
+  sort by documented operational order, not alphabetically.
+
+The IC permission check runs before any parameter is parsed, so filters never
+widen visibility and an unauthorized actor learns nothing from a filtered
+request. Unknown filter values are refused with 422 rather than silently falling
+back to a default.
+
 Incident PDF print (`GET /api/events/{event}/incidents/{incident}/pdf`) is
 server-generated, online-only, and restricted to IC leads (`incidents.print`).
 Successful exports are audited. Incidents remain excluded from general
@@ -2144,6 +2170,9 @@ Rules:
 - incidents are not merged away
 - incidents may be edited regardless of status
 - status affects filtering/status, not editability
+- incident list search and filters are a read concern only: they narrow rows the
+  requesting user may already see and never grant, widen, or cross-event
+  visibility (see section 5.1)
 - priority label, incident type labels, and involved/responding staff are current incident fields and their changes are preserved in history
 - incident timestamps are not retroactively changed
 - incident title edits create timeline entries

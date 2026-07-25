@@ -458,6 +458,54 @@ export function listIncidentsForSession(
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+/**
+ * Incident type labels in use for this event, for list filter controls
+ * (M11.19; UI contract 15.1).
+ */
+export function incidentTypeOptionsForSession(
+  context: IncidentSessionContext | null,
+): string[] {
+  const names = new Map<string, string>();
+
+  for (const incident of listIncidentsForSession(context)) {
+    for (const name of incident.incidentTypeNames) {
+      const key = name.toLowerCase();
+
+      if (!names.has(key)) {
+        names.set(key, name);
+      }
+    }
+  }
+
+  return [...names.values()].sort((left, right) =>
+    left.localeCompare(right, undefined, { sensitivity: "base" }),
+  );
+}
+
+/**
+ * Responders attached to this event's incidents, for list filter controls
+ * (M11.19; UI contract 15.1).
+ */
+export function incidentResponderOptionsForSession(
+  context: IncidentSessionContext | null,
+): IncidentResponder[] {
+  const responders = new Map<string, IncidentResponder>();
+
+  for (const incident of listIncidentsForSession(context)) {
+    for (const responder of incident.responders) {
+      if (!responders.has(responder.staffId)) {
+        responders.set(responder.staffId, responder);
+      }
+    }
+  }
+
+  return [...responders.values()].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName, undefined, {
+      sensitivity: "base",
+    }),
+  );
+}
+
 export function listFieldReportsForSession(
   context: IncidentSessionContext | null,
 ): ImsFieldReportListItem[] {
@@ -1412,6 +1460,9 @@ function incidentMatchesSearch(
     return true;
   }
 
+  // Mirrors the server list search (M11.19): the incident record, its active
+  // notes, and its attached Field Reports. Stricken history stays out of search
+  // for the same reason it stays out of the default timeline.
   const searchableText = [
     incident.incidentNumber,
     incident.title,
@@ -1420,6 +1471,14 @@ function incidentMatchesSearch(
     incident.locationDetails ?? "",
     ...incident.incidentTypeNames,
     ...incident.responders.map((responder) => responder.displayName),
+    ...incident.timelineEntries
+      .filter((entry) => !entry.strickenAt)
+      .map((entry) => entry.body ?? ""),
+    ...incident.attachedFieldReports.flatMap((report) => [
+      report.displayNumber,
+      report.title,
+      report.body,
+    ]),
   ].join(" ").toLowerCase();
 
   return (

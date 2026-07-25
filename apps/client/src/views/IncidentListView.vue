@@ -12,6 +12,8 @@ import {
   canEditIncident,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
+  incidentResponderOptionsForSession,
+  incidentTypeOptionsForSession,
   resolveIncidentListOpenMode,
   listIncidentsForSession,
   resolveIncidentSession,
@@ -44,6 +46,12 @@ const stateFilter = computed(() =>
 const priorityFilter = computed(() =>
   typeof route.query.priority === "string" ? route.query.priority : "all",
 );
+const typeFilter = computed(() =>
+  typeof route.query.type === "string" ? route.query.type : "all",
+);
+const responderFilter = computed(() =>
+  typeof route.query.responder === "string" ? route.query.responder : "all",
+);
 const shiftFilter = computed(() =>
   route.query.shift === "current" ? "current" : "all",
 );
@@ -55,13 +63,35 @@ const sortDirection = computed(() =>
 );
 const searchDraft = ref(searchQuery.value);
 const listOpenMode = ref<IncidentListOpenMode>(resolveIncidentListOpenMode());
+const typeOptions = computed(() => incidentTypeOptionsForSession(session.value));
+const responderOptions = computed(() =>
+  incidentResponderOptionsForSession(session.value),
+);
 const incidents = computed(() => {
   return listIncidentsForSession(session.value, searchQuery.value)
     .filter((incident) => matchesStateFilter(incident, stateFilter.value))
     .filter((incident) => matchesPriorityFilter(incident, priorityFilter.value))
+    .filter((incident) => matchesTypeFilter(incident, typeFilter.value))
+    .filter((incident) =>
+      matchesResponderFilter(incident, responderFilter.value),
+    )
     .filter((incident) => matchesShiftFilter(incident, shiftFilter.value))
     .sort(compareIncidents);
 });
+const hasNarrowedList = computed(
+  () =>
+    searchQuery.value !== "" ||
+    stateFilter.value !== "active" ||
+    priorityFilter.value !== "all" ||
+    typeFilter.value !== "all" ||
+    responderFilter.value !== "all" ||
+    shiftFilter.value !== "all",
+);
+const resultSummary = computed(() =>
+  incidents.value.length === 1
+    ? "1 incident matches the current filters."
+    : `${incidents.value.length} incidents match the current filters.`,
+);
 
 watch(searchQuery, (value) => {
   searchDraft.value = value;
@@ -116,6 +146,30 @@ function onPriorityFilterChange(event: Event): void {
   });
 }
 
+function onTypeFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      type: target.value === "all" ? undefined : target.value,
+    },
+  });
+}
+
+function onResponderFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      responder: target.value === "all" ? undefined : target.value,
+    },
+  });
+}
+
 function onShiftFilterChange(event: Event): void {
   const target = event.target as HTMLSelectElement;
 
@@ -164,6 +218,22 @@ function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
 
 function matchesPriorityFilter(incident: ImsIncident, filter: string): boolean {
   return filter === "all" || incident.priorityLabel === filter;
+}
+
+function matchesTypeFilter(incident: ImsIncident, filter: string): boolean {
+  return (
+    filter === "all" ||
+    incident.incidentTypeNames.some(
+      (name) => name.toLowerCase() === filter.toLowerCase(),
+    )
+  );
+}
+
+function matchesResponderFilter(incident: ImsIncident, filter: string): boolean {
+  return (
+    filter === "all" ||
+    incident.responders.some((responder) => responder.staffId === filter)
+  );
 }
 
 function activeShiftWindow():
@@ -378,6 +448,34 @@ async function onSearchSubmit(): Promise<void> {
           <option value="Routine">Routine</option>
         </select>
 
+        <label for="ims-list-type">Type</label>
+        <select
+          id="ims-list-type"
+          :value="typeFilter"
+          @change="onTypeFilterChange"
+        >
+          <option value="all">All types</option>
+          <option v-for="name in typeOptions" :key="name" :value="name">
+            {{ name }}
+          </option>
+        </select>
+
+        <label for="ims-list-responder">Responder</label>
+        <select
+          id="ims-list-responder"
+          :value="responderFilter"
+          @change="onResponderFilterChange"
+        >
+          <option value="all">All responders</option>
+          <option
+            v-for="responder in responderOptions"
+            :key="responder.staffId"
+            :value="responder.staffId"
+          >
+            {{ responder.displayName }}
+          </option>
+        </select>
+
         <label for="ims-list-shift">Shift</label>
         <select
           id="ims-list-shift"
@@ -400,13 +498,20 @@ async function onSearchSubmit(): Promise<void> {
         </select>
       </form>
 
-      <p
-        v-if="incidents.length === 0"
-        class="ims-list__empty"
-        role="status"
-      >
+      <p class="ims-list__summary" role="status">
+        <span>{{ resultSummary }}</span>
+        <RouterLink
+          v-if="hasNarrowedList"
+          class="ims-list__reset-filters"
+          :to="{ name: 'ims.incidents.index' }"
+        >
+          Reset filters
+        </RouterLink>
+      </p>
+
+      <p v-if="incidents.length === 0" class="ims-list__empty">
         {{
-          searchQuery
+          hasNarrowedList
             ? "No incidents match this search."
             : "No incidents are recorded for this event."
         }}
@@ -596,9 +701,21 @@ async function onSearchSubmit(): Promise<void> {
   color: var(--m-text-muted);
 }
 
+.ims-list__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
 .ims-list__restricted a,
 .ims-list__incident-link,
 .ims-list__search-context a,
+.ims-list__reset-filters,
 .ims-list__clear-search,
 .ims-list__table thead a {
   color: var(--m-action-secondary-bg);
@@ -611,6 +728,7 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__search-form input:focus-visible,
 .ims-list__search-form button:focus-visible,
 .ims-list__filters select:focus-visible,
+.ims-list__reset-filters:focus-visible,
 .ims-list__clear-search:focus-visible,
 .ims-list__table thead a:focus-visible {
   outline: 3px solid var(--m-focus-ring);

@@ -40,14 +40,16 @@ final class FieldReportPhotoProcessor
             );
         }
 
-        $image = @imagecreatefromstring($bytes);
-        if ($image === false) {
-            throw new FieldReportPhotoProcessingException(
-                'Unable to decode this image. Use a JPEG, PNG, or WebP photo.'
-            );
-        }
+        $restoreMemoryLimit = $this->reserveMemoryFor($bytes);
 
         try {
+            $image = @imagecreatefromstring($bytes);
+            if ($image === false) {
+                throw new FieldReportPhotoProcessingException(
+                    'Unable to decode this image. Use a JPEG, PNG, or WebP photo.'
+                );
+            }
+
             $sourceWidth = imagesx($image);
             $sourceHeight = imagesy($image);
             [$width, $height] = $this->fitDimensions($sourceWidth, $sourceHeight);
@@ -91,8 +93,15 @@ final class FieldReportPhotoProcessor
                 'checksum_sha256' => hash('sha256', $encodedBytes),
             ];
         } finally {
-            if (is_resource($image) || $image instanceof \GdImage) {
+            if (isset($image) && ($image instanceof \GdImage || is_resource($image))) {
                 imagedestroy($image);
+                unset($image);
+            }
+
+            if ($restoreMemoryLimit !== null) {
+                // Best effort: PHP refuses a limit below the memory still held,
+                // in which case the raise stays for the rest of this process.
+                @ini_set('memory_limit', $restoreMemoryLimit);
             }
         }
     }
@@ -155,6 +164,100 @@ final class FieldReportPhotoProcessor
     private function isGifBytes(string $bytes): bool
     {
         return str_starts_with($bytes, 'GIF87a') || str_starts_with($bytes, 'GIF89a');
+    }
+
+    /**
+     * Reserve enough memory to decode, resize, and re-encode this photo.
+     *
+     * GD bitmaps cost 4 bytes per pixel and count against `memory_limit`, so a
+     * routine 12 MP phone photo needs more than PHP's 128 MB default: the
+     * decoded source, the resized canvas, and the RGBA copy the encoder builds
+     * are all resident at once. Without this the request dies with a fatal
+     * allocation error instead of a handled response, so raise the limit for
+     * the duration of one photo and refuse anything above the ceiling.
+     *
+     * @return string|null the previous `memory_limit` when it was raised
+     */
+    private function reserveMemoryFor(string $bytes): ?string
+    {
+        $size = @getimagesizefromstring($bytes);
+
+        if (! is_array($size)) {
+            // Undecodable header; imagecreatefromstring reports the real error.
+            return null;
+        }
+
+        $width = (int) ($size[0] ?? 0);
+        $height = (int) ($size[1] ?? 0);
+
+        if ($width <= 0 || $height <= 0) {
+            return null;
+        }
+
+        $sourcePixels = $width * $height;
+
+        if ($sourcePixels > FieldReportPhotoLimits::MAX_SOURCE_PIXELS) {
+            throw new FieldReportPhotoProcessingException(sprintf(
+                'This photo is %s by %s pixels, above the %d megapixel limit for Field Report photos.',
+                $width,
+                $height,
+                intdiv(FieldReportPhotoLimits::MAX_SOURCE_PIXELS, 1_000_000),
+            ));
+        }
+
+        [$fitWidth, $fitHeight] = $this->fitDimensions($width, $height);
+
+        $required = (int) ceil(
+            (memory_get_usage()
+                + ($sourcePixels * 4)
+                + ($fitWidth * $fitHeight * 4 * 2)
+                + (strlen($bytes) * 2)
+            ) * 1.25
+        ) + FieldReportPhotoLimits::MEMORY_HEADROOM_BYTES;
+
+        $currentLimit = $this->currentMemoryLimitBytes();
+
+        if ($currentLimit === null || $currentLimit >= $required) {
+            return null;
+        }
+
+        if ($required > FieldReportPhotoLimits::MEMORY_CEILING_BYTES) {
+            throw new FieldReportPhotoProcessingException(
+                'This photo is too large for this server to process. Use a smaller photo.'
+            );
+        }
+
+        $previous = ini_get('memory_limit');
+
+        if (@ini_set('memory_limit', (string) $required) === false) {
+            throw new FieldReportPhotoProcessingException(
+                'This photo is too large for this server to process. Use a smaller photo.'
+            );
+        }
+
+        return is_string($previous) ? $previous : null;
+    }
+
+    /**
+     * @return int|null null when memory is unlimited
+     */
+    private function currentMemoryLimitBytes(): ?int
+    {
+        $limit = trim((string) ini_get('memory_limit'));
+
+        if ($limit === '' || $limit === '-1') {
+            return null;
+        }
+
+        $unit = strtolower(substr($limit, -1));
+        $value = (int) $limit;
+
+        return match ($unit) {
+            'g' => $value * 1024 * 1024 * 1024,
+            'm' => $value * 1024 * 1024,
+            'k' => $value * 1024,
+            default => $value,
+        };
     }
 
     /**

@@ -202,6 +202,84 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     );
   });
 
+  it("filters incidents by incident type and responder", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents");
+
+    const typeOptions = wrapper
+      .get("#ims-list-type")
+      .findAll("option")
+      .map((option) => option.text());
+    expect(typeOptions).toContain("Medical");
+    expect(typeOptions).toContain("Radio");
+
+    await wrapper.get("#ims-list-type").setValue("Medical");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.type).toBe("Medical");
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+
+    await router.push("/ims/incidents");
+    await flushPromises();
+
+    const responderOptions = wrapper
+      .get("#ims-list-responder")
+      .findAll("option")
+      .map((option) => option.text());
+    expect(responderOptions).toContain("Vera Ranger");
+
+    await wrapper
+      .get("#ims-list-responder")
+      .setValue("22222222-2222-4222-8222-222222222201");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+  });
+
+  it("searches incident notes and attached Field Reports from the list", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+    linkFieldReportForSession(
+      IC_OPERATOR_SESSION,
+      "incident-gate-medical",
+      "field-report-radio-relay",
+    );
+
+    const { wrapper } = await mountAt("/ims/incidents?search=west-side relay");
+
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+
+    const notes = await mountAt("/ims/incidents?search=signal reports");
+
+    expect(notes.wrapper.text()).toContain("Radio relay check");
+    expect(notes.wrapper.text()).not.toContain("Medical assist near Gate A");
+  });
+
+  it("summarizes narrowed results and offers a reset back to the default list", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents");
+
+    expect(wrapper.text()).toContain("2 incidents match the current filters.");
+    expect(findLinkByText(wrapper, "Reset filters")).toBeUndefined();
+
+    await wrapper.get("#ims-list-priority").setValue("Serious");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("1 incident matches the current filters.");
+
+    const reset = findLinkByText(wrapper, "Reset filters");
+    expect(reset).toBeDefined();
+    await reset?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.priority).toBeUndefined();
+    expect(wrapper.text()).toContain("2 incidents match the current filters.");
+  });
+
   it("renders the IC Field Reports list with cross-links, filters, and sorting", async () => {
     installIncidentSession(IC_OPERATOR_SESSION);
     linkFieldReportForSession(
