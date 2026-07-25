@@ -202,6 +202,228 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     );
   });
 
+  it("filters incidents by incident type and responder", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents");
+
+    const typeOptions = wrapper
+      .get("#ims-list-type")
+      .findAll("option")
+      .map((option) => option.text());
+    expect(typeOptions).toContain("Medical");
+    expect(typeOptions).toContain("Radio");
+
+    await wrapper.get("#ims-list-type").setValue("Medical");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.type).toBe("Medical");
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+
+    await router.push("/ims/incidents");
+    await flushPromises();
+
+    const responderOptions = wrapper
+      .get("#ims-list-responder")
+      .findAll("option")
+      .map((option) => option.text());
+    expect(responderOptions).toContain("Vera Ranger");
+
+    await wrapper
+      .get("#ims-list-responder")
+      .setValue("22222222-2222-4222-8222-222222222201");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+  });
+
+  it("searches incident notes and attached Field Reports from the list", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+    linkFieldReportForSession(
+      IC_OPERATOR_SESSION,
+      "incident-gate-medical",
+      "field-report-radio-relay",
+    );
+
+    const { wrapper } = await mountAt("/ims/incidents?search=west-side relay");
+
+    expect(wrapper.text()).toContain("Medical assist near Gate A");
+    expect(wrapper.text()).not.toContain("Radio relay check");
+
+    const notes = await mountAt("/ims/incidents?search=signal reports");
+
+    expect(notes.wrapper.text()).toContain("Radio relay check");
+    expect(notes.wrapper.text()).not.toContain("Medical assist near Gate A");
+  });
+
+  it("summarizes narrowed results and offers a reset back to the default list", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents");
+
+    expect(wrapper.text()).toContain("2 incidents match the current filters.");
+    expect(findLinkByText(wrapper, "Reset filters")).toBeUndefined();
+
+    await wrapper.get("#ims-list-priority").setValue("Serious");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("1 incident matches the current filters.");
+
+    const reset = findLinkByText(wrapper, "Reset filters");
+    expect(reset).toBeDefined();
+    await reset?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.priority).toBeUndefined();
+    expect(wrapper.text()).toContain("2 incidents match the current filters.");
+  });
+
+  it("shows no page controls while the whole result fits on one page", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents?state=all");
+
+    expect(wrapper.text()).toContain("3 incidents match the current filters.");
+    expect(wrapper.text()).not.toContain("Page 1 of");
+    expect(wrapper.find(".ims-list__pagination").exists()).toBe(false);
+
+    await wrapper.get("#ims-list-page-size").setValue("10");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.per_page).toBe("10");
+    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(3);
+  });
+
+  it("moves between pages without losing the active filters", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    for (let index = 0; index < 12; index += 1) {
+      createIncidentFromAutosaveForm(IC_OPERATOR_SESSION, {
+        ...blankIncidentAutosaveForm(),
+        title: `Paged incident ${index}`,
+      });
+    }
+
+    const { wrapper, router } = await mountAt("/ims/incidents?per_page=10");
+
+    // Two active fixture incidents plus the twelve created above; the closed
+    // fixture incident stays excluded by the default active-state filter.
+    expect(wrapper.text()).toContain("14 incidents match the current filters.");
+    expect(wrapper.text()).toContain("Page 1 of 2");
+    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(10);
+
+    const next = findLinkByText(wrapper, "Next");
+    expect(next).toBeDefined();
+    await next?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.per_page).toBe("10");
+    expect(wrapper.text()).toContain("Page 2 of 2");
+    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(4);
+    expect(findLinkByText(wrapper, "Next")).toBeUndefined();
+
+    const previous = findLinkByText(wrapper, "Previous");
+    expect(previous).toBeDefined();
+    await previous?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Page 1 of 2");
+  });
+
+  it("returns to the first page when a filter narrows the list", async () => {
+    installIncidentSession(IC_OPERATOR_SESSION);
+
+    for (let index = 0; index < 12; index += 1) {
+      createIncidentFromAutosaveForm(IC_OPERATOR_SESSION, {
+        ...blankIncidentAutosaveForm(),
+        title: `Paged incident ${index}`,
+      });
+    }
+
+    const { wrapper, router } = await mountAt("/ims/incidents?per_page=10&page=2");
+
+    expect(wrapper.text()).toContain("Page 2 of 2");
+
+    await wrapper.get("#ims-list-priority").setValue("Serious");
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.page).toBeUndefined();
+    expect(wrapper.text()).toContain("1 incident matches the current filters.");
+  });
+
+  it("saves, reapplies, and deletes an incident list filter preset", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper, router } = await mountAt("/ims/incidents?priority=Serious");
+
+    expect(wrapper.text()).toContain("1 incident matches the current filters.");
+
+    await wrapper.get("#ims-list-preset-name").setValue("Serious watch");
+    await wrapper.get("form.ims-list__presets").trigger("submit");
+    await flushPromises();
+
+    const options = wrapper
+      .get("#ims-list-preset")
+      .findAll("option")
+      .map((option) => option.text());
+    expect(options).toContain("Serious watch");
+
+    await router.push("/ims/incidents");
+    await flushPromises();
+    expect(wrapper.text()).toContain("2 incidents match the current filters.");
+
+    const presetId = wrapper
+      .get("#ims-list-preset")
+      .findAll("option")
+      .find((option) => option.text() === "Serious watch")
+      ?.attributes("value");
+    expect(presetId).toBeDefined();
+
+    await wrapper.get("#ims-list-preset").setValue(presetId);
+    await flushPromises();
+
+    expect(router.currentRoute.value.query.priority).toBe("Serious");
+    expect(wrapper.text()).toContain("1 incident matches the current filters.");
+
+    const deleteButton = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Delete preset");
+    expect(deleteButton).toBeDefined();
+    await deleteButton?.trigger("click");
+    await flushPromises();
+
+    expect(
+      wrapper
+        .get("#ims-list-preset")
+        .findAll("option")
+        .map((option) => option.text()),
+    ).not.toContain("Serious watch");
+  });
+
+  it("refuses a preset without a name and keeps the saved list unchanged", async () => {
+    installIncidentSession(IC_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents");
+
+    await wrapper.get("#ims-list-preset-name").setValue("   ");
+    await wrapper.get("form.ims-list__presets").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Preset name is required.");
+    expect(wrapper.text()).toContain("No saved presets");
+  });
+
+  it("does not offer saved presets to sessions without IC access", async () => {
+    installIncidentSession(NON_IC_SESSION);
+
+    const { wrapper } = await mountAt("/ims/incidents");
+
+    expect(wrapper.find("#ims-list-preset").exists()).toBe(false);
+    expect(wrapper.find("#ims-list-preset-name").exists()).toBe(false);
+  });
+
   it("renders the IC Field Reports list with cross-links, filters, and sorting", async () => {
     installIncidentSession(IC_OPERATOR_SESSION);
     linkFieldReportForSession(

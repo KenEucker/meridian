@@ -339,6 +339,39 @@ Department operations read models are purpose-built and separate:
 
 Incident APIs must return data only to IC-authorized users.
 
+The incident list (`GET /api/events/{event}/incidents`) accepts explicit search,
+filter, and sort query parameters and echoes the applied selection plus the
+event's filter options:
+
+- `search` matches the incident number, title, location fields, incident type
+  labels, responder names, active timeline notes, actively attached Field
+  Reports, and Name Reference tokens. A leading `@` or `#` is stripped, so Name
+  Reference chips and tag pills route through the same list search. Stricken
+  notes and unlinked Field Reports never match.
+- `state` is `active` (default, excludes Closed), `all`, or one canonical
+  incident status.
+- `priority` is `all` (default) or one priority label.
+- `type` is `all` (default) or one incident type label, matched
+  case-insensitively.
+- `responder` is `all` (default) or one `staff_id`.
+- `started_from` and `started_to` bound `started_at`; a bare date upper bound
+  covers that whole day.
+- `sort` is one of `updated` (default), `incident`, `state`, `priority`,
+  `started`, or `location`, with `direction` `asc` or `desc`. State and priority
+  sort by documented operational order, not alphabetically.
+- `page` (default 1) and `per_page` (default 25, maximum 100) page the filtered
+  result. The response `pagination` block reports `page`, `per_page`, `total`,
+  `total_pages`, and `has_more`, where `total` counts the filtered result rather
+  than every incident in the event. Sorting always applies deterministic
+  tiebreakers so a record cannot appear on two pages or be skipped between them.
+
+The response also carries the caller's saved filter presets (see 10.16A).
+
+The IC permission check runs before any parameter is parsed, so filters never
+widen visibility and an unauthorized actor learns nothing from a filtered,
+paged, or preset-bearing request. Unknown filter values are refused with 422
+rather than silently falling back to a default.
+
 Incident PDF print (`GET /api/events/{event}/incidents/{incident}/pdf`) is
 server-generated, online-only, and restricted to IC leads (`incidents.print`).
 Successful exports are audited. Incidents remain excluded from general
@@ -384,6 +417,8 @@ POST /api/commands/close-incident
 POST /api/commands/reopen-incident
 POST /api/commands/link-field-report-to-incident
 POST /api/commands/unlink-field-report-from-incident
+POST /api/commands/save-incident-list-preset
+POST /api/commands/delete-incident-list-preset
 POST /api/commands/create-policy-document
 POST /api/commands/update-policy-document
 POST /api/commands/publish-policy-document
@@ -431,6 +466,8 @@ Team lead designation commands (`select-team-lead`, `remove-team-lead`) are depa
 Team staff assignment commands (`assign-staff-to-team`, `remove-staff-from-team`) are open to department `department.administer` authority and to designated leads of the target team. Removal archives the membership (`archived_at`) rather than deleting it, cannot remove the department default-team membership, and cannot leave a department membership without at least one active team membership.
 
 Equipment inventory setup commands (`create-equipment-item`, `update-equipment-item`, `archive-equipment-item`, `restore-equipment-item`, `import-equipment-inventory`) build the department inventory that the Logistics checkout/check-in commands consume. They are department-scoped and event-independent, authorized by `department.equipment.manage` (`department_logistics`) or `department.administer` (`department_lead`, `department_administration`) on a team in the target department. Equipment without a department stays Orchid/God Mode repair tooling, and no command accepts a department other than the one that owns the item, so department-to-department allotments remain excluded by EQUIP-006. New equipment is always created `available`; inventory setup may set only `available`, `missing`, or `damaged`, because `checked_out` and `returned` are produced by `checkout-equipment`/`return-equipment`. State changes and archiving are refused while an item has an open checkout. Asset tags are unique among equipment in a department, which lets a re-run of the same import skip rows instead of duplicating equipment. Archiving is a soft transition on `archived_at` that preserves checkout history. `import-equipment-inventory` accepts spreadsheet CSV text with a required `name` header column plus optional `asset_tag` and `serial_number` columns, takes event scope from the request rather than the file, processes each row independently, and returns per-row imported/skipped results with reasons.
+
+Incident list preset commands (`save-incident-list-preset`, `delete-incident-list-preset`) manage one user's saved incident list selections for one event. They reuse the `incidents.view` gate rather than adding a capability: if a user may read the event's incident list, they may name their own way of reading it. Presets are always addressed by owner, so an IC user can neither overwrite nor delete another's, and a preset never grants access to an incident the applying user could not already see. Saving an existing name overwrites that preset; paging position is never stored. Presets are personal view state rather than operational records, so they are not audited.
 
 Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 
@@ -2144,6 +2181,9 @@ Rules:
 - incidents are not merged away
 - incidents may be edited regardless of status
 - status affects filtering/status, not editability
+- incident list search and filters are a read concern only: they narrow rows the
+  requesting user may already see and never grant, widen, or cross-event
+  visibility (see section 5.1)
 - priority label, incident type labels, and involved/responding staff are current incident fields and their changes are preserved in history
 - incident timestamps are not retroactively changed
 - incident title edits create timeline entries
@@ -2287,6 +2327,44 @@ Rules:
 - no dedicated Name Reference API or management screen is required for Alpha 1
 
 ---
+
+### 10.16A Incident list presets
+
+#### `incident_list_presets`
+
+Represents one user's saved IMS incident list search/filter/sort selection for
+one event.
+
+Key fields:
+
+- `id`
+- `event_id`
+- `user_id`
+- `name`
+- `filters`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- a preset is personal view state, not an operational record: it stores only the
+  list selection and never incident content
+- a preset is never an authorization source; applying one still runs the normal
+  IC-gated list read, so a preset can only ever narrow rows the user may already
+  see
+- presets are addressed by owner, so one IC user cannot read, overwrite, or
+  delete another user's preset, and presets do not cross events
+- names are unique per user per event, compared case-insensitively; saving an
+  existing name overwrites that preset rather than failing
+- paging position (`page`, `per_page`) is per-visit and is never stored in a
+  preset, so applying one always starts at the first page
+- a preset saved before a filter vocabulary change degrades to the default list
+  rather than breaking the list read that carries it
+- presets are managed through `save-incident-list-preset` and
+  `delete-incident-list-preset`, authorized by the same `incidents.view`
+  capability as the list itself, adding no new capability or role mapping
+- presets are personal and non-operational, so they are not audited and are not
+  synced to devices
 
 ### 10.17 Attachments and Files
 

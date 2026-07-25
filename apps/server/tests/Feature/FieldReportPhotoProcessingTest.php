@@ -47,6 +47,18 @@ class FieldReportPhotoProcessingTest extends TestCase
         $this->assertSame(hash('sha256', $processed['bytes']), $processed['checksum_sha256']);
     }
 
+    public function test_rejects_a_source_bitmap_above_the_megapixel_limit(): void
+    {
+        $declaredPixels = FieldReportPhotoLimits::MAX_SOURCE_PIXELS + 1_000_000;
+        $side = (int) ceil(sqrt($declaredPixels));
+        $oversized = $this->createPngHeaderBytes($side, $side);
+
+        $this->expectException(FieldReportPhotoProcessingException::class);
+        $this->expectExceptionMessage('megapixel limit');
+
+        app(FieldReportPhotoProcessor::class)->process($oversized, 'image/png');
+    }
+
     public function test_strips_exif_including_gps_from_processed_output(): void
     {
         $withExif = $this->createJpegWithExifApp1Segment($this->createJpegBytes(80, 60));
@@ -150,6 +162,20 @@ class FieldReportPhotoProcessingTest extends TestCase
         imagedestroy($image);
 
         return (string) ob_get_clean();
+    }
+
+    /**
+     * PNG signature plus an IHDR chunk only. The declared dimensions are read
+     * from the header, so the guard runs without allocating the bitmap.
+     */
+    private function createPngHeaderBytes(int $width, int $height): string
+    {
+        $header = 'IHDR'.pack('NN', $width, $height)."\x08\x02\x00\x00\x00";
+
+        return "\x89PNG\r\n\x1a\n"
+            .pack('N', 13)
+            .$header
+            .pack('N', crc32($header));
     }
 
     private function createGifBytes(): string

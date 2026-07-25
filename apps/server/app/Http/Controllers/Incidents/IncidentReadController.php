@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Incidents;
 
+use App\Exceptions\IncidentSearchException;
 use App\Http\Controllers\Controller;
 use App\Models\Attachment;
 use App\Models\AuditEvent;
@@ -12,17 +13,25 @@ use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
+use App\Services\Incidents\IncidentListPresetService;
 use App\Services\Incidents\IncidentReadAccess;
+use App\Services\Incidents\IncidentSearchFilters;
+use App\Services\Incidents\IncidentSearchService;
 use App\Services\NameReferences\NameReferenceSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Restricted IMS incident read transport (M11.5).
+ * Restricted IMS incident read transport (M11.5, M11.19).
  *
  * Data/API section 5.1 documents resource reads under
  * GET /api/events/{event}/incidents. Section 6.5 requires incident rows to be
  * returned only to IC-authorized users; UI hiding alone is insufficient.
+ *
+ * M11.19 adds explicit list search/filter/sort query parameters, pagination,
+ * and the caller's saved filter presets. The IC gate still runs before any of
+ * them are parsed, so an unauthorized actor learns nothing about the event's
+ * incidents from a filtered, paged, or preset-bearing response.
  */
 final class IncidentReadController extends Controller
 {
@@ -31,6 +40,8 @@ final class IncidentReadController extends Controller
         Event $event,
         IncidentReadAccess $access,
         NameReferenceSearchService $nameReferences,
+        IncidentSearchService $search,
+        IncidentListPresetService $presets,
     ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
@@ -39,22 +50,36 @@ final class IncidentReadController extends Controller
             return $this->restrictedResponse();
         }
 
-        $search = $request->query('search');
-        $incidents = is_string($search) && trim($search) !== ''
-            ? $nameReferences->searchIncidents($user, $search, $event)
-            : Incident::query()
-                ->with(['createdByUser', 'incidentTypes', 'incidentStaff.staff'])
-                ->forEvent($event)
-                ->orderByDesc('updated_at')
-                ->orderByDesc('started_at')
-                ->get();
+        try {
+            $filters = IncidentSearchFilters::fromQuery($request->query());
+        } catch (IncidentSearchException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
 
-        $incidents = $incidents
+        $page = $search->search($user, $event, $filters);
+        $incidents = $page->getCollection()
             ->map(fn (Incident $incident): array => $this->incidentPayload($incident, $nameReferences))
             ->values();
 
         return response()->json([
             'event_id' => $event->id,
+            'filters' => $filters->toArray(),
+            'filter_options' => [
+                'states' => IncidentSearchFilters::states(),
+                'priorities' => IncidentSearchFilters::priorities(),
+                'sorts' => IncidentSearchFilters::sorts(),
+                'types' => $search->typeOptions($user, $event),
+                'responders' => $search->responderOptions($user, $event),
+                'max_per_page' => IncidentSearchFilters::MAX_PER_PAGE,
+            ],
+            'pagination' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'total_pages' => max(1, $page->lastPage()),
+                'has_more' => $page->hasMorePages(),
+            ],
+            'presets' => $presets->payloadFor($user, $event),
             'incidents' => $incidents,
         ]);
     }

@@ -17,6 +17,41 @@ export interface IncidentSessionContext {
 
 export type IncidentListOpenMode = "view" | "edit";
 
+/**
+ * One saved incident list selection (M11.19).
+ *
+ * Presets capture what is being looked for, never where the reader had paged
+ * to, so applying one always starts at the first page.
+ */
+export interface IncidentListFilterSelection {
+  readonly search: string;
+  readonly state: string;
+  readonly priority: string;
+  readonly type: string;
+  readonly responder: string;
+  readonly shift: string;
+  readonly sort: string;
+  readonly direction: string;
+}
+
+export interface IncidentListPreset {
+  readonly id: string;
+  readonly eventId: string;
+  readonly name: string;
+  readonly filters: IncidentListFilterSelection;
+  readonly query: Record<string, string>;
+}
+
+export const INCIDENT_LIST_PRESET_NAME_MAX_LENGTH = 60;
+
+export const INCIDENT_LIST_PRESET_MAX_PER_EVENT = 20;
+
+export const INCIDENT_LIST_PAGE_SIZES: readonly number[] = Object.freeze([
+  10, 25, 50, 100,
+]);
+
+export const DEFAULT_INCIDENT_LIST_PAGE_SIZE = 25;
+
 export interface IncidentTimelineEntry {
   readonly id: string;
   readonly incidentId: string;
@@ -374,6 +409,8 @@ let incidentLinkSequence = 0;
 let incidentFieldReportLinkSequence = 0;
 let incidentListOpenMode: IncidentListOpenMode = "view";
 
+const localIncidentListPresets = new Map<string, IncidentListPreset>();
+let incidentListPresetSequence = 0;
 const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
 const localTimelineEntryOverrides = new Map<string, IncidentTimelineEntry>();
 const localIncidentUpdatedAt = new Map<string, string>();
@@ -395,6 +432,8 @@ export function clearIncidentSession(): void {
   localIncidentUpdatedAt.clear();
   localIncidentOverrides.clear();
   localCreatedIncidents.clear();
+  localIncidentListPresets.clear();
+  incidentListPresetSequence = 0;
   noteSequence = 0;
   incidentSequence = 42;
   fieldUpdateSequence = 0;
@@ -456,6 +495,171 @@ export function listIncidentsForSession(
     )
     .filter((incident) => incidentMatchesSearch(incident, normalizedSearch))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+/**
+ * The caller's saved incident list presets for this event (M11.19).
+ *
+ * Presets are personal view state and never an authorization source: a session
+ * without IC access sees none, and the list read is gated independently.
+ */
+export function listIncidentPresetsForSession(
+  context: IncidentSessionContext | null,
+): IncidentListPreset[] {
+  if (!hasIncidentCommandAccess(context)) {
+    return [];
+  }
+
+  return [...localIncidentListPresets.values()]
+    .filter((preset) => preset.eventId === context?.eventId)
+    .sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
+    );
+}
+
+export function saveIncidentPresetForSession(
+  context: IncidentSessionContext | null,
+  name: string,
+  selection: IncidentListFilterSelection,
+): IncidentListPreset {
+  if (!hasIncidentCommandAccess(context)) {
+    throw new Error("Incident Command access is required to save list presets.");
+  }
+
+  const trimmed = name.trim();
+
+  if (trimmed.length === 0) {
+    throw new Error("Preset name is required.");
+  }
+
+  if (trimmed.length > INCIDENT_LIST_PRESET_NAME_MAX_LENGTH) {
+    throw new Error(
+      `Preset name may not be greater than ${INCIDENT_LIST_PRESET_NAME_MAX_LENGTH} characters.`,
+    );
+  }
+
+  const existing = listIncidentPresetsForSession(context).find(
+    (preset) => preset.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+
+  if (
+    !existing &&
+    listIncidentPresetsForSession(context).length >=
+      INCIDENT_LIST_PRESET_MAX_PER_EVENT
+  ) {
+    throw new Error(
+      `You already have ${INCIDENT_LIST_PRESET_MAX_PER_EVENT} saved incident list presets for this event. Delete one before saving another.`,
+    );
+  }
+
+  const preset: IncidentListPreset = Object.freeze({
+    id: existing?.id ?? `local-incident-preset-${++incidentListPresetSequence}`,
+    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
+    name: trimmed,
+    filters: Object.freeze({ ...selection }),
+    query: Object.freeze(incidentPresetQuery(selection)),
+  });
+
+  localIncidentListPresets.set(preset.id, preset);
+
+  return preset;
+}
+
+export function deleteIncidentPresetForSession(
+  context: IncidentSessionContext | null,
+  presetId: string,
+): void {
+  if (!hasIncidentCommandAccess(context)) {
+    throw new Error(
+      "Incident Command access is required to delete list presets.",
+    );
+  }
+
+  const preset = localIncidentListPresets.get(presetId);
+
+  if (!preset || preset.eventId !== context?.eventId) {
+    throw new Error("Saved incident list preset not found.");
+  }
+
+  localIncidentListPresets.delete(presetId);
+}
+
+/**
+ * Only non-default values become query parameters, so an applied preset reads
+ * as the selection it saved rather than a wall of redundant defaults.
+ */
+function incidentPresetQuery(
+  selection: IncidentListFilterSelection,
+): Record<string, string> {
+  const defaults: IncidentListFilterSelection = {
+    search: "",
+    state: "active",
+    priority: "all",
+    type: "all",
+    responder: "all",
+    shift: "all",
+    sort: "updated",
+    direction: "desc",
+  };
+  const query: Record<string, string> = {};
+
+  for (const key of Object.keys(defaults) as (keyof IncidentListFilterSelection)[]) {
+    const value = selection[key];
+
+    if (value !== "" && value !== defaults[key]) {
+      query[key] = value;
+    }
+  }
+
+  return query;
+}
+
+/**
+ * Incident type labels in use for this event, for list filter controls
+ * (M11.19; UI contract 15.1).
+ */
+export function incidentTypeOptionsForSession(
+  context: IncidentSessionContext | null,
+): string[] {
+  const names = new Map<string, string>();
+
+  for (const incident of listIncidentsForSession(context)) {
+    for (const name of incident.incidentTypeNames) {
+      const key = name.toLowerCase();
+
+      if (!names.has(key)) {
+        names.set(key, name);
+      }
+    }
+  }
+
+  return [...names.values()].sort((left, right) =>
+    left.localeCompare(right, undefined, { sensitivity: "base" }),
+  );
+}
+
+/**
+ * Responders attached to this event's incidents, for list filter controls
+ * (M11.19; UI contract 15.1).
+ */
+export function incidentResponderOptionsForSession(
+  context: IncidentSessionContext | null,
+): IncidentResponder[] {
+  const responders = new Map<string, IncidentResponder>();
+
+  for (const incident of listIncidentsForSession(context)) {
+    for (const responder of incident.responders) {
+      if (!responders.has(responder.staffId)) {
+        responders.set(responder.staffId, responder);
+      }
+    }
+  }
+
+  return [...responders.values()].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName, undefined, {
+      sensitivity: "base",
+    }),
+  );
 }
 
 export function listFieldReportsForSession(
@@ -1412,6 +1616,9 @@ function incidentMatchesSearch(
     return true;
   }
 
+  // Mirrors the server list search (M11.19): the incident record, its active
+  // notes, and its attached Field Reports. Stricken history stays out of search
+  // for the same reason it stays out of the default timeline.
   const searchableText = [
     incident.incidentNumber,
     incident.title,
@@ -1420,6 +1627,14 @@ function incidentMatchesSearch(
     incident.locationDetails ?? "",
     ...incident.incidentTypeNames,
     ...incident.responders.map((responder) => responder.displayName),
+    ...incident.timelineEntries
+      .filter((entry) => !entry.strickenAt)
+      .map((entry) => entry.body ?? ""),
+    ...incident.attachedFieldReports.flatMap((report) => [
+      report.displayNumber,
+      report.title,
+      report.body,
+    ]),
   ].join(" ").toLowerCase();
 
   return (

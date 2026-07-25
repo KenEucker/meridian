@@ -10,13 +10,22 @@ import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
 import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   canEditIncident,
+  DEFAULT_INCIDENT_LIST_PAGE_SIZE,
+  deleteIncidentPresetForSession,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
+  INCIDENT_LIST_PAGE_SIZES,
+  INCIDENT_LIST_PRESET_NAME_MAX_LENGTH,
+  incidentResponderOptionsForSession,
+  incidentTypeOptionsForSession,
+  listIncidentPresetsForSession,
   resolveIncidentListOpenMode,
   listIncidentsForSession,
   resolveIncidentSession,
+  saveIncidentPresetForSession,
   setIncidentListOpenMode,
   statusLabel,
+  type IncidentListFilterSelection,
   type IncidentListOpenMode,
   type IncidentPriorityLabel,
   type ImsIncident,
@@ -44,6 +53,12 @@ const stateFilter = computed(() =>
 const priorityFilter = computed(() =>
   typeof route.query.priority === "string" ? route.query.priority : "all",
 );
+const typeFilter = computed(() =>
+  typeof route.query.type === "string" ? route.query.type : "all",
+);
+const responderFilter = computed(() =>
+  typeof route.query.responder === "string" ? route.query.responder : "all",
+);
 const shiftFilter = computed(() =>
   route.query.shift === "current" ? "current" : "all",
 );
@@ -55,16 +70,92 @@ const sortDirection = computed(() =>
 );
 const searchDraft = ref(searchQuery.value);
 const listOpenMode = ref<IncidentListOpenMode>(resolveIncidentListOpenMode());
+const typeOptions = computed(() => incidentTypeOptionsForSession(session.value));
+const responderOptions = computed(() =>
+  incidentResponderOptionsForSession(session.value),
+);
 const incidents = computed(() => {
   return listIncidentsForSession(session.value, searchQuery.value)
     .filter((incident) => matchesStateFilter(incident, stateFilter.value))
     .filter((incident) => matchesPriorityFilter(incident, priorityFilter.value))
+    .filter((incident) => matchesTypeFilter(incident, typeFilter.value))
+    .filter((incident) =>
+      matchesResponderFilter(incident, responderFilter.value),
+    )
     .filter((incident) => matchesShiftFilter(incident, shiftFilter.value))
     .sort(compareIncidents);
 });
+const hasNarrowedList = computed(
+  () =>
+    searchQuery.value !== "" ||
+    stateFilter.value !== "active" ||
+    priorityFilter.value !== "all" ||
+    typeFilter.value !== "all" ||
+    responderFilter.value !== "all" ||
+    shiftFilter.value !== "all",
+);
+const pageSize = computed(() => {
+  const requested = Number.parseInt(String(route.query.per_page ?? ""), 10);
+
+  return INCIDENT_LIST_PAGE_SIZES.includes(requested)
+    ? requested
+    : DEFAULT_INCIDENT_LIST_PAGE_SIZE;
+});
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(incidents.value.length / pageSize.value)),
+);
+const currentPage = computed(() => {
+  const requested = Number.parseInt(String(route.query.page ?? ""), 10);
+
+  if (!Number.isFinite(requested) || requested < 1) {
+    return 1;
+  }
+
+  return Math.min(requested, totalPages.value);
+});
+const pagedIncidents = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+
+  return incidents.value.slice(start, start + pageSize.value);
+});
+const resultSummary = computed(() => {
+  const total = incidents.value.length;
+  const matched =
+    total === 1
+      ? "1 incident matches the current filters."
+      : `${total} incidents match the current filters.`;
+
+  return totalPages.value > 1
+    ? `${matched} Showing ${pagedIncidents.value.length} on page ${currentPage.value} of ${totalPages.value}.`
+    : matched;
+});
+const currentSelection = computed<IncidentListFilterSelection>(() => ({
+  search: searchQuery.value,
+  state: stateFilter.value,
+  priority: priorityFilter.value,
+  type: typeFilter.value,
+  responder: responderFilter.value,
+  shift: shiftFilter.value,
+  sort: sortKey.value,
+  direction: sortDirection.value,
+}));
+const presets = ref(listIncidentPresetsForSession(session.value));
+const presetNameDraft = ref("");
+const presetError = ref("");
+const matchingPreset = computed(
+  () =>
+    presets.value.find(
+      (preset) =>
+        preset.name.toLowerCase() === presetNameDraft.value.trim().toLowerCase(),
+    ) ?? null,
+);
 
 watch(searchQuery, (value) => {
   searchDraft.value = value;
+});
+
+watch(session, () => {
+  refreshPresets();
 });
 
 function priorityText(priorityLabel: string | null): string {
@@ -95,6 +186,7 @@ function nextSortQuery(key: string) {
     ...route.query,
     sort: key,
     direction: nextDirection,
+    page: undefined,
   };
 }
 
@@ -103,7 +195,7 @@ function onStateFilterChange(event: Event): void {
 
   void router.push({
     name: "ims.incidents.index",
-    query: { ...route.query, state: target.value },
+    query: { ...route.query, state: target.value, page: undefined },
   });
 }
 
@@ -112,7 +204,116 @@ function onPriorityFilterChange(event: Event): void {
 
   void router.push({
     name: "ims.incidents.index",
-    query: { ...route.query, priority: target.value },
+    query: { ...route.query, priority: target.value, page: undefined },
+  });
+}
+
+function refreshPresets(): void {
+  presets.value = listIncidentPresetsForSession(session.value);
+}
+
+function onPresetApply(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+  const preset = presets.value.find((candidate) => candidate.id === target.value);
+
+  presetError.value = "";
+
+  if (!preset) {
+    return;
+  }
+
+  presetNameDraft.value = preset.name;
+
+  // A preset replaces the whole selection rather than merging into it, and
+  // always lands on the first page of its own result.
+  void router.push({
+    name: "ims.incidents.index",
+    query: { ...preset.query },
+  });
+}
+
+function onPresetSave(): void {
+  presetError.value = "";
+
+  try {
+    const preset = saveIncidentPresetForSession(
+      session.value,
+      presetNameDraft.value,
+      currentSelection.value,
+    );
+
+    presetNameDraft.value = preset.name;
+    refreshPresets();
+  } catch (error) {
+    presetError.value =
+      error instanceof Error ? error.message : "Unable to save this preset.";
+  }
+}
+
+function onPresetDelete(): void {
+  const preset = matchingPreset.value;
+  presetError.value = "";
+
+  if (!preset) {
+    return;
+  }
+
+  try {
+    deleteIncidentPresetForSession(session.value, preset.id);
+    presetNameDraft.value = "";
+    refreshPresets();
+  } catch (error) {
+    presetError.value =
+      error instanceof Error ? error.message : "Unable to delete this preset.";
+  }
+}
+
+function onPageSizeChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      per_page:
+        Number.parseInt(target.value, 10) === DEFAULT_INCIDENT_LIST_PAGE_SIZE
+          ? undefined
+          : target.value,
+      page: undefined,
+    },
+  });
+}
+
+function pageQuery(page: number) {
+  return {
+    ...route.query,
+    page: page <= 1 ? undefined : String(page),
+  };
+}
+
+function onTypeFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      type: target.value === "all" ? undefined : target.value,
+      page: undefined,
+    },
+  });
+}
+
+function onResponderFilterChange(event: Event): void {
+  const target = event.target as HTMLSelectElement;
+
+  void router.push({
+    name: "ims.incidents.index",
+    query: {
+      ...route.query,
+      responder: target.value === "all" ? undefined : target.value,
+      page: undefined,
+    },
   });
 }
 
@@ -124,6 +325,7 @@ function onShiftFilterChange(event: Event): void {
     query: {
       ...route.query,
       shift: target.value === "current" ? "current" : undefined,
+      page: undefined,
     },
   });
 }
@@ -164,6 +366,22 @@ function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
 
 function matchesPriorityFilter(incident: ImsIncident, filter: string): boolean {
   return filter === "all" || incident.priorityLabel === filter;
+}
+
+function matchesTypeFilter(incident: ImsIncident, filter: string): boolean {
+  return (
+    filter === "all" ||
+    incident.incidentTypeNames.some(
+      (name) => name.toLowerCase() === filter.toLowerCase(),
+    )
+  );
+}
+
+function matchesResponderFilter(incident: ImsIncident, filter: string): boolean {
+  return (
+    filter === "all" ||
+    incident.responders.some((responder) => responder.staffId === filter)
+  );
 }
 
 function activeShiftWindow():
@@ -271,6 +489,7 @@ async function onSearchSubmit(): Promise<void> {
       ...route.query,
       ...(search ? { search } : {}),
       ...(!search ? { search: undefined } : {}),
+      page: undefined,
     },
   });
 }
@@ -378,6 +597,34 @@ async function onSearchSubmit(): Promise<void> {
           <option value="Routine">Routine</option>
         </select>
 
+        <label for="ims-list-type">Type</label>
+        <select
+          id="ims-list-type"
+          :value="typeFilter"
+          @change="onTypeFilterChange"
+        >
+          <option value="all">All types</option>
+          <option v-for="name in typeOptions" :key="name" :value="name">
+            {{ name }}
+          </option>
+        </select>
+
+        <label for="ims-list-responder">Responder</label>
+        <select
+          id="ims-list-responder"
+          :value="responderFilter"
+          @change="onResponderFilterChange"
+        >
+          <option value="all">All responders</option>
+          <option
+            v-for="responder in responderOptions"
+            :key="responder.staffId"
+            :value="responder.staffId"
+          >
+            {{ responder.displayName }}
+          </option>
+        </select>
+
         <label for="ims-list-shift">Shift</label>
         <select
           id="ims-list-shift"
@@ -386,6 +633,17 @@ async function onSearchSubmit(): Promise<void> {
         >
           <option value="all">All shifts</option>
           <option value="current">Current shift</option>
+        </select>
+
+        <label for="ims-list-page-size">Per page</label>
+        <select
+          id="ims-list-page-size"
+          :value="String(pageSize)"
+          @change="onPageSizeChange"
+        >
+          <option v-for="size in INCIDENT_LIST_PAGE_SIZES" :key="size" :value="String(size)">
+            {{ size }}
+          </option>
         </select>
 
         <label v-if="canEdit" for="ims-list-open-mode">Open incidents as</label>
@@ -400,13 +658,64 @@ async function onSearchSubmit(): Promise<void> {
         </select>
       </form>
 
-      <p
-        v-if="incidents.length === 0"
-        class="ims-list__empty"
-        role="status"
+      <form
+        class="ims-list__presets"
+        aria-label="Saved incident list presets"
+        @submit.prevent="onPresetSave"
       >
+        <label for="ims-list-preset">Saved presets</label>
+        <select
+          id="ims-list-preset"
+          :value="matchingPreset?.id ?? ''"
+          @change="onPresetApply"
+        >
+          <option value="">
+            {{
+              presets.length === 0
+                ? "No saved presets"
+                : "Apply a saved preset"
+            }}
+          </option>
+          <option v-for="preset in presets" :key="preset.id" :value="preset.id">
+            {{ preset.name }}
+          </option>
+        </select>
+
+        <label for="ims-list-preset-name">Preset name</label>
+        <input
+          id="ims-list-preset-name"
+          v-model="presetNameDraft"
+          type="text"
+          autocomplete="off"
+          :maxlength="INCIDENT_LIST_PRESET_NAME_MAX_LENGTH"
+        />
+
+        <button type="submit">
+          {{ matchingPreset ? "Update preset" : "Save preset" }}
+        </button>
+        <button v-if="matchingPreset" type="button" @click="onPresetDelete">
+          Delete preset
+        </button>
+      </form>
+
+      <p v-if="presetError" class="ims-list__preset-error" role="alert">
+        {{ presetError }}
+      </p>
+
+      <p class="ims-list__summary" role="status">
+        <span>{{ resultSummary }}</span>
+        <RouterLink
+          v-if="hasNarrowedList"
+          class="ims-list__reset-filters"
+          :to="{ name: 'ims.incidents.index' }"
+        >
+          Reset filters
+        </RouterLink>
+      </p>
+
+      <p v-if="incidents.length === 0" class="ims-list__empty">
         {{
-          searchQuery
+          hasNarrowedList
             ? "No incidents match this search."
             : "No incidents are recorded for this event."
         }}
@@ -463,7 +772,7 @@ async function onSearchSubmit(): Promise<void> {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="incident in incidents" :key="incident.id">
+            <tr v-for="incident in pagedIncidents" :key="incident.id">
               <th scope="row">
                 <RouterLink
                   class="ims-list__incident-link"
@@ -493,6 +802,40 @@ async function onSearchSubmit(): Promise<void> {
           </tbody>
         </table>
         </div>
+
+        <nav
+          v-if="totalPages > 1"
+          class="ims-list__pagination"
+          aria-label="Incident list pages"
+        >
+          <RouterLink
+            v-if="currentPage > 1"
+            class="ims-list__page-link"
+            :to="{ name: 'ims.incidents.index', query: pageQuery(currentPage - 1) }"
+            rel="prev"
+          >
+            Previous
+          </RouterLink>
+          <span v-else class="ims-list__page-link ims-list__page-link--disabled">
+            Previous
+          </span>
+
+          <span class="ims-list__page-position">
+            Page {{ currentPage }} of {{ totalPages }}
+          </span>
+
+          <RouterLink
+            v-if="currentPage < totalPages"
+            class="ims-list__page-link"
+            :to="{ name: 'ims.incidents.index', query: pageQuery(currentPage + 1) }"
+            rel="next"
+          >
+            Next
+          </RouterLink>
+          <span v-else class="ims-list__page-link ims-list__page-link--disabled">
+            Next
+          </span>
+        </nav>
       </div>
     </template>
   </WorkflowPageShell>
@@ -596,9 +939,21 @@ async function onSearchSubmit(): Promise<void> {
   color: var(--m-text-muted);
 }
 
+.ims-list__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
 .ims-list__restricted a,
 .ims-list__incident-link,
 .ims-list__search-context a,
+.ims-list__reset-filters,
 .ims-list__clear-search,
 .ims-list__table thead a {
   color: var(--m-action-secondary-bg);
@@ -611,14 +966,70 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__search-form input:focus-visible,
 .ims-list__search-form button:focus-visible,
 .ims-list__filters select:focus-visible,
+.ims-list__presets select:focus-visible,
+.ims-list__presets input:focus-visible,
+.ims-list__presets button:focus-visible,
+.ims-list__page-link:focus-visible,
+.ims-list__reset-filters:focus-visible,
 .ims-list__clear-search:focus-visible,
 .ims-list__table thead a:focus-visible {
   outline: 3px solid var(--m-focus-ring);
   outline-offset: 2px;
 }
 
+.ims-list__pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-3);
+  align-items: center;
+  justify-content: center;
+  padding: var(--m-space-2);
+}
+
+.ims-list__page-position {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.ims-list__page-link {
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-3);
+  color: var(--m-action-secondary-bg);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.ims-list__page-link--disabled {
+  border-color: var(--m-border-default);
+  color: var(--m-text-muted);
+}
+
+.ims-list__preset-error {
+  margin: 0;
+  color: var(--m-attention-critical);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.ims-list__presets button {
+  border: 1px solid var(--m-action-secondary-bg);
+  border-radius: var(--m-radius-sm);
+  padding: var(--m-space-2) var(--m-space-4);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
+  font-weight: 800;
+}
+
+.ims-list__presets button[type="button"] {
+  background: var(--m-surface-primary);
+  color: var(--m-action-secondary-bg);
+}
+
 .ims-list__search-form,
-.ims-list__filters {
+.ims-list__filters,
+.ims-list__presets {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) auto auto;
   gap: var(--m-space-2);
@@ -629,25 +1040,30 @@ async function onSearchSubmit(): Promise<void> {
   background: var(--m-surface-raised);
 }
 
-.ims-list__filters {
+.ims-list__filters,
+.ims-list__presets {
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
 
 .ims-list__search-form label,
-.ims-list__filters label {
+.ims-list__filters label,
+.ims-list__presets label {
   grid-column: 1 / -1;
   color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
   font-weight: 800;
 }
 
-.ims-list__filters label {
+.ims-list__filters label,
+.ims-list__presets label {
   grid-column: auto;
   align-self: center;
 }
 
 .ims-list__search-form input,
-.ims-list__filters select {
+.ims-list__filters select,
+.ims-list__presets select,
+.ims-list__presets input {
   min-width: 0;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
@@ -786,7 +1202,8 @@ async function onSearchSubmit(): Promise<void> {
 
 @media (max-width: 43.99rem) {
   .ims-list__search-form,
-  .ims-list__filters {
+  .ims-list__filters,
+  .ims-list__presets {
     grid-template-columns: 1fr;
   }
 

@@ -39,6 +39,7 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 | ID | Coverage | Owning task |
 |---|---|---|
 | [`QA-INC-01-incident-management.md`](QA-INC-01-incident-management.md) | IC-only incident access, online create/edit with the full IMS current-field set, notes/strikes, Name Reference chips, linked incidents, Field Report attach/unlink, history, list/IC Field Report cross-links/filters, attachment-strike automated evidence, and IC-lead PDF print | M11.11 |
+| [`QA-INC-02-incident-search-and-filters.md`](QA-INC-02-incident-search-and-filters.md) | Explicit incident list search across record/notes/attached Field Reports, state/priority/type/responder/started-window filters, operational-order heading sorts, paging, per-user saved filter presets, refused filter values, and IC-permission enforcement ahead of filtering | M11.19 |
 
 ## Alpha 1 Organizer department administration script
 
