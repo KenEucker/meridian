@@ -13,6 +13,7 @@ use App\Models\IncidentLink;
 use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Services\Audit\AuditService;
+use App\Services\Incidents\IncidentListPresetService;
 use App\Services\Incidents\IncidentReadAccess;
 use App\Services\Incidents\IncidentSearchFilters;
 use App\Services\Incidents\IncidentSearchService;
@@ -27,9 +28,10 @@ use Illuminate\Http\Request;
  * GET /api/events/{event}/incidents. Section 6.5 requires incident rows to be
  * returned only to IC-authorized users; UI hiding alone is insufficient.
  *
- * M11.19 adds explicit list search/filter/sort query parameters. The IC gate
- * still runs before any of them are parsed, so an unauthorized actor learns
- * nothing about the event's incidents from a filter response.
+ * M11.19 adds explicit list search/filter/sort query parameters, pagination,
+ * and the caller's saved filter presets. The IC gate still runs before any of
+ * them are parsed, so an unauthorized actor learns nothing about the event's
+ * incidents from a filtered, paged, or preset-bearing response.
  */
 final class IncidentReadController extends Controller
 {
@@ -39,6 +41,7 @@ final class IncidentReadController extends Controller
         IncidentReadAccess $access,
         NameReferenceSearchService $nameReferences,
         IncidentSearchService $search,
+        IncidentListPresetService $presets,
     ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
@@ -53,7 +56,8 @@ final class IncidentReadController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        $incidents = $search->search($user, $event, $filters)
+        $page = $search->search($user, $event, $filters);
+        $incidents = $page->getCollection()
             ->map(fn (Incident $incident): array => $this->incidentPayload($incident, $nameReferences))
             ->values();
 
@@ -66,7 +70,16 @@ final class IncidentReadController extends Controller
                 'sorts' => IncidentSearchFilters::sorts(),
                 'types' => $search->typeOptions($user, $event),
                 'responders' => $search->responderOptions($user, $event),
+                'max_per_page' => IncidentSearchFilters::MAX_PER_PAGE,
             ],
+            'pagination' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'total_pages' => max(1, $page->lastPage()),
+                'has_more' => $page->hasMorePages(),
+            ],
+            'presets' => $presets->payloadFor($user, $event),
             'incidents' => $incidents,
         ]);
     }

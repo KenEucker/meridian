@@ -395,6 +395,90 @@ class IncidentSearchHttpTest extends TestCase
         }
     }
 
+    public function test_list_pages_results_while_keeping_the_requested_order(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $viewer = $this->userWithEventRole('ic_viewer', $event);
+
+        foreach (range(1, 5) as $offset) {
+            $this->incident($event, [
+                'incident_number' => sprintf('INC-2027-%06d', 700 + $offset),
+                'title' => sprintf('Paged record %d', $offset),
+            ]);
+        }
+
+        $firstPage = $this->actingAs($viewer)
+            ->getJson("/api/events/{$event->id}/incidents?sort=incident&direction=asc&per_page=2")
+            ->assertOk()
+            ->assertJsonPath('pagination.page', 1)
+            ->assertJsonPath('pagination.per_page', 2)
+            ->assertJsonPath('pagination.total', 5)
+            ->assertJsonPath('pagination.total_pages', 3)
+            ->assertJsonPath('pagination.has_more', true)
+            ->assertJsonCount(2, 'incidents');
+
+        $this->assertSame(
+            ['INC-2027-000701', 'INC-2027-000702'],
+            $this->incidentNumbers($firstPage->json('incidents')),
+        );
+
+        $lastPage = $this->actingAs($viewer)
+            ->getJson("/api/events/{$event->id}/incidents?sort=incident&direction=asc&per_page=2&page=3")
+            ->assertOk()
+            ->assertJsonPath('pagination.page', 3)
+            ->assertJsonPath('pagination.has_more', false)
+            ->assertJsonCount(1, 'incidents');
+
+        $this->assertSame(
+            ['INC-2027-000705'],
+            $this->incidentNumbers($lastPage->json('incidents')),
+        );
+
+        $this->actingAs($viewer)
+            ->getJson("/api/events/{$event->id}/incidents?per_page=2&page=9")
+            ->assertOk()
+            ->assertJsonPath('pagination.page', 9)
+            ->assertJsonPath('pagination.total', 5)
+            ->assertJsonCount(0, 'incidents');
+    }
+
+    public function test_pagination_counts_the_filtered_result_not_the_whole_event(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $viewer = $this->userWithEventRole('ic_viewer', $event);
+
+        $this->incident($event, ['title' => 'Medical assist one', 'priority_label' => Incident::PRIORITY_CRITICAL]);
+        $this->incident($event, ['title' => 'Medical assist two', 'priority_label' => Incident::PRIORITY_CRITICAL]);
+        $this->incident($event, ['title' => 'Unrelated record']);
+        $this->incident($event, [
+            'title' => 'Medical assist closed',
+            'priority_label' => Incident::PRIORITY_CRITICAL,
+            'status' => Incident::STATUS_CLOSED,
+            'closed_at' => Carbon::parse('2027-07-04T22:00:00Z'),
+        ]);
+
+        $this->actingAs($viewer)
+            ->getJson("/api/events/{$event->id}/incidents?search=medical&priority=Critical&per_page=1")
+            ->assertOk()
+            ->assertJsonPath('pagination.total', 2)
+            ->assertJsonPath('pagination.total_pages', 2)
+            ->assertJsonCount(1, 'incidents');
+    }
+
+    public function test_invalid_pagination_values_are_refused(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $viewer = $this->userWithEventRole('ic_viewer', $event);
+        $this->incident($event, ['title' => 'Present record']);
+
+        foreach (['page=0', 'page=-1', 'page=two', 'per_page=0', 'per_page=101', 'per_page=many'] as $query) {
+            $this->actingAs($viewer)
+                ->getJson("/api/events/{$event->id}/incidents?{$query}")
+                ->assertStatus(422)
+                ->assertJsonMissingPath('incidents');
+        }
+    }
+
     public function test_search_and_filters_never_cross_events_or_ic_permission(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();
@@ -518,6 +602,18 @@ class IncidentSearchHttpTest extends TestCase
     {
         return array_values(array_map(
             static fn (array $incident): string => (string) $incident['id'],
+            $incidents ?? [],
+        ));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>|null  $incidents
+     * @return list<string>
+     */
+    private function incidentNumbers(?array $incidents): array
+    {
+        return array_values(array_map(
+            static fn (array $incident): string => (string) $incident['incident_number'],
             $incidents ?? [],
         ));
     }

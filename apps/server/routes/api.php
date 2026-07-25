@@ -15,6 +15,7 @@ use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Incidents\IncidentCommandController;
+use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
@@ -96,6 +97,12 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/strike-incident-note', [IncidentCommandController::class, 'strikeNote'])
         ->name('api.commands.strike-incident-note');
+
+    Route::post('/commands/save-incident-list-preset', [IncidentListPresetController::class, 'save'])
+        ->name('api.commands.save-incident-list-preset');
+
+    Route::post('/commands/delete-incident-list-preset', [IncidentListPresetController::class, 'delete'])
+        ->name('api.commands.delete-incident-list-preset');
 
     Route::post('/commands/create-department', [DepartmentCommandController::class, 'create'])
         ->name('api.commands.create-department');

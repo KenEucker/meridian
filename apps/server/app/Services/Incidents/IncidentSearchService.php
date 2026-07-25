@@ -8,8 +8,10 @@ use App\Models\IncidentStaff;
 use App\Models\IncidentType;
 use App\Models\User;
 use App\Services\NameReferences\NameReferenceSearchService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 
 /**
  * IMS incident list search, filtering, and sorting (M11.19).
@@ -46,12 +48,12 @@ final class IncidentSearchService
     ) {}
 
     /**
-     * @return Collection<int, Incident>
+     * @return LengthAwarePaginator<int, Incident>
      */
-    public function search(User $user, Event $event, IncidentSearchFilters $filters): Collection
+    public function search(User $user, Event $event, IncidentSearchFilters $filters): LengthAwarePaginator
     {
         if (! $this->access->canViewIncidents($user, $event)) {
-            return new Collection;
+            return $this->emptyPage($filters);
         }
 
         $query = Incident::query()
@@ -66,7 +68,20 @@ final class IncidentSearchService
 
         $this->applySort($query, $filters);
 
-        return $query->get();
+        return $query->paginate(perPage: $filters->perPage, page: $filters->page);
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, Incident>
+     */
+    private function emptyPage(IncidentSearchFilters $filters): LengthAwarePaginator
+    {
+        return new Paginator(
+            items: new Collection,
+            total: 0,
+            perPage: $filters->perPage,
+            currentPage: $filters->page,
+        );
     }
 
     /**

@@ -39,6 +39,10 @@ final class IncidentSearchFilters
 
     public const DIRECTION_DESC = 'desc';
 
+    public const DEFAULT_PER_PAGE = 25;
+
+    public const MAX_PER_PAGE = 100;
+
     private function __construct(
         public readonly string $search,
         public readonly string $state,
@@ -49,6 +53,8 @@ final class IncidentSearchFilters
         public readonly ?Carbon $startedTo,
         public readonly string $sort,
         public readonly string $direction,
+        public readonly int $page,
+        public readonly int $perPage,
     ) {}
 
     /**
@@ -107,6 +113,8 @@ final class IncidentSearchFilters
             startedTo: $startedTo,
             sort: $sort,
             direction: $direction,
+            page: self::positiveInt($query, 'page', 1, 1),
+            perPage: self::positiveInt($query, 'per_page', self::DEFAULT_PER_PAGE, 1, self::MAX_PER_PAGE),
         );
     }
 
@@ -191,9 +199,26 @@ final class IncidentSearchFilters
     }
 
     /**
+     * The full applied selection, including where the reader is in the list.
+     *
      * @return array<string, mixed>
      */
     public function toArray(): array
+    {
+        return [
+            ...$this->toSelectionArray(),
+            'page' => $this->page,
+            'per_page' => $this->perPage,
+        ];
+    }
+
+    /**
+     * The saveable part of a selection: what is being looked for, not where the
+     * reader had scrolled to. Paging is per-visit, so presets never store it.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSelectionArray(): array
     {
         return [
             'search' => $this->search,
@@ -206,6 +231,27 @@ final class IncidentSearchFilters
             'sort' => $this->sort,
             'direction' => $this->direction,
         ];
+    }
+
+    /**
+     * The selection as list query parameters, so a saved preset can be applied
+     * by handing it straight back to the list endpoint.
+     *
+     * @return array<string, string>
+     */
+    public function toQueryParameters(): array
+    {
+        $parameters = [];
+
+        foreach ($this->toSelectionArray() as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $parameters[$key] = (string) $value;
+        }
+
+        return $parameters;
     }
 
     /**
@@ -224,6 +270,37 @@ final class IncidentSearchFilters
         }
 
         return (string) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    private static function positiveInt(
+        array $query,
+        string $key,
+        int $default,
+        int $min,
+        ?int $max = null,
+    ): int {
+        $value = self::scalar($query, $key, '');
+
+        if ($value === '') {
+            return $default;
+        }
+
+        if (preg_match('/^\d+$/', $value) !== 1) {
+            throw IncidentSearchException::invalid(sprintf('%s must be a whole number.', $key));
+        }
+
+        $parsed = (int) $value;
+
+        if ($parsed < $min || ($max !== null && $parsed > $max)) {
+            throw IncidentSearchException::invalid($max === null
+                ? sprintf('%s must be at least %d.', $key, $min)
+                : sprintf('%s must be between %d and %d.', $key, $min, $max));
+        }
+
+        return $parsed;
     }
 
     /**

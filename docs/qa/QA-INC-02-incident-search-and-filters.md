@@ -1,4 +1,4 @@
-# QA-INC-02: Incident Search and List Filters
+# QA-INC-02: Incident Search, List Filters, Paging, and Presets
 
 ## Purpose
 
@@ -15,6 +15,7 @@ user could already see for the requested event.
 - Technical spec sections 19.9 and 19.10 (Name Reference search and permission filtering).
 - UI implementation contract sections 12.7 (`ims.incidents`) and 15.1 (sortable headings; state and priority filters defaulting to active states while still allowing Closed to be included).
 - IMS surface specification section 9 (list cross-links, sortable headings, filters).
+- Data/API specification sections 5.1 (list query parameters and paging) and 10.16A (`incident_list_presets`).
 
 ## Documented search and filter rules
 
@@ -28,12 +29,15 @@ user could already see for the requested event.
 - Sorting is available on the incident, state, priority, types, location, and last-update headings. State and priority sort by operational order (Open → Closed, Critical → Routine), not alphabetically.
 - Unknown filter values are refused (422), never silently defaulted.
 - The IC permission check runs before any filter is parsed.
+- Paging uses `page` (default 1) and `per_page` (default 25, maximum 100). The reported total counts the filtered result, not the whole event, and deterministic sort tiebreakers keep a record from appearing on two pages or being skipped between them.
+- Changing any filter, search, or sort returns to the first page, because page 4 of the previous result is meaningless against a new one.
+- Saved presets are personal view state for one user on one event. They store the selection but never the paging position, are never an authorization source, and are unique by name per user per event with a save-over-existing-name overwrite.
 
 ## Environment
 
 - Development server environment with migrated database and `DevelopmentScenarioSeeder` (or equivalent personas)
 - Shared Meridian client (`apps/client`) IMS surfaces at `/ims/incidents`
-- For API checks, authenticated requests against `GET /api/events/{event}/incidents` with `search`, `state`, `priority`, `type`, `responder`, `started_from`, `started_to`, `sort`, and `direction`
+- For API checks, authenticated requests against `GET /api/events/{event}/incidents` with `search`, `state`, `priority`, `type`, `responder`, `started_from`, `started_to`, `sort`, `direction`, `page`, and `per_page`, plus the `save-incident-list-preset` and `delete-incident-list-preset` commands
 
 ## Personas
 
@@ -80,6 +84,19 @@ user could already see for the requested event.
 20. Repeat step 19 as the organizer and as the non-IC department lead. Confirm 403 in both cases.
 21. Sign out and request the list unauthenticated. Confirm 401.
 22. Confirm no filter or search response contains an incident from another event.
+23. Set **Per page** to 10 on an event with more than ten active incidents. Confirm the page controls appear, the summary reports the total match count alongside the current page, and **Previous** is unavailable on the first page.
+24. Page forward to the last page. Confirm **Next** is unavailable there, that the active filters and sort survive the move, and that no incident appears on two pages or is skipped between them.
+25. While on page 2, change a filter. Confirm the list returns to page 1 rather than showing an empty page of a smaller result.
+26. Request `?per_page=101`, `?per_page=0`, and `?page=0` through the API. Confirm each returns 422.
+27. Request a page number beyond the end through the API. Confirm it returns 200 with an empty `incidents` array and an accurate `pagination.total`, not an error.
+28. Apply a filter combination, enter a preset name, and save it. Confirm the preset appears in the saved list.
+29. Reset the filters, then apply the saved preset. Confirm the full selection is restored, the list lands on page 1, and the result matches what was saved.
+30. Save again under the same name with a different selection. Confirm it overwrites rather than creating a duplicate.
+31. Attempt to save a preset with a blank name. Confirm it is refused and no preset is created.
+32. Sign in as a second IC user for the same event. Confirm they see none of the first user's presets and cannot delete one by ID.
+33. Confirm the same user's presets for a different event do not appear on this event's list.
+34. Delete the preset and confirm it disappears from the saved list for that user.
+35. As the organizer, revoked IC user, and cross-event IC user, attempt to save and delete a preset. Confirm 403 in every case, and 401 unauthenticated.
 
 ## Expected results
 
@@ -91,6 +108,8 @@ user could already see for the requested event.
 - Invalid filter values are refused with 422 instead of silently falling back to a default.
 - IC permission is checked before any filter is applied: cross-event, organizer, non-IC department lead, and unauthenticated actors receive 403/401 with no rows, regardless of the search or filters requested.
 - No search or filter result crosses events.
+- Paging reports the filtered total, keeps filters and sort across page moves, returns to page 1 when the selection changes, refuses out-of-range page sizes, and answers an out-of-range page number with an empty page rather than an error.
+- Presets save, reapply, overwrite by name, and delete for their owner only; they never carry paging position, never cross users or events, and never reveal an incident the applying user could not already see.
 
 ## Evidence to capture
 
@@ -99,6 +118,8 @@ user could already see for the requested event.
 - Screenshot or notes showing state and priority sort order matching operational order.
 - API responses for the 422 cases and for the 403/401 denial cases.
 - Notes confirming a stricken note and an unlinked Field Report produce no search match while their history remains.
+- Screenshot of the page controls showing the total match count and current page position.
+- Screenshot of the saved preset list, plus notes confirming a second IC user sees none of them.
 
 ## Failure notes
 
@@ -107,3 +128,6 @@ user could already see for the requested event.
 - If stricken notes or unlinked Field Reports become findable through search, stop testing and file a history-versus-current-content issue (INC-013, INC-014).
 - If the list stops defaulting to active states, or Closed incidents can no longer be included, file a UI contract 15.1 regression.
 - If an unknown filter value silently falls back to a default, file an issue: a filter that quietly ignores input misrepresents what the operator is looking at.
+- If an incident appears on two pages or is skipped between them, stop testing and file a sort-stability issue: a paged incident list that loses records is worse than an unpaged one.
+- If one user can see, apply, overwrite, or delete another user's preset, stop testing and file a blocking privacy issue.
+- If applying a preset returns an incident the user could not otherwise see, stop testing and file a blocking permission issue: presets must never be an authorization path.
