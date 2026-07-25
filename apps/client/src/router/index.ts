@@ -29,6 +29,7 @@ import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
+import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
@@ -235,6 +236,12 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/shifts/:shiftId/edit",
     name: "events.departments.shifts.edit",
     component: DepartmentShiftEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/equipment",
+    name: "events.departments.equipment.index",
+    component: DepartmentEquipmentView,
     beforeEnter: ensureDepartmentSelfAdminSession,
   },
   {
