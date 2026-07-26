@@ -30,7 +30,7 @@ export type NavigationSection = {
  * the reader has to guess which menu holds the page instead of reading one
  * short list. At or above it, the split earns its keep.
  */
-export const COMBINED_NAVIGATION_MAX_ITEMS = 7;
+export const COMBINED_NAVIGATION_MAX_ITEMS = 10;
 
 /**
  * The event the interface is currently locked to, or null when the context is

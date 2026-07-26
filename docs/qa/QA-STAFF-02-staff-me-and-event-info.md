@@ -69,7 +69,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - The team-scoped `housing` document is visible to members of that team and absent for staff outside it; the department-scoped `packing` document is visible to department members and absent for staff in other departments.
 - Clearing the Event Info section removes the document from Event Info while leaving it published and visible in the document library, and does not change the document version.
 - The staff member with no standing in the event's organization receives HTTP 403 from `/api/events/{event}/info`.
-- The staff member without lead authority sees a single **Menu** rather than separate Staff and Workflows menus, listing Me and Event Info first. The department lead, whose combined list reaches seven or more items, sees both menus, with Me and Event Info in the Staff menu.
+- Every persona sees a single **Menu** rather than separate Staff and Workflows menus, listing Me and Event Info first, then the workflows they can reach. No Alpha 1 role reaches the ten-item split threshold: the department lead, the fullest role, reaches nine.
 - Documents, Shifts, Trainings, My Field Reports, and Event Info render for the non-lead as a single narrow column of labelled cards. Nothing scrolls sideways at 375px, and every action, link, and disclosure control is at least 44px tall.
 - The same Documents, Shifts, and Trainings pages render for the department lead as the wide workflow shell with the management table and its create/edit actions intact.
 

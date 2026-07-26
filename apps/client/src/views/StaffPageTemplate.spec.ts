@@ -136,18 +136,24 @@ describe("staff page template", () => {
 });
 
 describe("combined staff and workflow navigation", () => {
-  it("combines the menus below the threshold and splits them at or above it", () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-    const gate = useCombinedNavigation();
-    expect(gate.value.links.length).toBeLessThan(COMBINED_NAVIGATION_MAX_ITEMS);
-    expect(gate.value.combined).toBe(true);
+  it("combines the menus exactly while the list stays under the threshold", () => {
+    // No fixture role reaches the threshold today: the fullest, a Rangers
+    // department lead, is nine items against a limit of ten. The split path is
+    // therefore asserted as a rule rather than driven through a fixture, so
+    // raising or lowering the limit keeps this honest.
+    for (const departmentId of [
+      FIXTURE_GATE_DEPARTMENT_ID,
+      FIXTURE_DPW_DEPARTMENT_ID,
+      FIXTURE_RANGERS_DEPARTMENT_ID,
+    ]) {
+      selectFixtureDepartment(departmentId);
+      const navigation = useCombinedNavigation();
 
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    const rangers = useCombinedNavigation();
-    expect(rangers.value.links.length).toBeGreaterThanOrEqual(
-      COMBINED_NAVIGATION_MAX_ITEMS,
-    );
-    expect(rangers.value.combined).toBe(false);
+      expect(navigation.value.combined).toBe(
+        navigation.value.links.length < COMBINED_NAVIGATION_MAX_ITEMS,
+      );
+      expect(navigation.value.combined).toBe(true);
+    }
   });
 
   it("puts Event Info next to Me whenever the interface is locked to an event", () => {

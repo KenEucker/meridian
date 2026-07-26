@@ -292,11 +292,13 @@ Planning workflows they already work out of.
 **Workflows** holds only hubs someone works out of for a stretch of the event.
 Me is not a workflow and must not appear here.
 
-When the two menus together hold fewer than seven items, the shell renders them
-as one menu labeled **Menu**, ordered staff pages first and then workflows. A
-short list split across two dropdowns makes the reader guess which one holds the
-page; the split only earns its keep once the combined list is long enough to
-scan poorly.
+When the two menus together hold fewer than ten items, the shell renders them as
+one menu labeled **Menu**, ordered staff pages first and then workflows. A short
+list split across two dropdowns makes the reader guess which one holds the page;
+the split only earns its keep once the combined list is long enough to scan
+poorly. No Alpha 1 role reaches ten items yet — the fullest, a department lead
+with every department capability, reaches nine — so the split is currently a
+rule waiting on a role that needs it rather than behavior anyone sees.
 
 ### 7.1 Command Palette Shortcuts
 

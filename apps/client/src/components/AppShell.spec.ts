@@ -263,7 +263,7 @@ describe("AppShell fixed UI mode display", () => {
     expect(workflowLabels).not.toContain("Incidents");
   });
 
-  it("keeps Staff and Workflows separate only when the combined list is long", () => {
+  it("still combines the menus for the fullest fixture role", () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -271,18 +271,24 @@ describe("AppShell fixed UI mode display", () => {
       global: { stubs: routerLinkStub },
     });
 
-    // The Rangers fixture user reaches seven workflows plus Me and Event Info,
-    // so the two menus stay separate.
-    expect(wrapper.get(".app-shell__workflow-button").text()).toContain(
-      "Workflows",
-    );
+    // The Rangers department lead reaches every workflow the fixtures grant,
+    // and still lands under the combine threshold at nine items.
+    expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
+    expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
 
-    const staffLabels = wrapper
-      .get(".app-shell__staff-menu")
-      .findAll(".app-shell__staff-tab")
-      .map((tab) => tab.text());
-
-    expect(staffLabels).toEqual(["Me", "Event Info"]);
+    expect(
+      wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
+    ).toEqual([
+      "Me",
+      "Event Info",
+      "Overview",
+      "Planning",
+      "Logistics",
+      "Operations",
+      "Incidents",
+      "Reports",
+      "Admin",
+    ]);
   });
 
   it("combines Staff and Workflows into one menu when the list is short", async () => {
