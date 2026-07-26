@@ -10,6 +10,13 @@
   color-scheme: light dark;
   --m-content-narrow: min(80vw, 40rem);
   --m-content-wide: min(80vw, 64rem);
+  /*
+   * Staff-facing informational pages. Unlike the narrow/wide measures above,
+   * this one fills the phone inside the shell's own padding instead of giving
+   * back another 20% of a 375px screen, then caps at a readable measure once
+   * there is room.
+   */
+  --m-content-staff: min(100%, 40rem);
 }
 
 html,

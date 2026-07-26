@@ -5,6 +5,7 @@ import { RouterLink, routerKey } from "vue-router";
 import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
+  useCombinedNavigation,
   useShowStaffMenu,
   useStaffLinks,
   useWorkflowLinks,
@@ -40,7 +41,16 @@ const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
 const workflowLinks = useWorkflowLinks();
 const staffLinks = useStaffLinks();
+const navigation = useCombinedNavigation();
 const showStaffMenu = useShowStaffMenu();
+// A short nav reads better as one list than as two dropdowns the reader has to
+// guess between, so the shell merges Staff and Workflows under the threshold.
+const primaryMenuLabel = computed(() =>
+  navigation.value.combined ? "Menu" : "Workflows",
+);
+const primaryMenuLinks = computed(() =>
+  navigation.value.combined ? navigation.value.links : workflowLinks.value,
+);
 const staffMenuOpen = ref(false);
 const staffMenuElement = ref<HTMLElement | null>(null);
 const fixtureUserLabel = "Fixture user";
@@ -477,7 +487,7 @@ onBeforeUnmount(() => {
           aria-controls="app-shell-workflow-tabs"
           @click="toggleWorkflowMenu"
         >
-          <span>Workflows</span>
+          <span>{{ primaryMenuLabel }}</span>
           <svg
             class="app-shell__dropdown-icon app-shell__workflow-icon"
             aria-hidden="true"
@@ -497,10 +507,12 @@ onBeforeUnmount(() => {
         <nav
           id="app-shell-workflow-tabs"
           class="app-shell__tabs"
-          aria-label="Event workflows"
+          :aria-label="
+            navigation.combined ? 'Staff pages and event workflows' : 'Event workflows'
+          "
         >
           <RouterLink
-            v-for="link in workflowLinks"
+            v-for="link in primaryMenuLinks"
             :key="link.label"
             :to="link.to"
             class="app-shell__tab"

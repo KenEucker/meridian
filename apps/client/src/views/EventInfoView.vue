@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 
+import StaffPageShell from "@/components/StaffPageShell.vue";
 import {
   LOCAL_DEPARTMENT_OPS_CONTEXT,
   LOCAL_PLANNING_TABLE,
@@ -47,175 +48,84 @@ const operationsWindowLabel = computed(() => {
 </script>
 
 <template>
-  <section class="event-info" aria-labelledby="event-info-heading">
-    <p class="event-info__nav">
-      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
-    </p>
-
-    <header class="event-info__header">
-      <p class="event-info__eyebrow">Event info</p>
-      <h1 id="event-info-heading">{{ eventInfo.eventLabel }}</h1>
-      <p>{{ eventInfo.departmentLabel }}</p>
-      <dl class="event-info__context" aria-label="Event information">
-        <div>
-          <dt>Operations</dt>
-          <dd>{{ operationsWindowLabel }}</dd>
-        </div>
-        <div>
-          <dt>Organization</dt>
-          <dd>{{ eventInfo.organizationLabel }}</dd>
-        </div>
-        <div>
-          <dt>Published documents</dt>
-          <dd>
-            {{ eventInfo.documentCount }} visible to you
-          </dd>
-        </div>
-      </dl>
+  <StaffPageShell
+    heading-id="event-info-heading"
+    eyebrow="Event info"
+    :title="eventInfo.eventLabel"
+    :lede="`${eventInfo.departmentLabel} / ${operationsWindowLabel}`"
+    :context="`${eventInfo.documentCount} published documents visible to you`"
+  >
+    <template #under-title>
       <p class="event-info__source" role="note">
         Every section below is the published policy and procedure content you are
         permitted to see. Sections without a published document say so instead of
         standing in for one.
       </p>
-    </header>
+    </template>
 
-    <div class="event-info__grid">
-      <article
-        v-for="section in eventInfo.sections"
-        :key="section.section"
-        :data-section="section.section"
-        :data-empty="section.documents.length === 0 ? 'true' : 'false'"
+    <article
+      v-for="section in eventInfo.sections"
+      :key="section.section"
+      class="event-info__section"
+      :data-section="section.section"
+      :data-empty="section.documents.length === 0 ? 'true' : 'false'"
+    >
+      <h2>{{ section.label }}</h2>
+
+      <p v-if="section.emptyDescription" class="event-info__empty" role="status">
+        {{ section.emptyDescription }}
+      </p>
+
+      <section
+        v-for="document in section.documents"
+        :key="document.id"
+        class="event-info__document"
       >
-        <h2>{{ section.label }}</h2>
-
-        <p
-          v-if="section.emptyDescription"
-          class="event-info__empty"
-          role="status"
-        >
-          {{ section.emptyDescription }}
+        <h3>{{ document.title }}</h3>
+        <div
+          class="event-info__document-body"
+          v-html="renderDocumentMarkdown(document.markdownSource)"
+        />
+        <p class="event-info__document-meta">
+          {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
+          {{ scopeLabel(document.scopeType, document.scopeId) }} / version
+          {{ document.version }}
         </p>
-
-        <section
-          v-for="document in section.documents"
-          :key="document.id"
-          class="event-info__document"
-        >
-          <h3>{{ document.title }}</h3>
-          <div
-            class="event-info__document-body"
-            v-html="renderDocumentMarkdown(document.markdownSource)"
-          />
-          <p class="event-info__document-meta">
-            {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
-            {{ scopeLabel(document.scopeType, document.scopeId) }} / version
-            {{ document.version }}
-          </p>
-        </section>
-      </article>
-    </div>
-  </section>
+      </section>
+    </article>
+  </StaffPageShell>
 </template>
 
 <style scoped>
-.event-info {
-  display: grid;
-  gap: var(--m-space-4);
-  width: min(100%, 72rem);
-}
-
-.event-info__nav {
-  margin: 0;
+.event-info__source {
+  margin: var(--m-space-2) 0 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
-  font-weight: 700;
 }
 
-.event-info__nav a {
-  color: var(--m-text-secondary);
-  text-decoration: none;
-}
-
-.event-info__header,
-.event-info__grid article {
+.event-info__section {
   display: grid;
   gap: var(--m-space-3);
+  min-width: 0;
   padding: var(--m-space-4);
   border: 1px solid var(--m-border-default);
-  border-radius: 8px;
+  border-radius: var(--m-radius-sm);
   background: var(--m-surface-raised);
-  box-shadow: var(--m-shadow-sm);
 }
 
-.event-info__eyebrow,
-.event-info__header h1,
-.event-info__header p,
-.event-info__grid h2,
-.event-info__grid p {
+.event-info__section h2 {
   margin: 0;
-}
-
-.event-info__eyebrow {
-  color: var(--m-text-secondary);
-  font-size: var(--m-text-sm);
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.event-info__header h1 {
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-xl);
-}
-
-.event-info__header p,
-.event-info__grid p {
-  color: var(--m-text-muted);
-}
-
-.event-info__source {
-  font-size: var(--m-text-sm);
-}
-
-.event-info__context {
-  display: grid;
-  gap: var(--m-space-3);
-  margin: 0;
-}
-
-.event-info__context div {
-  padding: var(--m-space-3);
-  border: 1px solid var(--m-border-subtle);
-  border-radius: 8px;
-  background: var(--m-surface-base);
-}
-
-.event-info__context dt {
-  color: var(--m-text-secondary);
-  font-size: var(--m-text-xs);
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.event-info__context dd {
-  margin: var(--m-space-1) 0 0;
-}
-
-.event-info__grid {
-  display: grid;
-  gap: var(--m-space-3);
-  align-items: start;
-}
-
-.event-info__grid h2 {
   font-size: var(--m-text-base);
 }
 
 .event-info__document {
   display: grid;
   gap: var(--m-space-2);
+  min-width: 0;
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--m-radius-sm);
   background: var(--m-surface-base);
 }
 
@@ -243,23 +153,14 @@ const operationsWindowLabel = computed(() => {
 }
 
 .event-info__document-meta {
+  margin: 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-xs);
 }
 
 .event-info__empty {
+  margin: 0;
+  color: var(--m-text-muted);
   font-size: var(--m-text-sm);
-}
-
-.event-info__nav a:focus-visible {
-  outline: 2px solid var(--m-focus-ring);
-  outline-offset: 2px;
-}
-
-@media (min-width: 48rem) {
-  .event-info__context,
-  .event-info__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 </style>

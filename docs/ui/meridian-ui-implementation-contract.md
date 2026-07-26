@@ -277,6 +277,27 @@ Suggested Blade API:
 
 ## 7. Navigation and Command Palette Contract
 
+### 7.0 Primary Navigation Menus
+
+The shell carries two menus.
+
+**Staff** holds the pages that belong to the person rather than to a workflow.
+Me is always first. Event Info sits immediately next to it whenever the
+interface is locked to an event, so the staff-facing event answers are one tap
+from the personal page. Members also get Documents, Shifts, Trainings, and My
+Field Reports here, because they have no workflow to reach them from; leads stop
+after Me and Event Info, since those pages are reached from inside the Admin and
+Planning workflows they already work out of.
+
+**Workflows** holds only hubs someone works out of for a stretch of the event.
+Me is not a workflow and must not appear here.
+
+When the two menus together hold fewer than seven items, the shell renders them
+as one menu labeled **Menu**, ordered staff pages first and then workflows. A
+short list split across two dropdowns makes the reader guess which one holds the
+page; the split only earns its keep once the combined list is long enough to
+scan poorly.
+
 ### 7.1 Command Palette Shortcuts
 
 Required shortcuts:
@@ -636,6 +657,33 @@ Required features:
 - large actions;
 - inline corrective actions where appropriate;
 - no hover-only controls.
+
+### 11.5A StaffPageShell and staff card lists
+
+Purpose: Page template for staff-facing informational surfaces — the pages most
+people read on a phone between shifts.
+
+Applies to `staff.field-reports`, `event.info`, and the reader view of
+`department.documents`, `department.shifts`, and `department.trainings`. A page
+that has both a lead view and a reader view chooses per viewer: lead authority
+keeps the wide workflow shell, and the same page without that authority uses
+this one.
+
+Required behavior:
+
+- a single measured column (`--m-content-staff`), filling the phone inside the
+  shell's own padding and capping at a readable measure on larger screens;
+- no horizontal scrolling at any width;
+- records rendered as stacked cards with every field labelled, not as a table
+  that scrolls its own headers off screen;
+- tap targets of at least 44px, including disclosure controls and the whole card
+  title block when a card links out;
+- primary actions full-width on a phone, inline once there is room;
+- one shared empty state per list, stating what is absent.
+
+The lead view keeps `DataTable`: a lead comparing coverage across teams needs
+the width, and a table is the right shape for that comparison. The reader view
+must not be the lead table with columns hidden.
 
 ### 11.6 MetricCard
 

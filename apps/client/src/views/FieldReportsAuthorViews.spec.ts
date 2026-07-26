@@ -201,7 +201,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     expect(wrapper.text()).toContain("First author report");
     expect(wrapper.text()).not.toContain("Should not appear for user-1");
     expect(wrapper.text()).not.toContain("Other author title");
-    expect(wrapper.get(".field-reports__link").attributes("href")).toBe(
+    expect(wrapper.get(".staff-card__main").attributes("href")).toBe(
       `/staff/field-reports/${reportId}`,
     );
   });

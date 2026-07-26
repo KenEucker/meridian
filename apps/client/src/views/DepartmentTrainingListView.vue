@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
+import StaffPageShell from "@/components/StaffPageShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
@@ -56,7 +57,28 @@ const viewerCompletedCount = computed(
 </script>
 
 <template>
+  <!--
+    Members come here to find a training and sign up for it, so they get the
+    narrow touch-first staff shell with their own counts. Managers keep the
+    wide workflow shell and its roster-level heading cards.
+  -->
+  <StaffPageShell
+    v-if="!canManage"
+    heading-id="trainings-heading"
+    title="Trainings"
+    :eyebrow="session.department.departmentLabel"
+    lede="Department training schedule, signup, and completion."
+    :context="
+      canAccess
+        ? `${viewerSignupCount} signed up / ${viewerCompletedCount} completed`
+        : ''
+    "
+  >
+    <TrainingListSection variant="page" />
+  </StaffPageShell>
+
   <DeptOpsShell
+    v-else
     heading-id="trainings-heading"
     title="Trainings"
     :eyebrow="session.department.departmentLabel"
@@ -68,7 +90,6 @@ const viewerCompletedCount = computed(
 
     <template #actions>
       <WorkflowActionButton
-        v-if="canManage"
         :to="{ name: 'events.departments.trainings.create', params: routeParams }"
       >
         New training

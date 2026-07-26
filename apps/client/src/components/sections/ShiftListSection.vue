@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import StaffCardList from "@/components/StaffCardList.vue";
+import StaffListCard from "@/components/StaffListCard.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
@@ -195,8 +197,32 @@ const shiftCreateRoute = computed(() => ({
       authority for the selected department.
     </p>
 
+    <!--
+      Members read this on a phone to find out when they work. A six-column
+      admin table scrolls its own headers off screen there, so the read-only
+      view is a card per shift with every field labelled.
+    -->
+    <StaffCardList
+      v-else-if="!canManage"
+      label="Shifts"
+      :empty="shifts.length === 0"
+      empty-message="No shifts are scheduled for your teams."
+    >
+      <StaffListCard
+        v-for="shift in shifts"
+        :key="shift.id"
+        :title="shift.title"
+        :eyebrow="teamName(shift)"
+        :status="shiftStatus(shift)"
+        :meta="[
+          { label: 'When', value: formatWindow(shift) },
+          { label: 'Capacity', value: formatCapacity(shift) },
+        ]"
+      />
+    </StaffCardList>
+
     <template v-else>
-      <div v-if="canManage" class="dept-shifts__toolbar">
+      <div class="dept-shifts__toolbar">
         <label class="dept-shifts__filter">
           Status
           <select
@@ -224,31 +250,24 @@ const shiftCreateRoute = computed(() => ({
               <th scope="col">Schedule</th>
               <th scope="col">Capacity</th>
               <th scope="col">Status</th>
-              <th v-if="canManage" scope="col">Actions</th>
+              <th scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="shifts.length === 0">
-              <td :colspan="canManage ? 6 : 5">
-                {{
-                  canManage
-                    ? "No shifts match this filter."
-                    : "No shifts are scheduled for your teams."
-                }}
-              </td>
+              <td colspan="6">No shifts match this filter.</td>
             </tr>
             <tr v-for="shift in shifts" :key="shift.id">
               <td>
-                <RouterLink v-if="canManage" :to="shiftEditRoute(shift.id)">
+                <RouterLink :to="shiftEditRoute(shift.id)">
                   {{ shift.title }}
                 </RouterLink>
-                <strong v-else>{{ shift.title }}</strong>
               </td>
               <td>{{ teamName(shift) }}</td>
               <td>{{ formatWindow(shift) }}</td>
               <td>{{ formatCapacity(shift) }}</td>
               <td>{{ shiftStatus(shift) }}</td>
-              <td v-if="canManage" class="dept-shifts__actions">
+              <td class="dept-shifts__actions">
                 <RouterLink :to="shiftEditRoute(shift.id)">Edit</RouterLink>
                 <button
                   v-if="shift.cancelledAt === null && !shiftHasStarted(shift)"

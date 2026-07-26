@@ -13,7 +13,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - Technical spec section 21.3: document states, scope, and visibility.
 - Data/API spec section 11.4A: Event Info section selection and assembly rules.
 - Data/API spec sections 5.1 and 5.2: `GET /api/events/{event}/info` and the `event_info_section` command field.
-- UI implementation contract sections 12.3 (`staff.me`, `event.info`) and 12.4 (`team.overview`).
+- UI implementation contract sections 7.0 (primary navigation menus), 11.5A (StaffPageShell and staff card lists), 12.3 (`staff.me`, `event.info`), and 12.4 (`team.overview`).
 - Accessibility checklist sections 8, 9, 14, and 18.
 
 ## Environment
@@ -54,6 +54,8 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 10. Reload Event Info as a department member and confirm the packing section.
 11. Restore the packing assignment, then publish the draft `arrival` policy and reload Event Info.
 12. Sign out and, as the staff member with no standing in the event's organization, request `GET /api/events/{event}/info`.
+13. On a phone or a 375px-wide viewport, sign in as the staff member with no lead authority and open the shell menu, then Documents, Shifts, Trainings, My Field Reports, and Event Info in turn.
+14. Repeat step 13 as the department lead, comparing the same Documents, Shifts, and Trainings pages.
 
 ## Expected results
 
@@ -67,6 +69,9 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - The team-scoped `housing` document is visible to members of that team and absent for staff outside it; the department-scoped `packing` document is visible to department members and absent for staff in other departments.
 - Clearing the Event Info section removes the document from Event Info while leaving it published and visible in the document library, and does not change the document version.
 - The staff member with no standing in the event's organization receives HTTP 403 from `/api/events/{event}/info`.
+- The staff member without lead authority sees a single **Menu** rather than separate Staff and Workflows menus, listing Me and Event Info first. The department lead, whose combined list reaches seven or more items, sees both menus, with Me and Event Info in the Staff menu.
+- Documents, Shifts, Trainings, My Field Reports, and Event Info render for the non-lead as a single narrow column of labelled cards. Nothing scrolls sideways at 375px, and every action, link, and disclosure control is at least 44px tall.
+- The same Documents, Shifts, and Trainings pages render for the department lead as the wide workflow shell with the management table and its create/edit actions intact.
 
 ## Evidence to capture
 
@@ -77,6 +82,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - Screenshot of the document editor showing the Event Info section selector and the visibility panel.
 - API response or notes for `GET /api/events/{event}/info` before and after publishing the `arrival` document.
 - API or notes showing HTTP 403 for the staff member outside the organization.
+- 375px-wide screenshots of the shell menu, one reader page, and the matching lead page.
 
 ## Failure notes
 
@@ -86,3 +92,5 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - If Team Overview renders a team the persona does not lead, or silently substitutes a team they do, stop testing and file a blocking authorization issue.
 - If Staff Me routes a team lead to the Admin page or to Event Info instead of Team Overview, file a routing issue against UI contract section 12.3.
 - If changing the Event Info assignment bumps the document version, file an issue against data/API spec section 11.4A; placement is not content.
+- If a reader page scrolls sideways at 375px, or renders the lead table with columns hidden, file an issue against UI contract section 11.5A.
+- If a lead loses the management table, its create/edit actions, or the wide shell on Documents, Shifts, or Trainings, stop testing and file a regression: the reader template must never replace a lead workspace.

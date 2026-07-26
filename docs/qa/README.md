@@ -82,7 +82,7 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 
 | ID | Coverage | Owning task |
 |---|---|---|
-| [`QA-STAFF-02-staff-me-and-event-info.md`](QA-STAFF-02-staff-me-and-event-info.md) | Staff Me role-aware event routing, the team-lead Team Overview handoff and its fail-closed behavior, and Event Info assembled from visible published documents with explicit empty sections instead of placeholders | M11.20 |
+| [`QA-STAFF-02-staff-me-and-event-info.md`](QA-STAFF-02-staff-me-and-event-info.md) | Staff Me role-aware event routing, the team-lead Team Overview handoff and its fail-closed behavior, Event Info assembled from visible published documents with explicit empty sections instead of placeholders, the combined Staff/Workflows shell menu, and the mobile-first staff page template for reader views | M11.20 |
 
 M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
 Name Reference chips, online create/edit autosave, priority/types/responders,
