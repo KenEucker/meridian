@@ -5,14 +5,18 @@ import { RouterLink, type RouteLocationRaw } from "vue-router";
  * Page frame for staff-facing informational pages.
  *
  * These are the pages most people read on a phone between shifts — Event Info,
- * Documents, Shifts, Trainings, My Field Reports — so the frame is mobile-first
- * rather than a narrowed copy of the lead workflow shell. It is a single
- * measured column instead of a wide multi-column dashboard, actions are
- * full-width and thumb-sized until there is room to sit them inline, and
- * content is expected to stack as cards rather than scroll sideways in a table.
+ * Documents, Shifts, Trainings, My Field Reports — so the frame is mobile-first:
+ * one column, thumb-sized full-width actions, cards rather than a table that
+ * scrolls sideways.
+ *
+ * Mobile-first is where it starts, not where it stops. The container keeps
+ * growing with the viewport, the header stops stacking once there is room
+ * beside the title, and card lists inside tile into columns. What stays bounded
+ * is reading measure, not layout width: prose is capped per block so a wall
+ * display shows more records rather than wider sentences.
  *
  * Lead surfaces keep WorkflowPageShell: a lead comparing coverage across teams
- * needs the width, and a table is the right shape for that work.
+ * needs the table, and a table is the right shape for that work.
  */
 withDefaults(
   defineProps<{
@@ -43,11 +47,13 @@ withDefaults(
     </p>
 
     <header class="staff-page__header">
-      <p v-if="eyebrow" class="staff-page__eyebrow">{{ eyebrow }}</p>
-      <h1 :id="headingId" class="staff-page__heading">{{ title }}</h1>
-      <p v-if="lede" class="staff-page__lede">{{ lede }}</p>
-      <p v-if="context" class="staff-page__context">{{ context }}</p>
-      <slot name="under-title" />
+      <div class="staff-page__title">
+        <p v-if="eyebrow" class="staff-page__eyebrow">{{ eyebrow }}</p>
+        <h1 :id="headingId" class="staff-page__heading">{{ title }}</h1>
+        <p v-if="lede" class="staff-page__lede">{{ lede }}</p>
+        <p v-if="context" class="staff-page__context">{{ context }}</p>
+        <slot name="under-title" />
+      </div>
 
       <div v-if="$slots.actions" class="staff-page__actions">
         <slot name="actions" />
@@ -92,6 +98,13 @@ withDefaults(
   display: grid;
   gap: var(--m-space-2);
   min-width: 0;
+}
+
+.staff-page__title {
+  display: grid;
+  gap: var(--m-space-2);
+  min-width: 0;
+  max-width: var(--m-measure);
 }
 
 .staff-page__eyebrow,
@@ -178,6 +191,23 @@ withDefaults(
   .staff-page__actions :deep(a),
   .staff-page__actions :deep(button) {
     width: auto;
+  }
+}
+
+/*
+ * Past this width the actions have somewhere to sit other than under the title,
+ * which is a row of vertical space back on every staff page.
+ */
+@media (min-width: 64rem) {
+  .staff-page__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--m-space-4);
+  }
+
+  .staff-page__actions {
+    margin-top: 0;
+    justify-content: flex-end;
   }
 }
 </style>

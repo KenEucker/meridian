@@ -90,34 +90,36 @@ const operationsWindowLabel = computed(() => {
       </span>
     </header>
 
-    <section
-      v-for="group in navigationSections"
-      :key="group.title"
-      class="home__section"
-      :aria-label="group.title"
-    >
-      <div class="home__section-heading">
-        <h2>{{ group.title }}</h2>
-        <p>{{ group.description }}</p>
-      </div>
-      <div class="home__grid">
-        <RouterLink
-          v-for="link in group.links"
-          :key="`${group.title}:${link.label}`"
-          :to="link.to"
-          class="home__card"
-        >
-          <h3>{{ link.pageLabel ?? link.label }}</h3>
-          <p>{{ link.description }}</p>
-        </RouterLink>
-      </div>
-    </section>
+    <div class="home__sections">
+      <section
+        v-for="group in navigationSections"
+        :key="group.title"
+        class="home__section"
+        :aria-label="group.title"
+      >
+        <div class="home__section-heading">
+          <h2>{{ group.title }}</h2>
+          <p>{{ group.description }}</p>
+        </div>
+        <div class="home__grid">
+          <RouterLink
+            v-for="link in group.links"
+            :key="`${group.title}:${link.label}`"
+            :to="link.to"
+            class="home__card"
+          >
+            <h3>{{ link.pageLabel ?? link.label }}</h3>
+            <p>{{ link.description }}</p>
+          </RouterLink>
+        </div>
+      </section>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .home {
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
 }
 
 .home__event-card {
@@ -256,8 +258,39 @@ const operationsWindowLabel = computed(() => {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  /*
+   * A column per tile rather than a fixed two, so Home keeps collapsing its
+   * own height as the display grows instead of running four cards deep on a
+   * wall panel.
+   */
   .home__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--m-tile-min), 1fr));
+  }
+}
+
+/*
+ * Past a large desktop the sections themselves sit side by side. Each section
+ * is a heading over its own card grid, so this is the point where Home stops
+ * being a vertical stack of stacks.
+ *
+ * The 42rem floor is two tiles plus their gap: a section narrow enough to hold
+ * one card column would trade a row of cards for a row of headings and end up
+ * taller, which is the opposite of the point.
+ */
+@media (min-width: 90rem) {
+  .home__sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(42rem, 1fr));
+    gap: var(--m-space-5);
+    align-items: start;
+  }
+
+  .home__section {
+    margin-bottom: 0;
+  }
+
+  .home__event-details {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   }
 }
 </style>

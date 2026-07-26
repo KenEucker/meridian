@@ -1382,7 +1382,7 @@ async function onPrintPdf(): Promise<void> {
 <style scoped>
 .ims-edit {
   box-sizing: border-box;
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   margin-inline: auto;
   display: grid;
   gap: var(--m-space-4);

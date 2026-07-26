@@ -187,6 +187,7 @@ function onRestore(training: ProductTraining): void {
       </p>
 
       <StaffCardList
+        min="wide"
         label="Trainings"
         :empty="trainings.length === 0"
         empty-message="No trainings are available for your department yet."

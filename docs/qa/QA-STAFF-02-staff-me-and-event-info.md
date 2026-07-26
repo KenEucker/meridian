@@ -13,7 +13,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - Technical spec section 21.3: document states, scope, and visibility.
 - Data/API spec section 11.4A: Event Info section selection and assembly rules.
 - Data/API spec sections 5.1 and 5.2: `GET /api/events/{event}/info` and the `event_info_section` command field.
-- UI implementation contract sections 7.0 (primary navigation menus), 11.5A (StaffPageShell and staff card lists), 12.3 (`staff.me`, `event.info`), and 12.4 (`team.overview`).
+- UI implementation contract sections 7.0 (primary navigation menus), 10.2 (layout tokens), 11.5A (StaffPageShell and staff card lists), 11.5B (ContentGrid and large-display scaling), 12.3 (`staff.me`, `event.info`), and 12.4 (`team.overview`).
 - Accessibility checklist sections 8, 9, 14, and 18.
 
 ## Environment
@@ -56,6 +56,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 12. Sign out and, as the staff member with no standing in the event's organization, request `GET /api/events/{event}/info`.
 13. On a phone or a 375px-wide viewport, sign in as the staff member with no lead authority and open the shell menu, then Documents, Shifts, Trainings, My Field Reports, and Event Info in turn.
 14. Repeat step 13 as the department lead, comparing the same Documents, Shifts, and Trainings pages.
+15. Widen the same pages through 1366px, 1920px, and 2560px, and to 3840px if a 4K display or browser emulation is available. Watch the column count on Event Info, Documents, Shifts, Trainings, and Home.
 
 ## Expected results
 
@@ -72,6 +73,8 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - Every persona sees a single **Menu** rather than separate Staff and Workflows menus, listing Me and Event Info first, then the workflows they can reach. No Alpha 1 role reaches the ten-item split threshold: the department lead, the fullest role, reaches nine.
 - Documents, Shifts, Trainings, My Field Reports, and Event Info render for the non-lead as a single narrow column of labelled cards. Nothing scrolls sideways at 375px, and every action, link, and disclosure control is at least 44px tall.
 - The same Documents, Shifts, and Trainings pages render for the department lead as the wide workflow shell with the management table and its create/edit actions intact.
+- As the window widens, card lists and Event Info sections gain columns rather than staying one column with empty space beside them, and Home tiles its sections side by side from roughly 1440px. Paragraphs stop at the reading measure even when the container is far wider.
+- Text and controls grow at 2560px and again at 3840px, and stay at desktop size at 1920px and below.
 
 ## Evidence to capture
 
@@ -83,6 +86,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - API response or notes for `GET /api/events/{event}/info` before and after publishing the `arrival` document.
 - API or notes showing HTTP 403 for the staff member outside the organization.
 - 375px-wide screenshots of the shell menu, one reader page, and the matching lead page.
+- Screenshots of Event Info and Home at 1920px and at the largest width available, showing the column counts.
 
 ## Failure notes
 
@@ -93,4 +97,6 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - If Staff Me routes a team lead to the Admin page or to Event Info instead of Team Overview, file a routing issue against UI contract section 12.3.
 - If changing the Event Info assignment bumps the document version, file an issue against data/API spec section 11.4A; placement is not content.
 - If a reader page scrolls sideways at 375px, or renders the lead table with columns hidden, file an issue against UI contract section 11.5A.
+- If a page stays one column as the window widens, or keeps a fixed maximum width with empty space beside it, file an issue against UI contract section 11.5B.
+- If a paragraph runs the full width of a large display rather than stopping at the reading measure, file an issue against UI contract section 10.2.
 - If a lead loses the management table, its create/edit actions, or the wide shell on Documents, Shifts, or Trainings, stop testing and file a regression: the reader template must never replace a lead workspace.

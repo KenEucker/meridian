@@ -192,6 +192,7 @@ function transition(
     -->
     <template v-else-if="!canMaintain">
       <StaffCardList
+        min="wide"
         label="Documents"
         :empty="documents.length === 0"
         empty-message="No policies or procedures are published to you yet."
@@ -392,6 +393,7 @@ function transition(
 
 .documents__reader-body :deep(p) {
   margin: 0 0 var(--m-space-2);
+  max-width: var(--m-measure);
   color: var(--m-text-secondary);
 }
 

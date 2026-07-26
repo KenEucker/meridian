@@ -1,17 +1,25 @@
 <script setup lang="ts">
+import ContentGrid from "@/components/ContentGrid.vue";
+
 /**
- * Wrapper for a stack of StaffListCard items, with the empty state built in so
- * every staff list says the same thing when it has nothing to show.
+ * Stack of StaffListCard items, with the empty state built in so every staff
+ * list says the same thing when it has nothing to show.
+ *
+ * One column on a phone; a column per tile width beyond that, so a roster that
+ * needed four screens of scrolling on a laptop needs one on a large display.
  */
 withDefaults(
   defineProps<{
     label: string;
     empty?: boolean;
     emptyMessage?: string;
+    /** Widen the tile when cards carry long labelled fields. */
+    min?: "tile" | "wide";
   }>(),
   {
     empty: false,
     emptyMessage: "Nothing to show yet.",
+    min: "tile",
   },
 );
 </script>
@@ -20,21 +28,12 @@ withDefaults(
   <p v-if="empty" class="staff-card-list__empty" role="status">
     {{ emptyMessage }}
   </p>
-  <ul v-else class="staff-card-list" :aria-label="label">
+  <ContentGrid v-else as="ul" :label="label" :min="min" class="staff-card-list">
     <slot />
-  </ul>
+  </ContentGrid>
 </template>
 
 <style scoped>
-.staff-card-list {
-  display: grid;
-  gap: var(--m-space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: 0;
-}
-
 .staff-card-list__empty {
   margin: 0;
   padding: var(--m-space-3);

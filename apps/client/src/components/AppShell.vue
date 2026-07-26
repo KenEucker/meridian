@@ -579,7 +579,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .app-shell {
-  --m-app-content-max: min(100% - 2rem, 76rem);
+  --m-app-content-max: min(100% - 2rem, max(76rem, 94vw));
 
   display: flex;
   flex-direction: column;
@@ -1080,7 +1080,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 32rem) {
   .app-shell {
-    --m-app-content-max: min(100% - 1rem, 76rem);
+    --m-app-content-max: min(100% - 1rem, max(76rem, 94vw));
   }
 
   .app-shell__top-bar {

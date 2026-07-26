@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 
+import ContentGrid from "@/components/ContentGrid.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import {
   LOCAL_DEPARTMENT_OPS_CONTEXT,
@@ -63,36 +64,48 @@ const operationsWindowLabel = computed(() => {
       </p>
     </template>
 
-    <article
-      v-for="section in eventInfo.sections"
-      :key="section.section"
-      class="event-info__section"
-      :data-section="section.section"
-      :data-empty="section.documents.length === 0 ? 'true' : 'false'"
-    >
-      <h2>{{ section.label }}</h2>
-
-      <p v-if="section.emptyDescription" class="event-info__empty" role="status">
-        {{ section.emptyDescription }}
-      </p>
-
-      <section
-        v-for="document in section.documents"
-        :key="document.id"
-        class="event-info__document"
+    <!--
+      Sections tile rather than stack: six answers a staff member wants before
+      arriving should be one screen on a laptop or a wall display, not six
+      scrolls. Heights differ a lot between a filled and an empty section, so
+      rows are not stretched to match.
+    -->
+    <ContentGrid min="wide" :stretch="false">
+      <article
+        v-for="section in eventInfo.sections"
+        :key="section.section"
+        class="event-info__section"
+        :data-section="section.section"
+        :data-empty="section.documents.length === 0 ? 'true' : 'false'"
       >
-        <h3>{{ document.title }}</h3>
-        <div
-          class="event-info__document-body"
-          v-html="renderDocumentMarkdown(document.markdownSource)"
-        />
-        <p class="event-info__document-meta">
-          {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
-          {{ scopeLabel(document.scopeType, document.scopeId) }} / version
-          {{ document.version }}
+        <h2>{{ section.label }}</h2>
+
+        <p
+          v-if="section.emptyDescription"
+          class="event-info__empty"
+          role="status"
+        >
+          {{ section.emptyDescription }}
         </p>
-      </section>
-    </article>
+
+        <section
+          v-for="document in section.documents"
+          :key="document.id"
+          class="event-info__document"
+        >
+          <h3>{{ document.title }}</h3>
+          <div
+            class="event-info__document-body"
+            v-html="renderDocumentMarkdown(document.markdownSource)"
+          />
+          <p class="event-info__document-meta">
+            {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
+            {{ scopeLabel(document.scopeType, document.scopeId) }} / version
+            {{ document.version }}
+          </p>
+        </section>
+      </article>
+    </ContentGrid>
   </StaffPageShell>
 </template>
 
@@ -145,6 +158,7 @@ const operationsWindowLabel = computed(() => {
 
 .event-info__document-body :deep(p) {
   margin: 0 0 var(--m-space-2);
+  max-width: var(--m-measure);
   color: var(--m-text-secondary);
 }
 

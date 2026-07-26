@@ -24,6 +24,7 @@ import {
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { routes } from "@/router";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
+import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
@@ -122,6 +123,49 @@ describe("staff page template", () => {
     expect(manager.find(".staff-page").exists()).toBe(false);
     expect(manager.find("table").exists()).toBe(true);
     expect(manager.text()).toContain("New training");
+  });
+
+  it("tiles Event Info sections rather than stacking them", async () => {
+    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    const wrapper = await mountAt(
+      EventInfoView,
+      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
+    );
+
+    const grid = wrapper.get(".content-grid");
+    expect(grid.classes()).toContain("content-grid--wide");
+    // Sections differ a lot in height, so rows are not stretched to match.
+    expect(grid.classes()).toContain("content-grid--start");
+    expect(grid.findAll(".event-info__section").length).toBe(6);
+  });
+
+  it("tiles reader lists on the department staff surfaces", async () => {
+    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    installDevelopmentDepartmentSelfAdminSession();
+
+    const documents = await mountAt(
+      DocumentLibraryView,
+      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "documents"),
+    );
+    expect(documents.get(".content-grid").classes()).toContain(
+      "content-grid--wide",
+    );
+
+    const shifts = await mountAt(
+      DepartmentShiftListView,
+      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "shifts"),
+    );
+    expect(shifts.get(".content-grid").classes()).toContain(
+      "content-grid--tile",
+    );
+
+    const trainings = await mountAt(
+      DepartmentTrainingListView,
+      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "trainings"),
+    );
+    expect(trainings.get(".content-grid").classes()).toContain(
+      "content-grid--wide",
+    );
   });
 
   it("keeps staff card actions at a thumb-sized target", async () => {

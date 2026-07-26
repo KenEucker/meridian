@@ -565,6 +565,32 @@ Creation actions use `--m-action-primary-*`. Search/filter actions and page navi
 
 Light and dark mode must use the same semantic token names with different values.
 
+### 10.2 Layout Tokens
+
+```css
+:root {
+  --m-content-staff: ;
+  --m-content-workflow: ;
+  --m-measure: ;
+  --m-tile-min: ;
+  --m-tile-min-wide: ;
+}
+```
+
+`--m-content-staff` and `--m-content-workflow` are page container widths. Both
+fill the phone inside the shell's padding and then keep growing with the
+viewport rather than stopping at a fixed measure. Pages must use these rather
+than hard-coding a `rem` cap: a capped container leaves a large display showing
+a narrow strip of content with several screens of scrolling underneath it.
+
+`--m-measure` is the longest line of prose we render. Layout width and reading
+width are different limits: a paragraph, document body, or lede is capped at the
+measure even when its container is a wall panel wide.
+
+`--m-tile-min` and `--m-tile-min-wide` are the narrowest a tile may get before a
+grid drops a column. Use the wide value where tiles carry prose or four or more
+labelled fields.
+
 ---
 
 ## 11. Component Contract
@@ -673,11 +699,16 @@ this one.
 
 Required behavior:
 
-- a single measured column (`--m-content-staff`), filling the phone inside the
-  shell's own padding and capping at a readable measure on larger screens;
+- container width from `--m-content-staff`, which fills the phone inside the
+  shell's own padding and keeps growing with the viewport;
 - no horizontal scrolling at any width;
-- records rendered as stacked cards with every field labelled, not as a table
-  that scrolls its own headers off screen;
+- records rendered as cards with every field labelled, not as a table that
+  scrolls its own headers off screen;
+- cards laid out with `ContentGrid`: one column on a phone, a column per tile
+  width beyond that (see 11.5B);
+- prose bounded by `--m-measure` rather than by the container;
+- the header stacking on a phone and putting actions beside the title from
+  64rem, which is a row of vertical space back on every staff page;
 - tap targets of at least 44px, including disclosure controls and the whole card
   title block when a card links out;
 - primary actions full-width on a phone, inline once there is room;
@@ -686,6 +717,39 @@ Required behavior:
 The lead view keeps `DataTable`: a lead comparing coverage across teams needs
 the width, and a table is the right shape for that comparison. The reader view
 must not be the lead table with columns hidden.
+
+### 11.5B ContentGrid and large-display scaling
+
+Purpose: turn extra width into more visible content instead of more empty space,
+across both page templates.
+
+`ContentGrid` is the tiling primitive. Peer blocks — record cards, page
+sections, summaries — are one column on a phone and gain a column per
+`--m-tile-min` (or `--m-tile-min-wide`) of available width. It uses `auto-fill`,
+not `auto-fit`: a two-record list must render two normal tiles with space beside
+them, not two tiles stretched across a television.
+
+Rules:
+
+- a stack of peer cards or sections tiles; a single stream of prose does not;
+- full-width blocks — headings, toolbars, filters, tables — stay full width and
+  sit between tiled groups rather than inside them;
+- rows stretch to equal height by default; blocks whose natural height varies a
+  lot, such as sections that may be empty, opt out;
+- containers grow with the viewport, prose does not.
+
+Beyond 2560px the root font size steps up (18px, then 20px at 3200px, then 23px
+at 3840px), which scales every rem-based token — type, spacing, controls, and
+tile widths — together. Scaling starts at 2560px rather than 1920px because what
+drives legible type is viewing distance, which CSS cannot measure; a 1920px
+panel is far more often a desk monitor than a wall, and inflating those would
+cost density users already have.
+
+Bigger type costs vertical space, so it is paired with grids that add columns at
+the same widths: height falls by the column count faster than the type grows.
+The target is that a page's normal content fits one screen on a large display.
+That is a design goal, not a guarantee — a list of two hundred records will
+still scroll, and no layout rule can prevent that.
 
 ### 11.6 MetricCard
 

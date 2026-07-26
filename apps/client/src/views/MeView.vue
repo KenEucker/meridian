@@ -316,7 +316,7 @@ const currentEventTargetLabel = computed(() => {
 .me {
   display: grid;
   gap: var(--m-space-5);
-  width: min(100%, 72rem);
+  width: var(--m-content-workflow);
 }
 
 .me__hero,
@@ -552,6 +552,29 @@ const currentEventTargetLabel = computed(() => {
 
   .me__schedule-list dl {
     grid-template-columns: 1fr minmax(8rem, auto);
+  }
+}
+
+/*
+ * Past a laptop, the event cards and the shift schedule tile instead of
+ * stacking, so a staff member with a full rotation sees the whole rotation
+ * rather than the first two entries and a scrollbar.
+ */
+@media (min-width: 64rem) {
+  .me__event-list,
+  .me__schedule-list {
+    grid-template-columns: repeat(auto-fill, minmax(var(--m-tile-min), 1fr));
+    align-items: start;
+  }
+
+  .me__hero {
+    grid-template-columns: auto minmax(12rem, 1fr) minmax(0, 2fr);
+  }
+
+  .me__details {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
   }
 }
 </style>

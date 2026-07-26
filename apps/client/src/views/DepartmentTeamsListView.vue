@@ -527,7 +527,7 @@ function teamCreateRoute() {
 
 <style scoped>
 .dept-teams {
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   min-width: 0;
   display: grid;
   gap: var(--m-space-4);
