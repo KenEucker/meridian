@@ -52,7 +52,10 @@ withDefaults(
 <style scoped>
 .workflow-page {
   display: grid;
-  gap: var(--m-space-4);
+  /* Rows keep their content height; slack collects at the end of the page
+     rather than being shared out as gaps between unrelated bands. */
+  align-content: start;
+  gap: var(--m-stack-gap);
   width: var(--m-content-workflow);
   min-width: 0;
 }

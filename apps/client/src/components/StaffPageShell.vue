@@ -69,7 +69,8 @@ withDefaults(
 <style scoped>
 .staff-page {
   display: grid;
-  gap: var(--m-space-4);
+  align-content: start;
+  gap: var(--m-stack-gap);
   width: var(--m-content-staff);
   min-width: 0;
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ControlBar from "@/components/ControlBar.vue";
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
@@ -352,64 +353,66 @@ function compareReports(
     </div>
 
     <template v-else>
-      <form class="ims-fr-list__filters" aria-label="Filter Field Reports">
-        <label for="ims-fr-list-link">
-          <span>Link status</span>
-          <select
-            id="ims-fr-list-link"
-            :value="linkFilter"
-            @change="onLinkFilterChange"
-          >
-            <option value="all">All reports</option>
-            <option value="linked">Linked</option>
-            <option value="not_linked">Not linked</option>
-          </select>
-        </label>
+      <ControlBar label="Field Report filters">
+        <form data-control-group aria-label="Filter Field Reports">
+          <label for="ims-fr-list-link">
+            <span>Link status</span>
+            <select
+              id="ims-fr-list-link"
+              :value="linkFilter"
+              @change="onLinkFilterChange"
+            >
+              <option value="all">All reports</option>
+              <option value="linked">Linked</option>
+              <option value="not_linked">Not linked</option>
+            </select>
+          </label>
 
-        <label for="ims-fr-list-shift">
-          <span>Shift</span>
-          <select
-            id="ims-fr-list-shift"
-            :value="shiftFilter"
-            @change="onShiftFilterChange"
-          >
-            <option value="all">All shifts</option>
-            <option value="current">Current shift</option>
-          </select>
-        </label>
+          <label for="ims-fr-list-shift">
+            <span>Shift</span>
+            <select
+              id="ims-fr-list-shift"
+              :value="shiftFilter"
+              @change="onShiftFilterChange"
+            >
+              <option value="all">All shifts</option>
+              <option value="current">Current shift</option>
+            </select>
+          </label>
 
-        <label for="ims-fr-list-state">
-          <span>Related state</span>
-          <select
-            id="ims-fr-list-state"
-            :value="stateFilter"
-            @change="onStateFilterChange"
-          >
-            <option value="active">Active states</option>
-            <option value="open">Open</option>
-            <option value="on_scene">On Scene</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="on_hold">On Hold</option>
-            <option value="closed">Closed</option>
-            <option value="all">All states</option>
-          </select>
-        </label>
+          <label for="ims-fr-list-state">
+            <span>Related state</span>
+            <select
+              id="ims-fr-list-state"
+              :value="stateFilter"
+              @change="onStateFilterChange"
+            >
+              <option value="active">Active states</option>
+              <option value="open">Open</option>
+              <option value="on_scene">On Scene</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="on_hold">On Hold</option>
+              <option value="closed">Closed</option>
+              <option value="all">All states</option>
+            </select>
+          </label>
 
-        <label for="ims-fr-list-priority">
-          <span>Related priority</span>
-          <select
-            id="ims-fr-list-priority"
-            :value="priorityFilter"
-            @change="onPriorityFilterChange"
-          >
-            <option value="all">All priorities</option>
-            <option value="Critical">Critical</option>
-            <option value="Serious">Serious</option>
-            <option value="Important">Important</option>
-            <option value="Routine">Routine</option>
-          </select>
-        </label>
-      </form>
+          <label for="ims-fr-list-priority">
+            <span>Related priority</span>
+            <select
+              id="ims-fr-list-priority"
+              :value="priorityFilter"
+              @change="onPriorityFilterChange"
+            >
+              <option value="all">All priorities</option>
+              <option value="Critical">Critical</option>
+              <option value="Serious">Serious</option>
+              <option value="Important">Important</option>
+              <option value="Routine">Routine</option>
+            </select>
+          </label>
+        </form>
+      </ControlBar>
 
       <p v-if="reports.length === 0" class="ims-fr-list__empty" role="status">
         No Field Reports match these filters.

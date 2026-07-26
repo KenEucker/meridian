@@ -3,6 +3,19 @@ import { RouterLink, type RouteLocationRaw } from "vue-router";
 
 import WorkflowPageNavigation from "@/components/WorkflowPageNavigation.vue";
 
+/**
+ * Workflow page heading.
+ *
+ * The heading is the same three strings, a few summary numbers, and a couple of
+ * links at every width — but stacking them costs a phone nothing and costs a
+ * wide display a third of the fold. So the band re-flows rather than re-sizes:
+ * department, title, and description share a baseline row once there is width
+ * for them, summary cards move up beside the title instead of below it, and
+ * block padding tightens through the density tokens while inline padding grows.
+ *
+ * Nothing is hidden at any width. The same content is rearranged, so a wide
+ * screen buys visible rows of data rather than a taller header.
+ */
 withDefaults(
   defineProps<{
     headingId: string;
@@ -69,7 +82,7 @@ withDefaults(
 <style scoped>
 .workflow-page-heading {
   display: grid;
-  gap: var(--m-space-4);
+  gap: var(--m-stack-gap);
   min-width: 0;
 }
 
@@ -92,9 +105,9 @@ withDefaults(
 
 .workflow-page-heading__card {
   display: grid;
-  gap: var(--m-space-4);
+  gap: var(--m-stack-gap);
   min-width: 0;
-  padding: var(--m-space-4);
+  padding: var(--m-pad-block) var(--m-pad-inline);
   border: 1px solid var(--m-border-default);
   border-radius: 8px;
   background: var(--m-surface-raised);
@@ -131,6 +144,7 @@ withDefaults(
   margin-top: var(--m-space-2);
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
+  max-width: var(--m-measure);
 }
 
 .workflow-page-heading__actions {
@@ -162,11 +176,69 @@ withDefaults(
   .workflow-page-heading__card {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    padding: var(--m-space-5);
   }
 
   .workflow-page-heading__cards {
     grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Wide: the three heading strings share one baseline row. Three stacked lines
+ * of one-line text is the single most repeated piece of wasted height in the
+ * product, because every workflow page has this band.
+ */
+@media (min-width: 90rem) {
+  .workflow-page-heading__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--m-space-2) var(--m-space-3);
+  }
+
+  .workflow-page-heading__title h1,
+  .workflow-page-heading__description {
+    margin-top: 0;
+  }
+
+  .workflow-page-heading__department::after {
+    content: "";
+  }
+
+  .workflow-page-heading__description {
+    flex: 1 1 20rem;
+  }
+}
+
+/*
+ * Wider still: summary cards move out of their own row and sit beside the
+ * title, so the whole heading is one band rather than two.
+ *
+ * They are forced into a single row of content-sized columns to get there. A
+ * card grid that wraps inside a side column is taller than the full-width row
+ * it replaced, which would make this rule cost height rather than save it.
+ */
+@media (min-width: 120rem) {
+  .workflow-page-heading__card {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+  }
+
+  .workflow-page-heading__cards {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .workflow-page-heading__cards :deep(.workflow-heading-card-grid) {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(7rem, max-content);
+  }
+
+  .workflow-page-heading__actions {
+    grid-column: 3;
+    grid-row: 1;
+    align-items: center;
   }
 }
 </style>

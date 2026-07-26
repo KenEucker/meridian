@@ -78,6 +78,11 @@ All authenticated Meridian product screens must follow these rules:
 13. Normal create/edit forms use explicit Submit or Save and Cancel.
 14. Field Reports are submitted and finalized; they are not drafts.
 15. Department accent colors identify departments but do not theme entire surfaces.
+16. Build every screen mobile-first, then let it re-flow rather than re-size: a wider viewport must buy visible content, not bigger gaps. See sections 11.5B through 11.5E.
+17. A page has one control band. Search and filters live in it, not in bands of their own.
+18. Nothing spans the full width by default. Full width is a decision; declare which element grows and let the rest size to their content.
+19. Take page padding and band gaps from the density tokens in 10.2 rather than fixed spacing values.
+20. Before adding a layout rule for wide screens, measure the page height before and after. If it grew, the rule is wrong.
 
 ---
 
@@ -574,6 +579,11 @@ Light and dark mode must use the same semantic token names with different values
   --m-measure: ;
   --m-tile-min: ;
   --m-tile-min-wide: ;
+  --m-region-min: ;
+
+  --m-pad-block: ;
+  --m-pad-inline: ;
+  --m-stack-gap: ;
 }
 ```
 
@@ -587,9 +597,14 @@ a narrow strip of content with several screens of scrolling underneath it.
 width are different limits: a paragraph, document body, or lede is capped at the
 measure even when its container is a wall panel wide.
 
-`--m-tile-min` and `--m-tile-min-wide` are the narrowest a tile may get before a
-grid drops a column. Use the wide value where tiles carry prose or four or more
-labelled fields.
+`--m-tile-min`, `--m-tile-min-wide`, and `--m-region-min` are the narrowest a
+tile or region may get before a grid drops a column. Use the wide value where
+tiles carry prose or four or more labelled fields.
+
+`--m-pad-block`, `--m-pad-inline`, and `--m-stack-gap` are the density axis
+described in section 11.5C. Components use these for their own padding and for
+the gaps between page bands instead of fixed `--m-space-*` values, so density is
+a property of the viewport rather than something each screen re-decides.
 
 ---
 
@@ -662,6 +677,11 @@ Required features:
 - keyboard-reachable row actions;
 - filters/sorting where useful;
 - responsive fallback or paired card layout.
+
+Filters and search belong in the page's `ControlBar` (11.5D), not in a band of
+their own above the table. A table is primary content: it keeps full width and
+is not paired into a region (11.5E) unless the block beside it is a peer of
+similar weight.
 
 Suggested Blade API:
 
@@ -750,6 +770,98 @@ the same widths: height falls by the column count faster than the type grows.
 The target is that a page's normal content fits one screen on a large display.
 That is a design goal, not a guarantee — a list of two hundred records will
 still scroll, and no layout rule can prevent that.
+
+### 11.5C The Density Axis
+
+The two axes are not equally scarce. On a wide display horizontal space is
+abundant and vertical space is the entire problem: everything a page pushes down
+is something the reader has to scroll to. Every rule in 11.5C through 11.5E
+follows from that.
+
+As width grows, block padding and stack gaps tighten while inline padding grows,
+through `--m-pad-block`, `--m-pad-inline`, and `--m-stack-gap`. A band gets
+shorter and roomier at the same time. Components take their own padding and the
+gaps between page bands from these tokens rather than fixed spacing values.
+
+Three corollaries, which apply to any new surface:
+
+1. **Re-flow rather than re-size.** A wide screen should not show the same
+   layout with bigger gaps. Stacked one-line strings share a baseline row;
+   blocks that sat above each other sit beside each other. Nothing is hidden at
+   any width — the same content is rearranged.
+2. **Nothing spans the full width by default.** Full width is a decision, not a
+   fallback. A search box, a filter, a heading string, and a summary line each
+   claim the width they need; leftover width goes to whichever element was
+   declared as the one that grows.
+3. **Page grids use `align-content: start`.** Leftover height collects at the
+   end of the page rather than being shared out as gaps between unrelated bands.
+
+Page headings follow this directly. `WorkflowPageHeading` stacks on a phone,
+puts actions beside the title from 48rem, shares one baseline row between
+department, title, and description from 90rem, and moves summary cards up beside
+the title from 120rem. When cards move into a side column they are forced into a
+single row of content-sized columns: a card grid that wraps inside a side column
+is taller than the full-width row it replaced, which would make the rule cost
+height rather than save it.
+
+### 11.5D ControlBar and ControlField
+
+Purpose: one band for a page's search, filters, and list-level actions.
+
+The pattern this replaces is a page stacking several sibling forms, each with
+its own border, padding, and background. Three of those is three bands of chrome
+above the data and, on a wide display, three near-empty rows.
+
+Rules:
+
+- a page has **one** control band; search, filters, presets, and list actions go
+  in it;
+- children stay separate `form` elements where they submit separately — the bar
+  is a layout container, not a merge of unrelated forms;
+- a group of related controls carries `data-control-group` so it wraps as one
+  unit rather than splitting across rows;
+- exactly one group may carry `data-control-group="grow"`, and it absorbs
+  leftover width. A growing group must not wrap internally: it gives width back
+  by compressing its field, because wrapping would make the whole bar row as
+  tall as that group;
+- end-aligned actions go in the `end` slot;
+- `variant="bare"` where the bar already sits inside a card or section.
+
+`ControlField` is one labelled control. Past a phone the label sits beside its
+control rather than above it — a row of height back per control — and the field
+is sized by `width`, a content class (`sm`, `md`, `lg`, `grow`) rather than a
+pixel value. A State select does not need the same width as a search box, and
+neither needs a seventh of a 1900px screen.
+
+Toolbars that already use a `label` wrapping its own text and control adopt the
+bar by changing their wrapper element; `ControlBar` styles that idiom too. New
+work should prefer `ControlField`.
+
+### 11.5E Page Regions
+
+Purpose: let a page declare which blocks are peers, so they sit side by side
+when there is room.
+
+Wrap peer blocks in `ContentGrid` with `min="region"`. Regions use `auto-fit`
+where record tiles use `auto-fill`, and the difference is deliberate: a record
+list is unbounded data, so tiles keep a predictable size rather than stretching
+to fill whatever came back, while a page's regions are a small fixed set the
+author chose and should share the width they are given.
+
+Reading order is preserved — a region grid reads left to right, top to bottom,
+so a documented content order (Department Overview's exceptions, working staff,
+assignments, summaries) still holds.
+
+Pair blocks only when they are peers of similar weight:
+
+- **do** pair setup panels, a chart with the detail it drives, and two embedded
+  featuresets;
+- **do not** pair a wide table with a narrow panel. Halving a table's width
+  makes it taller, and the pairing can cost more height than it saves. Measure
+  before and after; if the page got taller, the blocks were not peers.
+
+Primary content keeps the width it needs. The document library's policy table
+stays full width beside nothing, because it is the point of that section.
 
 ### 11.6 MetricCard
 

@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import StaffCardList from "@/components/StaffCardList.vue";
 import StaffListCard from "@/components/StaffListCard.vue";
+import ControlBar from "@/components/ControlBar.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
   archiveDocument,
@@ -219,7 +220,7 @@ function transition(
     </template>
 
     <template v-else>
-      <div class="documents__toolbar">
+      <ControlBar label="Document filters">
         <label>
           State
           <select :value="stateFilter" @change="onStateChange">
@@ -229,7 +230,7 @@ function transition(
             <option value="archived">Archived</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <p v-if="actionError" class="documents__error" role="alert">
         {{ actionError }}

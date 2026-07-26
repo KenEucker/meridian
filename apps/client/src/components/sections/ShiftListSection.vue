@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import StaffCardList from "@/components/StaffCardList.vue";
 import StaffListCard from "@/components/StaffListCard.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
+import ControlBar from "@/components/ControlBar.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
   canAdministerDepartment,
@@ -222,7 +223,7 @@ const shiftCreateRoute = computed(() => ({
     </StaffCardList>
 
     <template v-else>
-      <div class="dept-shifts__toolbar">
+      <ControlBar label="Shift filters">
         <label class="dept-shifts__filter">
           Status
           <select
@@ -235,7 +236,7 @@ const shiftCreateRoute = computed(() => ({
             <option value="cancelled">Cancelled</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <p v-if="actionError" class="dept-shifts__error" role="alert">
         {{ actionError }}

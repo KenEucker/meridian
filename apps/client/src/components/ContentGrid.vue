@@ -7,16 +7,21 @@
  * makes a wide screen show more at once rather than the same single column with
  * empty space beside it.
  *
- * `auto-fill`, not `auto-fit`: a two-item list should render two normal tiles
- * with space beside them, not two tiles stretched across a television. Tile
- * width stays predictable regardless of how many records came back.
+ * `auto-fill`, not `auto-fit`, for record tiles: a two-item list should render
+ * two normal tiles with space beside them, not two tiles stretched across a
+ * television. Tile width stays predictable regardless of how many records came
+ * back.
+ *
+ * `min="region"` inverts that on purpose — see the note on the rule. Records are
+ * unbounded data; regions are a fixed set the page author declared, and those
+ * should share the width they are given.
  */
 withDefaults(
   defineProps<{
     /** Rendered element. Use `ul` when the children are `li` records. */
     as?: "div" | "ul";
     /** Narrowest a tile may get before the grid drops a column. */
-    min?: "tile" | "wide" | "compact";
+    min?: "tile" | "wide" | "compact" | "region";
     /** Accessible name, required when `as` is `ul`. */
     label?: string;
     /**
@@ -74,6 +79,20 @@ withDefaults(
       auto-fill,
       minmax(var(--m-tile-min-wide), 1fr)
     );
+  }
+
+  /*
+   * Page regions: whole blocks a page declares as peers.
+   *
+   * Regions use auto-fit where records use auto-fill, and the difference is
+   * deliberate. A record list is unbounded data, so tiles must keep a
+   * predictable size rather than stretching to fill whatever came back. A
+   * page's regions are a small fixed set the author chose, so two of them
+   * should share the width rather than sit in two thirds of it with an empty
+   * column beside them.
+   */
+  .content-grid--region {
+    grid-template-columns: repeat(auto-fit, minmax(var(--m-region-min), 1fr));
   }
 }
 

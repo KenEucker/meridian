@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ControlBar from "@/components/ControlBar.vue";
 import { computed, reactive, ref } from "vue";
 
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
@@ -290,7 +291,7 @@ function eventLabel(item: ProductEquipmentItem): string {
         </div>
       </form>
 
-      <div class="equipment__toolbar">
+      <ControlBar label="Equipment filters">
         <label class="equipment__filter">
           Show
           <select v-model="statusFilter" aria-label="Filter equipment by status">
@@ -299,7 +300,7 @@ function eventLabel(item: ProductEquipmentItem): string {
             <option value="all">All</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <div class="equipment__table-wrap" role="region" aria-label="Equipment">
         <table class="equipment__table">

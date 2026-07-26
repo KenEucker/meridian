@@ -41,6 +41,40 @@
    */
   --m-tile-min: 20rem;
   --m-tile-min-wide: 26rem;
+  --m-region-min: 34rem;
+
+  /*
+   * Density axis.
+   *
+   * The two axes are not equally scarce. On a wide display horizontal space is
+   * abundant and vertical space is the whole problem: everything a page pushes
+   * down is something the reader has to scroll to. So as width grows, block
+   * padding and stack gaps tighten while inline padding grows — a band gets
+   * shorter and roomier at the same time.
+   *
+   * Components use these instead of fixed --m-space values for their own
+   * padding and for the gaps between page bands, so density is a property of
+   * the viewport rather than something each screen re-decides.
+   */
+  --m-pad-block: var(--m-space-4);
+  --m-pad-inline: var(--m-space-4);
+  --m-stack-gap: var(--m-space-4);
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --m-pad-block: var(--m-space-3);
+    --m-pad-inline: var(--m-space-5);
+    --m-stack-gap: var(--m-space-3);
+  }
+}
+
+@media (min-width: 120rem) {
+  :root {
+    --m-pad-block: var(--m-space-3);
+    --m-pad-inline: var(--m-space-6);
+    --m-stack-gap: var(--m-space-3);
+  }
 }
 
 html,

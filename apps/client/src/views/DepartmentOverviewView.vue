@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ContentGrid from "@/components/ContentGrid.vue";
 import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
@@ -107,87 +108,94 @@ function onShiftChange(shiftId: string): void {
       {{ formatTimestamp(shift.endsAt, overview.context.timeZone) }}
     </p>
 
-    <section aria-labelledby="exceptions-heading" class="overview__section">
-      <h2 id="exceptions-heading">Exceptions needing attention</h2>
-      <p v-if="overview.exceptions.length === 0" role="status">
-        No exceptions for this shift.
-      </p>
-      <ul v-else class="overview__exceptions">
-        <li
-          v-for="item in overview.exceptions"
-          :key="item.id"
-          :data-severity="item.severity"
-        >
-          <strong>{{ item.label }}</strong>
-          <span>{{ item.detail }}</span>
-        </li>
-      </ul>
-    </section>
+    <!--
+      Overview keeps its documented content order — exceptions, then working
+      staff, then assignments, then summaries — while reading left to right and
+      top to bottom instead of straight down. A lead scanning for an exception
+      should not have to scroll past it to see who is on shift.
+    -->
+    <ContentGrid min="region" :stretch="false">
+      <section aria-labelledby="exceptions-heading" class="overview__section">
+        <h2 id="exceptions-heading">Exceptions needing attention</h2>
+        <p v-if="overview.exceptions.length === 0" role="status">
+          No exceptions for this shift.
+        </p>
+        <ul v-else class="overview__exceptions">
+          <li
+            v-for="item in overview.exceptions"
+            :key="item.id"
+            :data-severity="item.severity"
+          >
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.detail }}</span>
+          </li>
+        </ul>
+      </section>
 
-    <section aria-labelledby="checked-in-heading" class="overview__section">
-      <h2 id="checked-in-heading">Checked-in staff currently working</h2>
-      <p v-if="checkedIn.length === 0" role="status">
-        No staff are checked in for this shift.
-      </p>
-      <ul v-else class="overview__list">
-        <li v-for="member in checkedIn" :key="member.assignmentId">
-          <span>{{ member.displayName }}</span>
-          <span>
-            {{ attendanceStateLabel(member.attendanceState) }} /
-            {{ deploymentLabel(overview, member.currentDeploymentId) }}
-          </span>
-        </li>
-      </ul>
-    </section>
+      <section aria-labelledby="checked-in-heading" class="overview__section">
+        <h2 id="checked-in-heading">Checked-in staff currently working</h2>
+        <p v-if="checkedIn.length === 0" role="status">
+          No staff are checked in for this shift.
+        </p>
+        <ul v-else class="overview__list">
+          <li v-for="member in checkedIn" :key="member.assignmentId">
+            <span>{{ member.displayName }}</span>
+            <span>
+              {{ attendanceStateLabel(member.attendanceState) }} /
+              {{ deploymentLabel(overview, member.currentDeploymentId) }}
+            </span>
+          </li>
+        </ul>
+      </section>
 
-    <section aria-labelledby="assignments-heading" class="overview__section">
-      <h2 id="assignments-heading">Shift assignments</h2>
-      <div class="overview__table-frame">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Staff</th>
-              <th scope="col">Team</th>
-              <th scope="col">Attendance</th>
-              <th scope="col">Deployment</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="member in overview.assignments"
-              :key="member.assignmentId"
-            >
-              <th scope="row">{{ member.displayName }}</th>
-              <td>{{ member.teamLabel }}</td>
-              <td>{{ attendanceStateLabel(member.attendanceState) }}</td>
-              <td>
-                {{ deploymentLabel(overview, member.currentDeploymentId) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <section aria-labelledby="assignments-heading" class="overview__section">
+        <h2 id="assignments-heading">Shift assignments</h2>
+        <div class="overview__table-frame">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Staff</th>
+                <th scope="col">Team</th>
+                <th scope="col">Attendance</th>
+                <th scope="col">Deployment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="member in overview.assignments"
+                :key="member.assignmentId"
+              >
+                <th scope="row">{{ member.displayName }}</th>
+                <td>{{ member.teamLabel }}</td>
+                <td>{{ attendanceStateLabel(member.attendanceState) }}</td>
+                <td>
+                  {{ deploymentLabel(overview, member.currentDeploymentId) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-    <section aria-labelledby="equipment-heading" class="overview__section">
-      <h2 id="equipment-heading">Equipment out</h2>
-      <p v-if="overview.equipmentOut.length === 0" role="status">
-        No equipment is checked out.
-      </p>
-      <ul v-else class="overview__list">
-        <li
-          v-for="item in overview.equipmentOut"
-          :key="item.checkoutId"
-        >
-          <span>
-            {{ item.itemName }}
-            <template v-if="item.assetTag">({{ item.assetTag }})</template>
-          </span>
-          <span>with {{ item.staffName }}</span>
-        </li>
-      </ul>
-    </section>
-
+      <section aria-labelledby="equipment-heading" class="overview__section">
+        <h2 id="equipment-heading">Equipment out</h2>
+        <p v-if="overview.equipmentOut.length === 0" role="status">
+          No equipment is checked out.
+        </p>
+        <ul v-else class="overview__list">
+          <li
+            v-for="item in overview.equipmentOut"
+            :key="item.checkoutId"
+          >
+            <span>
+              {{ item.itemName }}
+              <template v-if="item.assetTag">({{ item.assetTag }})</template>
+            </span>
+            <span>with {{ item.staffName }}</span>
+          </li>
+        </ul>
+      </section>
+    </ContentGrid>
   </DeptOpsShell>
 </template>
 
