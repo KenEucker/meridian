@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Documents\Concerns;
 
+use App\Domain\Documents\EventInfoSection;
 use App\Models\DocumentFragment;
 use App\Models\DocumentFragmentReference;
 use App\Models\PolicyDocument;
@@ -36,6 +37,8 @@ trait SerializesProductDocuments
             'scope_label' => $this->scopeLabel($document),
             'title' => $document->title,
             'slug' => $document->slug,
+            'event_info_section' => $document->event_info_section,
+            'event_info_section_label' => EventInfoSection::label($document->event_info_section),
             'markdown_source' => $document->markdown_source,
             'rendered_html' => $renderer->render($document),
             'state' => $document->state,

@@ -837,7 +837,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
 | `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
-| `event.info` | `events.info` | Staff-safe event information fallback with directions, arrival guidance, packing, food/housing, and document placeholders | Staff with event access |
+| `event.info` | `events.info` | Staff-safe event information assembled from visible published documents for directions, arrival requirements, packing, food, housing, and event requirements | Staff with event access |
 | `staff.field-reports` | `staff.field-reports.index` | My Field Reports | Authenticated author |
 | `staff.field-report-create` | `staff.field-reports.create` | Submit Field Report | Staff with FR permission |
 | `staff.field-report-detail` | `staff.field-reports.show` | View submitted Field Report | Author or permitted reviewer |
@@ -854,6 +854,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `department.overview` | `events.departments.overview` | Lead situational awareness for a selected shift | Department lead |
 | `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
 | `department.teams` | `events.departments.teams.index` | Dynamic Admin page: department details and team management for department leads; scoped team details and staff lists for team leads | Department lead or team lead; hidden/fails closed for staff-only members |
+| `team.overview` | `events.departments.teams.show` | Team situational awareness: team shifts, roster, current staffing, and drill-through to the owning workflows | Department lead for any department team; team lead for teams they lead; fails closed otherwise |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
 | `department.training-detail` | `events.departments.trainings.show` | Staff-facing training page: delivery (in-person/online), schedule or training URL, time commitment, prerequisites, signup state, and after-training information | Department member; managers additionally reach create/edit |
 | `department.shifts` | `events.departments.shifts.index` | Manage/view shifts | Department lead or permitted role |
@@ -895,11 +896,29 @@ owning workflows. Overview actions do not replace Logistics or Operations.
 
 The Staff Me page is the staff-facing profile and personal work hub. Ongoing
 event clicks route by role: department leads go to Department Overview, team
-leads should go to a future team overview once that route is defined, and other
-staff go to Event Info. Event Info is an interim staff-safe surface until the
-document system can resolve and render the visible published event documents for
-directions, arrival instructions, packing guidance, food/housing, and event
-requirements.
+leads go to Team Overview for a team they lead, and other staff go to Event Info.
+The card states which surface it opens, so the destination is not a surprise.
+
+Team Overview is the team-scoped counterpart to Department Overview, not a
+narrowed copy of it. It shows the team's shifts with staffing counts, the team
+roster with current attendance, and drill-through links to Admin, Shifts,
+Documents, and Event Info. Authorization matches the Admin page: department
+administer authority reaches every team in the department, team leads reach only
+teams they lead, and everyone else fails closed. A named team the viewer may not
+open fails closed rather than redirecting to a team they may, so one team's
+roster never renders under another team's URL.
+
+Event Info is assembled from published policy and procedure documents. A
+maintainer assigns a document to exactly one Event Info section while authoring
+it; nothing is inferred from titles or slugs. The sections and their order are
+`directions`, `arrival`, `packing`, `food`, `housing`, and `requirements`. Only
+published documents appear, including for the maintainer who wrote them, and
+visibility is exactly the existing published-document rule, so Event Info grants
+no access of its own and the same section may legitimately differ between two
+staff members. Within a section, documents are ordered organization scope first,
+then department, then team, then by title. A section with no visible published
+document states that plainly and never falls back to placeholder prose, because
+staff cannot tell placeholder guidance from published guidance.
 
 The Logistics Window is a staff-first service station. Search for staff, equipment,
 and shifts is front and center and works from department-scoped offline cache for

@@ -81,6 +81,11 @@ const selectedTeamLabels = computed(() =>
 const isSelectedTeamLead = computed(() =>
   selectedFixtureDepartment.value.teams.some((team) => team.isTeamLead),
 );
+const leadTeamId = computed(
+  () =>
+    selectedFixtureDepartment.value.teams.find((team) => team.isTeamLead)
+      ?.teamId ?? null,
+);
 const scheduleRows = computed(() =>
   (workspace.value?.shiftCards ?? [])
     .filter(
@@ -141,6 +146,13 @@ const personalDetails = computed(() => [
     value: `${eventCards.value.length}`,
   },
 ]);
+/**
+ * Role-aware event routing (M11.20, UI contract 12.3). Department leads land on
+ * Department Overview, team leads on the team overview for a team they lead,
+ * and everyone else on Event Info. The team-lead branch previously fell through
+ * to the Admin page as an interim, which answered who is on the team but not
+ * what the team is doing.
+ */
 const currentEventTarget = computed(() => {
   if (selectedFixtureDepartment.value.isDepartmentLead) {
     return {
@@ -149,10 +161,13 @@ const currentEventTarget = computed(() => {
     };
   }
 
-  if (isSelectedTeamLead.value) {
+  if (isSelectedTeamLead.value && leadTeamId.value !== null) {
     return {
-      name: "events.departments.teams.index",
-      params: selectedFixtureDepartmentRouteParams.value,
+      name: "events.departments.teams.show",
+      params: {
+        ...selectedFixtureDepartmentRouteParams.value,
+        teamId: leadTeamId.value,
+      },
     };
   }
 
@@ -162,6 +177,15 @@ const currentEventTarget = computed(() => {
       eventId: selectedFixtureDepartment.value.eventId,
     },
   };
+});
+const currentEventTargetLabel = computed(() => {
+  if (selectedFixtureDepartment.value.isDepartmentLead) {
+    return "Opens Department Overview";
+  }
+
+  return isSelectedTeamLead.value && leadTeamId.value !== null
+    ? "Opens Team Overview"
+    : "Opens Event Info";
 });
 </script>
 
@@ -196,6 +220,14 @@ const currentEventTarget = computed(() => {
     </header>
 
     <nav class="me__links" aria-label="Me links">
+      <RouterLink
+        :to="{
+          name: 'events.info',
+          params: { eventId: selectedFixtureDepartment.eventId },
+        }"
+      >
+        Event Info
+      </RouterLink>
       <RouterLink :to="{ name: 'staff.field-reports.index' }">
         My Field Reports
       </RouterLink>
@@ -226,6 +258,7 @@ const currentEventTarget = computed(() => {
             to
             {{ formatTimestamp(event.endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone) }}
           </small>
+          <small>{{ currentEventTargetLabel }}</small>
         </RouterLink>
       </div>
 
@@ -514,7 +547,7 @@ const currentEventTarget = computed(() => {
   }
 
   .me__links {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .me__schedule-list dl {

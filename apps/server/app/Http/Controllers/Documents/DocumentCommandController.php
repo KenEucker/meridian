@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Documents;
 
+use App\Domain\Documents\EventInfoSection;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Documents\Concerns\SerializesProductDocuments;
 use App\Models\AuditEvent;
@@ -266,6 +267,7 @@ final class DocumentCommandController extends Controller
             'scope_id',
             'title',
             'slug',
+            'event_info_section',
             'markdown_source',
         ]);
         $attributes['state'] = $state;
@@ -280,7 +282,7 @@ final class DocumentCommandController extends Controller
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|null>
      */
     private function validateDocument(
         Request $request,
@@ -293,8 +295,16 @@ final class DocumentCommandController extends Controller
             'scope_id' => ['required', 'uuid'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
+            // Assigning an Event Info section is part of maintaining the
+            // document, so it needs no capability beyond the maintain-scope
+            // check the caller already passed (M11.20).
+            'event_info_section' => ['sometimes', 'nullable', 'string', Rule::in(EventInfoSection::keys())],
             'markdown_source' => ['required', 'string'],
         ]);
+
+        $validated['event_info_section'] = $request->has('event_info_section')
+            ? ($validated['event_info_section'] ?? null)
+            : $document->event_info_section;
 
         if (! $scopes->isValid((string) $validated['organization_id'], (string) $validated['scope_type'], (string) $validated['scope_id'])) {
             throw ValidationException::withMessages([

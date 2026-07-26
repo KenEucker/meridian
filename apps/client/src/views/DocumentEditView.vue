@@ -23,6 +23,11 @@ import {
   type DocumentScopeType,
   type ProductDocument,
 } from "@/documents/documentAuthoringModel";
+import {
+  EVENT_INFO_SECTIONS,
+  eventInfoSectionLabel,
+  isEventInfoSection,
+} from "@/documents/eventInfoSections";
 
 const route = useRoute();
 const router = useRouter();
@@ -64,6 +69,7 @@ const form = reactive<DocumentDraft>({
   scopeId: "",
   title: "",
   slug: "",
+  eventInfoSection: null,
   markdownSource: "",
 });
 const error = ref<string | null>(null);
@@ -131,6 +137,7 @@ watch(
       form.scopeId = existingDocument.value.scopeId;
       form.title = existingDocument.value.title;
       form.slug = existingDocument.value.slug;
+      form.eventInfoSection = existingDocument.value.eventInfoSection;
       form.markdownSource = existingDocument.value.markdownSource;
       savedDocument.value = existingDocument.value;
       return;
@@ -141,6 +148,7 @@ watch(
       form.scopeId = existingFragment.value.scopeId;
       form.title = existingFragment.value.name;
       form.slug = existingFragment.value.slug;
+      form.eventInfoSection = null;
       form.markdownSource = existingFragment.value.markdownSource;
       savedDocument.value = null;
       return;
@@ -150,6 +158,7 @@ watch(
     form.scopeId = defaultScope?.id ?? "";
     form.title = "";
     form.slug = "";
+    form.eventInfoSection = null;
     form.markdownSource = "";
     savedDocument.value = null;
   },
@@ -160,6 +169,11 @@ function onScopeChange(event: Event): void {
   const [scopeType, scopeId] = (event.target as HTMLSelectElement).value.split(":");
   form.scopeType = scopeType as DocumentScopeType;
   form.scopeId = scopeId ?? "";
+}
+
+function onEventInfoSectionChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value;
+  form.eventInfoSection = isEventInfoSection(value) ? value : null;
 }
 
 function save(): void {
@@ -317,6 +331,30 @@ function transition(state: "published" | "archived"): void {
             <input v-model="form.slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
           </label>
 
+          <label v-if="artifactKind !== 'fragment'">
+            Event Info section
+            <select
+              :value="form.eventInfoSection ?? ''"
+              @change="onEventInfoSectionChange"
+            >
+              <option value="">Not shown on Event Info</option>
+              <option
+                v-for="section in EVENT_INFO_SECTIONS"
+                :key="section"
+                :value="section"
+              >
+                {{ eventInfoSectionLabel(section) }}
+              </option>
+            </select>
+          </label>
+          <p
+            v-if="artifactKind !== 'fragment'"
+            class="document-edit__hint"
+          >
+            Assigned documents appear on Event Info once published, to the staff
+            who can already see them.
+          </p>
+
           <label>
             Markdown
             <textarea v-model="form.markdownSource" required rows="16" />
@@ -351,6 +389,16 @@ function transition(state: "published" | "archived"): void {
               <div>
                 <dt>Scope</dt>
                 <dd>{{ scopeLabel(savedDocument.scopeType, savedDocument.scopeId) }}</dd>
+              </div>
+              <div>
+                <dt>Event Info</dt>
+                <dd>
+                  {{
+                    savedDocument.eventInfoSection
+                      ? eventInfoSectionLabel(savedDocument.eventInfoSection)
+                      : "Not shown on Event Info"
+                  }}
+                </dd>
               </div>
             </dl>
             <p>{{ visibilitySummary(savedDocument) }}</p>
@@ -417,6 +465,12 @@ function transition(state: "published" | "archived"): void {
   resize: vertical;
   min-height: 18rem;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.document-edit__hint {
+  margin: calc(var(--m-space-2) * -1) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
 }
 
 .document-edit__button,

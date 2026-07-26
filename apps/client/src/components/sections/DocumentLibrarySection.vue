@@ -18,6 +18,7 @@ import {
   type ProductDocument,
   type ProductDocumentState,
 } from "@/documents/documentAuthoringModel";
+import { eventInfoSectionLabel } from "@/documents/eventInfoSections";
 
 /**
  * Policy, procedure, and fragment library featureset (M11.15, M11.17).
@@ -212,13 +213,14 @@ function transition(
                 <th scope="col">State</th>
                 <th scope="col">Scope</th>
                 <th scope="col">Version</th>
+                <th scope="col">Event Info</th>
                 <th scope="col">Visibility</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="documents.length === 0">
-                <td colspan="7">No documents match this filter.</td>
+                <td colspan="8">No documents match this filter.</td>
               </tr>
               <tr v-for="document in documents" :key="document.id">
                 <td>
@@ -239,6 +241,13 @@ function transition(
                 </td>
                 <td>{{ scopeLabel(document.scopeType, document.scopeId) }}</td>
                 <td>{{ documentVersion(document) }}</td>
+                <td>
+                  {{
+                    document.eventInfoSection
+                      ? eventInfoSectionLabel(document.eventInfoSection)
+                      : "Not shown"
+                  }}
+                </td>
                 <td>{{ visibilitySummary(document) }}</td>
                 <td class="documents__actions">
                   <RouterLink

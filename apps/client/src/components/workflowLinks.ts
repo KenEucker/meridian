@@ -60,6 +60,27 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       });
     }
 
+    // Team leads without department lead authority get the team-scoped
+    // equivalent rather than a narrowed copy of Department Overview (M11.20).
+    const ledTeam = department.isDepartmentLead
+      ? undefined
+      : department.teams.find((team) => team.isTeamLead);
+
+    if (ledTeam) {
+      links.push({
+        label: "Team",
+        pageLabel: "Team Overview",
+        description: "Your team's shifts, roster, and current staffing.",
+        to: {
+          name: "events.departments.teams.show",
+          params: {
+            ...departmentRouteParams.value,
+            teamId: ledTeam.teamId,
+          },
+        },
+      });
+    }
+
     if (department.capabilities.hasPlanning) {
       links.push({
         label: "Planning",

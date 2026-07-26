@@ -1,13 +1,27 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import {
   LOCAL_DEPARTMENT_OPS_CONTEXT,
   LOCAL_PLANNING_TABLE,
 } from "@/department-ops/fixtures";
 import { formatTimestamp } from "@/department-ops/labels";
+import {
+  renderDocumentMarkdown,
+  scopeLabel,
+} from "@/documents/documentAuthoringModel";
+import { resolveEventInfo } from "@/event-info/eventInfoModel";
 
+const route = useRoute();
+const eventInfo = computed(() =>
+  resolveEventInfo(
+    typeof route.params.eventId === "string" ? route.params.eventId : null,
+    typeof route.params.departmentId === "string"
+      ? route.params.departmentId
+      : null,
+  ),
+);
 const eventWindow = computed(() => {
   const starts = LOCAL_PLANNING_TABLE.rows.map((row) => row.startsAt).sort();
   const ends = LOCAL_PLANNING_TABLE.rows.map((row) => row.endsAt).sort();
@@ -30,28 +44,6 @@ const operationsWindowLabel = computed(() => {
     LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone,
   )} to ${formatTimestamp(endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone)}`;
 });
-const eventInfoItems = [
-  {
-    id: "directions",
-    title: "How to get to the event",
-    body: "Placeholder: directions, access windows, gate instructions, and arrival checkpoints will be pulled from published event documents.",
-  },
-  {
-    id: "packing",
-    title: "What to bring",
-    body: "Placeholder: staff packing guidance, credential requirements, weather notes, and role-specific supplies will be assembled from published documents.",
-  },
-  {
-    id: "food",
-    title: "Food and housing",
-    body: "Placeholder: meal availability, housing status, camping notes, and reimbursement guidance will come from event-facing documents.",
-  },
-  {
-    id: "documents",
-    title: "Event documents",
-    body: "Needs further development: this section should resolve the visible policy/procedure/event documents for the staff member and render the current published content.",
-  },
-];
 </script>
 
 <template>
@@ -62,28 +54,64 @@ const eventInfoItems = [
 
     <header class="event-info__header">
       <p class="event-info__eyebrow">Event info</p>
-      <h1 id="event-info-heading">{{ LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel }}</h1>
-      <p>{{ LOCAL_DEPARTMENT_OPS_CONTEXT.departmentLabel }}</p>
+      <h1 id="event-info-heading">{{ eventInfo.eventLabel }}</h1>
+      <p>{{ eventInfo.departmentLabel }}</p>
       <dl class="event-info__context" aria-label="Event information">
         <div>
           <dt>Operations</dt>
           <dd>{{ operationsWindowLabel }}</dd>
         </div>
         <div>
-          <dt>Location</dt>
-          <dd>Location document pending</dd>
+          <dt>Organization</dt>
+          <dd>{{ eventInfo.organizationLabel }}</dd>
         </div>
         <div>
-          <dt>Description</dt>
-          <dd>Event description document pending</dd>
+          <dt>Published documents</dt>
+          <dd>
+            {{ eventInfo.documentCount }} visible to you
+          </dd>
         </div>
       </dl>
+      <p class="event-info__source" role="note">
+        Every section below is the published policy and procedure content you are
+        permitted to see. Sections without a published document say so instead of
+        standing in for one.
+      </p>
     </header>
 
     <div class="event-info__grid">
-      <article v-for="item in eventInfoItems" :key="item.id">
-        <h2>{{ item.title }}</h2>
-        <p>{{ item.body }}</p>
+      <article
+        v-for="section in eventInfo.sections"
+        :key="section.section"
+        :data-section="section.section"
+        :data-empty="section.documents.length === 0 ? 'true' : 'false'"
+      >
+        <h2>{{ section.label }}</h2>
+
+        <p
+          v-if="section.emptyDescription"
+          class="event-info__empty"
+          role="status"
+        >
+          {{ section.emptyDescription }}
+        </p>
+
+        <section
+          v-for="document in section.documents"
+          :key="document.id"
+          class="event-info__document"
+        >
+          <h3>{{ document.title }}</h3>
+          <div
+            class="event-info__document-body"
+            v-html="renderDocumentMarkdown(document.markdownSource)"
+          />
+          <p class="event-info__document-meta">
+            {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
+            {{ scopeLabel(document.scopeType, document.scopeId) }} / version
+            {{ document.version }}
+          </p>
+        </section>
       </article>
     </div>
   </section>
@@ -144,6 +172,10 @@ const eventInfoItems = [
   color: var(--m-text-muted);
 }
 
+.event-info__source {
+  font-size: var(--m-text-sm);
+}
+
 .event-info__context {
   display: grid;
   gap: var(--m-space-3);
@@ -171,10 +203,52 @@ const eventInfoItems = [
 .event-info__grid {
   display: grid;
   gap: var(--m-space-3);
+  align-items: start;
 }
 
 .event-info__grid h2 {
   font-size: var(--m-text-base);
+}
+
+.event-info__document {
+  display: grid;
+  gap: var(--m-space-2);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: 8px;
+  background: var(--m-surface-base);
+}
+
+.event-info__document h3 {
+  margin: 0;
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.event-info__document-body :deep(h1),
+.event-info__document-body :deep(h2) {
+  margin: 0 0 var(--m-space-2);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-base);
+}
+
+.event-info__document-body :deep(p) {
+  margin: 0 0 var(--m-space-2);
+  color: var(--m-text-secondary);
+}
+
+.event-info__document-body :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.event-info__document-meta {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+}
+
+.event-info__empty {
+  font-size: var(--m-text-sm);
 }
 
 .event-info__nav a:focus-visible {

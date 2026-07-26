@@ -1,5 +1,6 @@
 import { shallowRef } from "vue";
 
+import type { EventInfoSection } from "@/documents/eventInfoSections";
 import {
   FIXTURE_ORGANIZER_DEFAULT_TEAM_ID,
   FIXTURE_ORGANIZER_DEPARTMENT_ID,
@@ -25,6 +26,8 @@ export interface ProductDocument {
   readonly scopeId: string;
   readonly title: string;
   readonly slug: string;
+  /** Event Info placement, or null when the document is library-only (M11.20). */
+  readonly eventInfoSection: EventInfoSection | null;
   readonly markdownSource: string;
   readonly state: ProductDocumentState;
   readonly documentRevision: number;
@@ -52,6 +55,7 @@ export interface DocumentDraft {
   scopeId: string;
   title: string;
   slug: string;
+  eventInfoSection: EventInfoSection | null;
   markdownSource: string;
 }
 
@@ -82,6 +86,7 @@ const INITIAL_DOCUMENTS: ProductDocument[] = [
     scopeId: organizationId,
     title: "Volunteer Conduct",
     slug: "volunteer-conduct",
+    eventInfoSection: "requirements",
     markdownSource:
       "# Volunteer Conduct\n\n{{fragment:shared-conduct}}\n\nStaff are expected to keep commitments visible and ask for help early.",
     state: "published",
@@ -99,6 +104,7 @@ const INITIAL_DOCUMENTS: ProductDocument[] = [
     scopeId: FIXTURE_RANGERS_DEPARTMENT_ID,
     title: "Radio Checkout",
     slug: "radio-checkout",
+    eventInfoSection: null,
     markdownSource:
       "# Radio Checkout\n\n1. Confirm the staff member and shift.\n2. Record the radio number.\n3. Ask the staff member to test before leaving Logistics.",
     state: "draft",
@@ -116,6 +122,7 @@ const INITIAL_DOCUMENTS: ProductDocument[] = [
     scopeId: FIXTURE_RANGERS_DIRT_TEAM_ID,
     title: "Dirt Team Radio Policy",
     slug: "dirt-team-radio-policy",
+    eventInfoSection: null,
     markdownSource:
       "# Dirt Team Radio Policy\n\n{{fragment:radio-language}}\n\nUse the team channel for patrol coordination.",
     state: "published",
@@ -124,6 +131,99 @@ const INITIAL_DOCUMENTS: ProductDocument[] = [
     publishedAt: "2026-07-03T15:15:00.000Z",
     archivedAt: null,
     updatedAt: "2026-07-03T15:15:00.000Z",
+  },
+  // Event Info fixtures (M11.20). Deliberately spread across scopes and states
+  // so the local screen shows the assembly order, the team-scoped narrowing,
+  // and at least one section that is still legitimately empty.
+  {
+    id: "44444444-4444-4444-8444-444444444404",
+    kind: "policy",
+    organizationId,
+    scopeType: "organization",
+    scopeId: organizationId,
+    title: "Getting To Signal Camp",
+    slug: "getting-to-signal-camp",
+    eventInfoSection: "directions",
+    markdownSource:
+      "# Getting To Signal Camp\n\nTake the north access road to Gate 1. The last fuel stop is 40 miles out.\n\nGate 1 is open 08:00 to 22:00; arrivals after 22:00 wait in the holding lot until morning.",
+    state: "published",
+    documentRevision: 1,
+    fragmentRevision: 0,
+    publishedAt: "2026-07-04T17:00:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-07-04T17:00:00.000Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444405",
+    kind: "procedure",
+    organizationId,
+    scopeType: "organization",
+    scopeId: organizationId,
+    title: "Arrival And Gate Check-In",
+    slug: "arrival-and-gate-check-in",
+    eventInfoSection: "arrival",
+    markdownSource:
+      "# Arrival And Gate Check-In\n\nBring photo identification and your staff credential to the staff lane at Gate 1.\n\nLogistics marks you on-site before your first shift.",
+    state: "published",
+    documentRevision: 1,
+    fragmentRevision: 0,
+    publishedAt: "2026-07-04T17:10:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-07-04T17:10:00.000Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444406",
+    kind: "procedure",
+    organizationId,
+    scopeType: "organization",
+    scopeId: organizationId,
+    title: "Meals And Camp Kitchen",
+    slug: "meals-and-camp-kitchen",
+    eventInfoSection: "food",
+    markdownSource:
+      "# Meals And Camp Kitchen\n\nStaff meals are served at the camp kitchen between shifts.\n\nBring your own water bottle and cup.",
+    state: "published",
+    documentRevision: 1,
+    fragmentRevision: 0,
+    publishedAt: "2026-07-04T17:20:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-07-04T17:20:00.000Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444407",
+    kind: "procedure",
+    organizationId,
+    scopeType: "department",
+    scopeId: FIXTURE_RANGERS_DEPARTMENT_ID,
+    title: "Ranger Packing List",
+    slug: "ranger-packing-list",
+    eventInfoSection: "packing",
+    markdownSource:
+      "# Ranger Packing List\n\nDust goggles, a working headlamp, closed-toe boots, and warm layers for night patrol.",
+    state: "published",
+    documentRevision: 1,
+    fragmentRevision: 0,
+    publishedAt: "2026-07-04T17:30:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-07-04T17:30:00.000Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444408",
+    kind: "procedure",
+    organizationId,
+    scopeType: "team",
+    scopeId: FIXTURE_RANGERS_DIRT_TEAM_ID,
+    title: "Dirt Team Housing",
+    slug: "dirt-team-housing",
+    eventInfoSection: "housing",
+    markdownSource:
+      "# Dirt Team Housing\n\nDirt patrol camps together behind Ranger HQ. Quiet hours run 10:00 to 16:00 for the overnight rotation.",
+    state: "published",
+    documentRevision: 1,
+    fragmentRevision: 0,
+    publishedAt: "2026-07-04T17:40:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-07-04T17:40:00.000Z",
   },
 ];
 
@@ -328,6 +428,9 @@ export function saveDocumentDraft(
     scopeId: draft.scopeId,
     title,
     slug,
+    // Event Info placement is where the document is shown, not what it says,
+    // so it never participates in the published-content revision bump below.
+    eventInfoSection: draft.eventInfoSection,
     markdownSource,
     state: existing?.state ?? "draft",
     documentRevision: changedPublishedContent
