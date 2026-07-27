@@ -4,6 +4,7 @@ namespace App\Services\Node;
 
 use App\Models\AuditEvent;
 use App\Models\Device;
+use App\Models\Event;
 use App\Models\Node;
 use App\Models\NodeOperation;
 use App\Models\User;
@@ -53,15 +54,24 @@ use Throwable;
  * want to show it, but appliers receive {@see SignedNodeOperation} and never
  * see it, so local state is only ever written from signed content.
  *
+ * Event authority is checked here too, once the operation is known to be
+ * authentic. During an active event window the on-site primary node is
+ * authoritative for event-scoped records and edits not from that node are
+ * refused (technical spec 10.2), so an event-scoped operation from any other
+ * node is refused rather than stored. Applying, by contrast, stands the local
+ * write guard down: an operation that reached application has already been
+ * accepted from the authoritative node, and data arriving from that node is
+ * precisely what a read-only node still accepts.
+ *
  * Scope. This is the receiving half of the path. Sending and the loop that
- * drives both halves belong to the bidirectional sync loop (M12.5). Whether an
- * authentic operation is *allowed* to change event-scoped state during an
- * active event window belongs to event authority (M12.6, M12.7), and
- * disagreements between local and remote state belong to the sync conflict
+ * drives both halves belong to the bidirectional sync loop (M12.5). Blocking
+ * policy/procedure and fragment edits during an active event window is M12.7,
+ * and disagreements between local and remote state belong to the sync conflict
  * queue (M12.8, M12.9). What this service enforces is narrower: the operation
  * is well formed, it is addressed here, it comes from a node and device this
- * install still accepts, its node signature verifies, and it is stored before
- * anything is applied.
+ * install still accepts, its node signature verifies, its origin holds
+ * authority over any event it names, and it is stored before anything is
+ * applied.
  */
 class NodeOperationReceiver
 {
@@ -72,6 +82,8 @@ class NodeOperationReceiver
         private readonly NodeOperationApplierRegistry $appliers,
         private readonly NodeSetupService $nodes,
         private readonly AuditService $audit,
+        private readonly EventAuthority $authority,
+        private readonly EventScopedWriteGuard $writeGuard,
     ) {}
 
     /**
@@ -121,6 +133,8 @@ class NodeOperationReceiver
             );
         }
 
+        $this->assertEventAuthority($envelope, $originNode);
+
         return $this->store($envelope, $operation);
     }
 
@@ -164,15 +178,23 @@ class NodeOperationReceiver
             // The entity write and the `applied` mark commit together, so there
             // is no window in which local state changed but the operation still
             // looks unapplied.
-            DB::transaction(function () use ($applier, $signed, $operation): void {
-                $applier->apply($signed);
+            //
+            // Event authority was decided on receipt, and data arriving from the
+            // authoritative node is the documented exception to a read-only node
+            // (technical spec 10.2), so the local write guard stands down here.
+            // Applying is the one write path that has already answered the
+            // question the guard asks.
+            $this->writeGuard->withoutEnforcement(fn () => DB::transaction(
+                function () use ($applier, $signed, $operation): void {
+                    $applier->apply($signed);
 
-                $operation->forceFill([
-                    'status' => NodeOperation::STATUS_APPLIED,
-                    'applied_at' => now(),
-                    'failure_reason' => null,
-                ])->save();
-            });
+                    $operation->forceFill([
+                        'status' => NodeOperation::STATUS_APPLIED,
+                        'applied_at' => now(),
+                        'failure_reason' => null,
+                    ])->save();
+                },
+            ));
         } catch (Throwable $failure) {
             // The rolled-back transaction leaves the in-memory model holding
             // attributes the database never kept, so the row is re-read before
@@ -307,6 +329,51 @@ class NodeOperationReceiver
         if ($targetNodeId !== null && $targetNodeId !== (string) $receivingNode->getKey()) {
             throw $this->refuse($envelope, NodeOperationRejectedException::wrongTargetNode(), $originNode);
         }
+    }
+
+    /**
+     * An event-scoped operation may only come from the node that holds
+     * authority for that event (technical spec 10.2).
+     *
+     * This runs after the signature check, so an operation is refused for
+     * authority only once it is known to be authentic; a forged operation is
+     * refused as a forgery rather than reported as an authority problem.
+     *
+     * An operation naming an event this install does not hold is not refused
+     * here. There is no window to evaluate and no authority to compare against,
+     * and the operation is authentic; it is stored and left to fail on
+     * application, where it stays recoverable once the event arrives.
+     *
+     * @throws NodeOperationRejectedException
+     */
+    private function assertEventAuthority(NodeOperationEnvelope $envelope, Node $originNode): void
+    {
+        $eventId = $envelope->eventId();
+
+        if ($eventId === null) {
+            return;
+        }
+
+        $event = Event::query()->find($eventId);
+
+        if (! $event instanceof Event) {
+            return;
+        }
+
+        if ($this->authority->acceptsOperationFrom($originNode, $event)) {
+            return;
+        }
+
+        $authoritativeNode = $this->authority->authoritativeNodeFor($event);
+
+        throw $this->refuse(
+            $envelope,
+            NodeOperationRejectedException::eventAuthorityRefused(
+                (string) $event->name,
+                (string) $authoritativeNode?->node_name,
+            ),
+            $originNode,
+        );
     }
 
     /**

@@ -142,6 +142,16 @@ final class NodeOperationEnvelope
     }
 
     /**
+     * The event this operation is scoped to, or null when it is not
+     * event-scoped. Event authority is decided from this field (technical spec
+     * 10.2).
+     */
+    public function eventId(): ?string
+    {
+        return $this->normalized['event_id'];
+    }
+
+    /**
      * An unsaved operation carrying this envelope's content and none of the
      * receiver's delivery lifecycle state. Signature verification runs against
      * this model before anything is stored, so the model has to exist before

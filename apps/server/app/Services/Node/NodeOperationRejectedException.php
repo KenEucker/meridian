@@ -52,6 +52,12 @@ class NodeOperationRejectedException extends RuntimeException
     /** The idempotency key is already held by an operation with other content. */
     public const REASON_UUID_CONFLICT = 'operation_uuid_conflict';
 
+    /**
+     * The operation edits event-scoped records during an active event window
+     * and did not come from the node that holds authority for that event.
+     */
+    public const REASON_EVENT_AUTHORITY = 'event_authority_refused';
+
     public function __construct(
         public readonly string $reason,
         string $message,
@@ -135,6 +141,25 @@ class NodeOperationRejectedException extends RuntimeException
         return new self(
             self::REASON_SIGNATURE_REJECTED,
             'The node signature on this node operation could not be verified.',
+        );
+    }
+
+    /**
+     * During the active event window the on-site primary node is authoritative
+     * for event-scoped records, and edits not from that node are refused
+     * (technical spec 10.2). The refusal names the authoritative node so the
+     * sending node's operator can see where the edit belongs.
+     */
+    public static function eventAuthorityRefused(string $eventName, string $authoritativeNodeName): self
+    {
+        return new self(
+            self::REASON_EVENT_AUTHORITY,
+            sprintf(
+                'This node operation edits records for "%s" during its active event window, '
+                .'when the on-site node "%s" is authoritative for that event.',
+                $eventName,
+                $authoritativeNodeName,
+            ),
         );
     }
 

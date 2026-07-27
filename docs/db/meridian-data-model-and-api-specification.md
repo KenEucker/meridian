@@ -793,6 +793,39 @@ During the active event window:
 
 After the event closes, post-event corrections happen on central.
 
+Enforcing event authority:
+
+An event's phase is derived from `events.active_event_window_starts_at` and
+`active_event_window_ends_at`: preparation before the window, active inside it,
+closed after it. An archived event and an event with no window start are never
+active, because authority is a handover and neither records when the handover
+would happen; a window with no end stays active until an end is recorded.
+
+The on-site primary node for an event is an active, paired `nodes` record with
+role `onsite` whose `event_id` names that event or names nothing, preferring the
+one that names it. Alpha 1 has exactly one active on-site node per event
+(technical spec 10.1) and pairing does not carry an event, so an on-site node
+that has not recorded which event it serves is taken as the on-site node of the
+single event the install is running.
+
+Both write paths defer to that node while the window is open:
+
+- local writes to event-scoped records are refused on any node that is not the
+  on-site primary node. Refusal is by `event_id`, including records that reach
+  their event through a parent row, and including event-scoped `team_grants`,
+  which is how the permission-change rule is enforced. `node_operations`,
+  `audit_events`, incident list presets, and the `events` row itself are
+  exempt: a read-only node must still record what it received and refused, and
+  must still be able to close or extend the window that makes it read-only
+- an authentic node operation naming an event is refused unless its origin node
+  is the on-site primary node for that event (section 13.3). Applying a stored
+  operation is not refused, because data arriving from the on-site primary node
+  is the documented exception to central being read-only
+
+Nothing is refused outside the active window, and nothing is refused while no
+on-site primary node is known, since there would be no node to hand authority
+to.
+
 ### 7.5 Sync Conflicts
 
 Conflicts go to a sync conflict queue.
@@ -3475,8 +3508,14 @@ Refusal and failure are different outcomes:
 - a refused operation is never written to `node_operations`. Refusals are
   malformed envelopes, a `target_node_id` naming another node, an unknown or
   revoked origin node, an unknown acting user, an unknown or revoked acting
-  device, a node signature that does not verify, and a `uuid` already held by an
-  operation with different content. Because a refused operation leaves no row
+  device, a node signature that does not verify, a `uuid` already held by an
+  operation with different content, and an event-scoped operation whose origin
+  node does not hold event authority for the event it names during that event's
+  active event window (section 7.4; technical spec 10.2). Event authority is
+  checked after the signature, so an unauthentic operation is refused as a
+  forgery rather than reported as an authority problem, and an operation naming
+  an event this install does not hold is stored rather than refused, because
+  there is no window to evaluate. Because a refused operation leaves no row
   behind to record itself, refusals past envelope parsing are audited as
   `node_operation.rejected` with a stable reason code (section 14.1); the
   refused operation's own scope is recorded in `after_json` rather than in the

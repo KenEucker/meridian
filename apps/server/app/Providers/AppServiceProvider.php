@@ -12,6 +12,7 @@ use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
+use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
@@ -33,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
         // operation received later resolves the appliers registered earlier
         // (technical spec 10.1).
         $this->app->singleton(NodeOperationApplierRegistry::class);
+
+        // One guard instance holds the enforcement state, so the receive path
+        // standing it down while it applies an operation stands down the same
+        // guard the rest of the request writes through (technical spec 10.2).
+        $this->app->singleton(EventScopedWriteGuard::class);
     }
 
     /**
@@ -50,5 +56,11 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(DeviceTrust::class, DeviceTrustPolicy::class);
         Gate::policy(FieldReport::class, FieldReportPolicy::class);
+
+        // During an active event window the on-site primary node is
+        // authoritative for event-scoped records, so every local write path on a
+        // node that does not hold authority is refused rather than each call
+        // site remembering to ask (technical spec 10.2).
+        $this->app->make(EventScopedWriteGuard::class)->register();
     }
 }
