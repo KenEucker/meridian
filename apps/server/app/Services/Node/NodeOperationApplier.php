@@ -25,14 +25,18 @@ namespace App\Services\Node;
  * against the same entity. Write toward the state the operation describes
  * rather than assuming the entity is untouched.
  *
- * Throwing marks the operation `failed` with the exception message as its
- * `failure_reason` and leaves it available for retry. An applier should throw
- * rather than swallow, because a silent no-op is indistinguishable from a
- * successful application on the row.
+ * Throwing a generic exception marks the operation `failed` with the exception
+ * message as its `failure_reason` and leaves it available for retry. An
+ * applier should throw rather than swallow, because a silent no-op is
+ * indistinguishable from a successful application on the row.
+ *
+ * Throwing {@see SyncConflictException} is the third outcome: the receiver
+ * records an open sync conflict and marks the operation `conflicted` instead
+ * of `failed`. Conflict resolution (accept on-site / accept central) is
+ * M12.9.
  *
  * Each entity type's applier belongs to the task that owns that entity's sync
- * behavior. Conflict outcomes, which are a third result distinct from applied
- * and failed, arrive with the sync conflict queue (M12.8, M12.9).
+ * behavior.
  */
 interface NodeOperationApplier
 {
@@ -45,7 +49,9 @@ interface NodeOperationApplier
     /**
      * Apply the operation to local state.
      *
-     * @throws \Throwable when the operation cannot be applied
+     * @throws SyncConflictException when local and remote state disagree and
+     *                               the operation belongs in the conflict queue
+     * @throws \Throwable when the operation cannot be applied and should retry
      */
     public function apply(SignedNodeOperation $operation): void;
 }

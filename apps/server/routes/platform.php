@@ -27,6 +27,8 @@ use App\Orchid\Screens\Shift\ShiftEditScreen;
 use App\Orchid\Screens\Shift\ShiftListScreen;
 use App\Orchid\Screens\Staff\StaffEditScreen;
 use App\Orchid\Screens\Staff\StaffListScreen;
+use App\Orchid\Screens\SyncConflict\SyncConflictDetailScreen;
+use App\Orchid\Screens\SyncConflict\SyncConflictListScreen;
 use App\Orchid\Screens\Team\TeamEditScreen;
 use App\Orchid\Screens\Team\TeamListScreen;
 use App\Orchid\Screens\User\UserEditScreen;
@@ -331,6 +333,20 @@ Route::screen('document-fragments', DocumentFragmentListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Document Fragments'), route('platform.document-fragments')));
+
+// Platform > God Mode > Sync Conflicts > Conflict
+Route::screen('sync-conflicts/{conflict}', SyncConflictDetailScreen::class)
+    ->name('platform.sync-conflicts.show')
+    ->breadcrumbs(fn (Trail $trail, $conflict) => $trail
+        ->parent('platform.sync-conflicts')
+        ->push(__('Review'), route('platform.sync-conflicts.show', $conflict)));
+
+// Platform > God Mode > Sync Conflicts
+Route::screen('sync-conflicts', SyncConflictListScreen::class)
+    ->name('platform.sync-conflicts')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Sync Conflicts'), route('platform.sync-conflicts')));
 
 // Platform > God Mode > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)

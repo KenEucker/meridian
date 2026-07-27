@@ -6,6 +6,7 @@ use App\Models\AuditEvent;
 use App\Models\Device;
 use App\Models\Node;
 use App\Models\NodeOperation;
+use App\Models\SyncConflict;
 use App\Models\User;
 use App\Services\Node\NodeKeyPairGenerator;
 use App\Services\Node\NodeOperationApplier;
@@ -16,6 +17,7 @@ use App\Services\Node\NodeOperationRejectedException;
 use App\Services\Node\NodeOperationSigner;
 use App\Services\Node\NodeSignatureAlgorithm;
 use App\Services\Node\SignedNodeOperation;
+use App\Services\Node\SyncConflictException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -376,6 +378,79 @@ class NodeOperationReceiveApplyTest extends TestCase
         $this->assertSame(1, $retried->retry_count);
     }
 
+    public function test_a_state_mismatch_records_a_sync_conflict_instead_of_failing(): void
+    {
+        $applier = $this->registerApplier();
+        $applier->conflictWith = new SyncConflictException(
+            reason: 'Local and remote Field Report state disagree.',
+            conflictType: SyncConflict::TYPE_STATE_MISMATCH,
+            localValue: ['status' => 'open'],
+            remoteValue: ['status' => 'closed'],
+        );
+
+        $receipt = $this->receiver->receiveAndApply($this->signedEnvelope());
+        $operation = $receipt->operation->fresh();
+
+        $this->assertSame(NodeOperation::STATUS_CONFLICTED, $operation->status);
+        $this->assertSame('Local and remote Field Report state disagree.', $operation->failure_reason);
+        $this->assertSame(0, $operation->retry_count);
+        $this->assertNull($operation->applied_at);
+        $this->assertDatabaseCount('sync_conflicts', 1);
+        $this->assertDatabaseHas('sync_conflicts', [
+            'operation_id' => $operation->id,
+            'entity_type' => $operation->entity_type,
+            'entity_id' => $operation->entity_id,
+            'status' => SyncConflict::STATUS_OPEN,
+            'reason' => 'Local and remote Field Report state disagree.',
+        ]);
+
+        $conflict = SyncConflict::query()->firstOrFail();
+
+        $this->assertSame(['status' => 'open'], $conflict->local_value_json);
+        $this->assertSame(['status' => 'closed'], $conflict->remote_value_json);
+    }
+
+    public function test_a_conflicted_operation_is_not_reapplied(): void
+    {
+        $applier = $this->registerApplier();
+        $applier->conflictWith = new SyncConflictException(
+            reason: 'State mismatch.',
+            localValue: ['status' => 'open'],
+            remoteValue: ['status' => 'closed'],
+        );
+
+        $operation = $this->receiver->receiveAndApply($this->signedEnvelope())->operation;
+
+        $applier->conflictWith = null;
+
+        $this->receiver->apply($operation->fresh());
+        $this->receiver->apply($operation->fresh());
+
+        $this->assertSame(0, $applier->applied);
+        $this->assertSame(NodeOperation::STATUS_CONFLICTED, $operation->fresh()->status);
+        $this->assertDatabaseCount('sync_conflicts', 1);
+    }
+
+    public function test_a_conflict_does_not_block_unrelated_operations(): void
+    {
+        $applier = $this->registerApplier();
+        $applier->conflictWith = new SyncConflictException(
+            reason: 'State mismatch.',
+            localValue: ['status' => 'open'],
+            remoteValue: ['status' => 'closed'],
+        );
+
+        $blocked = $this->receiver->receiveAndApply($this->signedEnvelope())->operation;
+
+        $applier->conflictWith = null;
+
+        $later = $this->receiver->receiveAndApply($this->signedEnvelope())->operation;
+
+        $this->assertSame(NodeOperation::STATUS_CONFLICTED, $blocked->fresh()->status);
+        $this->assertSame(NodeOperation::STATUS_APPLIED, $later->fresh()->status);
+        $this->assertDatabaseCount('sync_conflicts', 1);
+    }
+
     public function test_repeated_application_failures_increment_the_retry_count(): void
     {
         $applier = $this->registerApplier();
@@ -589,6 +664,8 @@ class RecordingNodeOperationApplier implements NodeOperationApplier
 
     public ?string $failWith = null;
 
+    public ?SyncConflictException $conflictWith = null;
+
     public ?string $writeDeviceLabel = null;
 
     /** @var list<SignedNodeOperation> */
@@ -605,6 +682,10 @@ class RecordingNodeOperationApplier implements NodeOperationApplier
 
         if ($this->writeDeviceLabel !== null) {
             Device::factory()->create(['device_label' => $this->writeDeviceLabel]);
+        }
+
+        if ($this->conflictWith instanceof SyncConflictException) {
+            throw $this->conflictWith;
         }
 
         if ($this->failWith !== null) {
