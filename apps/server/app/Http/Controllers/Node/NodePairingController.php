@@ -26,6 +26,10 @@ class NodePairingController extends Controller
     {
         $validated = $request->validate([
             'pairing_token' => ['required', 'string', 'max:255'],
+            // Node ids are global: the pairing node keeps the id it already
+            // knows itself by, because node operations name their origin node
+            // by id inside the signed message (technical spec 10.4).
+            'node_id' => ['required', 'uuid'],
             'node_name' => [
                 'required',
                 'string',
@@ -39,6 +43,7 @@ class NodePairingController extends Controller
         try {
             $result = $this->pairing->redeem(
                 plaintextToken: $validated['pairing_token'],
+                nodeId: $validated['node_id'],
                 nodeName: $validated['node_name'],
                 nodeRole: $validated['node_role'],
                 publicKey: $validated['public_key'],

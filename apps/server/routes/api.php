@@ -20,6 +20,7 @@ use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Node\NodePairingController;
+use App\Http\Controllers\Node\NodeSyncController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
@@ -39,6 +40,15 @@ Route::get('/health', [HealthController::class, 'show'])->name('api.health');
 Route::post('/node-pairing', [NodePairingController::class, 'store'])
     ->middleware('throttle:10,1')
     ->name('api.node-pairing.store');
+
+// Node-to-node sync exchange (technical spec 10.1, 10.2). The calling node's
+// signature over the exchange is the credential, so this route carries no user
+// session either. The throttle is looser than pairing's because a paired node
+// syncs continuously while the internet exists, and a backlog drains over
+// several exchanges in one run.
+Route::post('/node-sync', [NodeSyncController::class, 'store'])
+    ->middleware('throttle:120,1')
+    ->name('api.node-sync.store');
 
 Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/check-in-staff', [AttendanceCommandController::class, 'checkIn'])

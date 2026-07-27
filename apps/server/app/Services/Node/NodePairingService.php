@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\DB;
  * 8). The token is single use: replaying it with the same node identity returns
  * the original result so a lost response can be recovered, while replaying it
  * with a different node identity is refused.
+ *
+ * The peer record keeps the pairing node's own id rather than minting a new
+ * one. Node ids are global, not per-install, because a node operation names its
+ * origin and target nodes by id inside the message a signature covers
+ * (technical spec 10.4): if central knew an on-site node by a different id than
+ * the on-site node knows itself by, every operation that node signed would
+ * arrive naming an origin central cannot resolve, and the id could not be
+ * rewritten without breaking the signature.
  */
 class NodePairingService
 {
@@ -31,6 +39,7 @@ class NodePairingService
      */
     public function redeem(
         string $plaintextToken,
+        string $nodeId,
         string $nodeName,
         string $nodeRole,
         string $publicKey,
@@ -48,22 +57,12 @@ class NodePairingService
         }
 
         if ($token->isUsed()) {
-            return $this->replay($token, $centralNode, $nodeName, $publicKey);
+            return $this->replay($token, $centralNode, $nodeId, $nodeName, $publicKey);
         }
 
-        $existing = Node::query()->where('node_name', $nodeName)->first();
+        $existing = $this->existingPeer($nodeId, $nodeName, $publicKey);
 
-        if ($existing instanceof Node) {
-            if ($existing->is_local || ! hash_equals($existing->public_key, $publicKey)) {
-                throw NodePairingException::nodeNameConflict($nodeName);
-            }
-
-            if ($existing->isRevoked()) {
-                throw NodePairingException::nodeRevoked($nodeName);
-            }
-        }
-
-        $pairedNode = DB::transaction(function () use ($token, $existing, $nodeName, $nodeRole, $publicKey): Node {
+        $pairedNode = DB::transaction(function () use ($token, $existing, $nodeId, $nodeName, $nodeRole, $publicKey): Node {
             // Re-read the token inside the transaction so two concurrent
             // redemptions of the same token cannot both pair a node.
             $locked = NodePairingToken::query()
@@ -78,6 +77,7 @@ class NodePairingService
             $node = $existing ?? new Node;
 
             $node->forceFill([
+                'id' => $nodeId,
                 'node_name' => $nodeName,
                 'node_role' => $nodeRole,
                 'is_local' => false,
@@ -120,12 +120,14 @@ class NodePairingService
     private function replay(
         NodePairingToken $token,
         Node $centralNode,
+        string $nodeId,
         string $nodeName,
         string $publicKey,
     ): NodePairingResult {
         $pairedNode = $token->pairedNode()->first();
 
         if (! $pairedNode instanceof Node
+            || (string) $pairedNode->getKey() !== $nodeId
             || $pairedNode->node_name !== $nodeName
             || ! hash_equals($pairedNode->public_key, $publicKey)) {
             throw NodePairingException::invalidToken();
@@ -136,6 +138,49 @@ class NodePairingService
         }
 
         return new NodePairingResult($centralNode, $pairedNode, replayed: true);
+    }
+
+    /**
+     * The peer record this pairing updates, or null when the node is new here.
+     *
+     * A pairing node is identified by its id, its name, and its key material
+     * together, and all three have to agree with whatever this install already
+     * holds. Any disagreement is refused rather than reconciled: adopting a
+     * peer-supplied id means a node presenting a valid token could otherwise
+     * claim an identity that already belongs to someone else, including
+     * central's own.
+     *
+     * @throws NodePairingException
+     */
+    private function existingPeer(string $nodeId, string $nodeName, string $publicKey): ?Node
+    {
+        $byId = Node::query()->find($nodeId);
+        $byName = Node::query()->where('node_name', $nodeName)->first();
+
+        if ($byId instanceof Node
+            && ($byId->is_local
+                || $byId->node_name !== $nodeName
+                || ! hash_equals((string) $byId->public_key, $publicKey))) {
+            throw NodePairingException::nodeIdConflict($nodeId);
+        }
+
+        if ($byName instanceof Node) {
+            if ($byName->is_local || ! hash_equals((string) $byName->public_key, $publicKey)) {
+                throw NodePairingException::nodeNameConflict($nodeName);
+            }
+
+            if ((string) $byName->getKey() !== $nodeId) {
+                throw NodePairingException::nodeIdConflict($nodeId);
+            }
+        }
+
+        $existing = $byId ?? $byName;
+
+        if ($existing instanceof Node && $existing->isRevoked()) {
+            throw NodePairingException::nodeRevoked($nodeName);
+        }
+
+        return $existing;
     }
 
     /**

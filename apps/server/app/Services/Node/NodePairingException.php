@@ -26,6 +26,9 @@ class NodePairingException extends RuntimeException
     /** A different node already holds the submitted node name. */
     public const REASON_NODE_NAME_CONFLICT = 'node_name_conflict';
 
+    /** A different node identity already holds the submitted node id. */
+    public const REASON_NODE_ID_CONFLICT = 'node_id_conflict';
+
     /** The peer node record was revoked on this node. */
     public const REASON_NODE_REVOKED = 'node_revoked';
 
@@ -90,6 +93,22 @@ class NodePairingException extends RuntimeException
         return new self(
             self::REASON_NODE_NAME_CONFLICT,
             sprintf('Another node is already registered as "%s" with different key material.', $nodeName),
+            409,
+        );
+    }
+
+    /**
+     * Node ids are global rather than per-install: a node keeps the same
+     * identifier on every node that knows it, because node operations name
+     * their origin node by id inside the signed message (technical spec 10.4).
+     * An id already held by a different node identity therefore cannot be
+     * adopted.
+     */
+    public static function nodeIdConflict(string $nodeId): self
+    {
+        return new self(
+            self::REASON_NODE_ID_CONFLICT,
+            sprintf('The node id %s is already held by a different node on this install.', $nodeId),
             409,
         );
     }

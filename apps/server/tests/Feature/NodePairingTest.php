@@ -15,6 +15,7 @@ use App\Services\Node\NodePairingTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Orchid\Support\Testing\ScreenTesting;
 use Tests\TestCase;
 
@@ -26,6 +27,15 @@ class NodePairingTest extends TestCase
 {
     use RefreshDatabase;
     use ScreenTesting;
+
+    /**
+     * Node ids are global, so a node keeps one id across every install that
+     * knows it (technical spec 10.4). Each node name in these tests therefore
+     * has one stable id, the way a real install would.
+     *
+     * @var array<string, string>
+     */
+    private array $nodeIds = [];
 
     protected function setUp(): void
     {
@@ -104,6 +114,7 @@ class NodePairingTest extends TestCase
 
         $response = $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -143,6 +154,7 @@ class NodePairingTest extends TestCase
 
         $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -150,6 +162,7 @@ class NodePairingTest extends TestCase
 
         $response = $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('gerlach.2027.onsite'),
             'node_name' => 'gerlach.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'other-public-key',
@@ -167,6 +180,7 @@ class NodePairingTest extends TestCase
 
         $body = [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -202,6 +216,7 @@ class NodePairingTest extends TestCase
         foreach ([NodePairingTokenGenerator::generate(), $revoked, $expired] as $plaintext) {
             $response = $this->postJson(route('api.node-pairing.store'), [
                 'pairing_token' => $plaintext,
+                'node_id' => $this->nodeId('juplaya.2027.onsite'),
                 'node_name' => 'juplaya.2027.onsite',
                 'node_role' => Node::ROLE_ONSITE,
                 'public_key' => 'onsite-public-key',
@@ -221,6 +236,7 @@ class NodePairingTest extends TestCase
 
         $response = $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('gerlach.2027.onsite'),
             'node_name' => 'gerlach.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -243,6 +259,7 @@ class NodePairingTest extends TestCase
 
         $response = $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -259,6 +276,7 @@ class NodePairingTest extends TestCase
         [$plaintext] = $this->issuedToken($central);
 
         Node::factory()->remote()->onsite()->create([
+            'id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'public_key' => 'onsite-public-key',
             'revoked_at' => now(),
@@ -266,6 +284,7 @@ class NodePairingTest extends TestCase
 
         $response = $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $plaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -303,8 +322,10 @@ class NodePairingTest extends TestCase
         $onsite = $this->localNode(Node::ROLE_ONSITE, 'juplaya.2027.onsite');
         $user = $this->godModeUser();
 
+        $centralPayload = $this->centralPairingResponse();
+
         Http::fake([
-            'central.example.org/api/node-pairing' => Http::response($this->centralPairingResponse(), 201),
+            'central.example.org/api/node-pairing' => Http::response($centralPayload, 201),
         ]);
 
         $result = app(NodePairingClient::class)->pair(
@@ -315,6 +336,9 @@ class NodePairingTest extends TestCase
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://central.example.org/api/node-pairing'
             && $request['pairing_token'] === 'mrdn-pair-token'
+            // Node ids are global, so this node tells central the id it already
+            // knows itself by (technical spec 10.4).
+            && $request['node_id'] === (string) $onsite->getKey()
             && $request['node_name'] === 'juplaya.2027.onsite'
             && $request['node_role'] === Node::ROLE_ONSITE
             && $request['public_key'] === $onsite->public_key);
@@ -326,6 +350,9 @@ class NodePairingTest extends TestCase
         $this->assertFalse($peer->is_local);
         $this->assertSame(Node::ROLE_CENTRAL, $peer->node_role);
         $this->assertSame('central-public-key', $peer->public_key);
+        // Central keeps the id it knows itself by, so an operation central
+        // signs names an origin node this install can resolve.
+        $this->assertSame($centralPayload['central_node']['id'], (string) $peer->getKey());
 
         $onsite->refresh();
 
@@ -598,6 +625,7 @@ class NodePairingTest extends TestCase
         // A revoked token no longer pairs anything.
         $this->postJson(route('api.node-pairing.store'), [
             'pairing_token' => $firstPlaintext,
+            'node_id' => $this->nodeId('juplaya.2027.onsite'),
             'node_name' => 'juplaya.2027.onsite',
             'node_role' => Node::ROLE_ONSITE,
             'public_key' => 'onsite-public-key',
@@ -718,6 +746,11 @@ class NodePairingTest extends TestCase
         $response->assertSee('Not applicable for this node role');
     }
 
+    private function nodeId(string $nodeName): string
+    {
+        return $this->nodeIds[$nodeName] ??= (string) Str::uuid();
+    }
+
     private function localNode(string $role, string $name): Node
     {
         return Node::factory()->create([
@@ -759,13 +792,13 @@ class NodePairingTest extends TestCase
     {
         return [
             'central_node' => [
-                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'node_name' => 'juplaya.central',
                 'node_role' => Node::ROLE_CENTRAL,
                 'public_key' => 'central-public-key',
             ],
             'paired_node' => [
-                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'node_name' => 'juplaya.2027.onsite',
                 'node_role' => Node::ROLE_ONSITE,
             ],

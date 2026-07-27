@@ -80,6 +80,25 @@ return [
         'pairing' => [
             'request_timeout_seconds' => (float) env('MERIDIAN_NODE_PAIRING_TIMEOUT_SECONDS', 10),
         ],
+
+        // Node-to-node sync (technical spec 10.1, 10.2). On-site pushes to
+        // central continuously when internet exists and queues operations when
+        // it does not, so the loop is scheduled rather than triggered by a
+        // human. `batch_size` bounds one exchange and `max_exchanges_per_run`
+        // bounds one run, which together let a backlog drain over repeated
+        // exchanges without a single run spinning indefinitely.
+        // `max_request_age_seconds` is the clock window in which a signed
+        // exchange is accepted, and bounds replay of a captured request.
+        'sync' => [
+            'batch_size' => (int) env('MERIDIAN_NODE_SYNC_BATCH_SIZE', 100),
+            'max_exchanges_per_run' => (int) env('MERIDIAN_NODE_SYNC_MAX_EXCHANGES_PER_RUN', 10),
+            'request_timeout_seconds' => (float) env('MERIDIAN_NODE_SYNC_TIMEOUT_SECONDS', 15),
+            'max_request_age_seconds' => (int) env('MERIDIAN_NODE_SYNC_MAX_REQUEST_AGE_SECONDS', 300),
+            'schedule_enabled' => filter_var(
+                env('MERIDIAN_NODE_SYNC_SCHEDULE_ENABLED', true),
+                FILTER_VALIDATE_BOOL,
+            ),
+        ],
     ],
 
     /*
