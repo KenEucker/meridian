@@ -30,7 +30,8 @@ use DateTimeInterface;
  * and *should no longer* edit event records after it closes, neither of which
  * describes an edit central refuses, and turning either into a refusal would
  * block writes the rest of Alpha 1 currently depends on. Disagreement between
- * local and remote state is the conflict queue (M12.8, M12.9).
+ * local and remote state is recorded by the conflict queue (M12.8); resolution
+ * is M12.9.
  *
  * The window is also read by {@see GovernanceWriteGuard}, which freezes
  * policy/procedure and fragment edits while it is open (M12.7). That is a

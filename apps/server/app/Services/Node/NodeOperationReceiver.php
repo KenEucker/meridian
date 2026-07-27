@@ -64,17 +64,18 @@ use Throwable;
  * precisely what a read-only node still accepts.
  *
  * Scope. This is the receiving half of the path. Sending and the loop that
- * drives both halves belong to the bidirectional sync loop (M12.5), and
- * disagreements between local and remote state belong to the sync conflict
- * queue (M12.8, M12.9). The governance freeze (M12.7) is not applied to arriving
- * operations either: no node can create a document or fragment operation while
- * the window is open, so one that arrives mid-window carries a pre-window edit,
- * and deciding otherwise would mean trusting the sender's clock. What this
- * service enforces is narrower: the operation
- * is well formed, it is addressed here, it comes from a node and device this
- * install still accepts, its node signature verifies, its origin holds
- * authority over any event it names, and it is stored before anything is
- * applied.
+ * drives both halves belong to the bidirectional sync loop (M12.5). When an
+ * applier signals a state disagreement via {@see SyncConflictException},
+ * {@see apply()} records an open sync conflict and marks the operation
+ * `conflicted` without treating it as a retriable failure; resolution is
+ * M12.9. The governance freeze (M12.7) is not applied to arriving operations
+ * either: no node can create a document or fragment operation while the window
+ * is open, so one that arrives mid-window carries a pre-window edit, and
+ * deciding otherwise would mean trusting the sender's clock. What this service
+ * enforces is narrower: the operation is well formed, it is addressed here, it
+ * comes from a node and device this install still accepts, its node signature
+ * verifies, its origin holds authority over any event it names, and it is
+ * stored before anything is applied.
  */
 class NodeOperationReceiver
 {
@@ -88,6 +89,7 @@ class NodeOperationReceiver
         private readonly EventAuthority $authority,
         private readonly EventScopedWriteGuard $writeGuard,
         private readonly GovernanceWriteGuard $governanceGuard,
+        private readonly SyncConflictService $conflicts,
     ) {}
 
     /**
@@ -162,6 +164,13 @@ class NodeOperationReceiver
             return $operation;
         }
 
+        // A conflicted operation already has a queue row. Re-applying it would
+        // invent a second conflict for the same disagreement; God-mode review
+        // (M12.9) is what moves it out of this state.
+        if ($operation->isConflicted()) {
+            return $operation;
+        }
+
         // Appliers are handed the signed projection rather than the row, so
         // local state can only be written from fields the origin node signed.
         // `payload_json` is outside the signed message (data/API 13.3) and is
@@ -204,6 +213,15 @@ class NodeOperationReceiver
                     ])->save();
                 }),
             ));
+        } catch (SyncConflictException $conflict) {
+            // The apply transaction rolled back any partial entity write. The
+            // conflict queue is written outside that transaction so the
+            // disagreement survives even though local state did not change.
+            $operation->refresh();
+
+            $this->conflicts->recordFromException($operation, $conflict);
+
+            return $operation->fresh();
         } catch (Throwable $failure) {
             // The rolled-back transaction leaves the in-memory model holding
             // attributes the database never kept, so the row is re-read before

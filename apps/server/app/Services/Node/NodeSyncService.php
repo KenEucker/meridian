@@ -33,9 +33,10 @@ use Carbon\CarbonImmutable;
  *
  * Out of scope here. Whether an authentic operation is allowed to change
  * event-scoped state during an active event window is event authority (M12.6,
- * M12.7), and disagreement between local and remote state is the sync conflict
- * queue (M12.8, M12.9). This service decides who may exchange, moves the
- * operations, and keeps both sides' delivery state honest.
+ * M12.7), and disagreement between local and remote state is recorded by the
+ * sync conflict queue (M12.8) with resolution in M12.9. This service decides
+ * who may exchange, moves the operations, and keeps both sides' delivery state
+ * honest.
  */
 class NodeSyncService
 {

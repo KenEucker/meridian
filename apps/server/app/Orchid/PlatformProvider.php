@@ -113,11 +113,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.document-fragments')
                 ->permission('platform.document-fragments'),
 
+            Menu::make(__('Sync Conflicts'))
+                ->icon('bs.exclamation-diamond')
+                ->route('platform.sync-conflicts')
+                ->permission('platform.sync-conflicts')
+                ->title(__('God Mode')),
+
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
                 ->route('platform.node.config')
-                ->permission('platform.node.config')
-                ->title(__('God Mode')),
+                ->permission('platform.node.config'),
 
             Menu::make('Documentation')
                 ->title('Docs')
@@ -159,6 +164,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.document-fragments', __('Document fragments')),
 
             ItemPermission::group(__('God Mode'))
+                ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
                 ->addPermission('platform.node.config', __('Node configuration')),
         ];
     }

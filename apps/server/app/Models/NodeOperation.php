@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use RuntimeException;
 
 /**
@@ -209,6 +210,16 @@ class NodeOperation extends Model
     }
 
     /**
+     * Sync conflicts recorded for this operation (data/API 14.2). An operation
+     * marked `conflicted` has at least one queue row created by
+     * {@see \App\Services\Node\SyncConflictService}.
+     */
+    public function syncConflicts(): HasMany
+    {
+        return $this->hasMany(SyncConflict::class, 'operation_id');
+    }
+
+    /**
      * The normalized operation fields a signature covers (technical spec 10.4),
      * keyed in specification order so the projection is stable regardless of
      * attribute assignment order. `created_at` is rendered as ISO-8601 UTC so
@@ -258,5 +269,10 @@ class NodeOperation extends Model
     public function isApplied(): bool
     {
         return $this->applied_at !== null;
+    }
+
+    public function isConflicted(): bool
+    {
+        return $this->status === self::STATUS_CONFLICTED;
     }
 }
