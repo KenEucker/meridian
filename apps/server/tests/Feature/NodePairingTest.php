@@ -546,6 +546,103 @@ class NodePairingTest extends TestCase
             ->assertDontSee($plaintext);
     }
 
+    public function test_god_mode_explains_what_an_issued_token_is_for(): void
+    {
+        $this->localNode(Node::ROLE_CENTRAL, 'juplaya.central');
+        $user = $this->godModeUser();
+
+        $response = $this->actingAs($user)
+            ->withSession(['meridian.issued_pairing_token' => 'mrdn-pair-example'])
+            ->get(route('platform.node.config'));
+
+        $response->assertOk();
+        $response->assertSee('What this token is for');
+        $response->assertSee('server install', false);
+        // The confusion this answers: a pairing token is not a device or Kiosk
+        // credential.
+        $response->assertSee('Kiosk uses shared workstation', false);
+        $response->assertSee('How to use it');
+        $response->assertSee('Pair with central');
+    }
+
+    public function test_god_mode_revokes_unused_pairing_tokens(): void
+    {
+        $central = $this->localNode(Node::ROLE_CENTRAL, 'juplaya.central');
+        $user = $this->godModeUser();
+
+        [$firstPlaintext, $first] = $this->issuedToken($central);
+        [, $second] = $this->issuedToken($central);
+        [, $used] = $this->issuedToken($central);
+        $used->forceFill(['used_at' => now()])->save();
+
+        $response = $this->screen('platform.node.config')
+            ->actingAs($user)
+            ->withoutFollowingRedirects()
+            ->method('revokePairingTokens');
+
+        $response->assertRedirect(route('platform.node.config'));
+
+        $this->assertNotNull($first->fresh()->revoked_at);
+        $this->assertNotNull($second->fresh()->revoked_at);
+        // An already-used token is history, not an outstanding credential.
+        $this->assertNull($used->fresh()->revoked_at);
+
+        foreach ([$first, $second] as $token) {
+            $this->assertDatabaseHas('audit_events', [
+                'action' => 'node_pairing_token.revoked',
+                'entity_id' => $token->id,
+                'actor_user_id' => $user->id,
+            ]);
+        }
+
+        // A revoked token no longer pairs anything.
+        $this->postJson(route('api.node-pairing.store'), [
+            'pairing_token' => $firstPlaintext,
+            'node_name' => 'juplaya.2027.onsite',
+            'node_role' => Node::ROLE_ONSITE,
+            'public_key' => 'onsite-public-key',
+        ])
+            ->assertStatus(401)
+            ->assertJsonPath('reason', NodePairingException::REASON_INVALID_TOKEN);
+    }
+
+    public function test_the_revoke_action_appears_only_with_unused_tokens_on_a_central_node(): void
+    {
+        $central = $this->localNode(Node::ROLE_CENTRAL, 'juplaya.central');
+        $user = $this->godModeUser();
+
+        $this->actingAs($user)
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertDontSee('Revoke unused tokens');
+
+        $this->issuedToken($central);
+
+        $this->actingAs($user)
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertSee('Revoke unused tokens');
+    }
+
+    public function test_revoking_an_already_revoked_token_leaves_it_unchanged(): void
+    {
+        $central = $this->localNode(Node::ROLE_CENTRAL, 'juplaya.central');
+        [, $token] = $this->issuedToken($central);
+
+        $tokens = app(NodePairingTokenService::class);
+
+        $tokens->revoke($token);
+        $revokedAt = $token->fresh()->revoked_at;
+
+        $tokens->revoke($token->fresh());
+
+        $this->assertEquals($revokedAt, $token->fresh()->revoked_at);
+        $this->assertSame(
+            1,
+            AuditEvent::query()->where('action', 'node_pairing_token.revoked')->count(),
+        );
+    }
+
     public function test_god_mode_pairs_an_onsite_node_with_central(): void
     {
         $onsite = $this->localNode(Node::ROLE_ONSITE, 'juplaya.2027.onsite');

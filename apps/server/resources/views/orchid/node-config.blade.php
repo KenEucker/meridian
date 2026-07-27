@@ -26,15 +26,49 @@
         @if ($issuedPairingToken)
             <div class="alert alert-warning">
                 <p class="mb-1"><strong>One-time pairing token</strong></p>
-                <p class="mb-1"><code>{{ $issuedPairingToken }}</code></p>
-                <p class="mb-0">Copy this token to the pairing node now. It is shown once and cannot be recovered.</p>
+                <p class="mb-2"><code>{{ $issuedPairingToken }}</code></p>
+                <p class="mb-0">
+                    Copy this token now. It is shown once, is stored only as a hash,
+                    and cannot be recovered from this screen or the database.
+                </p>
+            </div>
+
+            <div class="alert alert-info">
+                <p class="mb-1"><strong>What this token is for</strong></p>
+                <p>
+                    This token joins a second Meridian <strong>server install</strong> to this
+                    central node, so the two can sync event operations. It is not a device,
+                    browser, or Kiosk credential. Trusted personal devices register their own
+                    signing key during device trust setup, and Kiosk uses shared workstation
+                    login codes; neither uses this token.
+                </p>
+                <p class="mb-1"><strong>How to use it</strong></p>
+                <ol class="mb-1">
+                    <li>Open Node Configuration on the <strong>on-site install</strong>, not this one.</li>
+                    <li>Confirm that install's node role is <code>onsite</code> or <code>standalone</code>. A central node never shows the pairing form.</li>
+                    <li>Under Central pairing, enter this node's URL and paste the token.</li>
+                    <li>Select <strong>Pair with central</strong>.</li>
+                </ol>
+                <p class="mb-0">
+                    The token pairs one node once. Re-running pairing from the same node is
+                    safe, but a different node cannot reuse it.
+                </p>
             </div>
         @endif
 
         @if ($node->isCentral())
             <p class="mb-4">
                 Unused pairing tokens: <strong>{{ $pairingTokens->count() }}</strong>.
-                Token values are stored hashed and are never displayed again.
+                Token values are stored hashed and are never displayed again. Tokens do not
+                expire, so revoke any that were issued in error or lost.
+            </p>
+        @endif
+
+        @if ($node->canPairWithCentral())
+            <p class="mb-4">
+                This node pairs with a central node by redeeming a one-time token created in
+                Node Configuration on that central install. Pairing joins two Meridian server
+                installs; devices and Kiosk workstations use their own trust flows.
             </p>
         @endif
     @endif

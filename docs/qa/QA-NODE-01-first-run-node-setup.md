@@ -67,6 +67,9 @@ Central pairing (two installs):
     token.
 15. On the on-site install, change the central node URL under Node settings to a
     different URL and save, then reload `/admin/node-config`.
+16. On the central install, select **Create pairing token** again, then select
+    **Revoke unused tokens** and confirm.
+17. On the on-site install, attempt to pair with the token from step 16.
 
 ## Expected results
 
@@ -85,6 +88,13 @@ Central pairing (two installs):
   neither and shows pairing status `Not applicable for this node role`.
 - The one-time token is displayed once with a warning that it cannot be
   recovered, and reloading the page no longer shows it.
+- The issued token is displayed alongside an explanation that it joins a second
+  Meridian server install rather than a device or Kiosk workstation, and
+  step-by-step instructions naming the on-site install as where it is redeemed.
+- **Revoke unused tokens** appears only on a central node that has at least one
+  unused token, asks for confirmation, and reports how many were revoked.
+- A revoked token is refused when it is presented for pairing, and already-used
+  tokens are left untouched by revocation.
 - After pairing, the on-site install shows pairing status `Paired with central`,
   the central node name, and a paired-at timestamp, and the central install
   lists the on-site node as a paired node.

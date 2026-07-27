@@ -3407,6 +3407,9 @@ Rules:
 - tokens are issued by, and redeemed on, a central node only
 - Alpha 1 does not require quick expiry, so `expires_at` is normally unset
 - a token pairs one node once; used, revoked, and expired tokens are refused
+- because tokens do not expire by default, God mode may revoke outstanding
+  unused tokens; revocation is audited and never rewrites an already-used token,
+  which is preserved pairing history
 
 ### 13.5 Node pairing endpoint
 

@@ -33,6 +33,11 @@ class NodeConfigScreen extends Screen
     public $node;
 
     /**
+     * @var bool
+     */
+    public $hasUnusedPairingTokens = false;
+
+    /**
      * @return array<string, mixed>
      */
     public function query(
@@ -42,12 +47,14 @@ class NodeConfigScreen extends Screen
         NodePairingTokenService $pairingTokens,
     ): iterable {
         $node = $nodes->activeNode()?->load('configValues');
+        $activeTokens = $pairingTokens->activeTokens();
 
         return [
             'node' => $node,
             'configValues' => $resolver->valuesFor($node),
             'pairing' => $pairingState->describe($node),
-            'pairingTokens' => $pairingTokens->activeTokens(),
+            'pairingTokens' => $activeTokens,
+            'hasUnusedPairingTokens' => $activeTokens->isNotEmpty(),
             'issuedPairingToken' => session('meridian.issued_pairing_token'),
         ];
     }
@@ -87,6 +94,12 @@ class NodeConfigScreen extends Screen
                 ->icon('bs.key')
                 ->method('createPairingToken')
                 ->canSee($this->node instanceof Node && $this->node->isCentral()),
+
+            Button::make(__('Revoke unused tokens'))
+                ->icon('bs.x-circle')
+                ->method('revokePairingTokens')
+                ->confirm(__('This cannot be undone. Any pairing token that has not been used yet will stop working, and nodes still waiting to pair will need a new one.'))
+                ->canSee($this->node instanceof Node && $this->node->isCentral() && $this->hasUnusedPairingTokens),
 
             Button::make(__('Pair with central'))
                 ->icon('bs.link-45deg')
@@ -204,6 +217,29 @@ class NodeConfigScreen extends Screen
         return redirect()
             ->route('platform.node.config')
             ->with('meridian.issued_pairing_token', $issued->plaintext);
+    }
+
+    /**
+     * Revoke every pairing token this central node has issued that has not been
+     * used yet. Alpha 1 tokens do not expire (technical spec 7.3), so revoking
+     * is the only way to retire a token that was issued in error or lost.
+     */
+    public function revokePairingTokens(Request $request, NodePairingTokenService $tokens): RedirectResponse
+    {
+        $revoked = 0;
+
+        foreach ($tokens->activeTokens() as $token) {
+            $tokens->revoke($token, revokedBy: $request->user());
+            $revoked++;
+        }
+
+        Toast::info(trans_choice(
+            '{0}There were no unused pairing tokens to revoke.|{1}One unused pairing token was revoked.|[2,*]:count unused pairing tokens were revoked.',
+            $revoked,
+            ['count' => $revoked],
+        ));
+
+        return redirect()->route('platform.node.config');
     }
 
     /**
