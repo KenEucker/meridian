@@ -2,6 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import ControlBar from "@/components/ControlBar.vue";
+import ControlField from "@/components/ControlField.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
@@ -546,157 +548,195 @@ async function onSearchSubmit(): Promise<void> {
     </div>
 
     <template v-else>
-      <form
-        class="ims-list__search-form"
-        aria-label="Search incidents"
-        @submit.prevent="onSearchSubmit"
-      >
-        <label for="ims-list-search">Search</label>
-        <input
-          id="ims-list-search"
-          v-model="searchDraft"
-          type="search"
-          autocomplete="off"
-        />
-        <button type="submit">Search</button>
-        <RouterLink
-          v-if="searchQuery"
-          class="ims-list__clear-search"
-          :to="{ name: 'ims.incidents.index' }"
+      <!--
+        One control band. Search, filters, and presets stay separate forms
+        because they submit separately, but they share a surface and pack into
+        the width available instead of stacking three bordered rows of
+        near-empty controls above the data.
+      -->
+      <ControlBar label="Incident list controls">
+        <form
+          data-control-group="grow"
+          aria-label="Search incidents"
+          @submit.prevent="onSearchSubmit"
         >
-          Clear
-        </RouterLink>
-      </form>
-
-      <form class="ims-list__filters" aria-label="Filter incidents">
-        <label for="ims-list-state">State</label>
-        <select
-          id="ims-list-state"
-          :value="stateFilter"
-          @change="onStateFilterChange"
-        >
-          <option value="active">Active states</option>
-          <option value="open">Open</option>
-          <option value="on_scene">On Scene</option>
-          <option value="monitoring">Monitoring</option>
-          <option value="on_hold">On Hold</option>
-          <option value="closed">Closed</option>
-          <option value="all">All states</option>
-        </select>
-
-        <label for="ims-list-priority">Priority</label>
-        <select
-          id="ims-list-priority"
-          :value="priorityFilter"
-          @change="onPriorityFilterChange"
-        >
-          <option value="all">All priorities</option>
-          <option value="Critical">Critical</option>
-          <option value="Serious">Serious</option>
-          <option value="Important">Important</option>
-          <option value="Routine">Routine</option>
-        </select>
-
-        <label for="ims-list-type">Type</label>
-        <select
-          id="ims-list-type"
-          :value="typeFilter"
-          @change="onTypeFilterChange"
-        >
-          <option value="all">All types</option>
-          <option v-for="name in typeOptions" :key="name" :value="name">
-            {{ name }}
-          </option>
-        </select>
-
-        <label for="ims-list-responder">Responder</label>
-        <select
-          id="ims-list-responder"
-          :value="responderFilter"
-          @change="onResponderFilterChange"
-        >
-          <option value="all">All responders</option>
-          <option
-            v-for="responder in responderOptions"
-            :key="responder.staffId"
-            :value="responder.staffId"
+          <ControlField label="Search" control-id="ims-list-search" width="grow">
+            <input
+              id="ims-list-search"
+              v-model="searchDraft"
+              type="search"
+              autocomplete="off"
+            />
+          </ControlField>
+          <button type="submit">Search</button>
+          <RouterLink
+            v-if="searchQuery"
+            class="ims-list__clear-search"
+            :to="{ name: 'ims.incidents.index' }"
           >
-            {{ responder.displayName }}
-          </option>
-        </select>
+            Clear
+          </RouterLink>
+        </form>
 
-        <label for="ims-list-shift">Shift</label>
-        <select
-          id="ims-list-shift"
-          :value="shiftFilter"
-          @change="onShiftFilterChange"
+        <form data-control-group aria-label="Filter incidents">
+          <ControlField label="State" control-id="ims-list-state" width="md">
+            <select
+              id="ims-list-state"
+              :value="stateFilter"
+              @change="onStateFilterChange"
+            >
+              <option value="active">Active states</option>
+              <option value="open">Open</option>
+              <option value="on_scene">On Scene</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="on_hold">On Hold</option>
+              <option value="closed">Closed</option>
+              <option value="all">All states</option>
+            </select>
+          </ControlField>
+
+          <ControlField label="Priority" control-id="ims-list-priority" width="sm">
+            <select
+              id="ims-list-priority"
+              :value="priorityFilter"
+              @change="onPriorityFilterChange"
+            >
+              <option value="all">All priorities</option>
+              <option value="Critical">Critical</option>
+              <option value="Serious">Serious</option>
+              <option value="Important">Important</option>
+              <option value="Routine">Routine</option>
+            </select>
+          </ControlField>
+
+          <ControlField label="Type" control-id="ims-list-type" width="md">
+            <select
+              id="ims-list-type"
+              :value="typeFilter"
+              @change="onTypeFilterChange"
+            >
+              <option value="all">All types</option>
+              <option v-for="name in typeOptions" :key="name" :value="name">
+                {{ name }}
+              </option>
+            </select>
+          </ControlField>
+
+          <ControlField
+            label="Responder"
+            control-id="ims-list-responder"
+            width="md"
+          >
+            <select
+              id="ims-list-responder"
+              :value="responderFilter"
+              @change="onResponderFilterChange"
+            >
+              <option value="all">All responders</option>
+              <option
+                v-for="responder in responderOptions"
+                :key="responder.staffId"
+                :value="responder.staffId"
+              >
+                {{ responder.displayName }}
+              </option>
+            </select>
+          </ControlField>
+
+          <ControlField label="Shift" control-id="ims-list-shift" width="sm">
+            <select
+              id="ims-list-shift"
+              :value="shiftFilter"
+              @change="onShiftFilterChange"
+            >
+              <option value="all">All shifts</option>
+              <option value="current">Current shift</option>
+            </select>
+          </ControlField>
+
+          <ControlField
+            label="Per page"
+            control-id="ims-list-page-size"
+            width="sm"
+          >
+            <select
+              id="ims-list-page-size"
+              :value="String(pageSize)"
+              @change="onPageSizeChange"
+            >
+              <option
+                v-for="size in INCIDENT_LIST_PAGE_SIZES"
+                :key="size"
+                :value="String(size)"
+              >
+                {{ size }}
+              </option>
+            </select>
+          </ControlField>
+
+          <ControlField
+            v-if="canEdit"
+            label="Open as"
+            control-id="ims-list-open-mode"
+            width="sm"
+          >
+            <select
+              id="ims-list-open-mode"
+              :value="listOpenMode"
+              @change="onListOpenModeChange"
+            >
+              <option value="view">View</option>
+              <option value="edit">Edit</option>
+            </select>
+          </ControlField>
+        </form>
+
+        <form
+          data-control-group
+          aria-label="Saved incident list presets"
+          @submit.prevent="onPresetSave"
         >
-          <option value="all">All shifts</option>
-          <option value="current">Current shift</option>
-        </select>
+          <ControlField label="Saved presets" control-id="ims-list-preset" width="md">
+            <select
+              id="ims-list-preset"
+              :value="matchingPreset?.id ?? ''"
+              @change="onPresetApply"
+            >
+              <option value="">
+                {{
+                  presets.length === 0
+                    ? "No saved presets"
+                    : "Apply a saved preset"
+                }}
+              </option>
+              <option v-for="preset in presets" :key="preset.id" :value="preset.id">
+                {{ preset.name }}
+              </option>
+            </select>
+          </ControlField>
 
-        <label for="ims-list-page-size">Per page</label>
-        <select
-          id="ims-list-page-size"
-          :value="String(pageSize)"
-          @change="onPageSizeChange"
-        >
-          <option v-for="size in INCIDENT_LIST_PAGE_SIZES" :key="size" :value="String(size)">
-            {{ size }}
-          </option>
-        </select>
+          <ControlField
+            label="Preset name"
+            control-id="ims-list-preset-name"
+            width="md"
+          >
+            <input
+              id="ims-list-preset-name"
+              v-model="presetNameDraft"
+              type="text"
+              autocomplete="off"
+              :maxlength="INCIDENT_LIST_PRESET_NAME_MAX_LENGTH"
+            />
+          </ControlField>
 
-        <label v-if="canEdit" for="ims-list-open-mode">Open incidents as</label>
-        <select
-          v-if="canEdit"
-          id="ims-list-open-mode"
-          :value="listOpenMode"
-          @change="onListOpenModeChange"
-        >
-          <option value="view">View</option>
-          <option value="edit">Edit</option>
-        </select>
-      </form>
-
-      <form
-        class="ims-list__presets"
-        aria-label="Saved incident list presets"
-        @submit.prevent="onPresetSave"
-      >
-        <label for="ims-list-preset">Saved presets</label>
-        <select
-          id="ims-list-preset"
-          :value="matchingPreset?.id ?? ''"
-          @change="onPresetApply"
-        >
-          <option value="">
-            {{
-              presets.length === 0
-                ? "No saved presets"
-                : "Apply a saved preset"
-            }}
-          </option>
-          <option v-for="preset in presets" :key="preset.id" :value="preset.id">
-            {{ preset.name }}
-          </option>
-        </select>
-
-        <label for="ims-list-preset-name">Preset name</label>
-        <input
-          id="ims-list-preset-name"
-          v-model="presetNameDraft"
-          type="text"
-          autocomplete="off"
-          :maxlength="INCIDENT_LIST_PRESET_NAME_MAX_LENGTH"
-        />
-
-        <button type="submit">
-          {{ matchingPreset ? "Update preset" : "Save preset" }}
-        </button>
-        <button v-if="matchingPreset" type="button" @click="onPresetDelete">
-          Delete preset
-        </button>
-      </form>
+          <button type="submit">
+            {{ matchingPreset ? "Update preset" : "Save preset" }}
+          </button>
+          <button v-if="matchingPreset" type="button" @click="onPresetDelete">
+            Delete preset
+          </button>
+        </form>
+      </ControlBar>
 
       <p v-if="presetError" class="ims-list__preset-error" role="alert">
         {{ presetError }}
@@ -963,12 +1003,6 @@ async function onSearchSubmit(): Promise<void> {
 .ims-list__create:focus-visible,
 .ims-list__nav a:focus-visible,
 .ims-list__secondary-link:focus-visible,
-.ims-list__search-form input:focus-visible,
-.ims-list__search-form button:focus-visible,
-.ims-list__filters select:focus-visible,
-.ims-list__presets select:focus-visible,
-.ims-list__presets input:focus-visible,
-.ims-list__presets button:focus-visible,
 .ims-list__page-link:focus-visible,
 .ims-list__reset-filters:focus-visible,
 .ims-list__clear-search:focus-visible,
@@ -1013,57 +1047,14 @@ async function onSearchSubmit(): Promise<void> {
   font-weight: 700;
 }
 
-.ims-list__presets button {
-  border: 1px solid var(--m-action-secondary-bg);
-  border-radius: var(--m-radius-sm);
-  padding: var(--m-space-2) var(--m-space-4);
+.ims-list :deep(.control-bar button[type="submit"]) {
+  border-color: var(--m-action-secondary-bg);
   background: var(--m-action-secondary-bg);
   color: var(--m-action-secondary-text);
-  font-weight: 800;
 }
 
-.ims-list__presets button[type="button"] {
-  background: var(--m-surface-primary);
-  color: var(--m-action-secondary-bg);
-}
-
-.ims-list__search-form,
-.ims-list__filters,
-.ims-list__presets {
-  display: grid;
-  grid-template-columns: minmax(12rem, 1fr) auto auto;
-  gap: var(--m-space-2);
-  align-items: end;
-  padding: var(--m-space-3);
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
-}
-
-.ims-list__filters,
-.ims-list__presets {
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-}
-
-.ims-list__search-form label,
-.ims-list__filters label,
-.ims-list__presets label {
-  grid-column: 1 / -1;
-  color: var(--m-text-secondary);
-  font-size: var(--m-text-sm);
-  font-weight: 800;
-}
-
-.ims-list__filters label,
-.ims-list__presets label {
-  grid-column: auto;
-  align-self: center;
-}
-
-.ims-list__search-form input,
-.ims-list__filters select,
-.ims-list__presets select,
-.ims-list__presets input {
+.ims-list :deep(.control-bar input),
+.ims-list :deep(.control-bar select) {
   min-width: 0;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
@@ -1073,17 +1064,13 @@ async function onSearchSubmit(): Promise<void> {
   font: inherit;
 }
 
-.ims-list__search-form button {
-  border: 1px solid var(--m-action-secondary-bg);
-  border-radius: var(--m-radius-sm);
-  padding: var(--m-space-2) var(--m-space-4);
-  background: var(--m-action-secondary-bg);
-  color: var(--m-action-secondary-text);
-  font-weight: 800;
-}
-
 .ims-list__clear-search {
-  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--m-action-secondary-bg);
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .ims-list__results {
@@ -1201,12 +1188,6 @@ async function onSearchSubmit(): Promise<void> {
 }
 
 @media (max-width: 43.99rem) {
-  .ims-list__search-form,
-  .ims-list__filters,
-  .ims-list__presets {
-    grid-template-columns: 1fr;
-  }
-
   .ims-list__clear-search {
     justify-self: start;
   }

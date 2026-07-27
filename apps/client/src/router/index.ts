@@ -39,6 +39,7 @@ import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import { selectFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   installDevelopmentOrganizerDepartmentSession,
@@ -254,6 +255,12 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/teams/:teamId/edit",
     name: "events.departments.teams.edit",
     component: DepartmentTeamEditView,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/teams/:teamId",
+    name: "events.departments.teams.show",
+    component: TeamOverviewView,
     beforeEnter: ensureDepartmentSelfAdminSession,
   },
   legacyShiftBoardRedirect("current"),

@@ -780,7 +780,10 @@ async function onPrintPdf(): Promise<void> {
         class="ims-edit__form"
         aria-label="Incident autosave form"
       >
-        <section class="ims-edit__panel" aria-label="Incident details">
+        <section
+          class="ims-edit__panel ims-edit__panel--span"
+          aria-label="Incident details"
+        >
           <div class="ims-edit__detail-grid">
             <div class="ims-edit__field ims-edit__field--readonly">
               <span>IMS #</span>
@@ -1130,7 +1133,10 @@ async function onPrintPdf(): Promise<void> {
           </div>
         </section>
 
-        <section class="ims-edit__panel" aria-labelledby="ims-edit-location-heading">
+        <section
+          class="ims-edit__panel ims-edit__panel--span"
+          aria-labelledby="ims-edit-location-heading"
+        >
           <div class="ims-edit__panel-heading">
             <h2 id="ims-edit-location-heading">Location</h2>
           </div>
@@ -1382,10 +1388,11 @@ async function onPrintPdf(): Promise<void> {
 <style scoped>
 .ims-edit {
   box-sizing: border-box;
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   margin-inline: auto;
   display: grid;
-  gap: var(--m-space-4);
+  align-content: start;
+  gap: var(--m-stack-gap);
 }
 
 .ims-edit *,
@@ -2157,6 +2164,64 @@ async function onPrintPdf(): Promise<void> {
 @media (max-width: 42rem) {
   .ims-edit__detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * Wide editing layout (M11.20 follow-up).
+ *
+ * The incident form is a column of independent panels: details, responders,
+ * types, linked incidents, attached Field Reports, location. Below ~1500px that
+ * column is the right shape. Above it the panels are each far narrower than the
+ * page, so stacking them pushes the timeline — the thing an operator reads while
+ * editing — off the fold for no reason.
+ *
+ * The panel row collapses into the form grid with `display: contents` so
+ * responders and types become peers of the other panels instead of a nested
+ * two-up block, which keeps every panel on one shared column rhythm.
+ */
+@media (min-width: 94rem) {
+  .ims-edit__form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .ims-edit__panel-grid {
+    display: contents;
+  }
+
+  /* Panels whose own field grid earns the full row. */
+  .ims-edit__panel--span {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Wider still: the timeline sits beside the form rather than under it. Editing
+ * a field and reading what it just recorded belong on one screen.
+ */
+@media (min-width: 120rem) {
+  .ims-edit {
+    grid-template-columns: minmax(0, 1.75fr) minmax(24rem, 1fr);
+  }
+
+  .ims-edit__back,
+  .ims-edit__header {
+    grid-column: 1 / -1;
+  }
+
+  .ims-edit__form {
+    grid-column: 1;
+  }
+
+  .ims-edit__timeline {
+    grid-column: 2;
+    align-self: start;
+  }
+
+  /* Back to one column when the form is not on screen (view mode). */
+  .ims-edit__view {
+    grid-column: 1 / -1;
   }
 }
 

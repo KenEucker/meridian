@@ -99,7 +99,7 @@ describe("department self-administration", () => {
     expect(wrapper.text()).toContain("Fragments");
   });
 
-  it("updates department details from the teams surface", async () => {
+  it("opens department details read-only and edits behind a toggle", async () => {
     installDevelopmentDepartmentSelfAdminSession();
     const router = buildRouter();
     await router.push(adminPath());
@@ -109,17 +109,51 @@ describe("department self-administration", () => {
       global: { plugins: [router] },
     });
 
+    // Default is the read-out, like the team details panel beside it.
+    expect(wrapper.find(".dept-teams__readout").exists()).toBe(true);
+    expect(wrapper.find(".dept-teams__form").exists()).toBe(false);
+    expect(wrapper.get(".dept-teams__readout").text()).toContain("Rangers");
+
+    await wrapper.get(".dept-teams__edit").trigger("click");
+    expect(wrapper.find(".dept-teams__form").exists()).toBe(true);
+
     const inputs = wrapper.findAll('input[type="text"]');
     await inputs[0]!.setValue("Rangers QA");
     await wrapper.get('button[type="submit"]').trigger("submit");
     await flushPromises();
 
+    // Saving returns to the read-out and shows the saved value.
+    expect(wrapper.find(".dept-teams__form").exists()).toBe(false);
+    expect(wrapper.get(".dept-teams__readout").text()).toContain("Rangers QA");
+  });
+
+  it("discards an unsaved department details edit on cancel", async () => {
+    installDevelopmentDepartmentSelfAdminSession();
+    const router = buildRouter();
+    await router.push(adminPath());
+    await router.isReady();
+
+    const wrapper = mount(DepartmentTeamsListView, {
+      global: { plugins: [router] },
+    });
+
+    await wrapper.get(".dept-teams__edit").trigger("click");
+    await wrapper.findAll('input[type="text"]')[0]!.setValue("Discard me");
+    await wrapper
+      .findAll(".dept-teams__form-actions button")
+      .find((button) => button.text() === "Cancel")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find(".dept-teams__form").exists()).toBe(false);
+    expect(wrapper.get(".dept-teams__readout").text()).not.toContain("Discard me");
+    expect(wrapper.get(".dept-teams__readout").text()).toContain("Rangers");
+
+    await wrapper.get(".dept-teams__edit").trigger("click");
     expect(
-      (
-        wrapper.findAll('input[type="text"]')[0]!
-          .element as HTMLInputElement
-      ).value,
-    ).toBe("Rangers QA");
+      (wrapper.findAll('input[type="text"]')[0]!.element as HTMLInputElement)
+        .value,
+    ).toBe("Rangers");
   });
 
   it("creates a team from the create form", async () => {

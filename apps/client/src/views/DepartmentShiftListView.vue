@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
+import StaffPageShell from "@/components/StaffPageShell.vue";
 import ShiftListSection from "@/components/sections/ShiftListSection.vue";
 import {
   canAdministerDepartment,
@@ -21,6 +22,9 @@ const canView = computed(
 );
 const canAdminister = computed(() => canAdministerDepartment(session.value));
 const department = computed(() => getCurrentDepartment(session.value));
+const eyebrow = computed(
+  () => department.value?.name ?? session.value?.departmentLabel ?? "Department",
+);
 
 const lede = computed(() => {
   if (!canView.value) {
@@ -46,18 +50,31 @@ const planningRoute = computed(() => ({
 </script>
 
 <template>
+  <!--
+    Members read their schedule here, usually on a phone, so they get the
+    narrow touch-first staff shell. Shift administration keeps the wide
+    workflow shell, where the comparison table earns its width.
+  -->
+  <StaffPageShell
+    v-if="!canManage"
+    heading-id="dept-shifts-heading"
+    title="Shifts"
+    :eyebrow="eyebrow"
+    :lede="lede"
+  >
+    <ShiftListSection variant="page" />
+  </StaffPageShell>
+
   <DeptOpsShell
+    v-else
     class="dept-shifts"
     heading-id="dept-shifts-heading"
     title="Shifts"
-    :eyebrow="department?.name ?? session?.departmentLabel ?? 'Department'"
+    :eyebrow="eyebrow"
     :lede="lede"
   >
     <template #nav>
-      <RouterLink v-if="canManage" :to="planningRoute">
-        Back To Planning
-      </RouterLink>
-      <RouterLink v-else :to="{ name: 'home' }">Back To Home</RouterLink>
+      <RouterLink :to="planningRoute">Back To Planning</RouterLink>
     </template>
 
     <ShiftListSection variant="page" />
@@ -66,7 +83,7 @@ const planningRoute = computed(() => ({
 
 <style scoped>
 .dept-shifts {
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   min-width: 0;
   display: grid;
   gap: var(--m-space-4);

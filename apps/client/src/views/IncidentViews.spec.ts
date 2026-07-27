@@ -361,7 +361,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("1 incident matches the current filters.");
 
     await wrapper.get("#ims-list-preset-name").setValue("Serious watch");
-    await wrapper.get("form.ims-list__presets").trigger("submit");
+    await wrapper.get('form[aria-label="Saved incident list presets"]').trigger("submit");
     await flushPromises();
 
     const options = wrapper
@@ -408,7 +408,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     const { wrapper } = await mountAt("/ims/incidents");
 
     await wrapper.get("#ims-list-preset-name").setValue("   ");
-    await wrapper.get("form.ims-list__presets").trigger("submit");
+    await wrapper.get('form[aria-label="Saved incident list presets"]').trigger("submit");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Preset name is required.");
@@ -1150,7 +1150,7 @@ describe("IMS incident list/detail surfaces (M11.5)", () => {
     expect(wrapper.text()).toContain("INC-2027-000041");
 
     await wrapper.get("#ims-list-search").setValue("#medical");
-    await wrapper.get("form.ims-list__search-form").trigger("submit");
+    await wrapper.get('form[aria-label="Search incidents"]').trigger("submit");
     await flushPromises();
 
     expect(router.currentRoute.value.query.search).toBe("#medical");

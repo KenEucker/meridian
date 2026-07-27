@@ -10,6 +10,71 @@
   color-scheme: light dark;
   --m-content-narrow: min(80vw, 40rem);
   --m-content-wide: min(80vw, 64rem);
+
+  /*
+   * Page containers.
+   *
+   * A page fills the phone inside the shell's own padding, then keeps growing
+   * with the viewport instead of stopping at a fixed measure. Width is not the
+   * thing that has to stay small — reading measure is, and that is bounded per
+   * block by --m-measure below. Capping the container instead would leave a
+   * 4K display showing a 1200px strip of content and several screens of
+   * scrolling underneath it.
+   *
+   * The rem floors keep the container from collapsing on small screens, where
+   * `min(100%, ...)` hands back the phone width anyway.
+   */
+  --m-content-staff: min(100%, max(40rem, 94vw));
+  --m-content-workflow: min(100%, max(76rem, 94vw));
+
+  /*
+   * Longest line of prose we will render. Layout may be as wide as the display;
+   * a paragraph may not, because line length is a reading limit rather than a
+   * space limit.
+   */
+  --m-measure: 68ch;
+
+  /*
+   * Narrowest a tile may get before a grid drops a column. Grids use auto-fill
+   * rather than auto-fit so a list of two records shows two tiles at the normal
+   * size instead of two tiles stretched across the display.
+   */
+  --m-tile-min: 20rem;
+  --m-tile-min-wide: 26rem;
+  --m-region-min: 34rem;
+
+  /*
+   * Density axis.
+   *
+   * The two axes are not equally scarce. On a wide display horizontal space is
+   * abundant and vertical space is the whole problem: everything a page pushes
+   * down is something the reader has to scroll to. So as width grows, block
+   * padding and stack gaps tighten while inline padding grows — a band gets
+   * shorter and roomier at the same time.
+   *
+   * Components use these instead of fixed --m-space values for their own
+   * padding and for the gaps between page bands, so density is a property of
+   * the viewport rather than something each screen re-decides.
+   */
+  --m-pad-block: var(--m-space-4);
+  --m-pad-inline: var(--m-space-4);
+  --m-stack-gap: var(--m-space-4);
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --m-pad-block: var(--m-space-3);
+    --m-pad-inline: var(--m-space-5);
+    --m-stack-gap: var(--m-space-3);
+  }
+}
+
+@media (min-width: 120rem) {
+  :root {
+    --m-pad-block: var(--m-space-3);
+    --m-pad-inline: var(--m-space-6);
+    --m-stack-gap: var(--m-space-3);
+  }
 }
 
 html,
@@ -31,4 +96,41 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/*
+ * Large-display scaling.
+ *
+ * Every Meridian token is rem-based, so moving the root size scales type,
+ * spacing, controls, and tile widths together rather than leaving 14px labels
+ * on a wall-mounted 4K panel read from across a room. Media query rem units
+ * resolve against the initial 16px root, so these thresholds do not chase the
+ * value they set.
+ *
+ * Scaling starts at 2560px, not at 1920px. What actually drives legible type is
+ * viewing distance, which CSS cannot measure; pixel width is the only proxy
+ * available, and a 1920px panel is far more often a desk monitor than a wall.
+ * Getting that wrong in the other direction is worse — it would inflate every
+ * ordinary desktop and cost the density those users already have.
+ *
+ * Bigger text costs vertical space, which is why it is paired with grids that
+ * add columns at the same widths: the height a tile list needs falls by the
+ * column count, faster than the type grows.
+ */
+@media (min-width: 160rem) {
+  :root {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 200rem) {
+  :root {
+    font-size: 20px;
+  }
+}
+
+@media (min-width: 240rem) {
+  :root {
+    font-size: 23px;
+  }
 }

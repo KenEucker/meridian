@@ -26,13 +26,39 @@ export type NavigationSection = {
 };
 
 /**
+ * Below this many total nav items, two dropdowns cost more than they organize:
+ * the reader has to guess which menu holds the page instead of reading one
+ * short list. At or above it, the split earns its keep.
+ */
+export const COMBINED_NAVIGATION_MAX_ITEMS = 10;
+
+/**
+ * The event the interface is currently locked to, or null when the context is
+ * organization-level and no single event is in scope.
+ *
+ * Event Info and the other event-scoped staff pages are only constructible with
+ * an event id, so this is the gate for showing them at all.
+ */
+export function useEventContext(): ComputedRef<{
+  readonly eventId: string;
+  readonly eventLabel: string;
+} | null> {
+  return computed(() => {
+    const department = selectedFixtureDepartment.value;
+
+    return department.eventId
+      ? { eventId: department.eventId, eventLabel: department.eventLabel }
+      : null;
+  });
+}
+
+/**
  * Top-level workflows.
  *
  * A workflow is a hub someone works out of for a stretch of the event, not
  * every page they can reach. Pages that belong to a workflow are reached from
  * inside it: Shifts and Documents live under Admin, Trainings lives under
- * Planning. Staff-facing versions of those pages are reached from the Staff
- * menu instead.
+ * Planning. Personal pages live in the Staff menu instead.
  */
 export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
   const departmentRouteParams = computed(
@@ -41,13 +67,7 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
 
   return computed(() => {
     const department = selectedFixtureDepartment.value;
-    const links: WorkflowLink[] = [
-      {
-        label: "Me",
-        description: "Your shifts, trainings, and event information.",
-        to: { name: "staff.me" },
-      },
-    ];
+    const links: WorkflowLink[] = [];
 
     if (department.isDepartmentLead) {
       links.push({
@@ -56,6 +76,27 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
         to: {
           name: "events.departments.overview",
           params: departmentRouteParams.value,
+        },
+      });
+    }
+
+    // Team leads without department lead authority get the team-scoped
+    // equivalent rather than a narrowed copy of Department Overview (M11.20).
+    const ledTeam = department.isDepartmentLead
+      ? undefined
+      : department.teams.find((team) => team.isTeamLead);
+
+    if (ledTeam) {
+      links.push({
+        label: "Team",
+        pageLabel: "Team Overview",
+        description: "Your team's shifts, roster, and current staffing.",
+        to: {
+          name: "events.departments.teams.show",
+          params: {
+            ...departmentRouteParams.value,
+            teamId: ledTeam.teamId,
+          },
         },
       });
     }
@@ -124,22 +165,50 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
 }
 
 /**
- * Staff menu for department members without lead authority: the department
- * pages they can use themselves, rather than the lead workflows.
+ * The Staff menu: the pages that belong to the person rather than to a
+ * workflow.
+ *
+ * Me is always here, and Event Info sits next to it whenever the interface is
+ * locked to an event. Leads stop there, because their Documents/Shifts/
+ * Trainings pages are reached from inside the Admin and Planning workflows they
+ * already work out of; members get those pages here, since they have no
+ * workflow to reach them from.
  */
 export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   const departmentRouteParams = computed(
     () => selectedFixtureDepartmentRouteParams.value,
   );
+  const eventContext = useEventContext();
 
   return computed(() => {
     const department = selectedFixtureDepartment.value;
+    const links: WorkflowLink[] = [
+      {
+        label: "Me",
+        description: "Your shifts, trainings, and event information.",
+        to: { name: "staff.me" },
+      },
+    ];
 
-    if (!department.teams.some((team) => team.isMember)) {
-      return [];
+    if (eventContext.value) {
+      links.push({
+        label: "Event Info",
+        description: "Directions, arrival, packing, food, and housing.",
+        to: {
+          name: "events.info",
+          params: { eventId: eventContext.value.eventId },
+        },
+      });
     }
 
-    return [
+    if (
+      fixtureDepartmentHasAdminAccess(department) ||
+      !department.teams.some((team) => team.isMember)
+    ) {
+      return links;
+    }
+
+    links.push(
       {
         label: "Documents",
         description: "Policies and procedures published to your department.",
@@ -169,31 +238,54 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
         description: "Field report author workspace.",
         to: { name: "staff.field-reports.index" },
       },
-    ];
+    );
+
+    return links;
   });
 }
 
 /**
- * Whether the Staff menu is shown in the app shell. Leads reach the same pages
- * from inside the Admin and Planning workflows.
+ * Whether the app shell renders Staff and Workflows as one menu or two.
+ *
+ * Under the threshold the shell shows a single list, because splitting a short
+ * list across two dropdowns makes the reader guess which one holds the page.
  */
-export function useShowStaffMenu(): ComputedRef<boolean> {
+export function useCombinedNavigation(): ComputedRef<{
+  readonly combined: boolean;
+  readonly links: readonly WorkflowLink[];
+}> {
+  const workflowLinks = useWorkflowLinks();
   const staffLinks = useStaffLinks();
 
-  return computed(
-    () =>
-      staffLinks.value.length > 0 &&
-      !fixtureDepartmentHasAdminAccess(selectedFixtureDepartment.value),
-  );
+  return computed(() => {
+    const links = [...staffLinks.value, ...workflowLinks.value];
+
+    return {
+      combined: links.length < COMBINED_NAVIGATION_MAX_ITEMS,
+      links,
+    };
+  });
+}
+
+/**
+ * Whether the app shell shows a separate Staff menu. False when the two menus
+ * are combined, because the combined menu already carries the staff pages.
+ */
+export function useShowStaffMenu(): ComputedRef<boolean> {
+  const navigation = useCombinedNavigation();
+  const staffLinks = useStaffLinks();
+
+  return computed(() => !navigation.value.combined && staffLinks.value.length > 0);
 }
 
 /**
  * Every page the current fixture user can reach, grouped for the home screen.
- * Workflows are listed first, then the individual pages they contain and the
- * device pages that belong to no workflow.
+ * Personal pages come first, then the workflows they work out of, then the
+ * lead-only department pages those workflows contain.
  */
 export function useNavigationSections(): ComputedRef<NavigationSection[]> {
   const workflowLinks = useWorkflowLinks();
+  const staffLinks = useStaffLinks();
   const departmentRouteParams = computed(
     () => selectedFixtureDepartmentRouteParams.value,
   );
@@ -202,62 +294,53 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     const department = selectedFixtureDepartment.value;
     const sections: NavigationSection[] = [
       {
-        title: "Workflows",
-        description: "Hubs you work out of during the event.",
-        links: workflowLinks.value,
+        title: "You",
+        description: "Your profile, event information, and personal pages.",
+        links: staffLinks.value,
       },
     ];
 
-    const departmentPages: WorkflowLink[] = [];
-
-    if (fixtureDepartmentHasAdminAccess(department)) {
-      departmentPages.push({
-        label: "Shifts",
-        description: "Create and maintain department and team shifts.",
-        to: {
-          name: "events.departments.shifts.index",
-          params: departmentRouteParams.value,
-        },
-      });
-      departmentPages.push({
-        label: "Documents",
-        description: "Department and team policies, procedures, and fragments.",
-        to: {
-          name: "events.departments.documents.index",
-          params: departmentRouteParams.value,
-        },
-      });
-    } else if (department.teams.some((team) => team.isMember)) {
-      departmentPages.push({
-        label: "Shifts",
-        description: "Shifts your teams are eligible for.",
-        to: {
-          name: "events.departments.shifts.index",
-          params: departmentRouteParams.value,
-        },
-      });
-      departmentPages.push({
-        label: "Documents",
-        description: "Policies and procedures published to your department.",
-        to: {
-          name: "events.departments.documents.index",
-          params: departmentRouteParams.value,
-        },
+    if (workflowLinks.value.length > 0) {
+      sections.push({
+        title: "Workflows",
+        description: "Hubs you work out of during the event.",
+        links: workflowLinks.value,
       });
     }
 
-    if (
-      fixtureDepartmentHasAdminAccess(department) ||
-      department.teams.some((team) => team.isMember)
-    ) {
-      departmentPages.push({
-        label: "Trainings",
-        description: "Department training schedule, signup, and completion.",
-        to: {
-          name: "events.departments.trainings.index",
-          params: departmentRouteParams.value,
+    const staffRouteNames = new Set(
+      staffLinks.value.map((link) => link.to.name),
+    );
+    const departmentPages: WorkflowLink[] = [];
+
+    if (fixtureDepartmentHasAdminAccess(department)) {
+      departmentPages.push(
+        {
+          label: "Shifts",
+          description: "Create and maintain department and team shifts.",
+          to: {
+            name: "events.departments.shifts.index",
+            params: departmentRouteParams.value,
+          },
         },
-      });
+        {
+          label: "Documents",
+          description:
+            "Department and team policies, procedures, and fragments.",
+          to: {
+            name: "events.departments.documents.index",
+            params: departmentRouteParams.value,
+          },
+        },
+        {
+          label: "Trainings",
+          description: "Department training schedule, signup, and completion.",
+          to: {
+            name: "events.departments.trainings.index",
+            params: departmentRouteParams.value,
+          },
+        },
+      );
     }
 
     // Equipment inventory setup is department logistics/administration work
@@ -279,20 +362,17 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       to: { name: "staff.field-reports.index" },
     });
 
-    departmentPages.push({
-      label: "Event Info",
-      description: "Directions, arrival, packing, food, and housing.",
-      to: {
-        name: "events.info",
-        params: { eventId: departmentRouteParams.value.eventId },
-      },
-    });
+    const remainingDepartmentPages = departmentPages.filter(
+      (link) => !staffRouteNames.has(link.to.name),
+    );
 
-    sections.push({
-      title: "Department pages",
-      description: "Pages inside your department workflows.",
-      links: departmentPages,
-    });
+    if (remainingDepartmentPages.length > 0) {
+      sections.push({
+        title: "Department pages",
+        description: "Pages inside your department workflows.",
+        links: remainingDepartmentPages,
+      });
+    }
 
     if (fixtureDepartmentHasOrganizerDepartmentAccess(department)) {
       sections.push({

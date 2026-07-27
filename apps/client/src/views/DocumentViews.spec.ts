@@ -132,9 +132,12 @@ describe("product document authoring", () => {
 
     expect(wrapper.text()).toContain("Volunteer Conduct");
     expect(wrapper.text()).not.toContain("Radio Checkout");
-    expect(wrapper.text()).toContain(
-      "Fragment maintenance is available only to document maintainers.",
-    );
+    // Readers get the mobile-first card list, not the maintainer table or the
+    // fragment workspace.
+    expect(wrapper.find(".staff-page").exists()).toBe(true);
+    expect(wrapper.findAll(".staff-card").length).toBeGreaterThan(0);
+    expect(wrapper.find("table").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Fragments");
     expect(wrapper.text()).not.toContain("New fragment");
   });
 });

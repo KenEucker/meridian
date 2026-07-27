@@ -120,7 +120,7 @@ const fieldReport = computed(() =>
 <style scoped>
 .ims-fr-detail {
   box-sizing: border-box;
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   margin-inline: auto;
   display: grid;
   gap: var(--m-space-4);

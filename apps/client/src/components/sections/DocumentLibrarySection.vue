@@ -2,6 +2,9 @@
 import { computed, ref } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import StaffCardList from "@/components/StaffCardList.vue";
+import StaffListCard from "@/components/StaffListCard.vue";
+import ControlBar from "@/components/ControlBar.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
   archiveDocument,
@@ -10,6 +13,7 @@ import {
   documentVersion,
   publishDocument,
   referencingDocuments,
+  renderDocumentMarkdown,
   resolveDocumentAuthoringSession,
   scopeLabel,
   visibleDocuments,
@@ -18,6 +22,7 @@ import {
   type ProductDocument,
   type ProductDocumentState,
 } from "@/documents/documentAuthoringModel";
+import { eventInfoSectionLabel } from "@/documents/eventInfoSections";
 
 /**
  * Policy, procedure, and fragment library featureset (M11.15, M11.17).
@@ -181,8 +186,41 @@ function transition(
       team document visibility.
     </p>
 
+    <!--
+      Readers get the mobile-first card list. A maintainer's table has eight
+      columns of lifecycle metadata a reader has no use for, and on a phone it
+      scrolls sideways until the labels are off screen.
+    -->
+    <template v-else-if="!canMaintain">
+      <StaffCardList
+        min="wide"
+        label="Documents"
+        :empty="documents.length === 0"
+        empty-message="No policies or procedures are published to you yet."
+      >
+        <StaffListCard
+          v-for="document in documents"
+          :key="document.id"
+          :title="document.title"
+          :eyebrow="document.kind === 'policy' ? 'Policy' : 'Procedure'"
+          :meta="[
+            { label: 'Scope', value: scopeLabel(document.scopeType, document.scopeId) },
+            { label: 'Version', value: documentVersion(document) },
+          ]"
+        >
+          <details class="documents__reader">
+            <summary>Read document</summary>
+            <div
+              class="documents__reader-body"
+              v-html="renderDocumentMarkdown(document.markdownSource)"
+            />
+          </details>
+        </StaffListCard>
+      </StaffCardList>
+    </template>
+
     <template v-else>
-      <div class="documents__toolbar">
+      <ControlBar label="Document filters">
         <label>
           State
           <select :value="stateFilter" @change="onStateChange">
@@ -192,7 +230,7 @@ function transition(
             <option value="archived">Archived</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <p v-if="actionError" class="documents__error" role="alert">
         {{ actionError }}
@@ -212,13 +250,14 @@ function transition(
                 <th scope="col">State</th>
                 <th scope="col">Scope</th>
                 <th scope="col">Version</th>
+                <th scope="col">Event Info</th>
                 <th scope="col">Visibility</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="documents.length === 0">
-                <td colspan="7">No documents match this filter.</td>
+                <td colspan="8">No documents match this filter.</td>
               </tr>
               <tr v-for="document in documents" :key="document.id">
                 <td>
@@ -239,6 +278,13 @@ function transition(
                 </td>
                 <td>{{ scopeLabel(document.scopeType, document.scopeId) }}</td>
                 <td>{{ documentVersion(document) }}</td>
+                <td>
+                  {{
+                    document.eventInfoSection
+                      ? eventInfoSectionLabel(document.eventInfoSection)
+                      : "Not shown"
+                  }}
+                </td>
                 <td>{{ visibilitySummary(document) }}</td>
                 <td class="documents__actions">
                   <RouterLink
@@ -317,6 +363,43 @@ function transition(
 .documents__section {
   display: grid;
   gap: var(--m-space-3);
+}
+
+.documents__reader summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.documents__reader summary:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.documents__reader-body {
+  padding-top: var(--m-space-2);
+  border-top: 1px solid var(--m-border-subtle);
+}
+
+.documents__reader-body :deep(h1),
+.documents__reader-body :deep(h2) {
+  margin: 0 0 var(--m-space-2);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-base);
+}
+
+.documents__reader-body :deep(p) {
+  margin: 0 0 var(--m-space-2);
+  max-width: var(--m-measure);
+  color: var(--m-text-secondary);
+}
+
+.documents__reader-body :deep(p:last-child) {
+  margin-bottom: 0;
 }
 
 .documents__toolbar {

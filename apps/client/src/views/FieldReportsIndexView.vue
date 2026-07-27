@@ -2,6 +2,9 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
+import StaffCardList from "@/components/StaffCardList.vue";
+import StaffListCard from "@/components/StaffListCard.vue";
+import StaffPageShell from "@/components/StaffPageShell.vue";
 import {
   authorFieldReportCatalog,
   fieldReportCatalogRevision,
@@ -41,202 +44,62 @@ function syncLabel(report: OfflineFieldReport): string {
 </script>
 
 <template>
-  <section class="field-reports" aria-labelledby="field-reports-heading">
-    <p class="field-reports__nav">
-      <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
+  <StaffPageShell
+    heading-id="field-reports-heading"
+    title="My Field Reports"
+    lede="Submitted Field Reports you authored. Original reports are finalized and cannot be edited."
+    :context="session ? `Event: ${session.eventLabel}` : ''"
+  >
+    <template #actions>
+      <RouterLink
+        data-variant="primary"
+        :to="{ name: 'staff.field-reports.create' }"
+      >
+        Submit Field Report
+      </RouterLink>
+    </template>
+
+    <p v-if="!session" class="field-reports__unavailable" role="status">
+      Field session is unavailable. Sign in and select an event to view your
+      Field Reports.
     </p>
 
-    <header class="field-reports__header">
-      <h1 id="field-reports-heading" class="field-reports__heading">
-        My Field Reports
-      </h1>
-      <p class="field-reports__lede">
-        Submitted Field Reports you authored. Original reports are finalized and
-        cannot be edited.
-      </p>
-      <p v-if="session" class="field-reports__context">
-        Event: {{ session.eventLabel }}
-      </p>
-      <p v-else class="field-reports__unavailable" role="status">
-        Field session is unavailable. Sign in and select an event to view your
-        Field Reports.
-      </p>
-      <p class="field-reports__actions">
-        <RouterLink
-          class="field-reports__create"
-          :to="{ name: 'staff.field-reports.create' }"
-        >
-          Submit Field Report
-        </RouterLink>
-      </p>
-    </header>
-
-    <p
-      v-if="session && reports.length === 0"
-      class="field-reports__empty"
-      role="status"
+    <StaffCardList
+      v-else
+      label="Field Reports"
+      :empty="reports.length === 0"
+      empty-message="You have not submitted any Field Reports yet."
     >
-      You have not submitted any Field Reports yet.
-    </p>
-
-    <ul v-else-if="reports.length > 0" class="field-reports__list">
-      <li
+      <StaffListCard
         v-for="report in reports"
         :key="report.id"
-        class="field-reports__item"
+        :to="{
+          name: 'staff.field-reports.show',
+          params: { fieldReportId: report.id },
+        }"
+        :eyebrow="displayFor(report).displayNumber"
+        :title="report.title"
+        :status="syncLabel(report)"
+        :meta="[{ label: 'Submitted', value: report.deviceSubmittedAt }]"
       >
-        <RouterLink
-          class="field-reports__link"
-          :to="{
-            name: 'staff.field-reports.show',
-            params: { fieldReportId: report.id },
-          }"
-        >
-          <span class="field-reports__number">{{
-            displayFor(report).displayNumber
-          }}</span>
-          <span class="field-reports__title">{{ report.title }}</span>
-          <span class="field-reports__meta">
-            <span class="field-reports__sync">{{ syncLabel(report) }}</span>
-            <span class="field-reports__submitted">
-              Submitted {{ report.deviceSubmittedAt }}
-            </span>
-          </span>
-          <span class="field-reports__excerpt">{{ report.body }}</span>
-        </RouterLink>
-      </li>
-    </ul>
-  </section>
+        <p class="field-reports__excerpt">{{ report.body }}</p>
+      </StaffListCard>
+    </StaffCardList>
+  </StaffPageShell>
 </template>
 
 <style scoped>
-.field-reports {
-  width: var(--m-content-narrow);
-}
-
-.field-reports__nav {
-  margin: 0 0 var(--m-space-4);
-  color: var(--m-text-muted);
-  font-size: var(--m-text-sm);
-  font-weight: 700;
-}
-
-.field-reports__nav a {
-  color: var(--m-text-secondary);
-  text-decoration: none;
-}
-
-.field-reports__heading {
-  margin: 0 0 var(--m-space-2);
-  font-family: var(--m-font-heading);
-  font-size: var(--m-text-xl);
-}
-
-.field-reports__lede,
-.field-reports__context,
-.field-reports__unavailable,
-.field-reports__empty,
-.field-reports__actions {
-  margin: 0 0 var(--m-space-4);
-}
-
-.field-reports__lede,
-.field-reports__context,
-.field-reports__unavailable,
-.field-reports__empty {
-  color: var(--m-text-muted);
-}
-
-.field-reports__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--m-space-2);
-}
-
-.field-reports__create,
-.field-reports__secondary-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  min-height: 2.75rem;
-  border-radius: var(--m-radius-sm);
-  padding: 0 var(--m-space-4);
-  font-weight: 800;
-  line-height: 1;
-  text-align: center;
-  text-decoration: none;
-}
-
-.field-reports__create {
-  background: var(--m-action-primary-bg);
-  color: var(--m-action-primary-text);
-}
-
-.field-reports__secondary-link {
-  border: 1px solid var(--m-border-default);
-  color: var(--m-action-secondary-bg);
-}
-
-.field-reports__create:focus-visible,
-.field-reports__nav a:focus-visible,
-.field-reports__secondary-link:focus-visible {
-  outline: 2px solid var(--m-focus-ring);
-  outline-offset: 2px;
-}
-
-.field-reports__list {
-  list-style: none;
+.field-reports__unavailable {
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--m-space-3);
-}
-
-.field-reports__link {
-  display: grid;
-  gap: var(--m-space-1);
-  padding: var(--m-space-3);
-  border: 1px solid var(--m-border-default);
-  border-radius: var(--m-radius-sm);
-  background: var(--m-surface-raised);
-  color: var(--m-text-primary);
-  text-decoration: none;
-}
-
-.field-reports__link:focus-visible {
-  outline: 2px solid var(--m-focus-ring);
-  outline-offset: 2px;
-}
-
-.field-reports__number {
-  font-weight: 700;
-}
-
-.field-reports__title {
-  font-weight: 600;
-}
-
-.field-reports__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--m-space-2);
-  color: var(--m-text-secondary);
-  font-size: var(--m-text-sm);
+  color: var(--m-text-muted);
 }
 
 .field-reports__excerpt {
+  margin: 0;
   color: var(--m-text-muted);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-@media (min-width: 44rem) {
-  .field-reports__create {
-    width: auto;
-  }
 }
 </style>

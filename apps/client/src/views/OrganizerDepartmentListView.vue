@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ControlBar from "@/components/ControlBar.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
@@ -103,7 +104,7 @@ function formatArchived(department: OrganizerDepartment): string {
     </p>
 
     <template v-else>
-      <div class="org-dept__toolbar">
+      <ControlBar label="Department filters">
         <label class="org-dept__filter">
           Status
           <select
@@ -116,7 +117,7 @@ function formatArchived(department: OrganizerDepartment): string {
             <option value="archived">Archived</option>
           </select>
         </label>
-      </div>
+      </ControlBar>
 
       <p v-if="actionError" class="org-dept__error" role="alert">
         {{ actionError }}

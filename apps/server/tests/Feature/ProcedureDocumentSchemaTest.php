@@ -27,6 +27,7 @@ class ProcedureDocumentSchemaTest extends TestCase
             'scope_id',
             'title',
             'slug',
+            'event_info_section',
             'markdown_source',
             'state',
             'document_revision',

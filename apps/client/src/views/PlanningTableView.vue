@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ContentGrid from "@/components/ContentGrid.vue";
+import ControlBar from "@/components/ControlBar.vue";
 import { computed, ref, type CSSProperties } from "vue";
 import { RouterLink } from "vue-router";
 
@@ -279,125 +281,134 @@ function formatTimelineMarker(timestamp: number): string {
       </div>
     </div>
 
-    <form class="planning__filters" aria-label="Planning filters">
-      <label>
-        <span>Team filter</span>
-        <select v-model="selectedTeamId">
-          <option value="">All teams</option>
-          <option
-            v-for="team in table.availableTeams"
-            :key="team.teamId"
-            :value="team.teamId"
-          >
-            {{ team.teamLabel }}
-          </option>
-        </select>
-      </label>
-      <label>
-        <span>Date filter</span>
-        <input
-          v-model="selectedDate"
-          type="date"
-          :list="'planning-date-options'"
-        />
-        <datalist id="planning-date-options">
-          <option v-for="date in availableDates" :key="date" :value="date" />
-        </datalist>
-      </label>
-    </form>
-
-    <section class="planning__gantt" aria-labelledby="planning-gantt-heading">
-      <header class="planning__section-header">
-        <div>
-          <h2 id="planning-gantt-heading">Scheduled shifts</h2>
-          <p>Select a shift to inspect scheduled staff and timing.</p>
-        </div>
-        <span>{{ visibleRows.length }} visible</span>
-      </header>
-
-      <div v-if="visibleRows.length > 0" class="planning__gantt-frame">
-        <div class="planning__time-scale" aria-hidden="true">
-          <span></span>
-          <ol>
-            <li
-              v-for="marker in timelineMarkers"
-              :key="marker"
-              :style="timelineMarkerStyle(marker)"
+    <ControlBar label="Planning filters">
+      <form data-control-group aria-label="Planning filters">
+        <label>
+          <span>Team filter</span>
+          <select v-model="selectedTeamId">
+            <option value="">All teams</option>
+            <option
+              v-for="team in table.availableTeams"
+              :key="team.teamId"
+              :value="team.teamId"
             >
-              {{ formatTimelineMarker(marker) }}
-            </li>
-          </ol>
-        </div>
-        <div class="planning__gantt-body">
-          <button
-            v-for="row in visibleRows"
-            :key="row.shiftId"
-            type="button"
-            class="planning__gantt-row"
-            :class="`planning__gantt-row--${row.lifecycle}`"
-            :data-selected="selectedShift?.shiftId === row.shiftId"
-            @click="selectShift(row.shiftId)"
-          >
-            <span class="planning__gantt-label">
-              <strong>{{ row.title }}</strong>
-              <small>
-                {{ row.teamLabel }} / {{ lifecycleLabel(row.lifecycle) }}
-              </small>
-            </span>
-            <span class="planning__gantt-track">
-              <span
-                v-if="nowMarkerStyle"
-                class="planning__now-marker"
-                :style="nowMarkerStyle"
-              ></span>
-              <span class="planning__gantt-bar" :style="timelineStyle(row)">
-                <span>{{ row.title }}</span>
+              {{ team.teamLabel }}
+            </option>
+          </select>
+        </label>
+        <label>
+          <span>Date filter</span>
+          <input
+            v-model="selectedDate"
+            type="date"
+            :list="'planning-date-options'"
+          />
+          <datalist id="planning-date-options">
+            <option v-for="date in availableDates" :key="date" :value="date" />
+          </datalist>
+        </label>
+      </form>
+    </ControlBar>
+
+    <!--
+      The chart and the detail for the shift picked in it are peers, and the
+      pairing is the point: choosing a bar to read its staffing should not push
+      the answer below the fold. They sit side by side once each has room.
+    -->
+    <ContentGrid min="region" :stretch="false">
+      <section class="planning__gantt" aria-labelledby="planning-gantt-heading">
+        <header class="planning__section-header">
+          <div>
+            <h2 id="planning-gantt-heading">Scheduled shifts</h2>
+            <p>Select a shift to inspect scheduled staff and timing.</p>
+          </div>
+          <span>{{ visibleRows.length }} visible</span>
+        </header>
+
+        <div v-if="visibleRows.length > 0" class="planning__gantt-frame">
+          <div class="planning__time-scale" aria-hidden="true">
+            <span></span>
+            <ol>
+              <li
+                v-for="marker in timelineMarkers"
+                :key="marker"
+                :style="timelineMarkerStyle(marker)"
+              >
+                {{ formatTimelineMarker(marker) }}
+              </li>
+            </ol>
+          </div>
+          <div class="planning__gantt-body">
+            <button
+              v-for="row in visibleRows"
+              :key="row.shiftId"
+              type="button"
+              class="planning__gantt-row"
+              :class="`planning__gantt-row--${row.lifecycle}`"
+              :data-selected="selectedShift?.shiftId === row.shiftId"
+              @click="selectShift(row.shiftId)"
+            >
+              <span class="planning__gantt-label">
+                <strong>{{ row.title }}</strong>
+                <small>
+                  {{ row.teamLabel }} / {{ lifecycleLabel(row.lifecycle) }}
+                </small>
               </span>
+              <span class="planning__gantt-track">
+                <span
+                  v-if="nowMarkerStyle"
+                  class="planning__now-marker"
+                  :style="nowMarkerStyle"
+                ></span>
+                <span class="planning__gantt-bar" :style="timelineStyle(row)">
+                  <span>{{ row.title }}</span>
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+        <p v-else class="planning__empty" role="status">
+          No shift windows match the current filters.
+        </p>
+      </section>
+
+      <section
+        class="planning__drilldown"
+        aria-labelledby="planning-shift-detail-heading"
+      >
+        <header class="planning__section-header">
+          <div>
+            <h2 id="planning-shift-detail-heading">Shift detail</h2>
+            <p v-if="selectedShift">
+              {{ selectedShift.title }} /
+              {{ formatTimestamp(selectedShift.startsAt, table.context.timeZone) }}
+              to
+              {{ formatTimestamp(selectedShift.endsAt, table.context.timeZone) }}
+            </p>
+          </div>
+          <span v-if="selectedShift">{{
+            lifecycleLabel(selectedShift.lifecycle)
+          }}</span>
+        </header>
+
+        <ul v-if="scheduledStaff.length > 0" class="planning__staff-list">
+          <li v-for="member in scheduledStaff" :key="member.staffId">
+            <span>
+              <strong>{{ member.displayName }}</strong>
+              <small>{{ member.teamLabel }} / {{ member.attendanceLabel }}</small>
             </span>
-          </button>
-        </div>
-      </div>
-      <p v-else class="planning__empty" role="status">
-        No shift windows match the current filters.
-      </p>
-    </section>
-
-    <section
-      class="planning__drilldown"
-      aria-labelledby="planning-shift-detail-heading"
-    >
-      <header class="planning__section-header">
-        <div>
-          <h2 id="planning-shift-detail-heading">Shift detail</h2>
-          <p v-if="selectedShift">
-            {{ selectedShift.title }} /
-            {{ formatTimestamp(selectedShift.startsAt, table.context.timeZone) }}
-            to
-            {{ formatTimestamp(selectedShift.endsAt, table.context.timeZone) }}
-          </p>
-        </div>
-        <span v-if="selectedShift">{{
-          lifecycleLabel(selectedShift.lifecycle)
-        }}</span>
-      </header>
-
-      <ul v-if="scheduledStaff.length > 0" class="planning__staff-list">
-        <li v-for="member in scheduledStaff" :key="member.staffId">
-          <span>
-            <strong>{{ member.displayName }}</strong>
-            <small>{{ member.teamLabel }} / {{ member.attendanceLabel }}</small>
-          </span>
-          <span>
-            {{ formatTimestamp(member.startsAt, table.context.timeZone) }}
-            to
-            {{ formatTimestamp(member.endsAt, table.context.timeZone) }}
-          </span>
-        </li>
-      </ul>
-      <p v-else class="planning__empty" role="status">
-        No scheduled staff are available for this shift in the local fixture.
-      </p>
-    </section>
+            <span>
+              {{ formatTimestamp(member.startsAt, table.context.timeZone) }}
+              to
+              {{ formatTimestamp(member.endsAt, table.context.timeZone) }}
+            </span>
+          </li>
+        </ul>
+        <p v-else class="planning__empty" role="status">
+          No scheduled staff are available for this shift in the local fixture.
+        </p>
+      </section>
+    </ContentGrid>
 
     <section
       class="planning__table-section"
@@ -466,8 +477,10 @@ function formatTimelineMarker(timestamp: number): string {
       above, the shifts that coverage is built from, and the trainings that
       gate eligibility for them.
     -->
-    <ShiftListSection variant="section" />
-    <TrainingListSection variant="section" />
+    <ContentGrid min="region" :stretch="false">
+      <ShiftListSection variant="section" />
+      <TrainingListSection variant="section" />
+    </ContentGrid>
   </DeptOpsShell>
 </template>
 

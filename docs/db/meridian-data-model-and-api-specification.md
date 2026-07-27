@@ -307,6 +307,7 @@ GET /api/departments/{department}/teams/{team}
 GET /api/events
 GET /api/events/{event}
 GET /api/events/{event}/departments
+GET /api/events/{event}/info
 GET /api/events/{event}/teams
 GET /api/events/{event}/shifts
 GET /api/events/{event}/departments/{department}/overview
@@ -336,6 +337,12 @@ Department operations read models are purpose-built and separate:
   module payloads only.
 - Planning returns identity-free plan-versus-actual aggregate rows and must not
   include staff identities, signup lists, or team-member lists.
+
+Event Info (`GET /api/events/{event}/info`) returns the staff-facing event
+information surface: event context plus one entry per Event Info section, in the
+documented order, each carrying the published documents the caller may see or an
+`empty_description` naming the gap. Access requires staff standing in the event's
+organization and nothing more. Assembly rules are in 11.4A.
 
 Incident APIs must return data only to IC-authorized users.
 
@@ -454,6 +461,12 @@ POST /api/commands/restore-shift
 ```
 
 Fragments do not have Draft/Published/Archived states in Alpha 1, so fragment publish/archive commands are not part of the Alpha 1 command surface.
+
+Policy/procedure create and update commands accept an optional
+`event_info_section`. Omitting the key leaves the current assignment alone;
+sending `null` clears it. Unknown section values are refused with 422 rather
+than silently ignored, because a placement the maintainer thinks they made and
+staff never see is worse than an error. See 11.4A.
 
 `create-note` and `add-note-to-briefing` are the Alpha 1 Notes/Briefing write commands. Remaining Briefing commands in section 11A are post–Alpha 1.
 
@@ -2600,6 +2613,7 @@ Key fields:
 - `scope_id`
 - `title`
 - `slug`
+- `event_info_section`
 - `markdown_source`
 - `state`
 - `document_revision`
@@ -2631,6 +2645,7 @@ Rules:
 - team-scoped policy documents are maintained by team leads
 - organizers can view all published policy documents across organization, department, and team scopes
 - organizers cannot edit department/team documents merely by being organizers
+- `event_info_section` is nullable and, when set, is one of the Event Info section keys in 11.4A
 
 ### 11.3 `procedure_documents`
 
@@ -2644,6 +2659,7 @@ Key fields mirror `policy_documents`:
 - `scope_id`
 - `title`
 - `slug`
+- `event_info_section`
 - `markdown_source`
 - `state`
 - `document_revision`
@@ -2674,6 +2690,60 @@ Visibility:
 - team-scoped published documents are visible to members of that team
 - department leads and team leads may see policies/procedures within their department according to leadership scope
 - documents are not generally public-facing before login except as part of staff signup for an organization
+
+### 11.4A Event Info Section Assembly
+
+Event Info (`event.info`, `GET /api/events/{event}/info`) is the staff-facing
+answer to how to reach the event, what to bring, and what is expected. It is
+assembled from published policy/procedure documents rather than authored
+separately, so there is exactly one place event guidance lives.
+
+Section keys, in display order:
+
+```text
+directions
+arrival
+packing
+food
+housing
+requirements
+```
+
+Selection rules:
+
+- A maintainer assigns a document to at most one section through
+  `event_info_section` while authoring it. Nothing is inferred from titles or
+  slugs; a surface that guesses which document means "directions" eventually
+  guesses wrong for someone driving to a gate at night.
+- Assignment requires no capability beyond the maintain-scope authority that
+  already governs the document. If a maintainer may publish the text, they may
+  say where it appears.
+- Assigning, changing, or clearing a section does not bump the document version.
+  Placement is where a document is shown, not what it says, and a version bump
+  would tell acknowledgment review that the text changed when it did not. The
+  change is still recorded in the document audit snapshot.
+
+Assembly rules:
+
+- Only `published` documents appear, including for the maintainer who wrote
+  them. Event Info answers what is in force now, and a maintainer reading their
+  own draft here would read it as published guidance.
+- Visibility is exactly the published-document rule in 11.4. Event Info grants
+  no access of its own, so the same section may legitimately differ between two
+  staff members.
+- The document pool is the event's organization; department and team scope
+  narrow it further through the visibility rule above.
+- Within a section, documents are ordered by scope breadth (`organization`,
+  then `department`, then `team`), then title, then id. Broad guidance is read
+  before the narrower guidance that qualifies it, and the order is stable across
+  requests.
+- A section with no visible published document returns an `empty_description`
+  naming the gap. It never returns placeholder prose, because staff cannot tell
+  placeholder guidance from published guidance.
+
+Event Info access requires staff standing in the event's organization. It is not
+gated on any operational capability, because it is the surface a staff member
+needs before their first shift.
 
 ### 11.5 `document_fragments`
 

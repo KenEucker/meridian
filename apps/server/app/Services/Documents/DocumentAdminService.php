@@ -24,7 +24,7 @@ class DocumentAdminService
     ) {}
 
     /**
-     * @param  array<string, string>  $attributes
+     * @param  array<string, string|null>  $attributes
      */
     public function save(
         PolicyDocument|ProcedureDocument $document,
@@ -46,6 +46,10 @@ class DocumentAdminService
                     'created_by_user_id' => $actor->id,
                 ]);
             } elseif ($document->getOriginal('state') === $document::STATE_PUBLISHED && $document->isDirty([
+                // `event_info_section` is deliberately absent: moving a
+                // published document onto or off Event Info changes where it is
+                // displayed, not what it says, and a version bump would tell
+                // acknowledgment review that the text changed when it did not.
                 'organization_id',
                 'scope_type',
                 'scope_id',
@@ -135,6 +139,7 @@ class DocumentAdminService
             'scope_id' => $document->scope_id,
             'title' => $document->title,
             'slug' => $document->slug,
+            'event_info_section' => $document->event_info_section,
             'markdown_source' => $document->markdown_source,
             'state' => $document->state,
             'document_revision' => $document->document_revision,

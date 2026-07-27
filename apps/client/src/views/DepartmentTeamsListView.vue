@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ContentGrid from "@/components/ContentGrid.vue";
+import ControlBar from "@/components/ControlBar.vue";
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
@@ -80,6 +82,12 @@ const detailsDraft = reactive({
 });
 const detailsError = ref<string | null>(null);
 const detailsBusy = ref(false);
+/**
+ * Department details open read-only, like the team details panel beside them.
+ * Editing organization-visible identity fields is a deliberate act, not
+ * something to land in mid-form by opening the Admin page.
+ */
+const detailsEditing = ref(false);
 const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -96,6 +104,7 @@ watch(
     detailsDraft.name = value.name;
     detailsDraft.code = value.code;
     detailsDraft.description = value.description ?? "";
+    detailsEditing.value = false;
   },
   { immediate: true },
 );
@@ -128,6 +137,7 @@ async function onSaveDetails(): Promise<void> {
 
   try {
     updateDepartmentDetails(session.value, { ...detailsDraft });
+    detailsEditing.value = false;
   } catch (error) {
     detailsError.value =
       error instanceof Error
@@ -136,6 +146,26 @@ async function onSaveDetails(): Promise<void> {
   } finally {
     detailsBusy.value = false;
   }
+}
+
+function onEditDetails(): void {
+  detailsError.value = null;
+  detailsEditing.value = true;
+}
+
+function onCancelDetailsEdit(): void {
+  const current = administeredDepartment.value;
+
+  detailsError.value = null;
+  detailsEditing.value = false;
+
+  if (current === null) {
+    return;
+  }
+
+  detailsDraft.name = current.name;
+  detailsDraft.code = current.code;
+  detailsDraft.description = current.description ?? "";
 }
 
 async function archiveTeam(team: DepartmentTeam): Promise<void> {
@@ -270,251 +300,294 @@ function teamCreateRoute() {
     </p>
 
     <template v-else>
-      <section
-        v-if="canAdminister"
-        class="dept-teams__details"
-        aria-labelledby="dept-details-heading"
-      >
-        <h2 id="dept-details-heading" class="dept-teams__subheading">
-          Department details
-        </h2>
-        <p class="dept-teams__hint">
-          Update permitted department identity fields. Organization create and
-          archive remain with organizers.
-        </p>
-        <p v-if="detailsError" class="dept-teams__error" role="alert">
-          {{ detailsError }}
-        </p>
-        <form class="dept-teams__form" @submit.prevent="onSaveDetails">
-          <label class="dept-teams__field">
-            Name
-            <input v-model="detailsDraft.name" type="text" required />
-          </label>
-          <label class="dept-teams__field">
-            Code
-            <input v-model="detailsDraft.code" type="text" required />
-          </label>
-          <label class="dept-teams__field dept-teams__field--wide">
-            Description
-            <textarea v-model="detailsDraft.description" rows="3" />
-          </label>
-          <button
-            class="dept-teams__save"
-            type="submit"
-            :disabled="detailsBusy"
-          >
-            Save department details
-          </button>
-        </form>
-      </section>
-
-      <section
-        v-if="canLeadTeam"
-        class="dept-teams__lead"
-        aria-labelledby="team-lead-heading"
-      >
-        <div>
-          <h2 id="team-lead-heading" class="dept-teams__subheading">
-            Team details
-          </h2>
-          <p class="dept-teams__hint">
-            Team lead view is limited to teams you lead in this department.
-          </p>
-        </div>
-        <ul class="dept-teams__lead-teams" aria-label="Teams you lead">
-          <li v-for="team in leadTeams" :key="team.id">
-            <strong>{{ team.name }}</strong>
-            <span>{{ team.description ?? "No description set." }}</span>
-            <small>{{ team.code }} - {{ formatArchived(team) }}</small>
-          </li>
-        </ul>
-      </section>
-
-      <section
-        class="dept-teams__staffmgmt"
-        aria-labelledby="team-staff-heading"
-      >
-        <div>
-          <h2 id="team-staff-heading" class="dept-teams__subheading">
-            Team staff
-          </h2>
-          <p class="dept-teams__hint">
-            {{
-              canAdminister
-                ? "Assign permitted department staff to teams and designate individual team leads."
-                : "Assign permitted department staff to teams you lead."
-            }}
-          </p>
-        </div>
-
-        <p v-if="staffError" class="dept-teams__error" role="alert">
-          {{ staffError }}
-        </p>
-
-        <form class="dept-teams__assign" @submit.prevent="onAssignStaff">
-          <label class="dept-teams__field">
-            Staff
-            <select v-model="assignDraft.staffId" required>
-              <option value="" disabled>Select staff</option>
-              <option
-                v-for="member in assignableStaff"
-                :key="member.staffId"
-                :value="member.staffId"
-              >
-                {{ member.displayName }}
-              </option>
-            </select>
-          </label>
-          <label class="dept-teams__field">
-            Team
-            <select v-model="assignDraft.teamId" required>
-              <option value="" disabled>Select team</option>
-              <option
-                v-for="team in assignableTeams"
-                :key="team.id"
-                :value="team.id"
-              >
-                {{ team.name }}
-              </option>
-            </select>
-          </label>
-          <button class="dept-teams__save" type="submit">Assign to team</button>
-        </form>
-
-        <div
-          class="dept-teams__table-wrap"
-          role="region"
-          aria-label="Team staff"
+      <!--
+        Department details, lead selection, staff assignment, and team
+        management are peer setup panels rather than a sequence, and each is
+        narrower than a wide screen. They pair up instead of running four deep.
+      -->
+      <ContentGrid min="region" :stretch="false">
+        <section
+          v-if="canAdminister"
+          class="dept-teams__details"
+          aria-labelledby="dept-details-heading"
         >
-          <table class="dept-teams__table">
+          <div class="dept-teams__panel-heading">
+            <div>
+              <h2 id="dept-details-heading" class="dept-teams__subheading">
+                Department details
+              </h2>
+              <p class="dept-teams__hint">
+                {{
+                  detailsEditing
+                    ? "Update permitted department identity fields. Organization create and archive remain with organizers."
+                    : "Permitted department identity fields. Organization create and archive remain with organizers."
+                }}
+              </p>
+            </div>
+            <button
+              v-if="!detailsEditing"
+              class="dept-teams__edit"
+              type="button"
+              @click="onEditDetails"
+            >
+              Edit details
+            </button>
+          </div>
+          <p v-if="detailsError" class="dept-teams__error" role="alert">
+            {{ detailsError }}
+          </p>
+
+          <dl v-if="!detailsEditing" class="dept-teams__readout">
+            <div>
+              <dt>Name</dt>
+              <dd>{{ administeredDepartment?.name ?? "Not set" }}</dd>
+            </div>
+            <div>
+              <dt>Code</dt>
+              <dd>{{ administeredDepartment?.code ?? "Not set" }}</dd>
+            </div>
+            <div>
+              <dt>Description</dt>
+              <dd>
+                {{ administeredDepartment?.description ?? "No description set." }}
+              </dd>
+            </div>
+          </dl>
+
+          <form v-else class="dept-teams__form" @submit.prevent="onSaveDetails">
+            <label class="dept-teams__field">
+              Name
+              <input v-model="detailsDraft.name" type="text" required />
+            </label>
+            <label class="dept-teams__field">
+              Code
+              <input v-model="detailsDraft.code" type="text" required />
+            </label>
+            <label class="dept-teams__field dept-teams__field--wide">
+              Description
+              <textarea v-model="detailsDraft.description" rows="3" />
+            </label>
+            <div class="dept-teams__form-actions">
+              <button
+                class="dept-teams__save"
+                type="submit"
+                :disabled="detailsBusy"
+              >
+                Save department details
+              </button>
+              <button type="button" @click="onCancelDetailsEdit">Cancel</button>
+            </div>
+          </form>
+        </section>
+
+        <section
+          v-if="canLeadTeam"
+          class="dept-teams__lead"
+          aria-labelledby="team-lead-heading"
+        >
+          <div>
+            <h2 id="team-lead-heading" class="dept-teams__subheading">
+              Team details
+            </h2>
+            <p class="dept-teams__hint">
+              Team lead view is limited to teams you lead in this department.
+            </p>
+          </div>
+          <ul class="dept-teams__lead-teams" aria-label="Teams you lead">
+            <li v-for="team in leadTeams" :key="team.id">
+              <strong>{{ team.name }}</strong>
+              <span>{{ team.description ?? "No description set." }}</span>
+              <small>{{ team.code }} - {{ formatArchived(team) }}</small>
+            </li>
+          </ul>
+        </section>
+
+        <section
+          class="dept-teams__staffmgmt"
+          aria-labelledby="team-staff-heading"
+        >
+          <div>
+            <h2 id="team-staff-heading" class="dept-teams__subheading">
+              Team staff
+            </h2>
+            <p class="dept-teams__hint">
+              {{
+                canAdminister
+                  ? "Assign permitted department staff to teams and designate individual team leads."
+                  : "Assign permitted department staff to teams you lead."
+              }}
+            </p>
+          </div>
+
+          <p v-if="staffError" class="dept-teams__error" role="alert">
+            {{ staffError }}
+          </p>
+
+          <form class="dept-teams__assign" @submit.prevent="onAssignStaff">
+            <label class="dept-teams__field">
+              Staff
+              <select v-model="assignDraft.staffId" required>
+                <option value="" disabled>Select staff</option>
+                <option
+                  v-for="member in assignableStaff"
+                  :key="member.staffId"
+                  :value="member.staffId"
+                >
+                  {{ member.displayName }}
+                </option>
+              </select>
+            </label>
+            <label class="dept-teams__field">
+              Team
+              <select v-model="assignDraft.teamId" required>
+                <option value="" disabled>Select team</option>
+                <option
+                  v-for="team in assignableTeams"
+                  :key="team.id"
+                  :value="team.id"
+                >
+                  {{ team.name }}
+                </option>
+              </select>
+            </label>
+            <button class="dept-teams__save" type="submit">Assign to team</button>
+          </form>
+
+          <div
+            class="dept-teams__table-wrap"
+            role="region"
+            aria-label="Team staff"
+          >
+            <table class="dept-teams__table">
+              <thead>
+                <tr>
+                  <th scope="col">Staff</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="managedStaff.length === 0">
+                  <td colspan="4">No staff are listed for your teams.</td>
+                </tr>
+                <tr
+                  v-for="member in managedStaff"
+                  :key="`${member.teamId}:${member.staffId}`"
+                >
+                  <td>
+                    <strong>{{ member.displayName }}</strong>
+                    <span v-if="member.handle">@{{ member.handle }}</span>
+                  </td>
+                  <td>{{ member.teamLabel }}</td>
+                  <td>{{ member.roleLabel }}</td>
+                  <td class="dept-teams__actions">
+                    <button
+                      v-if="canAdminister && member.roleLabel !== 'Team lead'"
+                      type="button"
+                      @click="onSelectLead(member)"
+                    >
+                      Make team lead
+                    </button>
+                    <button
+                      v-if="canAdminister && member.roleLabel === 'Team lead'"
+                      type="button"
+                      @click="onRemoveLead(member)"
+                    >
+                      Remove lead
+                    </button>
+                    <button
+                      type="button"
+                      class="dept-teams__archive"
+                      @click="onRemoveStaff(member)"
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section
+          v-if="canAdminister"
+          class="dept-teams__management"
+          aria-labelledby="team-management-heading"
+        >
+          <h2 id="team-management-heading" class="dept-teams__subheading">
+            Teams
+          </h2>
+
+          <ControlBar label="Team filters">
+          <label class="dept-teams__filter">
+            Status
+            <select
+              :value="statusFilter"
+              aria-label="Filter teams by status"
+              @change="onStatusChange"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          </ControlBar>
+
+          <p v-if="actionError" class="dept-teams__error" role="alert">
+            {{ actionError }}
+          </p>
+
+          <div class="dept-teams__table-wrap" role="region" aria-label="Teams">
+            <table class="dept-teams__table">
             <thead>
               <tr>
-                <th scope="col">Staff</th>
-                <th scope="col">Team</th>
-                <th scope="col">Role</th>
+                <th scope="col">Name</th>
+                <th scope="col">Code</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="managedStaff.length === 0">
-                <td colspan="4">No staff are listed for your teams.</td>
+              <tr v-if="teams.length === 0">
+                <td colspan="5">No teams match this filter.</td>
               </tr>
-              <tr
-                v-for="member in managedStaff"
-                :key="`${member.teamId}:${member.staffId}`"
-              >
+              <tr v-for="team in teams" :key="team.id">
                 <td>
-                  <strong>{{ member.displayName }}</strong>
-                  <span v-if="member.handle">@{{ member.handle }}</span>
+                  <RouterLink :to="teamEditRoute(team.id)">
+                    {{ team.name }}
+                  </RouterLink>
                 </td>
-                <td>{{ member.teamLabel }}</td>
-                <td>{{ member.roleLabel }}</td>
+                <td>{{ team.code }}</td>
+                <td>{{ formatDefault(team) }}</td>
+                <td>{{ formatArchived(team) }}</td>
                 <td class="dept-teams__actions">
+                  <RouterLink :to="teamEditRoute(team.id)">Edit</RouterLink>
                   <button
-                    v-if="canAdminister && member.roleLabel !== 'Team lead'"
-                    type="button"
-                    @click="onSelectLead(member)"
-                  >
-                    Make team lead
-                  </button>
-                  <button
-                    v-if="canAdminister && member.roleLabel === 'Team lead'"
-                    type="button"
-                    @click="onRemoveLead(member)"
-                  >
-                    Remove lead
-                  </button>
-                  <button
+                    v-if="!team.isDefault && team.archivedAt === null"
                     type="button"
                     class="dept-teams__archive"
-                    @click="onRemoveStaff(member)"
+                    :disabled="busyId === team.id"
+                    @click="archiveTeam(team)"
                   >
-                    Remove
+                    Archive
+                  </button>
+                  <button
+                    v-else-if="!team.isDefault && team.archivedAt !== null"
+                    type="button"
+                    :disabled="busyId === team.id"
+                    @click="restoreTeam(team)"
+                  >
+                    Restore
                   </button>
                 </td>
               </tr>
             </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section
-        v-if="canAdminister"
-        class="dept-teams__management"
-        aria-labelledby="team-management-heading"
-      >
-        <h2 id="team-management-heading" class="dept-teams__subheading">
-          Teams
-        </h2>
-
-        <div class="dept-teams__toolbar">
-        <label class="dept-teams__filter">
-          Status
-          <select
-            :value="statusFilter"
-            aria-label="Filter teams by status"
-            @change="onStatusChange"
-          >
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
-        </div>
-
-        <p v-if="actionError" class="dept-teams__error" role="alert">
-          {{ actionError }}
-        </p>
-
-        <div class="dept-teams__table-wrap" role="region" aria-label="Teams">
-          <table class="dept-teams__table">
-          <thead>
-            <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Code</th>
-              <th scope="col">Type</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="teams.length === 0">
-              <td colspan="5">No teams match this filter.</td>
-            </tr>
-            <tr v-for="team in teams" :key="team.id">
-              <td>
-                <RouterLink :to="teamEditRoute(team.id)">
-                  {{ team.name }}
-                </RouterLink>
-              </td>
-              <td>{{ team.code }}</td>
-              <td>{{ formatDefault(team) }}</td>
-              <td>{{ formatArchived(team) }}</td>
-              <td class="dept-teams__actions">
-                <RouterLink :to="teamEditRoute(team.id)">Edit</RouterLink>
-                <button
-                  v-if="!team.isDefault && team.archivedAt === null"
-                  type="button"
-                  class="dept-teams__archive"
-                  :disabled="busyId === team.id"
-                  @click="archiveTeam(team)"
-                >
-                  Archive
-                </button>
-                <button
-                  v-else-if="!team.isDefault && team.archivedAt !== null"
-                  type="button"
-                  :disabled="busyId === team.id"
-                  @click="restoreTeam(team)"
-                >
-                  Restore
-                </button>
-              </td>
-            </tr>
-          </tbody>
-          </table>
-        </div>
-      </section>
+            </table>
+          </div>
+        </section>
+      </ContentGrid>
 
       <!--
         Admin is the department-setup hub: department details, teams and their
@@ -527,7 +600,7 @@ function teamCreateRoute() {
 
 <style scoped>
 .dept-teams {
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
   min-width: 0;
   display: grid;
   gap: var(--m-space-4);
@@ -584,6 +657,64 @@ function teamCreateRoute() {
   margin: 0;
   font-family: var(--m-font-heading);
   font-size: var(--m-text-lg);
+}
+
+.dept-teams__panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+}
+
+.dept-teams__edit,
+.dept-teams__form-actions button[type="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 0 var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dept-teams__edit:focus-visible,
+.dept-teams__form-actions button:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.dept-teams__readout {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: 0;
+}
+
+.dept-teams__readout dt {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dept-teams__readout dd {
+  margin: var(--m-space-1) 0 0;
+  color: var(--m-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.dept-teams__form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
 }
 
 .dept-teams__save {

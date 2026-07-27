@@ -78,6 +78,12 @@ All authenticated Meridian product screens must follow these rules:
 13. Normal create/edit forms use explicit Submit or Save and Cancel.
 14. Field Reports are submitted and finalized; they are not drafts.
 15. Department accent colors identify departments but do not theme entire surfaces.
+16. Build every screen mobile-first, then let it re-flow rather than re-size: a wider viewport must buy visible content, not bigger gaps. See sections 11.5B through 11.5E.
+17. A page has one control band. Search and filters live in it, not in bands of their own.
+18. Nothing spans the full width by default. Full width is a decision; declare which element grows and let the rest size to their content.
+19. Take page padding and band gaps from the density tokens in 10.2 rather than fixed spacing values.
+20. Before adding a layout rule for wide screens, measure the page height before and after. If it grew, the rule is wrong.
+21. Administration panels that edit identity fields open read-only with an explicit Edit control. Landing mid-form is not a default; Cancel discards the draft and returns to the read-out.
 
 ---
 
@@ -276,6 +282,29 @@ Suggested Blade API:
 ---
 
 ## 7. Navigation and Command Palette Contract
+
+### 7.0 Primary Navigation Menus
+
+The shell carries two menus.
+
+**Staff** holds the pages that belong to the person rather than to a workflow.
+Me is always first. Event Info sits immediately next to it whenever the
+interface is locked to an event, so the staff-facing event answers are one tap
+from the personal page. Members also get Documents, Shifts, Trainings, and My
+Field Reports here, because they have no workflow to reach them from; leads stop
+after Me and Event Info, since those pages are reached from inside the Admin and
+Planning workflows they already work out of.
+
+**Workflows** holds only hubs someone works out of for a stretch of the event.
+Me is not a workflow and must not appear here.
+
+When the two menus together hold fewer than ten items, the shell renders them as
+one menu labeled **Menu**, ordered staff pages first and then workflows. A short
+list split across two dropdowns makes the reader guess which one holds the page;
+the split only earns its keep once the combined list is long enough to scan
+poorly. No Alpha 1 role reaches ten items yet — the fullest, a department lead
+with every department capability, reaches nine — so the split is currently a
+rule waiting on a role that needs it rather than behavior anyone sees.
 
 ### 7.1 Command Palette Shortcuts
 
@@ -542,6 +571,42 @@ Creation actions use `--m-action-primary-*`. Search/filter actions and page navi
 
 Light and dark mode must use the same semantic token names with different values.
 
+### 10.2 Layout Tokens
+
+```css
+:root {
+  --m-content-staff: ;
+  --m-content-workflow: ;
+  --m-measure: ;
+  --m-tile-min: ;
+  --m-tile-min-wide: ;
+  --m-region-min: ;
+
+  --m-pad-block: ;
+  --m-pad-inline: ;
+  --m-stack-gap: ;
+}
+```
+
+`--m-content-staff` and `--m-content-workflow` are page container widths. Both
+fill the phone inside the shell's padding and then keep growing with the
+viewport rather than stopping at a fixed measure. Pages must use these rather
+than hard-coding a `rem` cap: a capped container leaves a large display showing
+a narrow strip of content with several screens of scrolling underneath it.
+
+`--m-measure` is the longest line of prose we render. Layout width and reading
+width are different limits: a paragraph, document body, or lede is capped at the
+measure even when its container is a wall panel wide.
+
+`--m-tile-min`, `--m-tile-min-wide`, and `--m-region-min` are the narrowest a
+tile or region may get before a grid drops a column. Use the wide value where
+tiles carry prose or four or more labelled fields.
+
+`--m-pad-block`, `--m-pad-inline`, and `--m-stack-gap` are the density axis
+described in section 11.5C. Components use these for their own padding and for
+the gaps between page bands instead of fixed `--m-space-*` values, so density is
+a property of the viewport rather than something each screen re-decides.
+
 ---
 
 ## 11. Component Contract
@@ -614,6 +679,11 @@ Required features:
 - filters/sorting where useful;
 - responsive fallback or paired card layout.
 
+Filters and search belong in the page's `ControlBar` (11.5D), not in a band of
+their own above the table. A table is primary content: it keeps full width and
+is not paired into a region (11.5E) unless the block beside it is a peer of
+similar weight.
+
 Suggested Blade API:
 
 ```blade
@@ -636,6 +706,198 @@ Required features:
 - large actions;
 - inline corrective actions where appropriate;
 - no hover-only controls.
+
+### 11.5A StaffPageShell and staff card lists
+
+Purpose: Page template for staff-facing informational surfaces — the pages most
+people read on a phone between shifts.
+
+Applies to `staff.field-reports`, `event.info`, and the reader view of
+`department.documents`, `department.shifts`, and `department.trainings`. A page
+that has both a lead view and a reader view chooses per viewer: lead authority
+keeps the wide workflow shell, and the same page without that authority uses
+this one.
+
+Required behavior:
+
+- container width from `--m-content-staff`, which fills the phone inside the
+  shell's own padding and keeps growing with the viewport;
+- no horizontal scrolling at any width;
+- records rendered as cards with every field labelled, not as a table that
+  scrolls its own headers off screen;
+- cards laid out with `ContentGrid`: one column on a phone, a column per tile
+  width beyond that (see 11.5B);
+- prose bounded by `--m-measure` rather than by the container;
+- the header stacking on a phone and putting actions beside the title from
+  64rem, which is a row of vertical space back on every staff page;
+- tap targets of at least 44px, including disclosure controls and the whole card
+  title block when a card links out;
+- primary actions full-width on a phone, inline once there is room;
+- one shared empty state per list, stating what is absent.
+
+The lead view keeps `DataTable`: a lead comparing coverage across teams needs
+the width, and a table is the right shape for that comparison. The reader view
+must not be the lead table with columns hidden.
+
+### 11.5B ContentGrid and large-display scaling
+
+Purpose: turn extra width into more visible content instead of more empty space,
+across both page templates.
+
+`ContentGrid` is the tiling primitive. Peer blocks — record cards, page
+sections, summaries — are one column on a phone and gain a column per
+`--m-tile-min` (or `--m-tile-min-wide`) of available width. It uses `auto-fill`,
+not `auto-fit`: a two-record list must render two normal tiles with space beside
+them, not two tiles stretched across a television.
+
+Rules:
+
+- a stack of peer cards or sections tiles; a single stream of prose does not;
+- full-width blocks — headings, toolbars, filters, tables — stay full width and
+  sit between tiled groups rather than inside them;
+- rows stretch to equal height by default; blocks whose natural height varies a
+  lot, such as sections that may be empty, opt out;
+- containers grow with the viewport, prose does not.
+
+Beyond 2560px the root font size steps up (18px, then 20px at 3200px, then 23px
+at 3840px), which scales every rem-based token — type, spacing, controls, and
+tile widths — together. Scaling starts at 2560px rather than 1920px because what
+drives legible type is viewing distance, which CSS cannot measure; a 1920px
+panel is far more often a desk monitor than a wall, and inflating those would
+cost density users already have.
+
+Bigger type costs vertical space, so it is paired with grids that add columns at
+the same widths: height falls by the column count faster than the type grows.
+The target is that a page's normal content fits one screen on a large display.
+That is a design goal, not a guarantee — a list of two hundred records will
+still scroll, and no layout rule can prevent that.
+
+### 11.5C The Density Axis
+
+The two axes are not equally scarce. On a wide display horizontal space is
+abundant and vertical space is the entire problem: everything a page pushes down
+is something the reader has to scroll to. Every rule in 11.5C through 11.5E
+follows from that.
+
+As width grows, block padding and stack gaps tighten while inline padding grows,
+through `--m-pad-block`, `--m-pad-inline`, and `--m-stack-gap`. A band gets
+shorter and roomier at the same time. Components take their own padding and the
+gaps between page bands from these tokens rather than fixed spacing values.
+
+Three corollaries, which apply to any new surface:
+
+1. **Re-flow rather than re-size.** A wide screen should not show the same
+   layout with bigger gaps. Stacked one-line strings share a baseline row;
+   blocks that sat above each other sit beside each other. Nothing is hidden at
+   any width — the same content is rearranged.
+2. **Nothing spans the full width by default.** Full width is a decision, not a
+   fallback. A search box, a filter, a heading string, and a summary line each
+   claim the width they need; leftover width goes to whichever element was
+   declared as the one that grows.
+3. **Page grids use `align-content: start`.** Leftover height collects at the
+   end of the page rather than being shared out as gaps between unrelated bands.
+
+Page headings follow this directly. `WorkflowPageHeading` stacks on a phone,
+puts actions beside the title from 48rem, shares one baseline row between
+department, title, and description from 90rem, and moves summary cards up beside
+the title from 120rem. When cards move into a side column they are forced into a
+single row of content-sized columns: a card grid that wraps inside a side column
+is taller than the full-width row it replaced, which would make the rule cost
+height rather than save it.
+
+### 11.5D ControlBar and ControlField
+
+Purpose: one band for a page's search, filters, and list-level actions.
+
+The pattern this replaces is a page stacking several sibling forms, each with
+its own border, padding, and background. Three of those is three bands of chrome
+above the data and, on a wide display, three near-empty rows.
+
+Rules:
+
+- a page has **one** control band; search, filters, presets, and list actions go
+  in it;
+- children stay separate `form` elements where they submit separately — the bar
+  is a layout container, not a merge of unrelated forms;
+- a group of related controls carries `data-control-group` so it wraps as one
+  unit rather than splitting across rows;
+- exactly one group may carry `data-control-group="grow"`, and it absorbs
+  leftover width. A growing group must not wrap internally: it gives width back
+  by compressing its field, because wrapping would make the whole bar row as
+  tall as that group;
+- end-aligned actions go in the `end` slot;
+- `variant="bare"` where the bar already sits inside a card or section.
+
+`ControlField` is one labelled control. Past a phone the label sits beside its
+control rather than above it — a row of height back per control — and the field
+is sized by `width`, a content class (`sm`, `md`, `lg`, `grow`) rather than a
+pixel value. A State select does not need the same width as a search box, and
+neither needs a seventh of a 1900px screen.
+
+Toolbars that already use a `label` wrapping its own text and control adopt the
+bar by changing their wrapper element; `ControlBar` styles that idiom too. New
+work should prefer `ControlField`.
+
+### 11.5E Page Regions
+
+Purpose: let a page declare which blocks are peers, so they sit side by side
+when there is room.
+
+Wrap peer blocks in `ContentGrid` with `min="region"`. Regions use `auto-fit`
+where record tiles use `auto-fill`, and the difference is deliberate: a record
+list is unbounded data, so tiles keep a predictable size rather than stretching
+to fill whatever came back, while a page's regions are a small fixed set the
+author chose and should share the width they are given.
+
+Reading order is preserved — a region grid reads left to right, top to bottom,
+so a documented content order (Department Overview's exceptions, working staff,
+assignments, summaries) still holds.
+
+Pair blocks only when they are peers of similar weight:
+
+- **do** pair setup panels, a chart with the detail it drives, and two embedded
+  featuresets;
+- **do not** pair a wide table with a narrow panel. Halving a table's width
+  makes it taller, and the pairing can cost more height than it saves. Measure
+  before and after; if the page got taller, the blocks were not peers.
+
+Primary content keeps the width it needs. The document library's policy table
+stays full width beside nothing, because it is the point of that section.
+
+Two applications worth copying:
+
+- **Editing beside its record.** The incident edit form becomes two panel
+  columns past ~1500px, and past 120rem the timeline moves alongside it, so
+  changing a field and reading what it recorded stay on one screen. A wrapper
+  that only groups panels for narrow layouts uses `display: contents` at the
+  wide breakpoint, so its children join the outer grid instead of forming a
+  nested block on a different rhythm.
+- **A chart beside the detail it drives.** Planning pairs the shift chart with
+  the shift detail, because picking a bar to read its staffing should not push
+  the answer below the fold.
+
+### 11.5F HeroCenterLayout
+
+Purpose: hold a summary block in the middle of the page with its peer cards
+around it.
+
+Use it where every card answers the same question the summary frames — Event
+Info's six sections all answer "what do I need to know before I arrive". A plain
+grid puts the summary on top and pushes the reader down through the answers;
+centring it makes the relationship visible and keeps the summary on screen while
+the cards are read.
+
+Rules:
+
+- one column on a phone with the hero first, because a centre cell means nothing
+  in a single column;
+- a normal tile grid in between, hero as the first tile;
+- three columns past ~1500px, hero in the middle spanning rows, cards flowing
+  around it with `grid-auto-flow: row dense` so the layout does not depend on
+  the card count;
+- the hero is a peer of the cards, not the page header. Pages using it keep
+  their `h1` in the page shell and put the summary content in the hero, so
+  nothing is duplicated between them.
 
 ### 11.6 MetricCard
 
@@ -837,7 +1099,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
 | `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
-| `event.info` | `events.info` | Staff-safe event information fallback with directions, arrival guidance, packing, food/housing, and document placeholders | Staff with event access |
+| `event.info` | `events.info` | Staff-safe event information assembled from visible published documents for directions, arrival requirements, packing, food, housing, and event requirements | Staff with event access |
 | `staff.field-reports` | `staff.field-reports.index` | My Field Reports | Authenticated author |
 | `staff.field-report-create` | `staff.field-reports.create` | Submit Field Report | Staff with FR permission |
 | `staff.field-report-detail` | `staff.field-reports.show` | View submitted Field Report | Author or permitted reviewer |
@@ -854,6 +1116,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `department.overview` | `events.departments.overview` | Lead situational awareness for a selected shift | Department lead |
 | `department.roster` | `events.departments.roster` | Department staff list | Department administration/planning or permitted lead |
 | `department.teams` | `events.departments.teams.index` | Dynamic Admin page: department details and team management for department leads; scoped team details and staff lists for team leads | Department lead or team lead; hidden/fails closed for staff-only members |
+| `team.overview` | `events.departments.teams.show` | Team situational awareness: team shifts, roster, current staffing, and drill-through to the owning workflows | Department lead for any department team; team lead for teams they lead; fails closed otherwise |
 | `department.trainings` | `events.departments.trainings.index` | Manage trainings | Department lead |
 | `department.training-detail` | `events.departments.trainings.show` | Staff-facing training page: delivery (in-person/online), schedule or training URL, time commitment, prerequisites, signup state, and after-training information | Department member; managers additionally reach create/edit |
 | `department.shifts` | `events.departments.shifts.index` | Manage/view shifts | Department lead or permitted role |
@@ -880,8 +1143,11 @@ Shifts have exactly one team. Department Overview and Planning Table are
 department-scoped by default; optional team or date filters may narrow the view
 without changing authorization.
 
-The Admin page is permission-shaped. Department leads see editable department
-details and team create/manage actions. Team leads see only the teams they lead
+The Admin page is permission-shaped. Department leads see department details and
+team create/manage actions. Department details open read-only behind an Edit
+control, matching the team details panel beside them: these are
+organization-visible identity fields, so editing them is a deliberate act rather
+than the state the page opens in. Team leads see only the teams they lead
 and the staff assigned to those teams. Staff with both department-lead and
 team-lead authority see both sections. Staff without either authority do not see
 Admin in the workflow menu and direct access fails closed.
@@ -895,11 +1161,29 @@ owning workflows. Overview actions do not replace Logistics or Operations.
 
 The Staff Me page is the staff-facing profile and personal work hub. Ongoing
 event clicks route by role: department leads go to Department Overview, team
-leads should go to a future team overview once that route is defined, and other
-staff go to Event Info. Event Info is an interim staff-safe surface until the
-document system can resolve and render the visible published event documents for
-directions, arrival instructions, packing guidance, food/housing, and event
-requirements.
+leads go to Team Overview for a team they lead, and other staff go to Event Info.
+The card states which surface it opens, so the destination is not a surprise.
+
+Team Overview is the team-scoped counterpart to Department Overview, not a
+narrowed copy of it. It shows the team's shifts with staffing counts, the team
+roster with current attendance, and drill-through links to Admin, Shifts,
+Documents, and Event Info. Authorization matches the Admin page: department
+administer authority reaches every team in the department, team leads reach only
+teams they lead, and everyone else fails closed. A named team the viewer may not
+open fails closed rather than redirecting to a team they may, so one team's
+roster never renders under another team's URL.
+
+Event Info is assembled from published policy and procedure documents. A
+maintainer assigns a document to exactly one Event Info section while authoring
+it; nothing is inferred from titles or slugs. The sections and their order are
+`directions`, `arrival`, `packing`, `food`, `housing`, and `requirements`. Only
+published documents appear, including for the maintainer who wrote them, and
+visibility is exactly the existing published-document rule, so Event Info grants
+no access of its own and the same section may legitimately differ between two
+staff members. Within a section, documents are ordered organization scope first,
+then department, then team, then by title. A section with no visible published
+document states that plainly and never falls back to placeholder prose, because
+staff cannot tell placeholder guidance from published guidance.
 
 The Logistics Window is a staff-first service station. Search for staff, equipment,
 and shifts is front and center and works from department-scoped offline cache for
@@ -1317,6 +1601,36 @@ Use these UI states consistently:
 | Queued | Local actions are waiting to sync |
 | Sync conflict | Conflict needs handling |
 | Sync failed | Sync failed and may require action |
+
+### 16.1A Node Connection Scale
+
+The seven states in 16.1 are what the UI *says*. This is what it *shows*: a
+four-step scale of notice on the shell's user button and on the dot in the user
+dropdown, both of which report the same thing — how the device is doing against
+the node it syncs with.
+
+Worst to best:
+
+| Step | Colour token | Covers |
+|---|---|---|
+| Unknown | `--m-text-muted` | State not yet determined. Startup only. |
+| Failing | `--m-status-danger` | Sync conflict; Sync failed; no node reachable |
+| Degraded | `--m-status-warning` | Offline but usable; Local node reachable; Central unreachable; Queued |
+| Connected | `--m-status-success` | Online |
+
+Rules:
+
+- these are the only four steps; do not add a fifth or re-map a state without
+  changing this table;
+- render the colours at full strength. Do not blend them toward
+  `--m-text-muted`: a scale mixed into the surrounding gray stops being a scale;
+- colour never carries the state on its own. Every indicator also exposes the
+  canonical 16.1 label as text or accessible name, per the accessibility
+  checklist;
+- Unknown is startup only, and is reachable only once a connection signal exists
+  that has an indeterminate period. The current device-network signal resolves
+  synchronously, so today Unknown is defined and testable but not reached at
+  runtime. Do not manufacture a gray flash to make it visible.
 
 ### 16.2 Offline UI Rules
 

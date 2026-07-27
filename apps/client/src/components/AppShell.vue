@@ -5,6 +5,7 @@ import { RouterLink, routerKey } from "vue-router";
 import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
+  useCombinedNavigation,
   useShowStaffMenu,
   useStaffLinks,
   useWorkflowLinks,
@@ -40,7 +41,16 @@ const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
 const workflowLinks = useWorkflowLinks();
 const staffLinks = useStaffLinks();
+const navigation = useCombinedNavigation();
 const showStaffMenu = useShowStaffMenu();
+// A short nav reads better as one list than as two dropdowns the reader has to
+// guess between, so the shell merges Staff and Workflows under the threshold.
+const primaryMenuLabel = computed(() =>
+  navigation.value.combined ? "Menu" : "Workflows",
+);
+const primaryMenuLinks = computed(() =>
+  navigation.value.combined ? navigation.value.links : workflowLinks.value,
+);
 const staffMenuOpen = ref(false);
 const staffMenuElement = ref<HTMLElement | null>(null);
 const fixtureUserLabel = "Fixture user";
@@ -137,37 +147,53 @@ function handleStaffMenuOutsideClick(event: Event): void {
   closeStaffMenu();
 }
 
-function connectionStatusFor(state: ConnectivityState): {
+/**
+ * Node connection scale shown on the user button and the dropdown dot.
+ *
+ * UI implementation contract section 16.3 defines four steps, worst to best:
+ * unknown, failing, degraded, connected. The steps are a scale of notice, not a
+ * restatement of the seven connectivity states in 16.1 — those stay the text
+ * label, because state is never carried by colour alone.
+ *
+ * `unknown` is startup only: before the first connectivity result there is
+ * nothing to claim, and claiming "connected" would be a lie the shell cannot
+ * back up.
+ */
+function connectionStatusFor(state: ConnectivityState | null): {
   readonly label: string;
   readonly meaning: string;
-  readonly tone: "connected" | "offline" | "failure";
+  readonly tone: "unknown" | "failing" | "degraded" | "connected";
 } {
+  if (state === null) {
+    return {
+      label: "Checking node connection",
+      meaning: "Connection state has not been determined yet.",
+      tone: "unknown",
+    };
+  }
+
   const descriptor = describeConnectivityState(state);
 
   if (state === "sync_conflict" || state === "sync_failed") {
     return {
-      label: "Offline with failures",
+      label: "Node connection failing",
       meaning: descriptor.meaning,
-      tone: "failure",
+      tone: "failing",
     };
   }
 
-  if (
-    state === "offline_usable" ||
-    state === "central_unreachable" ||
-    state === "sync_queued"
-  ) {
+  if (state === "online") {
     return {
-      label: "Offline, no device errors",
+      label: "Connected and fully capable",
       meaning: descriptor.meaning,
-      tone: "offline",
+      tone: "connected",
     };
   }
 
   return {
-    label: "Connected and fully capable",
+    label: "Node connection degraded",
     meaning: descriptor.meaning,
-    tone: "connected",
+    tone: "degraded",
   };
 }
 
@@ -477,7 +503,7 @@ onBeforeUnmount(() => {
           aria-controls="app-shell-workflow-tabs"
           @click="toggleWorkflowMenu"
         >
-          <span>Workflows</span>
+          <span>{{ primaryMenuLabel }}</span>
           <svg
             class="app-shell__dropdown-icon app-shell__workflow-icon"
             aria-hidden="true"
@@ -497,10 +523,12 @@ onBeforeUnmount(() => {
         <nav
           id="app-shell-workflow-tabs"
           class="app-shell__tabs"
-          aria-label="Event workflows"
+          :aria-label="
+            navigation.combined ? 'Staff pages and event workflows' : 'Event workflows'
+          "
         >
           <RouterLink
-            v-for="link in workflowLinks"
+            v-for="link in primaryMenuLinks"
             :key="link.label"
             :to="link.to"
             class="app-shell__tab"
@@ -567,7 +595,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .app-shell {
-  --m-app-content-max: min(100% - 2rem, 76rem);
+  --m-app-content-max: min(100% - 2rem, max(76rem, 94vw));
 
   display: flex;
   flex-direction: column;
@@ -744,16 +772,25 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
+/*
+ * The four-step scale is rendered at full strength. It was previously mixed
+ * roughly two thirds with --m-text-muted, which is what flattened it into the
+ * surrounding gray and lost the distinction it exists to carry.
+ */
+.app-shell__user-button[data-connection-status="unknown"] .app-shell__user-icon {
+  color: var(--m-text-muted);
+}
+
+.app-shell__user-button[data-connection-status="failing"] .app-shell__user-icon {
+  color: var(--m-status-danger);
+}
+
+.app-shell__user-button[data-connection-status="degraded"] .app-shell__user-icon {
+  color: var(--m-status-warning);
+}
+
 .app-shell__user-button[data-connection-status="connected"] .app-shell__user-icon {
-  color: color-mix(in srgb, var(--m-status-success) 68%, var(--m-text-muted));
-}
-
-.app-shell__user-button[data-connection-status="offline"] .app-shell__user-icon {
-  color: color-mix(in srgb, var(--m-status-warning) 64%, var(--m-text-muted));
-}
-
-.app-shell__user-button[data-connection-status="failure"] .app-shell__user-icon {
-  color: color-mix(in srgb, var(--m-status-danger) 64%, var(--m-text-muted));
+  color: var(--m-status-success);
 }
 
 .app-shell__user-label {
@@ -836,31 +873,24 @@ onBeforeUnmount(() => {
   background: var(--m-text-muted);
 }
 
+.app-shell__connection-note[data-connection-status="unknown"]
+  > span:first-child {
+  background: var(--m-text-muted);
+}
+
+.app-shell__connection-note[data-connection-status="failing"]
+  > span:first-child {
+  background: var(--m-status-danger);
+}
+
+.app-shell__connection-note[data-connection-status="degraded"]
+  > span:first-child {
+  background: var(--m-status-warning);
+}
+
 .app-shell__connection-note[data-connection-status="connected"]
   > span:first-child {
-  background: color-mix(
-    in srgb,
-    var(--m-status-success) 68%,
-    var(--m-text-muted)
-  );
-}
-
-.app-shell__connection-note[data-connection-status="offline"]
-  > span:first-child {
-  background: color-mix(
-    in srgb,
-    var(--m-status-warning) 64%,
-    var(--m-text-muted)
-  );
-}
-
-.app-shell__connection-note[data-connection-status="failure"]
-  > span:first-child {
-  background: color-mix(
-    in srgb,
-    var(--m-status-danger) 64%,
-    var(--m-text-muted)
-  );
+  background: var(--m-status-success);
 }
 
 .app-shell__connection-note strong,
@@ -1068,7 +1098,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 32rem) {
   .app-shell {
-    --m-app-content-max: min(100% - 1rem, 76rem);
+    --m-app-content-max: min(100% - 1rem, max(76rem, 94vw));
   }
 
   .app-shell__top-bar {

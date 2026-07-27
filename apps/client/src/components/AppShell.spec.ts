@@ -61,7 +61,7 @@ describe("AppShell offline/sync display", () => {
       wrapper
         .get(".app-shell__user-button")
         .attributes("data-connection-status"),
-    ).toBe("offline");
+    ).toBe("degraded");
   });
 
   it("reveals the banner when the device goes offline after mount", async () => {
@@ -79,6 +79,37 @@ describe("AppShell offline/sync display", () => {
     expect(wrapper.get(".offline-banner").attributes("data-state")).toBe(
       "offline_usable",
     );
+  });
+
+  it("shows the node connection scale at full strength", async () => {
+    // Contract 16.1A: four steps, worst to best, colour never alone.
+    setDeviceOnLine(true);
+    const online = mount(AppShell, { global: { stubs: routerLinkStub } });
+    expect(
+      online.get(".app-shell__user-button").attributes("data-connection-status"),
+    ).toBe("connected");
+    expect(
+      online.get(".app-shell__user-button").attributes("aria-label"),
+    ).toContain("Connected and fully capable");
+
+    setDeviceOnLine(false);
+    const degraded = mount(AppShell, { global: { stubs: routerLinkStub } });
+    expect(
+      degraded
+        .get(".app-shell__user-button")
+        .attributes("data-connection-status"),
+    ).toBe("degraded");
+    // The step is a scale of notice; the canonical 16.1 label still carries the
+    // state as text.
+    await degraded.get(".app-shell__user-button").trigger("click");
+    expect(degraded.get(".app-shell__connection-note").text()).toContain(
+      "Node connection degraded",
+    );
+    expect(
+      degraded
+        .get(".app-shell__connection-note")
+        .attributes("data-connection-status"),
+    ).toBe("degraded");
   });
 
   it("drains Field Report and attendance outboxes when online", () => {
@@ -263,7 +294,7 @@ describe("AppShell fixed UI mode display", () => {
     expect(workflowLabels).not.toContain("Incidents");
   });
 
-  it("gives non-lead department members a Staff menu", async () => {
+  it("still combines the menus for the fullest fixture role", () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -271,8 +302,33 @@ describe("AppShell fixed UI mode display", () => {
       global: { stubs: routerLinkStub },
     });
 
-    // Rangers fixture user is a department lead: pages live in the workflows.
+    // The Rangers department lead reaches every workflow the fixtures grant,
+    // and still lands under the combine threshold at nine items.
+    expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
+
+    expect(
+      wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
+    ).toEqual([
+      "Me",
+      "Event Info",
+      "Overview",
+      "Planning",
+      "Logistics",
+      "Operations",
+      "Incidents",
+      "Reports",
+      "Admin",
+    ]);
+  });
+
+  it("combines Staff and Workflows into one menu when the list is short", async () => {
+    const wrapper = mount(AppShell, {
+      props: {
+        config: appConfigForUiMode("admin"),
+      },
+      global: { stubs: routerLinkStub },
+    });
 
     await wrapper.get(".app-shell__user-button").trigger("click");
     await wrapper
@@ -280,22 +336,45 @@ describe("AppShell fixed UI mode display", () => {
       .find((button) => button.text().includes("Gate"))!
       .trigger("click");
 
-    // Gate fixture user is a plain member, so the Staff menu carries the
-    // department pages they can use themselves.
-    const staffMenu = wrapper.get(".app-shell__staff-menu");
-    const staffLabels = staffMenu
-      .findAll(".app-shell__staff-tab")
-      .map((tab) => tab.text());
+    // The Gate fixture user is a plain member: six items total, so splitting
+    // them across two dropdowns would only make the reader guess.
+    expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
+    expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
 
-    expect(staffLabels).toEqual([
+    expect(
+      wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
+    ).toEqual([
+      "Me",
+      "Event Info",
       "Documents",
       "Shifts",
       "Trainings",
       "My Field Reports",
     ]);
+  });
+
+  it("keeps Event Info beside Me for a team lead's combined menu", async () => {
+    const wrapper = mount(AppShell, {
+      props: {
+        config: appConfigForUiMode("admin"),
+      },
+      global: { stubs: routerLinkStub },
+    });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+    await wrapper
+      .findAll(".app-shell__department-switch button")
+      .find(
+        (button) =>
+          button.text().includes("DPW") &&
+          button.attributes("aria-checked") === "false",
+      )!
+      .trigger("click");
+
+    expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
     expect(
       wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
-    ).not.toContain("Admin");
+    ).toEqual(["Me", "Event Info", "Team", "Admin"]);
   });
 
   it("closes the fixture user dropdown after choosing an item", async () => {

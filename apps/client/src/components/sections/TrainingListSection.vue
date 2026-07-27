@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import StaffCardList from "@/components/StaffCardList.vue";
+import StaffListCard from "@/components/StaffListCard.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
@@ -97,6 +99,15 @@ function statusLabel(training: ProductTraining): string {
   return "—";
 }
 
+/**
+ * Card status pill. Empty when the viewer has no standing on the training, so
+ * the card omits the pill instead of showing an em dash inside one.
+ */
+function cardStatus(training: ProductTraining): string {
+  const label = statusLabel(training);
+  return label === "—" ? "" : label;
+}
+
 function isSignedUp(training: ProductTraining): boolean {
   void refreshKey.value;
   return viewerStatus(session.value, training).signedUp;
@@ -161,6 +172,77 @@ function onRestore(training: ProductTraining): void {
     <p v-if="!canAccess" class="trainings__restricted" role="status">
       Trainings are available only to department members, trainers, and leads.
     </p>
+
+    <!--
+      A member's question is "what do I need, and am I signed up" — answered on
+      a phone. The seven-column management table answers a different question,
+      so members get a card per training with the signup action in reach.
+    -->
+    <template v-else-if="!canManage">
+      <p v-if="actionError" class="trainings__error" role="alert">
+        {{ actionError }}
+      </p>
+      <p v-if="actionNotice" class="trainings__notice" role="status">
+        {{ actionNotice }}
+      </p>
+
+      <StaffCardList
+        min="wide"
+        label="Trainings"
+        :empty="trainings.length === 0"
+        empty-message="No trainings are available for your department yet."
+      >
+        <StaffListCard
+          v-for="training in trainings"
+          :key="training.id"
+          :title="training.name"
+          :eyebrow="deliveryLabel(training)"
+          :subtitle="training.description ?? ''"
+          :status="cardStatus(training)"
+          :meta="[
+            { label: 'Schedule', value: scheduleLabel(training) },
+            { label: 'Expiration', value: expirationLabel(training) },
+            {
+              label: 'Prerequisites',
+              value:
+                prerequisiteNames(training).length === 0
+                  ? 'None'
+                  : prerequisiteNames(training).join(', '),
+            },
+            { label: 'Signups', value: signupSummary(training) },
+          ]"
+        >
+          <template #actions>
+            <RouterLink
+              :to="{
+                name: 'events.departments.trainings.show',
+                params: { ...routeParams, trainingId: training.id },
+              }"
+            >
+              Details
+            </RouterLink>
+            <button
+              v-if="
+                takesSignups(training) &&
+                training.archivedAt === null &&
+                !isSignedUp(training)
+              "
+              type="button"
+              @click="onSignUp(training)"
+            >
+              Sign up
+            </button>
+            <button
+              v-if="isSignedUp(training)"
+              type="button"
+              @click="onCancelSignup(training)"
+            >
+              Cancel signup
+            </button>
+          </template>
+        </StaffListCard>
+      </StaffCardList>
+    </template>
 
     <template v-else>
       <p v-if="actionError" class="trainings__error" role="alert">

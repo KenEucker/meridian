@@ -11,6 +11,7 @@ use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
+use App\Http\Controllers\Events\EventInfoReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\HealthController;
@@ -273,6 +274,9 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/departments/{department}/shifts/{shift}', [ShiftAdminReadController::class, 'show'])
         ->name('api.departments.shifts.show');
+
+    Route::get('/events/{event}/info', [EventInfoReadController::class, 'show'])
+        ->name('api.events.info');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

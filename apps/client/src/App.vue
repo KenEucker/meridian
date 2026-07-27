@@ -95,13 +95,13 @@ onBeforeUnmount(() => {
   display: grid;
   justify-items: center;
   gap: var(--m-space-4);
-  width: min(100%, 76rem);
+  width: var(--m-content-workflow);
 }
 
 .route-loader {
   display: grid;
   gap: var(--m-space-3);
-  width: min(100%, 72rem);
+  width: var(--m-content-workflow);
   padding: var(--m-space-4);
   border: 1px solid var(--m-border-subtle);
   border-radius: 8px;
