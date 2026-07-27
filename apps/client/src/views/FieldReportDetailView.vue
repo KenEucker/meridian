@@ -38,9 +38,12 @@ const report = computed(() => {
     return undefined;
   }
 
+  // Staff id as well as user id, so a staff member can open the Field Report an
+  // operator typed for them (FR-004).
   return authorFieldReportCatalog.getForAuthor(
     fieldReportId.value,
     current.submittedByUserId,
+    current.staffId,
   );
 });
 
@@ -52,10 +55,25 @@ const appendBody = ref("");
 const appendError = ref<string | null>(null);
 const appending = ref(false);
 
+/**
+ * Only the original submitter may append (data/API 15.3).
+ *
+ * A dictated Field Report is readable by the staff member it is about, but the
+ * submitter is the operator who took it down, so appending stays with them.
+ * Without this the wider read scope would quietly widen the append rule too.
+ */
+const isSubmitter = computed(
+  () =>
+    report.value !== undefined &&
+    session.value !== null &&
+    report.value.submittedByUserId === session.value.submittedByUserId,
+);
+
 const canAppend = computed(
   () =>
     Boolean(session.value) &&
     Boolean(report.value) &&
+    isSubmitter.value &&
     appendBody.value.trim().length > 0 &&
     !appending.value,
 );
@@ -306,7 +324,13 @@ async function onRetrySync(): Promise<void> {
         append an update below.
       </p>
 
+      <p v-if="!isSubmitter" class="fr-detail__append-help" role="status">
+        This Field Report was filled out for you by another staff member. Only
+        the person who submitted it can append to it.
+      </p>
+
       <form
+        v-else
         class="fr-detail__append-form"
         aria-labelledby="fr-append-heading"
         @submit.prevent="onAppend"

@@ -54,6 +54,72 @@ export function currentLogisticsShifts(
     .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
 }
 
+/**
+ * A staff member the Logistics Window is currently holding a shift open for.
+ *
+ * Checked in and not yet checked out is the whole definition. That is the state
+ * the window exists to close: someone standing at the desk is either being sent
+ * out with equipment or being taken off shift, and both of those need the same
+ * roster in front of the operator without a search first.
+ */
+export interface LogisticsStaffOnShift {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly teamLabel: string;
+  readonly shiftId: string;
+  readonly shiftTitle: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly openEquipmentCount: number;
+  /** False when the workspace no longer offers check-out for that shift. */
+  readonly canCheckOut: boolean;
+  /** False when the department cache holds no equipment left to hand out. */
+  readonly canCheckOutEquipment: boolean;
+}
+
+/**
+ * Everyone currently checked in on a shift, oldest shift start first.
+ *
+ * Derived from the workspace cache rather than stored, so it reflects the same
+ * attendance state the staff workspace shows; a separate list could disagree
+ * with the record the operator acts on. Someone checked in on two overlapping
+ * shifts appears once per shift, because check-out is per shift.
+ */
+export function logisticsStaffOnShift(
+  desk: LogisticsDeskModel,
+): readonly LogisticsStaffOnShift[] {
+  const onShift: LogisticsStaffOnShift[] = [];
+
+  for (const workspace of Object.values(desk.staffWorkspaces)) {
+    for (const card of workspace.shiftCards) {
+      if (card.attendanceState !== "checked_in") {
+        continue;
+      }
+
+      onShift.push({
+        staffId: workspace.staffId,
+        displayName: workspace.displayName,
+        teamLabel: workspace.teamLabel,
+        shiftId: card.shiftId,
+        shiftTitle: card.title,
+        startsAt: card.startsAt,
+        endsAt: card.endsAt,
+        openEquipmentCount: workspace.openEquipment.length,
+        canCheckOut: card.canCheckOut,
+        canCheckOutEquipment: workspace.availableEquipment.length > 0,
+      });
+    }
+  }
+
+  return onShift.sort((left, right) => {
+    const startsAt = left.startsAt.localeCompare(right.startsAt);
+
+    return startsAt === 0
+      ? left.displayName.localeCompare(right.displayName)
+      : startsAt;
+  });
+}
+
 export function searchLogisticsDesk(
   desk: LogisticsDeskModel,
   query: string,

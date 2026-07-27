@@ -57,16 +57,41 @@ export class AuthorFieldReportCatalog {
   }
 
   /**
-   * Resolve a report only when it belongs to the given author (FR-004).
-   * Non-authors receive `undefined` — the same fail-closed outcome as a miss.
+   * Whether a report belongs in one person's own list (FR-004).
+   *
+   * Two people can own a dictated report and both are correct: the staff member
+   * whose account it is, and the operator who submitted it for them. Matching
+   * either identifier means a dictated report appears in the reporting staff
+   * member's list, which is where they will look for it, without disappearing
+   * from the list of the operator who took it down.
+   *
+   * `staffId` is only consulted when the caller supplies one. A caller that
+   * knows only a user id keeps the original author-only behavior.
+   */
+  private belongsTo(
+    report: OfflineFieldReport,
+    authorUserId: string,
+    staffId?: string,
+  ): boolean {
+    if (report.submittedByUserId === authorUserId) {
+      return true;
+    }
+
+    return staffId !== undefined && report.staffId === staffId;
+  }
+
+  /**
+   * Resolve a report only when it belongs to the given person (FR-004).
+   * Non-owners receive `undefined` — the same fail-closed outcome as a miss.
    */
   getForAuthor(
     id: string,
     authorUserId: string,
+    staffId?: string,
   ): OfflineFieldReport | undefined {
     const report = this.reports.get(id);
 
-    if (!report || report.submittedByUserId !== authorUserId) {
+    if (!report || !this.belongsTo(report, authorUserId, staffId)) {
       return undefined;
     }
 
@@ -74,15 +99,16 @@ export class AuthorFieldReportCatalog {
   }
 
   /**
-   * Author-filtered list, optionally scoped to one event. Newest submissions
+   * Own-reports list, optionally scoped to one event. Newest submissions
    * appear last (submission order).
    */
   listForAuthor(
     authorUserId: string,
     eventId?: string,
+    staffId?: string,
   ): readonly OfflineFieldReport[] {
     return Array.from(this.reports.values()).filter((report) => {
-      if (report.submittedByUserId !== authorUserId) {
+      if (!this.belongsTo(report, authorUserId, staffId)) {
         return false;
       }
 

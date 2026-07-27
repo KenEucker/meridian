@@ -191,6 +191,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         syncStatus: "pending_sync" as const,
         createdAt: "2027-06-01T12:00:00.000Z",
         appends: [],
+        dictation: null,
       }),
     );
 
@@ -226,6 +227,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
         syncStatus: "pending_sync" as const,
         createdAt: "2027-06-01T12:00:00.000Z",
         appends: [],
+        dictation: null,
       }),
     );
 

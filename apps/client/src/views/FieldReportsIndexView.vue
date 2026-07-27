@@ -28,8 +28,14 @@ const reports = computed(() => {
     return [] as OfflineFieldReport[];
   }
 
+  // Scoped by staff id as well as user id so a Field Report an operator typed
+  // for this staff member appears in their own list (FR-004).
   return [
-    ...authorFieldReportCatalog.listForAuthor(current.submittedByUserId),
+    ...authorFieldReportCatalog.listForAuthor(
+      current.submittedByUserId,
+      undefined,
+      current.staffId,
+    ),
   ].reverse();
 });
 

@@ -303,6 +303,17 @@ export const routes: RouteRecordRaw[] = [
     component: ImsFieldReportListView,
     beforeEnter: ensureIncidentSession,
   },
+  // Dictated Field Report create. Static segment before the `:fieldReportId`
+  // route so `/ims/field-reports/create` is not read as a report id. Both
+  // sessions are required: the incident session carries the IC permission that
+  // gates dictation, and the field session carries the event/device context a
+  // Field Report is created from.
+  {
+    path: "/ims/field-reports/create",
+    name: "ims.field-reports.create",
+    component: FieldReportCreateView,
+    beforeEnter: [ensureIncidentSession, ensureFieldSession],
+  },
   {
     path: "/ims/field-reports/:fieldReportId",
     name: "ims.field-reports.show",
