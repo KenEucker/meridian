@@ -40,9 +40,22 @@ final class SignedNodeOperation
         public readonly ?string $eventId,
         /** The origin node's creation time, in UTC. */
         public readonly CarbonImmutable $createdAt,
+        /**
+         * True when a God-mode reviewer resolved a sync conflict in favour of
+         * this operation's version (technical spec 10.3).
+         *
+         * This is not signed content and is never part of {@see toArray()}: it
+         * describes a decision this node made about an operation it already
+         * verified, not something the origin node said. An applier that raised
+         * {@see SyncConflictException} for this operation must not raise it
+         * again while this is true — the disagreement it detected has been
+         * reviewed, and the reviewer chose this version — so it writes the
+         * operation's version over local state instead.
+         */
+        public readonly bool $resolvedConflict = false,
     ) {}
 
-    public static function fromOperation(NodeOperation $operation): self
+    public static function fromOperation(NodeOperation $operation, bool $resolvedConflict = false): self
     {
         $normalized = $operation->normalizedAttributes();
 
@@ -57,6 +70,7 @@ final class SignedNodeOperation
             entityId: (string) $normalized['entity_id'],
             eventId: $normalized['event_id'],
             createdAt: CarbonImmutable::parse((string) $normalized['created_at'])->utc(),
+            resolvedConflict: $resolvedConflict,
         );
     }
 

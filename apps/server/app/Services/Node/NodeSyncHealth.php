@@ -33,8 +33,8 @@ use Illuminate\Support\Carbon;
  * This is the God-mode read model. Electron health (M12.10) surfaces the same
  * signals in the on-site command centre. The sync conflict queue (M12.8) owns
  * disagreements between local and remote state, which are a different thing
- * from the delivery and application failures counted here; conflict resolution
- * is M12.9.
+ * from the delivery and application failures counted here, and
+ * {@see SyncConflictResolver} settles them.
  */
 class NodeSyncHealth
 {
