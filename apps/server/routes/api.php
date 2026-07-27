@@ -19,6 +19,7 @@ use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
+use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
@@ -31,6 +32,13 @@ use App\Http\Controllers\Trainings\TrainingReadController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
+
+// Node-to-node pairing (technical spec 7.3, 7.4). The one-time pairing token
+// issued by central is the credential, so this route carries no user session;
+// it is rate limited instead.
+Route::post('/node-pairing', [NodePairingController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('api.node-pairing.store');
 
 Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/check-in-staff', [AttendanceCommandController::class, 'checkIn'])

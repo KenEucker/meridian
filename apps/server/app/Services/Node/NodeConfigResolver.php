@@ -38,6 +38,28 @@ class NodeConfigResolver
             'config' => 'meridian.node.central_node_url',
             'default' => null,
         ],
+        // Pairing state recorded when this node paired with central
+        // (technical spec 7.3).
+        'central_node_name' => [
+            'label' => 'Central node name',
+            'config' => 'meridian.node.central_node_name',
+            'default' => null,
+        ],
+        'central_node_public_key' => [
+            'label' => 'Central node public key',
+            'config' => 'meridian.node.central_node_public_key',
+            'default' => null,
+        ],
+        'central_node_paired_url' => [
+            'label' => 'Central node URL at pairing',
+            'config' => 'meridian.node.central_node_paired_url',
+            'default' => null,
+        ],
+        'central_node_paired_at' => [
+            'label' => 'Central node paired at',
+            'config' => 'meridian.node.central_node_paired_at',
+            'default' => null,
+        ],
     ];
 
     /**

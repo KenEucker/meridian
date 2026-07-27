@@ -6,10 +6,16 @@ namespace App\Orchid\Screens\Node;
 
 use App\Models\Node;
 use App\Models\NodeConfigValue;
+use App\Orchid\Layouts\Node\NodePairingLayout;
 use App\Orchid\Layouts\Node\NodeSettingsLayout;
 use App\Services\EventMode\EventModeGuard;
 use App\Services\EventMode\EventModeNotReadyException;
 use App\Services\Node\NodeConfigResolver;
+use App\Services\Node\NodePairingClient;
+use App\Services\Node\NodePairingException;
+use App\Services\Node\NodePairingState;
+use App\Services\Node\NodePairingTokenService;
+use App\Services\Node\NodeSetupService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,19 +33,29 @@ class NodeConfigScreen extends Screen
     public $node;
 
     /**
+     * @var bool
+     */
+    public $hasUnusedPairingTokens = false;
+
+    /**
      * @return array<string, mixed>
      */
-    public function query(NodeConfigResolver $resolver): iterable
-    {
-        $node = Node::query()
-            ->active()
-            ->with('configValues')
-            ->latest('id')
-            ->first();
+    public function query(
+        NodeConfigResolver $resolver,
+        NodeSetupService $nodes,
+        NodePairingState $pairingState,
+        NodePairingTokenService $pairingTokens,
+    ): iterable {
+        $node = $nodes->activeNode()?->load('configValues');
+        $activeTokens = $pairingTokens->activeTokens();
 
         return [
             'node' => $node,
             'configValues' => $resolver->valuesFor($node),
+            'pairing' => $pairingState->describe($node),
+            'pairingTokens' => $activeTokens,
+            'hasUnusedPairingTokens' => $activeTokens->isNotEmpty(),
+            'issuedPairingToken' => session('meridian.issued_pairing_token'),
         ];
     }
 
@@ -73,6 +89,22 @@ class NodeConfigScreen extends Screen
                 ->icon('bs.check-circle')
                 ->method('save')
                 ->canSee($this->node instanceof Node),
+
+            Button::make(__('Create pairing token'))
+                ->icon('bs.key')
+                ->method('createPairingToken')
+                ->canSee($this->node instanceof Node && $this->node->isCentral()),
+
+            Button::make(__('Revoke unused tokens'))
+                ->icon('bs.x-circle')
+                ->method('revokePairingTokens')
+                ->confirm(__('This cannot be undone. Any pairing token that has not been used yet will stop working, and nodes still waiting to pair will need a new one.'))
+                ->canSee($this->node instanceof Node && $this->node->isCentral() && $this->hasUnusedPairingTokens),
+
+            Button::make(__('Pair with central'))
+                ->icon('bs.link-45deg')
+                ->method('pairWithCentral')
+                ->canSee($this->node instanceof Node && $this->node->canPairWithCentral()),
         ];
     }
 
@@ -89,15 +121,21 @@ class NodeConfigScreen extends Screen
                 ->description(__('These fields configure this Meridian server/node. Client devices discover their settings from the server/API URL and trusted-device flow.'));
         }
 
+        if ($this->node instanceof Node && $this->node->canPairWithCentral()) {
+            $layouts[] = Layout::block(NodePairingLayout::class)
+                ->title(__('Central pairing'))
+                ->description(__('Pair this node with its central node using a one-time token created on central.'));
+        }
+
         return [
             ...$layouts,
             Layout::view('orchid.node-config'),
         ];
     }
 
-    public function save(Request $request, EventModeGuard $eventMode): RedirectResponse
+    public function save(Request $request, EventModeGuard $eventMode, NodeSetupService $nodes): RedirectResponse
     {
-        $node = Node::query()->active()->with('configValues')->latest('id')->first();
+        $node = $nodes->activeNode()?->load('configValues');
 
         if (! $node instanceof Node) {
             Toast::warning(__('No active node is available to update.'));
@@ -155,6 +193,81 @@ class NodeConfigScreen extends Screen
         );
 
         Toast::info(__('Node settings were saved.'));
+
+        return redirect()->route('platform.node.config');
+    }
+
+    /**
+     * Create a one-time pairing token on this central node (technical spec
+     * 7.3). The plaintext token is flashed for a single render and is never
+     * recoverable afterwards.
+     */
+    public function createPairingToken(Request $request, NodePairingTokenService $tokens): RedirectResponse
+    {
+        try {
+            $issued = $tokens->issue(issuedBy: $request->user());
+        } catch (NodePairingException $exception) {
+            return redirect()
+                ->route('platform.node.config')
+                ->withErrors(['pairing' => $exception->getMessage()]);
+        }
+
+        Toast::info(__('A one-time pairing token was created. Copy it now; it is not shown again.'));
+
+        return redirect()
+            ->route('platform.node.config')
+            ->with('meridian.issued_pairing_token', $issued->plaintext);
+    }
+
+    /**
+     * Revoke every pairing token this central node has issued that has not been
+     * used yet. Alpha 1 tokens do not expire (technical spec 7.3), so revoking
+     * is the only way to retire a token that was issued in error or lost.
+     */
+    public function revokePairingTokens(Request $request, NodePairingTokenService $tokens): RedirectResponse
+    {
+        $revoked = 0;
+
+        foreach ($tokens->activeTokens() as $token) {
+            $tokens->revoke($token, revokedBy: $request->user());
+            $revoked++;
+        }
+
+        Toast::info(trans_choice(
+            '{0}There were no unused pairing tokens to revoke.|{1}One unused pairing token was revoked.|[2,*]:count unused pairing tokens were revoked.',
+            $revoked,
+            ['count' => $revoked],
+        ));
+
+        return redirect()->route('platform.node.config');
+    }
+
+    /**
+     * Pair this on-site or standalone node with its central node using a
+     * one-time token created on central (technical spec 7.3, 7.4).
+     */
+    public function pairWithCentral(Request $request, NodePairingClient $pairing): RedirectResponse
+    {
+        $validated = $request->validate([
+            'pairing.token' => ['required', 'string', 'max:255'],
+            'pairing.central_node_url' => ['nullable', 'url', 'max:2048'],
+        ]);
+
+        try {
+            $result = $pairing->pair(
+                plaintextToken: $validated['pairing']['token'],
+                centralNodeUrl: $validated['pairing']['central_node_url'] ?? null,
+                actor: $request->user(),
+            );
+        } catch (NodePairingException $exception) {
+            return redirect()
+                ->route('platform.node.config')
+                ->withErrors(['pairing.token' => $exception->getMessage()]);
+        }
+
+        Toast::info(__('This node is paired with :central.', [
+            'central' => $result['central_node']->node_name,
+        ]));
 
         return redirect()->route('platform.node.config');
     }

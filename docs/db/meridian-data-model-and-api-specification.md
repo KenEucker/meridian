@@ -3302,13 +3302,20 @@ Key fields:
 - `id`
 - `node_name`
 - `node_role`
+- `is_local`
 - `public_key`
 - `organization_id`, nullable
 - `event_id`, nullable for central/standalone
 - `central_node_url`, nullable
+- `paired_at`, nullable
 - `created_at`
 - `updated_at`
 - `revoked_at`
+
+Once nodes pair, this table holds peer node records as well as the install's
+own node. `is_local` marks the install's own node so learning about a peer never
+changes which node is ours, and `paired_at` records when a peer completed
+pairing.
 
 Node roles:
 
@@ -3373,6 +3380,71 @@ Rules:
 - operations are signed with node private keys
 - device-originated operations are signed by the device and countersigned by the accepting node
 - both signatures are retained in audit data
+
+### 13.4 `node_pairing_tokens`
+
+Represents the one-time pairing tokens a central node creates so an on-site or
+standalone node can pair with it (technical spec 7.3, 7.4).
+
+Key fields:
+
+- `id`
+- `token_hash`
+- `issued_by_node_id`
+- `issued_by_user_id`, nullable
+- `label`, nullable
+- `expires_at`, nullable
+- `used_at`, nullable
+- `paired_node_id`, nullable
+- `revoked_at`, nullable
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- only the token hash is stored; the plaintext token is displayed once at issue
+  time and is not recoverable afterwards
+- tokens are issued by, and redeemed on, a central node only
+- Alpha 1 does not require quick expiry, so `expires_at` is normally unset
+- a token pairs one node once; used, revoked, and expired tokens are refused
+- because tokens do not expire by default, God mode may revoke outstanding
+  unused tokens; revocation is audited and never rewrites an already-used token,
+  which is preserved pairing history
+
+### 13.5 Node pairing endpoint
+
+```text
+POST /api/node-pairing
+```
+
+Node-to-node, not user-facing. The one-time pairing token is the only
+credential, so the route carries no user session and is rate limited instead.
+
+Request: `pairing_token`, `node_name`, `node_role` (`onsite` or `standalone`),
+`public_key`.
+
+Response: the central node identity (`id`, `node_name`, `node_role`,
+`public_key`), the registered `paired_node`, `paired_at`, and `replayed`.
+
+Rules:
+
+- redemption registers the pairing node as a peer `nodes` record on central and
+  marks the token used
+- replaying a used token with the same node name and public key returns the
+  original pairing so a lost response can be recovered; replaying it with a
+  different node identity is refused
+- a node name already held with different key material, and a revoked peer
+  node, are both refused
+- the on-site node stores the returned central identity as node config values
+  (`central_node_name`, `central_node_public_key`, `central_node_paired_url`,
+  `central_node_paired_at`) so God mode shows pairing state with the same
+  file/database/runtime source labels as the rest of node config
+- pairing status is derived from the configured central URL against the URL
+  that was paired, so changing the central node URL triggers a pairing recheck
+  (technical spec 7.3)
+- event mode refuses pairing over plain HTTP (technical spec 8.2)
+- token issue, token revocation, and completed pairing are audited as node
+  pairing/config changes (section 8)
 
 ---
 

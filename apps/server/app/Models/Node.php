@@ -37,15 +37,28 @@ class Node extends Model
     ];
 
     /**
+     * An on-site node pairs with central, and a standalone node may be paired
+     * with central later (technical spec 7.3, 8.1).
+     *
+     * @var list<string>
+     */
+    public const PAIRABLE_ROLES = [
+        self::ROLE_STANDALONE,
+        self::ROLE_ONSITE,
+    ];
+
+    /**
      * @var list<string>
      */
     protected $fillable = [
         'node_name',
         'node_role',
+        'is_local',
         'public_key',
         'organization_id',
         'event_id',
         'central_node_url',
+        'paired_at',
         'revoked_at',
     ];
 
@@ -55,6 +68,8 @@ class Node extends Model
     protected function casts(): array
     {
         return [
+            'is_local' => 'boolean',
+            'paired_at' => 'datetime',
             'revoked_at' => 'datetime',
         ];
     }
@@ -62,6 +77,14 @@ class Node extends Model
     public function configValues(): HasMany
     {
         return $this->hasMany(NodeConfigValue::class);
+    }
+
+    /**
+     * Pairing tokens this node issued as a central node.
+     */
+    public function issuedPairingTokens(): HasMany
+    {
+        return $this->hasMany(NodePairingToken::class, 'issued_by_node_id');
     }
 
     public function acceptedDocumentAcknowledgments(): HasMany
@@ -78,8 +101,43 @@ class Node extends Model
         return $query->whereNull('revoked_at');
     }
 
+    /**
+     * This install's own node, as opposed to a paired peer node record.
+     *
+     * @param  Builder<Node>  $query
+     * @return Builder<Node>
+     */
+    public function scopeLocal(Builder $query): Builder
+    {
+        return $query->where('is_local', true);
+    }
+
+    /**
+     * Peer node records this install learned about through pairing.
+     *
+     * @param  Builder<Node>  $query
+     * @return Builder<Node>
+     */
+    public function scopeRemote(Builder $query): Builder
+    {
+        return $query->where('is_local', false);
+    }
+
     public function isRevoked(): bool
     {
         return $this->revoked_at !== null;
+    }
+
+    public function isCentral(): bool
+    {
+        return $this->node_role === self::ROLE_CENTRAL;
+    }
+
+    /**
+     * Roles that pair with a central node (technical spec 7.3, 8.1).
+     */
+    public function canPairWithCentral(): bool
+    {
+        return in_array($this->node_role, self::PAIRABLE_ROLES, true);
     }
 }

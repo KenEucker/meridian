@@ -14,12 +14,16 @@ class NodeSetupService
 
     public function hasActiveNode(): bool
     {
-        return Node::query()->active()->exists();
+        return Node::query()->active()->local()->exists();
     }
 
+    /**
+     * This install's own node. Peer node records created by pairing are
+     * excluded, so learning about central never changes which node is ours.
+     */
     public function activeNode(): ?Node
     {
-        return Node::query()->active()->latest('id')->first();
+        return Node::query()->active()->local()->latest('id')->first();
     }
 
     public function setupFirstNode(
@@ -33,7 +37,7 @@ class NodeSetupService
         }
 
         return DB::transaction(function () use ($nodeName, $nodeRole, $centralNodeUrl, $updatedBy): Node {
-            if (Node::query()->active()->lockForUpdate()->exists()) {
+            if (Node::query()->active()->local()->lockForUpdate()->exists()) {
                 throw new NodeAlreadyConfiguredException('This Meridian install already has an active node.');
             }
 
@@ -42,6 +46,7 @@ class NodeSetupService
             $node = Node::query()->create([
                 'node_name' => $nodeName,
                 'node_role' => $nodeRole,
+                'is_local' => true,
                 'public_key' => $keypair['public_key'],
                 'central_node_url' => $centralNodeUrl,
             ]);

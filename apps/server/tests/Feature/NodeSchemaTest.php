@@ -19,13 +19,41 @@ class NodeSchemaTest extends TestCase
         $this->assertTrue(Schema::hasTable('nodes'));
         $this->assertTrue(Schema::hasColumn('nodes', 'node_name'));
         $this->assertTrue(Schema::hasColumn('nodes', 'node_role'));
+        $this->assertTrue(Schema::hasColumn('nodes', 'is_local'));
         $this->assertTrue(Schema::hasColumn('nodes', 'public_key'));
         $this->assertTrue(Schema::hasColumn('nodes', 'organization_id'));
         $this->assertTrue(Schema::hasColumn('nodes', 'event_id'));
         $this->assertTrue(Schema::hasColumn('nodes', 'central_node_url'));
+        $this->assertTrue(Schema::hasColumn('nodes', 'paired_at'));
         $this->assertTrue(Schema::hasColumn('nodes', 'revoked_at'));
         $this->assertTrue(Schema::hasColumn('nodes', 'created_at'));
         $this->assertTrue(Schema::hasColumn('nodes', 'updated_at'));
+    }
+
+    public function test_node_pairing_tokens_table_has_expected_columns(): void
+    {
+        $this->assertTrue(Schema::hasTable('node_pairing_tokens'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'token_hash'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'issued_by_node_id'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'issued_by_user_id'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'label'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'expires_at'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'used_at'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'paired_node_id'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'revoked_at'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'created_at'));
+        $this->assertTrue(Schema::hasColumn('node_pairing_tokens', 'updated_at'));
+    }
+
+    public function test_local_and_remote_scopes_separate_this_install_from_paired_peers(): void
+    {
+        $local = Node::factory()->create(['node_name' => 'juplaya.2027.onsite']);
+        $peer = Node::factory()->remote()->central()->create(['node_name' => 'juplaya.central']);
+
+        $this->assertTrue($local->is_local);
+        $this->assertFalse($peer->is_local);
+        $this->assertSame([$local->id], Node::query()->local()->pluck('id')->all());
+        $this->assertSame([$peer->id], Node::query()->remote()->pluck('id')->all());
     }
 
     public function test_node_config_values_table_has_expected_columns(): void

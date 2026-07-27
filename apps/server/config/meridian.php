@@ -68,6 +68,18 @@ return [
         'public_key' => env('MERIDIAN_NODE_PUBLIC_KEY'),
         'private_key' => env('MERIDIAN_NODE_PRIVATE_KEY'),
         'central_node_url' => env('MERIDIAN_CENTRAL_NODE_URL'),
+
+        // Pairing state (technical spec 7.3). These are normally written by
+        // pairing as database overrides; the file values exist so a prepared
+        // deployment can ship a known central identity.
+        'central_node_name' => env('MERIDIAN_CENTRAL_NODE_NAME'),
+        'central_node_public_key' => env('MERIDIAN_CENTRAL_NODE_PUBLIC_KEY'),
+        'central_node_paired_url' => env('MERIDIAN_CENTRAL_NODE_PAIRED_URL'),
+        'central_node_paired_at' => env('MERIDIAN_CENTRAL_NODE_PAIRED_AT'),
+
+        'pairing' => [
+            'request_timeout_seconds' => (float) env('MERIDIAN_NODE_PAIRING_TIMEOUT_SECONDS', 10),
+        ],
     ],
 
     /*
