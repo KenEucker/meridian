@@ -32,8 +32,12 @@ namespace App\Services\Node;
  *
  * Throwing {@see SyncConflictException} is the third outcome: the receiver
  * records an open sync conflict and marks the operation `conflicted` instead
- * of `failed`. Conflict resolution (accept on-site / accept central) is
- * M12.9.
+ * of `failed`. A God-mode reviewer then resolves that conflict by accepting the
+ * on-site or the central version (technical spec 10.3). When the reviewer
+ * accepts the remote version, the operation is applied again with
+ * {@see SignedNodeOperation::$resolvedConflict} set, and an applier must honour
+ * that decision by writing the operation's version over local state rather than
+ * raising the same conflict a second time.
  *
  * Each entity type's applier belongs to the task that owns that entity's sync
  * behavior.
@@ -50,7 +54,9 @@ interface NodeOperationApplier
      * Apply the operation to local state.
      *
      * @throws SyncConflictException when local and remote state disagree and
-     *                               the operation belongs in the conflict queue
+     *                               the operation belongs in the conflict queue;
+     *                               never when the operation carries
+     *                               `resolvedConflict`
      * @throws \Throwable when the operation cannot be applied and should retry
      */
     public function apply(SignedNodeOperation $operation): void;

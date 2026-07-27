@@ -15,7 +15,8 @@ use Orchid\Screen\Screen;
  *
  * Conflicts are visible only in God Mode for Alpha 1. The list is ordered by
  * entity type so reviewers can work through one entity class at a time, then
- * by creation time. Accept on-site / accept central resolution is M12.9.
+ * by creation time. Accept on-site / accept central is chosen on the detail
+ * screen, where both versions are visible.
  */
 class SyncConflictListScreen extends Screen
 {
@@ -41,7 +42,7 @@ class SyncConflictListScreen extends Screen
 
     public function description(): ?string
     {
-        return 'God-mode queue of node operations that could not be safely applied. Unresolved conflicts do not block unrelated sync.';
+        return 'God-mode queue of node operations that could not be safely applied. Open a conflict to keep the on-site or the central version. Unresolved conflicts do not block unrelated sync.';
     }
 
     /**

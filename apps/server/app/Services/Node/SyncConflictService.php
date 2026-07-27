@@ -11,12 +11,12 @@ use RuntimeException;
  * Records operations that could not be safely applied into the God-mode sync
  * conflict queue (technical spec 10.3; data/API 14.2, 7.5).
  *
- * Creating a conflict is the only write path this service owns for Alpha 1.
- * It inserts an open {@see SyncConflict} and marks the related
- * {@see NodeOperation} `conflicted` in one transaction so a conflict never
- * exists without a conflicted operation, and a conflicted operation always has
- * a queue row. Resolution (accept on-site / accept central, with audit) is
- * M12.9. Electron health for severe conflicts is M12.10.
+ * Creating a conflict is the only write path this service owns. It inserts an
+ * open {@see SyncConflict} and marks the related {@see NodeOperation}
+ * `conflicted` in one transaction so a conflict never exists without a
+ * conflicted operation, and a conflicted operation always has a queue row.
+ * Resolution (accept on-site / accept central, with audit) belongs to
+ * {@see SyncConflictResolver}. Electron health for severe conflicts is M12.10.
  *
  * Unresolved conflicts must not block unrelated sync (technical spec 10.3):
  * callers enqueue a conflict and continue applying other operations.

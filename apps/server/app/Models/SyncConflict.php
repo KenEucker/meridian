@@ -20,9 +20,9 @@ use Orchid\Screen\AsSource;
  *
  * Conflicts are operations that could not be safely applied. They are visible
  * only in God Mode / Orchid for Alpha 1, grouped by entity type, and show both
- * local and remote values. Resolution chooses accept on-site or accept
- * central (M12.9); this model stores the queue and review fields so that
- * resolver can fill them later.
+ * local and remote values. Resolution chooses accept on-site or accept central
+ * and is audited; `SyncConflictResolver` is the only write path for the review
+ * columns.
  *
  * Status and resolution values are Alpha 1 conventions: section 14.2 names the
  * columns but not the enumerations, while technical spec 10.3 / data/API 7.5
@@ -46,7 +46,8 @@ class SyncConflict extends Model
     public const STATUS_OPEN = 'open';
 
     /**
-     * Reviewed with an accept-on-site or accept-central choice (M12.9).
+     * Reviewed with an accept-on-site or accept-central choice, and audited
+     * (technical spec 10.3).
      */
     public const STATUS_RESOLVED = 'resolved';
 
