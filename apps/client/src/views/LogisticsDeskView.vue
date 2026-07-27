@@ -24,6 +24,7 @@ import {
   checkOutLogisticsStaff,
   currentLogisticsShifts,
   logisticsShiftSections,
+  logisticsStaffOnShift,
   markLogisticsStaffOffSite,
   markLogisticsStaffOnSite,
   returnLogisticsEquipment,
@@ -56,6 +57,7 @@ const equipmentReturnConditions = ref<Record<string, EquipmentReturnCondition>>(
 
 const workspace = computed(() => selectedLogisticsWorkspace(desk.value));
 const currentShifts = computed(() => currentLogisticsShifts(desk.value));
+const staffOnShift = computed(() => logisticsStaffOnShift(desk.value));
 const logisticsSummary = computed(() => ({
   onSite: desk.value.searchableStaff.filter(
     (staff) => staff.presenceState === "on_site",
@@ -270,6 +272,22 @@ function markOffSite(): void {
     status.value =
       error instanceof Error ? error.message : "Unable to mark off-site.";
   }
+}
+
+/**
+ * Act on someone from the on-shift roster without searching for them first.
+ *
+ * Selecting the staff member before opening the dialog keeps one code path for
+ * attendance: the dialog always acts on the open workspace, so the roster
+ * shortcut and the searched-for workspace cannot drift apart.
+ */
+function openDialogForStaff(
+  kind: "check-out" | "equipment-checkout",
+  staffId: string,
+  shiftId = "",
+): void {
+  openStaff(staffId);
+  openDialog(kind, shiftId);
 }
 
 function openDialog(
@@ -492,24 +510,81 @@ const equipmentInventoryRoute = computed(() => ({
       </div>
     </dl>
 
-    <EntitySearch
-      :hits="hits"
-      @search="onSearch"
-      @select="onSelect"
-    />
-
-    <section class="logistics__cache" aria-labelledby="search-cache-heading">
-      <h2 id="search-cache-heading">Offline search cache</h2>
-      <p>
-        {{ desk.searchCache.scopeLabel }} /
-        {{
-          desk.searchCache.state === "offline_usable"
-            ? "Offline usable"
-            : desk.searchCache.state
-        }}
+    <section class="logistics__on-shift" aria-labelledby="on-shift-heading">
+      <h2 id="on-shift-heading">On shift now</h2>
+      <p class="logistics__on-shift-lede">
+        Staff checked in and not yet checked out. Act on them here without
+        searching first.
       </p>
-      <p>{{ desk.searchCache.note }}</p>
+      <p v-if="staffOnShift.length === 0" class="logistics__note" role="status">
+        No staff are checked in for this department right now.
+      </p>
+      <ul v-else class="logistics__on-shift-list">
+        <li
+          v-for="member in staffOnShift"
+          :key="`${member.staffId}-${member.shiftId}`"
+        >
+          <div class="logistics__on-shift-who">
+            <strong>{{ member.displayName }}</strong>
+            <span>{{ member.teamLabel }} - {{ member.shiftTitle }}</span>
+            <span>
+              {{ formatTimestamp(member.startsAt, desk.context.timeZone) }} -
+              {{ formatTimestamp(member.endsAt, desk.context.timeZone) }}
+              <template v-if="member.openEquipmentCount > 0">
+                / {{ member.openEquipmentCount }} equipment out
+              </template>
+            </span>
+          </div>
+          <div class="logistics__actions">
+            <button
+              type="button"
+              :disabled="!member.canCheckOut"
+              @click="
+                openDialogForStaff('check-out', member.staffId, member.shiftId)
+              "
+            >
+              Check out
+            </button>
+            <button
+              type="button"
+              :disabled="!member.canCheckOutEquipment"
+              @click="
+                openDialogForStaff('equipment-checkout', member.staffId)
+              "
+            >
+              Check out equipment
+            </button>
+          </div>
+        </li>
+      </ul>
     </section>
+
+    <!--
+      The cache notice sits beside the search rather than under it. It qualifies
+      what the search can find, so it should be readable while someone is typing
+      into the box, not after they have scrolled past it.
+    -->
+    <div class="logistics__find">
+      <EntitySearch
+        class="logistics__search"
+        :hits="hits"
+        @search="onSearch"
+        @select="onSelect"
+      />
+
+      <section class="logistics__cache" aria-labelledby="search-cache-heading">
+        <h2 id="search-cache-heading">Offline search cache</h2>
+        <p>
+          {{ desk.searchCache.scopeLabel }} /
+          {{
+            desk.searchCache.state === "offline_usable"
+              ? "Offline usable"
+              : desk.searchCache.state
+          }}
+        </p>
+        <p>{{ desk.searchCache.note }}</p>
+      </section>
+    </div>
 
     <section
       v-if="searchContext"
@@ -981,6 +1056,71 @@ const equipmentInventoryRoute = computed(() => ({
   font-weight: 900;
 }
 
+.logistics__on-shift {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-5);
+}
+
+.logistics__on-shift h2 {
+  margin: 0;
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.logistics__on-shift-lede,
+.logistics__on-shift .logistics__note {
+  margin: 0;
+  color: var(--m-text-muted);
+}
+
+.logistics__on-shift-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--m-space-2);
+}
+
+.logistics__on-shift-list li {
+  display: grid;
+  gap: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  box-shadow: var(--m-shadow-sm);
+}
+
+.logistics__on-shift-who {
+  display: grid;
+  gap: var(--m-space-1);
+}
+
+.logistics__on-shift-who span {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+/*
+ * Narrow: cache notice above the search, and the search takes the full column
+ * because 720px does not exist on a phone. Wide: the two sit side by side with
+ * the search held at a 720px floor.
+ */
+.logistics__find {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-5);
+}
+
+/* Nested so this outranks EntitySearch's own scoped bottom margin. */
+.logistics__find .logistics__search {
+  margin: 0;
+  min-width: 0;
+}
+
 .logistics__cache,
 .logistics__search-context {
   display: grid;
@@ -991,6 +1131,12 @@ const equipmentInventoryRoute = computed(() => ({
   border-radius: 8px;
   background: var(--m-surface-raised);
   box-shadow: var(--m-shadow-sm);
+}
+
+.logistics__find .logistics__cache {
+  order: -1;
+  margin: 0;
+  align-self: start;
 }
 
 .logistics__cache h2,
@@ -1230,9 +1376,26 @@ const equipmentInventoryRoute = computed(() => ({
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .logistics__scheduled-staff li {
+  .logistics__scheduled-staff li,
+  .logistics__on-shift-list li {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
+  }
+
+  .logistics__find .logistics__cache {
+    order: 0;
+  }
+}
+
+/*
+ * The side-by-side split waits until the search can hold its 720px floor and
+ * still leave the cache notice a readable column. Below that the two stack, so
+ * the floor never forces a horizontal scrollbar.
+ */
+@media (min-width: 68rem) {
+  .logistics__find {
+    grid-template-columns: minmax(720px, 1.4fr) minmax(0, 1fr);
+    align-items: start;
   }
 }
 </style>

@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { RouterLink, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import {
+  findDictationStaff,
+  searchDictationStaff,
+  type DictationStaffOption,
+} from "@/field-reports/dictationStaffDirectory";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
+import {
+  canEditIncident,
+  resolveIncidentSession,
+} from "@/ims/incidentReadModel";
 import {
   FIELD_REPORT_TITLE_MAX_LENGTH,
   OfflineFieldReportError,
@@ -28,8 +37,62 @@ import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 // Alpha 1 limits before submit. Name Reference autocomplete is intentionally
 // absent (M9.6A); titles are not parsed for Name References. Photos attach to
 // the durable encrypted pending upload queue after submit (M9.8).
+//
+// M-aside: the same form also takes dictated reports. An IC operator or lead
+// opens it from Incidents to write down a report someone gave them verbally,
+// names that staff member, and submits. The report is the named staff member's
+// — it lands in their My Field Reports — while the operator stays recorded as
+// the submitter and is named in a line prepended to the immutable body.
+//
+// Dictation is gated on the same permission as creating an incident, because
+// recording an account on someone else's behalf is Incident Command work, not
+// something any staff member may do to another staff member's record.
 const router = useRouter();
+const route = useRoute();
 const session = computed(() => resolveFieldSession());
+const incidentSession = computed(() => resolveIncidentSession());
+
+/** True on the `/ims/field-reports/create` route, false on the staff route. */
+const dictationRoute = computed(() => route.name === "ims.field-reports.create");
+const canDictate = computed(() => canEditIncident(incidentSession.value));
+const dictationMode = computed(() => dictationRoute.value && canDictate.value);
+
+const staffQuery = ref("");
+const selectedStaffId = ref<string | null>(null);
+const staffMatches = computed(() => searchDictationStaff(staffQuery.value));
+
+/**
+ * Who the report is about. Defaults to the signed-in user, so an operator who
+ * opens the form and types nothing into the picker files their own report.
+ */
+const reportingStaff = computed<DictationStaffOption | null>(() => {
+  const current = session.value;
+  if (!current) {
+    return null;
+  }
+
+  return findDictationStaff(selectedStaffId.value ?? current.staffId);
+});
+
+const ownStaff = computed<DictationStaffOption | null>(() =>
+  session.value ? findDictationStaff(session.value.staffId) : null,
+);
+
+/** True only when the operator picked somebody other than themselves. */
+const onBehalfOfSomeoneElse = computed(
+  () =>
+    dictationMode.value &&
+    session.value !== null &&
+    reportingStaff.value !== null &&
+    reportingStaff.value.staffId !== session.value.staffId,
+);
+
+const attributionPreview = computed(() =>
+  onBehalfOfSomeoneElse.value && ownStaff.value && reportingStaff.value
+    ? `Field Report filled out by ${ownStaff.value.displayName} on behalf of ${reportingStaff.value.displayName}`
+    : null,
+);
+
 const title = ref("");
 const body = ref("");
 const errorMessage = ref<string | null>(null);
@@ -66,10 +129,27 @@ onBeforeUnmount(() => {
   photoSelection.clear();
 });
 
+/** Where Cancel and the header link go back to, per entry point. */
+const returnRoute = computed(() =>
+  dictationRoute.value
+    ? { name: "ims.field-reports.index" }
+    : { name: "staff.field-reports.index" },
+);
+
+function selectStaff(option: DictationStaffOption): void {
+  selectedStaffId.value = option.staffId;
+  staffQuery.value = "";
+}
+
+function clearStaffSelection(): void {
+  selectedStaffId.value = null;
+  staffQuery.value = "";
+}
+
 function onCancel(): void {
   photoSelection.clear();
   bumpPhotoSelection();
-  void router.push({ name: "staff.field-reports.index" });
+  void router.push(returnRoute.value);
 }
 
 function openPhotoPicker(): void {
@@ -152,16 +232,38 @@ async function onSubmit(): Promise<void> {
 
   try {
     const photos = photoSelection.snapshotForSubmit();
+    const subject = reportingStaff.value;
+    const operator = ownStaff.value;
+
+    if (onBehalfOfSomeoneElse.value && (!subject || !operator)) {
+      errorMessage.value =
+        "Select the staff member this Field Report is for before submitting.";
+      submitting.value = false;
+      return;
+    }
+
     const report = submitFieldReport({
       eventId: current.eventId,
+      // The operator stays the submitter; only the staff the report is about
+      // changes. Both facts are recorded rather than one standing in for the
+      // other (data/API 10.15).
       submittedByUserId: current.submittedByUserId,
-      staffId: current.staffId,
+      staffId:
+        onBehalfOfSomeoneElse.value && subject ? subject.staffId : current.staffId,
       originDeviceId: current.originDeviceId,
       originNodeId: current.originNodeId,
       departmentId: current.departmentId,
       teamId: current.teamId,
       title: title.value,
       body: body.value,
+      dictation:
+        onBehalfOfSomeoneElse.value && subject && operator
+          ? {
+              recordedByStaffId: current.staffId,
+              recordedByDisplayName: operator.displayName,
+              reportedByDisplayName: subject.displayName,
+            }
+          : null,
     });
 
     // Text finalize and navigate immediately; photo persistence/upload is a
@@ -196,21 +298,30 @@ async function onSubmit(): Promise<void> {
   <section class="fr-create" aria-labelledby="fr-create-heading">
     <header class="fr-create__header">
       <h1 id="fr-create-heading" class="fr-create__heading">
-        Submit Field Report
+        {{ dictationMode ? "Take Field Report" : "Submit Field Report" }}
       </h1>
-      <RouterLink
-        class="fr-create__cancel-link"
-        :to="{ name: 'staff.field-reports.index' }"
-      >
+      <RouterLink class="fr-create__cancel-link" :to="returnRoute">
         Cancel
       </RouterLink>
     </header>
     <p class="fr-create__lede">
-      Field Reports are finalized on submit. There are no drafts, and the
-      original title and body cannot be edited later.
+      {{
+        dictationMode
+          ? "Write down a Field Report a staff member gave you. It is finalized on submit and files to their My Field Reports."
+          : "Field Reports are finalized on submit. There are no drafts, and the original title and body cannot be edited later."
+      }}
     </p>
 
-    <p v-if="!session" class="fr-create__unavailable" role="status">
+    <p
+      v-if="dictationRoute && !canDictate"
+      class="fr-create__unavailable"
+      role="status"
+    >
+      Taking a Field Report on behalf of another staff member requires Incident
+      Command permission to create incidents.
+    </p>
+
+    <p v-else-if="!session" class="fr-create__unavailable" role="status">
       Field session is unavailable. Sign in and select an event before
       submitting a Field Report.
     </p>
@@ -234,6 +345,73 @@ async function onSubmit(): Promise<void> {
           <dd>Set by your signed-in session</dd>
         </div>
       </dl>
+
+      <section
+        v-if="dictationMode"
+        class="fr-create__on-behalf"
+        aria-labelledby="fr-on-behalf-heading"
+      >
+        <h2 id="fr-on-behalf-heading" class="fr-create__label">
+          Field Report for
+        </h2>
+        <p id="fr-on-behalf-help" class="fr-create__on-behalf-help">
+          Defaults to you. Search for another staff member to write down the
+          report they gave you; it files to their My Field Reports.
+        </p>
+
+        <p class="fr-create__on-behalf-selected">
+          <strong>{{ reportingStaff?.displayName ?? "You" }}</strong>
+          <template v-if="reportingStaff?.detail">
+            <span> / {{ reportingStaff.detail }}</span>
+          </template>
+          <button
+            v-if="onBehalfOfSomeoneElse"
+            type="button"
+            class="fr-create__on-behalf-clear"
+            @click="clearStaffSelection"
+          >
+            Use my own name
+          </button>
+        </p>
+
+        <label class="fr-create__label" for="fr-on-behalf-search">
+          Search staff
+        </label>
+        <input
+          id="fr-on-behalf-search"
+          v-model="staffQuery"
+          class="fr-create__title"
+          type="search"
+          autocomplete="off"
+          aria-describedby="fr-on-behalf-help"
+        />
+
+        <ul
+          v-if="staffQuery.trim().length > 0"
+          class="fr-create__on-behalf-results"
+          aria-label="Staff matches"
+        >
+          <li v-if="staffMatches.length === 0" role="status">
+            No staff match that search.
+          </li>
+          <li v-for="option in staffMatches" :key="option.staffId">
+            <button type="button" @click="selectStaff(option)">
+              <span class="fr-create__on-behalf-name">
+                {{ option.displayName }}
+              </span>
+              <span class="fr-create__on-behalf-detail">{{ option.detail }}</span>
+            </button>
+          </li>
+        </ul>
+
+        <p
+          v-if="attributionPreview"
+          class="fr-create__on-behalf-preview"
+          role="status"
+        >
+          This line is added to the top of the report: “{{ attributionPreview }}”
+        </p>
+      </section>
 
       <form class="fr-create__form" @submit.prevent="onSubmit">
         <label class="fr-create__label" for="fr-title">Title</label>
@@ -419,6 +597,84 @@ async function onSubmit(): Promise<void> {
   display: block;
   margin-bottom: var(--m-space-2);
   font-weight: 600;
+  font-size: inherit;
+}
+
+.fr-create__on-behalf {
+  margin: 0 0 var(--m-space-6);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.fr-create__on-behalf-help,
+.fr-create__on-behalf-preview {
+  margin: 0 0 var(--m-space-3);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.fr-create__on-behalf-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-3);
+}
+
+.fr-create__on-behalf-selected span {
+  color: var(--m-text-muted);
+}
+
+.fr-create__on-behalf-clear {
+  min-height: 2.25rem;
+  padding: 0 var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fr-create__on-behalf-results {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.fr-create__on-behalf-results button {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fr-create__on-behalf-name {
+  font-weight: 700;
+}
+
+.fr-create__on-behalf-detail {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.fr-create__on-behalf-clear:focus-visible,
+.fr-create__on-behalf-results button:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .fr-create__title,

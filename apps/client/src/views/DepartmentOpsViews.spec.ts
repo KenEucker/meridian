@@ -294,7 +294,10 @@ describe("department operations surfaces", () => {
       .trigger("click");
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    // Scoped to the open workspace: the on-shift roster above the search offers
+    // its own "Check out equipment" button for a different staff member.
     await wrapper
+      .get(".logistics__workspace")
       .findAll("button")
       .find((button) => button.text() === "Check out equipment")!
       .trigger("click");
@@ -450,5 +453,77 @@ describe("department operations surfaces", () => {
     expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
     expect(wrapper.text()).toContain("Ranger Dirt Swing Shift");
     expect(wrapper.text()).not.toContain("Ranger Command Overnight");
+  });
+  it('lists staff on shift above the search with the cache notice beside it', async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const roster = wrapper.get('.logistics__on-shift');
+    expect(roster.get('#on-shift-heading').text()).toBe('On shift now');
+    // Checked in on the day shift in the fixture; Vera Staff is only scheduled.
+    expect(roster.text()).toContain('Local Field Author');
+    expect(roster.text()).not.toContain('Vera Staff');
+    expect(roster.text()).toContain('Ranger Dirt Day Shift');
+
+    const html = wrapper.html();
+    expect(html.indexOf('logistics__on-shift')).toBeLessThan(
+      html.indexOf('entity-search'),
+    );
+    expect(
+      wrapper.get('.logistics__find').find('.logistics__cache').exists(),
+    ).toBe(true);
+    expect(wrapper.find('.logistics__find .entity-search').exists()).toBe(true);
+  });
+
+  it('checks a staff member out straight from the on-shift roster', async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const row = wrapper
+      .findAll('.logistics__on-shift-list li')
+      .find((item) => item.text().includes('Local Field Author'));
+    expect(row).toBeTruthy();
+
+    await row!
+      .findAll('button')
+      .find((button) => button.text() === 'Check out')!
+      .trigger('click');
+
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.get('#attendance-dialog-heading').text()).toBe('Check out');
+    // Opening from the roster selects that staff member, so the dialog and the
+    // workspace act on the same person.
+    expect(wrapper.get('#staff-workspace-heading').text()).toBe(
+      'Local Field Author',
+    );
+
+    await dialog
+      .findAll('button')
+      .find((button) => button.text() === 'Confirm')!
+      .trigger('click');
+
+    expect(wrapper.text()).toContain('Local Field Author checked out.');
+    expect(wrapper.get('.logistics__on-shift').text()).toContain(
+      'No staff are checked in',
+    );
+  });
+
+  it('opens equipment checkout for a roster member without searching first', async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const row = wrapper
+      .findAll('.logistics__on-shift-list li')
+      .find((item) => item.text().includes('Local Field Author'));
+
+    await row!
+      .findAll('button')
+      .find((button) => button.text() === 'Check out equipment')!
+      .trigger('click');
+
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.get('#attendance-dialog-heading').text()).toBe(
+      'Check out equipment',
+    );
+    expect(wrapper.get('#staff-workspace-heading').text()).toBe(
+      'Local Field Author',
+    );
   });
 });

@@ -6,9 +6,11 @@ import {
   addLogisticsStaffToShift,
   checkInLogisticsStaff,
   checkOutLogisticsEquipment,
+  checkOutLogisticsStaff,
   currentLogisticsShifts,
   isShiftCurrentlyGoing,
   logisticsShiftSections,
+  logisticsStaffOnShift,
   markLogisticsStaffOffSite,
   markLogisticsStaffOnSite,
   returnLogisticsEquipment,
@@ -36,6 +38,68 @@ describe("logistics desk model", () => {
     expect(isShiftCurrentlyGoing(swing, "2027-07-04T21:44:00.000Z")).toBe(
       false,
     );
+  });
+
+  it("lists staff checked in on a shift, oldest shift start first", () => {
+    const onShift = logisticsStaffOnShift(LOCAL_LOGISTICS_DESK);
+
+    expect(onShift.length).toBeGreaterThan(0);
+    expect(
+      onShift.every((member) => member.displayName.length > 0 && member.shiftId),
+    ).toBe(true);
+
+    const startTimes = onShift.map((member) => member.startsAt);
+    expect([...startTimes].sort()).toEqual(startTimes);
+  });
+
+  it("excludes staff who are only scheduled or already checked out", () => {
+    const onShiftIds = new Set(
+      logisticsStaffOnShift(LOCAL_LOGISTICS_DESK).map(
+        (member) => `${member.staffId}:${member.shiftId}`,
+      ),
+    );
+
+    for (const workspace of Object.values(LOCAL_LOGISTICS_DESK.staffWorkspaces)) {
+      for (const card of workspace.shiftCards) {
+        const key = `${workspace.staffId}:${card.shiftId}`;
+
+        expect(onShiftIds.has(key)).toBe(card.attendanceState === "checked_in");
+      }
+    }
+  });
+
+  it("drops a staff member from the roster once they are checked out", () => {
+    const before = logisticsStaffOnShift(LOCAL_LOGISTICS_DESK);
+    const member = before[0]!;
+
+    const after = logisticsStaffOnShift(
+      checkOutLogisticsStaff(
+        LOCAL_LOGISTICS_DESK,
+        member.staffId,
+        member.shiftId,
+      ),
+    );
+
+    expect(
+      after.some(
+        (entry) =>
+          entry.staffId === member.staffId && entry.shiftId === member.shiftId,
+      ),
+    ).toBe(false);
+    expect(after).toHaveLength(before.length - 1);
+  });
+
+  it("reports open equipment and what each roster action can do", () => {
+    const onShift = logisticsStaffOnShift(LOCAL_LOGISTICS_DESK);
+
+    for (const member of onShift) {
+      const workspace = LOCAL_LOGISTICS_DESK.staffWorkspaces[member.staffId]!;
+
+      expect(member.openEquipmentCount).toBe(workspace.openEquipment.length);
+      expect(member.canCheckOutEquipment).toBe(
+        workspace.availableEquipment.length > 0,
+      );
+    }
   });
 
   it("searches department-scoped staff, equipment, and shifts", () => {

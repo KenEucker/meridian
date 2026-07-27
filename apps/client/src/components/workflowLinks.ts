@@ -135,17 +135,16 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       });
     }
 
+    // IMS Field Reports is deliberately absent from the workflow tab bar. It is
+    // a page IC roles reach from inside the Incidents workspace they already
+    // work out of, not a hub they sit in for a stretch of the event, so it is
+    // listed in the home directory and linked from Incidents instead.
+    // {@see imsDirectoryLinks} keeps it in the home directory.
     if (department.capabilities.hasIncidentCommand) {
       links.push({
         label: "Incidents",
         description: "Restricted incident workspace for IC roles.",
         to: { name: "ims.incidents.index" },
-      });
-      links.push({
-        label: "Reports",
-        pageLabel: "Field Reports",
-        description: "Submitted field reports for review.",
-        to: { name: "ims.field-reports.index" },
       });
     }
 
@@ -162,6 +161,29 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
 
     return links;
   });
+}
+
+/**
+ * Workflow pages reached from inside the Incidents workspace rather than from
+ * the tab bar.
+ *
+ * These are still workflow pages and still belong in the home directory — the
+ * home screen is the full map of what someone can reach. They are kept out of
+ * the tab bar because the tab bar names hubs, and a reader scanning eight tabs
+ * should not have to tell "Incidents" and "Reports" apart mid-event.
+ */
+function imsDirectoryLinks(hasIncidentCommand: boolean): WorkflowLink[] {
+  if (!hasIncidentCommand) {
+    return [];
+  }
+
+  return [
+    {
+      label: "Field Reports",
+      description: "Event Field Reports visible to Incident Command.",
+      to: { name: "ims.field-reports.index" },
+    },
+  ];
 }
 
 /**
@@ -300,11 +322,16 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       },
     ];
 
-    if (workflowLinks.value.length > 0) {
+    const workflowDirectory = [
+      ...workflowLinks.value,
+      ...imsDirectoryLinks(department.capabilities.hasIncidentCommand),
+    ];
+
+    if (workflowDirectory.length > 0) {
       sections.push({
         title: "Workflows",
         description: "Hubs you work out of during the event.",
-        links: workflowLinks.value,
+        links: workflowDirectory,
       });
     }
 

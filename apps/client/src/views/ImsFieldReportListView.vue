@@ -3,12 +3,14 @@ import ControlBar from "@/components/ControlBar.vue";
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
 import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
+  canEditIncident,
   formatIncidentDateTime,
   hasIncidentCommandAccess,
   listFieldReportsForSession,
@@ -25,6 +27,13 @@ const canView = computed(
   () =>
     selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
     hasIncidentCommandAccess(session.value),
+);
+// Taking a dictated Field Report is gated on the same permission as creating an
+// incident, the same way it is on the Incidents page.
+const canTakeFieldReport = computed(
+  () =>
+    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
+    canEditIncident(session.value),
 );
 const stateFilter = computed(() =>
   typeof route.query.state === "string" ? route.query.state : "active",
@@ -324,6 +333,17 @@ function compareReports(
     :eyebrow="session?.icDepartmentLabel ?? 'Incident Command'"
     lede="Restricted Field Reports available to Incident Command."
   >
+    <template #actions>
+      <div class="ims-fr-list__links">
+        <WorkflowActionButton
+          v-if="canTakeFieldReport"
+          :to="{ name: 'ims.field-reports.create' }"
+        >
+          Take Field Report
+        </WorkflowActionButton>
+      </div>
+    </template>
+
     <template #navigation>
       <RouterLink
         v-if="canView"

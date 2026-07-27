@@ -176,8 +176,11 @@ describe("AppShell fixed UI mode display", () => {
       expect(workflowLabels).toContain("Me");
       expect(workflowLabels).toContain("Logistics");
       expect(workflowLabels).toContain("Operations");
-      expect(workflowLabels).toContain("Reports");
       expect(workflowLabels).toContain("Admin");
+      // IMS Field Reports is reached from inside Incidents and from the home
+      // directory, not from the tab bar.
+      expect(workflowLabels).not.toContain("Reports");
+      expect(workflowLabels).not.toContain("Field Reports");
       expect(workflowLabels).not.toContain("My Field Reports");
       expect(workflowLabels).not.toContain("Notes");
       expect(workflowLabels).not.toContain("Operations Center");
@@ -270,7 +273,6 @@ describe("AppShell fixed UI mode display", () => {
       .findAll(".app-shell__tab")
       .map((tab) => tab.text());
     expect(workflowLabels).toContain("Me");
-    expect(workflowLabels).not.toContain("Reports");
     expect(workflowLabels).not.toContain("Admin");
     expect(workflowLabels).not.toContain("Overview");
     expect(workflowLabels).not.toContain("Operations");
@@ -288,7 +290,6 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.get(".app-shell__context").text()).toContain("DPW");
     workflowLabels = wrapper.findAll(".app-shell__tab").map((tab) => tab.text());
     expect(workflowLabels).toContain("Admin");
-    expect(workflowLabels).not.toContain("Reports");
     expect(workflowLabels).not.toContain("Overview");
     expect(workflowLabels).not.toContain("Logistics");
     expect(workflowLabels).not.toContain("Incidents");
@@ -317,7 +318,6 @@ describe("AppShell fixed UI mode display", () => {
       "Logistics",
       "Operations",
       "Incidents",
-      "Reports",
       "Admin",
     ]);
   });

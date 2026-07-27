@@ -10,19 +10,26 @@
  *
  * One column on a phone with the hero first, because a centre cell has no
  * meaning in a single column. Three columns past the wide breakpoint, hero in
- * the middle spanning rows, cards flowing densely around it. Dense placement
- * means the layout does not depend on the card count: extra cards continue
- * below the hero rather than leaving holes.
+ * the middle of the grid — middle column and, starting a row down, middle row —
+ * so cards sit above it, beside it, and below it. A hero pinned to the top row
+ * is still just a summary with a list under it; surrounding it on all four
+ * sides is what makes it read as the centre of the page. Dense placement means
+ * the layout does not depend on the card count: extra cards continue below the
+ * hero rather than leaving holes.
  */
 withDefaults(
   defineProps<{
     /** Accessible name for the surrounding region. */
     label: string;
-    /** Rows the hero spans at wide widths. Match it to half the card count. */
+    /**
+     * Rows the hero spans at wide widths, starting from the second row. Keep it
+     * small enough that the card flow still reaches a row underneath: with a
+     * three-column grid, `cards >= 6` and `heroRows` of 1 leaves a row below.
+     */
     heroRows?: number;
   }>(),
   {
-    heroRows: 3,
+    heroRows: 1,
   },
 );
 </script>
@@ -76,9 +83,13 @@ withDefaults(
     grid-auto-flow: row dense;
   }
 
+  /*
+   * Row 2, not row 1: the first row of cards lands above the hero, and the
+   * dense flow carries the remaining cards below it.
+   */
   .hero-center__hero {
     grid-column: 2;
-    grid-row: 1 / span var(--m-hero-rows, 3);
+    grid-row: 2 / span var(--m-hero-rows, 1);
     align-self: stretch;
   }
 }

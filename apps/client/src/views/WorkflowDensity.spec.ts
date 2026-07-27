@@ -50,42 +50,64 @@ afterEach(() => {
 });
 
 describe("workflow control bands", () => {
-  it("gathers incident search, filters, and presets into one band", async () => {
+  it("keeps incident search on the band and collapses filters and presets", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
 
-    // One surface, not three stacked bordered forms.
+    // Search is the control someone reaches for first, so it stays visible.
     const bars = wrapper.findAll(".control-bar");
     expect(bars).toHaveLength(1);
-
-    // The forms stay separate, because they submit separately.
-    const forms = bars[0]!.findAll("form");
-    expect(forms.map((form) => form.attributes("aria-label"))).toEqual([
+    expect(bars[0]!.findAll("form").map((f) => f.attributes("aria-label"))).toEqual([
       "Search incidents",
-      "Filter incidents",
-      "Saved incident list presets",
     ]);
+    expect(bars[0]!.get("form").attributes("data-control-group")).toBe("grow");
 
-    // Only the search group absorbs leftover width.
-    expect(forms[0]!.attributes("data-control-group")).toBe("grow");
-    expect(forms[1]!.attributes("data-control-group")).toBe("");
+    // Filters and presets move behind one accordion, closed by default.
+    const panel = wrapper.get(".ims-list__filter-panel");
+    expect(panel.attributes("open")).toBeUndefined();
+    expect(panel.get("summary").text()).toContain("Filters and presets");
+    expect(
+      panel.findAll("form").map((form) => form.attributes("aria-label")),
+    ).toEqual(["Filter incidents", "Saved incident list presets"]);
   });
 
-  it("sizes each filter by what it holds rather than by sibling count", async () => {
+  it("opens the filter panel and counts the filters when the list arrives narrowed", async () => {
+    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    installDevelopmentIncidentSession();
+
+    const wrapper = await mountAt(
+      IncidentListView,
+      "/ims/incidents?priority=Critical&shift=current",
+    );
+
+    const panel = wrapper.get(".ims-list__filter-panel");
+    expect(panel.attributes("open")).toBeDefined();
+    expect(panel.get(".ims-list__filter-count").text()).toBe("2 active");
+  });
+
+  it("gives incident filters the roomier label-above-control shape", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
-    const widths = wrapper
-      .findAll(".control-field")
-      .map((field) => field.attributes("data-width"));
 
-    expect(widths).toContain("grow");
-    expect(widths).toContain("sm");
-    expect(widths).toContain("md");
-    expect(new Set(widths).size).toBeGreaterThan(1);
+    // Same idiom as the Field Reports list: a label wrapping its own text and
+    // control, rather than the dense inline ControlField used for search.
+    const filters = wrapper.get(".ims-list__filters");
+    const labels = filters.findAll("label");
+    expect(labels.length).toBeGreaterThan(3);
+    for (const label of labels) {
+      expect(label.find("span").exists()).toBe(true);
+      expect(label.find("select, input").exists()).toBe(true);
+    }
+    expect(filters.findAll(".control-field")).toHaveLength(0);
+
+    // Search keeps its inline sizing hint.
+    expect(
+      wrapper.findAll(".control-field").map((f) => f.attributes("data-width")),
+    ).toEqual(["grow"]);
   });
 
   it("puts department filter toolbars on the shared band", async () => {

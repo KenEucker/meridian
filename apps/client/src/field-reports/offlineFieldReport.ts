@@ -50,6 +50,25 @@ export interface OfflineFieldReportAppend {
 }
 
 /**
+ * Who typed a Field Report someone else reported.
+ *
+ * An operator taking a report by dictation is one person recording another
+ * person's account, so the two identifiers separate rather than one standing in
+ * for the other: `staffId` is the staff member whose report it is, and
+ * `submittedByUserId` stays the operator who actually submitted it. Neither is
+ * rewritten to look like the other, because both facts are true and an export or
+ * an audit needs to be able to tell them apart (data/API 10.15).
+ */
+export interface FieldReportDictation {
+  /** Staff id of the operator who typed the report. */
+  readonly recordedByStaffId: string;
+  /** Operator's display name, as shown in the prepended attribution line. */
+  readonly recordedByDisplayName: string;
+  /** Reporting staff member's display name, for the same line. */
+  readonly reportedByDisplayName: string;
+}
+
+/**
  * Local Field Report record, mirroring the `field_reports` columns from
  * data/API section 10.15 that exist at device-create time. `fraNumber` and
  * `serverReceivedAt` stay `null` until the server accepts the report (M9.3).
@@ -72,6 +91,8 @@ export interface OfflineFieldReport {
   readonly syncStatus: FieldReportSyncStatus;
   readonly createdAt: string;
   readonly appends: readonly OfflineFieldReportAppend[];
+  /** Set when an operator typed this report for the reporting staff member. */
+  readonly dictation: FieldReportDictation | null;
 }
 
 /**
@@ -90,6 +111,11 @@ export interface CreateOfflineFieldReportInput {
   readonly body: string;
   readonly departmentId?: string | null;
   readonly teamId?: string | null;
+  /**
+   * Present when an operator is typing this report for someone else. The author
+   * identifiers above are then the reporting staff member's, not the operator's.
+   */
+  readonly dictation?: FieldReportDictation | null;
 }
 
 /**
@@ -180,6 +206,46 @@ export function buildTemporaryLocalNumber(id: string): string {
 }
 
 /**
+ * The attribution line prepended to a dictated Field Report body.
+ *
+ * It goes into the body rather than beside it because the body is the immutable
+ * record (technical spec 17.4, FR-007). Anyone who later reads the report —
+ * on another surface, in an export, or attached to an incident — reads that an
+ * operator wrote down someone else's account, without that surface having to
+ * know about dictation at all.
+ */
+export function fieldReportDictationLine(dictation: FieldReportDictation): string {
+  return `Field Report filled out by ${dictation.recordedByDisplayName} on behalf of ${dictation.reportedByDisplayName}`;
+}
+
+function normalizeDictation(
+  dictation: FieldReportDictation | null | undefined,
+): FieldReportDictation | null {
+  if (!dictation) {
+    return null;
+  }
+
+  const recordedByStaffId = requireNonEmpty(
+    dictation.recordedByStaffId,
+    "recordedByStaffId",
+  );
+  const recordedByDisplayName = requireNonEmpty(
+    dictation.recordedByDisplayName,
+    "recordedByDisplayName",
+  ).trim();
+  const reportedByDisplayName = requireNonEmpty(
+    dictation.reportedByDisplayName,
+    "reportedByDisplayName",
+  ).trim();
+
+  return Object.freeze({
+    recordedByStaffId,
+    recordedByDisplayName,
+    reportedByDisplayName,
+  });
+}
+
+/**
  * Create a finalized, immutable offline Field Report. The returned record has a
  * device-generated UUID, a device submission timestamp, a temporary local
  * number, a normalized title, and the `pending_sync` status. It is frozen
@@ -200,11 +266,18 @@ export function createOfflineFieldReport(
     throw new OfflineFieldReportError("Field Report body text is required.");
   }
 
+  const dictation = normalizeDictation(input.dictation);
   const generateId = dependencies.generateId ?? defaultGenerateId;
   const now = dependencies.now ?? (() => new Date());
 
   const id = requireNonEmpty(generateId(), "id");
   const submittedAt = now().toISOString();
+
+  // Prepended before the record is frozen, so the attribution is part of the
+  // immutable body rather than something a later surface has to remember to add.
+  const body = dictation
+    ? `${fieldReportDictationLine(dictation)}\n\n${input.body}`
+    : input.body;
 
   return Object.freeze({
     id,
@@ -216,7 +289,7 @@ export function createOfflineFieldReport(
     fraNumber: null,
     temporaryLocalNumber: buildTemporaryLocalNumber(id),
     title,
-    body: input.body,
+    body,
     deviceSubmittedAt: submittedAt,
     serverReceivedAt: null,
     originDeviceId: input.originDeviceId,
@@ -224,6 +297,7 @@ export function createOfflineFieldReport(
     syncStatus: FIELD_REPORT_PENDING_SYNC,
     createdAt: submittedAt,
     appends: Object.freeze([] as OfflineFieldReportAppend[]),
+    dictation,
   });
 }
 

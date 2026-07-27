@@ -96,6 +96,37 @@ const hasNarrowedList = computed(
     responderFilter.value !== "all" ||
     shiftFilter.value !== "all",
 );
+/**
+ * How many list filters are currently narrowing the list.
+ *
+ * Shown on the collapsed accordion so a closed panel still says whether it is
+ * hiding anything — a filter the reader cannot see and cannot count is how a
+ * list ends up looking empty for no visible reason.
+ */
+const activeFilterCount = computed(() => {
+  const active = [
+    stateFilter.value !== "active",
+    priorityFilter.value !== "all",
+    typeFilter.value !== "all",
+    responderFilter.value !== "all",
+    shiftFilter.value !== "all",
+  ];
+
+  return active.filter(Boolean).length;
+});
+
+/**
+ * The panel starts closed and opens itself when a filter is already applied,
+ * which happens whenever someone follows a filtered link or a saved preset.
+ */
+const filtersOpen = ref(activeFilterCount.value > 0);
+
+watch(activeFilterCount, (count) => {
+  if (count > 0) {
+    filtersOpen.value = true;
+  }
+});
+
 const pageSize = computed(() => {
   const requested = Number.parseInt(String(route.query.per_page ?? ""), 10);
 
@@ -513,6 +544,18 @@ async function onSearchSubmit(): Promise<void> {
         >
           Create incident
         </WorkflowActionButton>
+        <!--
+          Taking a report by dictation is gated on the same permission as
+          creating an incident: it records an account on another staff member's
+          behalf, which is Incident Command work.
+        -->
+        <WorkflowActionButton
+          v-if="canEdit"
+          variant="secondary"
+          :to="{ name: 'ims.field-reports.create' }"
+        >
+          Take Field Report
+        </WorkflowActionButton>
       </div>
     </template>
 
@@ -577,9 +620,24 @@ async function onSearchSubmit(): Promise<void> {
             Clear
           </RouterLink>
         </form>
+      </ControlBar>
 
-        <form data-control-group aria-label="Filter incidents">
-          <ControlField label="State" control-id="ims-list-state" width="md">
+      <!--
+        Filters collapse by default. Seven selects above a list is more chrome
+        than data on a phone, and the reader arrives wanting the incidents, not
+        the controls. The summary carries the active count so a closed panel
+        never hides a filter silently.
+      -->
+      <details class="ims-list__filter-panel" :open="filtersOpen">
+        <summary>
+          <span>Filters and presets</span>
+          <span v-if="activeFilterCount > 0" class="ims-list__filter-count">
+            {{ activeFilterCount }} active
+          </span>
+        </summary>
+        <div class="ims-list__filter-body">
+        <form class="ims-list__filters" aria-label="Filter incidents">
+          <label for="ims-list-state"><span>State</span>
             <select
               id="ims-list-state"
               :value="stateFilter"
@@ -593,9 +651,9 @@ async function onSearchSubmit(): Promise<void> {
               <option value="closed">Closed</option>
               <option value="all">All states</option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField label="Priority" control-id="ims-list-priority" width="sm">
+          <label for="ims-list-priority"><span>Priority</span>
             <select
               id="ims-list-priority"
               :value="priorityFilter"
@@ -607,9 +665,9 @@ async function onSearchSubmit(): Promise<void> {
               <option value="Important">Important</option>
               <option value="Routine">Routine</option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField label="Type" control-id="ims-list-type" width="md">
+          <label for="ims-list-type"><span>Type</span>
             <select
               id="ims-list-type"
               :value="typeFilter"
@@ -620,13 +678,9 @@ async function onSearchSubmit(): Promise<void> {
                 {{ name }}
               </option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField
-            label="Responder"
-            control-id="ims-list-responder"
-            width="md"
-          >
+          <label for="ims-list-responder"><span>Responder</span>
             <select
               id="ims-list-responder"
               :value="responderFilter"
@@ -641,9 +695,9 @@ async function onSearchSubmit(): Promise<void> {
                 {{ responder.displayName }}
               </option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField label="Shift" control-id="ims-list-shift" width="sm">
+          <label for="ims-list-shift"><span>Shift</span>
             <select
               id="ims-list-shift"
               :value="shiftFilter"
@@ -652,13 +706,9 @@ async function onSearchSubmit(): Promise<void> {
               <option value="all">All shifts</option>
               <option value="current">Current shift</option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField
-            label="Per page"
-            control-id="ims-list-page-size"
-            width="sm"
-          >
+          <label for="ims-list-page-size"><span>Per page</span>
             <select
               id="ims-list-page-size"
               :value="String(pageSize)"
@@ -672,14 +722,9 @@ async function onSearchSubmit(): Promise<void> {
                 {{ size }}
               </option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField
-            v-if="canEdit"
-            label="Open as"
-            control-id="ims-list-open-mode"
-            width="sm"
-          >
+          <label v-if="canEdit" for="ims-list-open-mode"><span>Open as</span>
             <select
               id="ims-list-open-mode"
               :value="listOpenMode"
@@ -688,15 +733,15 @@ async function onSearchSubmit(): Promise<void> {
               <option value="view">View</option>
               <option value="edit">Edit</option>
             </select>
-          </ControlField>
+          </label>
         </form>
 
         <form
-          data-control-group
+          class="ims-list__filters ims-list__presets"
           aria-label="Saved incident list presets"
           @submit.prevent="onPresetSave"
         >
-          <ControlField label="Saved presets" control-id="ims-list-preset" width="md">
+          <label for="ims-list-preset"><span>Saved presets</span>
             <select
               id="ims-list-preset"
               :value="matchingPreset?.id ?? ''"
@@ -713,13 +758,9 @@ async function onSearchSubmit(): Promise<void> {
                 {{ preset.name }}
               </option>
             </select>
-          </ControlField>
+          </label>
 
-          <ControlField
-            label="Preset name"
-            control-id="ims-list-preset-name"
-            width="md"
-          >
+          <label for="ims-list-preset-name"><span>Preset name</span>
             <input
               id="ims-list-preset-name"
               v-model="presetNameDraft"
@@ -727,7 +768,7 @@ async function onSearchSubmit(): Promise<void> {
               autocomplete="off"
               :maxlength="INCIDENT_LIST_PRESET_NAME_MAX_LENGTH"
             />
-          </ControlField>
+          </label>
 
           <button type="submit">
             {{ matchingPreset ? "Update preset" : "Save preset" }}
@@ -736,7 +777,8 @@ async function onSearchSubmit(): Promise<void> {
             Delete preset
           </button>
         </form>
-      </ControlBar>
+        </div>
+      </details>
 
       <p v-if="presetError" class="ims-list__preset-error" role="alert">
         {{ presetError }}
@@ -1045,6 +1087,125 @@ async function onSearchSubmit(): Promise<void> {
   color: var(--m-attention-critical);
   font-size: var(--m-text-sm);
   font-weight: 700;
+}
+
+/*
+ * Filters and presets accordion. The panel matches the Field Reports list
+ * filters: label above control, one comfortable column per filter, sized by the
+ * grid rather than packed inline. Roomier than the old inline band, which is the
+ * point — these are read and changed, not scanned past.
+ */
+.ims-list__filter-panel {
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.ims-list__filter-panel > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  min-height: 2.75rem;
+  padding: var(--m-space-2) var(--m-pad-inline);
+  color: var(--m-text-primary);
+  font-weight: 800;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.ims-list__filter-panel > summary:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: -2px;
+}
+
+.ims-list__filter-count {
+  padding: 0.1rem var(--m-space-2);
+  border-radius: 999px;
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
+  font-size: var(--m-text-xs);
+  font-weight: 800;
+}
+
+.ims-list__filter-body {
+  display: grid;
+  gap: var(--m-space-4);
+  padding: 0 var(--m-pad-inline) var(--m-pad-block);
+  border-top: 1px solid var(--m-border-subtle);
+  padding-top: var(--m-pad-block);
+}
+
+.ims-list__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--m-space-3);
+}
+
+.ims-list__filters label {
+  display: grid;
+  gap: var(--m-space-2);
+  min-width: 0;
+}
+
+.ims-list__filters label span {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-xs);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ims-list__filters select,
+.ims-list__filters input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+}
+
+.ims-list__filters select:focus-visible,
+.ims-list__filters input:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.ims-list__presets {
+  align-items: end;
+  padding-top: var(--m-space-4);
+  border-top: 1px solid var(--m-border-subtle);
+}
+
+.ims-list__presets button {
+  min-height: 2.75rem;
+  padding: 0 var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ims-list__presets button[type="submit"] {
+  border-color: var(--m-action-secondary-bg);
+  background: var(--m-action-secondary-bg);
+  color: var(--m-action-secondary-text);
+}
+
+.ims-list__presets button:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 48rem) {
+  .ims-list__filters {
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  }
 }
 
 .ims-list :deep(.control-bar button[type="submit"]) {
