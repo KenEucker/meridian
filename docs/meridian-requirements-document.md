@@ -1557,6 +1557,20 @@ Notices may also be marked **department leads only**. When so marked, they are v
 
 ---
 
+## 3.42 Branding Profile
+
+A branding profile is the stored set of identity and color values that determine how Meridian presents itself to a given organization or department.
+
+An organization branding profile carries the organization display name, logo assets, and the organization color palette. It replaces Meridian's own name and mark on signed-in product surfaces, so staff experience the product as their organization's system rather than as Meridian.
+
+A department branding profile is deliberately narrower. It carries a department logo, one department accent color, and one department surface background color. It identifies department context inside the organization's palette; it does not redefine that palette.
+
+Branding profiles never carry meaning. Status, severity, priority, and restriction are communicated through canonical labels, iconography, and structure, and remain readable regardless of which branding profile is active.
+
+Branding is organization governance data, not event-scoped operational data.
+
+---
+
 # 4. User Roles
 
 ## 4.1 Staff
@@ -2408,6 +2422,28 @@ Alpha 1 Briefing slice:
 - empty shell / placeholder sections for AAR, Directions, Action Plan, and Notices
 - Orchid/admin and permission scaffolding for Notes
 - no full AAR submit/compile, Directions deep-link authoring, Action Plan banners, or Notices alerts in Alpha 1
+
+Organization and department branding:
+
+- organization branding profile with display name, full logo lockup, compact mark, platform palette, and neutral palette
+- organization identity replacing the Meridian name and mark on signed-in product surfaces, document titles, PDF exports, and system email
+- Meridian identity retained on login, node first-run setup, Orchid, and desktop chrome
+- department branding profile with logo, accent color, and surface background color
+- generated lettermark fallback for organizations and departments without a logo
+- server-side WCAG 2.1 AA contrast validation that rejects failing combinations rather than repairing them
+- organization-level switch to disable department branding overrides
+- branding sync to on-site nodes and permitted offline devices
+
+God Mode console:
+
+- Meridian orientation landing screen replacing the framework welcome content
+- attention list covering configuration readiness, organizational data gaps, and unresolved sync conflicts
+- in-console Documentation page served from a packaged `docs/operator/` tree
+- in-console Changelog page grouped by Meridian version, generated at build time and refreshed from the source repository only by the central node
+- removal of framework documentation links, framework changelog links, and framework version display
+- Meridian logo, compact mark, and favicon throughout the console and its authentication surfaces
+- console chrome resolved from the shared Meridian design tokens instead of framework defaults
+- footer stating the Meridian license, a 2026-to-present copyright range, and the Meridian build version
 
 ---
 
@@ -4166,6 +4202,262 @@ Note create, Briefing/AAR Note add (reference or link), AAR submit/publish, Dire
 
 ---
 
+## 7.20 Branding and Theming Requirements
+
+### BRAND-001
+
+Meridian shall support an organization branding profile defining an organization display name, organization logo assets, and an organization color palette.
+
+### BRAND-002
+
+The organization branding profile shall replace the Meridian display name and Meridian mark on signed-in product surfaces, including the application header and Home control, the browser/document title, generated PDF exports, and system-generated email.
+
+### BRAND-003
+
+Meridian identity shall remain on pre-authentication surfaces (login, magic-link landing, node first-run setup), the Orchid administrative interface, and desktop application chrome and installers. Organization branding shall not replace Meridian identity on those surfaces.
+
+### BRAND-004
+
+Organizations shall be able to upload, replace, and remove one current full logo lockup and one current compact mark. Meridian does not need to preserve previous logo assets after replacement or removal.
+
+### BRAND-005
+
+If an organization has no logo asset for a required form, Meridian shall render a generated lettermark using initials or letters from separate words in the organization display name.
+
+### BRAND-006
+
+Organizations shall define the four platform palette colors (primary, secondary, tertiary, accent) and the neutral set (canvas, surface, foreground, muted foreground, border, focus).
+
+### BRAND-007
+
+Action, status, severity, attention/priority, chart series, and department accent tokens shall continue to resolve through the organization platform palette. They shall not be independently settable.
+
+### BRAND-008
+
+The organization branding profile shall apply to every event, department, UI mode, and presentation profile in that organization, except where a department branding override applies.
+
+### BRAND-009
+
+Departments shall be able to define a department branding profile containing a department logo, one department accent color, and one department surface background color.
+
+### BRAND-010
+
+The department logo shall appear in the application header while the user is in that department's context, in the department identity badge, and on department-scoped surfaces. If the department has no logo, Meridian shall render a generated lettermark from the department name.
+
+### BRAND-011
+
+Departments shall not override foreground/text, border, focus/highlight, status, severity, attention/priority, or chart colors. Those values shall resolve from the organization palette.
+
+### BRAND-012
+
+A department surface background override shall apply only to department-scoped surfaces. It shall not apply to incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces.
+
+### BRAND-013
+
+Organizations shall be able to disable department branding overrides for the entire organization. When disabled, departments retain logo and accent identity only.
+
+### BRAND-014
+
+Meridian shall validate every submitted branding color combination server-side and shall reject any combination that fails WCAG 2.1 AA contrast for its intended use, requiring at least 4.5:1 for normal text, 3:1 for large text, and 3:1 for non-text user interface and graphical indicators.
+
+### BRAND-015
+
+A rejected branding submission shall identify the failing color pair, the measured contrast ratio, and the required ratio.
+
+### BRAND-016
+
+Meridian shall not silently adjust, auto-correct, or auto-derive submitted branding colors. Invalid combinations are rejected rather than repaired.
+
+### BRAND-017
+
+Branding shall never become the sole carrier of state or status meaning. Canonical status labels, iconography, and structural communication shall remain unchanged by any branding profile.
+
+### BRAND-018
+
+Branding administration surfaces shall present a preview of the resulting appearance and the contrast validation result before the change is saved.
+
+### BRAND-019
+
+Only organizers and Lead Organizers shall edit an organization branding profile. Department administration and department leads shall edit only their own department branding profile.
+
+### BRAND-020
+
+Branding profile create, update, and asset removal operations shall be audited.
+
+### BRAND-021
+
+Branding profiles are organization governance data. The central node shall be authoritative for branding, and branding edits shall be blocked during the active event window under the same governance edit rules that apply to policy and procedure documents.
+
+### BRAND-022
+
+Branding assets and palette values shall sync to on-site nodes and permitted offline devices, and shall render from cache when a device is offline.
+
+### BRAND-023
+
+Logo uploads shall be constrained by permitted MIME type and maximum file size, and shall be stored and served through the existing attachment path.
+
+### BRAND-024
+
+Typography customization shall not be part of this scope. Organizations and departments shall not select or upload fonts.
+
+---
+
+## 7.21 God Mode Console Requirements
+
+### GOD-001
+
+The God Mode console shall present Meridian's own identity, terminology, and content. It shall not present administrative framework branding, framework documentation, or framework release information as if it were Meridian's.
+
+### GOD-002
+
+The God Mode landing screen shall replace the framework welcome content with a Meridian orientation summary and an attention list.
+
+### GOD-003
+
+The orientation summary shall explain in brief bulleted form how Meridian works end to end, covering organizations and departments, events and the active event window, staff, teams, shifts and eligibility, operations, attendance and hours, policies and acknowledgments, incidents, and the central/on-site node model with its sync authority rules.
+
+### GOD-004
+
+The orientation summary shall state that God Mode is repair and break-glass tooling, and that normal organizer, department, and staff workflows belong in Meridian Admin.
+
+### GOD-005
+
+The God Mode landing screen shall surface items requiring attention in three groups: deployment and configuration readiness, organizational data gaps, and unresolved sync conflicts.
+
+### GOD-006
+
+Deployment and configuration readiness shall report node configuration completeness, node role and pairing state, presence of required secrets, secure connection policy status, and PowerSync connectivity.
+
+### GOD-007
+
+Organizational data gaps shall report organizations without departments, organizations without a configured Organizers Department, organizations and events without a resolvable Incident Command Department, organizations without an active Lead Organizer, and events without assigned departments.
+
+### GOD-008
+
+Unresolved sync conflicts shall report the outstanding conflict count and link to the conflict resolution screen.
+
+### GOD-009
+
+Every attention item shall link to the screen where it can be resolved.
+
+### GOD-010
+
+Attention items shall reflect current state at view time and shall not perform mutations as a side effect of being displayed.
+
+### GOD-011
+
+When no attention items exist, the landing screen shall state that explicitly rather than rendering an empty region.
+
+### GOD-012
+
+The God Mode console shall provide a Documentation page served from Meridian's own operator documentation, replacing the external framework documentation link.
+
+### GOD-013
+
+Operator documentation shall be maintained in the repository under `docs/operator/` and shall be written for node operators and God Mode users, covering deployment, node setup and pairing, configuration and config source resolution, data repair, sync conflict resolution, and break-glass procedures.
+
+### GOD-014
+
+The Documentation page shall render operator documentation from content packaged with the deployment. It shall not require network access and shall not fetch documentation from an external service.
+
+### GOD-015
+
+The Documentation page shall not serve the requirements document, technical specification, data/API specification, UI documentation, QA scripts, architecture decision records, development plan, traceability matrix, or issue documents.
+
+### GOD-016
+
+The Documentation page shall provide a document index, render Markdown headings, lists, tables, and fenced code, and allow filtering documents by title and heading.
+
+### GOD-017
+
+The Documentation page shall display the packaged operator documentation version alongside the running build version so an operator can tell whether the documentation matches the deployment.
+
+### GOD-018
+
+The God Mode console shall provide a Changelog page describing Meridian releases, replacing the external framework changelog link.
+
+### GOD-019
+
+Changelog entries shall be derived from merged pull requests, using pull request title, body, number, merge date, and author, and shall be grouped under the Meridian version number in which each change shipped.
+
+### GOD-020
+
+Every merged pull request shall appear in the Changelog. Changelog content shall not be filtered by conventional-commit type or change category.
+
+### GOD-021
+
+A release build step shall generate a changelog data file from repository history and package it with the deployment, so the Changelog page renders completely without network access.
+
+### GOD-022
+
+When the central node has network access and a configured source-repository credential, the Changelog page shall refresh from the source repository and merge newer entries into the packaged baseline.
+
+### GOD-023
+
+Changelog refresh shall never be required for the page to render. Absent network, missing credential, or failed refresh shall degrade to the packaged baseline and display the time of the last successful refresh.
+
+### GOD-024
+
+Only the central node shall perform changelog refresh. On-site nodes shall render the packaged baseline.
+
+### GOD-025
+
+Changelog refresh shall not block page rendering and shall not be performed during the active event window.
+
+### GOD-026
+
+Source-repository credentials used for changelog refresh shall be stored through the existing configuration mechanism, shall be read-only in scope, and shall not be displayed in the console or written to logs.
+
+### GOD-027
+
+Documentation and Changelog shall be console pages within Meridian, not external links, and shall not open an external browser context.
+
+### GOD-028
+
+Version information displayed in God Mode navigation shall be the Meridian build version, not the administrative framework version.
+
+### GOD-029
+
+The God Mode console shall present Meridian's visual identity rather than the default appearance of the administrative framework it is built on.
+
+### GOD-030
+
+The console shall display the Meridian logo in its navigation and authentication surfaces, including a compact mark form for the collapsed navigation state.
+
+### GOD-031
+
+The console shall serve the Meridian favicon.
+
+### GOD-032
+
+The console footer shall state the Meridian license, a copyright range of 2026 to present, and the Meridian build version. It shall not state the administrative framework's license, copyright range, or version.
+
+### GOD-033
+
+The console footer license statement shall match the license the repository is actually published under.
+
+### GOD-034
+
+The console shall resolve its surface, foreground, border, focus, and action colors, its typography scale, and its spacing from the shared Meridian design tokens rather than from framework defaults.
+
+### GOD-035
+
+The console shall use Meridian's own default palette and shall not adopt an organization branding profile, consistent with BRAND-003.
+
+### GOD-036
+
+Console restyling shall not reduce any text, control, or focus indicator below the contrast and visibility requirements in the accessibility checklist.
+
+### GOD-037
+
+Console restyling shall be applied through supported framework configuration and template extension points wherever those exist, so that framework upgrades remain possible without reapplying the visual identity by hand.
+
+### GOD-038
+
+Authentication, logout, and node first-run setup surfaces shall present the same Meridian visual identity as the console.
+
+---
+
 # 8. Deferred / Future Scope
 
 The following concepts are acknowledged but deferred beyond October MVP:
@@ -4250,6 +4542,21 @@ Future versions may support:
 - additional map-derived permissions and effective-permission-level role codes for the Placement department
 
 MVP only requires uploaded/imported maps, lightweight map metadata, camps with name and location, lightweight map locations, the Placement department designation, operations-window locking, optional IMS references, and offline sync to permitted devices.
+
+## Advanced Branding and Theming
+
+MVP branding is specified in section 7.20. Future versions may support:
+
+- typography customization, whether by curated font list or uploaded font files, including the licensing, file-size, offline-delivery, and rendering-fallback handling that requires
+- department override of the full color palette rather than accent and surface background only
+- event-level branding profiles distinct from the organization profile
+- per-UI-mode or per-presentation-profile branding variants
+- light and dark palette variants defined independently by the organization
+- automatic contrast repair or derived foreground selection, which MVP explicitly rejects in favor of blocking invalid combinations (BRAND-016)
+- branding preview against a live sample of real product surfaces rather than a representative preview
+- externally hosted or CDN-delivered branding assets
+
+MVP only requires the organization and department branding profiles, the Meridian identity replacement rules, generated lettermark fallbacks, blocking contrast validation, and branding sync to permitted nodes and devices.
 
 ## The Briefing Beyond Alpha 1
 
