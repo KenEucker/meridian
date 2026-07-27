@@ -3381,6 +3381,48 @@ Rules:
 - device-originated operations are signed by the device and countersigned by the accepting node
 - both signatures are retained in audit data
 
+Append-only means operations are never deleted and their content is never
+rewritten. Content is the normalized operation fields a signature covers
+(`uuid`, `origin_node_id`, `target_node_id`, `actor_user_id`,
+`actor_device_id`, `operation_type`, `entity_type`, `entity_id`, `event_id`,
+`created_at`) together with `payload_json`, `signature`, and `hash`. The
+delivery lifecycle columns (`sent_at`, `received_at`, `applied_at`, `status`,
+`failure_reason`, `retry_count`) do change on the same row as an operation is
+sent, received, applied, or retried, and are the only columns an update may
+touch.
+
+Other rules:
+
+- `uuid` is unique and is the idempotency key; receiving the same operation
+  more than once is safe because the receiver resolves it by `uuid` rather than
+  by local primary key (technical spec 10.1)
+- `created_at` is the origin node's creation time and travels with the
+  operation; there is no `updated_at`, so a received operation keeps the
+  originating timestamp rather than the receiving node's insert time
+- `entity_id` is an unconstrained UUID because it is polymorphic across every
+  synced entity type, matching `audit_events` (sections 4.1, 14.1)
+- foreign keys restrict on delete so sync history is not destroyed by removing
+  a node, user, device, or event
+
+Status values:
+
+```text
+pending
+sent
+received
+applied
+failed
+conflicted
+```
+
+- `pending` is created at the origin and not yet sent; on-site queues
+  operations in this state while there is no internet (technical spec 10.2)
+- `received` is stored by the receiver but not yet applied, because receivers
+  store remote operations before applying them (technical spec 10.1)
+- `failed` carries `failure_reason` and `retry_count`
+- `conflicted` could not be safely applied and belongs in the sync conflict
+  queue (section 14.2; technical spec 10.3)
+
 ### 13.4 `node_pairing_tokens`
 
 Represents the one-time pairing tokens a central node creates so an on-site or
