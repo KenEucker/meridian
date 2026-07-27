@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Node\EventAuthorityException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,4 +22,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // An event-scoped write refused because another node holds event
+        // authority is a conflict with the current state of the event, not a
+        // server fault and not an authorization failure: the same actor may make
+        // the same change on the authoritative node (technical spec 10.2).
+        $exceptions->render(function (EventAuthorityException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                    'reason_code' => $exception->reason,
+                    'event_id' => $exception->eventId,
+                    'authoritative_node_id' => $exception->authoritativeNodeId,
+                ], 409);
+            }
+
+            return response($exception->getMessage(), 409);
+        });
     })->create();
