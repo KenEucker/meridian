@@ -29,10 +29,13 @@ use DateTimeInterface;
  * the specification says on-site *may receive* updates before the event starts
  * and *should no longer* edit event records after it closes, neither of which
  * describes an edit central refuses, and turning either into a refusal would
- * block writes the rest of Alpha 1 currently depends on. Blocking
- * policy/procedure and fragment edits during the window is M12.7, and
- * disagreement between local and remote state is the conflict queue (M12.8,
- * M12.9).
+ * block writes the rest of Alpha 1 currently depends on. Disagreement between
+ * local and remote state is the conflict queue (M12.8, M12.9).
+ *
+ * The window is also read by {@see GovernanceWriteGuard}, which freezes
+ * policy/procedure and fragment edits while it is open (M12.7). That is a
+ * different rule reading the same clock: authority moves event-scoped writes to
+ * one node, whereas frozen governance content may not be edited on any node.
  *
  * Two conditions deliberately leave authority unenforced:
  *
@@ -105,6 +108,35 @@ class EventAuthority
         }
 
         return $this->onsitePrimaryNodeFor($event);
+    }
+
+    /**
+     * The organization's event whose active window is open right now, or null
+     * when the organization is not running an event.
+     *
+     * Governance content — policies, procedures, and fragments — is scoped to an
+     * organization, department, or team rather than to an event, so the question
+     * "is an event running?" has to be asked of the organization that owns the
+     * content. An install may host more than one organization, and another
+     * organization's event says nothing about this organization's documents.
+     *
+     * Candidates are narrowed in SQL only by what cannot make an event active at
+     * all; whether the window is open is decided by {@see isActive()}, so an
+     * event's phase has one definition rather than one here and one in a query.
+     */
+    public function activeEventForOrganization(?string $organizationId, ?DateTimeInterface $at = null): ?Event
+    {
+        if ($organizationId === null || $organizationId === '') {
+            return null;
+        }
+
+        return Event::query()
+            ->where('organization_id', $organizationId)
+            ->whereNotNull('active_event_window_starts_at')
+            ->whereNull('archived_at')
+            ->orderBy('active_event_window_starts_at')
+            ->get()
+            ->first(fn (Event $event): bool => $this->isActive($event, $at));
     }
 
     /**
