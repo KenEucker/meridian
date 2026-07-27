@@ -84,6 +84,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-STAFF-02-staff-me-and-event-info.md`](QA-STAFF-02-staff-me-and-event-info.md) | Staff Me role-aware event routing, the team-lead Team Overview handoff and its fail-closed behavior, Event Info assembled from visible published documents with explicit empty sections instead of placeholders, the combined Staff/Workflows shell menu, and the mobile-first staff page template for reader views | M11.20 |
 
+## Alpha 1 Node sync script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-SYNC-01-onsite-central-sync.md`](QA-SYNC-01-onsite-central-sync.md) | On-site/central pairing, signed append-only node operations, outage queueing, bidirectional sync drain, active-event authority, governance freeze, conflict queue/resolution, God-mode sync health, and Electron sync-health observation | M12.11 |
+
 M11.5 through M11.10 deliver the restricted IMS list/detail, timeline notes,
 Name Reference chips, online create/edit autosave, priority/types/responders,
 linked incidents, Field Report attach/unlink, attachment strike, and IC-lead
