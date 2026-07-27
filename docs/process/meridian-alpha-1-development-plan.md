@@ -521,6 +521,89 @@ This milestone is placed after IMS (Milestone 11), offline foundations (Mileston
 
 ---
 
+### Milestone 15A: Organization and Department Branding
+
+**Goal:** Let an organization present Meridian as its own system, and let departments carry visible identity, without weakening state legibility or accessibility.
+
+This milestone closes a gap between the UI documentation and the product: UI operating guide section 8.3 and the `DepartmentBadge` contract have always described department logos and accent colors, and `tokens.css` carries a `--m-department-accent` placeholder noting that per-department override "arrives with org model," but no requirement, schema, or component ever followed. Organization white-labeling is new scope added alongside it.
+
+**Primary source docs:** Requirements sections 3.1, 3.3, 3.42, 6.3, 7.20 (BRAND-001 through BRAND-024); Technical spec sections 15.2, 21, 22.1; data/API sections 10.1, 10.6; UI style guide sections 3 and 4; UI operating guide sections 6.3 and 8.3; UI implementation contract sections 10 and 11.3; component library specification sections 3 and 5.1; accessibility checklist section 6.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M15A.1 Branding contract reset | Amend the UI style guide, operating guide, implementation contract, component library specification, and accessibility checklist so a customizable organization palette and a bounded department surface override replace the fixed four-color platform palette and the accent-only department rule. Record that department background is permitted and that the system blocks rather than repairs failing contrast. | BRAND-006, BRAND-007, BRAND-009, BRAND-011, BRAND-016; UI style guide 4; operating guide 6.3, 8.3; UI contract 10, 11.3 | Doc/traceability checks |
+| M15A.2 Branding schema | Add organization and department branding columns and logo asset references, including the organization switch that disables department overrides. | BRAND-001, BRAND-004, BRAND-006, BRAND-009, BRAND-013; data/API 10.1, 10.6 | Schema/model tests |
+| M15A.3 Contrast validation service | Add a server-side WCAG 2.1 AA contrast validator enforcing 4.5:1 normal text, 3:1 large text, and 3:1 non-text indicators, rejecting failing submissions with the failing pair, measured ratio, and required ratio. No auto-correction. | BRAND-014, BRAND-015, BRAND-016 | Domain/validation tests including boundary ratios |
+| M15A.4 Token resolution | Resolve `@meridian/ui-tokens` and the server token stylesheet from the active organization palette at runtime, keeping action, status, severity, attention, and chart tokens derived rather than independently settable. | BRAND-006, BRAND-007; UI contract 10 | Token contract tests; client and server token parity tests |
+| M15A.5 Logo upload and lettermark | Add organization full-lockup, organization compact-mark, and department logo upload/replace/remove through the existing attachment path with MIME and size constraints, plus the generated lettermark fallback. | BRAND-004, BRAND-005, BRAND-010, BRAND-023 | Upload/policy/rendering tests |
+| M15A.6 Organization branding admin | Add the organizer/Lead Organizer branding surface with palette editing, logo management, live preview, and the contrast validation result shown before save. | BRAND-018, BRAND-019 | API/domain/policy/UI tests |
+| M15A.7 Department branding admin | Add the department administration/department lead branding surface limited to logo, accent, and surface background, disabled when the organization switch is off. | BRAND-009, BRAND-011, BRAND-013, BRAND-018, BRAND-019 | API/domain/policy/UI tests |
+| M15A.8 Meridian identity replacement | Replace the Meridian display name and mark with organization identity across the app header and Home control, document titles, generated PDF exports, and system email, while preserving Meridian identity on login, magic-link landing, node first-run setup, Orchid, and desktop chrome. | BRAND-002, BRAND-003 | Shell/title/export/mail tests; boundary tests asserting Meridian identity survives where required |
+| M15A.9 DepartmentBadge component | Build the long-specified `DepartmentBadge` with logo, icon, short label, lettermark fallback, small accent, sizes, and an accessible name including the department name. | BRAND-010; UI contract 11.3; component library 5.1 | Component/accessibility tests |
+| M15A.10 Department surface scoping | Apply the department surface background only to department-scoped surfaces, explicitly excluding incident/IMS surfaces, The Briefing, and organization-level or cross-department surfaces. | BRAND-012 | UI scoping tests asserting IMS and Briefing surfaces are unaffected |
+| M15A.11 Branding governance and audit | Enforce central-node authority for branding, block branding edits during the active event window under the existing governance edit-freeze rules, and audit branding create/update/asset-removal. | BRAND-020, BRAND-021 | Domain/audit/authority tests reusing the governance edit-freeze suite |
+| M15A.12 Branding sync and offline | Sync branding palettes and assets to on-site nodes and permitted offline devices, and render branding from cache when offline. | BRAND-022 | Sync/offline/cache tests |
+| M15A.13 State legibility guard | Verify that no branding profile can make canonical status, severity, priority, or restriction unreadable or color-only, including under a department background override. | BRAND-017; accessibility checklist 6 | Accessibility/contrast regression tests |
+| M15A.14 Branding QA script | Add `QA-BRAND-01-organization-and-department-branding.md`. | QA README | Human QA script |
+
+**QA gate:** A reviewer can upload an organization logo and palette, see the organization name and mark replace Meridian across the header, document title, a generated PDF, and a system email while login and Orchid still show Meridian, have a failing color combination rejected with the measured ratio rather than silently corrected, set a department logo, accent, and background and see them on department surfaces but not on IMS or Briefing surfaces, confirm a department with no logo renders a lettermark, disable department overrides organization-wide, confirm branding edits are blocked during the active event window, and confirm branding still renders on an offline device.
+
+---
+
+### Milestone 15B: God Mode Console Orientation, Documentation, and Changelog
+
+**Goal:** Make the God Mode console about Meridian rather than about the administrative framework it is built on, and give a God Mode user a landing screen that orients them and points at what needs their attention.
+
+The console currently ships stock framework content: `PlatformScreen` renders the vendor welcome partial and describes itself as an Orchid application, and the navigation links out to Orchid's own documentation and Orchid's release changelog badged with the framework version. None of it is about Meridian.
+
+**Primary source docs:** Requirements sections 6.3, 7.21 (GOD-001 through GOD-028); Technical spec sections 22.1 through 22.4, 25.3, 26.3; data/API configuration sections; development process release checklist.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M15B.1 Console spec alignment | Extend technical spec section 22 with the God Mode landing screen, operator documentation, and changelog behavior so the console has a specification beyond screen inventory. | GOD-001 through GOD-028; technical spec 22.1-22.4 | Doc/traceability checks |
+| M15B.2 Meridian landing screen | Replace the framework welcome partial and "Welcome to your Orchid application" description with the Meridian orientation summary, including the God-Mode-is-repair-tooling boundary statement. | GOD-001 through GOD-004 | Screen/content tests |
+| M15B.3 Configuration readiness checks | Add the deployment/configuration attention group covering node configuration completeness, node role and pairing state, required secrets, secure connection policy, and PowerSync connectivity. | GOD-005, GOD-006, GOD-009; technical spec 25.3, 26.2 | Domain/check tests including healthy and degraded states |
+| M15B.4 Organizational data gap checks | Add the data gap attention group covering missing departments, missing Organizers Department, unresolvable Incident Command Department, absent active Lead Organizer, and events without assigned departments. | GOD-005, GOD-007, GOD-009; ORG-002, ORG-005 through ORG-008 | Domain/check tests against seeded gap fixtures |
+| M15B.5 Conflict surfacing and clean state | Add the unresolved sync conflict group with a link to conflict resolution, guarantee checks are read-only, and render an explicit all-clear when nothing needs attention. | GOD-008 through GOD-011 | Domain/UI tests; a test asserting no writes occur on view |
+| M15B.6 Operator documentation tree | Add `docs/operator/` covering deployment, node setup and pairing, configuration and config source resolution, data repair, conflict resolution, and break-glass procedures, written for operators rather than as specification. | GOD-013 | Doc/process checks |
+| M15B.7 Documentation page | Add the in-console Documentation page rendering the packaged operator tree with an index, Markdown rendering, title/heading filtering, and documentation-versus-build version display. Serves only `docs/operator/`. | GOD-012, GOD-014 through GOD-017 | Rendering/packaging tests; a test asserting spec, QA, plan, and issue documents are not reachable |
+| M15B.8 Changelog generation | Add a release build step that generates a changelog data file from repository history, capturing pull request title, body, number, merge date, and author grouped by shipped version, and package it with the deployment. | GOD-019, GOD-021; versioning strategy | Generator unit tests; build smoke test |
+| M15B.9 Changelog page | Add the in-console Changelog page rendering the packaged data grouped by Meridian version with no change-type filtering. | GOD-018 through GOD-021 | Rendering tests; offline rendering test |
+| M15B.10 Changelog refresh | Add central-node-only refresh that merges newer source-repository entries into the packaged baseline, degrades to the baseline on missing network, missing credential, or failure, shows last successful refresh time, is skipped during the active event window, and never blocks rendering. | GOD-022 through GOD-026 | Refresh/degradation/authority tests; credential redaction test |
+| M15B.11 Framework link and version cleanup | Remove the external Orchid documentation and changelog menu entries and the framework version badge, replacing them with the internal pages and the Meridian build version. | GOD-027, GOD-028; technical spec 26.3 | Navigation tests asserting no external framework links remain |
+| M15B.12 Console QA script | Add `QA-GOD-01-console-orientation-docs-changelog.md`. | QA README | Human QA script |
+
+**QA gate:** A reviewer can open God Mode and read a Meridian orientation summary instead of framework welcome content, see attention items for a misconfigured node, an organization missing its Organizers Department, and an outstanding sync conflict, follow each item to the screen that resolves it, watch the list report all-clear once resolved, read operator documentation in-console with no network access and confirm specification and planning documents are not reachable there, read a version-grouped changelog on an offline on-site node, and confirm no menu entry links to Orchid documentation, Orchid's changelog, or the framework version.
+
+---
+
+### Milestone 15C: God Mode Console Visual Identity
+
+**Goal:** Make the God Mode console look like Meridian rather than like a default administrative framework installation.
+
+Milestone 15B makes the console's *content* about Meridian. This milestone makes its *appearance* about Meridian. The two are separable and can land independently.
+
+`PlatformProvider` already registers `css/meridian-tokens.css` as a dashboard stylesheet, so the shared tokens are loaded into the console today but nothing in the framework chrome consumes them. The `resource.stylesheets`, `template.header`, and `template.footer` configuration hooks in `config/platform.php` are all still empty. The current footer also states the MIT license, which is the framework's license and not Meridian's; the repository is published under AGPL-3.0-or-later.
+
+**Primary source docs:** Requirements section 7.21 (GOD-029 through GOD-038); UI style guide sections 3, 4, and 5; UI implementation contract section 10; component library specification section 3; accessibility checklist section 6; technical spec sections 22.1, 26.3.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M15C.1 Token bridge | Map the shared Meridian design tokens onto the framework's own CSS custom properties and component styles so console surface, foreground, border, focus, and action colors resolve from `@meridian/ui-tokens` instead of framework defaults. | GOD-029, GOD-034; UI contract 10 | Token/style tests; visual regression baseline |
+| M15C.2 Typography and spacing | Apply the Meridian typography scale and spacing scale to console chrome, tables, forms, and screen layouts. | GOD-034; style guide 5 | Style tests |
+| M15C.3 Console logo | Serve the Meridian logo in console navigation and provide the compact mark for the collapsed navigation state, wired through the framework's supported template hooks. | GOD-030, GOD-037 | Rendering tests at both navigation states |
+| M15C.4 Favicon | Serve the Meridian favicon across console, authentication, and setup surfaces. | GOD-031 | Rendering test |
+| M15C.5 Footer replacement | Replace the framework footer with a Meridian footer stating the repository's actual license, a 2026-to-present copyright range, and the Meridian build version resolved from `config('meridian.version')`. Remove the framework license, copyright range, and version string. | GOD-032, GOD-033, GOD-028 | Content tests asserting the license matches the repository license and no framework version appears |
+| M15C.6 Auth and setup surfaces | Bring login, magic-link, logout, and node first-run setup surfaces onto the same visual identity as the console. | GOD-038 | Rendering tests across each surface |
+| M15C.7 Meridian palette isolation | Ensure the console renders in Meridian's default palette and never resolves an organization branding profile. | GOD-035; BRAND-003 | Test asserting console appearance is unchanged with a branded organization active |
+| M15C.8 Upgrade safety | Confine restyling to supported configuration and template extension points, and document any place a vendor view had to be overridden along with why. | GOD-037 | Documented override inventory; process check |
+| M15C.9 Accessibility verification | Verify the restyle holds contrast and focus visibility across console screens, including tables, forms, badges, and disabled states. | GOD-036; accessibility checklist 6 | Contrast/focus regression tests |
+| M15C.10 Console identity QA script | Add `QA-GOD-02-console-visual-identity.md`. | QA README | Human QA script |
+
+**QA gate:** A reviewer can open the God Mode console and see Meridian's logo, favicon, palette, typography, and spacing rather than default framework styling, see a footer stating Meridian's actual license, a 2026-to-present copyright range, and the Meridian build version with no framework license or version anywhere, see the collapsed navigation render the compact mark, confirm login and node setup match the console, confirm an organization branding profile does not change console appearance, and confirm contrast and focus visibility hold across console screens.
+
+---
+
 ### Milestone 16: Packaging, Event-Mode Safeguards, and Release Candidate QA
 
 **Goal:** Produce versioned Alpha 1 builds and verify release readiness.
@@ -557,7 +640,10 @@ QA should run in this order:
 10. Export/reporting QA.
 11. Event geography and maps QA.
 12. The Briefing Notes + add-to-Briefing + hub shells QA.
-13. Release candidate QA.
+13. Organization and department branding QA.
+14. God Mode console orientation, documentation, and changelog QA.
+15. God Mode console visual identity QA.
+16. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 
@@ -606,5 +692,10 @@ The following are acknowledged only as exclusions because the source documents d
 - Live GPS tracking, turn-by-turn routing, and real-time personnel icons.
 - Multiple Placement departments per event.
 - Equipment map-location fields (equipment location is not yet modeled).
+- Typography/font customization for organizations and departments, by curated list or upload.
+- Department override of the full color palette beyond accent and surface background.
+- Event-level, per-UI-mode, and per-presentation-profile branding variants.
+- Independent organization-defined light and dark palette variants.
+- Automatic contrast repair or derived foreground selection for branding colors.
 
 Any PR adding these behaviors must first update the relevant source documents through the normal change-control process.
