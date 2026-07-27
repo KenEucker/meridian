@@ -3455,6 +3455,64 @@ node's configured timezone.
   cryptographically valid operation is then accepted, including node and device
   revocation and event authority, is decided by the receive/apply path
 
+Receive, store, and apply:
+
+Receivers store remote operations before applying them (technical spec 10.1), so
+storing and applying are separate steps with separate transactions. An operation
+is committed as `received` first, and only then is application attempted. An
+application that throws, or a node that loses power mid-apply, therefore leaves
+the operation in the log to be applied later rather than losing it.
+
+What travels between nodes is the normalized operation fields, `signature`,
+`hash`, and `payload_json`. The delivery lifecycle columns do not travel: each
+node tracks an operation's progress on its own row, so a receiver sets
+`received_at` and leaves `sent_at` unset rather than copying a delivery attempt
+it did not make. `created_at` does travel, because it is the origin node's
+creation time and is covered by the signature.
+
+Refusal and failure are different outcomes:
+
+- a refused operation is never written to `node_operations`. Refusals are
+  malformed envelopes, a `target_node_id` naming another node, an unknown or
+  revoked origin node, an unknown acting user, an unknown or revoked acting
+  device, a node signature that does not verify, and a `uuid` already held by an
+  operation with different content. Because a refused operation leaves no row
+  behind to record itself, refusals past envelope parsing are audited as
+  `node_operation.rejected` with a stable reason code (section 14.1); the
+  refused operation's own scope is recorded in `after_json` rather than in the
+  audit event's scope columns, since a refused operation may name an event,
+  node, or device this install does not have
+- a failed operation was accepted and stored. It is marked `failed` with a
+  `failure_reason` and an incremented `retry_count`, stays available for retry,
+  and does not stop the rest of a sync run, because failed sync actions remain
+  recoverable (technical spec 9.2) and unapplied operations must not block
+  unrelated sync (technical spec 10.3)
+
+Idempotency rests on `uuid`:
+
+- a redelivery resolves to the stored operation, is not stored twice, and is not
+  applied twice; an operation already carrying `applied_at` is not re-applied
+- redelivery is resolved before the acceptance checks run, so an operation this
+  node already accepted is not re-decided against node or device state that
+  changed after it was accepted
+- the same `uuid` arriving with different content is a replay rather than a
+  redelivery and is refused; the stored operation is append-only and remains
+  authoritative
+- concurrent delivery of the same operation is resolved by the unique index on
+  `uuid`, and the losing insert resolves to the stored winner instead of
+  duplicating it
+- an application is committed together with the row's `applied` mark, so there
+  is no state in which local entity data changed but the operation still looks
+  unapplied. Appliers must still be idempotent, because a retry after a failure
+  runs against an entity a previous attempt may have partially reached
+
+Applying an operation is per-entity behavior owned by the task that owns that
+entity's sync, so the receive path dispatches on `entity_type` and
+`operation_type` to a registered applier. An operation no applier claims is not
+refused: it was authentic enough to store, so it is kept and marked `failed`
+with a readable reason, and a node that receives an operation for an entity type
+it does not yet understand can apply it after an upgrade.
+
 ### 13.4 `node_pairing_tokens`
 
 Represents the one-time pairing tokens a central node creates so an on-site or
