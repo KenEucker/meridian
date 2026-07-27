@@ -3423,6 +3423,38 @@ conflicted
 - `conflicted` could not be safely applied and belongs in the sync conflict
   queue (section 14.2; technical spec 10.3)
 
+Signature canonicalization:
+
+Two nodes that do not share a code path must agree byte for byte on what a
+signature covers, so the signed message is canonical rather than incidental. The
+canonical payload is the format marker `meridian.node-operation.v1`, a newline,
+and the normalized operation fields encoded as a JSON object in the field order
+listed above, with unescaped slashes and unicode and null values preserved.
+`created_at` is rendered as ISO-8601 UTC so the payload does not shift with a
+node's configured timezone.
+
+- `hash` is the SHA-256 hex digest of that canonical payload. A receiver
+  recomputes it instead of trusting the value it was handed, so a rewritten
+  normalized field is detected before any signature check runs
+- `signature` is the base64 detached signature over the same canonical payload.
+  The signing algorithm is derived from the signer's key material rather than
+  stored in the column: Ed25519 for base64 sodium keys and RSA over SHA-256 for
+  PEM keys, matching the key formats node setup generates (technical spec 7.3)
+- `payload_json`, `signature`, `hash`, and the delivery lifecycle columns are
+  not part of the signed message, because they either carry the signature itself
+  or change after the origin node signs
+- signing happens before the operation row is inserted, because `signature` and
+  `hash` are append-only content
+- for a device-originated operation, `signature` holds the accepting node's
+  countersignature over the same canonical payload the device signed; the
+  device signature is retained in `audit_events.signature_metadata_json`
+  (section 14.1), which is where both signatures are kept
+- verification fails closed: a blank signature, a hash mismatch, missing or
+  unusable key material, an unknown origin node, or a signature made by another
+  node is refused rather than treated as unverified-but-acceptable. Whether a
+  cryptographically valid operation is then accepted, including node and device
+  revocation and event authority, is decided by the receive/apply path
+
 ### 13.4 `node_pairing_tokens`
 
 Represents the one-time pairing tokens a central node creates so an on-site or

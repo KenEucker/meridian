@@ -3,6 +3,9 @@
 namespace Database\Factories;
 
 use App\Models\Node;
+use App\Models\NodeConfigValue;
+use App\Services\Node\NodeKeyPairGenerator;
+use App\Services\Node\NodeKeyProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -63,5 +66,33 @@ class NodeFactory extends Factory
         return $this->state(fn (): array => [
             'node_role' => Node::ROLE_ONSITE,
         ]);
+    }
+
+    /**
+     * A node that can actually sign node operations: the stored public key
+     * belongs to a real keypair, and the matching private key is recorded as
+     * the node's `node_private_key` config value the way first-run setup
+     * records it (technical spec 7.3, 10.4).
+     *
+     * Pass explicit key material to exercise a specific algorithm; the default
+     * is whatever {@see NodeKeyPairGenerator} produces on this runtime.
+     *
+     * @param  array{public_key: string, private_key: string}|null  $keys
+     */
+    public function signing(?array $keys = null): static
+    {
+        $keys ??= app(NodeKeyPairGenerator::class)->generate();
+
+        return $this
+            ->state(fn (): array => ['public_key' => $keys['public_key']])
+            ->afterCreating(function (Node $node) use ($keys): void {
+                $node->configValues()->updateOrCreate(
+                    ['key' => NodeKeyProvider::CONFIG_PRIVATE_KEY],
+                    [
+                        'value_json' => $keys['private_key'],
+                        'source' => NodeConfigValue::SOURCE_DATABASE,
+                    ],
+                );
+            });
     }
 }
