@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 
-import ContentGrid from "@/components/ContentGrid.vue";
+import HeroCenterLayout from "@/components/HeroCenterLayout.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import {
   LOCAL_DEPARTMENT_OPS_CONTEXT,
@@ -53,24 +53,42 @@ const operationsWindowLabel = computed(() => {
     heading-id="event-info-heading"
     eyebrow="Event info"
     :title="eventInfo.eventLabel"
-    :lede="`${eventInfo.departmentLabel} / ${operationsWindowLabel}`"
-    :context="`${eventInfo.documentCount} published documents visible to you`"
   >
-    <template #under-title>
-      <p class="event-info__source" role="note">
-        Every section below is the published policy and procedure content you are
-        permitted to see. Sections without a published document say so instead of
-        standing in for one.
-      </p>
-    </template>
-
     <!--
-      Sections tile rather than stack: six answers a staff member wants before
-      arriving should be one screen on a laptop or a wall display, not six
-      scrolls. Heights differ a lot between a filled and an empty section, so
-      rows are not stretched to match.
+      The six sections all answer one question, so the summary they belong to
+      sits among them rather than above them once there is room for a card
+      column either side of it.
     -->
-    <ContentGrid min="wide" :stretch="false">
+    <HeroCenterLayout label="Event information" :hero-rows="3">
+      <template #hero>
+        <article class="event-info__hero">
+          <h2>At a glance</h2>
+          <dl>
+            <div>
+              <dt>Department</dt>
+              <dd>{{ eventInfo.departmentLabel }}</dd>
+            </div>
+            <div>
+              <dt>Operations</dt>
+              <dd>{{ operationsWindowLabel }}</dd>
+            </div>
+            <div>
+              <dt>Organization</dt>
+              <dd>{{ eventInfo.organizationLabel }}</dd>
+            </div>
+            <div>
+              <dt>Published documents</dt>
+              <dd>{{ eventInfo.documentCount }} visible to you</dd>
+            </div>
+          </dl>
+          <p class="event-info__source" role="note">
+            Every section here is the published policy and procedure content you
+            are permitted to see. Sections without a published document say so
+            instead of standing in for one.
+          </p>
+        </article>
+      </template>
+
       <article
         v-for="section in eventInfo.sections"
         :key="section.section"
@@ -80,11 +98,7 @@ const operationsWindowLabel = computed(() => {
       >
         <h2>{{ section.label }}</h2>
 
-        <p
-          v-if="section.emptyDescription"
-          class="event-info__empty"
-          role="status"
-        >
+        <p v-if="section.emptyDescription" class="event-info__empty" role="status">
           {{ section.emptyDescription }}
         </p>
 
@@ -105,13 +119,50 @@ const operationsWindowLabel = computed(() => {
           </p>
         </section>
       </article>
-    </ContentGrid>
+    </HeroCenterLayout>
   </StaffPageShell>
 </template>
 
 <style scoped>
+.event-info__hero {
+  display: grid;
+  align-content: start;
+  gap: var(--m-space-3);
+  min-width: 0;
+  padding: var(--m-pad-block) var(--m-pad-inline);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  box-shadow: var(--m-shadow-sm);
+}
+
+.event-info__hero h2 {
+  margin: 0;
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-base);
+}
+
+.event-info__hero dl {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: 0;
+}
+
+.event-info__hero dt {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.event-info__hero dd {
+  margin: var(--m-space-1) 0 0;
+  color: var(--m-text-primary);
+  overflow-wrap: anywhere;
+}
+
 .event-info__source {
-  margin: var(--m-space-2) 0 0;
+  margin: 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
 }

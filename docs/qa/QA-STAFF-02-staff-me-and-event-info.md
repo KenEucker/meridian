@@ -57,6 +57,8 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 13. On a phone or a 375px-wide viewport, sign in as the staff member with no lead authority and open the shell menu, then Documents, Shifts, Trainings, My Field Reports, and Event Info in turn.
 14. Repeat step 13 as the department lead, comparing the same Documents, Shifts, and Trainings pages.
 15. Widen the same pages through 1366px, 1920px, and 2560px, and to 3840px if a 4K display or browser emulation is available. Watch the column count on Event Info, Documents, Shifts, Trainings, and Home.
+16. At 1600px, confirm Event Info places the At a glance summary in the middle column with section cards either side of it, then narrow below 1500px and confirm it returns to a normal tile grid with the summary first.
+17. Open the shell user menu and note the icon and dot colour against the connection state.
 
 ## Expected results
 
@@ -75,6 +77,8 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - The same Documents, Shifts, and Trainings pages render for the department lead as the wide workflow shell with the management table and its create/edit actions intact.
 - As the window widens, card lists and Event Info sections gain columns rather than staying one column with empty space beside them, and Home tiles its sections side by side from roughly 1440px. Paragraphs stop at the reading measure even when the container is far wider.
 - Text and controls grow at 2560px and again at 3840px, and stay at desktop size at 1920px and below.
+- Event Info centres its summary with cards around it above 1500px and reverts to a summary-first tile grid below it. The summary content is not duplicated in the page heading.
+- The user icon and the dropdown dot show the same four-step node connection scale at full strength: gray unknown, red failing, orange degraded, green connected. The canonical connectivity label is always present as text or accessible name, so the state never depends on colour.
 
 ## Evidence to capture
 
@@ -99,4 +103,5 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - If a reader page scrolls sideways at 375px, or renders the lead table with columns hidden, file an issue against UI contract section 11.5A.
 - If a page stays one column as the window widens, or keeps a fixed maximum width with empty space beside it, file an issue against UI contract section 11.5B.
 - If a paragraph runs the full width of a large display rather than stopping at the reading measure, file an issue against UI contract section 10.2.
+- If the connection indicator colours look washed toward gray, or a state is distinguishable only by colour, file an issue against UI contract section 16.1A.
 - If a lead loses the management table, its create/edit actions, or the wide shell on Documents, Shifts, or Trainings, stop testing and file a regression: the reader template must never replace a lead workspace.

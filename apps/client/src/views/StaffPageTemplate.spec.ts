@@ -125,18 +125,20 @@ describe("staff page template", () => {
     expect(manager.text()).toContain("New training");
   });
 
-  it("tiles Event Info sections rather than stacking them", async () => {
+  it("surrounds the Event Info summary with its section cards", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     const wrapper = await mountAt(
       EventInfoView,
       `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
     );
 
-    const grid = wrapper.get(".content-grid");
-    expect(grid.classes()).toContain("content-grid--wide");
-    // Sections differ a lot in height, so rows are not stretched to match.
-    expect(grid.classes()).toContain("content-grid--start");
-    expect(grid.findAll(".event-info__section").length).toBe(6);
+    const layout = wrapper.get(".hero-center");
+    // The summary is a peer of the cards, not a header above them, so it can
+    // take the middle column once there is room either side of it.
+    expect(layout.get(".hero-center__hero .event-info__hero").text()).toContain(
+      "At a glance",
+    );
+    expect(layout.findAll(".event-info__section").length).toBe(6);
   });
 
   it("tiles reader lists on the department staff surfaces", async () => {

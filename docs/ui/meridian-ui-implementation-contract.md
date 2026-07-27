@@ -83,6 +83,7 @@ All authenticated Meridian product screens must follow these rules:
 18. Nothing spans the full width by default. Full width is a decision; declare which element grows and let the rest size to their content.
 19. Take page padding and band gaps from the density tokens in 10.2 rather than fixed spacing values.
 20. Before adding a layout rule for wide screens, measure the page height before and after. If it grew, the rule is wrong.
+21. Administration panels that edit identity fields open read-only with an explicit Edit control. Landing mid-form is not a default; Cancel discards the draft and returns to the read-out.
 
 ---
 
@@ -863,6 +864,41 @@ Pair blocks only when they are peers of similar weight:
 Primary content keeps the width it needs. The document library's policy table
 stays full width beside nothing, because it is the point of that section.
 
+Two applications worth copying:
+
+- **Editing beside its record.** The incident edit form becomes two panel
+  columns past ~1500px, and past 120rem the timeline moves alongside it, so
+  changing a field and reading what it recorded stay on one screen. A wrapper
+  that only groups panels for narrow layouts uses `display: contents` at the
+  wide breakpoint, so its children join the outer grid instead of forming a
+  nested block on a different rhythm.
+- **A chart beside the detail it drives.** Planning pairs the shift chart with
+  the shift detail, because picking a bar to read its staffing should not push
+  the answer below the fold.
+
+### 11.5F HeroCenterLayout
+
+Purpose: hold a summary block in the middle of the page with its peer cards
+around it.
+
+Use it where every card answers the same question the summary frames — Event
+Info's six sections all answer "what do I need to know before I arrive". A plain
+grid puts the summary on top and pushes the reader down through the answers;
+centring it makes the relationship visible and keeps the summary on screen while
+the cards are read.
+
+Rules:
+
+- one column on a phone with the hero first, because a centre cell means nothing
+  in a single column;
+- a normal tile grid in between, hero as the first tile;
+- three columns past ~1500px, hero in the middle spanning rows, cards flowing
+  around it with `grid-auto-flow: row dense` so the layout does not depend on
+  the card count;
+- the hero is a peer of the cards, not the page header. Pages using it keep
+  their `h1` in the page shell and put the summary content in the hero, so
+  nothing is duplicated between them.
+
 ### 11.6 MetricCard
 
 Purpose: Show a meaningful operational metric.
@@ -1107,8 +1143,11 @@ Shifts have exactly one team. Department Overview and Planning Table are
 department-scoped by default; optional team or date filters may narrow the view
 without changing authorization.
 
-The Admin page is permission-shaped. Department leads see editable department
-details and team create/manage actions. Team leads see only the teams they lead
+The Admin page is permission-shaped. Department leads see department details and
+team create/manage actions. Department details open read-only behind an Edit
+control, matching the team details panel beside them: these are
+organization-visible identity fields, so editing them is a deliberate act rather
+than the state the page opens in. Team leads see only the teams they lead
 and the staff assigned to those teams. Staff with both department-lead and
 team-lead authority see both sections. Staff without either authority do not see
 Admin in the workflow menu and direct access fails closed.
@@ -1562,6 +1601,36 @@ Use these UI states consistently:
 | Queued | Local actions are waiting to sync |
 | Sync conflict | Conflict needs handling |
 | Sync failed | Sync failed and may require action |
+
+### 16.1A Node Connection Scale
+
+The seven states in 16.1 are what the UI *says*. This is what it *shows*: a
+four-step scale of notice on the shell's user button and on the dot in the user
+dropdown, both of which report the same thing — how the device is doing against
+the node it syncs with.
+
+Worst to best:
+
+| Step | Colour token | Covers |
+|---|---|---|
+| Unknown | `--m-text-muted` | State not yet determined. Startup only. |
+| Failing | `--m-status-danger` | Sync conflict; Sync failed; no node reachable |
+| Degraded | `--m-status-warning` | Offline but usable; Local node reachable; Central unreachable; Queued |
+| Connected | `--m-status-success` | Online |
+
+Rules:
+
+- these are the only four steps; do not add a fifth or re-map a state without
+  changing this table;
+- render the colours at full strength. Do not blend them toward
+  `--m-text-muted`: a scale mixed into the surrounding gray stops being a scale;
+- colour never carries the state on its own. Every indicator also exposes the
+  canonical 16.1 label as text or accessible name, per the accessibility
+  checklist;
+- Unknown is startup only, and is reachable only once a connection signal exists
+  that has an indeterminate period. The current device-network signal resolves
+  synchronously, so today Unknown is defined and testable but not reached at
+  runtime. Do not manufacture a gray flash to make it visible.
 
 ### 16.2 Offline UI Rules
 

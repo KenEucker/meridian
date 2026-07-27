@@ -82,6 +82,12 @@ const detailsDraft = reactive({
 });
 const detailsError = ref<string | null>(null);
 const detailsBusy = ref(false);
+/**
+ * Department details open read-only, like the team details panel beside them.
+ * Editing organization-visible identity fields is a deliberate act, not
+ * something to land in mid-form by opening the Admin page.
+ */
+const detailsEditing = ref(false);
 const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -98,6 +104,7 @@ watch(
     detailsDraft.name = value.name;
     detailsDraft.code = value.code;
     detailsDraft.description = value.description ?? "";
+    detailsEditing.value = false;
   },
   { immediate: true },
 );
@@ -130,6 +137,7 @@ async function onSaveDetails(): Promise<void> {
 
   try {
     updateDepartmentDetails(session.value, { ...detailsDraft });
+    detailsEditing.value = false;
   } catch (error) {
     detailsError.value =
       error instanceof Error
@@ -138,6 +146,26 @@ async function onSaveDetails(): Promise<void> {
   } finally {
     detailsBusy.value = false;
   }
+}
+
+function onEditDetails(): void {
+  detailsError.value = null;
+  detailsEditing.value = true;
+}
+
+function onCancelDetailsEdit(): void {
+  const current = administeredDepartment.value;
+
+  detailsError.value = null;
+  detailsEditing.value = false;
+
+  if (current === null) {
+    return;
+  }
+
+  detailsDraft.name = current.name;
+  detailsDraft.code = current.code;
+  detailsDraft.description = current.description ?? "";
 }
 
 async function archiveTeam(team: DepartmentTeam): Promise<void> {
@@ -283,17 +311,50 @@ function teamCreateRoute() {
           class="dept-teams__details"
           aria-labelledby="dept-details-heading"
         >
-          <h2 id="dept-details-heading" class="dept-teams__subheading">
-            Department details
-          </h2>
-          <p class="dept-teams__hint">
-            Update permitted department identity fields. Organization create and
-            archive remain with organizers.
-          </p>
+          <div class="dept-teams__panel-heading">
+            <div>
+              <h2 id="dept-details-heading" class="dept-teams__subheading">
+                Department details
+              </h2>
+              <p class="dept-teams__hint">
+                {{
+                  detailsEditing
+                    ? "Update permitted department identity fields. Organization create and archive remain with organizers."
+                    : "Permitted department identity fields. Organization create and archive remain with organizers."
+                }}
+              </p>
+            </div>
+            <button
+              v-if="!detailsEditing"
+              class="dept-teams__edit"
+              type="button"
+              @click="onEditDetails"
+            >
+              Edit details
+            </button>
+          </div>
           <p v-if="detailsError" class="dept-teams__error" role="alert">
             {{ detailsError }}
           </p>
-          <form class="dept-teams__form" @submit.prevent="onSaveDetails">
+
+          <dl v-if="!detailsEditing" class="dept-teams__readout">
+            <div>
+              <dt>Name</dt>
+              <dd>{{ administeredDepartment?.name ?? "Not set" }}</dd>
+            </div>
+            <div>
+              <dt>Code</dt>
+              <dd>{{ administeredDepartment?.code ?? "Not set" }}</dd>
+            </div>
+            <div>
+              <dt>Description</dt>
+              <dd>
+                {{ administeredDepartment?.description ?? "No description set." }}
+              </dd>
+            </div>
+          </dl>
+
+          <form v-else class="dept-teams__form" @submit.prevent="onSaveDetails">
             <label class="dept-teams__field">
               Name
               <input v-model="detailsDraft.name" type="text" required />
@@ -306,13 +367,16 @@ function teamCreateRoute() {
               Description
               <textarea v-model="detailsDraft.description" rows="3" />
             </label>
-            <button
-              class="dept-teams__save"
-              type="submit"
-              :disabled="detailsBusy"
-            >
-              Save department details
-            </button>
+            <div class="dept-teams__form-actions">
+              <button
+                class="dept-teams__save"
+                type="submit"
+                :disabled="detailsBusy"
+              >
+                Save department details
+              </button>
+              <button type="button" @click="onCancelDetailsEdit">Cancel</button>
+            </div>
           </form>
         </section>
 
@@ -593,6 +657,64 @@ function teamCreateRoute() {
   margin: 0;
   font-family: var(--m-font-heading);
   font-size: var(--m-text-lg);
+}
+
+.dept-teams__panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+}
+
+.dept-teams__edit,
+.dept-teams__form-actions button[type="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 0 var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dept-teams__edit:focus-visible,
+.dept-teams__form-actions button:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.dept-teams__readout {
+  display: grid;
+  gap: var(--m-space-3);
+  margin: 0;
+}
+
+.dept-teams__readout dt {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dept-teams__readout dd {
+  margin: var(--m-space-1) 0 0;
+  color: var(--m-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.dept-teams__form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
 }
 
 .dept-teams__save {

@@ -61,7 +61,7 @@ describe("AppShell offline/sync display", () => {
       wrapper
         .get(".app-shell__user-button")
         .attributes("data-connection-status"),
-    ).toBe("offline");
+    ).toBe("degraded");
   });
 
   it("reveals the banner when the device goes offline after mount", async () => {
@@ -79,6 +79,37 @@ describe("AppShell offline/sync display", () => {
     expect(wrapper.get(".offline-banner").attributes("data-state")).toBe(
       "offline_usable",
     );
+  });
+
+  it("shows the node connection scale at full strength", async () => {
+    // Contract 16.1A: four steps, worst to best, colour never alone.
+    setDeviceOnLine(true);
+    const online = mount(AppShell, { global: { stubs: routerLinkStub } });
+    expect(
+      online.get(".app-shell__user-button").attributes("data-connection-status"),
+    ).toBe("connected");
+    expect(
+      online.get(".app-shell__user-button").attributes("aria-label"),
+    ).toContain("Connected and fully capable");
+
+    setDeviceOnLine(false);
+    const degraded = mount(AppShell, { global: { stubs: routerLinkStub } });
+    expect(
+      degraded
+        .get(".app-shell__user-button")
+        .attributes("data-connection-status"),
+    ).toBe("degraded");
+    // The step is a scale of notice; the canonical 16.1 label still carries the
+    // state as text.
+    await degraded.get(".app-shell__user-button").trigger("click");
+    expect(degraded.get(".app-shell__connection-note").text()).toContain(
+      "Node connection degraded",
+    );
+    expect(
+      degraded
+        .get(".app-shell__connection-note")
+        .attributes("data-connection-status"),
+    ).toBe("degraded");
   });
 
   it("drains Field Report and attendance outboxes when online", () => {
