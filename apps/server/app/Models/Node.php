@@ -93,6 +93,22 @@ class Node extends Model
     }
 
     /**
+     * Sync operations this node created (data/API 13.3).
+     */
+    public function originatedOperations(): HasMany
+    {
+        return $this->hasMany(NodeOperation::class, 'origin_node_id');
+    }
+
+    /**
+     * Sync operations addressed to this node (data/API 13.3).
+     */
+    public function targetedOperations(): HasMany
+    {
+        return $this->hasMany(NodeOperation::class, 'target_node_id');
+    }
+
+    /**
      * @param  Builder<Node>  $query
      * @return Builder<Node>
      */
