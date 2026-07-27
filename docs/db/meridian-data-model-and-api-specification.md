@@ -3533,6 +3533,37 @@ Nothing is applied from `payload_json`:
   `uuid` conflict rather than absorbed quietly, because it has been changed in
   transit; the stored copy stands either way, since operations are append-only
 
+Creating and queueing:
+
+An operation created on this node is signed before it is inserted, because
+`signature` and `hash` are append-only content, and is stored `pending`. Pending
+is the queue: on-site queues operations in that state while there is no internet
+and pushes them later (technical spec 10.2), so nothing about creating an
+operation depends on the peer being reachable. `uuid` is minted at the origin,
+which is what lets the same operation be recognized as itself on every node that
+ever sees it.
+
+Delivery state on the sending side:
+
+- `pending` becomes `sent` only when the peer has confirmed it holds the
+  operation, not when it was put on the wire. A response lost in flight would
+  otherwise drop an operation nobody would resend, and redelivering an operation
+  the peer already holds is safe, so erring towards resending is the cheap
+  mistake
+- an operation the peer refuses becomes `failed` with the peer's reason code and
+  an incremented `retry_count`. It leaves the queue rather than being offered on
+  every run forever, stays in the log, and can be retried deliberately once the
+  reason is fixed
+- only operations that originated on this node are offered to a peer. Operations
+  received from a peer are stored, applied, and left alone, which is what keeps
+  two nodes from bouncing the same operation back and forth
+- an operation with a `target_node_id` is offered only to the node it names; an
+  unaddressed operation goes to whichever peer this node syncs with
+- Alpha 1 has exactly one central node and one active on-site node per event
+  (technical spec 10.1), so delivery state fits on the operation row. A topology
+  with several peers needs per-peer delivery records, because one `status`
+  column cannot say "delivered to A but not to B"
+
 ### 13.4 `node_pairing_tokens`
 
 Represents the one-time pairing tokens a central node creates so an on-site or
@@ -3572,19 +3603,30 @@ POST /api/node-pairing
 Node-to-node, not user-facing. The one-time pairing token is the only
 credential, so the route carries no user session and is rate limited instead.
 
-Request: `pairing_token`, `node_name`, `node_role` (`onsite` or `standalone`),
-`public_key`.
+Request: `pairing_token`, `node_id`, `node_name`, `node_role` (`onsite` or
+`standalone`), `public_key`.
 
 Response: the central node identity (`id`, `node_name`, `node_role`,
 `public_key`), the registered `paired_node`, `paired_at`, and `replayed`.
 
+Node ids are global, not per-install. A node keeps the same `nodes.id` on every
+install that knows it: the pairing node sends its own id and central adopts it,
+and the pairing node adopts the id central returns. This is a requirement of
+node sync rather than a convenience. A node operation names its origin and
+target nodes by id inside the message the signature covers (section 13.3), so a
+receiver that knew the sending node by a different local id could not resolve
+the origin of any operation that node signed, and could not rewrite the id
+without breaking verification. A submitted id that is already held by a
+different node identity — a different name, different key material, or this
+install's own node — is refused as `node_id_conflict`.
+
 Rules:
 
-- redemption registers the pairing node as a peer `nodes` record on central and
-  marks the token used
-- replaying a used token with the same node name and public key returns the
-  original pairing so a lost response can be recovered; replaying it with a
-  different node identity is refused
+- redemption registers the pairing node as a peer `nodes` record on central,
+  under the pairing node's own id, and marks the token used
+- replaying a used token with the same node id, node name, and public key
+  returns the original pairing so a lost response can be recovered; replaying it
+  with a different node identity is refused
 - a node name already held with different key material, and a revoked peer
   node, are both refused
 - the on-site node stores the returned central identity as node config values
@@ -3597,6 +3639,98 @@ Rules:
 - event mode refuses pairing over plain HTTP (technical spec 8.2)
 - token issue, token revocation, and completed pairing are audited as node
   pairing/config changes (section 8)
+
+### 13.6 Node sync exchange endpoint
+
+```text
+POST /api/node-sync
+```
+
+Node-to-node, not user-facing. There is no user session: the calling node signs
+the exchange with its node private key and is verified against the public key
+registered when the two nodes paired.
+
+One request carries both directions. Node sync is bidirectional rather than
+push-only (technical spec 10.1), and the on-site node initiates because central
+has a routable address while an on-site node on an event network usually does
+not. Making the response carry central's own queued operations is what keeps
+sync bidirectional without central having to open a connection inwards; it is
+not a statement about authority, since on-site is the authoritative node during
+an active event window (technical spec 10.2).
+
+Request: `source_node_id`, `sent_at`, `operations` (operation envelopes),
+`acknowledged` (uuids the caller now holds), `refused` (operations the caller
+will never accept, each with `uuid`, `reason_code`, and `detail`), and
+`signature`.
+
+Response: `node_id`, `received_at`, `results` (one per pushed operation),
+`operations` (this node's queued operations for the caller), `acknowledged`, and
+`refusals_recorded`.
+
+An operation envelope is the normalized operation fields, `signature`, `hash`,
+and `payload_json` (section 13.3). The delivery lifecycle columns do not travel.
+
+Result outcomes:
+
+```text
+stored
+duplicate
+refused
+```
+
+A result is a delivery outcome, not an application outcome. It answers the only
+question the sending node needs answered — does the peer hold this operation
+now? — and deliberately does not report whether the peer applied it. A peer that
+stored an operation but could not apply it keeps its own `failed` record and
+retries locally; re-sending would be redelivery of an operation the peer already
+holds.
+
+Rules:
+
+- the exchange signature covers the format marker `meridian.node-sync.v1`, a
+  newline, and a JSON object of `source_node_id`, `sent_at`, and the `uuid`
+  lists for `operations`, `acknowledged`, and `refused`, in that order. Operation
+  contents are not covered, because each operation carries its own node
+  signature over its own canonical payload and is verified separately; refusal
+  reason text is not covered either, because it is stored as a readable failure
+  reason rather than acted on
+- authentication is required because the response hands operations back: an
+  unauthenticated caller could otherwise pull this node's queue. Operation-level
+  signatures alone cannot answer whether a caller may be given operations
+- the calling node must be a `nodes` record that is not this install's own, is
+  not revoked, and has completed pairing
+- `sent_at` must be inside a two-sided clock window (default five minutes),
+  which bounds replay of a captured exchange; a peer whose clock runs ahead is
+  as unverifiable as one whose clock runs behind
+- one refused operation does not end an exchange. The refusal is reported in
+  `results` and the rest of the batch is processed, because unresolved problems
+  must not block unrelated sync (technical spec 10.3)
+- a malformed envelope refuses the whole exchange rather than one operation. A
+  sending node only builds envelopes from rows it already holds, so an
+  unparseable one is corruption or a hostile caller; nothing is stored, so the
+  sender's retry is safe
+- refused exchanges are audited as `node_sync.refused` with a stable reason code
+  (section 14.1); refused operations inside an accepted exchange are audited by
+  the receive path as `node_operation.rejected`
+- an exchange carries at most one batch (default 100 operations). A run is a
+  loop of exchanges, so a backlog built up during an outage drains over repeated
+  exchanges, bounded per run so a scheduled sync cannot spin indefinitely
+- acknowledgements and refusals produced by one exchange are carried into the
+  next one by the same run, so nothing about that bookkeeping is persisted
+  between runs. A run that stops early simply leaves the peer offering the
+  unacknowledged operations again, and the receiver stores them idempotently
+- a peer can only settle operations that originated on the receiving node. An
+  acknowledgement or refusal naming an operation this node did not originate, or
+  one that is no longer pending, changes nothing
+- an unreachable peer changes no operation state at all: operations stay
+  `pending` and are pushed on a later run (technical spec 10.2)
+- event mode refuses sync over plain HTTP (technical spec 8.2), and a node whose
+  central URL changed does not sync until pairing is confirmed again (technical
+  spec 7.3)
+
+Whether an authentic operation is allowed to change event-scoped state during an
+active event window is event authority (technical spec 10.2), and disagreement
+between local and remote state is the sync conflict queue (section 14.2).
 
 ---
 

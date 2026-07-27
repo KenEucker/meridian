@@ -9,8 +9,10 @@ use App\Services\Audit\AuditService;
 use App\Services\EventMode\EventModeGuard;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 /**
  * On-site side of node pairing (technical spec 7.3, 7.4).
@@ -34,7 +36,7 @@ class NodePairingClient
     /**
      * Pair this node with central using a one-time pairing token.
      *
-     * @return array{central_node: Node, paired_at: \Illuminate\Support\Carbon}
+     * @return array{central_node: Node, paired_at: Carbon}
      *
      * @throws NodePairingException
      */
@@ -58,6 +60,13 @@ class NodePairingClient
 
         $payload = $this->post($url, [
             'pairing_token' => $plaintextToken,
+            // Node ids are global rather than per-install, so this node tells
+            // central the id it already knows itself by and stores central
+            // under the id central knows itself by. Node operations name their
+            // origin and target nodes by id inside the signed message
+            // (technical spec 10.4), and that id cannot be rewritten on arrival
+            // without breaking the signature.
+            'node_id' => (string) $localNode->getKey(),
             'node_name' => $localNode->node_name,
             'node_role' => $localNode->node_role,
             'public_key' => $localNode->public_key,
@@ -154,6 +163,8 @@ class NodePairingClient
 
         if (! is_array($payload)
             || ! is_array($payload['central_node'] ?? null)
+            || ! is_string($payload['central_node']['id'] ?? null)
+            || ! Str::isUuid($payload['central_node']['id'])
             || ! is_string($payload['central_node']['node_name'] ?? null)
             || ! is_string($payload['central_node']['public_key'] ?? null)) {
             throw NodePairingException::centralRefused('the pairing response was not understood.');
@@ -183,8 +194,11 @@ class NodePairingClient
      */
     private function storeCentralPeer(array $centralNode, string $url): Node
     {
+        $nodeId = (string) $centralNode['id'];
         $nodeName = (string) $centralNode['node_name'];
-        $existing = Node::query()->where('node_name', $nodeName)->first();
+
+        $existing = Node::query()->find($nodeId)
+            ?? Node::query()->where('node_name', $nodeName)->first();
 
         if ($existing instanceof Node && $existing->is_local) {
             throw NodePairingException::nodeNameConflict($nodeName);
@@ -196,9 +210,17 @@ class NodePairingClient
             throw NodePairingException::nodeRevoked($nodeName);
         }
 
+        // Central's id is adopted as-is, so a name that is already held here
+        // under a different id is a conflict rather than something to
+        // overwrite.
+        if ($existing instanceof Node && (string) $existing->getKey() !== $nodeId) {
+            throw NodePairingException::nodeIdConflict($nodeId);
+        }
+
         $peer = $existing ?? new Node;
 
         $peer->forceFill([
+            'id' => $nodeId,
             'node_name' => $nodeName,
             'node_role' => Node::ROLE_CENTRAL,
             'is_local' => false,
