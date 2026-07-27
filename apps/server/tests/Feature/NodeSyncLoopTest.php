@@ -17,6 +17,7 @@ use App\Services\Node\NodePairingState;
 use App\Services\Node\NodeSignatureAlgorithm;
 use App\Services\Node\NodeSyncClient;
 use App\Services\Node\NodeSyncException;
+use App\Services\Node\NodeSyncHealth;
 use App\Services\Node\NodeSyncOperationResult;
 use App\Services\Node\NodeSyncRequest;
 use App\Services\Node\NodeSyncService;
@@ -776,6 +777,128 @@ class NodeSyncLoopTest extends TestCase
             ->assertFailed();
     }
 
+    // God mode sync panel
+
+    public function test_the_node_config_screen_reports_sync_state_from_the_operation_log(): void
+    {
+        $this->asOnsiteInstall();
+        $this->registerApplier();
+
+        $queued = $this->queueLocalOperation();
+        $delivered = $this->queueLocalOperation();
+
+        $this->fakeCentral([
+            $this->centralResponse(
+                results: [NodeSyncOperationResult::stored($delivered->uuid)],
+                operations: [$this->peerEnvelope()],
+            ),
+            $this->centralResponse(),
+        ]);
+
+        app(NodeSyncClient::class)->sync();
+
+        $health = app(NodeSyncHealth::class)->describe($this->localNode->fresh());
+
+        $this->assertSame(NodeSyncHealth::STATUS_QUEUED, $health['status']);
+        $this->assertSame(1, $health['queued']);
+        $this->assertSame(1, $health['delivered']);
+        $this->assertSame(1, $health['applied']);
+        $this->assertSame(0, $health['undelivered']);
+        $this->assertNotNull($health['last_sent_at']);
+        $this->assertNotNull($health['last_received_at']);
+
+        $this->actingAs($this->godModeUser())
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertSee('Node sync')
+            ->assertSee('Operations queued for the peer')
+            ->assertSee('Queued to send');
+
+        $this->assertNotNull($queued->fresh());
+    }
+
+    /**
+     * A backlog is what an on-site node is supposed to build during an outage,
+     * so it must not read as a fault.
+     */
+    public function test_queued_work_alone_does_not_ask_for_attention(): void
+    {
+        $this->asOnsiteInstall();
+
+        $this->queueLocalOperation();
+
+        $health = app(NodeSyncHealth::class)->describe($this->localNode);
+
+        $this->assertSame(NodeSyncHealth::STATUS_QUEUED, $health['status']);
+        $this->assertSame(1, $health['queued']);
+        $this->assertSame([], $health['failures']);
+    }
+
+    public function test_a_failed_operation_puts_the_panel_into_attention(): void
+    {
+        $this->asOnsiteInstall();
+
+        // No applier is registered, so the pulled operation is stored and
+        // marked failed: reachable peer, local problem.
+        $this->fakeCentral([
+            $this->centralResponse(operations: [$this->peerEnvelope()]),
+            $this->centralResponse(),
+        ]);
+
+        app(NodeSyncClient::class)->sync();
+
+        $health = app(NodeSyncHealth::class)->describe($this->localNode);
+
+        $this->assertSame(NodeSyncHealth::STATUS_ATTENTION, $health['status']);
+        $this->assertSame(1, $health['unapplied']);
+        $this->assertCount(1, $health['failures']);
+        $this->assertSame('inbound', $health['failures'][0]['direction']);
+
+        $this->actingAs($this->godModeUser())
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertSee('Needs attention')
+            ->assertSee('Recent operation failures')
+            ->assertSee('could not be applied');
+    }
+
+    public function test_a_refused_exchange_is_shown_even_though_nothing_was_stored(): void
+    {
+        $this->asCentralInstall();
+
+        $this->peerNode->forceFill(['revoked_at' => now()])->save();
+        $this->postJson(route('api.node-sync.store'), $this->signedRequest())->assertStatus(401);
+
+        $health = app(NodeSyncHealth::class)->describe($this->localNode);
+
+        $this->assertSame(NodeSyncHealth::STATUS_ATTENTION, $health['status']);
+        $this->assertSame(
+            NodeSyncException::REASON_SOURCE_NODE_NOT_ACCEPTED,
+            $health['refusals'][0]['reason_code'],
+        );
+        $this->assertDatabaseCount('node_operations', 0);
+
+        $this->actingAs($this->godModeUser())
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertSee('Recent refused exchanges')
+            ->assertSee(NodeSyncException::REASON_SOURCE_NODE_NOT_ACCEPTED);
+    }
+
+    public function test_a_node_that_has_never_synced_reads_as_idle(): void
+    {
+        $this->asOnsiteInstall();
+
+        $health = app(NodeSyncHealth::class)->describe($this->localNode);
+
+        $this->assertSame(NodeSyncHealth::STATUS_IDLE, $health['status']);
+
+        $this->actingAs($this->godModeUser())
+            ->get(route('platform.node.config'))
+            ->assertOk()
+            ->assertSee('Nothing synced yet');
+    }
+
     // Installs
 
     /**
@@ -1004,6 +1127,16 @@ class NodeSyncLoopTest extends TestCase
         $this->assertNotNull($audit, 'The refused exchange was not audited.');
         $this->assertSame(AuditEvent::SOURCE_SYNC, $audit->source_context);
         $this->assertSame($reasonCode, $audit->after_json['reason_code']);
+    }
+
+    private function godModeUser(): User
+    {
+        return User::factory()->create([
+            'permissions' => [
+                'platform.index' => true,
+                'platform.node.config' => true,
+            ],
+        ]);
     }
 
     private function registerApplier(): SyncLoopRecordingApplier

@@ -16,6 +16,7 @@ use App\Services\Node\NodePairingException;
 use App\Services\Node\NodePairingState;
 use App\Services\Node\NodePairingTokenService;
 use App\Services\Node\NodeSetupService;
+use App\Services\Node\NodeSyncHealth;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -45,6 +46,7 @@ class NodeConfigScreen extends Screen
         NodeSetupService $nodes,
         NodePairingState $pairingState,
         NodePairingTokenService $pairingTokens,
+        NodeSyncHealth $syncHealth,
     ): iterable {
         $node = $nodes->activeNode()?->load('configValues');
         $activeTokens = $pairingTokens->activeTokens();
@@ -56,6 +58,10 @@ class NodeConfigScreen extends Screen
             'pairingTokens' => $activeTokens,
             'hasUnusedPairingTokens' => $activeTokens->isNotEmpty(),
             'issuedPairingToken' => session('meridian.issued_pairing_token'),
+            // Node sync state is derived from the operation log rather than
+            // stored, so this reads the same rows the sync loop writes
+            // (technical spec 10.1, 25.3).
+            'sync' => $syncHealth->describe($node),
         ];
     }
 

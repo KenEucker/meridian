@@ -3732,6 +3732,23 @@ Whether an authentic operation is allowed to change event-scoped state during an
 active event window is event authority (technical spec 10.2), and disagreement
 between local and remote state is the sync conflict queue (section 14.2).
 
+Sync state is derived from `node_operations` and `audit_events` rather than
+stored as a run status, so there is one source of truth. A stored status would
+let a run that died mid-way look healthier than one that finished and reported a
+problem. God mode reads it on the node configuration screen, and Electron health
+surfaces the same signals on-site (technical spec 25.3). It reports:
+
+- operations queued here, delivered to the peer, and refused by the peer
+- operations received from the peer, applied, and stored but not applied
+- the oldest queued operation, the last send, and the last receipt
+- recent operation failures and recent refused exchanges
+
+The two directions are counted apart because they fail for different reasons:
+undelivered means this node cannot reach its peer, while unapplied means the peer
+was reached and something local is wrong. Queued work is reported without alarm,
+because an on-site node building a backlog during an outage is the system working
+as designed; failures and refused exchanges are what ask for a human.
+
 ---
 
 ## 14. Audit and Sync Conflicts
