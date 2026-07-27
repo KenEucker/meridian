@@ -36,7 +36,12 @@ class SyncConflictDetailLayout extends Rows
             Input::make('resolution_label')
                 ->title(__('Resolution'))
                 ->readonly()
-                ->help(__('Choosing a side to keep is delivered by the conflict resolver task.')),
+                ->help(__('Resolution keeps one of the two versions shown below. Values are never edited here.')),
+
+            Input::make('default_resolution_label')
+                ->title(__('Recommended default'))
+                ->readonly()
+                ->help(__('Event-scoped records during an active event window default to accept on-site; central and global records default to accept central. The reviewer still chooses.')),
 
             TextArea::make('conflict.reason')
                 ->title(__('Reason'))
@@ -50,6 +55,11 @@ class SyncConflictDetailLayout extends Rows
             Input::make('operation_type')
                 ->title(__('Operation type'))
                 ->readonly(),
+
+            Input::make('operation_status')
+                ->title(__('Operation status'))
+                ->readonly()
+                ->help(__('An operation stays conflicted when the local version was kept, because it was received and never applied.')),
 
             Input::make('origin_node')
                 ->title(__('Origin node'))

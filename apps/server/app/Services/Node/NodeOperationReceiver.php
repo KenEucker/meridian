@@ -67,11 +67,12 @@ use Throwable;
  * drives both halves belong to the bidirectional sync loop (M12.5). When an
  * applier signals a state disagreement via {@see SyncConflictException},
  * {@see apply()} records an open sync conflict and marks the operation
- * `conflicted` without treating it as a retriable failure; resolution is
- * M12.9. The governance freeze (M12.7) is not applied to arriving operations
- * either: no node can create a document or fragment operation while the window
- * is open, so one that arrives mid-window carries a pre-window edit, and
- * deciding otherwise would mean trusting the sender's clock. What this service
+ * `conflicted` without treating it as a retriable failure; God-mode resolution
+ * comes back through {@see applyResolvedConflict()} when the reviewer accepts
+ * the remote version. The governance freeze (M12.7) is not applied to arriving
+ * operations either: no node can create a document or fragment operation while
+ * the window is open, so one that arrives mid-window carries a pre-window edit,
+ * and deciding otherwise would mean trusting the sender's clock. What this service
  * enforces is narrower: the operation is well formed, it is addressed here, it
  * comes from a node and device this install still accepts, its node signature
  * verifies, its origin holds authority over any event it names, and it is
@@ -154,11 +155,7 @@ class NodeOperationReceiver
      */
     public function apply(NodeOperation $operation): NodeOperation
     {
-        if (! $operation->exists) {
-            throw new RuntimeException(
-                'Node operations are stored before they are applied; this operation is not recorded yet.',
-            );
-        }
+        $this->assertStored($operation);
 
         if ($operation->isApplied()) {
             return $operation;
@@ -166,16 +163,60 @@ class NodeOperationReceiver
 
         // A conflicted operation already has a queue row. Re-applying it would
         // invent a second conflict for the same disagreement; God-mode review
-        // (M12.9) is what moves it out of this state.
+        // is what moves it out of this state, through
+        // {@see applyResolvedConflict()}.
         if ($operation->isConflicted()) {
             return $operation;
         }
 
+        return $this->runApplier($operation, resolvedConflict: false);
+    }
+
+    /**
+     * Apply a stored operation whose sync conflict a God-mode reviewer resolved
+     * in favour of the remote version (technical spec 10.3).
+     *
+     * This is the one path that re-applies a conflicted operation, so it is the
+     * one place the conflicted mark is cleared. The mark exists to stop routine
+     * retries from re-deciding a disagreement a human has not looked at yet;
+     * once a reviewer has chosen this operation's version, that is exactly what
+     * should happen, and the operation goes back to `received` and runs again.
+     *
+     * An applier that raises {@see SyncConflictException} here is contradicting
+     * a decision that has already been made, so the operation is marked `failed`
+     * rather than queued as a second conflict. {@see SyncConflictResolver} reads
+     * that as a resolution that did not take effect and leaves the original
+     * conflict open.
+     */
+    public function applyResolvedConflict(NodeOperation $operation): NodeOperation
+    {
+        $this->assertStored($operation);
+
+        if ($operation->isApplied()) {
+            return $operation;
+        }
+
+        if ($operation->isConflicted()) {
+            $operation->forceFill([
+                'status' => NodeOperation::STATUS_RECEIVED,
+                'failure_reason' => null,
+            ])->save();
+        }
+
+        return $this->runApplier($operation, resolvedConflict: true);
+    }
+
+    /**
+     * Dispatch a stored operation to its applier and record the outcome on the
+     * row.
+     */
+    private function runApplier(NodeOperation $operation, bool $resolvedConflict): NodeOperation
+    {
         // Appliers are handed the signed projection rather than the row, so
         // local state can only be written from fields the origin node signed.
         // `payload_json` is outside the signed message (data/API 13.3) and is
         // stored for conflict display and diagnosis, not applied.
-        $signed = SignedNodeOperation::fromOperation($operation);
+        $signed = SignedNodeOperation::fromOperation($operation, resolvedConflict: $resolvedConflict);
 
         $applier = $this->appliers->applierFor($signed);
 
@@ -218,6 +259,10 @@ class NodeOperationReceiver
             // conflict queue is written outside that transaction so the
             // disagreement survives even though local state did not change.
             $operation->refresh();
+
+            if ($resolvedConflict) {
+                return $this->markFailed($operation, $conflict->getMessage());
+            }
 
             $this->conflicts->recordFromException($operation, $conflict);
 
@@ -479,6 +524,15 @@ class NodeOperationReceiver
         );
 
         return $rejection;
+    }
+
+    private function assertStored(NodeOperation $operation): void
+    {
+        if (! $operation->exists) {
+            throw new RuntimeException(
+                'Node operations are stored before they are applied; this operation is not recorded yet.',
+            );
+        }
     }
 
     private function markFailed(NodeOperation $operation, string $reason): NodeOperation

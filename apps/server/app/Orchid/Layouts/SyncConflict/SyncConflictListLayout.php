@@ -44,6 +44,9 @@ class SyncConflictListLayout extends Table
                 ->filter(Select::make()->options(SyncConflict::statusLabels()))
                 ->render(fn (SyncConflict $conflict) => $conflict->statusLabel()),
 
+            TD::make('resolution', __('Resolution'))
+                ->render(fn (SyncConflict $conflict) => $conflict->resolutionLabel()),
+
             TD::make('reason', __('Reason'))
                 ->render(fn (SyncConflict $conflict) => e(\Illuminate\Support\Str::limit($conflict->reason, 80))),
 

@@ -1,7 +1,7 @@
 <div class="bg-white rounded shadow-sm p-4 mb-3">
     <h4 class="h5">{{ __('Local and remote values') }}</h4>
     <p class="text-muted">
-        {{ __('Conflicts show both local and remote values. Values are not edited here; the conflict resolver chooses which side to keep.') }}
+        {{ __('Conflicts show both local and remote values. Values are not edited here; resolving keeps one of these two versions exactly as shown.') }}
     </p>
 
     <div class="row">
