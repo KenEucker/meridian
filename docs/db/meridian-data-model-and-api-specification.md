@@ -3513,6 +3513,26 @@ refused: it was authentic enough to store, so it is kept and marked `failed`
 with a readable reason, and a node that receives an operation for an entity type
 it does not yet understand can apply it after an upgrade.
 
+Nothing is applied from `payload_json`:
+
+- signatures cover the normalized operation fields only, so the payload is
+  unauthenticated and can be changed in transit, or by the sending peer after
+  signing, without breaking verification. An applier that read it would be
+  writing local state from unauthenticated input on an operation that verified
+- appliers are therefore handed the signed field projection and have no access
+  to the payload at all, so this is a structural property rather than a
+  convention an applier could forget
+- `payload_json` is still stored, because the schema carries it and conflict
+  review (section 14.2) shows local and remote values, but it is diagnostic and
+  non-authoritative
+- the consequence for operation vocabularies is that an operation's meaning must
+  live in `operation_type` together with the entity it names. An operation that
+  needs to carry a value expresses it as a command-style operation type rather
+  than as payload data
+- a redelivery whose payload does not match the stored copy is refused as a
+  `uuid` conflict rather than absorbed quietly, because it has been changed in
+  transit; the stored copy stands either way, since operations are append-only
+
 ### 13.4 `node_pairing_tokens`
 
 Represents the one-time pairing tokens a central node creates so an on-site or

@@ -15,6 +15,7 @@ use App\Services\Node\NodeOperationReceiver;
 use App\Services\Node\NodeOperationRejectedException;
 use App\Services\Node\NodeOperationSigner;
 use App\Services\Node\NodeSignatureAlgorithm;
+use App\Services\Node\SignedNodeOperation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -426,6 +427,61 @@ class NodeOperationReceiveApplyTest extends TestCase
         $this->assertSame(NodeOperation::STATUS_APPLIED, $later->fresh()->status);
     }
 
+    public function test_an_applier_is_handed_only_the_signed_fields(): void
+    {
+        $applier = $this->registerApplier();
+        $envelope = $this->signedEnvelope(['payload_json' => ['status' => 'closed']]);
+
+        $this->receiver->receiveAndApply($envelope);
+
+        $this->assertCount(1, $applier->seen);
+
+        $signed = $applier->seen[0];
+
+        $this->assertInstanceOf(SignedNodeOperation::class, $signed);
+        $this->assertSame($envelope->normalized, $signed->toArray());
+        $this->assertFalse(
+            property_exists($signed, 'payload') || property_exists($signed, 'payload_json'),
+            'The applier was handed unsigned payload data.',
+        );
+    }
+
+    /**
+     * `payload_json` is outside the signed message (data/API 13.3), so a peer
+     * or anything between two peers can change it without breaking
+     * verification. Nothing an applier acts on may come from there.
+     */
+    public function test_a_tampered_payload_cannot_change_what_an_applier_sees(): void
+    {
+        $applier = $this->registerApplier();
+
+        $envelope = $this->signedEnvelope(['payload_json' => ['status' => 'closed']]);
+
+        $tampered = $envelope->toArray();
+        $tampered['payload_json'] = ['status' => 'open', 'entity_id' => (string) Str::uuid()];
+
+        // The signature still verifies, because the payload was never covered.
+        $receipt = $this->receiver->receiveAndApply($tampered);
+
+        $this->assertTrue($receipt->wasApplied());
+        $this->assertSame($envelope->normalized, $applier->seen[0]->toArray());
+        $this->assertSame(
+            $envelope->normalized['entity_id'],
+            $applier->seen[0]->entityId,
+        );
+    }
+
+    public function test_the_unsigned_payload_is_still_stored_for_review(): void
+    {
+        $this->registerApplier();
+
+        $receipt = $this->receiver->receiveAndApply(
+            $this->signedEnvelope(['payload_json' => ['status' => 'closed']]),
+        );
+
+        $this->assertSame(['status' => 'closed'], $receipt->operation->fresh()->payload_json);
+    }
+
     public function test_applying_an_unstored_operation_is_refused(): void
     {
         $this->expectException(RuntimeException::class);
@@ -523,9 +579,9 @@ class NodeOperationReceiveApplyTest extends TestCase
 }
 
 /**
- * A test applier that records how many times it ran, can be made to fail, and
- * can write local state before failing so the apply transaction boundary is
- * observable.
+ * A test applier that records what it was handed and how many times it ran, can
+ * be made to fail, and can write local state before failing so the apply
+ * transaction boundary is observable.
  */
 class RecordingNodeOperationApplier implements NodeOperationApplier
 {
@@ -535,13 +591,18 @@ class RecordingNodeOperationApplier implements NodeOperationApplier
 
     public ?string $writeDeviceLabel = null;
 
-    public function supports(NodeOperation $operation): bool
+    /** @var list<SignedNodeOperation> */
+    public array $seen = [];
+
+    public function supports(SignedNodeOperation $operation): bool
     {
-        return $operation->entity_type === 'field_report';
+        return $operation->entityType === 'field_report';
     }
 
-    public function apply(NodeOperation $operation): void
+    public function apply(SignedNodeOperation $operation): void
     {
+        $this->seen[] = $operation;
+
         if ($this->writeDeviceLabel !== null) {
             Device::factory()->create(['device_label' => $this->writeDeviceLabel]);
         }

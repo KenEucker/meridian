@@ -2,8 +2,6 @@
 
 namespace App\Services\Node;
 
-use App\Models\NodeOperation;
-
 /**
  * The set of {@see NodeOperationApplier} implementations this node can apply
  * operations with (technical spec 10.1).
@@ -37,7 +35,7 @@ class NodeOperationApplierRegistry
         return $this;
     }
 
-    public function applierFor(NodeOperation $operation): ?NodeOperationApplier
+    public function applierFor(SignedNodeOperation $operation): ?NodeOperationApplier
     {
         foreach ($this->appliers as $applier) {
             if ($applier->supports($operation)) {

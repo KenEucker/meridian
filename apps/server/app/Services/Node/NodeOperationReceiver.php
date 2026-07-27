@@ -46,6 +46,13 @@ use Throwable;
  * unapplied operation must not block unrelated sync (technical spec 10.3), so
  * application failures do not propagate out of {@see apply()}.
  *
+ * Nothing is applied from `payload_json`. Signatures cover the normalized
+ * operation fields only (technical spec 10.4), so the payload is
+ * unauthenticated and can be changed in transit without breaking verification.
+ * The payload is stored because the schema carries it and conflict review will
+ * want to show it, but appliers receive {@see SignedNodeOperation} and never
+ * see it, so local state is only ever written from signed content.
+ *
  * Scope. This is the receiving half of the path. Sending and the loop that
  * drives both halves belong to the bidirectional sync loop (M12.5). Whether an
  * authentic operation is *allowed* to change event-scoped state during an
@@ -137,13 +144,19 @@ class NodeOperationReceiver
             return $operation;
         }
 
-        $applier = $this->appliers->applierFor($operation);
+        // Appliers are handed the signed projection rather than the row, so
+        // local state can only be written from fields the origin node signed.
+        // `payload_json` is outside the signed message (data/API 13.3) and is
+        // stored for conflict display and diagnosis, not applied.
+        $signed = SignedNodeOperation::fromOperation($operation);
+
+        $applier = $this->appliers->applierFor($signed);
 
         if (! $applier instanceof NodeOperationApplier) {
             return $this->markFailed($operation, sprintf(
                 'No applier is registered for %s operations on entity type "%s".',
-                $operation->operation_type,
-                $operation->entity_type,
+                $signed->operationType,
+                $signed->entityType,
             ));
         }
 
@@ -151,8 +164,8 @@ class NodeOperationReceiver
             // The entity write and the `applied` mark commit together, so there
             // is no window in which local state changed but the operation still
             // looks unapplied.
-            DB::transaction(function () use ($applier, $operation): void {
-                $applier->apply($operation);
+            DB::transaction(function () use ($applier, $signed, $operation): void {
+                $applier->apply($signed);
 
                 $operation->forceFill([
                     'status' => NodeOperation::STATUS_APPLIED,

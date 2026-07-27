@@ -165,7 +165,11 @@ final class NodeOperationEnvelope
      * Whether a stored operation holds the same content this envelope carries.
      *
      * `hash` covers the normalized fields, so it settles those. `payload_json`
-     * is outside the signed payload (data/API 13.3) and is compared directly.
+     * is outside the signed payload (data/API 13.3) and is compared directly:
+     * nothing is applied from the payload, but a redelivery whose payload does
+     * not match the stored copy has been changed in transit, and that is worth
+     * refusing loudly rather than absorbing quietly. The stored copy stands
+     * either way, because operations are append-only.
      */
     public function matchesStored(NodeOperation $stored): bool
     {

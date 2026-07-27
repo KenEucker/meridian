@@ -2,8 +2,6 @@
 
 namespace App\Services\Node;
 
-use App\Models\NodeOperation;
-
 /**
  * Applies one stored node operation to local entity state (technical spec
  * 10.1).
@@ -14,11 +12,18 @@ use App\Models\NodeOperation;
  * survives, and {@see NodeOperationReceiver::apply()} can run the applier again
  * later.
  *
+ * Appliers see {@see SignedNodeOperation} rather than the stored row, and that
+ * is deliberate. Signatures cover the normalized operation fields only, so
+ * `payload_json` is unauthenticated and could have been changed by anything
+ * between two nodes without breaking verification. Every applied change is
+ * therefore derived from signed fields, which also means an operation's meaning
+ * belongs in `operation_type` and the entity it names rather than in payload
+ * data.
+ *
  * Appliers must be idempotent. The receiver will not re-apply an operation it
- * has already marked applied, but an application that failed partway, or one
- * whose row update did not commit, is retried against the same entity. Write
- * toward the state the operation describes rather than assuming the entity is
- * untouched.
+ * has already marked applied, but an application that failed partway is retried
+ * against the same entity. Write toward the state the operation describes
+ * rather than assuming the entity is untouched.
  *
  * Throwing marks the operation `failed` with the exception message as its
  * `failure_reason` and leaves it available for retry. An applier should throw
@@ -33,15 +38,14 @@ interface NodeOperationApplier
 {
     /**
      * Whether this applier handles the given operation. Dispatch is by
-     * `entity_type` and `operation_type` rather than by payload shape, because
-     * those are the fields the signature covers.
+     * `entity_type` and `operation_type`, which the signature covers.
      */
-    public function supports(NodeOperation $operation): bool;
+    public function supports(SignedNodeOperation $operation): bool;
 
     /**
      * Apply the operation to local state.
      *
      * @throws \Throwable when the operation cannot be applied
      */
-    public function apply(NodeOperation $operation): void;
+    public function apply(SignedNodeOperation $operation): void;
 }
