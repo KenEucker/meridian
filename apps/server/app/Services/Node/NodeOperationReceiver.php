@@ -64,10 +64,13 @@ use Throwable;
  * precisely what a read-only node still accepts.
  *
  * Scope. This is the receiving half of the path. Sending and the loop that
- * drives both halves belong to the bidirectional sync loop (M12.5). Blocking
- * policy/procedure and fragment edits during an active event window is M12.7,
- * and disagreements between local and remote state belong to the sync conflict
- * queue (M12.8, M12.9). What this service enforces is narrower: the operation
+ * drives both halves belong to the bidirectional sync loop (M12.5), and
+ * disagreements between local and remote state belong to the sync conflict
+ * queue (M12.8, M12.9). The governance freeze (M12.7) is not applied to arriving
+ * operations either: no node can create a document or fragment operation while
+ * the window is open, so one that arrives mid-window carries a pre-window edit,
+ * and deciding otherwise would mean trusting the sender's clock. What this
+ * service enforces is narrower: the operation
  * is well formed, it is addressed here, it comes from a node and device this
  * install still accepts, its node signature verifies, its origin holds
  * authority over any event it names, and it is stored before anything is
@@ -84,6 +87,7 @@ class NodeOperationReceiver
         private readonly AuditService $audit,
         private readonly EventAuthority $authority,
         private readonly EventScopedWriteGuard $writeGuard,
+        private readonly GovernanceWriteGuard $governanceGuard,
     ) {}
 
     /**
@@ -184,8 +188,13 @@ class NodeOperationReceiver
             // (technical spec 10.2), so the local write guard stands down here.
             // Applying is the one write path that has already answered the
             // question the guard asks.
-            $this->writeGuard->withoutEnforcement(fn () => DB::transaction(
-                function () use ($applier, $signed, $operation): void {
+            //
+            // The governance freeze stands down for a different reason. No node
+            // can create a document or fragment operation during the window, so
+            // one arriving mid-window carries an edit made before it opened;
+            // refusing it would discard content central prepared for the event.
+            $this->writeGuard->withoutEnforcement(fn () => $this->governanceGuard->withoutEnforcement(
+                fn () => DB::transaction(function () use ($applier, $signed, $operation): void {
                     $applier->apply($signed);
 
                     $operation->forceFill([
@@ -193,7 +202,7 @@ class NodeOperationReceiver
                         'applied_at' => now(),
                         'failure_reason' => null,
                     ])->save();
-                },
+                }),
             ));
         } catch (Throwable $failure) {
             // The rolled-back transaction leaves the in-memory model holding

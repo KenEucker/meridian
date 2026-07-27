@@ -13,6 +13,7 @@ use App\Models\ProcedureDocument;
 use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
 use App\Services\Node\EventScopedWriteGuard;
+use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
@@ -39,6 +40,7 @@ class AppServiceProvider extends ServiceProvider
         // standing it down while it applies an operation stands down the same
         // guard the rest of the request writes through (technical spec 10.2).
         $this->app->singleton(EventScopedWriteGuard::class);
+        $this->app->singleton(GovernanceWriteGuard::class);
     }
 
     /**
@@ -62,5 +64,10 @@ class AppServiceProvider extends ServiceProvider
         // node that does not hold authority is refused rather than each call
         // site remembering to ask (technical spec 10.2).
         $this->app->make(EventScopedWriteGuard::class)->register();
+
+        // Policy/procedure and fragment edits are blocked for the duration of
+        // the active event window on every node, so the same fail-closed
+        // boundary covers governance content (technical spec 10.2, 21.10).
+        $this->app->make(GovernanceWriteGuard::class)->register();
     }
 }

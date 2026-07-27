@@ -23,10 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*'),
         );
 
-        // An event-scoped write refused because another node holds event
-        // authority is a conflict with the current state of the event, not a
-        // server fault and not an authorization failure: the same actor may make
-        // the same change on the authoritative node (technical spec 10.2).
+        // A write refused by an event authority rule is a conflict with the
+        // current state of the event, not a server fault and not an
+        // authorization failure. The same actor may make the same change on the
+        // authoritative node, or — for governance content frozen during the
+        // active event window — once the window ends (technical spec 10.2,
+        // 21.10). `authoritative_node_id` is null for a freeze, because no node
+        // may make that edit while the window is open.
         $exceptions->render(function (EventAuthorityException $exception, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return response()->json([

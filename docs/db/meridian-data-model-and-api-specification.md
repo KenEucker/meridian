@@ -826,6 +826,37 @@ Nothing is refused outside the active window, and nothing is refused while no
 on-site primary node is known, since there would be no node to hand authority
 to.
 
+Freezing governance content:
+
+Policy/procedure and fragment edits are blocked for the duration of the window
+on every node, including the on-site primary node that holds authority over
+event-scoped records. This is a separate rule from authority: authority moves a
+write to one node, whereas a frozen edit may be made on none. A fragment edit
+raises the version of every published document that references it, and staff
+acknowledge a document at a version, so a mid-event edit would change what an
+acknowledgment already taken refers to.
+
+Governance content carries no `event_id`, so the window is resolved through
+`organization_id`: `policy_documents`, `procedure_documents`, and
+`document_fragments` are frozen while any event of their organization is in its
+active window, and `document_fragment_references` and
+`document_fragment_version_bumps` reach their organization through their
+fragment. An organization's window freezes only that organization's content.
+
+`document_acknowledgments` and `document_version_snapshots` stay writable, since
+acknowledgments collected on-site sync back to central and the snapshot is
+written as part of accepting one. `document_acknowledgment_requirements` stay
+writable too: a requirement is the live signup gate rather than document
+content, changing one bumps no version, and a requirement blocking signups has
+to be liftable while the event runs.
+
+A refused edit is HTTP 409 with reason code
+`governance_frozen_during_active_event`, naming the event whose window is open
+and no authoritative node, because no node may make the edit. Applying a
+received node operation is not refused: no node can create a document or
+fragment operation while the window is open, so one arriving mid-window carries
+an edit made before it opened.
+
 ### 7.5 Sync Conflicts
 
 Conflicts go to a sync conflict queue.
