@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
-import { RouterLink, routerKey } from "vue-router";
+import { RouterLink, routerKey, useRoute } from "vue-router";
 
 import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
+import { brandingState } from "@/branding/brandingProfile";
+import { departmentSurfaceAttributes } from "@/branding/departmentSurfaceScope";
+import { applyDocumentTitle } from "@/branding/documentTitle";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
   useCombinedNavigation,
@@ -34,6 +37,38 @@ const props = defineProps<{
 
 const appConfig = computed(() => props.config ?? meridianAppConfig);
 const router = inject(routerKey, null);
+const route = useRoute();
+
+/*
+ * Organization identity replaces Meridian's on signed-in product surfaces
+ * (BRAND-002). The shell is one of the four places BRAND-002 names, alongside
+ * the document title, generated PDF exports, and system email.
+ *
+ * The mark falls back compact mark → full lockup → generated lettermark
+ * (BRAND-005). Meridian's own mark is used only when the organization has no
+ * branding profile at all, which is also what keeps an unconfigured install
+ * looking like Meridian rather than like a nameless product.
+ */
+const branding = computed(() => brandingState.profile);
+const productName = computed(() =>
+  branding.value.is_branded ? branding.value.display_name : "Meridian",
+);
+const markUrl = computed(() =>
+  branding.value.is_branded
+    ? (branding.value.compact_mark_url ?? branding.value.full_lockup_url ?? null)
+    : meridianMarkUrl,
+);
+const showLettermark = computed(() => markUrl.value === null);
+
+// The current department, and whether this surface may take its background.
+// Scoping lives in one place so a new screen is unscoped until someone adds
+// it deliberately (BRAND-012).
+const departmentBrandingAttributes = computed(() =>
+  departmentSurfaceAttributes(
+    typeof route?.name === "string" ? route.name : null,
+    selectedFixtureDepartment.value.departmentId,
+  ),
+);
 const fixtureUserMenuOpen = ref(false);
 const workflowMenuOpen = ref(false);
 const fixtureUserElement = ref<HTMLElement | null>(null);
@@ -218,6 +253,20 @@ watch(
   { immediate: true },
 );
 
+// The document title carries the organization's name, not Meridian's, once a
+// branding profile exists (BRAND-002).
+watch(
+  [productName, () => route?.meta?.title, () => appConfig.value.modeDisplayName],
+  ([name, screenTitle, modeName]) => {
+    applyDocumentTitle({
+      screen: typeof screenTitle === "string" ? screenTitle : null,
+      productName: name,
+      modeName,
+    });
+  },
+  { immediate: true },
+);
+
 watch(
   theme,
   (value) => {
@@ -290,25 +339,31 @@ onBeforeUnmount(() => {
     :class="`app-shell--${appConfig.uiMode}`"
     :data-ui-mode="appConfig.uiMode"
     :data-deployment-target="appConfig.deploymentTarget"
-    :aria-label="`${appConfig.productName} application shell`"
+    :data-organization-branding="branding.document_attribute"
+    v-bind="departmentBrandingAttributes"
+    :aria-label="`${productName} ${appConfig.modeDisplayName} application shell`"
   >
     <header class="app-shell__top-bar">
       <div class="app-shell__masthead">
         <RouterLink
           class="app-shell__home"
           :to="{ name: 'home' }"
-          :aria-label="appConfig.productName"
+          :aria-label="`${productName} ${appConfig.modeDisplayName}`"
         >
           <img
+            v-if="!showLettermark"
             class="app-shell__mark"
-            :src="meridianMarkUrl"
+            :src="markUrl ?? meridianMarkUrl"
             alt=""
             width="44"
             height="44"
             aria-hidden="true"
           />
+          <span v-else class="app-shell__mark app-shell__lettermark" aria-hidden="true">
+            {{ branding.lettermark }}
+          </span>
           <span class="app-shell__product">
-            <span class="app-shell__product-name">Meridian</span>
+            <span class="app-shell__product-name">{{ productName }}</span>
             <span class="app-shell__mode-name">{{ appConfig.modeDisplayName }}</span>
           </span>
         </RouterLink>
@@ -644,6 +699,24 @@ onBeforeUnmount(() => {
   width: 2.25rem;
   height: 2.25rem;
   object-fit: contain;
+}
+
+/*
+ * Generated fallback when the organization has a name but no mark (BRAND-005).
+ * It sits on the platform primary color rather than on the department accent:
+ * this is organization identity, and it must read the same in every department.
+ */
+.app-shell__lettermark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--m-radius-md);
+  background: var(--m-action-primary-bg);
+  color: var(--m-action-primary-text);
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .app-shell__product {
@@ -1055,6 +1128,20 @@ onBeforeUnmount(() => {
   padding: var(--m-space-6) var(--m-space-4)
     max(var(--m-space-8), env(safe-area-inset-bottom));
   background: var(--m-surface-app);
+}
+
+/*
+ * The department surface background (BRAND-012). Applied only where the shell
+ * has marked the surface department-scoped, and only to the content area —
+ * the top bar carries organization identity and stays on the organization
+ * canvas so the department never appears to own the whole product.
+ *
+ * `--m-department-surface` defaults to the organization surface, so this rule
+ * is a no-op for a department with no background, for an organization that has
+ * switched overrides off, and in dark mode.
+ */
+.app-shell[data-department-surface] .app-shell__main {
+  background: var(--m-department-surface);
 }
 
 @media (min-width: 50rem) {

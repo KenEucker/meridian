@@ -34,6 +34,12 @@ class Organization extends Model
     protected $fillable = [
         'name',
         'slug',
+        'branding_display_name',
+        'branding_palette_json',
+        'branding_full_lockup_attachment_id',
+        'branding_compact_mark_attachment_id',
+        'department_branding_enabled',
+        'branding_updated_at',
         'organizers_department_id',
         'default_ic_department_id',
         'default_credit_policy_id',
@@ -77,7 +83,48 @@ class Organization extends Model
             'calendar_year_start_month' => 'integer',
             'calendar_year_start_day' => 'integer',
             'archived_at' => 'datetime',
+            'branding_palette_json' => 'array',
+            'department_branding_enabled' => 'boolean',
+            'branding_updated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The name staff see on signed-in product surfaces (BRAND-001, BRAND-002).
+     *
+     * Falls back to the legal organization name rather than to "Meridian",
+     * because an organization that uploaded a logo but never set a display
+     * name has still asked to be presented as itself.
+     */
+    public function brandingDisplayName(): string
+    {
+        $displayName = trim((string) ($this->branding_display_name ?? ''));
+
+        return $displayName !== '' ? $displayName : (string) $this->name;
+    }
+
+    /**
+     * Whether this organization has said anything about its own identity. An
+     * organization with no branding renders Meridian's defaults, and the
+     * shell uses this to decide whether to replace the Meridian name and mark
+     * at all (BRAND-002).
+     */
+    public function hasBrandingProfile(): bool
+    {
+        return $this->branding_palette_json !== null
+            || trim((string) ($this->branding_display_name ?? '')) !== ''
+            || $this->branding_full_lockup_attachment_id !== null
+            || $this->branding_compact_mark_attachment_id !== null;
+    }
+
+    public function brandingFullLockup(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'branding_full_lockup_attachment_id');
+    }
+
+    public function brandingCompactMark(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'branding_compact_mark_attachment_id');
     }
 
     public function events(): HasMany

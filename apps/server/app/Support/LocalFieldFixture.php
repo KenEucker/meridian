@@ -26,6 +26,28 @@ final class LocalFieldFixture
 
     public const TEAM_ID = '77777777-7777-4777-8777-777777777777';
 
+    /*
+     * The remaining departments the client's department switcher offers
+     * (`apps/client/src/department-teams/fixtureDepartmentAccess.ts`).
+     *
+     * The client switcher is fixture data; the server's permission checks are
+     * not. Before these existed, switching to "Organizer" changed what the
+     * client showed without changing what the server would allow, so an
+     * organizer-only action such as a branding logo upload was offered and then
+     * refused with a 403. These ids exist so both sides describe the same
+     * person in the same organization.
+     *
+     * Only department ids are pinned. Teams are reached through each
+     * department's own default team, which TEAM-002 creates automatically;
+     * pinning team ids as well would mean deleting that auto-created team,
+     * and `departments.default_team_id` references it.
+     */
+    public const ORGANIZER_DEPARTMENT_ID = '22222222-2222-4222-8222-222222222201';
+
+    public const GATE_DEPARTMENT_ID = '22222222-2222-4222-8222-222222222202';
+
+    public const DPW_DEPARTMENT_ID = '22222222-2222-4222-8222-222222222203';
+
     public const USER_EMAIL = 'local-field@meridian.test';
 
     public const USER_NAME = 'Local Field Author';

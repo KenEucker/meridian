@@ -61,6 +61,29 @@ class AttachmentFactory extends Factory
         ]);
     }
 
+    /**
+     * A branding logo asset (BRAND-023). Branding uploads arrive from a
+     * browser rather than a trusted field device, so no origin device is
+     * recorded.
+     */
+    public function brandingAsset(
+        string $attachableType,
+        string $attachableId,
+        string $slot,
+        ?User $uploadedBy = null,
+    ): static {
+        return $this->state(fn (): array => [
+            'attachable_type' => $attachableType,
+            'attachable_id' => $attachableId,
+            'uploaded_by_user_id' => $uploadedBy?->id ?? User::factory(),
+            'filename' => $slot.'_20270704T132210Z.png',
+            'mime_type' => 'image/png',
+            'storage_path' => 'branding/'.$attachableId.'/'.$slot.'_20270704T132210Z.png',
+            'metadata_json' => ['branding_slot' => $slot],
+            'origin_device_id' => null,
+        ]);
+    }
+
     public function forIncident(Incident $incident, ?User $uploadedBy = null): static
     {
         return $this->state(fn (): array => [

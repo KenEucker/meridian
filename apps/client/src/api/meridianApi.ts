@@ -54,7 +54,14 @@ export async function meridianFetch(
     headers.set("Accept", "application/json");
   }
 
-  if (!headers.has("Content-Type") && init.body !== undefined) {
+  // A multipart body carries its own content type with a generated boundary.
+  // Setting `application/json` over it — or even setting `multipart/form-data`
+  // without the boundary — makes the request unparseable on the server.
+  if (
+    !headers.has("Content-Type") &&
+    init.body !== undefined &&
+    !(init.body instanceof FormData)
+  ) {
     headers.set("Content-Type", "application/json");
   }
 

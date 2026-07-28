@@ -24,6 +24,15 @@ export interface ServerHealth {
   server_version?: string | null;
   config_schema_version?: number | null;
   timestamp?: string | null;
+  /**
+   * Node identity, used to decide whether this install is locked to an event
+   * and whose organization it serves (BRAND-003A). Null on an install whose
+   * node is not configured, or whose database is unreachable — the endpoint
+   * stays a liveness probe first and degrades these rather than failing.
+   */
+  node_role?: string | null;
+  organization_id?: string | null;
+  event_id?: string | null;
 }
 
 export type HealthFieldSource = "server" | "app" | "placeholder";

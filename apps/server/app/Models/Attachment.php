@@ -26,6 +26,24 @@ class Attachment extends Model
 
     public const MORPH_INCIDENT = 'incident';
 
+    /** Organization branding logo assets (BRAND-004, BRAND-023). */
+    public const MORPH_ORGANIZATION = 'organization';
+
+    /** Department branding logo assets (BRAND-010, BRAND-023). */
+    public const MORPH_DEPARTMENT = 'department';
+
+    /**
+     * Branding logo slots. The slot is stored in `metadata_json` so one
+     * attachable can hold more than one current asset — an organization has
+     * both a full lockup and a compact mark (BRAND-004) — without the morph
+     * type having to encode which is which.
+     */
+    public const BRANDING_SLOT_FULL_LOCKUP = 'full_lockup';
+
+    public const BRANDING_SLOT_COMPACT_MARK = 'compact_mark';
+
+    public const BRANDING_SLOT_DEPARTMENT_LOGO = 'department_logo';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -103,5 +121,21 @@ class Attachment extends Model
     {
         return $this->attachable_type === self::MORPH_FIELD_REPORT
             || $this->attachable instanceof FieldReport;
+    }
+
+    public function isBrandingAsset(): bool
+    {
+        return in_array(
+            $this->attachable_type,
+            [self::MORPH_ORGANIZATION, self::MORPH_DEPARTMENT],
+            true,
+        );
+    }
+
+    public function brandingSlot(): ?string
+    {
+        $slot = $this->metadata_json['branding_slot'] ?? null;
+
+        return is_string($slot) && $slot !== '' ? $slot : null;
     }
 }

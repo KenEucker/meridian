@@ -81,7 +81,7 @@ The current style direction includes:
 
 UI implementation must use semantic design tokens rather than raw brand colors directly in component code.
 
-The platform accent palette is limited to the four logo colors: `#475157`, `#6B7562`, `#A58667`, and `#CC792F`. Background, foreground/text, border, and focus/highlight tokens may use neutral accessibility values. Other action, status, priority, chart, and department accent colors must resolve through the shared platform palette.
+The four logo colors — `#475157`, `#6B7562`, `#A58667`, and `#CC792F` — are Meridian's own default platform palette, not a fixed platform constant. An organization branding profile replaces the four platform colors and the neutral set (canvas, surface, foreground, muted foreground, border, focus) on signed-in product surfaces (BRAND-006); Meridian's defaults remain on pre-authentication surfaces, Orchid, and desktop chrome (BRAND-003). Action, status, priority, chart, and department accent colors resolve through whichever platform palette is active and are never independently settable (BRAND-007). See section 6.3.
 
 Examples of required semantic token categories:
 
@@ -180,11 +180,20 @@ Dark mode should support night operations by reducing harsh contrast intensity w
 
 Dark mode must not rely on pure black backgrounds by default. It should use deep neutral surfaces, visible borders, restrained elevation, and clear focus states.
 
-### 6.3 Department accent colors
+### 6.3 Branding: organization palette and department override
 
-Department accent colors are not full theme overrides. They are small accents used to identify department context.
+Two branding layers exist, and they are not the same size.
 
-Department accent colors must not replace Meridian’s core semantic tokens. The system should not automatically adjust department accent colors for contrast. Department colors should be selected responsibly and used sparingly so that poor contrast in an accent does not break the UI.
+**The organization palette is the theme.** An organization branding profile defines the four platform colors and the neutral set — canvas, surface, foreground, muted foreground, border, focus — and those values *are* the semantic tokens for every event, department, UI mode, and presentation profile in that organization (BRAND-006, BRAND-008). Action, status, severity, attention/priority, chart series, and department accent tokens continue to derive from that palette and are never independently settable (BRAND-007).
+
+**The department override is bounded.** A department may set a logo, one accent color, and one surface background color, and nothing else (BRAND-009). Departments do not override foreground/text, border, focus/highlight, status, severity, attention/priority, or chart colors (BRAND-011). The department surface background applies only to department-scoped surfaces; it does not reach incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces (BRAND-012). An organization may switch department overrides off for the whole organization, after which departments keep logo and accent identity only (BRAND-013).
+
+Two earlier statements in this section were superseded and should not be read as still governing:
+
+- Department branding is no longer accent-only. A **department surface background is permitted**, within the scope limit above.
+- Meridian no longer leaves contrast to good intentions. Every submitted branding color combination is **validated server-side** against WCAG 2.1 AA — 4.5:1 normal text, 3:1 large text, 3:1 non-text indicators — and a failing submission is **rejected** with the failing pair, the measured ratio, and the required ratio (BRAND-014, BRAND-015). The system does not silently adjust, auto-correct, or auto-derive submitted colors (BRAND-016). Blocking replaced "choose responsibly"; the UI should say so when it refuses a save.
+
+No branding profile makes state unreadable. Canonical status, severity, priority, and restriction keep their labels, icons, and structure under every organization palette and every department background (BRAND-017).
 
 ### 6.4 Document type accents
 
@@ -279,13 +288,16 @@ Each department may define:
 
 - logo;
 - primary accent color;
+- surface background color;
 - icon;
 - short label;
 - description.
 
-Department branding should appear wherever the department appears, but only as small accents. It must not override the Meridian interface.
+Department branding should appear wherever the department appears. Accent remains a small identifier and must not become a full component theme. The surface background is the one exception to "accents only", and it is scope-limited: it applies to department-scoped surfaces and not to incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces (BRAND-012).
 
-If a department has no logo, the UI should generate a default lettermark-style icon using basic colors and initials or letters from separate words in the department name.
+Department branding sits inside the organization palette; it does not replace it (BRAND-011). When the organization has switched department overrides off, the accent and logo still render and the surface background does not (BRAND-013).
+
+The department logo appears in the application header while the user is in that department's context, in the department identity badge, and on department-scoped surfaces. If a department has no logo, the UI generates a default lettermark-style icon using initials or letters from separate words in the department name (BRAND-010).
 
 ### 8.4 Team context
 
@@ -1521,9 +1533,17 @@ A keyboard-accessible command and navigation interface opened by `Ctrl+K`, `Cmd+
 
 A contextual component showing active organization, event, department, team, role, operations window, or sync state when relevant.
 
+### Branding Profile
+
+The stored set of identity and color values that determine how Meridian presents itself to an organization or a department. An organization profile carries display name, logo assets, and the settable palette; a department profile carries logo, accent, and surface background only.
+
 ### Department Accent
 
 A small visual use of a department’s configured identity color. It is not a theme override.
+
+### Department Surface Background
+
+A department’s configured background color, applied only to department-scoped surfaces. It does not apply to incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces, and it is unavailable while the organization has department overrides switched off.
 
 ### DepartmentBadge
 

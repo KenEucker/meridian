@@ -336,6 +336,23 @@ export function fixtureDepartmentHasOrganizerDepartmentAccess(
   return department.capabilities.hasOrganizerDepartmentAdministration;
 }
 
+/**
+ * Branding authority is narrower than general department admin access
+ * (BRAND-019): department leads and department administration edit a
+ * department branding profile, and a team lead does not.
+ *
+ * Kept separate from {@see fixtureDepartmentHasAdminAccess} rather than reusing
+ * it, because that helper deliberately includes team leads — who reach shifts
+ * and team pages but have no say over the department's identity. Reusing it
+ * would show a Branding link the server then refuses, which is exactly the
+ * client/server disagreement this split exists to prevent.
+ */
+export function fixtureDepartmentHasBrandingAccess(
+  department: FixtureDepartmentAccess,
+): boolean {
+  return department.isDepartmentLead;
+}
+
 export function fixtureDepartmentRoleSummary(
   department: FixtureDepartmentAccess,
 ): string {

@@ -982,6 +982,12 @@ Key fields:
 - `id`
 - `name`
 - `slug`
+- `branding_display_name`
+- `branding_palette_json`
+- `branding_full_lockup_attachment_id`
+- `branding_compact_mark_attachment_id`
+- `department_branding_enabled`
+- `branding_updated_at`
 - `organizers_department_id`
 - `default_ic_department_id`
 - `default_placement_department_id`
@@ -994,6 +1000,13 @@ Key fields:
 - `updated_at`
 - `archived_at`
 
+Branding fields (BRAND-001, BRAND-004, BRAND-006, BRAND-013):
+
+- `branding_display_name` is the name shown on signed-in product surfaces. Null falls back to `name`.
+- `branding_palette_json` holds the ten settable colors — `primary`, `secondary`, `tertiary`, `accent`, `canvas`, `surface`, `foreground`, `muted_foreground`, `border`, `focus` — each an opaque `#rrggbb`. Null means Meridian's default palette. Derived tokens are never stored here.
+- The two logo columns reference the *current* attachment for each slot. Replacing a logo repoints the reference at a new attachment; removing it nulls the reference. Superseded assets are not preserved.
+- `department_branding_enabled` is the organization-wide switch. When false, departments retain logo and accent identity only.
+
 Relationships:
 
 - has many events
@@ -1004,6 +1017,7 @@ Relationships:
 - has many procedure documents
 - has many document fragments
 - has many credit policies
+- has current full-lockup and compact-mark branding attachments
 
 ---
 
@@ -1348,9 +1362,19 @@ Key fields:
 - `code`
 - `description`
 - `default_team_id`
+- `branding_logo_attachment_id`
+- `branding_accent_color`
+- `branding_surface_color`
+- `branding_updated_at`
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+Branding fields (BRAND-009, BRAND-011, BRAND-012):
+
+- A department branding profile carries a logo reference, one accent color, and one surface background color, and nothing else. Foreground, border, focus, status, severity, attention, and chart values resolve from the organization palette.
+- `branding_surface_color` applies only to department-scoped surfaces. It is not applied to incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces.
+- Both color columns are ignored while the owning organization has `department_branding_enabled` set to false.
 
 Relationships:
 
@@ -1361,6 +1385,7 @@ Relationships:
 - may be assigned to many events
 - may be selected as the event IC department
 - may own policy/procedure documents and fragments
+- has a current branding logo attachment
 
 Historical records should snapshot department name/code where human readability requires it.
 

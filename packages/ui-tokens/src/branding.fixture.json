@@ -1,0 +1,91 @@
+{
+  "validPalettes": {
+    "meridian-default": {
+      "palette": {
+        "primary": "#475157",
+        "secondary": "#6b7562",
+        "tertiary": "#a58667",
+        "accent": "#cc792f",
+        "canvas": "#f6f1e8",
+        "surface": "#fffcf6",
+        "foreground": "#151a1f",
+        "muted_foreground": "#5f665f",
+        "border": "#8d8371",
+        "focus": "#b35f14"
+      },
+      "tokens": {
+        "--m-platform-primary": "#475157",
+        "--m-platform-secondary": "#6b7562",
+        "--m-platform-tertiary": "#a58667",
+        "--m-platform-accent": "#cc792f",
+        "--m-surface-app": "#f6f1e8",
+        "--m-surface-base": "#fffcf6",
+        "--m-text-primary": "#151a1f",
+        "--m-text-muted": "#5f665f",
+        "--m-border-default": "#8d8371",
+        "--m-focus-ring": "#b35f14",
+        "--m-action-primary-text": "#fffcf6",
+        "--m-action-secondary-text": "#fffcf6",
+        "--m-action-destructive-text": "#151a1f"
+      }
+    },
+    "deep-harbor": {
+      "palette": {
+        "primary": "#123a5c",
+        "secondary": "#1f5f4b",
+        "tertiary": "#6b4f8a",
+        "accent": "#8c2f39",
+        "canvas": "#eef2f6",
+        "surface": "#ffffff",
+        "foreground": "#101418",
+        "muted_foreground": "#565f68",
+        "border": "#7c858d",
+        "focus": "#1b4f8f"
+      },
+      "tokens": {
+        "--m-platform-primary": "#123a5c",
+        "--m-platform-secondary": "#1f5f4b",
+        "--m-platform-tertiary": "#6b4f8a",
+        "--m-platform-accent": "#8c2f39",
+        "--m-surface-app": "#eef2f6",
+        "--m-surface-base": "#ffffff",
+        "--m-text-primary": "#101418",
+        "--m-text-muted": "#565f68",
+        "--m-border-default": "#7c858d",
+        "--m-focus-ring": "#1b4f8f",
+        "--m-action-primary-text": "#ffffff",
+        "--m-action-secondary-text": "#ffffff",
+        "--m-action-destructive-text": "#ffffff"
+      }
+    },
+    "high-visibility": {
+      "palette": {
+        "primary": "#2b2b2b",
+        "secondary": "#4a4a4a",
+        "tertiary": "#6d5d00",
+        "accent": "#b58900",
+        "canvas": "#ffffff",
+        "surface": "#fafafa",
+        "foreground": "#141414",
+        "muted_foreground": "#595959",
+        "border": "#767676",
+        "focus": "#0b5cad"
+      },
+      "tokens": {
+        "--m-platform-primary": "#2b2b2b",
+        "--m-platform-secondary": "#4a4a4a",
+        "--m-platform-tertiary": "#6d5d00",
+        "--m-platform-accent": "#b58900",
+        "--m-surface-app": "#ffffff",
+        "--m-surface-base": "#fafafa",
+        "--m-text-primary": "#141414",
+        "--m-text-muted": "#595959",
+        "--m-border-default": "#767676",
+        "--m-focus-ring": "#0b5cad",
+        "--m-action-primary-text": "#fafafa",
+        "--m-action-secondary-text": "#fafafa",
+        "--m-action-destructive-text": "#141414"
+      }
+    }
+  }
+}

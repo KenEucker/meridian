@@ -99,6 +99,20 @@ Check that:
 - restricted and destructive states use more than color, such as iconography, labels, borders, or wording;
 - focus indicators have sufficient contrast against their immediate background.
 
+### 6.1 Branding profiles
+
+Color is customizable per organization and, within limits, per department. Contrast is not.
+
+Check that:
+
+- every submitted branding color combination is validated server-side against WCAG 2.1 AA before it is stored — 4.5:1 for normal text, 3:1 for large text, 3:1 for non-text user interface and graphical indicators (BRAND-014);
+- a rejected submission names the failing color pair, the measured ratio, and the required ratio (BRAND-015);
+- nothing is silently adjusted, auto-corrected, or auto-derived to make a failing combination pass — invalid combinations are refused, not repaired (BRAND-016);
+- the branding administration surface shows the preview and the validation result **before** the change is saved (BRAND-018);
+- canonical status, severity, priority, and restriction remain readable and remain carried by label, icon, and structure under every organization palette and under a department surface background override (BRAND-017);
+- a department surface background is checked against the organization's foreground, muted foreground, border, focus, and status values, not only against the department's own accent;
+- department-scoped surfaces are the only surfaces taking a department background — IMS surfaces and The Briefing are checked with a department background configured and confirmed unaffected (BRAND-012).
+
 ---
 
 ## 7. Motion and Animation
@@ -306,6 +320,7 @@ Minimum Alpha 1 manual QA matrix for UI changes:
 | Permissions | Verify default staff denial and elevated-user explanation where applicable. |
 | Offline/sync | Verify contextual state and queued/failed behavior where relevant. |
 | Documents | Verify policy/procedure render, fragment reference, and acknowledgment accessibility where relevant. |
+| Branding | With a non-default organization palette and a department background configured, verify status, severity, priority, and restriction remain readable and label/icon-carried, and that a failing color combination is refused with its measured ratio. |
 
 Automated accessibility tooling is not yet configured in this documentation set. Until CI tooling is selected, PRs must include manual accessibility review notes.
 

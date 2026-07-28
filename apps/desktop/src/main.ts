@@ -17,7 +17,7 @@
  * (QA-ELECTRON-01).
  */
 
-import { app, BrowserWindow, globalShortcut } from "electron";
+import { app, BrowserWindow, globalShortcut, nativeImage } from "electron";
 
 import {
   resolveClientDistPath,
@@ -29,6 +29,12 @@ import {
   resolveAppUrlOverride,
   resolveServerUrl,
 } from "./config";
+import {
+  brandingManifestUrl,
+  resolveBrandedOrganizationId,
+  resolveWindowIconUrl,
+  type BrandingManifest,
+} from "./branding";
 import { buildHealthPanelModel, fetchServerHealth, renderHealthPanelHtml } from "./health";
 import { startClientStaticServer, type ClientStaticServer } from "./staticClientServer";
 
@@ -149,10 +155,62 @@ async function resolveMainAppUrl(): Promise<string> {
   return clientServer.url;
 }
 
+/**
+ * Show the organization's mark on the window and taskbar icon while this
+ * install is locked to an event (BRAND-003A).
+ *
+ * Best effort, and deliberately so. Every failure path — no node identity, no
+ * event, no branding profile, no asset, an unreachable server, bytes Electron
+ * cannot decode — leaves Meridian's icon in place, which is both the correct
+ * fallback and the state the window was created in. Branding is chrome; it
+ * must never be a reason the wrapper fails to start.
+ */
+async function applyOrganizationWindowIcon(window: BrowserWindow): Promise<void> {
+  try {
+    const serverUrl = resolveServerUrl(process.env);
+    const health = await fetchServerHealth(resolveHealthUrl(process.env));
+    const organizationId = resolveBrandedOrganizationId(health);
+
+    if (organizationId === null) {
+      return;
+    }
+
+    const response = await fetch(brandingManifestUrl(serverUrl, organizationId));
+
+    if (!response.ok) {
+      return;
+    }
+
+    const iconUrl = resolveWindowIconUrl((await response.json()) as BrandingManifest);
+
+    if (iconUrl === null) {
+      return;
+    }
+
+    const iconResponse = await fetch(iconUrl);
+
+    if (!iconResponse.ok) {
+      return;
+    }
+
+    const icon = nativeImage.createFromBuffer(
+      Buffer.from(await iconResponse.arrayBuffer()),
+    );
+
+    if (!icon.isEmpty() && !window.isDestroyed()) {
+      window.setIcon(icon);
+    }
+  } catch {
+    // Meridian's icon stays. Nothing about the wrapper depends on this.
+  }
+}
+
 app.whenReady().then(async () => {
   currentMeridianVersion = resolveClientVersion(process.env);
   currentAppUrl = await resolveMainAppUrl();
   mainWindow = createMainWindow(currentAppUrl);
+
+  void applyOrganizationWindowIcon(mainWindow);
 
   globalShortcut.register(HEALTH_TOGGLE_SHORTCUT, toggleHealthWindow);
 

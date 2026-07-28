@@ -30,6 +30,10 @@ class DepartmentFactory extends Factory
             'description' => fake()->sentence(),
             'default_team_id' => null,
             'archived_at' => null,
+            'branding_logo_attachment_id' => null,
+            'branding_accent_color' => null,
+            'branding_surface_color' => null,
+            'branding_updated_at' => null,
         ];
     }
 
@@ -37,6 +41,22 @@ class DepartmentFactory extends Factory
     {
         return $this->state(fn (): array => [
             'archived_at' => now(),
+        ]);
+    }
+
+    /**
+     * Accent and surface background pass the contrast rules against the
+     * organization branding factory palette and against Meridian's defaults,
+     * so a branded department fixture is usable without a bespoke palette.
+     */
+    public function branded(
+        string $accent = '#1f5f4b',
+        ?string $surface = '#eef6f2',
+    ): static {
+        return $this->state(fn (): array => [
+            'branding_accent_color' => $accent,
+            'branding_surface_color' => $surface,
+            'branding_updated_at' => now(),
         ]);
     }
 }

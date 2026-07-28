@@ -22,6 +22,12 @@ scripts/process/check.sh
 
 On Windows, open Git Bash in the repository and run this command there so the same POSIX script is used across Windows, Linux, and macOS. Do not use Windows PowerShell, `cmd.exe`, or the WSL `bash.exe` shim for this check.
 
+## Alpha 1 Branding script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-BRAND-01-organization-and-department-branding.md`](QA-BRAND-01-organization-and-department-branding.md) | Organization palette/display name/logo replacement of Meridian identity with login, Orchid, and desktop preserved; blocking WCAG 2.1 AA validation with no auto-repair; department logo/accent/surface bounded to department-scoped surfaces; the organization-wide override switch; lettermark fallback; central authority and active-event freeze; audit; offline rendering; state legibility | M15A.14 |
+
 ## Alpha 1 Briefing script
 
 | ID | Coverage | Owning task |

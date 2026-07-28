@@ -168,6 +168,7 @@ class SeedLocalFieldFixtureCommand extends Command
 
             $this->ensureDepartmentTeamMembership($staff, $department, $team, $user);
             $this->ensureIncidentCommandGrant($team, $event);
+            $this->seedSwitchableDepartments($organization, $department, $staff, $user);
 
             $device = $this->upsert(Device::class, LocalFieldFixture::DEVICE_ID, [
                 'device_label' => 'Local Field Device',
@@ -255,6 +256,148 @@ class SeedLocalFieldFixtureCommand extends Command
                 'archived_at' => null,
             ],
         );
+    }
+
+    /**
+     * The other three departments the client's switcher offers, with the role
+     * grants that make each switch mean the same thing on both sides.
+     *
+     * The grants are deliberately uneven, because the useful fixture is one
+     * that exercises both outcomes:
+     *
+     *   - **Organizer** holds `organizer` and `lead_organizer`, the two roles
+     *     BRAND-019 allows to edit an organization branding profile.
+     *   - **Rangers** holds `department_lead`, so department branding is
+     *     editable there.
+     *   - **Gate** is plain staff and **DPW** is a team lead. Neither may edit
+     *     its own department's branding, which gives two distinct denial paths
+     *     to check rather than an install where everything is permitted and
+     *     nothing is proved.
+     *
+     * Grants are organization-scoped (`event_id` null) rather than tied to the
+     * fixture event, because branding is organization governance data and an
+     * organizer keeps that authority between events.
+     *
+     * Each grant hangs off the department's own default team. TEAM-002 creates
+     * that team with the department, so it is the one team every department is
+     * guaranteed to have.
+     */
+    private function seedSwitchableDepartments(
+        Organization $organization,
+        Department $rangers,
+        Staff $staff,
+        User $user,
+    ): void {
+        $rangersDefault = $this->defaultTeamFor($rangers);
+        $this->grantRole($rangersDefault, PermissionCatalog::ROLE_DEPARTMENT_LEAD);
+
+        $organizers = $this->upsertDepartment(
+            $organization,
+            LocalFieldFixture::ORGANIZER_DEPARTMENT_ID,
+            'Organizer',
+            'ORG',
+            'Organization-level event administration.',
+        );
+        $organizersDefault = $this->defaultTeamFor($organizers);
+
+        // Recorded before the grants, not after: ORG-005 makes the Organizers
+        // Department an organization's organizer home, and TeamGrantService
+        // refuses an organizer role until the organization names one.
+        $organization->forceFill(['organizers_department_id' => $organizers->id])->save();
+
+        $this->grantRole($organizersDefault, PermissionCatalog::ROLE_ORGANIZER);
+        $this->grantRole($organizersDefault, PermissionCatalog::ROLE_LEAD_ORGANIZER);
+
+        $gate = $this->upsertDepartment(
+            $organization,
+            LocalFieldFixture::GATE_DEPARTMENT_ID,
+            'Gate',
+            'GATE',
+            'Entry and credentialing.',
+        );
+
+        $dpw = $this->upsertDepartment(
+            $organization,
+            LocalFieldFixture::DPW_DEPARTMENT_ID,
+            'DPW',
+            'DPW',
+            'Build, roads, and event infrastructure.',
+        );
+        $dpwDefault = $this->defaultTeamFor($dpw);
+
+        // A team lead, which is deliberately not enough for branding.
+        $this->grantRole($dpwDefault, PermissionCatalog::ROLE_SHIFT_LEAD);
+
+        $this->ensureDepartmentTeamMembership($staff, $rangers, $rangersDefault, $user);
+        $this->ensureDepartmentTeamMembership($staff, $organizers, $organizersDefault, $user);
+        $this->ensureDepartmentTeamMembership($staff, $gate, $this->defaultTeamFor($gate), $user);
+        $this->ensureDepartmentTeamMembership($staff, $dpw, $dpwDefault, $user);
+    }
+
+    private function upsertDepartment(
+        Organization $organization,
+        string $id,
+        string $name,
+        string $code,
+        string $description,
+    ): Department {
+        /** @var Department $department */
+        $department = $this->upsert(
+            Department::class,
+            $id,
+            [
+                'organization_id' => $organization->id,
+                'name' => $name,
+                'code' => $code,
+                'description' => $description,
+                'archived_at' => null,
+            ],
+            uniqueBy: ['organization_id' => $organization->id, 'code' => $code],
+        );
+
+        return $department;
+    }
+
+    /**
+     * The department's default team, creating it when an older fixture row
+     * predates the boot hook that now adds one.
+     */
+    private function defaultTeamFor(Department $department): Team
+    {
+        $department->refresh();
+
+        $existing = $department->default_team_id !== null
+            ? Team::query()->find($department->default_team_id)
+            : null;
+
+        if ($existing instanceof Team) {
+            return $existing;
+        }
+
+        $team = $department->teams()->firstOrCreate(
+            ['code' => 'DEFAULT'],
+            ['name' => 'Default', 'description' => null, 'is_default' => true],
+        );
+
+        $department->forceFill(['default_team_id' => $team->getKey()])->saveQuietly();
+
+        return $team;
+    }
+
+    private function grantRole(Team $team, string $roleCode): void
+    {
+        $role = PermissionRole::query()->where('code', $roleCode)->firstOrFail();
+
+        $existing = TeamGrant::query()
+            ->active()
+            ->where('team_id', $team->getKey())
+            ->whereNull('event_id')
+            ->where('permission_role_id', $role->id)
+            ->exists();
+
+        if (! $existing) {
+            app(TeamGrantService::class)->grant($team, $role);
+        }
     }
 
     private function ensureIncidentCommandGrant(Team $team, Event $event): void

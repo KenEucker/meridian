@@ -1,4 +1,4 @@
-Sign in to Meridian
+Sign in to {{ $productName }}
 
 Use the link below to sign in. This link expires soon and can only be used once per request.
 

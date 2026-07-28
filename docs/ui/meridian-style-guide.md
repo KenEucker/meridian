@@ -232,11 +232,15 @@ Avoid retaining thin contour lines in favicon-scale assets.
 
 ## 4. Color System
 
-The prior blue/cyan/teal identity should be retired for primary brand usage. Meridian's platform palette is the four-color logo palette, used in priority order for product accents, action color, status/severity color, priority indicators, chart series, and department accents.
+The prior blue/cyan/teal identity should be retired for primary brand usage. The four-color logo palette below is **Meridian's own default platform palette**, used in priority order for product accents, action color, status/severity color, priority indicators, chart series, and department accents.
 
-Background, foreground/text, border, and focus/highlight colors may continue to use neutral semantic tokens for readability and accessibility. New non-neutral accent colors must not be introduced without updating this guide and `@meridian/ui-tokens`.
+It is a default, not a fixed platform constant. An organization branding profile defines its own four platform colors and its own neutral set — canvas, surface, foreground, muted foreground, border, and focus — and those values replace the defaults on signed-in product surfaces (BRAND-006). The values in sections 4.1 and 4.2 are what an install renders before any organization branding profile exists, and what Meridian's own identity surfaces keep permanently: login, the magic-link landing, node first-run setup, the Orchid administrative interface, and desktop application chrome and installers never adopt an organization palette (BRAND-003).
 
-### 4.1 Core Platform Palette
+What is *not* customizable is the derivation. Action, status, severity, attention/priority, chart series, and department accent tokens continue to resolve through whichever platform palette is active. They are never independently settable, by Meridian or by an organization (BRAND-007), because those tokens are how state reads consistently across every organization on an install.
+
+New non-neutral accent *token names* must not be introduced without updating this guide and `@meridian/ui-tokens`. Changing the value behind an existing token is branding; adding a new token is a contract change.
+
+### 4.1 Core Platform Palette (Meridian default)
 
 | Token | Name | Hex | Use |
 | --- | --- | --- | --- |
@@ -245,7 +249,9 @@ Background, foreground/text, border, and focus/highlight colors may continue to 
 | `brand.platform-tertiary` | Dust Umber | `#A58667` | Secondary priority/state accents and supporting data series |
 | `brand.platform-accent` | Signal Orange | `#CC792F` | Destructive/archive/delete actions and critical attention accents |
 
-### 4.2 Extended Neutral Palette
+### 4.2 Extended Neutral Palette (Meridian default)
+
+The neutral set is branding surface too. An organization defines canvas, surface, foreground, muted foreground, border, and focus; the values below are Meridian's defaults for them (BRAND-006).
 
 | Token | Name | Hex | Use |
 | --- | --- | --- | --- |
@@ -277,8 +283,9 @@ Semantic accent tokens must resolve to the core platform palette. Communicate st
 - Use warm canvas backgrounds for brand and documentation surfaces.
 - Use white or near-white application surfaces when dense data readability matters.
 - Do not make the entire UI orange, tan, or earth-toned.
-- Avoid blue, cyan, teal, red, or green as product accent colors unless the color is a background, foreground/text, border, focus/highlight, or other accessibility-supporting neutral.
 - Preserve accessibility contrast for all text, controls, status chips, and links.
+
+The hue restriction that previously appeared here — avoid blue, cyan, teal, red, or green as product accent colors — applies to **Meridian's own identity**, not to an organization branding profile. An organization is entitled to a blue palette if it is a blue organization. What constrains an organization palette is contrast, not taste: every submitted combination is validated server-side against WCAG 2.1 AA and rejected outright when it fails (section 4.6).
 
 ### 4.5 UI Color Relationship
 
@@ -287,15 +294,34 @@ The brand palette should inform the UI, but the UI should still use semantic des
 Recommended examples:
 
 ```css
+/* Settable by an organization branding profile. */
 --m-platform-primary: #475157;
 --m-platform-secondary: #6b7562;
 --m-platform-tertiary: #a58667;
 --m-platform-accent: #cc792f;
 
+/* Derived. Never independently settable. */
 --m-action-primary-bg: var(--m-platform-primary);
 --m-action-secondary-bg: var(--m-platform-secondary);
 --m-action-destructive-bg: var(--m-platform-accent);
 ```
+
+### 4.6 Organization and Department Branding
+
+An **organization branding profile** carries the organization display name, logo assets, and the ten settable colors: the four platform colors plus canvas, surface, foreground, muted foreground, border, and focus. It applies to every event, department, UI mode, and presentation profile in that organization (BRAND-008).
+
+A **department branding profile** is deliberately narrower. It carries a department logo, one department accent color, and one department surface background color, and nothing else (BRAND-009). Departments do not override foreground/text, border, focus/highlight, status, severity, attention/priority, or chart colors; those keep resolving from the organization palette (BRAND-011).
+
+Two rules changed with this milestone and are recorded here so the earlier text is not read as still governing:
+
+- **A department background is now permitted.** Department identity used to be accent-only. A department may now set one surface background color, and it applies only to department-scoped surfaces — never to incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces (BRAND-012). An organization may switch department overrides off entirely, after which departments keep logo and accent identity only (BRAND-013).
+- **The system blocks failing contrast; it does not repair it.** Meridian validates every submitted branding color combination server-side against WCAG 2.1 AA — 4.5:1 for normal text, 3:1 for large text, 3:1 for non-text user interface and graphical indicators — and rejects a failing submission naming the failing pair, the measured ratio, and the required ratio (BRAND-014, BRAND-015). It never silently adjusts, auto-corrects, or auto-derives a submitted color (BRAND-016). The older guidance that Meridian "should not automatically adjust department accent colors for contrast, so choose responsibly" described an unvalidated accent; responsibility now sits with a validator that refuses the save.
+
+Branding never carries meaning on its own. Canonical status labels, iconography, and structural communication are unchanged by any branding profile, under any organization palette and under any department background (BRAND-017).
+
+One narrow carve-out exists in the desktop wrapper. While a desktop or Kiosk application is locked to an event, its **running window and taskbar icon** shows the organization compact mark, falling back to the full lockup and then to Meridian's mark (BRAND-003A). The packaged application icon, the installer, the executable metadata, and the OS-facing application name stay Meridian's: those identify the software rather than the deployment, and they have to remain correct on a machine that is not running an event.
+
+Typography is not branding surface. Organizations and departments do not select or upload fonts (BRAND-024).
 
 ---
 
@@ -720,6 +746,7 @@ Ensure charts remain usable for color-vision differences.
 ### 13.1 Minimum Requirements
 
 - Body text contrast should meet WCAG AA.
+- Branding color combinations must meet WCAG 2.1 AA and are rejected server-side when they do not (section 4.6).
 - Interactive controls must have visible focus states.
 - Status must never be communicated by color alone.
 - Touch targets should be at least 44×44px on touch-first and Kiosk surfaces.
