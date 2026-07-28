@@ -22,6 +22,7 @@
 // milestones. Rather than invent behavior, those items are reported honestly as
 // `pending` until their signal is wired in by the owning task.
 
+import { nodeConnection, type NodeConnection } from "@/app/nodeConnection";
 import {
   checkDeviceSigningReadiness,
   type DeviceSigningReadiness,
@@ -79,6 +80,7 @@ export interface ReadinessSummary {
 export interface ReadinessChecklistInputs {
   readonly localEncryption: LocalEncryptionReadiness;
   readonly deviceSigning: DeviceSigningReadiness;
+  readonly node: NodeConnection;
 }
 
 const READINESS_ITEM_ORDER: readonly ReadinessItemKey[] = [
@@ -116,8 +118,34 @@ const PENDING_ITEMS: readonly ReadinessItemKey[] = [
   "eventSelected",
   "localCacheComplete",
   "lastSyncCompleted",
-  "trustedServerKnown",
 ];
+
+/**
+ * `trusted server known` is about knowing which node this device works
+ * against, which is now a real signal: a device is either pointed at a node or
+ * falling back to a development default. Establishing *trust* with that node
+ * is device trust, which is the separate `deviceTrusted` item and is still
+ * pending.
+ */
+function nodeItem(node: NodeConnection): ReadinessChecklistItem {
+  if (node.source === "default") {
+    return toItem(
+      "trustedServerKnown",
+      "not-ready",
+      "No node is configured. This device is using the local development default.",
+    );
+  }
+
+  if (node.overridesServingNode) {
+    return toItem(
+      "trustedServerKnown",
+      "ready",
+      `Set to ${node.url}, which is not the node that served this app.`,
+    );
+  }
+
+  return toItem("trustedServerKnown", "ready", node.url);
+}
 
 function toItem(
   key: ReadinessItemKey,
@@ -151,6 +179,9 @@ export function buildReadinessChecklist(
     }
     if (key === "deviceSigningAvailable") {
       return capabilityItem(key, inputs.deviceSigning);
+    }
+    if (key === "trustedServerKnown") {
+      return nodeItem(inputs.node);
     }
     if (PENDING_ITEMS.includes(key)) {
       return toItem(key, "pending", PENDING_DETAIL);
@@ -208,5 +239,6 @@ export function resolveReadinessChecklist(
   return buildReadinessChecklist({
     localEncryption: checkLocalEncryptionReadiness(scope),
     deviceSigning: checkDeviceSigningReadiness(scope),
+    node: nodeConnection.value,
   });
 }

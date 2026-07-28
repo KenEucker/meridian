@@ -1,4 +1,10 @@
 // Minimal Meridian server HTTP client for Field Report command uploads (M9.8).
+//
+// The node this client talks to is resolved by `@/app/nodeConnection`, which
+// lets a device be pointed at a node rather than only inheriting the one that
+// served it or the one baked in at build time.
+
+import { resolveNodeUrl } from "@/app/nodeConnection";
 
 export class MeridianApiError extends Error {
   readonly status: number;
@@ -19,15 +25,9 @@ export interface MeridianApiConfig {
 
 function readConfig(): MeridianApiConfig {
   const env = import.meta.env as Record<string, string | undefined>;
-  const runtimeConfig =
-    typeof window === "undefined" ? null : window.__MERIDIAN_RUNTIME_CONFIG__;
 
   return {
-    baseUrl: (
-      runtimeConfig?.apiBaseUrl ??
-      env.VITE_MERIDIAN_API_BASE_URL ??
-      "http://127.0.0.1:8000"
-    ).replace(/\/$/, ""),
+    baseUrl: resolveNodeUrl(),
     bearerToken: env.VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN ?? null,
   };
 }

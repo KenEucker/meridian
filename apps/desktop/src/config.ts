@@ -40,6 +40,103 @@ export function resolveServerUrl(env: EnvLike = {}): string {
   return normalizeHttpUrl(raw, "MERIDIAN_SERVER_URL");
 }
 
+/**
+ * Name of the settings file the wrapper reads its node from, inside Electron's
+ * per-user application data directory.
+ *
+ * A packaged desktop app is not started from a shell, so an environment
+ * variable is not a way to tell it which node it belongs to — somebody
+ * installing an on-site laptop has no place to put one. A file in the app's own
+ * data directory is somewhere they can reach, and it survives an app update.
+ */
+export const NODE_SETTINGS_FILE = "node.json";
+
+export type ServerUrlSource = "environment" | "stored" | "default";
+
+export interface ResolvedServerUrl {
+  /** The node the wrapper reads health and branding from. */
+  readonly url: string;
+  /** Where that value came from. */
+  readonly source: ServerUrlSource;
+  /** The settings file consulted, whether or not it existed. */
+  readonly settingsPath: string | null;
+}
+
+/**
+ * Read the stored node URL, or `null` when there is none to read.
+ *
+ * A missing file is the normal case and is not an error. A malformed one is
+ * also treated as absent: the wrapper's job is to open the UI, and refusing to
+ * start because a settings file has a stray comma would strand an operator with
+ * no way in.
+ */
+export function readStoredServerUrl(
+  settingsPath: string,
+  readFile: ReadFile = readFileSync,
+): string | null {
+  let contents: string;
+
+  try {
+    contents = readFile(settingsPath, "utf8") as string;
+  } catch {
+    return null;
+  }
+
+  let raw: string;
+
+  try {
+    const parsed = JSON.parse(contents) as { serverUrl?: unknown };
+    raw = typeof parsed.serverUrl === "string" ? parsed.serverUrl.trim() : "";
+  } catch {
+    return null;
+  }
+
+  if (raw === "") {
+    return null;
+  }
+
+  try {
+    return normalizeHttpUrl(raw, "serverUrl");
+  } catch {
+    // Same policy as a malformed file: an address the wrapper cannot use is
+    // no address. It falls back to the default and says so in the health
+    // panel, which is a state an operator can see and correct.
+    return null;
+  }
+}
+
+/**
+ * Resolve the node this wrapper works against, with its provenance.
+ *
+ * `MERIDIAN_SERVER_URL` stays highest so a scripted or containerized
+ * deployment keeps deciding, and an operator's stored setting is next. The
+ * source travels with the value because "which node is this and who said so"
+ * is the question the health panel exists to answer.
+ */
+export function resolveServerUrlSetting(
+  env: EnvLike = {},
+  settingsPath: string | null = null,
+  readFile: ReadFile = readFileSync,
+): ResolvedServerUrl {
+  const fromEnvironment = env.MERIDIAN_SERVER_URL?.trim();
+
+  if (fromEnvironment) {
+    return {
+      url: normalizeHttpUrl(fromEnvironment, "MERIDIAN_SERVER_URL"),
+      source: "environment",
+      settingsPath,
+    };
+  }
+
+  const stored = settingsPath === null ? null : readStoredServerUrl(settingsPath, readFile);
+
+  if (stored !== null) {
+    return { url: stored, source: "stored", settingsPath };
+  }
+
+  return { url: DEFAULT_SERVER_URL, source: "default", settingsPath };
+}
+
 /** Resolve the packaged Meridian Kiosk client build directory. */
 export function resolveClientDistPath(env: EnvLike = {}, cwd = process.cwd()): string {
   const raw = env.MERIDIAN_CLIENT_DIST_DIR?.trim();

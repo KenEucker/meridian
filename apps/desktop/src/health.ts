@@ -56,6 +56,21 @@ export interface HealthPanelModel {
   generatedAt: string;
 }
 
+/** Explain where the wrapper's node setting came from, in the panel. */
+function describeNodeUrlSource(source: string, settingsPath: string | null): string {
+  if (source === "environment") {
+    return "MERIDIAN_SERVER_URL";
+  }
+
+  if (source === "stored") {
+    return settingsPath === null ? "Set on this device" : `Set on this device (${settingsPath})`;
+  }
+
+  return settingsPath === null
+    ? "Default. No node has been set."
+    : `Default. No node has been set (${settingsPath}).`;
+}
+
 /** Value shown for fields whose source milestone has not been built yet. */
 export const PLACEHOLDER_VALUE = "Pending later Alpha 1 milestone";
 
@@ -72,9 +87,15 @@ export function buildHealthPanelModel(input: {
   appVersion: string;
   clientVersion: string;
   health: ServerHealth | null;
+  /**
+   * The node this wrapper reads health from, and where that setting came from.
+   * Optional so existing callers keep working; omitted, the node fields are
+   * left off rather than guessed at.
+   */
+  node?: { url: string; source: string; settingsPath: string | null };
   generatedAt?: string;
 }): HealthPanelModel {
-  const { appUrl, appVersion, clientVersion, health } = input;
+  const { appUrl, appVersion, clientVersion, health, node } = input;
   const reachable = health !== null;
   const generatedAt = input.generatedAt ?? new Date().toISOString();
 
@@ -95,6 +116,19 @@ export function buildHealthPanelModel(input: {
     { label: "Connected devices", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Local discovery status", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Certificate / HTTPS status", value: describeHttpsStatus(appUrl), source: "app" },
+    // Which node this install belongs to, and who decided. An on-site laptop
+    // pointed at the wrong node looks identical to one that cannot reach its
+    // own, and this is the field that tells those apart.
+    ...(node === undefined
+      ? []
+      : [
+          { label: "Node URL", value: node.url, source: "app" as HealthFieldSource },
+          {
+            label: "Node URL source",
+            value: describeNodeUrlSource(node.source, node.settingsPath),
+            source: "app" as HealthFieldSource,
+          },
+        ]),
     { label: "Server version", ...serverValue(health?.server_version) },
     { label: "Client version", value: clientVersion, source: "app" },
     { label: "Electron wrapper version", value: appVersion, source: "app" },
