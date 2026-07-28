@@ -344,21 +344,21 @@ Route::screen('document-fragments', DocumentFragmentListScreen::class)
         ->parent('platform.index')
         ->push(__('Document Fragments'), route('platform.document-fragments')));
 
-// Platform > God Mode > Sync Conflicts > Conflict
+// Platform > Infrastructure > Sync Conflicts > Conflict
 Route::screen('sync-conflicts/{conflict}', SyncConflictDetailScreen::class)
     ->name('platform.sync-conflicts.show')
     ->breadcrumbs(fn (Trail $trail, $conflict) => $trail
         ->parent('platform.sync-conflicts')
         ->push(__('Review'), route('platform.sync-conflicts.show', $conflict)));
 
-// Platform > God Mode > Sync Conflicts
+// Platform > Infrastructure > Sync Conflicts
 Route::screen('sync-conflicts', SyncConflictListScreen::class)
     ->name('platform.sync-conflicts')
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Sync Conflicts'), route('platform.sync-conflicts')));
 
-// Platform > God Mode > Node Configuration
+// Platform > Infrastructure > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)
     ->name('platform.node.config')
     ->breadcrumbs(fn (Trail $trail) => $trail

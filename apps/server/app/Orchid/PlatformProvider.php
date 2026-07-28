@@ -39,9 +39,11 @@ class PlatformProvider extends OrchidServiceProvider
     public function menu(): array
     {
         return [
-            Menu::make(__('God Mode Home'))
+            // The console entry point carries no group heading: it is the first
+            // thing in the sidebar, so a heading above it would name a section
+            // of one and say nothing the item does not already say.
+            Menu::make(__('Getting Started'))
                 ->icon('bs.compass')
-                ->title(__('Navigation'))
                 ->route(config('platform.index'))
                 ->divider(),
 
@@ -124,10 +126,23 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.permissions')
                 ->title(__('God Mode')),
 
+            // Node identity, pairing, and sync conflicts describe how this
+            // deployment is wired together rather than how the organization
+            // operates, so they carry their own heading instead of trailing the
+            // previous section.
+            //
+            // A group heading in this framework lives on the first item of its
+            // group, and a permission-hidden item takes its heading with it. An
+            // operator holding only some of these permissions can therefore see
+            // a later item filed under the previous heading, which is how these
+            // two ended up reading as Policies & Procedures. Console
+            // permissions are granted together in practice; if that stops being
+            // true, the heading has to move to whichever item is always visible.
             Menu::make(__('Sync Conflicts'))
                 ->icon('bs.exclamation-diamond')
                 ->route('platform.sync-conflicts')
-                ->permission('platform.sync-conflicts'),
+                ->permission('platform.sync-conflicts')
+                ->title(__('Infrastructure')),
 
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
@@ -178,12 +193,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.procedure-documents', __('Procedure documents'))
                 ->addPermission('platform.document-fragments', __('Document fragments')),
 
+            // Grouped the way the sidebar is, so an operator granting console
+            // access finds a capability under the heading they saw it under.
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.permissions', __('Permission catalog'))
-                ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
-                ->addPermission('platform.node.config', __('Node configuration'))
                 ->addPermission('platform.documentation', __('Operator documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),
+
+            ItemPermission::group(__('Infrastructure'))
+                ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
+                ->addPermission('platform.node.config', __('Node configuration')),
         ];
     }
 }
