@@ -753,9 +753,120 @@ Two pieces of this milestone are attendance-domain work rather than Insights wor
 
 ### Milestone 18: Gap Closure
 
-**Goal:** To be specified.
+**Goal:** Close the distance between what the source documents specify and what a person can actually do in the product, so that every MVP feature is reachable, wired to real data, and administrable from a normal product surface rather than only from God Mode.
 
-This milestone is reserved for scope identified as missed across earlier milestones. Its scope, source documents, tasks, acceptance criteria, and QA gate will be added through the normal process before any task under it is implemented.
+This milestone was specified from a full audit of the requirements, technical, data/API, and UI documents against the implementation as of version 0.0.49. It divides into four parts with different characters, and they are listed in dependency order rather than in importance order.
+
+**Part A** is domain code that exists, is tested, and cannot be reached. Seven services have no controller, no route, and no user interface; four of them have no consumer anywhere in the application. This is the cheapest work in the milestone and the most valuable, because the hard part is already written and reviewed.
+
+**Part B** is scope the source documents did not previously carry. It arrived through the requirements additions listed in the requirements document header: organization configuration, department team designations, document-backed waivers, notifications, the applicant portal, and the public marketing surface. No task in Part B may begin before its requirement IDs are settled, because those IDs did not exist when earlier milestones were planned.
+
+**Part C** is product surfaces the UI implementation contract has always named and no milestone ever built. Most are small once Part A and Milestone 16 exist.
+
+**Part D** is documentation reconciliation with no runtime behavior of its own.
+
+**Sequencing note.** Milestone 16 is a hard prerequisite for most of Parts A and C. Until the client holds a real session, every surface built here would consume `department-ops/fixtures.ts` and its siblings and would then have to be rewired. Part B tasks M18.10 through M18.13 are the exception and should land *before* Milestone 16, because they change the permission model that Milestone 16 wires into navigation, and rewiring navigation twice is the expensive order.
+
+**Primary source docs:** Requirements sections 3.9, 3.11–3.15, 4.4, 4.8A, 4.9, 7.1 (ORG-017–ORG-021), 7.2 (VOL-014), 7.4 (APP-012–APP-015), 7.5 (TEAM-011–TEAM-018), 7.6 (TRAIN-011, WAIVER-007–WAIVER-010), 7.7 (SHIFT-017, SHIFT-018), 7.9 (SLB-031, SLB-032), 7.13 (EQUIP-008, EQUIP-009), 7.14 (REPORT-014, REPORT-015), 7.24 (NOTIFY-001–NOTIFY-010), 7.25 (PUBLIC-001–PUBLIC-006); Technical spec sections 15, 20, 21, 22, 23; data/API sections 5.2, 6.4, 10.1, 10.5, 10.6, 10.8, 10.10, 10.12, 10.13, 11.9, 11.10, 15.2; UI implementation contract sections 7, 9.6, 12, 13, 17, 19A.
+
+#### Part A: Unreachable domain
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M18.1 Department presence commands and UI | Expose `DepartmentPresenceService` as `mark-staff-on-site` / `mark-staff-off-site` commands and wire the Logistics Desk staff workspace controls to them. Enforce the off-site blocks for an open shift and for held equipment. | SLB-015 through SLB-018; technical spec 20.3; data/API 10.10A | Domain/policy/UI tests; a test asserting off-site is refused while checked in; a test asserting off-site is refused while equipment is held |
+| M18.2 Staff shift signup | Expose `ShiftSignupService` and `ShiftRemovalService` as `sign-up-for-shift` / `withdraw-from-shift` commands for ordinary shifts, not only through the training-linked path, and build the `staff.shift-board` surface where a staff member browses eligible shifts and signs up. | SHIFT-011 through SHIFT-015, SHIFT-018; requirements 3.12, 5.5 | Domain/policy/UI tests; a test asserting each eligibility denial reason renders; an overlap warning test asserting it warns rather than blocks |
+| M18.3 Unscheduled shift addition | Expose `UnscheduledShiftAdditionService` as an `add-staff-to-shift` command and wire the Logistics Desk staff workspace action to it, requiring on-site presence first. | SLB-008, SHIFT-016; requirements 5.8 | Domain/policy/UI tests; a test asserting a staff member not on-site is refused; a test asserting a staff member outside the department/team is refused |
+| M18.4 Hours correction | Expose `HoursCorrectionService` as a `correct-hours` command and build the Logistics Desk workspace path: search staff, open a completed shift, edit actual start/end. Refuse once frozen with a message naming the closed grace period. | SLB-007, SLB-031, SLB-032; HOURS-007, HOURS-008 | Domain/policy/audit/UI tests; a test asserting a frozen record refuses correction; a test asserting prior values survive in history |
+| M18.5 Credential revocation | Expose `CredentialRevocationService` as a `revoke-credential` command restricted to organizers and IC department leads, and build the `organizer.credentials` surface. Remove future shifts, preserve completed shifts and hours. | CRED-009 through CRED-014 | Domain/policy/audit/UI tests; a test asserting a non-organizer non-IC-lead is refused; a test asserting recorded hours survive revocation |
+| M18.6 Document acknowledgment path | Expose `DocumentAcknowledgmentService` and `DocumentAcknowledgmentRequirementService` as an `acknowledge-document` command plus requirement administration, and build `signup.policy-acknowledgment`, `staff.document-acknowledgments`, and `organizer.document-acknowledgments`. Record document and version. | POL-023 through POL-027, POL-043 through POL-047 | Domain/policy/UI tests; a test asserting the acknowledged version is recorded; a test asserting acknowledgment is not presented as a shift-signup or credential gate |
+| M18.7 Staff document library | Build `staff.documents` and `staff.document-detail` reading the existing document endpoints under published-document visibility, so staff reach policies and procedures outside a department administration surface. | POL-006, POL-008 through POL-013, POL-055; UI contract 12.3 | UI/policy tests; a test asserting an unpublished document is absent for a non-maintainer |
+| M18.8 Department operations API binding | Replace `department-ops/fixtures.ts` in Department Overview, Logistics Desk, Operations Center, and Planning Table with the real endpoints, routing every mutation through the Milestone 16 command outbox. | CLIENT-015, CLIENT-023; SLB-001 through SLB-022 | UI/offline/idempotency integration tests; a test asserting no fixture module is imported by a department operations view |
+| M18.9 Remaining fixture removal | Remove the remaining development-session installers and fixture models behind departments, teams, trainings, equipment, shifts, documents, event info, staff administration, and IMS, once Milestone 16 supplies the session. | CLIENT-001, CLIENT-023, CLIENT-024 | Integration tests per surface group; a repository check asserting no production module imports a fixture; client tests still run without a live server |
+
+#### Part B: New scope
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M18.10 Team designation model | Add department team designations for Logistics, Operations, Planning, Administration, and Operator, and the organization Staff Coordinator designation on a team within the Organizers Department. A designation attaches an existing department operational grant to a named team; it does not become a new authority path. | TEAM-011 through TEAM-014, TEAM-017; data/API 6.4, 10.6 | Schema/domain/audit tests; a test asserting a designation grants exactly the documented capability set; a test asserting removing a designation removes the derived authority |
+| M18.10A Department Operator role | Add `department_operator` to the permission catalog carrying the section 4.8A Operator capabilities, and derive event-scoped `ic_operator` for the designated Operator team when its department is the event's Incident Command Department. The elevation comes from the two designations together and is not separately grantable. | TEAM-012, TEAM-012A; requirements 4.8A; technical spec 16.2; data/API 6.4, 6.5 | PermissionCatalog/policy tests; a test asserting the elevation applies only for events where the department is IC; a test asserting the elevation cannot be granted directly |
+| M18.11 Staff Coordinator role | Add `staff_coordinator` to the permission catalog as an organization-scoped role carrying application review, approval, rejection, and deferral, and no other organizer governance capability. | TEAM-014; requirements 4.4; data/API 6.4, 10.7 | PermissionCatalog/policy tests; a test asserting a Staff Coordinator cannot manage departments, staff status, or credentials |
+| M18.12 Designation administration | Add department team designation management to the department administration surface and organization designation management to the organization configuration surface, with permission explanations naming the designation. | TEAM-016, TEAM-018; UI contract 12.4, 12.6 | API/domain/policy/UI tests; a test asserting the explanation names the designation that granted the capability |
+| M18.13 Attendance manager resolution | Resolve "authorized attendance manager" to `department_logistics` holders plus department leads and shift leads for the department, and apply it consistently to check-in, check-out, mark-no-show, and hours correction. | TEAM-015; SLB-007, SLB-029; HOURS-007 | Policy tests across all four operations; a test asserting the four agree on who is authorized |
+| M18.14 Organization configuration | Add the hours correction grace period column with a documented default, and build the organization configuration surface covering lifecycle thresholds, grace period, calendar year start, default credit policy, and the three department designations. | ORG-017, ORG-018, ORG-020, ORG-021; data/API 10.1 | Schema/API/domain/policy/UI tests; a governance-freeze test reusing the existing suite; audit tests |
+| M18.15 Lifecycle threshold evaluation | Add the scheduled evaluator that applies the Prospective and Active inactivity thresholds, idempotently, through the audited status path, respecting STAT-009. | ORG-019; STAT-009 through STAT-011 | Domain/schedule tests; an idempotency test; a test asserting active department work prevents organization inactivity |
+| M18.16 Credit policies | Add `credit_policies` and `credit_ledger_entries`, the organization default and shift override resolution, and product-UI credit policy administration. This is the schema Milestone 13.5 and 13.6 depend on and it does not exist. | ORG-009, ORG-010; SHIFT-010; CREDIT-001 through CREDIT-005; data/API 10.12 | Schema/domain/policy/UI tests; a test asserting shift policy wins over organization default; a freeze test |
+| M18.17 Document-backed waivers | Add the optional published-document reference on waivers, render document content with fragments inline at completion, and record the acknowledged document version alongside the completion. | WAIVER-007 through WAIVER-009; POL-022, POL-043 | Schema/domain/rendering tests; a test asserting a waiver with no document behaves unchanged; a version-recording test |
+| M18.18 Waiver administration | Expose `WaiverService` and build waiver create/scope/expiration administration and completion recording, with authority following waiver scope. | WAIVER-001 through WAIVER-006, WAIVER-010 | API/domain/policy/UI tests; a test asserting an expired waiver blocks credential eligibility; scope-authority tests |
+| M18.19 Relative schedule cutoff | Let a schedule lock be expressed as an offset before the active event window start as well as an absolute timestamp, resolving to absolute whenever the window is known. | SHIFT-009, SHIFT-017 | Domain tests; a test asserting a moved event window moves a relative cutoff and leaves an absolute one alone |
+| M18.20 Staff profile surface | Build the staff profile surface for own-profile field maintenance and profile picture upload, replace, and remove through the existing attachment path, online-only. | VOL-009, VOL-013, VOL-014; technical spec 18A | Upload/policy/UI tests; a test asserting a non-active staff member cannot upload; a visibility test asserting the picture follows profile visibility |
+| M18.21 Notification delivery | Add the transactional email path: templates for the NOTIFY-001 set, organization branding, queued delivery, send recording, central-node-only sending, and the suppression switch. | NOTIFY-001 through NOTIFY-010; BRAND-002 | Mail/queue/policy tests; a test asserting DNS auto-rejection sends nothing; a test asserting an unverified address receives nothing; a test asserting a delivery failure does not roll back its operation |
+| M18.22 Applicant portal | Add applicant self-service: request a signed link by email, view own applications, withdraw a withdrawable application, with enumeration protection, rate limiting, and audit. | APP-004, APP-012 through APP-015; AUTH-010 | Feature/policy/audit tests; a test asserting a DNS auto-rejected application is absent; a test asserting the request response is identical for known and unknown addresses |
+| M18.23 Marketing surface and organization interest | Add the public marketing surface at the deployment root with the organization interest form, the inquiry record, God Mode review, rate limiting, and audit. Not served by an on-site node or an event-locked node. | PUBLIC-001 through PUBLIC-006 | Feature/policy tests; a test asserting Meridian identity is not replaced by an organization profile; a test asserting an on-site node does not serve it |
+| M18.24 Equipment assignment scope | Add the shift-or-event assignment scope to equipment checkouts, and derive overdue and unknown as presentation states rather than storing them. | EQUIP-005, EQUIP-009; UI contract 9.6 | Schema/domain tests; separate cases for shift-assigned and event-assigned timing; a test asserting no new stored state was added |
+| M18.24A Dictated Field Reports | Give the existing client dictated-Field-Report surface a server side: authorize taking a report on behalf of another staff member for `department_operator`, `ic_operator`, and `ic_lead`; record author and submitter separately; scope the staff selector to staff the creating user may already see; keep append authority with the author. The client surface exists today with no requirement, no server authorization, and no scoping on its staff directory. | FR-015 through FR-017; requirements 4.8A; technical spec 17.3, 17.4 | Domain/policy/UI tests; a test asserting the submitter gains no append authority; a test asserting the staff selector discloses no staff outside the creating user's scope; a test asserting an unauthorized user cannot take a report for anyone |
+
+#### Part C: Missing contract surfaces
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M18.25 Remaining exports | Add shift roster, staff contact list, hours worked, and credits earned exports with their scope and field-exclusion rules. | REPORT-002 through REPORT-005, REPORT-008 through REPORT-010; CREDIT-005 | Export tests with samples; a test asserting shift rosters exclude phone and emergency contacts; a test asserting organizer exports exclude emergency contacts |
+| M18.26 Reporting surfaces | Build the organizer and department reporting surfaces, offering only authorized exports and stating scope and excluded fields before generation, downloading through short-lived scoped URLs. | REPORT-014, REPORT-015; CLIENT-019, CLIENT-020 | UI/policy tests; a test asserting an unauthorized export is absent rather than disabled |
+| M18.27 Users, teams, shifts, and assignments import | Add the CSV/spreadsheet import paths for users and teams and for shifts and assignments. | Technical spec 22.2 | Import tests with fixtures; malformed-row and partial-failure tests |
+| M18.28 Dashboards | Build the dashboard surfaces and the widget inventory for staff, department lead, department operations, organizer, IC, and kiosk groups, honoring the quiet states and the organizer IMS exclusion. | UI contract 13.1 through 13.6 | Widget/policy tests; a test asserting organizer widgets surface no incident data without IC authority; quiet-state tests |
+| M18.29 Context and organizer surfaces | Build `context.organizations`, `context.events`, `context.departments`, `organizer.dashboard`, `organizer.applications`, `organizer.application-detail`, `organizer.events`, and `organizer.audit` as product surfaces. | UI contract 12.2, 12.6; APP-003, APP-005; requirements 2.4 | UI/policy tests; a test asserting application review authority covers organizer and Staff Coordinator only |
+| M18.30 Department surfaces | Build `department.dashboard`, `department.roster`, `department.deployments`, and `department.credits`. | UI contract 12.4; VOL-012; SLB-009, SLB-010 | UI/policy tests; a test asserting department leads reach emergency contacts for their own department only |
+| M18.31 Event department participation | Add management of which departments participate in an event to the event administration surface, with the Placement and Incident Command validation rules applied. | ORG-006; PLACE-003; data/API 10.2, 10.6 | Domain/UI tests; a test asserting a designated Placement or IC department cannot be removed from the event while designated |
+| M18.32 Kiosk surfaces | Build `kiosk.home`, `kiosk.workstation-login`, `kiosk.switch-user`, `kiosk.reauth`, `kiosk.shift-board`, and `kiosk.safe-timeout` in the Kiosk artifact. | UI-019 through UI-023; UI contract 12.8, 18; kiosk guide | UI/session tests; a test asserting an unpinned Kiosk enters setup rather than inferring context |
+| M18.33 Command palette | Build the command palette with its shortcuts and permission-filtered results, excluding camps and map places. | UI contract 7.1, 7.2; MAP-018 | UI/policy tests; a test asserting no unpermitted destination appears |
+| M18.34 Orchid repair coverage | Add the missing God Mode screens: audit review, document acknowledgments, and field report and incident repair visibility under permission rules. | UI contract 12.9; technical spec 22.2; Alpha 1 acceptance target 13 | Orchid feature/policy tests; a test asserting field report visibility in Orchid follows the same rules as the product |
+
+#### Part D: Reconciliation
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M18.35 Traceability restatement | Restate the traceability matrix so "In progress" distinguishes a requirement whose domain exists from one a user can exercise, and correct rows that read as delivered while their surface is fixture-driven. | Development process 5.2 | Process/doc checks |
+| M18.36 Missing QA scripts | Add the QA scripts the plan already references: `QA-EXPORT-01`, `QA-MAP-01`, `QA-CLIENT-01`, `QA-INSIGHT-01`. | QA README | Human QA scripts |
+| M18.37 Gap closure QA script | Add `QA-GAP-01-milestone-18-gap-closure.md`. | QA README | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- every service in Part A is reachable from a product surface, and no domain service in the application has zero consumers;
+- a staff member browses the shifts they are eligible for, signs up, sees why an ineligible shift is unavailable, and withdraws before the cutoff;
+- Logistics marks a staff member on-site, adds them to a shift they had not signed up for, checks them in and out, and is refused when marking them off-site while they hold equipment;
+- an attendance manager corrects a completed shift's hours from the Logistics Desk, and is refused once the grace period has closed with a message that says so;
+- a staff member acknowledges a required document during signup, and the acknowledgment records the document version;
+- a department designates a team as its Logistics team, and every member of that team gains exactly the Logistics capabilities and no others;
+- a department designates a team as its Operator team, and its members can take a Field Report on behalf of another department staff member with author and submitter both recorded;
+- the same Operator team gains incident create and edit for an event where its department is the Incident Command Department, and holds neither for an event where it is not;
+- a Staff Coordinator reviews and approves an application and cannot manage departments, staff status, or credentials;
+- an organizer sets the hours correction grace period and the lifecycle thresholds from a product surface, and the change is audited and blocked during the active event window;
+- Prospective staff become Inactive when their threshold passes, without anyone performing the transition;
+- credits calculate from a shift-specific policy where one exists and from the organization default otherwise, and freeze;
+- a waiver backed by a published document renders that document with fragment text inline, and completion records the document version;
+- an approved applicant receives an email carrying their organization's name and mark, and a Do Not Staff auto-rejection sends nothing;
+- an applicant requests a link by email, sees their applications, and withdraws one, and the request response is identical for an address with no applications;
+- an organization submits interest from the public marketing surface, and the submission creates no organization, user, or staff record;
+- every export in REPORT-001 through REPORT-005 runs from a reporting surface that states its scope and exclusions first, and downloads through a short-lived URL;
+- dashboards render their widgets with quiet states, and organizer widgets surface no incident data without IC authority;
+- a Kiosk with no pinned context enters setup;
+- the traceability matrix distinguishes domain-complete from user-exercisable.
+
+**QA gate:** A human can complete the whole MVP operational path in normal Meridian Admin, Field, and Kiosk without Orchid: configure an organization and its designations, invite staff, run an application through a Staff Coordinator, have a staff member acknowledge a document and complete a document-backed waiver, sign up for a shift, be checked in and out at the Logistics Desk, have their hours corrected and then frozen, see credits calculated, and read every required export from a reporting surface — while an applicant manages their own application by email link and a prospective organization submits interest from the marketing surface.
+
+**Decisions resolved during specification:**
+
+1. **The Operator designation** is defined in requirements section 4.8A as the department dispatch and console function: it may take Field Reports on behalf of other department staff and holds the field report and incident shortcuts. Where its department is the event's Incident Command Department, the designated Operator team additionally carries event-scoped `ic_operator`, including incident create and edit (TEAM-012A). Covered by M18.10 and M18.10A.
+2. **The hours correction grace period** defaults to 14 days after event end (ORG-017).
+3. **Department and team addition notifications** collapse to one message when they occur together on first assignment, naming both department and team; a later team addition within a department the staff member already belongs to sends its own (NOTIFY-001A).
+
+**Explicitly out of scope for this milestone:**
+
+- anything the requirements document defers in section 8 or lists as an explicit non-goal in section 9;
+- Milestone 14, 15, 16, and 17 scope, which remain their own milestones rather than gap-closure work;
+- per-user notification preferences, digests, and opt-out categories (NOTIFY-010);
+- SMS and push notifications;
+- organization self-service creation, which remains a God Mode action (PUBLIC-004);
+- provision eligibility export, waiver completion export, and incident spreadsheet export, which remain not required for October MVP (REPORT-011 through REPORT-013).
 
 ---
 
@@ -800,7 +911,7 @@ QA should run in this order:
 15. God Mode console visual identity QA.
 16. Client session and API wiring QA.
 17. Insights framework and initial metrics QA.
-18. Gap closure QA, once Milestone 18 is specified.
+18. Gap closure QA.
 19. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
