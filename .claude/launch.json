@@ -1,0 +1,31 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-admin",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": [
+        "pnpm",
+        "run",
+        "client:dev:admin",
+        "--",
+        "--host",
+        "127.0.0.1"
+      ],
+      "autoPort": true
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "php",
+      "runtimeArgs": [
+        "apps/server/artisan",
+        "serve",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    }
+  ]
+}
