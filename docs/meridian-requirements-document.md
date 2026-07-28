@@ -4216,6 +4216,12 @@ The organization branding profile shall replace the Meridian display name and Me
 
 Meridian identity shall remain on pre-authentication surfaces (login, magic-link landing, node first-run setup), the Orchid administrative interface, and desktop application chrome and installers. Organization branding shall not replace Meridian identity on those surfaces.
 
+### BRAND-003A
+
+The one exception to the desktop chrome rule is the running window and taskbar icon of a desktop or Kiosk application that is locked to an event. While the application is locked to an event, that icon shall show the organization compact mark, falling back to the organization full lockup and then to Meridian's mark.
+
+This is deliberately narrow. The packaged application icon, the installer, the executable metadata, and the application name shown by the operating system remain Meridian's, because they identify the software rather than the deployment, and they must stay correct on a machine that is not currently running an event and on a machine serving more than one organization. An unlocked desktop or Kiosk application shows Meridian's icon.
+
 ### BRAND-004
 
 Organizations shall be able to upload, replace, and remove one current full logo lockup and one current compact mark. Meridian does not need to preserve previous logo assets after replacement or removal.

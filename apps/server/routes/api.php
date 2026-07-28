@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
+use App\Http\Controllers\Branding\BrandingCommandController;
+use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
@@ -49,6 +51,13 @@ Route::post('/node-pairing', [NodePairingController::class, 'store'])
 Route::post('/node-sync', [NodeSyncController::class, 'store'])
     ->middleware('throttle:120,1')
     ->name('api.node-sync.store');
+
+// Branding is chrome, not operational content: every signed-in user of an
+// organization sees its identity on every screen (BRAND-002), and a device
+// resolves it before a session exists. Keeping this behind the local-field
+// guard meant the client could not read branding without a dev API token.
+Route::get('/organizations/{organization}/branding', [BrandingReadController::class, 'show'])
+    ->name('api.organizations.branding.show');
 
 Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/check-in-staff', [AttendanceCommandController::class, 'checkIn'])
@@ -122,6 +131,21 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::post('/commands/delete-incident-list-preset', [IncidentListPresetController::class, 'delete'])
         ->name('api.commands.delete-incident-list-preset');
+
+    Route::post('/commands/update-organization-branding', [BrandingCommandController::class, 'updateOrganization'])
+        ->name('api.commands.update-organization-branding');
+
+    Route::post('/commands/update-department-branding', [BrandingCommandController::class, 'updateDepartment'])
+        ->name('api.commands.update-department-branding');
+
+    Route::post('/commands/preview-branding', [BrandingCommandController::class, 'preview'])
+        ->name('api.commands.preview-branding');
+
+    Route::post('/commands/upload-branding-asset', [BrandingCommandController::class, 'uploadAsset'])
+        ->name('api.commands.upload-branding-asset');
+
+    Route::post('/commands/remove-branding-asset', [BrandingCommandController::class, 'removeAsset'])
+        ->name('api.commands.remove-branding-asset');
 
     Route::post('/commands/create-department', [DepartmentCommandController::class, 'create'])
         ->name('api.commands.create-department');

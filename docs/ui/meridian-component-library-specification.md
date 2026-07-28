@@ -68,8 +68,16 @@ Initial Alpha 1 token names are defined in `docs/ui/meridian-ui-implementation-c
 - `--m-border-default`, `--m-border-strong`, `--m-border-subtle`;
 - `--m-action-primary-bg`, `--m-action-secondary-bg`, `--m-action-destructive-bg`;
 - `--m-focus-ring`;
-- `--m-status-*`, `--m-attention-*`, and `--m-department-accent`;
+- `--m-status-*`, `--m-attention-*`, `--m-department-accent`, and `--m-department-surface`;
 - `--m-space-*`, `--m-radius-*`, `--m-shadow-*`, and `--m-text-*`.
+
+Token *values* are branding surface; token *names* are not. An organization branding profile supplies ten values — the four platform colors and the six neutrals canvas, surface, foreground, muted foreground, border, and focus — and a department branding profile supplies two, `--m-department-accent` and `--m-department-surface`. Every other token derives from those and is never independently settable (BRAND-006, BRAND-007, BRAND-009, BRAND-011). The settable/derived split is defined in `docs/ui/meridian-ui-implementation-contract.md` section 10.0.
+
+Components must therefore keep consuming semantic names and must not read branding values directly. A component that reached for an organization's stored accent instead of `--m-action-destructive-bg` would keep working under Meridian's defaults and break the first time an organization chose a different palette.
+
+`--m-department-surface` is applied by surface scope, not by component (UI implementation contract section 10.3). Components inherit it; they do not decide whether it applies.
+
+Branding values are validated server-side against WCAG 2.1 AA before they can be stored, and failing combinations are rejected rather than repaired (BRAND-014 through BRAND-016). Components should not add compensating contrast logic of their own.
 
 ---
 
@@ -149,7 +157,15 @@ Supported content:
 - generated lettermark fallback;
 - small department accent.
 
-Department accent must not become a full component theme.
+Required behavior:
+
+- leading glyph precedence is logo, then icon, then generated lettermark from the department name (BRAND-010);
+- the lettermark is decorative and never carries the accessible name;
+- the accessible name includes the full department name even when the visible text is a short label;
+- sizes `sm`, `md`, and `lg` are supported and change glyph and type size only, not what is shown;
+- the accent renders on any surface the badge appears on, including surfaces that do not take a department background, and is omitted when the organization has department overrides switched off (BRAND-013).
+
+Department accent must not become a full component theme. The badge never applies a department surface background — that is a surface-scope decision, not a component one.
 
 ### 5.2 `StatusPill`
 
@@ -473,7 +489,7 @@ These compact contracts are the minimum shape future code-generation tasks shoul
 | `ContextBar` | Operating scope display | `organization`, `event`, `department`, `roleContext`, `syncState`, `kioskState`, `uiMode`, `presentationProfile` | optional extra context | Shows scope only where it affects decisions; collapses without hiding required state. |
 | `ActionBar` | Bottom current-screen actions | `uiMode`, `presentationProfile`, `sticky`, `safeArea`, `disabledReason` | primary and secondary actions | Reachable on touch/Kiosk presentation profiles, respects safe areas, does not cover required content. |
 | `CommandPalette` | Command/navigation overlay | `results`, `roleContext`, `scope`, `kioskState`, `uiMode`, `presentationProfile` | grouped result rows | `Ctrl+K`, `Cmd+K`, `/`; filters by permissions and hides unauthorized IMS results. |
-| `DepartmentBadge` | Department identity | `department`, `showLogo`, `showAccent`, `size` | optional label override | Uses logo/icon/lettermark and small accent; accessible name includes department. |
+| `DepartmentBadge` | Department identity | `department`, `showLogo`, `showAccent`, `size` | optional label override | Glyph precedence logo → icon → lettermark; small accent only; accessible name includes the full department name; never applies a department surface background. |
 | `StatusPill` | Canonical status | `family`, `status`, `size`, `icon` | none | Visible text matches canonical label; state is not color-only. |
 | `SeverityIndicator` | Attention or IMS priority | `kind`, `value`, `label` | optional description | Keeps dashboard attention distinct from IMS priority and incident state. |
 | `DataTable` | Dense record list | `columns`, `rows`, `presentationProfile`, `emptyMessage`, `permissions` | filters/actions | Headers, keyboard row actions, loading/empty/error states, paired touch fallback. |

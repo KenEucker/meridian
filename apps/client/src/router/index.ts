@@ -1,6 +1,12 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 
 import {
+  departmentBrandingRouteProps,
+  organizationBrandingRouteProps,
+} from "@/branding/brandingRouteProps";
+import DepartmentBrandingView from "@/views/DepartmentBrandingView.vue";
+import OrganizationBrandingView from "@/views/OrganizationBrandingView.vue";
+import {
   installDevelopmentFieldSession,
   resolveFieldSession,
 } from "@/field-reports/fieldSession";
@@ -246,6 +252,13 @@ export const routes: RouteRecordRaw[] = [
     beforeEnter: ensureDepartmentSelfAdminSession,
   },
   {
+    path: "/events/:eventId/departments/:departmentId/branding",
+    name: "events.departments.branding",
+    component: DepartmentBrandingView,
+    props: departmentBrandingRouteProps,
+    beforeEnter: ensureDepartmentSelfAdminSession,
+  },
+  {
     path: "/events/:eventId/departments/:departmentId/teams/create",
     name: "events.departments.teams.create",
     component: DepartmentTeamEditView,
@@ -366,6 +379,13 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/departments/:departmentId/edit",
     name: "organizer.departments.edit",
     component: OrganizerDepartmentEditView,
+    beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  {
+    path: "/organizer/branding",
+    name: "organizer.branding",
+    component: OrganizationBrandingView,
+    props: organizationBrandingRouteProps,
     beforeEnter: ensureOrganizerDepartmentSession,
   },
   {

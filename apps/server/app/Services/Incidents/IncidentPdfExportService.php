@@ -14,6 +14,7 @@ use App\Models\IncidentStaff;
 use App\Models\IncidentTimelineEntry;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Branding\BrandingResolver;
 use App\Services\Documents\PdfDocumentRenderer;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -31,6 +32,7 @@ final class IncidentPdfExportService
         private readonly AuditService $audit,
         private readonly IncidentPrintAccess $printAccess,
         private readonly PdfDocumentRenderer $pdf,
+        private readonly BrandingResolver $branding,
     ) {}
 
     public function export(
@@ -62,7 +64,14 @@ final class IncidentPdfExportService
         }
 
         $exportedAt = now()->utc();
-        $lines = $this->pdfLines($incident, $actor, $exportedAt->toIso8601String());
+
+        // BRAND-002: a generated PDF carries the organization's identity, not
+        // Meridian's. An unbranded organization resolves to "Meridian".
+        $producedBy = $this->branding
+            ->forOrganizationId($event->organization_id !== null ? (string) $event->organization_id : null)
+            ->identityName();
+
+        $lines = $this->pdfLines($incident, $actor, $exportedAt->toIso8601String(), $producedBy);
         $contents = $this->pdf->render($lines);
         $export = new IncidentPdfExport(
             contents: $contents,
@@ -91,9 +100,15 @@ final class IncidentPdfExportService
     /**
      * @return list<string>
      */
-    private function pdfLines(Incident $incident, User $actor, string $exportTimestamp): array
-    {
+    private function pdfLines(
+        Incident $incident,
+        User $actor,
+        string $exportTimestamp,
+        string $producedBy,
+    ): array {
         $lines = [
+            $producedBy,
+            '',
             'Incident PDF Export',
             'IMS number: '.$incident->incident_number,
             'Title: '.($incident->title !== '' ? $incident->title : 'Untitled incident'),

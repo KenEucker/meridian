@@ -9,6 +9,7 @@ use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Branding\BrandingResolver;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -27,6 +28,7 @@ class DocumentExportService
         private readonly DocumentScopeValidator $scopes,
         private readonly PdfDocumentRenderer $pdf,
         private readonly DocumentProductAccess $access,
+        private readonly BrandingResolver $branding,
     ) {}
 
     public function export(
@@ -45,10 +47,19 @@ class DocumentExportService
         $scope = $document::scopeTypeLabels()[$document->scope_type] ?? Str::headline($document->scope_type);
         $exportedAt = now()->utc();
         $resolvedMarkdown = $this->renderer->resolvedMarkdown($document);
-        $markdown = $this->markdownExport($document, $documentType, $scope, $exportedAt->toIso8601String(), $resolvedMarkdown);
+
+        // BRAND-002 names generated PDF exports as one of the surfaces
+        // organization identity replaces Meridian on. An unbranded
+        // organization resolves to "Meridian", so an export always says who
+        // produced it rather than sometimes saying nothing.
+        $producedBy = $this->branding
+            ->forOrganizationId($document->organization_id !== null ? (string) $document->organization_id : null)
+            ->identityName();
+
+        $markdown = $this->markdownExport($document, $documentType, $scope, $exportedAt->toIso8601String(), $producedBy, $resolvedMarkdown);
         $contents = $format === DocumentExport::FORMAT_MARKDOWN
             ? $markdown
-            : $this->pdf->render($this->pdfLines($document, $documentType, $scope, $exportedAt->toIso8601String()));
+            : $this->pdf->render($this->pdfLines($document, $documentType, $scope, $exportedAt->toIso8601String(), $producedBy));
 
         $export = new DocumentExport(
             format: $format,
@@ -96,11 +107,13 @@ class DocumentExportService
         string $documentType,
         string $scope,
         string $exportTimestamp,
+        string $producedBy,
         string $resolvedMarkdown,
     ): string {
         return implode("\n", [
             '# '.$document->title,
             '',
+            '- Produced by: '.$producedBy,
             '- Document type: '.$documentType,
             '- Document title: '.$document->title,
             '- Document version: '.$document->version(),
@@ -122,8 +135,11 @@ class DocumentExportService
         string $documentType,
         string $scope,
         string $exportTimestamp,
+        string $producedBy,
     ): array {
         return [
+            $producedBy,
+            '',
             'Document type: '.$documentType,
             'Document title: '.$document->title,
             'Document version: '.$document->version(),

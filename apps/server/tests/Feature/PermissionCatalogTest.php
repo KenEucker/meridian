@@ -134,15 +134,19 @@ class PermissionCatalogTest extends TestCase
 
         // M11.16: department administration and department leads also manage
         // department trainings through the product path.
+        // M15A.7 / BRAND-019: and their own department's branding profile —
+        // logo, accent, and surface background only.
         $this->assertSame([
             'department.administer',
             'department.trainings.manage',
+            'department.branding.manage',
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
         $this->assertSame([
             'department.administer',
             'department.trainings.manage',
+            'department.branding.manage',
         ], $this->permissionCodesFor('department_lead'));
 
         $this->assertSame([

@@ -2,6 +2,7 @@ import { computed, type ComputedRef } from "vue";
 
 import {
   fixtureDepartmentHasAdminAccess,
+  fixtureDepartmentHasBrandingAccess,
   fixtureDepartmentHasOrganizerDepartmentAccess,
   selectedFixtureDepartment,
   selectedFixtureDepartmentRouteParams,
@@ -383,6 +384,20 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       });
     }
 
+    // Department branding is department lead / department administration work
+    // and, unlike the rest of department admin, is not open to team leads
+    // (BRAND-019, M15A.7).
+    if (fixtureDepartmentHasBrandingAccess(department)) {
+      departmentPages.push({
+        label: "Branding",
+        description: "Department logo, accent color, and surface background.",
+        to: {
+          name: "events.departments.branding",
+          params: departmentRouteParams.value,
+        },
+      });
+    }
+
     departmentPages.push({
       label: "My Field Reports",
       description: "Field report author workspace.",
@@ -421,6 +436,14 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
             description:
               "Organization policies, procedures, fragments, and exports.",
             to: { name: "organizer.documents.index" },
+          },
+          // Organization branding is organizer / Lead Organizer work
+          // (BRAND-019, M15A.6).
+          {
+            label: "Branding",
+            description:
+              "Organization display name, logos, palette, and the department override switch.",
+            to: { name: "organizer.branding" },
           },
         ],
       });

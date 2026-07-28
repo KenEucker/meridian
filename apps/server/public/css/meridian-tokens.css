@@ -12,12 +12,20 @@
  *
  * Rules:
  *   - Components consume semantic --m-* tokens, never raw brand hex values.
- *   - Platform colors are the four logo colors, defined in priority order.
- *   - Action, status, severity/attention, and department accent tokens use
- *     only the platform palette.
- *   - Surface/background, text/foreground, border, and focus/highlight tokens
- *     may use separate accessible values when needed.
+ *   - The light :root block holds the ten values an organization branding
+ *     profile may replace (BRAND-006): the four platform colors and the
+ *     canvas/surface/foreground/muted-foreground/border/focus neutrals. Those
+ *     values here are Meridian's own defaults, not a platform constant.
+ *   - Every other color token is derived from those ten, either as
+ *     `var(--m-platform-*)` or as a `color-mix()` over a settable neutral, so a
+ *     branding profile that replaces the ten re-resolves the rest without
+ *     shipping its own status or action colors (BRAND-007).
+ *   - Department branding contributes --m-department-accent and
+ *     --m-department-surface only (BRAND-009, BRAND-011). The surface token is
+ *     applied by surface scope, never globally.
  *   - Light and dark mode reuse the same token names with different values.
+ *     Dark-mode neutrals are Meridian's and are not branding surface in
+ *     Alpha 1; only the platform colors carry into dark mode.
  *
  * Dark mode applies automatically with the OS preference and can be forced
  * with `data-theme="dark"` (or kept light with `data-theme="light"`).
@@ -28,39 +36,52 @@
  */
 
 :root {
+  /*
+   * SETTABLE (organization branding profile, BRAND-006). Ten values: the four
+   * platform colors and six neutrals. Meridian's defaults follow the style
+   * guide sections 4.1 and 4.2, adjusted so the default palette passes the
+   * WCAG 2.1 AA validation every submitted palette must pass (BRAND-014):
+   * muted foreground, border, and focus were previously below their required
+   * ratios against the canvas and surface values here.
+   */
+
   /* Platform palette (logo colors in priority order) */
   --m-platform-primary: #475157;
   --m-platform-secondary: #6b7562;
   --m-platform-tertiary: #a58667;
   --m-platform-accent: #cc792f;
 
-  /* Surfaces */
+  /* Neutrals */
   --m-surface-app: #f6f1e8;
   --m-surface-base: #fffcf6;
-  --m-surface-raised: #ffffff;
-  --m-surface-overlay: #ffffff;
+  --m-text-primary: #151a1f;
+  --m-text-muted: #5f665f;
+  --m-border-default: #8d8371;
+  --m-focus-ring: #b35f14;
+
+  /* DERIVED from the settable values above. Never set independently. */
+
+  /* Elevation steps away from the surface toward light. */
+  --m-surface-raised: color-mix(in srgb, var(--m-surface-base) 70%, #ffffff);
+  --m-surface-overlay: color-mix(in srgb, var(--m-surface-base) 55%, #ffffff);
 
   /* Text */
-  --m-text-primary: #151a1f;
   --m-text-secondary: var(--m-platform-primary);
-  --m-text-muted: #7a817a;
-  --m-text-inverse: #fffcf6;
+  --m-text-inverse: var(--m-surface-base);
 
-  /* Borders */
-  --m-border-default: #cfc5b4;
-  --m-border-strong: #a99e88;
-  --m-border-subtle: #ded6c8;
+  /* Borders. `strong` is a component boundary; `subtle` is a decorative
+     divider and is deliberately allowed below the 3:1 non-text threshold. */
+  --m-border-strong: color-mix(in srgb, var(--m-border-default) 70%, var(--m-text-primary));
+  --m-border-subtle: color-mix(in srgb, var(--m-border-default) 40%, var(--m-surface-base));
 
-  /* Actions */
+  /* Actions. Label colors are chosen by luminance in the branding token
+     resolver; these are the values that choice yields for the defaults. */
   --m-action-primary-bg: var(--m-platform-primary);
-  --m-action-primary-text: #fffcf6;
+  --m-action-primary-text: var(--m-surface-base);
   --m-action-secondary-bg: var(--m-platform-secondary);
-  --m-action-secondary-text: #fffcf6;
+  --m-action-secondary-text: var(--m-surface-base);
   --m-action-destructive-bg: var(--m-platform-accent);
-  --m-action-destructive-text: #151a1f;
-
-  /* Focus */
-  --m-focus-ring: var(--m-platform-accent);
+  --m-action-destructive-text: var(--m-text-primary);
 
   /* Status / severity */
   --m-status-neutral: var(--m-platform-primary);
@@ -76,8 +97,17 @@
   --m-attention-critical: var(--m-platform-accent);
   --m-attention-restricted: var(--m-platform-primary);
 
-  /* Department accent (per-department override arrives with org model) */
+  /*
+   * Department branding (BRAND-009). Both values are replaced per department
+   * by the branding stylesheet on `[data-department-branding="<id>"]`; the
+   * defaults here are what a department with no profile renders.
+   *
+   * --m-department-surface is consumed only where a surface has declared
+   * itself department-scoped (UI implementation contract 10.3), so defaulting
+   * it to the organization surface makes an unscoped surface a no-op.
+   */
   --m-department-accent: var(--m-platform-secondary);
+  --m-department-surface: var(--m-surface-base);
 
   /* Spacing (8px-centered scale with 4px fine adjustment) */
   --m-space-1: 0.25rem;

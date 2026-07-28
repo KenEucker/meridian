@@ -49,6 +49,7 @@ const REQUIRED_TOKENS = [
   "--m-attention-critical",
   "--m-attention-restricted",
   "--m-department-accent",
+  "--m-department-surface",
   "--m-space-1",
   "--m-space-2",
   "--m-space-3",
@@ -92,11 +93,17 @@ const PLATFORM_TOKENS = [
   "--m-platform-accent",
 ] as const;
 
+/**
+ * Tokens BRAND-007 requires to resolve through the platform palette rather
+ * than being independently settable. `--m-focus-ring` is deliberately absent:
+ * BRAND-006 puts focus in the organization-settable neutral set alongside
+ * canvas, surface, foreground, muted foreground, and border, so it is a
+ * branding value in its own right rather than a derived one.
+ */
 const PLATFORM_GOVERNED_TOKENS = [
   "--m-action-primary-bg",
   "--m-action-secondary-bg",
   "--m-action-destructive-bg",
-  "--m-focus-ring",
   "--m-status-neutral",
   "--m-status-success",
   "--m-status-warning",

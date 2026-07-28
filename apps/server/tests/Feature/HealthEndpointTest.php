@@ -35,7 +35,25 @@ class HealthEndpointTest extends TestCase
             'server_version',
             'config_schema_version',
             'timestamp',
+            'node_role',
+            'organization_id',
+            'event_id',
         ]);
+    }
+
+    public function test_health_endpoint_answers_when_node_identity_is_unavailable(): void
+    {
+        // This is a liveness probe first. It has to answer on an install whose
+        // database is unreachable or not yet migrated — exactly when someone
+        // is checking it — so node identity degrades to null rather than
+        // turning the probe into a 500.
+        $response = $this->getJson('/api/health');
+
+        $response->assertOk();
+        $response->assertJsonPath('status', 'ok');
+        $response->assertJsonPath('node_role', null);
+        $response->assertJsonPath('organization_id', null);
+        $response->assertJsonPath('event_id', null);
     }
 
     public function test_health_endpoint_is_reachable_without_authentication(): void

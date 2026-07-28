@@ -37,6 +37,10 @@ class Department extends Model
         'code',
         'description',
         'default_team_id',
+        'branding_logo_attachment_id',
+        'branding_accent_color',
+        'branding_surface_color',
+        'branding_updated_at',
         'archived_at',
     ];
 
@@ -71,7 +75,25 @@ class Department extends Model
     {
         return [
             'archived_at' => 'datetime',
+            'branding_updated_at' => 'datetime',
         ];
+    }
+
+    public function brandingLogo(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'branding_logo_attachment_id');
+    }
+
+    /**
+     * Whether this department has set anything of its own. Used to decide
+     * between a stored logo and a generated lettermark (BRAND-010), not to
+     * decide whether the department may be shown.
+     */
+    public function hasBrandingProfile(): bool
+    {
+        return $this->branding_logo_attachment_id !== null
+            || $this->branding_accent_color !== null
+            || $this->branding_surface_color !== null;
     }
 
     protected static function booted(): void

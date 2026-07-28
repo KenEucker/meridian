@@ -86,6 +86,10 @@ final class PermissionCatalog
 
     public const PERMISSION_DEPARTMENT_TRAININGS_MANAGE = 'department.trainings.manage';
 
+    public const PERMISSION_ORGANIZATION_BRANDING_MANAGE = 'organization.branding.manage';
+
+    public const PERMISSION_DEPARTMENT_BRANDING_MANAGE = 'department.branding.manage';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -143,6 +147,8 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'View identity-free Planning Table aggregates comparing plan versus actual.',
             self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer permitted department details and teams (team membership assignment remains a separate workflow).',
             self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE => 'Create and maintain department trainings, prerequisites, rosters, and completion records.',
+            self::PERMISSION_ORGANIZATION_BRANDING_MANAGE => 'Edit the organization branding profile: display name, palette, logo assets, and the department override switch.',
+            self::PERMISSION_DEPARTMENT_BRANDING_MANAGE => 'Edit the department branding profile: logo, accent color, and surface background color.',
         ];
     }
 
@@ -162,6 +168,11 @@ final class PermissionCatalog
      * department_administration, and organizer roles for product-path training
      * creation, prerequisite/expiration setup, rosters, and completion
      * recording/import (TRAIN-001 through TRAIN-006).
+     * M15A.6/M15A.7 add organization.branding.manage to the two organizer roles
+     * and department.branding.manage to department lead and
+     * department_administration, which is exactly the split BRAND-019 draws:
+     * organizers own the organization palette, departments own only their own
+     * logo, accent, and surface background.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -173,6 +184,7 @@ final class PermissionCatalog
             self::ROLE_DEPARTMENT_LEAD => [
                 self::PERMISSION_DEPARTMENT_ADMINISTER,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
+                self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
             ],
             self::ROLE_IC_LEAD => [
                 self::PERMISSION_INCIDENTS_VIEW,
@@ -211,6 +223,7 @@ final class PermissionCatalog
             self::ROLE_DEPARTMENT_ADMINISTRATION => [
                 self::PERMISSION_DEPARTMENT_ADMINISTER,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
+                self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
             ],
             self::ROLE_DEPARTMENT_PLANNING => [
                 self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
@@ -220,12 +233,14 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
+                self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
+                self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
             ],
         ];
     }

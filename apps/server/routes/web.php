@@ -5,6 +5,9 @@ use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\MagicLinkController;
+use App\Http\Controllers\Branding\BrandingAssetController;
+use App\Http\Controllers\Branding\BrandingManifestController;
+use App\Http\Controllers\Branding\BrandingStylesheetController;
 use App\Http\Controllers\ClientAppController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\Setup\NodeSetupController;
@@ -14,6 +17,18 @@ Route::get('/', ClientAppController::class)->name('client.app');
 Route::get('assets/{clientAssetPath}', [ClientAppController::class, 'asset'])
     ->where('clientAssetPath', '.*')
     ->name('client.assets');
+
+// Branding layer and logo assets (M15A.4, M15A.5; BRAND-006, BRAND-022,
+// BRAND-023). Both are unauthenticated: the stylesheet is chrome that has to
+// resolve before a session does, and a logo is the identity that appears in
+// generated PDFs and system email. Neither exposes operational content, and
+// the stylesheet applies only where a surface has declared itself branded.
+Route::get('branding/{organization}/tokens.css', [BrandingStylesheetController::class, 'show'])
+    ->name('branding.stylesheet');
+Route::get('branding/{organization}/manifest.json', [BrandingManifestController::class, 'show'])
+    ->name('branding.manifest');
+Route::get('branding/assets/{attachment}', [BrandingAssetController::class, 'show'])
+    ->name('branding.asset');
 
 Route::get('setup', [NodeSetupController::class, 'show'])->name('setup.show');
 Route::post('setup', [NodeSetupController::class, 'store'])->name('setup.store');

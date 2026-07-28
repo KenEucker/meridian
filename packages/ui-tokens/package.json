@@ -6,10 +6,12 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./tokens.css",
+    "./branding": "./src/branding.ts",
     "./package.json": "./package.json"
   },
   "files": [
-    "tokens.css"
+    "tokens.css",
+    "src/branding.ts"
   ],
   "scripts": {
     "test": "vitest run",

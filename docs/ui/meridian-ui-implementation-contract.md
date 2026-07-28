@@ -491,7 +491,32 @@ These labels are product-reviewable. Until changed, use them consistently.
 
 Use semantic tokens. Do not hard-code raw brand colors in components when semantic tokens exist.
 
-Platform accent color is limited to the four logo colors: `#475157`, `#6B7562`, `#A58667`, and `#CC792F`. Background, foreground/text, border, and focus/highlight tokens may use neutral accessibility values. Action, status, priority/attention, chart, and department accent tokens must resolve to the platform palette.
+### 10.0 Settable versus derived tokens
+
+The token set splits three ways, and the split is the contract.
+
+**Organization-settable (10 values).** An organization branding profile supplies the four platform colors and the six neutrals (BRAND-006). These are the only colors an organization chooses:
+
+| Token | Branding field |
+| --- | --- |
+| `--m-platform-primary` | primary |
+| `--m-platform-secondary` | secondary |
+| `--m-platform-tertiary` | tertiary |
+| `--m-platform-accent` | accent |
+| `--m-surface-app` | canvas |
+| `--m-surface-base` | surface |
+| `--m-text-primary` | foreground |
+| `--m-text-muted` | muted foreground |
+| `--m-border-default` | border |
+| `--m-focus-ring` | focus |
+
+**Department-settable (2 values).** A department branding profile supplies `--m-department-accent` and `--m-department-surface`, and nothing else (BRAND-009, BRAND-011). `--m-department-surface` is applied only on department-scoped surfaces (section 10.3) and is not emitted at all while the organization has department overrides switched off (BRAND-013).
+
+**Derived.** Everything else — `--m-surface-raised`, `--m-surface-overlay`, `--m-text-secondary`, `--m-text-inverse`, `--m-border-strong`, `--m-border-subtle`, every `--m-action-*`, every `--m-status-*`, every `--m-attention-*`, and chart series tokens — resolves from the settable values. Derived tokens are never independently settable (BRAND-007). A branding profile that could set `--m-status-danger` directly would be able to make danger look like success, which is exactly what section 9 exists to prevent.
+
+Meridian's own default values for the settable tokens are in `packages/ui-tokens/tokens.css` and in style guide sections 4.1 and 4.2. They render when no organization branding profile exists, and they render permanently on pre-authentication surfaces, Orchid, and desktop chrome (BRAND-003).
+
+Every submitted branding value is validated server-side against WCAG 2.1 AA before it is stored — 4.5:1 normal text, 3:1 large text, 3:1 non-text indicators — and a failing submission is rejected naming the failing pair, the measured ratio, and the required ratio (BRAND-014, BRAND-015). Nothing is auto-corrected or auto-derived to make a failing value pass (BRAND-016). Typography is not settable (BRAND-024).
 
 ### 10.1 CSS Custom Property Naming
 
@@ -540,6 +565,7 @@ Initial Alpha 1 token names:
   --m-attention-restricted: ;
 
   --m-department-accent: ;
+  --m-department-surface: ;
 
   --m-space-1: ;
   --m-space-2: ;
@@ -607,6 +633,20 @@ described in section 11.5C. Components use these for their own padding and for
 the gaps between page bands instead of fixed `--m-space-*` values, so density is
 a property of the viewport rather than something each screen re-decides.
 
+### 10.3 Branding Scope Attributes
+
+Branding reaches the DOM through two attributes rather than through per-component props, so a surface declares what it is and the token layer decides what that means.
+
+```html
+<html data-organization-branding="applied|default">
+  <main data-department-surface="dept-uuid">
+```
+
+- `data-organization-branding` is set on the document root. `applied` means an organization palette replaced the defaults; `default` means Meridian's own values are rendering. Pre-authentication surfaces, Orchid, and desktop chrome are always `default` (BRAND-003).
+- `data-department-surface` is set on a **department-scoped surface only** and carries the department id whose background applies. It must not be set on incident/IMS surfaces, The Briefing, or organization-level and cross-department surfaces (BRAND-012), and it must not be set at all while the organization has department overrides switched off (BRAND-013). Absence of the attribute is how a surface says "organization surface color", which is the default a new screen inherits without doing anything.
+
+`--m-department-accent` is not scoped this way. An accent is a small identifier that appears wherever the department appears, including on surfaces that must not take the background — a `DepartmentBadge` inside The Briefing still shows the department's accent.
+
 ---
 
 ## 11. Component Contract
@@ -656,16 +696,19 @@ Purpose: Identify department without theming the surface.
 
 Inputs:
 
-- `department`;
-- `showLogo`: boolean;
-- `showAccent`: boolean;
+- `department`: at minimum `id`, `name`, and optionally `shortLabel`, `icon`, `logoUrl`, `accentColor`;
+- `showLogo`: boolean, default `true`;
+- `showAccent`: boolean, default `true`;
 - `size`: `sm`, `md`, `lg`.
 
 Rules:
 
-- department accent must remain a small identifier;
-- generated fallback may use initials/lettermark;
-- accessible name must include department name.
+- department accent must remain a small identifier and must not become a full component theme;
+- content precedence for the leading glyph is logo, then icon, then generated lettermark;
+- the lettermark is generated from initials or letters from separate words in the department name (BRAND-010) and is decorative — it is never the accessible name;
+- visible text may be the short label, but the accessible name must include the full department name;
+- the badge renders the accent even on surfaces that do not take a department background (section 10.3), and renders without an accent when the organization has department overrides switched off (BRAND-013);
+- the badge does not set `data-department-surface`.
 
 ### 11.4 DataTable
 

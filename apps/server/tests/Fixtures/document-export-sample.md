@@ -1,5 +1,6 @@
 # Volunteer Safety
 
+- Produced by: Meridian
 - Document type: Policy
 - Document title: Volunteer Safety
 - Document version: 3.02

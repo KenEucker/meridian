@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Http\Middleware\MeridianOrchidAccess;
 use App\Models\Attachment;
+use App\Models\Department;
 use App\Models\DeviceTrust;
 use App\Models\DocumentAcknowledgmentRequirement;
 use App\Models\FieldReport;
+use App\Models\Organization;
 use App\Models\OrchidAttachment;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
@@ -54,6 +56,8 @@ class AppServiceProvider extends ServiceProvider
             DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_POLICY => PolicyDocument::class,
             DocumentAcknowledgmentRequirement::DOCUMENT_TYPE_PROCEDURE => ProcedureDocument::class,
             Attachment::MORPH_FIELD_REPORT => FieldReport::class,
+            Attachment::MORPH_ORGANIZATION => Organization::class,
+            Attachment::MORPH_DEPARTMENT => Department::class,
         ]);
 
         Gate::policy(DeviceTrust::class, DeviceTrustPolicy::class);
