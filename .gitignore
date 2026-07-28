@@ -43,3 +43,7 @@ apps/server/resources/changelog/
 *.tsbuildinfo
 # Local pnpm content-addressable store fallback
 .pnpm-store/
+# Per-developer Claude Code settings. `.claude/launch.json` is committed because
+# it describes how to run this project's dev servers; this file holds one
+# developer's permission allowlist and absolute local paths.
+.claude/settings.local.json

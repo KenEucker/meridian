@@ -1179,6 +1179,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `public.apply` | `public.events.apply` | Staff event application | Public or authenticated applicant |
 | `auth.login` | `login` | Provider/magic-link login entry | Public |
 | `auth.magic-link-sent` | `auth.magic-link.sent` | Login code sent confirmation | Public |
+| `auth.code-entry` | `auth.code.entry` | In-application magic-link code entry, so a client completes login without leaving the application | Public |
 | `auth.provider-callback` | framework route | External provider callback | Public/system |
 | `signup.policy-acknowledgment` | `signup.documents.acknowledge` | Required policy/procedure acknowledgment during signup | Applicant/authenticated user with server connection |
 
@@ -1187,9 +1188,11 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `home` | `home` | Task-based home and context entry | Authenticated |
-| `context.organizations` | `organizations.index` | Select organization | Authenticated with memberships |
-| `context.events` | `organizations.events.index` | Select event within organization | Authenticated with org access |
+| `context.organizations` | `organizations.index` | Select organization | Authenticated with memberships; connected only |
+| `context.events` | `organizations.events.index` | Select event within organization | Authenticated with org access; connected only |
 | `context.departments` | `events.departments.index` | Enter available department spaces | Authenticated with event/dept access |
+
+Organization and event selection are connected-only. A client resolves its context from the node's event lock first and narrows it through the session response; an offline client is locked to what the node provides and does not present these screens. Department entry remains available offline because the departments in scope are already part of the cached session.
 
 ### 12.3 Staff Screens
 
@@ -1206,6 +1209,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `staff.documents` | `staff.documents.index` | Policies & Procedures library | Authenticated staff with visible documents |
 | `staff.document-detail` | `staff.documents.show` | Rendered policy/procedure document | Authenticated staff with document visibility |
 | `staff.document-acknowledgments` | `staff.documents.acknowledgments` | My required document acknowledgments | Authenticated staff |
+| `staff.workstation-code` | `staff.workstation-code` | Generate a shared-workstation login code for yourself, for use on a kiosk with no internet | Authenticated staff on a device holding a valid session |
 | `briefing.hub` | `events.briefing` | The Briefing hub (Command-added Notes + shells) | Approved event staff |
 
 ### 12.4 Department Screens
@@ -1365,11 +1369,24 @@ Alpha 1 implements `briefing.hub`, Notes list/create/detail with author+Command 
 
 Orchid Note repair screen ID: `orchid.notes`.
 
+### 12.7B Insights Screens
+
+| Screen ID | Route name | Purpose | Access |
+|---|---|---|---|
+| `insights.index` | `insights.index` | Insights landing page listing every sheet available to the current user | `insights.view`, or authenticated staff for the personal view |
+| `insights.sheet` | `insights.sheets.show` | Compiled Insight Sheet for one selected event, with sheet-level filters and department context | `insights.view` plus per-metric capability |
+| `insights.sheet-edit` | `insights.sheets.edit` | Create and configure a sheet: add, remove, order, and configure metric placements, and choose which filters the sheet offers | `insights.sheets.manage` |
+| `insights.share` | `insights.sheets.share` | Share a sheet or one metric placement with Command, ongoing or temporary, and remove sharing | `insights.share_with_command` |
+| `insights.me` | `insights.me` | A volunteer's own event aggregates | Authenticated staff |
+
+Sheets the user cannot access are omitted from `insights.index`, not listed as inaccessible entries. Metrics whose capability the viewer lacks are omitted from a rendered sheet rather than shown empty.
+
 ### 12.8 Kiosk Screens
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
 | `kiosk.home` | `kiosk.home` | Trusted workstation dashboard | Trusted workstation / authenticated user |
+| `kiosk.workstation-login` | `kiosk.workstation-login` | Shared-workstation login code entry | Trusted workstation |
 | `kiosk.switch-user` | `kiosk.switch-user` | Fast user switching | Trusted workstation |
 | `kiosk.reauth` | `kiosk.reauth` | Re-auth for privileged action | Trusted workstation/authenticated user |
 | `kiosk.shift-board` | `kiosk.shift-board` | Kiosk-safe shift board entry | Authorized shift/department lead |
@@ -1388,6 +1405,11 @@ Orchid Note repair screen ID: `orchid.notes`.
 | `orchid.notes` | Orchid screen | Note list/detail repair visibility | God mode / authorized repair |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
 | `orchid.node-config` | Orchid screen | Node configuration and source display | God mode |
+| `orchid.api-tokens` | Orchid screen | Issued API tokens by user and device, with revocation of one token or every token on a device | God mode |
+| `orchid.workstation-login-codes` | Orchid screen | Shared-workstation login code generation for a known user, and revocation | God mode |
+| `orchid.insight-metric-definitions` | Orchid screen | Registered Insight Metric definitions and their administrable registration metadata; no metric logic authoring | God mode / authorized administrator |
+| `orchid.insight-sheets` | Orchid screen | Organization Insight Sheets, metric placements, ordering, placement configuration, sheet filter configuration, and Command sharing | Organizer / god mode |
+| `orchid.insight-sharing-audit` | Orchid screen | Audit records for Insight sharing and unsharing | Organizer / god mode |
 
 ---
 
@@ -1752,6 +1774,24 @@ Rules:
 - Name Reference source text syncs through existing Incident note and Field Report behavior. Any local/server derived index is rebuildable from source text and must not widen offline visibility.
 - Offline server rejections and conflicts defer to the God Mode conflict queue. Until that queue exists, product surfaces may fail silently after preserving local queued/sync-failed state needed for later repair.
 
+### 16.3 Command Outbox States
+
+Every command goes through one durable local queue. Surfaces report its state with these labels:
+
+| State | Meaning |
+|---|---|
+| Queued | Held locally, waiting to reach the node |
+| Sending | Currently being transmitted |
+| Accepted | The node applied it |
+| Rejected | The node refused it and it will not retry on its own |
+
+Rules:
+
+- a rejected command is surfaced to the user who issued it; it is never silently discarded;
+- a command the specification restricts to connected operation is refused at issue time with an explanation, not accepted into the queue. Telling a user their work is queued when it can never send is worse than refusing it;
+- queued commands survive a shared-workstation session ending, per section 18;
+- the queue is shared across surfaces. Field Reports and attendance are callers of it, not owners of their own queues.
+
 ---
 
 ## 17. Policy, Procedure, and Fragment Contract
@@ -1886,6 +1926,133 @@ Example:
 This action is not available for the current user.
 Return to kiosk home or switch users.
 ```
+
+---
+
+## 19A. Client Session and Permission Contract
+
+### 19A.1 Source of Permissions
+
+Navigation, available actions, and surface availability are derived from the capability codes the session response carries. They are not derived from bundled fixture data, build-time configuration, or hardcoded identifiers.
+
+The session response returns role codes and capability codes only. It carries no screen list, menu structure, or precomputed surface availability. A client that needs to know whether to render a surface answers that from the capabilities it holds.
+
+Client-side capability checks are presentation. Server-side authorization is the enforcement boundary. A client that fails to hide an action is still refused by the server, and a surface must never treat successful rendering as evidence of authority.
+
+No surface, action, or navigation entry renders for a user holding no permitting capability. Section 18.1 of the operating guide already requires unavailable actions to be hidden; this contract states where the answer comes from.
+
+### 19A.2 Cached Permission State
+
+A client caches its session response and boots from it when the node is unreachable.
+
+Rules:
+
+- the cached response stays usable for the duration of the event the node is locked to;
+- once that window has ended, or when the client holds no event context, the client requires a successful refresh before granting access;
+- a client running on cached permissions says so, and shows when they were last refreshed;
+- staleness is presented as information, not as an error. A device working normally offline inside its event window is not in a failure state;
+- on reconnect the client refreshes and applies any reduction in permissions immediately. A revoked capability disappears on refresh, not on next login.
+
+Cached-permission state is distinct from the connectivity states in 16.1. A device may be Online with stale permissions, or Offline but usable with fresh ones. Do not conflate the two indicators.
+
+### 19A.3 Context Switching
+
+Context resolves from the node's event lock first, narrowed by the session response to the user's own departments and teams.
+
+Rules:
+
+- a connected user belonging to more than one event, or more than one organization, may switch to any they hold an association with;
+- switching is connected-only. An offline client is locked to the node's context and does not present the switcher;
+- switching re-resolves permissions, navigation, branding, and cached context;
+- no data from the previous context stays visible after a switch. A stale department name in the header or a list still holding the previous event's rows is a defect, not a cosmetic lag.
+
+### 19A.4 Authenticated Downloads
+
+Exports, generated documents, and attachments are retrieved through a short-lived server-issued URL requested by the authenticated client, then navigated to. Credentials never appear in a link.
+
+Surfaces present this as an ordinary download. The URL request is not a step the user sees.
+
+---
+
+## 19B. Insights Contract
+
+### 19B.1 Insights Are Not Reports
+
+Insights and Reports are separate concepts and separate navigation. An Insight Sheet is a live compiled view; a Report is a fixed, formal, or historical output. Surfaces must not label one as the other, and a PDF taken from a sheet is a snapshot of a view rather than a Report.
+
+### 19B.2 Landing and Navigation
+
+Insights appear in primary navigation.
+
+The landing page lists every sheet available to the current user, with favorited sheets distinguished. Sheets the user cannot access are omitted entirely — not greyed, not shown as locked, not listed with an empty state. A navigation entry a user can see but never open teaches them the product is broken.
+
+Role-specific default sheets are not required.
+
+### 19B.3 Sheet Rendering
+
+A rendered sheet shows its name, the selected event, and the selected department where applicable.
+
+Rules:
+
+- one event at a time. There is no multi-event or comparison view;
+- the event selector offers only events the viewer is authorized for;
+- department context switching is offered only among departments the viewer is authorized for, and switching re-renders the sheet;
+- filters are sheet-level and apply to every metric on the sheet. Individual metrics carry no filter controls of their own;
+- filter selections persist for the session and are not required to survive a new one;
+- a metric whose capability the viewer lacks is omitted. It is not rendered empty, greyed, or as a permission-denied tile.
+
+### 19B.4 Metric State
+
+Every metric communicates whether conditions are healthy as clearly as whether they need attention. A metric that only speaks up when something is wrong makes its silence ambiguous — the viewer cannot tell "fine" from "not loaded".
+
+Two independent axes:
+
+| Axis | States |
+|---|---|
+| Operational | healthy, expected, attention, critical |
+| Data quality | incomplete, stale, offline, waiting to sync |
+
+They are shown separately and never merged. A metric can be healthy and stale at the same time, and collapsing that into one indicator tells a viewer the operation is fine when the truth is that nobody currently knows.
+
+Operational state uses the existing status and severity conventions in section 16 of the operating guide. Data-quality state uses the existing connectivity and sync conventions in section 16 of this contract. Insights introduce no new state vocabulary and no new colours.
+
+States are never dismissed, acknowledged, assigned, or resolved. A metric keeps displaying after a problem is corrected and shows that expectations are now met.
+
+### 19B.5 Suppressed Values
+
+An aggregate covering fewer than 5 people is suppressed.
+
+A suppressed value states that it is withheld for privacy. It is never rendered as zero, a dash, an empty cell, or a blank chart segment — a silent gap invites the viewer to guess what was in it, and a guess about a cohort of three is a name.
+
+### 19B.6 Action Links
+
+A metric links to the operational surface where an authorized user can investigate or act.
+
+Following a link enters that surface under its own authorization. The link carries no authority, and a shared metric's link does not admit Command to the sharing department's surfaces.
+
+### 19B.7 Sharing With Command
+
+A department lead may share a whole sheet or a single metric placement with Command, ongoing or temporarily.
+
+Shared content shows its originating department wherever it appears, so Command always knows whose numbers it is reading.
+
+A temporary share stops applying when the event's operations window closes, and may be removed earlier. Sharing surfaces must state which mode a share is in.
+
+Sharing exposes no data Command could not otherwise see. A restricted metric on a shared sheet stays restricted for Command, and the sharing surface should say so rather than let a lead believe they shared more than they did.
+
+### 19B.8 PDF Snapshot
+
+The snapshot action produces a PDF in the browser and downloads it.
+
+The PDF carries what the viewer was looking at: visible metrics, selected filters, current states, freshness and synchronization disclosures, organization, event, department where applicable, sheet name, generation timestamp, generating user, and originating department for shared content.
+
+Suppression applies to the PDF exactly as to the screen.
+
+Meridian stores nothing. There is no snapshot library, history, or retrieval surface, and the action must not suggest one exists.
+
+### 19B.9 Responsive Behavior
+
+Metrics use the existing card conventions on touch and narrow viewports and the existing table conventions where a metric's presentation is tabular. Insights introduce no new layout primitives.
 
 ---
 

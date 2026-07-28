@@ -608,7 +608,158 @@ Milestone 15B makes the console's *content* about Meridian. This milestone makes
 
 ---
 
-### Milestone 16: Packaging, Event-Mode Safeguards, and Release Candidate QA
+### Milestone 16: Client Session and API Wiring
+
+**Goal:** Make the client applications real. A user logs in, the server tells the client who they are and what they may do, navigation follows from those permissions instead of from bundled fixture data, and every surface reads and writes through the API endpoints that already exist.
+
+The server side of most of this milestone is already built. Departments, teams, trainings, equipment, shifts, documents, incidents, attendance, and the credential eligibility export all have endpoints. What is missing is a session for a real user to hold, a way for the client to learn that user's permissions, and the wiring between the two.
+
+Three parts of the milestone are not binding work and should be understood as new domain work: token authentication with device binding, shared-workstation login codes, and permission-scoped sync rules. The shared-workstation mechanism amends technical spec section 13.2, which previously allowed only God mode to generate login codes.
+
+Until this milestone, every `/api/*` route sat behind `local.field`, a shared-bearer-token middleware that authenticated as a seeded fixture user and was disabled outside local development. That middleware is removed here. The seeded fixture user survives as ordinary development seed data.
+
+**Primary source docs:** Requirements sections 7.16 (AUTH-018 through AUTH-030) and 7.22 (CLIENT-001 through CLIENT-024); technical spec sections 9.5, 11.4, 11A, 13.2, 13.3, 15; data/API sections 5.4 through 5.7, 7.3, 12.4, 12.5; UI implementation contract section 12; UI operating guide sections 18.1, 18.2; kiosk and field hardware UX guide.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M16.1 Sanctum token issuance | Add API login endpoints so a client requests a magic link and completes verification without leaving the application, receiving a bearer token. Add node-configured token expiry with a documented default. | AUTH-018, AUTH-019, AUTH-024; technical spec 11.4; data/API 5.4 | Feature/auth tests; expiry tests |
+| M16.2 Device-bound tokens and revocation | Bind every issued token to a `devices` record, refuse issuance without a resolvable device, and add God Mode listing and revocation by token and by device with request-time evaluation. | AUTH-021 through AUTH-023, AUTH-025; technical spec 11.4; data/API 12.5 | Domain/policy/audit tests; a test asserting a revoked token fails its next request; a redaction test asserting raw tokens never reach logs or audit |
+| M16.3 Provider handoff | Complete Google and Discord login through a system browser and return the token to the requesting client, mobile, or desktop application. | AUTH-020; technical spec 11.4; data/API 5.4 | Feature tests per client target |
+| M16.4 Session resolution endpoint | Add `GET /api/me` returning identity, effective role codes, permission capability codes, and the user's organizations, events, departments, and teams. Return codes only, with no navigation, screen list, or menu structure. | CLIENT-001 through CLIENT-003; technical spec 11A.2; data/API 5.5 | HTTP/policy tests; a test asserting the payload carries no precomputed surface list; a test asserting one user cannot read another's associations |
+| M16.5 Offline permission cache | Persist the session response durably, boot from it when the node is unreachable, bound staleness to the locked event window, show cached state and last refresh, and apply permission reductions immediately on reconnect. | CLIENT-007 through CLIENT-010; technical spec 11A.4 | Cache/staleness tests; a test asserting an ended event window forces refresh; a test asserting a removed permission is dropped on refresh |
+| M16.6 Permission-aware navigation | Replace `fixtureDepartmentAccess` and its consumers in the router, shell, and workflow links with capabilities from the session response, honoring the existing rules that unavailable actions are hidden and denied surfaces name the required role only for elevated users. | CLIENT-004 through CLIENT-006, CLIENT-024; UI operating guide 18.1, 18.2 | UI/policy tests; a test asserting no navigation entry renders without a permitting capability; client tests still run without a live server |
+| M16.7 Organization and event switcher | Resolve context from the node lock first and narrow it through the session response; let a connected user switch to any event or organization they hold an association with; lock an offline client to the node's context; re-resolve permissions, navigation, branding, and cache on switch. | CLIENT-011 through CLIENT-014; technical spec 11A.3; UI contract 12 | UI/context tests; a test asserting an offline client offers no switching; a test asserting no previous-context data survives a switch |
+| M16.8 Shared-workstation login codes | Implement login code generation, hashing, rate limiting, and audit for both God Mode issuance and self-service issuance from a device where the user already holds a session. Codes stay scoped to one user, event, and trusted workstation, and remain valid 6 weeks. | AUTH-026 through AUTH-029; technical spec 13.2; data/API 12.4 | Domain/policy/audit tests; a test asserting a user cannot generate a code for someone else; a test asserting self-service issuance needs no internet or central reachability; a raw-code redaction test |
+| M16.9 Shared-workstation session semantics | Establish the session a code produces: 5-minute inactivity timeout, explicit end before user switching, lock on Electron restart, session data wiped on end while queued operations survive, active user shown prominently, and no personal device token issued. | AUTH-030; technical spec 13.3; data/API 12.3; kiosk guide | Session/timeout/lock tests; a test asserting code entry issues no API token; a test asserting queued operations survive session end |
+| M16.10 Command outbox | Generalize command submission into one durable queue with client-generated idempotency keys, migrate the field report and attendance queues onto it, surface queued/accepted/rejected state, and refuse connected-only commands at queue time. | CLIENT-015 through CLIENT-018; technical spec 11A.5; data/API 5.3, 5.6 | Queue/replay/idempotency tests; a test asserting a repeated key produces no duplicate effect; a test asserting online-only commands are refused rather than queued |
+| M16.11 `local.field` removal | Remove the shared-token middleware, its configuration, and the client environment variable, and move the mobile Field application onto token authentication. Keep the fixture seeder as development seed data. | AUTH-018; technical spec 11.4 | Feature tests; a test asserting the shared token no longer authenticates; mobile upload regression tests |
+| M16.12 Short-lived download URLs | Extend the existing field report photo pattern to the credential eligibility export, incident PDFs, and document exports: an authenticated client requests a scoped expiring URL and then navigates to it. | CLIENT-019, CLIENT-020; technical spec 11A.6; data/API 5.7 | HTTP/policy tests; expiry test; a test asserting a URL issued for one resource does not retrieve another |
+| M16.13 Permission-scoped sync rules | Scope PowerSync replication by the caller's effective roles so a device never holds records its user could not retrieve through the API, and a role change changes what subsequently replicates. | CLIENT-021, CLIENT-022; technical spec 9.5, 11A.7; data/API 7.3 | Sync/policy tests; a test asserting a demoted user stops receiving previously replicated records |
+| M16.14 Organization admin binding | Bind the organizer department and staff surfaces to their existing endpoints and remove their fixture dependencies. | CLIENT-023; ORG-002, VOL-001 through VOL-006; data/API 10.6 | UI/API integration tests |
+| M16.15 Department and team binding | Bind department detail, team list, team detail, team lead designation, and team staff assignment surfaces to their endpoints. | CLIENT-023; TEAM requirements; data/API 10.6 | UI/API integration tests |
+| M16.16 Trainings binding | Bind training list, detail, signup, completion, and prerequisite surfaces to their endpoints. | CLIENT-023; training requirements | UI/API integration tests |
+| M16.17 Equipment binding | Bind department equipment inventory and checkout surfaces to their endpoints. | CLIENT-023; EQUIP-001 through EQUIP-005 | UI/API integration tests |
+| M16.18 Shifts binding | Bind shift administration and shift board surfaces to their endpoints. | CLIENT-023; SHIFT requirements | UI/API integration tests |
+| M16.19 Documents binding | Bind policy, procedure, fragment, and Event Info surfaces to their endpoints, including document export through M16.12. | CLIENT-023; policy/procedure requirements; data/API 11.4A | UI/API integration tests |
+| M16.20 IMS binding | Bind incident list, detail, notes, links, attachments, list presets, and PDF surfaces to their endpoints. | CLIENT-023; INC-001 through INC-015; IMS spec | UI/API/policy integration tests |
+| M16.21 Attendance and logistics binding | Bind check-in, check-out, no-show, deployment, and logistics workspace surfaces to the attendance commands through the M16.10 outbox. | CLIENT-023, CLIENT-015; SLB-001 through SLB-022; technical spec 20 | UI/offline/idempotency integration tests |
+| M16.22 Export entry points | Bind the reporting export entry points, including `organizer.credentials`, to their endpoints through the M16.12 download URL path. | CLIENT-023, CLIENT-019; REPORT-001; UI contract 12.6 | UI/API/policy tests |
+| M16.23 Client session QA script | Add `QA-CLIENT-01-session-and-api-wiring.md`. | QA README | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- a user logs in from the web client, the mobile application, and the desktop application using the same token mechanism;
+- every issued token is bound to a device, and God Mode can revoke one token or every token on a device, with revocation taking effect on the next request;
+- `GET /api/me` returns role codes and capability codes and returns no navigation structure;
+- navigation and available actions follow from those capabilities, with no surface reachable for which the user holds no permitting capability;
+- a client that fails to hide an action is still refused by the server;
+- a client that loses connectivity keeps working from its cached permissions for the duration of the locked event, shows that its permissions are cached, and shows when they were last refreshed;
+- a permission removed on the server is gone from the client on its next successful refresh;
+- a connected user belonging to multiple events or organizations can switch between them, and an offline user cannot;
+- switching context leaves no data from the previous context visible;
+- a staff member at a kiosk with no internet generates a login code on their own already-signed-in phone and uses it to sign in to the workstation;
+- God Mode can still generate a login code for another user, and a user cannot generate one for anyone but themselves;
+- a shared-workstation session times out after 5 minutes of inactivity, locks on restart, requires an explicit end before switching users, and issues no personal device token;
+- commands issued offline are queued, survive a session ending, and apply exactly once when connectivity returns;
+- a command restricted to connected operation is refused when issued offline rather than queued;
+- exports, incident PDFs, and document exports download through a short-lived scoped URL rather than a credentialed link;
+- a device does not hold records its user has no capability to read, and demoting a user changes what replicates to their devices;
+- the shared `local.field` token no longer authenticates anything;
+- every surface group reads and writes through the API, and the client's automated tests still run without a live server.
+
+**QA gate:** A human can log in on web, mobile, and desktop; confirm navigation matches their real roles and changes when a role is granted or revoked; take a device offline and confirm it keeps working within the event window and reports its permissions as cached; switch events and organizations while connected and confirm switching disappears when offline; generate a login code on their phone with no internet and sign in to a kiosk with it; watch that kiosk session time out; queue an attendance command offline and confirm it applies once on reconnect; download the credential eligibility export through a short-lived URL; and confirm God Mode can revoke a device's tokens and that the device stops working on its next request.
+
+---
+
+### Milestone 17: Insights
+
+**Goal:** Ship the Insights framework — registered metric types, organization-owned configurable sheets, permission and privacy enforcement, live and offline compilation, Command sharing, and browser PDF snapshots — plus the three approved initial metrics.
+
+This milestone builds the reusable framework and the first metrics that prove it. It does not design the full catalogue of Insight Sheets or metrics. Future metric and sheet design is separate work that consumes this framework, and no task here should be read as committing to it.
+
+Insights are not Reports. Reports remain the fixed, formal, historical outputs already specified in section 7.14. Nothing in this milestone renames, replaces, or absorbs them.
+
+Two pieces of this milestone are attendance-domain work rather than Insights work. Automatic no-show determination amends Milestone 10's manual `mark-no-show` behavior, and the missed-shift metric depends on it. It is placed here because the metric is what requires it, and it is called out separately so its blast radius is visible.
+
+**Primary source docs:** Requirements sections 3.43, 3.44, 7.9 (SLB-023 through SLB-030), and 7.23 (INSIGHT-001 through INSIGHT-062); technical spec sections 20.2, 21C, 31; data/API sections 5.8, 6.7, 7.3, 8, 10.10, 10.19; UI implementation contract sections 12.7B, 12.9, 19B; UI operating guide section 20A.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M17.1 Automatic no-show determination | Derive no-show from the ±5% sign-in window on the node holding event authority, writing an audited append-only attendance operation. Exclude cancelled and excused shifts. Preserve manual `mark-no-show`. Make determination idempotent per assignment. | SLB-023 through SLB-027, SLB-029; technical spec 20.2; data/API 10.10 | Domain/authority/audit tests; boundary tests at both window edges; idempotency test; a test asserting cancelled and excused shifts are excluded |
+| M17.2 Late arrival and supersession | Let a check-in after an automatic no-show supersede it so the derived state becomes checked-in with both operations preserved, and derive late arrival from that superseded case. | SLB-028, SLB-030; technical spec 20.2 | Domain tests; a test asserting both operations survive in history; a test asserting on-time, late, and missed partition with no gap or overlap |
+| M17.3 Metric registration and rendering contract | Add `insight_metric_definitions` and the render contract taking event, department scope, filters, and placement configuration and returning values, state, presentation, and action link. Enforce each metric's declared capability at render. | INSIGHT-002, INSIGHT-037; technical spec 21C.2; data/API 10.19 | Contract/registration tests; a test asserting a metric renders nothing when its declared capability is absent |
+| M17.4 Sheets and metric placements | Add `insight_sheets` and `insight_metric_placements` with ordering, per-placement configuration validated against registration at write time, sheet-level enabled filters, and create/edit/soft-archive lifecycle. | INSIGHT-003 through INSIGHT-006, INSIGHT-013, INSIGHT-014; technical spec 21C.3; data/API 10.19 | Schema/domain tests; a test asserting a metric type reused on multiple sheets keeps independent configuration; a test asserting unknown configuration keys are refused rather than ignored |
+| M17.5 Insights permissions | Add `insights.view`, `insights.sheets.manage`, and `insights.share_with_command` to the permission catalog with the documented role mappings, and enforce them in policies, query handlers, API responses, and Orchid. | INSIGHT-016 through INSIGHT-023; data/API 6.7 | PermissionCatalog/policy tests; a test asserting sheet-management authority does not widen data access; a test asserting a sheet cannot be configured to expose data its author cannot read |
+| M17.6 Scope and context resolution | Resolve one event at a time and a department scope from the viewer's authorization and selected department context, so one sheet renders different data for different viewers. Support authorized department switching. | INSIGHT-009 through INSIGHT-012; technical spec 21C.4 | Scope tests; department isolation tests; a test asserting a lead outside the Organizers Department sees only their department; organizer cross-department test |
+| M17.7 Restricted-domain and privacy enforcement | Hide sheets and metrics drawing on domains the viewer cannot access, restrict incident- and Field-Report-derived metrics to the IC pool, and suppress aggregates covering fewer than 5 people server-side with an explicit withheld-for-privacy result. | INSIGHT-024 through INSIGHT-030; technical spec 21C.6 | Policy/privacy tests; a test asserting suppression never renders as zero, null, or empty; a test asserting IMS-derived metrics are invisible outside the IC pool; a test asserting no names or PII appear in any rendered payload |
+| M17.8 Metric state model | Implement the operational states (healthy, expected, attention, critical) and the data-quality states (incomplete, stale, offline, waiting to sync) as independent axes with fixed thresholds, reusing existing status and connectivity conventions. | INSIGHT-033 through INSIGHT-036, INSIGHT-040, INSIGHT-041; technical spec 21C.7 | State tests; a test asserting a metric can be simultaneously healthy and stale; a test asserting no dismissal, acknowledgement, or resolution path exists |
+| M17.9 Live refresh and offline compilation | Recompile after each synchronized change; compile on-device from permission-scoped synced data when offline; report incomplete rather than reaching past the sync boundary. Sync sheet and placement definitions; sync no compiled value. | INSIGHT-038, INSIGHT-039, INSIGHT-042, INSIGHT-043; technical spec 21C.8; data/API 7.3 | Sync/offline tests; a test asserting no compiled result is persisted; a test asserting a metric lacking local data reports incomplete |
+| M17.10 Command sharing | Add `insight_sheet_shares` supporting whole-sheet and single-placement sharing, ongoing and temporary modes with expiry evaluated on read against the event window, originating-department labelling, removal, and audit. | INSIGHT-044 through INSIGHT-051; technical spec 21C.9; data/API 10.19 | Domain/policy/audit tests; a test asserting a restricted metric on a shared sheet stays restricted for Command; a test asserting placement-level sharing does not share other uses of the same metric type; expiry test at window close |
+| M17.11 Action links | Link each metric to its operational surface, entering that surface under its own authorization. | INSIGHT-037; technical spec 21C.7 | Policy tests; a test asserting a shared metric's link does not admit Command to the sharing department's surfaces |
+| M17.12 Favorites and pins | Add `insight_sheet_favorites` as personal view state, surfaced in the product interface and not in Orchid, and not audited. | INSIGHT-058; data/API 10.19 | Domain/UI tests |
+| M17.13 Insights surfaces | Build `insights.index`, `insights.sheet`, `insights.sheet-edit`, and `insights.share`, with primary-navigation placement, unauthorized sheets omitted entirely, sheet-level filters, session-scoped filter memory, and department switching. | INSIGHT-030, INSIGHT-056, INSIGHT-057, INSIGHT-015; UI contract 12.7B, 19B; operating guide 20A | UI/policy tests; a test asserting an inaccessible sheet is absent rather than disabled; session filter memory test |
+| M17.14 Personal volunteer Insights | Build `insights.me` returning the signed-in volunteer's own completed shifts, missed shifts, late arrivals, hours worked, hours worked by team, and credits, available without `insights.view`. | INSIGHT-031, INSIGHT-032; data/API 5.8 | UI/policy tests; a test asserting no peer comparison, ranking, or other volunteer's data is reachable |
+| M17.15 Browser PDF snapshot | Generate the snapshot in the browser and download it, carrying visible metrics, filters, states, freshness disclosures, organization, event, department, sheet name, timestamp, generating user, and originating department. Store nothing and create no snapshot entity. | INSIGHT-052 through INSIGHT-055; technical spec 21C.10 | Output tests asserting the PDF matches the current view; a test asserting nothing is persisted; a test asserting suppression carries into the PDF |
+| M17.16 Orchid Insights administration | Add registered metric definition visibility, organization sheet and placement administration, sheet filter configuration, Command sharing configuration, and the sharing audit view. No metric logic authoring. | INSIGHT-002, INSIGHT-021, INSIGHT-049; technical spec 21C.11; UI contract 12.9 | Orchid feature tests; a test asserting no formula or code authoring path exists; a test asserting editing configuration grants no data access |
+| M17.17 Missed shifts metric | Register the missed shifts metric on the M17.1 determination. | INSIGHT-060; SLB-023 through SLB-029 | Metric tests over seeded attendance fixtures |
+| M17.18 Equipment not returned metric | Register the equipment not returned metric covering explicitly missing equipment, shift-assigned equipment still checked out after its shift ended, and event-assigned equipment still checked out after the event ended. | INSIGHT-061; EQUIP-001 through EQUIP-005 | Metric tests; separate cases for shift-assigned and event-assigned timing |
+| M17.19 Extended shift presence metric | Register a metric identifying how many people remain on shift beyond their scheduled time. Its detailed calculation is designed with this task, not inherited from the framework. | INSIGHT-062; technical spec 30 item 33 | Metric tests |
+| M17.20 Insights QA script | Add `QA-INSIGHT-01-insights-framework.md`. | QA README | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- a scheduled shift with no check-in by the end of the ±5% window becomes a no-show without anyone marking it, and the operation is audited and syncs;
+- a cancelled shift and an excused shift never become no-shows;
+- a very late check-in supersedes the no-show, the derived state becomes checked-in, and both operations remain in history;
+- an authorized user creates a sheet, places metrics on it, orders them, and configures each placement independently;
+- the same metric type placed twice carries different configuration in each place;
+- an unauthorized user cannot manage sheets, and a user with sheet-management authority still cannot configure a sheet to show data they cannot read;
+- filters are offered at the sheet level only, and selections survive navigation within the session;
+- a sheet reads one event and offers no comparison or multi-event view;
+- a department lead sees only their department; an organizer sees across departments; Planning and Logistics see only their own;
+- Command sees its own department plus what has been explicitly shared with it, and nothing more;
+- incident- and Field-Report-derived metrics are invisible outside the IC pool;
+- an aggregate covering fewer than 5 people is withheld with a stated privacy reason, never as zero or blank;
+- no rendered Insight, and no audit payload, contains a volunteer name or other PII;
+- a volunteer sees their own completed shifts, missed shifts, late arrivals, hours, hours by team, and credits, and cannot reach anyone else's;
+- metrics report healthy conditions as clearly as they report problems, and operational state and data-quality state remain separate indicators;
+- a metric updates after a synchronized change without a manual refresh;
+- a device with no node reachable still renders its sheets, discloses staleness accurately, and reports incomplete where it lacks data;
+- an action link opens the operational surface under that surface's own authorization;
+- a lead shares a sheet with Command and separately shares one metric placement, and both show their originating department;
+- a restricted metric on a shared sheet stays restricted for Command;
+- a temporary share stops applying when the event's operations window closes;
+- sharing and unsharing appear in audit; PDF generation and favorites do not;
+- the browser PDF matches what was on screen including filters and freshness warnings, and Meridian stores no copy of it;
+- Insights appear in primary navigation, and sheets the user cannot access do not appear at all.
+
+**QA gate:** A human can watch a shift become a no-show automatically at the window boundary and then be superseded by a late check-in; build a sheet from registered metrics and configure two placements of the same metric differently; confirm a department lead, an organizer, Command, and a volunteer each see a different and correct slice of the same sheet; confirm an IMS-derived metric is invisible to a non-IC user; confirm a four-person aggregate is withheld rather than shown; take a device offline and confirm the sheet still renders with accurate staleness; share a sheet and a single metric with Command, confirm the originating department is labelled, and confirm a restricted metric on that sheet stays hidden; and save the view to PDF and confirm it matches the screen and is stored nowhere.
+
+**Explicitly out of scope for this milestone:**
+
+- cross-event comparison, multi-event sheets, cross-organization comparison;
+- organization-authored metric formulas or query builders;
+- user-authored narrative analysis, AI-generated insights, predictive analytics;
+- trend history across an event;
+- configurable thresholds;
+- metric dismissal, acknowledgement, assignment, or resolution;
+- individual staff rankings or leader access to named volunteer records through Insights;
+- persistent saved Insight results, stored PDF snapshots, or snapshot history;
+- per-metric user filters and role-specific default sheets;
+- an analytics warehouse, external business-intelligence system, or event stream;
+- design of Insight Sheets or metrics beyond the three approved above.
+
+---
+
+### Milestone 18: Gap Closure
+
+**Goal:** To be specified.
+
+This milestone is reserved for scope identified as missed across earlier milestones. Its scope, source documents, tasks, acceptance criteria, and QA gate will be added through the normal process before any task under it is implemented.
+
+---
+
+### Milestone 19: Packaging, Event-Mode Safeguards, and Release Candidate QA
 
 **Goal:** Produce versioned Alpha 1 builds and verify release readiness.
 
@@ -616,13 +767,13 @@ Milestone 15B makes the console's *content* about Meridian. This milestone makes
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
-| M16.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
-| M16.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
-| M16.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
-| M16.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
-| M16.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
-| M16.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
-| M16.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
+| M19.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
+| M19.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
+| M19.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
+| M19.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
+| M19.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
+| M19.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
+| M19.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
 
 **QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness.
 
@@ -647,7 +798,10 @@ QA should run in this order:
 13. Organization and department branding QA.
 14. God Mode console orientation, documentation, and changelog QA.
 15. God Mode console visual identity QA.
-16. Release candidate QA.
+16. Client session and API wiring QA.
+17. Insights framework and initial metrics QA.
+18. Gap closure QA, once Milestone 18 is specified.
+19. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 

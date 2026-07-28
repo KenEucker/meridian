@@ -510,6 +510,128 @@ Commands should be idempotent wherever possible.
 
 A repeated command with the same command/operation UUID must not create duplicate domain effects.
 
+### 5.4 API authentication
+
+Client applications authenticate with a bearer token issued by Laravel Sanctum. This applies to the web client, the mobile Field application, and the desktop application alike.
+
+Login endpoints:
+
+```text
+POST /api/auth/magic-link          request a magic link or code for an email
+POST /api/auth/magic-link/verify   exchange a verified link or code for a token
+GET  /api/auth/{provider}/start    begin a system-browser provider handoff
+POST /api/auth/session             exchange a completed handoff for a token
+DELETE /api/auth/session           revoke the calling token
+```
+
+Rules:
+
+- every token is bound to a `devices` record; a request that cannot supply a resolvable device identity is refused rather than issued an unbound token
+- tokens expire on a node-configured lifetime with a documented default
+- token expiry is independent of the shared-workstation inactivity timeout in 12.3
+- issuance, expiry, and revocation are audited; raw token values are never logged, audited, or exported
+- shared-workstation login codes do not issue tokens; see 12.4
+- the Alpha 1 `local.field` shared-token middleware is superseded by this mechanism and removed
+
+### 5.5 Session resolution
+
+```text
+GET /api/me
+```
+
+Returns, for the calling user:
+
+- `user`: identity fields
+- `roles`: effective role codes resolved from active team memberships and active team grants, each with the scope it was resolved at and the reason it was granted
+- `capabilities`: permission capability codes carried by those roles, as published by the permission catalog
+- `organizations`: organizations the user holds an association with
+- `events`: events the user holds an association with, and which one the node is locked to when it is locked
+- `departments` and `teams`: the user's associations within the resolved context
+- `context`: the resolved organization, event, and department, and whether context switching is available
+- `refreshed_at`: server time of resolution, used by the client to display permission staleness
+
+The response returns codes, not navigation. It carries no screen list, menu structure, or precomputed surface availability. Clients derive navigation from `capabilities`, which keeps the permission catalog the single source of truth.
+
+Client-side capability checks are presentation only. Every endpoint enforces its own authorization regardless of what the client rendered.
+
+`GET /api/me` is permission-filtered like every other read: it returns the caller's own associations and never another user's.
+
+### 5.6 Client command outbox
+
+Clients submit commands through one durable local queue rather than through per-feature queues.
+
+Each queued command carries a client-generated idempotency key, satisfying the idempotency requirement in 5.3. A repeated key is treated as the same command, which is what makes replay after an interrupted sync safe.
+
+The client surfaces queued, accepted, and rejected commands. A rejected command is reported, not discarded.
+
+Commands restricted to connected operation are refused at queue time rather than queued and rejected later. In Alpha 1 these are incident creation, policy and procedure acknowledgment, event application submission, and map editing. Offline-writable commands remain those listed in 7.2.
+
+### 5.7 Authenticated downloads
+
+A bearer token cannot be attached to a plain browser navigation, so authenticated file retrieval does not place credentials in a link.
+
+An authenticated client requests a short-lived URL for one resource, then navigates to it:
+
+```text
+POST /api/events/{event}/exports/credential-eligibility/download-url
+POST /api/events/{event}/incidents/{incident}/pdf/download-url
+POST /api/policy-documents/{policyDocument}/export/{format}/download-url
+POST /api/procedure-documents/{procedureDocument}/export/{format}/download-url
+POST /api/field-report-photos/{attachment}/download-url
+POST /api/field-report-photos/{attachment}/preview-url
+```
+
+The field report photo endpoints already establish this pattern; the remaining entries extend it to exports and generated documents.
+
+Rules:
+
+- a short-lived URL expires
+- it is scoped to the single resource it was issued for
+- issuing it applies the same authorization as a direct request for that resource
+- following it is not a second authorization decision
+
+Insight Sheet PDFs are not on this list. They are generated in the browser from the rendered view and never leave the client, so there is no server resource to issue a URL for.
+
+### 5.8 Insights API
+
+Reads:
+
+```text
+GET /api/insights/sheets
+GET /api/insights/sheets/{sheet}
+GET /api/insights/metric-definitions
+GET /api/events/{event}/insights/sheets/{sheet}
+GET /api/events/{event}/insights/me
+```
+
+`GET /api/insights/sheets` returns the sheets available to the caller. Sheets the caller cannot access are omitted, not returned as inaccessible entries.
+
+`GET /api/events/{event}/insights/sheets/{sheet}` compiles the sheet against one event, accepting the sheet's enabled filters and an optional department context as query parameters. It returns per-placement values, state, presentation, action link, and freshness disclosure. Placements whose required capability the caller lacks are omitted from the response rather than returned empty.
+
+`GET /api/events/{event}/insights/me` returns the calling volunteer's own event aggregates: completed shifts, missed shifts, late arrivals, hours worked, hours worked by team, and credits. It returns only the caller's own data and is available without `insights.view`.
+
+Every Insights read applies small-cohort suppression server-side. A suppressed value is returned as suppressed with a reason, never as zero, null, or an empty string.
+
+Commands:
+
+```text
+POST /api/commands/create-insight-sheet
+POST /api/commands/update-insight-sheet
+POST /api/commands/archive-insight-sheet
+POST /api/commands/add-insight-metric-placement
+POST /api/commands/update-insight-metric-placement
+POST /api/commands/remove-insight-metric-placement
+POST /api/commands/reorder-insight-metric-placements
+POST /api/commands/share-insights-with-command
+POST /api/commands/unshare-insights-with-command
+POST /api/commands/favorite-insight-sheet
+POST /api/commands/unfavorite-insight-sheet
+```
+
+Sheet and placement commands require `insights.sheets.manage` and validate placement configuration against metric registration at write time. Share and unshare require `insights.share_with_command` and are audited. `share-insights-with-command` accepts an optional metric placement; omitting it shares the whole sheet. Favorite commands are personal view state and are not audited.
+
+Insights are read-compiled and have no offline write path, so no Insights command enters the outbox in 5.6.
+
 ---
 
 ## 6. Permission Model
@@ -662,6 +784,35 @@ Scoping rules:
 - camp names and operational map data are not exposed to users who lack map permissions
 - the exact effective-permission-level role codes for the Placement department are left to the implementing milestone (see section 16)
 
+### 6.7 Insights Permissions
+
+Insights reuse the effective roles in 6.4 and the team-grant mechanism. No parallel permission system is introduced.
+
+Capabilities (module.action style):
+
+```text
+insights.view
+insights.sheets.manage
+insights.share_with_command
+```
+
+Authority sources:
+
+- `insights.view` is granted to the operational roles that need compiled views: `department_lead`, `department_logistics`, `department_operations`, `department_planning`, `organizer`, `lead_organizer`, and the IC roles. Staff hold a personal-Insights path without this capability, limited to their own aggregates.
+- `insights.sheets.manage` is granted to `department_lead`, `organizer`, and `lead_organizer`.
+- `insights.share_with_command` is granted to `department_lead`, so a department decides what leaves it.
+
+Scoping rules:
+
+- a metric renders only when the viewer holds the capability the metric's registration declares; the framework refuses otherwise, so a new metric cannot leak a domain by omitting a check
+- `insights.sheets.manage` grants configuration authority only. It never widens data access, and a sheet cannot be configured to expose data its author cannot read
+- organizers see across departments for the selected event, subject to domain restrictions defined elsewhere
+- a department lead not also authorized through a team under the Organizers Department sees only the department being viewed
+- Command means `ic_lead`, `ic_operator`, or `ic_viewer` in the event's designated Incident Command Department, matching the Briefing's Command pool. Command sees its own department plus content shared with it
+- `department_planning` and `department_logistics` see only their own department unless another capability independently grants more
+- incident- and Field-Report-derived metrics require the corresponding IC capabilities from 6.5
+- an aggregate covering fewer than 5 people is suppressed, and suppression is applied server-side rather than by the rendering client
+
 ---
 
 ## 7. Sync Model
@@ -775,6 +926,10 @@ The following data is server-only or restricted unless explicitly included in an
 - permission administration records except where needed for local authorization decisions
 - draft and archived maps for users without map edit/admin permissions
 - sensitive map layers/features and the camp/location data they contain for users without permission
+
+Beyond this list, sync rules are scoped by the caller's effective roles. A device does not receive records its user could not retrieve through the API, and a change to a user's effective roles changes what subsequently replicates to that user's devices. The cache lists in 7.1 describe what a role should receive; this rule is the boundary on what it may receive.
+
+Insights compile on the device from data already synchronized there under this rule. Insight Sheet and placement definitions sync to users who may view them; no compiled Insight value syncs, because none is stored. This is why offline Insights work and also why they are bounded — a device compiles what it holds, and it holds only what its user may read. A metric that cannot compile from local data reports incomplete rather than reaching past the boundary.
 
 ### 7.4 Node Sync
 
@@ -908,6 +1063,15 @@ Audit applies to:
 - add-note-to-briefing / add-note-to-aar (reference or link)
 - AAR submit/publish/auto-assemble/freeze (post–Alpha 1)
 - Direction, Action Plan, and Notice mutations and Notice dismissals (post–Alpha 1)
+- Insight Sheet creation and material configuration change
+- Insight Sheet sharing with Command, metric-placement sharing with Command, and unsharing
+- automatic no-show determination, through the audited attendance operation it writes
+
+Insight PDF generation is not audited. The browser generates it from a view the caller is already authorized to see, and a user can print any page they can read, so an entry would record only the cases where someone used the button while presenting itself as a record of who exported what. This differs deliberately from incident PDF export, which the server produces and therefore audits.
+
+Insight favorites and pins are personal view state and are not audited.
+
+Audit payloads for Insights reference staff and users by identifier. They do not carry volunteer names or other personal data.
 
 Audit entries should capture:
 
@@ -1871,6 +2035,17 @@ Rules:
 - offline check-out without known server-side check-in is accepted and reconciled later
 - attendance conflicts go to the sync conflict queue
 
+Automatic no-show determination:
+
+- a scheduled shift whose assigned staff member has not checked in by the end of the accepted sign-in window produces a `mark_no_show` operation without a lead marking it
+- the accepted sign-in window extends before and after the scheduled shift start by 5% of the scheduled shift duration
+- the operation is written by the node holding authority for the event — the on-site primary node during the active event window, central otherwise — and carries that node in `origin_node_id`, with no `origin_device_id`
+- cancelled shifts and shifts carrying an excused attendance record are excluded
+- a later `check_in` supersedes it: the derived state in `attendance_records` becomes `checked_in` and both operations remain in the append-only history
+- a staff member checked in after the end of the accepted window arrived late; late arrival is exactly this superseded case and is derived from the operation history rather than stored as its own state
+- the manual `mark_no_show` operation remains available to authorized attendance managers, and `created_by_user_id` distinguishes a manual operation from an automatic one
+- determination is idempotent per shift assignment: re-running it produces no second operation
+
 #### `attendance_records`
 
 Represents derived/current attendance state for a staff member/shift.
@@ -2689,6 +2864,131 @@ Rules:
 
 ---
 
+### 10.19 Insights
+
+Insights compile current authorized domain data. The entities below store what a sheet *is*, never what a metric *computed*. No table holds a calculated Insight result.
+
+#### `insight_metric_definitions`
+
+Represents a developer-defined Insight Metric type, registered as data.
+
+Key fields:
+
+- `id`
+- `code`, unique
+- `name`
+- `description`
+- `domain` (the operational domain the metric draws on, e.g. `shifts`, `equipment`, `incidents`)
+- `required_capability`
+- `configuration_schema_json` (the configuration keys a placement may carry)
+- `enabled`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- definitions are seeded and maintained by developers; Orchid may view and administer registration metadata but cannot create metric behavior
+- `required_capability` is enforced at render; a metric whose capability the viewer lacks does not render
+- no organization-authored formula, expression, or query is stored here
+
+#### `insight_sheets`
+
+Represents an organization-owned configurable page of metrics.
+
+Key fields:
+
+- `id`
+- `organization_id`
+- `name`
+- `description`, nullable
+- `enabled_filters_json` (which supported filters this sheet offers viewers)
+- `created_by_user_id`
+- `created_at`
+- `updated_at`
+- `archived_at`, nullable
+
+Rules:
+
+- sheets are organization-owned, not user-owned; the creator is recorded for audit, not for ownership
+- a sheet reads one event at a time; the event is a viewing selection, not a stored property of the sheet
+- filters are sheet-level; individual metrics carry no independent user-facing filters
+- lifecycle is create, edit, soft-archive. There is no publication, approval, or version history
+
+#### `insight_metric_placements`
+
+Represents one appearance of a registered metric on a sheet.
+
+Key fields:
+
+- `id`
+- `insight_sheet_id`
+- `insight_metric_definition_id`
+- `position`
+- `configuration_json`
+- `created_at`
+- `updated_at`
+- `archived_at`, nullable
+
+Rules:
+
+- a metric type may be placed on many sheets and more than once on one sheet
+- `configuration_json` is validated against the definition's `configuration_schema_json` at write time; unknown keys are refused rather than ignored
+- a placement referencing a disabled or unknown definition is refused at write time
+
+#### `insight_sheet_shares`
+
+Represents a department sharing a sheet, or one metric placement from it, with Command.
+
+Key fields:
+
+- `id`
+- `insight_sheet_id`
+- `insight_metric_placement_id`, nullable — null means the whole sheet is shared
+- `originating_department_id`
+- `event_id`
+- `share_mode` (`ongoing` or `temporary`)
+- `shared_by_user_id`
+- `shared_at`
+- `removed_at`, nullable
+- `removed_by_user_id`, nullable
+
+Rules:
+
+- Command is the `ic_lead`/`ic_operator`/`ic_viewer` pool in the event's designated Incident Command Department
+- a temporary share stops applying when the event's operations window closes; expiry is evaluated on read against the event window, so no scheduled job is required
+- an ongoing share applies until removed
+- sharing grants no data Command is otherwise prohibited from seeing; restricted metrics on a shared sheet remain restricted, so sheet-level sharing cannot leak a metric the sharer forgot was present
+- placement-level sharing applies to that placement only, never to every use of the metric type
+- `originating_department_id` is rendered wherever shared content appears
+- share and unshare are audited
+
+#### `insight_sheet_favorites`
+
+Represents a user pinning a sheet.
+
+Key fields:
+
+- `id`
+- `insight_sheet_id`
+- `user_id`
+- `created_at`
+
+Rules:
+
+- favorites are personal view state, belong in the product interface rather than Orchid, and are not audited
+
+#### Session filter state
+
+A viewer's filter selections are held for the session and are not persisted across sessions. They are client-side session state and have no table, following the same reasoning as incident list paging position in 10.16A.
+
+#### What is deliberately absent
+
+- no table stores a computed metric value; Insights compile on read
+- no snapshot, export, or PDF entity exists; a PDF is generated in the browser and downloaded
+- no saved Insight result, trend history, or cross-event aggregate is stored
+
+---
+
 ## 11. Policies, Procedures, and Fragments
 
 Policies and procedures are included in Alpha 1 and should be represented as first-class data modules.
@@ -3378,7 +3678,7 @@ Rules:
 
 ### 12.4 `shared_workstation_login_codes`
 
-Represents human-typable login codes generated by God mode.
+Represents human-typable login codes for shared workstation login.
 
 Key fields:
 
@@ -3398,6 +3698,44 @@ Rules:
 - raw login codes are not logged
 - generation and use are audited
 - codes are scoped to one user, event, and trusted shared workstation
+- codes are valid for 6 weeks
+- a successful code entry establishes a shared workstation session under 12.3 and does not issue an API token under 12.5
+
+Generation authority:
+
+- God mode may generate a code for any known user; `generated_by_user_id` records the operator
+- a user may generate a code for themselves from a device on which they already hold a valid session; `generated_by_user_id` equals `user_id`
+- self-service generation requires only reachability of the node that will accept the code, and does not require internet access, central reachability, or email delivery
+- a user may not generate a code on behalf of another user
+- generation is rate limited per user and per node
+- code entry attempts are rate limited per workstation, and failures are audited after a threshold
+
+### 12.5 API tokens
+
+Represents a Sanctum bearer token issued to a client application, bound to a device.
+
+Key fields:
+
+- `id`
+- `tokenable_type` and `tokenable_id`, resolving to the owning user
+- `device_id`
+- `name`
+- `token`, stored hashed
+- `abilities`
+- `last_used_at`
+- `expires_at`
+- `revoked_at`
+- `created_at`
+
+Rules:
+
+- a token is always bound to a `devices` record; issuance without a resolvable device is refused
+- expiry uses a node-configured lifetime with a documented default
+- revocation is evaluated at request time, so a revoked token stops authenticating on its next request without client cooperation
+- God mode may list tokens by user and by device, revoke one token, and revoke every token bound to a device
+- revoking a device revokes its tokens
+- raw token values are never logged, audited, or exported; audit entries reference the token identifier and bound device
+- token lifetime is independent of the 5-minute shared-workstation inactivity timeout in 12.3
 
 ---
 

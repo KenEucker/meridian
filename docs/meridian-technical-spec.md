@@ -643,6 +643,12 @@ Failed sync actions remain recoverable.
 
 Normal users should see sync status unobtrusively. Advanced sync details are hidden behind advanced/debug/God mode.
 
+## 9.5 Permission scoping of sync rules
+
+The cache lists in section 9.3 describe what each role should receive. They are expectations, not the authorization boundary.
+
+Sync rules are scoped by the user's effective roles, as defined in section 11A.7. A device does not receive records its user could not retrieve through the API, and a change to a user's effective roles changes what subsequently replicates to that user's devices.
+
 ---
 
 # 10. Node-to-Node Sync
@@ -811,6 +817,101 @@ God mode may generate/display short login URLs or codes.
 
 These are for assisted recovery or shared workstation login, not normal personal device trust.
 
+## 11.4 API tokens
+
+Meridian client applications authenticate to the API with a bearer token, not with a browser session cookie. The web client, the mobile Field application, and the desktop application all use the same mechanism, so that authentication does not depend on a client being served same-origin by the node it talks to.
+
+Tokens are issued by Laravel Sanctum.
+
+Token issuance paths:
+
+- API magic link. A client posts an email address, the node issues a magic link or code, and the client completes verification through an API endpoint rather than through a browser redirect. On success the client receives a token.
+- Provider handoff. Google and Discord login opens a system browser at the existing provider redirect. On completion the node returns a token to the requesting application through a registered callback or custom scheme. The provider exchange itself is not reimplemented in the client.
+- Shared workstation login codes do not issue tokens. See section 13.
+
+Every token is bound to a `devices` record. Token issuance requires a resolvable device identity, and a request that cannot supply one is refused rather than issued an unbound token. The device binding is what makes a token revocable as a unit of hardware rather than only as a unit of session.
+
+God mode can list tokens by user and by device, revoke an individual token, and revoke every token issued to a device. Revocation is evaluated on the node at request time, so a revoked token stops authenticating on its next request without any client cooperation.
+
+Tokens expire. Expiry is a node configuration value with a documented default. Token expiry is independent of the shared-workstation inactivity timeout in section 13.3; the two govern different things and neither substitutes for the other.
+
+Token issuance, expiry, and revocation are audit-sensitive. Raw token values are never written to logs, audit entries, or exports. Audit entries reference the token by identifier and by bound device.
+
+The shared-token `local.field` middleware used during Alpha 1 mobile Field QA is superseded by this mechanism and is removed. The seeded local Field fixture user remains as ordinary development seed data and is reached by logging in as that user.
+
+---
+
+# 11A. Client Session and API Binding
+
+## 11A.1 Purpose
+
+This section defines how a Meridian client application establishes a session, learns what its user may do, resolves its operating context, submits writes, and retrieves files. It adds no domain behavior. It replaces the fixture data that Alpha 1 clients have carried in place of a server-driven session.
+
+## 11A.2 Session resolution endpoint
+
+The node exposes an authenticated endpoint that returns, for the calling user:
+
+- the user's identity;
+- the effective role codes the user holds, as resolved by the effective role resolver described in section 15;
+- the permission capability codes those roles carry, as published by the permission catalog;
+- the organizations, events, departments, and teams the user is associated with.
+
+The endpoint returns role codes and capability codes. It does not return navigation decisions, screen lists, or menu structures. A client that needs to know whether to render a surface answers that question from the capabilities it holds. This keeps the permission catalog the single source of truth and prevents a second, divergent permission model from growing inside the response shape.
+
+Clients derive navigation and available actions from capabilities, applying the existing UI rules in the operating guide: unavailable actions are generally hidden, and permission-denied surfaces explain the required role to elevated users while stating only that access is restricted to default staff.
+
+Client-side capability checks are presentation. Server-side authorization remains the enforcement boundary, and a client that fails to hide an action is still refused by the server.
+
+## 11A.3 Context resolution
+
+A client resolves organization and event context from the node it is connected to. When the node is locked to an event, that lock determines organization and event, in the same way the branding resolver and Kiosk workstation pinning already resolve locked context. The session response then narrows that context to the user's own departments and teams.
+
+A connected client whose user belongs to more than one event, or to more than one organization, may switch to any other event or organization in which that user holds an association. Switching is a connected-only capability.
+
+A client without connectivity is locked to the context the node provides and does not offer switching.
+
+Switching re-resolves permissions, navigation, branding, and cached context. Data from the previous context is not left visible.
+
+## 11A.4 Offline permission cache
+
+A client caches the most recent session response durably and uses it to establish navigation and permissions when the node is unreachable.
+
+The cached response remains usable for the duration of the event the node is locked to. Once that event window has ended, or when the client holds no event context, the client requires a successful refresh before granting access. Tying staleness to the event window rather than to a fixed number of hours means a device does not lose its permissions partway through a multi-day event that has no connectivity.
+
+A client operating from cache indicates that its permissions are cached and records when they were last refreshed.
+
+On regaining connectivity the client refreshes and applies any reduction in permissions immediately. A permission that has been removed is removed on refresh, not on next login.
+
+## 11A.5 Command outbox
+
+Clients submit every command through one durable local queue rather than through per-feature queues.
+
+The outbox replaces the separate field report and attendance queues that Alpha 1 carries. Both become callers of the shared queue.
+
+Each queued command carries a client-generated idempotency key. The server treats a repeated key as the same command rather than as a new one, which is what makes replay after an interrupted sync safe.
+
+The client shows which commands are queued, which have been accepted, and which have been rejected. A rejected command is surfaced, not silently discarded.
+
+Commands this specification restricts to connected operation — incident creation in section 19, policy and procedure acknowledgments in section 21, event application submission, and map editing in section 21A — are refused at queue time rather than queued and rejected later. Queueing a command that can never succeed offline would misrepresent to the user that their work was captured.
+
+## 11A.6 Authenticated downloads
+
+A bearer token cannot be attached to a plain browser navigation, so authenticated file retrieval does not place credentials in a link.
+
+An authenticated client requests a short-lived URL for the resource it wants, then navigates to that URL. This follows the pattern the field report photo endpoints already establish.
+
+A short-lived URL expires, is scoped to the single resource it was issued for, and is subject to the same authorization as a direct request for that resource. Issuing the URL is an authorization decision; following it is not a second one.
+
+This applies to reporting exports, generated incident PDFs, document exports, and attachments.
+
+## 11A.7 Permission-scoped replication
+
+Offline data replicated to a device is limited to what the device's user is permitted to read. A device does not receive records its user could not retrieve through the API.
+
+The cache expectations in section 9.3 describe what a role *should* receive. This section states the boundary: sync rules are scoped by the user's effective roles, so a device cannot hold data its user has no capability to read. UI hiding is not sufficient, consistent with the existing rule for sensitive map layers.
+
+A change to a user's effective roles changes what subsequently replicates to that user's devices.
+
 ---
 
 # 12. Devices, Trust, and Encryption
@@ -944,7 +1045,7 @@ Kiosk context from Kiosk setup/support surfaces. Context changes are audited.
 
 Meridian Kiosk supports shared workstation login.
 
-Known users can enter short login codes generated by God mode.
+Known users can enter short login codes.
 
 Login codes are:
 
@@ -963,6 +1064,24 @@ Login codes are:
 Raw login codes should not be logged.
 
 Failed login-code attempts are audited after a threshold.
+
+### Code generation authority
+
+Login codes may be generated two ways.
+
+God mode generates a code for any known user. This is the assisted-recovery and event-preparation path.
+
+A user generates a code for themselves from a device on which they already hold a valid session. This is the on-site path: a staff member standing at a kiosk with no internet, no email delivery, and no operator available generates a code on their phone and types it into the workstation in front of them.
+
+Self-service generation requires only that the generating device can reach the node that will accept the code. It does not require internet access, central node reachability, email delivery, or any other out-of-band channel. This is the reason the mechanism exists — it is the only login path that survives an on-site node with no route to central.
+
+A self-service code is scoped to the generating user. A user cannot generate a code on behalf of someone else. God mode retains that ability.
+
+Code generation is rate-limited per user and per node. Failed code entry is rate-limited per workstation.
+
+Both generation paths produce the same kind of code and are subject to every constraint listed above. In particular, a self-service code still cannot create a trusted personal device session, and still expires at six weeks.
+
+A successful code entry establishes a shared workstation session as described in section 13.3. It does not issue an API token under section 11.4.
 
 ## 13.3 Shared workstation session behavior
 
@@ -1717,6 +1836,27 @@ Department Logistics can mark no-show.
 
 Department leads may have broader attendance access for their department.
 
+### Automatic no-show determination
+
+No-show is determined automatically. A scheduled shift whose assigned staff member has not checked in by the end of the accepted sign-in window is recorded as a no-show without anyone marking it.
+
+The accepted sign-in window extends before and after the scheduled shift start by 5% of the scheduled shift duration. A four-hour shift therefore accepts a sign-in from twelve minutes before its start to twelve minutes after.
+
+Determination writes an attendance operation through the existing append-only path in 20.1. It is a recorded operation with a timestamp, audited and synchronized like any other, not a value computed at read time. This is what lets a no-show survive on a device that later goes offline and lets the operation carry the node that produced it.
+
+The node holding authority for the event performs the determination: the on-site primary node during the active event window, central otherwise. This follows the existing event-authority rule in section 10.2 and introduces no new authority concept.
+
+Exclusions:
+
+- cancelled shifts;
+- shifts carrying an excused attendance record.
+
+A check-in recorded after an automatic no-show supersedes it. The derived attendance state becomes checked-in and both operations remain in history, consistent with how attendance already handles corrections. A staff member who arrives very late is recorded as having arrived, and the record still shows the shift was missed at the window boundary.
+
+Late arrival is this superseded case. A staff member checked in after the end of the accepted sign-in window arrived late. One threshold separates on time, late, and missed, with no gap or overlap.
+
+The manual mark-no-show operation remains available to authorized attendance managers. Automatic determination covers the ordinary case; the manual operation stays for absences a lead needs to record deliberately.
+
 ## 20.3 Department Presence
 
 On-site/off-site status is scoped by event, department, and staff member.
@@ -2404,6 +2544,156 @@ Audit Note create, add-note-to-briefing, add-note-to-aar, AAR submit/publish/aut
 
 ---
 
+# 21C. Insights
+
+## 21C.1 Purpose and boundary
+
+Insights are live compiled views of current authorized operational data. They answer whether operations are meeting expectations and where attention is needed, for Command, Planning, Logistics, organizers, department leads, and volunteers looking at their own numbers.
+
+Insights are not Reports. A Report is a fixed, formal, historical, or submitted output. An Insight Sheet is a live view whose contents change as the underlying data changes. A PDF taken from a sheet is a snapshot of what one person was looking at; it does not convert the sheet into a Report and Meridian does not keep it.
+
+Insights add no source of truth. They compile data the viewer is already authorized to read, from the domains that already own it. PostgreSQL and Laravel remain canonical. There is no analytics warehouse, no external business-intelligence system, no event stream, and no duplicated store.
+
+## 21C.2 Metric registration
+
+An Insight Metric type is defined in code by developers and registered as data. Registration carries the metric's identity, the domain it draws on, the capability required to view it, the configuration keys it accepts, and its fixed evaluation rules.
+
+Organizations do not author metric logic. There are no organization-defined formulas and no query builder. Orchid may display and administer registration metadata, but cannot create metric behavior.
+
+A registered metric renders through a contract: given an event, a resolved department scope, a filter selection, and a placement configuration, it returns values, a state, a presentation, and an optional action link. Anything a metric needs that this contract does not carry is a defect in the contract rather than a reason for a metric to reach around it.
+
+Every metric declares the capability it requires. The framework refuses to render a metric whose capability the viewer lacks, so a new metric cannot leak a domain by forgetting to check.
+
+## 21C.3 Sheets and placements
+
+An Insight Sheet is owned by the organization and holds an ordered set of metric placements. Each placement references a registered metric type and carries its own configuration, so the same metric type behaves differently in two places on the same sheet.
+
+A sheet declares which of its supported filters are offered to viewers. Filters apply to the whole sheet. Individual metrics carry no independent user-facing filters.
+
+A viewer's filter selections are held for the session. They are not persisted across sessions and are not part of the sheet definition.
+
+Sheet configuration is validated against metric registration. A placement referencing an unknown metric type, or carrying configuration keys that metric does not accept, is refused at write time rather than failing at render.
+
+Sheet lifecycle uses the existing conventions: created, edited, and soft-archived. There is no publication workflow, approval chain, or version history, because nothing in the product needs one and inventing one would make a live view behave like a document.
+
+## 21C.4 Scope resolution
+
+A sheet reads one event at a time. Cross-event aggregation and comparison are out of scope.
+
+Department scope resolves from the viewer's authorization and their selected department context. The same sheet renders organization-wide data for an organizer and a single department's data for a department lead, without either seeing a different sheet.
+
+Authorized users may switch department context among departments they are authorized for, and the sheet re-renders.
+
+## 21C.5 Authorization
+
+Insights reuse the permission catalog, effective roles, and team grants described in section 15. There is no parallel permission system.
+
+Capabilities:
+
+- `insights.view` — read Insight Sheets and metrics the viewer is otherwise authorized for
+- `insights.sheets.manage` — create, edit, order, archive organization Insight Sheets and their metric placements
+- `insights.share_with_command` — share a sheet or a metric placement with Command, and remove that sharing
+
+Resolution rules:
+
+- organizers access Insights across departments for the selected event, subject to domain restrictions defined elsewhere;
+- a department lead who is not also authorized through a team under the Organizers Department sees only the department being viewed, and may switch among departments they lead;
+- Command — holders of `ic_lead`, `ic_operator`, or `ic_viewer` in the event's designated Incident Command Department — sees Insights for its own department plus content explicitly shared with it;
+- Planning and Logistics see only their own department unless another permission independently grants more.
+
+Holding `insights.sheets.manage` does not widen data access. A user may build a sheet whose metrics render less for them than for someone else, and may not configure a sheet to expose data they cannot read. Configuration authority and data authority are separate.
+
+Enforcement is server-side, in policies, query handlers, API responses, Orchid, and sync rules. A hidden control is presentation, not enforcement.
+
+## 21C.6 Restricted data
+
+Insights never render personally identifiable information, individual volunteer names to leads or Command or Planning or Logistics or organizers, individual-level drilldown into another person, or anything that bypasses a source domain's restrictions.
+
+An aggregate covering fewer than 5 people is suppressed. A count of three in a small team is a name in a thin disguise. Suppression states that the value is withheld for privacy; it does not render as empty, zero, or a dash, because a silent gap invites the viewer to infer what was in it.
+
+Metrics drawing on restricted domains are visible only to users authorized for those domains. Incident- and Field-Report-derived metrics are restricted to the designated Incident Command Department under the applicable IC permissions, per section 16.
+
+A sheet the viewer cannot access is hidden, not rendered as an empty or inaccessible entry.
+
+## 21C.7 Metric state
+
+Metrics report whether conditions require attention and equally report when conditions are healthy. A metric that speaks only when something is wrong makes its silence ambiguous.
+
+Semantic states a metric may carry:
+
+- healthy — expectations are being met
+- expected — within normal range, no attention needed
+- attention — conditions warrant a look
+- critical — conditions require action now
+- incomplete — the metric could not compile from all the data it needs
+- stale — compiled from data known to be behind
+- offline — compiled on a device with no node reachable
+- waiting to sync — local changes have not yet reached the node
+
+The first four describe the operation. The last four describe the data. They are independent: a metric may be healthy and stale at once, and collapsing the two would tell a user their operation is fine when what is actually true is that nobody knows.
+
+Thresholds are fixed system rules for MVP. Organization-configurable thresholds are out of scope.
+
+States are not dismissed, acknowledged, assigned, or resolved. A metric continues to display after a problem is corrected, showing that expectations are now met. Insights add no task-management workflow.
+
+A metric links to the operational surface where an authorized user can investigate or act. Following the link enters that surface under its own authorization; the link carries no authority of its own.
+
+## 21C.8 Live data, synchronization, and offline
+
+Insights recompile after each synchronized change to their underlying data. There is no separate refresh cycle to fall behind.
+
+Insights compile on the device from data already synchronized there, under the permission-scoped sync rules in 11A.7. This is why offline Insights work at all, and also why they are bounded: a device compiles what it holds, and it holds only what its user may read.
+
+Offline and partially synchronized Insights disclose what the system knows: stale, waiting to sync, incomplete, offline, and last synchronized time as applicable. The interface never presents incomplete or stale data as current and complete.
+
+Insight evaluation does not circumvent sync rules, local data rules, upload validation, command handlers, or authorization policies. A metric that cannot compile within those boundaries reports incomplete rather than reaching past them.
+
+Compiled results are not stored as canonical records. If a future metric proves too expensive to compile per view, a cache is a performance decision to be justified and specified then, not an architecture to adopt in advance.
+
+## 21C.9 Sharing with Command
+
+A department lead may share a whole sheet or a single metric placement with Command.
+
+Sharing is ongoing or temporary. A temporary share stops applying when the event's operations window closes, and the sharing department may remove it earlier. Expiry is evaluated on read against the event window, so no scheduled job is involved.
+
+Rules:
+
+- shared content identifies its originating department wherever it appears;
+- sharing grants no data Command is otherwise prohibited from seeing. Restricted metrics on a shared sheet stay restricted, so sheet-level sharing cannot leak a metric the sharer forgot was on the page;
+- metric-level sharing applies to that placement, not to every use of the registered metric type;
+- a shared item's action link preserves authorization; Command follows it as Command, not as the sharing department;
+- sharing and unsharing are audited.
+
+## 21C.10 PDF snapshots
+
+An authorized viewer may save the current sheet view as a PDF. The browser generates it and the user downloads it.
+
+The PDF represents what the viewer was looking at: visible metrics, selected filters, current states, freshness and synchronization disclosures, organization, event, department where applicable, sheet name, generation timestamp, generating user, and the originating department of shared content.
+
+Meridian does not store the PDF, does not create a snapshot entity, and provides no snapshot history or retrieval.
+
+PDF generation is not audited. The browser generates it from a view the user is already authorized to see, and a user can print any page they can read; an audit entry here would record only the cases where someone used the button, which would misrepresent itself as a record of who exported what. This deliberately differs from incident PDF export, which is server-generated and audited because the server produces the document.
+
+The PDF carries the same suppression as the rendered view. It contains no personally identifiable information and no unauthorized individual data.
+
+## 21C.11 Orchid
+
+Orchid exposes registered metric definitions and their administrable registration metadata, organization Insight Sheets and their placements, sheet filter configuration, Command sharing configuration, and the audit records for sharing changes.
+
+Orchid users cannot create metric code or formulas. Editing a sheet's configuration grants no data access.
+
+Favorites and pins are personal view state and belong in the product interface, not in Orchid.
+
+## 21C.12 Audit
+
+Audit sheet creation and material configuration change, sheet sharing with Command, metric-placement sharing with Command, and unsharing.
+
+Access to restricted incident- or Field-Report-derived Insights follows the existing sensitive-read auditing rules for those domains.
+
+Audit payloads reference staff and users by identifier. They do not carry volunteer names or other personal data.
+
+---
+
 # 22. Admin, Orchid, and God Mode
 
 ## 22.1 Orchid purpose
@@ -3056,6 +3346,10 @@ The following areas may need later detail:
 30. Exact Direction deep-link entity allowlist and resolver UX.
 31. Exact Final AAR auto-assembly merge formatting from Submission AARs.
 32. Whether offline Note create / add-to-Briefing is required post–Alpha 1.
+33. Exact calculation for the extended shift presence Insight Metric: grace period, approved-extension behavior, deployment behavior, and breakdown. Designed with the metric.
+34. Whether the equipment domain needs states the equipment-not-returned metric implies but does not model — overdue, lost, and unknown status are named as presentation distinctions but only `available`, `checked_out`, `returned`, `missing`, and `damaged` exist.
+35. Whether event-assigned equipment needs an explicit assignment scope. The equipment-not-returned metric distinguishes shift-assigned from event-assigned equipment, and the current model does not record which a checkout is.
+36. Whether any Insight Metric proves expensive enough to justify a compiled-result cache, and if so its invalidation rules.
 
 ---
 
@@ -3176,3 +3470,19 @@ The external sync dependency used for server-to-device local database synchroniz
 ## Node sync
 
 Meridian’s application-level operation sync between central and on-site nodes.
+
+## Insight Metric
+
+A reusable, developer-defined unit of compiled operational information, registered as data. It carries values, a state, a presentation, and an optional link to the surface where an authorized user can act. It compiles current authorized data and stores no result.
+
+## Insight Sheet
+
+An organization-owned page holding an ordered set of Insight Metric placements, read against one event at a time and rendered according to the viewer's authorization and department context.
+
+## Metric placement
+
+One appearance of a registered Insight Metric on a sheet, carrying its own configuration. The same metric type may be placed on many sheets and more than once on one sheet.
+
+## Report
+
+A fixed, formal, historical, or submitted output. Distinct from an Insight. A PDF taken from an Insight Sheet is a transient snapshot, not a Report.
