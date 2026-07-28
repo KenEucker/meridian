@@ -1571,6 +1571,32 @@ Branding is organization governance data, not event-scoped operational data.
 
 ---
 
+## 3.43 Insight Metric
+
+An Insight Metric is a reusable, system-defined unit of compiled operational information.
+
+A metric may carry a value or set of values, a state describing whether expectations are being met, a visualization or structured presentation, a link to the operational surface where an authorized user can investigate or act, fixed evaluation rules, and configuration supplied where the metric is placed.
+
+Metric types are defined by developers and registered as data. Organizations do not author metric logic.
+
+A metric compiles current authorized data. It is not a stored result.
+
+---
+
+## 3.44 Insight Sheet
+
+An Insight Sheet is an organization-owned, configurable page containing any number of Insight Metrics.
+
+A sheet may combine metrics from different operational domains, and a metric may appear on more than one sheet. Each placement of a metric on a sheet carries its own configuration.
+
+A sheet reads one event at a time. It renders organization-wide or department-scoped data according to the viewer's authorization and selected department context, so the same sheet shows different data to different people.
+
+Filters are configured at the sheet level and apply to the whole sheet.
+
+An Insight Sheet is not a Report. Reports are fixed, formal, or historical outputs; Insight Sheets are live compiled views. A PDF taken from a sheet is a snapshot of what the viewer was looking at and does not make the sheet a Report.
+
+---
+
 # 4. User Roles
 
 ## 4.1 Staff
@@ -3070,6 +3096,38 @@ The Logistics Desk shall provide department-scoped offline search across staff, 
 
 The Operations Center shall compose overview modules from capabilities the actor already holds. The shell itself shall not grant access to incidents, equipment, maintenance tickets, or other modules.
 
+### SLB-023
+
+Meridian shall determine no-show automatically. A scheduled shift for which the assigned staff member has not checked in by the end of the accepted sign-in window shall be recorded as a no-show without a lead marking it.
+
+### SLB-024
+
+The accepted sign-in window shall extend before and after the scheduled shift start by 5% of the scheduled shift duration.
+
+### SLB-025
+
+Automatic no-show determination shall write an attendance operation through the existing append-only attendance path, audited and synchronized like any other attendance operation.
+
+### SLB-026
+
+Automatic no-show shall be determined by the node holding authority for the event: the on-site primary node during the active event window, and central otherwise.
+
+### SLB-027
+
+A shift excluded from coverage shall not be determined a no-show. Cancelled shifts and shifts with an excused attendance record shall be excluded.
+
+### SLB-028
+
+A check-in recorded after an automatic no-show shall supersede it. The derived attendance state shall become checked-in, and both operations shall be preserved in attendance history.
+
+### SLB-029
+
+The manual mark-no-show operation shall remain available to authorized attendance managers alongside automatic determination.
+
+### SLB-030
+
+A staff member shall be considered to have arrived late when they check in after the end of the accepted sign-in window defined in SLB-024. Given SLB-025 and SLB-028, a late arrival is an automatic no-show that a later check-in superseded, so one threshold separates on time, late, and missed with no gap or overlap between them.
+
 ---
 
 ## 7.10 Hours and Credit Requirements
@@ -3703,6 +3761,58 @@ Google and Discord may authenticate against either a verified primary email addr
 ### AUTH-017
 
 Google or Discord provider linking through a secondary email shall require the already-authenticated user to explicitly start provider linking.
+
+### AUTH-018
+
+Meridian client applications shall authenticate to the Meridian API with a bearer token rather than relying on a browser session cookie, so that the web client, the mobile Field application, and the desktop application all use one authentication mechanism.
+
+### AUTH-019
+
+Meridian shall expose API login endpoints so a client application can request a magic link and complete verification without leaving the application, receiving a bearer token on success.
+
+### AUTH-020
+
+Google and Discord login from a client application shall complete through a system browser and return the resulting bearer token to the requesting application. The provider flow itself shall not be reimplemented inside the client.
+
+### AUTH-021
+
+Every issued bearer token shall be bound to a device record. A token that cannot be associated with a device shall not be issued.
+
+### AUTH-022
+
+God mode shall be able to list issued tokens by user and by device, and revoke any individual token or every token for a device.
+
+### AUTH-023
+
+A revoked token shall stop authenticating at the next request the node receives from it. Revocation shall not depend on the client cooperating.
+
+### AUTH-024
+
+Bearer tokens shall expire. Expiry shall be configurable per node with a documented default, and shall be independent of the shared-workstation session timeout in the technical specification section 13.3.
+
+### AUTH-025
+
+Token issuance, expiry, and revocation shall be audited. Raw token values shall never be written to logs, audit entries, or exports.
+
+### AUTH-026
+
+The shared-workstation login codes described in the technical specification section 13.2 shall be generatable both by God mode and by the user the code is for, from a device on which that user already holds a valid session.
+
+### AUTH-027
+
+Self-service login code generation shall require only reachability of the node that will accept the code. It shall not require internet access, central node reachability, email delivery, or any other out-of-band channel.
+
+### AUTH-028
+
+A self-service login code shall be scoped to the generating user and shall not be generatable on behalf of another user. God mode retains the ability to generate a code for another user.
+
+### AUTH-029
+
+Login code generation shall be rate limited per user and per node, and failed login code attempts shall be rate limited per workstation.
+
+### AUTH-030
+
+A successful login code entry shall establish a shared-workstation session as described in the technical specification section 13.3. It shall not issue a personal device token and shall not establish a trusted personal device session.
 
 ---
 
@@ -4489,6 +4599,388 @@ Console restyling shall be applied through supported framework configuration and
 ### GOD-038
 
 Authentication, logout, and node first-run setup surfaces shall present the same Meridian visual identity as the console.
+
+---
+
+## 7.22 Client Session and API Binding Requirements
+
+These requirements govern how a Meridian client application establishes a session, learns what its user is permitted to do, resolves the organization, event, and department it is operating within, and reaches the API. They cover the web client, the mobile Field application, and the desktop application.
+
+They do not add domain behavior. Every surface named here already has requirements elsewhere in this document; these requirements state that the client must be driven by the server rather than by built-in fixture data.
+
+### CLIENT-001
+
+A Meridian client application shall obtain the identity, effective roles, and permission capabilities of its user from the server. It shall not derive them from bundled fixture data, build-time configuration, or hardcoded identifiers.
+
+### CLIENT-002
+
+Meridian shall expose an authenticated endpoint that returns, for the calling user: the user's identity, the effective role codes the user holds, the permission capability codes those roles carry, and the organizations, events, departments, and teams the user is associated with.
+
+### CLIENT-003
+
+The endpoint in CLIENT-002 shall return role codes and permission capability codes as published by the permission catalog. It shall not return precomputed navigation decisions, screen lists, or menu structures.
+
+### CLIENT-004
+
+A client shall derive navigation, available actions, and surface availability from the permission capabilities it receives, applying the existing UI rules that unavailable actions are generally hidden and that permission-denied surfaces explain the required role to elevated users and state only that access is restricted to default staff.
+
+### CLIENT-005
+
+A client shall not present a surface, action, or navigation entry for which the user holds no permitting capability, and shall not rely on the server rejecting the request as the only enforcement.
+
+### CLIENT-006
+
+Server-side authorization shall remain the enforcement boundary. Client-side capability checks are presentation, and a client that fails to hide an action shall still be refused by the server.
+
+### CLIENT-007
+
+A client shall cache the most recent response from CLIENT-002 durably, and shall use the cached response to establish navigation and permissions when the node is unreachable.
+
+### CLIENT-008
+
+The cached response shall remain usable for the duration of the event the node is locked to. Once that event window has ended, or when the client holds no event context, the client shall require a successful refresh before granting access.
+
+### CLIENT-009
+
+A client operating from a cached response shall indicate that its permissions are cached and shall record when they were last refreshed.
+
+### CLIENT-010
+
+A client shall refresh the CLIENT-002 response on regaining connectivity, and shall apply any reduction in permissions immediately.
+
+### CLIENT-011
+
+A client shall resolve its organization and event context from the node it is connected to when that node is locked to an event, and shall narrow that context to the user's own departments and teams from the CLIENT-002 response.
+
+### CLIENT-012
+
+A connected client shall allow a user who belongs to more than one event, or to more than one organization, to switch to any other event or organization in which that user holds an association.
+
+### CLIENT-013
+
+A client without connectivity shall be locked to the context the node provides and shall not offer switching.
+
+### CLIENT-014
+
+Switching organization or event shall re-resolve permissions, navigation, branding, and cached context, and shall not leave data from the previous context visible.
+
+### CLIENT-015
+
+A client shall submit every command through a durable local queue, so that a command issued without connectivity is retained and transmitted when connectivity returns.
+
+### CLIENT-016
+
+Each queued command shall carry a client-generated idempotency key, and the server shall treat a repeated key as the same command rather than as a new one.
+
+### CLIENT-017
+
+A client shall show the user which of their commands are queued, which have been accepted, and which have been rejected, and shall not silently discard a rejected command.
+
+### CLIENT-018
+
+Commands that the technical specification restricts to connected operation shall be refused at queue time rather than queued and rejected later.
+
+### CLIENT-019
+
+Authenticated file downloads, including exports, generated documents, and attachments, shall be reached through a short-lived server-issued URL requested by the authenticated client, rather than by placing credentials in a link.
+
+### CLIENT-020
+
+A short-lived download URL shall expire, shall be scoped to the single resource it was issued for, and shall be subject to the same authorization as a direct request for that resource.
+
+### CLIENT-021
+
+Offline data replicated to a device shall be limited to what the device's user is permitted to read. A device shall not receive records its user could not retrieve through the API.
+
+### CLIENT-022
+
+A change to a user's effective roles shall change what subsequently replicates to that user's devices.
+
+### CLIENT-023
+
+Client surfaces for organization administration, departments and teams, trainings, equipment, shifts, documents, incident management, attendance and logistics, and reporting exports shall read from and write to the Meridian API rather than to bundled fixture data.
+
+### CLIENT-024
+
+Removal of fixture-driven behavior shall not remove the ability to run the client's automated tests without a live server.
+
+---
+
+## 7.23 Insights Requirements
+
+Insights are live compiled views that help authorized users understand whether current operations are meeting expectations and where attention may be required. They are distinct from Reports, which remain fixed, formal, or historical outputs.
+
+### Framework
+
+#### INSIGHT-001
+
+Meridian shall provide Insights as live compiled views of current authorized operational data, distinct from Reports.
+
+#### INSIGHT-002
+
+Insight Metric types shall be defined by developers and registered as data. Organizations shall not author metric logic, formulas, or arbitrary queries.
+
+#### INSIGHT-003
+
+An Insight Metric shall be reusable and may be placed on more than one Insight Sheet.
+
+#### INSIGHT-004
+
+Each placement of an Insight Metric on a sheet shall carry its own configuration, supported by that metric type.
+
+#### INSIGHT-005
+
+An Insight Sheet shall be owned by the organization and shall contain an ordered arrangement of any number of Insight Metric placements.
+
+#### INSIGHT-006
+
+A sheet may combine metrics from different operational domains.
+
+#### INSIGHT-007
+
+Insights shall be quantitative. Insights shall not carry user-authored commentary, recommendations, conclusions, or narrative annotation.
+
+#### INSIGHT-008
+
+Insights shall not create persistent saved views or stored results.
+
+### Scope and context
+
+#### INSIGHT-009
+
+An Insight Sheet shall read data from one selected event at a time.
+
+#### INSIGHT-010
+
+Insights shall be available within organization, event, and department usage contexts.
+
+#### INSIGHT-011
+
+A sheet shall render organization-wide or department-scoped data according to the viewer's authorization and selected department context, so the same sheet renders different data for different viewers.
+
+#### INSIGHT-012
+
+An authorized user may switch department context, and the sheet shall re-render for the newly selected department.
+
+### Filters
+
+#### INSIGHT-013
+
+Filters shall be configured at the sheet level, and the sheet definition shall determine which supported filters are offered to viewers.
+
+#### INSIGHT-014
+
+Individual metrics shall not carry independent user-facing filters.
+
+#### INSIGHT-015
+
+A viewer's filter selections shall be remembered for that viewer for the current session and are not required to persist across sessions.
+
+### Authorization
+
+#### INSIGHT-016
+
+Insights authorization shall use the existing Meridian permission model. Insights shall not introduce a parallel permission system.
+
+#### INSIGHT-017
+
+Organizers may access Insights across departments for the selected event, subject to domain restrictions defined elsewhere.
+
+#### INSIGHT-018
+
+A department lead who is not also authorized through a team under the Organizers Department shall see only data for the department being viewed, and may switch among departments they are authorized to lead.
+
+#### INSIGHT-019
+
+Command shall see Insights for Command's own department and content explicitly shared with Command by another department. Command shall not automatically receive access to every department's Insights.
+
+#### INSIGHT-020
+
+Planning and Logistics shall see only their own department's data unless another permission independently grants broader access.
+
+#### INSIGHT-021
+
+A user with permission to use Insights may create and configure organization-owned Insight Sheets. The data rendered on those sheets shall remain limited by that user's authorization.
+
+#### INSIGHT-022
+
+A user shall not be able to configure a sheet in a way that exposes data they are not authorized to access.
+
+#### INSIGHT-023
+
+Authorization shall be enforced server-side in policies, query handlers, API responses, Orchid, and synchronization rules. Hiding a control in the interface shall not be the enforcement mechanism.
+
+### Restricted data
+
+#### INSIGHT-024
+
+Insights shall not display personally identifiable information.
+
+#### INSIGHT-025
+
+Insights shall not display the names of individual volunteers to department leads, Command, Planning, Logistics, or organizers.
+
+#### INSIGHT-026
+
+Insights shall not provide individual-level drilldown into another person's data.
+
+#### INSIGHT-027
+
+Insights shall not display data that bypasses restrictions already defined for the source domain.
+
+#### INSIGHT-028
+
+An aggregate covering fewer than 5 people shall be suppressed rather than displayed, so that an aggregate cannot effectively identify one person. Suppression shall state that the value is withheld for privacy rather than render as empty or zero.
+
+#### INSIGHT-029
+
+A sheet or metric drawing on a restricted domain shall be hidden from users who cannot access that domain. Metrics derived from incidents or Field Reports shall be visible only to members of the designated Incident Command Department holding the applicable Incident Command permissions.
+
+#### INSIGHT-030
+
+Unauthorized sheets shall be hidden rather than presented as empty or inaccessible navigation entries.
+
+### Personal volunteer Insights
+
+#### INSIGHT-031
+
+A volunteer shall be able to see their own event-level aggregate metrics: completed shift count, missed shift count, late arrival count, hours worked, hours worked broken down by team, and credits earned for the event.
+
+#### INSIGHT-032
+
+The personal Insights view shall not authorize any user to inspect another person's individual-level data, and shall not provide peer comparison, ranking, or visibility into another volunteer's metrics.
+
+### Metric state
+
+#### INSIGHT-033
+
+An Insight Metric shall communicate whether conditions require attention and shall equally communicate when conditions are healthy or meeting expectations.
+
+#### INSIGHT-034
+
+Evaluation thresholds shall be fixed system rules. Organization-configurable thresholds are not required.
+
+#### INSIGHT-035
+
+Insight states shall not require dismissal, acknowledgement, assignment, or resolution, and Insights shall not introduce a task-management workflow.
+
+#### INSIGHT-036
+
+A metric's state shall reflect current conditions. A metric may continue to display after a problem is corrected, but shall then show that expectations are being met.
+
+#### INSIGHT-037
+
+A metric shall link to the operational surface where an authorized user can investigate or act, and following that link shall not bypass authorization.
+
+### Live data, synchronization, and offline
+
+#### INSIGHT-038
+
+Insights shall refresh after each synchronized change to the underlying data.
+
+#### INSIGHT-039
+
+Insights shall remain available offline, compiled from the data currently available on the device.
+
+#### INSIGHT-040
+
+Insights shall disclose what the system knows about data quality and freshness, including stale, waiting to sync, incomplete, offline, and last synchronized time as applicable.
+
+#### INSIGHT-041
+
+Insights shall not present incomplete or stale data as though it were current and complete.
+
+#### INSIGHT-042
+
+Insight evaluation shall not circumvent synchronization rules, local data rules, upload validation, command handlers, or authorization policies.
+
+#### INSIGHT-043
+
+Insights shall compile current authorized domain data and shall not store calculated results as canonical records.
+
+### Sharing with Command
+
+#### INSIGHT-044
+
+A department lead may share an entire Insight Sheet with Command, or an individual metric placement from a sheet with Command.
+
+#### INSIGHT-045
+
+Sharing may be configured as an ongoing setting or enabled temporarily for the event.
+
+#### INSIGHT-046
+
+A temporary share shall stop applying when the event's operations window closes, and may be removed earlier by the sharing department.
+
+#### INSIGHT-047
+
+Shared content shall clearly identify its originating department.
+
+#### INSIGHT-048
+
+A department may stop sharing previously shared content.
+
+#### INSIGHT-049
+
+Sharing and unsharing shall be audited.
+
+#### INSIGHT-050
+
+Sharing shall not grant Command access to data Command is otherwise prohibited from seeing, and sheet-level sharing shall not expose a restricted metric contained on that sheet.
+
+#### INSIGHT-051
+
+Metric-level sharing shall apply to the shared metric placement only, not to every use of the registered metric type.
+
+### PDF snapshots
+
+#### INSIGHT-052
+
+An authorized user may save the current Insight Sheet view as a PDF generated in the browser and downloaded to the user.
+
+#### INSIGHT-053
+
+The PDF shall represent what the user is viewing, including the visible metrics, selected filters, current metric states, freshness and synchronization disclosures, organization, selected event, selected department where applicable, sheet name, generation timestamp, generating user, and the originating department of shared content where applicable.
+
+#### INSIGHT-054
+
+Meridian shall not store the PDF, shall not create a snapshot entity, and shall not provide snapshot history or retrieval.
+
+#### INSIGHT-055
+
+The PDF shall not include personally identifiable information or unauthorized individual information, and shall carry the same suppression applied to the rendered view.
+
+### Navigation and organization
+
+#### INSIGHT-056
+
+Insights shall appear in primary navigation.
+
+#### INSIGHT-057
+
+The Insights landing page shall show all sheets available to the current user.
+
+#### INSIGHT-058
+
+A user may favorite or pin sheets they use frequently.
+
+#### INSIGHT-059
+
+Role-specific default sheets are not required.
+
+### Initial metrics
+
+#### INSIGHT-060
+
+Meridian shall provide a missed shifts Insight Metric, using the automatic no-show determination in SLB-023 through SLB-029.
+
+#### INSIGHT-061
+
+Meridian shall provide an equipment not returned Insight Metric. Equipment is not returned when it is explicitly marked missing, when shift-assigned equipment remains checked out after the associated shift has ended, or when event-assigned equipment remains checked out after the event has ended.
+
+#### INSIGHT-062
+
+Meridian shall provide an extended shift presence Insight Metric identifying how many people remain on shift beyond their scheduled time. Its detailed calculation is designed with the metric and is not specified here.
 
 ---
 

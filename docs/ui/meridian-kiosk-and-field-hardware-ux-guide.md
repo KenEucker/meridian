@@ -63,7 +63,33 @@ The kiosk map is read-only, should work from the offline event map package, shou
 
 For Alpha 1, central authentication continues to use email magic links, Google OAuth, and Discord OAuth. There is no separate Meridian PIN credential.
 
-PIN-like re-authentication, if implemented later, is only a local trusted-workstation convenience for already-provisioned users. It must not become an independent central credential.
+Shared workstations additionally accept a short login code. A login code is not a central credential and not a password. It is issued by the node, scoped to one user, one event, and one trusted workstation, expires, and is revocable. It signs a known user in to a workstation; it never provisions a new user and never establishes a trusted personal device session.
+
+### 4.1 Where a login code comes from
+
+Two paths produce the same kind of code.
+
+God mode generates one for any known user. This is the prepared path, used before an event or when assisting someone.
+
+A user generates one for themselves on a device where they are already signed in — in practice, their phone, standing at the workstation.
+
+The self-service path exists for the situation that has no other answer. On-site, the node has no route to central. Email is not delivering. No operator is nearby. The staff member has a working session on the phone in their pocket and needs to use the workstation in front of them. Generating a code needs only that the phone can reach the same node.
+
+A user generates a code only for themselves. Generating one on someone else's behalf is God mode's job.
+
+### 4.2 Entering a code
+
+Code entry is a field interaction before it is a security interaction. Assume gloves, dust, glare, and a queue of people waiting.
+
+- the code is human-typable and short enough to carry across a room in someone's head;
+- the entry field is touch-sized and does not depend on precise tapping;
+- entry does not lock out on a single mistyped character, and says how many attempts remain before it does;
+- attempts are rate limited per workstation, so a workstation left unattended cannot be ground through;
+- a failed code says the code was not accepted. It does not say whether the code exists, whether it expired, or whom it belongs to.
+
+### 4.3 What a code does not do
+
+A login code does not issue an API token and does not make the workstation a trusted personal device. It establishes a shared workstation session, with the timeout and switching behavior below.
 
 Expected behavior:
 
@@ -80,6 +106,18 @@ Trusted workstation state and individual user authority are separate:
 - individual user authority controls actions and record access;
 - privileged actions may require re-authentication;
 - timeout returns to a safe kiosk surface.
+
+### 4.4 Session behavior
+
+The active user is visible at all times. A shared workstation that is unclear about who is signed in is worse than one that is signed out.
+
+Sessions end after 5 minutes of inactivity or when the user explicitly ends them. Switching users requires ending the current session first — there is no quiet handover.
+
+If the desktop application restarts, the session locks immediately.
+
+Ending a session wipes session data and abandons unsaved form state. Queued commands are not session data. A check-in recorded and queued survives the session ending and syncs when the node is reachable; losing it would mean the workstation quietly discarded operational work.
+
+Warn before a session times out and offer a way to continue. A timeout that lands mid-sentence, in a field, at night, is how people stop trusting the workstation.
 
 ---
 
@@ -282,6 +320,11 @@ Check:
 - bottom action bar behavior;
 - user switching;
 - local trusted-workstation re-authentication paths, if implemented;
+- login code entry with gloves and under glare;
+- self-service code generation on a phone with no internet reachability;
+- code entry failure messaging and per-workstation rate limiting;
+- session timeout warning, explicit end, and lock on application restart;
+- queued commands surviving a session ending;
 - self check-in restrictions;
 - offline and queued action behavior;
 - accidental action recovery;

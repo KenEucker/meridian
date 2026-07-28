@@ -299,6 +299,16 @@ Department branding sits inside the organization palette; it does not replace it
 
 The department logo appears in the application header while the user is in that department's context, in the department identity badge, and on department-scoped surfaces. If a department has no logo, the UI generates a default lettermark-style icon using initials or letters from separate words in the department name (BRAND-010).
 
+### 8.3A Context resolution and switching
+
+Context resolves from the node the client is connected to. When that node is locked to an event, the lock determines organization and event, and the session response narrows it to the user's own departments and teams.
+
+A connected user who belongs to more than one event, or more than one organization, may switch between them. The switcher sits with the other context affordances in the shell and shows only associations the user actually holds.
+
+Switching is connected-only. An offline client is locked to the context the node provides and should not present a switcher at all, rather than presenting a disabled one — a disabled control invites the user to keep trying something that cannot work without connectivity they do not have.
+
+Switching re-resolves permissions, navigation, branding, and cached context. No data from the previous organization or event stays on screen after a switch.
+
 ### 8.4 Team context
 
 Teams replace the earlier concept of roles in the operational model.
@@ -463,6 +473,26 @@ The kiosk dashboard should include a map by default when the event has a publish
 On-site shared workstations should support PIN-like re-authentication.
 
 Central access should use provider login and magic link authentication.
+
+A user signs in to a shared workstation with a short login code. The code may come from God mode, or the user may generate it themselves on a device where they are already signed in — typically their own phone, standing at the workstation. The self-service path exists for the case that has no other answer: an on-site node with no route to central, no email delivery, and no operator nearby.
+
+Self-service code generation needs only that the generating device can reach the same node. It does not need internet access.
+
+A user generates a code only for themselves. God mode generates codes for others.
+
+Code entry establishes a shared-workstation session. It does not sign the workstation in as a trusted personal device, and the session carries the timeout and switching rules in 11.2A.
+
+### 11.2A Shared workstation session behavior
+
+The active user is shown prominently at all times. A shared workstation that is ambiguous about who is signed in is worse than one that is signed out.
+
+Sessions end after 5 minutes of inactivity, or when the user explicitly ends them. Switching users requires explicitly ending the current session first.
+
+The session locks immediately if the desktop application restarts.
+
+When a session ends, session data is wiped and unsaved form state is abandoned. Queued commands are not session data — they remain in the local queue and sync when the node is reachable. A staff member whose kiosk session timed out has not lost the check-in they recorded.
+
+Timeout should not arrive as a surprise in the middle of typing. Surfaces should warn before the session ends and give a way to continue.
 
 ### 11.3 Self check-in
 
@@ -834,6 +864,16 @@ The UI must show these as locked/unavailable rather than allowing edits that wil
 
 Fragment changes during an active event are disallowed. The UI should explain that this prevents silent document version bumps during operations.
 
+### 17.7 Queued commands
+
+Commands issued from any surface go through one local queue, and the UI reports queued, sending, accepted, and rejected consistently across surfaces.
+
+A rejected command is shown to the user who issued it. It is never dropped quietly. A user who recorded a check-in and walked away must be able to find out that it failed.
+
+Commands that require a server connection are refused when issued, with an explanation, rather than accepted into the queue and rejected later. Accepting work that can never send tells the user their task is done when it is not.
+
+Queued commands survive a shared workstation session ending, per 11.2A.
+
 ---
 
 ## 18. Permissions and Visibility
@@ -844,6 +884,10 @@ Unavailable actions should generally be hidden.
 
 The UI should avoid presenting actions that a user cannot perform, unless showing them disabled with explanation is specifically useful in a high-context admin surface.
 
+Visibility follows from the capabilities the server reports for the signed-in user. It is not derived from fixture data, build configuration, or a hardcoded list of who sees what.
+
+Hiding is presentation, not enforcement. The server refuses the request regardless of what the client rendered, and a surface must never treat successful rendering as evidence of authority.
+
 ### 18.2 Permission denied pages
 
 Permission-denied behavior depends on the user type.
@@ -851,6 +895,18 @@ Permission-denied behavior depends on the user type.
 For elevated users, the page may explain which role is required.
 
 For default staff, the page should simply indicate that access is restricted.
+
+### 18.2A Cached permissions
+
+A client that cannot reach its node works from the permissions it last received, for the duration of the event the node is locked to.
+
+While doing so it says that its permissions are cached and when they were last refreshed. This is stated as information, not as a warning. A device operating normally offline inside its event window is not in a failure state, and dressing it as one trains users to ignore the indicator.
+
+Cached-permission state is separate from connectivity state. A device can be online with stale permissions, or offline with fresh ones. The two indicators must not be merged.
+
+Once the event window has ended, or when the client holds no event context, access requires a successful refresh.
+
+On reconnect, a permission that has been taken away disappears immediately. It does not wait for the next login.
 
 ### 18.3 Operational terminology
 
@@ -1173,6 +1229,95 @@ Policy/procedure document edits and fragment edits are blocked during the active
 The UI should make locked governance content clear. This is not an error state; it is an event-authority safeguard.
 
 Acknowledgments collected on-site during signup or training may sync back to central.
+
+---
+
+## 20A. Insights UI Rules
+
+### 20A.1 What Insights are for
+
+Insights answer a question someone is asking mid-shift: is this working, and where should I look. They are read by Command, Planning, Logistics, organizers, department leads, and volunteers checking their own numbers.
+
+Insights are live compiled views. Reports are fixed, formal, or historical outputs. The two are separate concepts, separate navigation, and separate language. Do not call an Insight a report, a report card, or a card.
+
+### 20A.2 Navigation and landing
+
+Insights belong in primary navigation.
+
+The landing page shows every sheet available to the current user. Sheets the user cannot access do not appear at all — not disabled, not locked, not empty. A visible entry that never opens reads as a broken product rather than as a boundary.
+
+Users may favorite or pin sheets they return to. Favorites are personal and need no administration surface.
+
+There are no role-specific default sheets. A sheet is available or it is not.
+
+### 20A.3 Sheet context
+
+A sheet always shows what it is reading: its name, the selected event, and the selected department where one applies.
+
+One event at a time. There is no comparison view and no multi-event sheet.
+
+Where the viewer is authorized for more than one department, they may switch department context and the sheet re-renders for the newly selected one. The same sheet showing different data to different people is expected behavior, not a defect.
+
+### 20A.4 Filters
+
+Filters belong to the sheet and apply to everything on it. Individual metrics do not carry their own filter controls — a page where each tile filters independently stops being a coherent view and becomes a pile of unrelated numbers.
+
+A viewer's filter selections are remembered for the session. They need not survive a new one.
+
+### 20A.5 Saying whether things are healthy
+
+A metric that speaks only when something is wrong makes its silence ambiguous. The viewer cannot tell "fine" from "not loaded", so they learn to distrust it.
+
+Every metric reports its operational state, including when conditions are being met.
+
+Two separate things are being communicated and they must stay separate:
+
+- how the operation is doing — healthy, expected, attention, critical;
+- how good the data is — incomplete, stale, offline, waiting to sync.
+
+A metric can be healthy and stale at once. Merging the two indicators would tell someone their operation is fine when what is actually true is that nobody knows. Keep them visually and semantically distinct.
+
+Use the existing status, severity, and connectivity conventions in sections 16 and 17. Insights introduce no new state vocabulary and no new colours.
+
+Thresholds are fixed system rules. Nothing in the interface offers to tune them.
+
+### 20A.6 No resolution workflow
+
+Insight states are not dismissed, acknowledged, assigned, or resolved.
+
+A metric keeps displaying after a problem is corrected, and shows that expectations are now met. Insights are not a task list and must not grow one.
+
+### 20A.7 Privacy in aggregates
+
+Insights never show names, personally identifiable information, or individual drilldown into another person.
+
+An aggregate covering fewer than 5 people is suppressed. Suppression says the value is withheld for privacy. It is never shown as zero, a dash, or an empty space — a silent gap invites the viewer to work out what was in it, and in a small team that is a name.
+
+A volunteer's own numbers are their own. The personal view offers no peer comparison, no ranking, and no visibility into anyone else.
+
+### 20A.8 Links into operations
+
+A metric that reports a problem should lead to the surface where the problem can be examined or fixed.
+
+Following the link enters that surface under its own authorization. The link grants nothing.
+
+### 20A.9 Sharing with Command
+
+A department lead may share a whole sheet, or one metric from a sheet, with Command.
+
+Shared content always shows which department it came from. Command reading a number without knowing whose it is cannot act on it.
+
+Sharing surfaces should state whether a share is ongoing or temporary, and that a temporary share ends when the event's operations window closes.
+
+Sharing never widens Command's access. A restricted metric sitting on a shared sheet stays restricted, and the sharing surface should say so plainly, so a lead does not believe they shared something they did not.
+
+### 20A.10 PDF snapshot
+
+The snapshot action prints the current view to PDF in the browser and downloads it.
+
+It captures what the viewer was looking at, including the filters and the freshness disclosures. Suppression applies exactly as it does on screen.
+
+Meridian keeps nothing. There is no snapshot history and the action must not imply one.
 
 ---
 
