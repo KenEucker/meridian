@@ -38,9 +38,9 @@ class PlatformProvider extends OrchidServiceProvider
     public function menu(): array
     {
         return [
-            Menu::make('Get Started')
-                ->icon('bs.book')
-                ->title('Navigation')
+            Menu::make(__('God Mode Home'))
+                ->icon('bs.compass')
+                ->title(__('Navigation'))
                 ->route(config('platform.index'))
                 ->divider(),
 
@@ -124,17 +124,22 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.node.config')
                 ->permission('platform.node.config'),
 
-            Menu::make('Documentation')
-                ->title('Docs')
-                ->icon('bs.box-arrow-up-right')
-                ->url('https://orchid.software/en/docs')
-                ->target('_blank'),
+            // Meridian's own documentation and changelog, served from content
+            // packaged with this deployment. These are console pages, not
+            // external links, and they do not open an external browser context
+            // (GOD-012, GOD-018, GOD-027). The badge is the Meridian build
+            // version, not the administrative framework's (GOD-028).
+            Menu::make(__('Documentation'))
+                ->title(__('Meridian'))
+                ->icon('bs.book')
+                ->route('platform.documentation')
+                ->permission('platform.documentation'),
 
-            Menu::make('Changelog')
-                ->icon('bs.box-arrow-up-right')
-                ->url('https://github.com/orchidsoftware/platform/blob/master/CHANGELOG.md')
-                ->target('_blank')
-                ->badge(fn () => Dashboard::version(), Color::DARK),
+            Menu::make(__('Changelog'))
+                ->icon('bs.clock-history')
+                ->route('platform.changelog')
+                ->permission('platform.changelog')
+                ->badge(fn (): string => (string) config('meridian.version'), Color::DARK),
         ];
     }
 
@@ -165,7 +170,9 @@ class PlatformProvider extends OrchidServiceProvider
 
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
-                ->addPermission('platform.node.config', __('Node configuration')),
+                ->addPermission('platform.node.config', __('Node configuration'))
+                ->addPermission('platform.documentation', __('Operator documentation'))
+                ->addPermission('platform.changelog', __('Changelog')),
         ];
     }
 }

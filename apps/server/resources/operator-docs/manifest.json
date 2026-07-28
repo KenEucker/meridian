@@ -1,0 +1,108 @@
+{
+  "version": "0.0.44",
+  "documents": [
+    {
+      "slug": "index",
+      "file": "README.md",
+      "title": "Meridian Operator Documentation",
+      "headings": [
+        "Meridian Operator Documentation",
+        "What is here",
+        "What is not here",
+        "Before you start"
+      ]
+    },
+    {
+      "slug": "deployment",
+      "file": "deployment.md",
+      "title": "Deployment",
+      "headings": [
+        "Deployment",
+        "What a deployment is made of",
+        "Roles a deployment can take",
+        "Bring up a node",
+        "Secrets",
+        "Before an event",
+        "Moving or rebuilding a node"
+      ]
+    },
+    {
+      "slug": "node-setup-and-pairing",
+      "file": "node-setup-and-pairing.md",
+      "title": "Node setup and pairing",
+      "headings": [
+        "Node setup and pairing",
+        "First-run setup",
+        "Pairing an on-site node with central",
+        "On central",
+        "On the on-site node",
+        "Reading pairing state",
+        "When pairing fails",
+        "After pairing"
+      ]
+    },
+    {
+      "slug": "configuration",
+      "file": "configuration.md",
+      "title": "Configuration",
+      "headings": [
+        "Configuration",
+        "The three sources",
+        "Where to look",
+        "Values that are managed for you",
+        "Sensitive values",
+        "Changing node settings",
+        "Event mode",
+        "Where to see the effect"
+      ]
+    },
+    {
+      "slug": "data-repair",
+      "file": "data-repair.md",
+      "title": "Data repair",
+      "headings": [
+        "Data repair",
+        "Before you repair anything",
+        "What God Mode may repair directly",
+        "What God Mode will not do",
+        "Reasons and audit",
+        "Common repairs",
+        "A staff member is on the wrong team",
+        "Hours look wrong",
+        "A credential is blocked and should not be",
+        "An organization is missing a designation",
+        "Do not repair around the event window"
+      ]
+    },
+    {
+      "slug": "sync-conflict-resolution",
+      "file": "sync-conflict-resolution.md",
+      "title": "Sync conflict resolution",
+      "headings": [
+        "Sync conflict resolution",
+        "What a conflict is",
+        "Where the queue is",
+        "Reviewing one conflict",
+        "The two resolutions",
+        "After resolving",
+        "During an event"
+      ]
+    },
+    {
+      "slug": "break-glass",
+      "file": "break-glass.md",
+      "title": "Break-glass procedures",
+      "headings": [
+        "Break-glass procedures",
+        "The rule",
+        "Nobody can sign in",
+        "Nobody can be checked in",
+        "The on-site node cannot reach central",
+        "Central is refusing an edit during the event",
+        "Event mode will not start",
+        "A God Mode user is locked out of God Mode",
+        "After the event"
+      ]
+    }
+  ]
+}

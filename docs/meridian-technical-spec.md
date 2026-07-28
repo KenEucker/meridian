@@ -2522,6 +2522,136 @@ God mode manages:
 - Node pairing.
 - Dangerous admin operations.
 
+## 22.5 God Mode landing screen
+
+The console index screen is Meridian's own landing screen. It does not render
+the administrative framework's welcome content and does not describe Meridian as
+an installation of that framework (GOD-001, GOD-002).
+
+The landing screen has two regions.
+
+### 22.5.1 Orientation summary
+
+A brief bulleted summary of how Meridian works end to end, covering
+organizations and departments, events and the active event window, staff, teams,
+shifts and eligibility, operations, attendance and hours, policies and
+acknowledgments, incidents, and the central/on-site node model with its sync
+authority rules (GOD-003).
+
+The summary states that God Mode is repair and break-glass tooling and that
+normal organizer, department, and staff workflows belong in Meridian Admin
+(GOD-004, section 22.1).
+
+### 22.5.2 Attention list
+
+Items requiring attention are surfaced in three groups (GOD-005):
+
+```text
+Deployment and configuration readiness
+Organizational data gaps
+Unresolved sync conflicts
+```
+
+Deployment and configuration readiness reports node configuration completeness,
+node role and pairing state, presence of required secrets, secure connection
+policy status, and PowerSync connectivity (GOD-006, sections 25.3 and 26.2). The
+secure connection policy and PowerSync signals are the same event-mode
+fail-closed checks described in section 26.2; the landing screen reports them
+rather than evaluating a second, separate policy.
+
+Organizational data gaps report organizations without departments, organizations
+without a configured Organizers Department, organizations and events without a
+resolvable Incident Command Department, organizations without an active Lead
+Organizer, and events without assigned departments (GOD-007). "Resolvable"
+follows the existing effective-department resolution: the event override when
+set, otherwise the organization default.
+
+Unresolved sync conflicts report the outstanding conflict count and link to the
+conflict queue described in section 10.3 (GOD-008).
+
+Every attention item links to the screen where it can be resolved (GOD-009).
+
+Checks are evaluated at view time and are read-only. Rendering the landing
+screen must not create, update, or delete records, and must not repair the state
+it reports (GOD-010).
+
+When every check passes, the landing screen states that explicitly instead of
+rendering an empty region (GOD-011).
+
+## 22.6 Operator documentation
+
+Operator documentation is maintained in the repository under `docs/operator/`
+and is written for node operators and God Mode users rather than as
+specification. It covers deployment, node setup and pairing, configuration and
+config source resolution, data repair, sync conflict resolution, and break-glass
+procedures (GOD-013).
+
+The console serves this documentation from a Documentation page (GOD-012). The
+page:
+
+- renders documentation packaged with the deployment, requires no network
+  access, and does not fetch from an external service (GOD-014);
+- serves `docs/operator/` only. The requirements document, technical
+  specification, data/API specification, UI documentation, QA scripts,
+  architecture decision records, development plan, traceability matrix, and
+  issue documents are not reachable from it (GOD-015);
+- provides a document index, renders Markdown headings, lists, tables, and
+  fenced code, and allows filtering documents by title and heading (GOD-016);
+- displays the packaged operator documentation version alongside the running
+  build version so an operator can tell whether the two match (GOD-017).
+
+The packaged documentation version is the Meridian version the documentation was
+packaged from. It is recorded when documentation is packaged and is compared
+against `config('meridian.version')` at view time.
+
+## 22.7 Changelog
+
+The console provides a Changelog page describing Meridian releases (GOD-018).
+
+Entries are derived from merged pull requests and carry pull request title,
+body, number, merge date, and author. Entries are grouped under the Meridian
+version in which each change shipped (GOD-019), which is the root
+`package.json` version defined by the versioning strategy.
+
+Every merged pull request appears. Changelog content is not filtered by
+conventional-commit type or change category (GOD-020).
+
+### 22.7.1 Packaged baseline
+
+A release build step generates a changelog data file from repository history and
+packages it with the deployment, so the page renders completely without network
+access (GOD-021). The packaged file is the baseline and is always sufficient to
+render the page.
+
+### 22.7.2 Refresh
+
+When the central node has network access and a configured source-repository
+credential, the page refreshes from the source repository and merges newer
+entries into the packaged baseline (GOD-022).
+
+Refresh is never required for the page to render. Absent network, missing
+credential, or a failed refresh degrades to the packaged baseline and displays
+the time of the last successful refresh (GOD-023).
+
+Only the central node performs refresh. On-site, standalone, and development
+nodes render the packaged baseline (GOD-024).
+
+Refresh does not block page rendering and is not performed during the active
+event window (GOD-025), consistent with the event-window governance rules in
+section 10.2.
+
+Source-repository credentials are stored through the existing configuration
+mechanism described in section 22.4, are read-only in scope, and are never
+displayed in the console or written to logs (GOD-026).
+
+## 22.8 Console external links and version display
+
+Documentation and Changelog are console pages within Meridian. They are not
+external links and do not open an external browser context (GOD-027).
+
+Version information displayed in God Mode navigation is the Meridian build
+version from section 26.3, not the administrative framework version (GOD-028).
+
 ---
 
 # 23. Audit Log
