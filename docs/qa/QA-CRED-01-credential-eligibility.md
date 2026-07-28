@@ -4,6 +4,8 @@
 
 Verify Milestone 7 event credential eligibility and manual revocation through the domain services that power Alpha 1: a reviewer can confirm that a credential-counting shift signup creates an Eligible credential, later failures move the credential to Blocked with documented reasons, organizers and IC leads can revoke credentials, unauthorized actors cannot, future shifts are removed on revocation while completed shifts remain, revoked state is preserved through recalculation, and unscheduled assignments do not grant credential eligibility.
 
+Section H additionally verifies the Milestone 13 credential eligibility export (M13.1): an organizer exports the whole event, a department lead exports only their own department, unauthorized actors are refused, sensitive contact fields never reach the file, and each successful export is audited.
+
 Orchid/API/UI credential screens are not required for this script. Use the documented Laravel domain-service tinker commands until dedicated admin/staff surfaces exist. Run this script independently from `QA-SHIFT-01` after a fresh seed unless noted.
 
 ## Requirements covered
@@ -23,9 +25,14 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
 - `CRED-013`
 - `CRED-014`
 - `WAIVER-006`
-- Requirements sections 3.16 and 5.6
+- `REPORT-001`
+- `REPORT-006`
+- `REPORT-007`
+- `REPORT-010`
+- Requirements sections 3.16, 5.6, 5.12, and 7.14
 - Data/API spec section 10.11
-- Meridian Alpha 1 tasks M7.9, M7.10, and M7.11
+- Technical spec section 22.2 (CSV export)
+- Meridian Alpha 1 tasks M7.9, M7.10, M7.11, and M13.1
 
 ## Environment
 
@@ -172,12 +179,44 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
     ```
 36. Confirm `counts` is true and credential status is `eligible`.
 
-### G. Explicit non-goals for this script
+### G. Credential eligibility export (M13.1)
 
-37. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
-38. Confirm physical credential issuance is out of scope.
-39. Confirm recorded hours preservation is noted as deferred to Milestone 10 once hours records exist; this script only verifies completed shift assignments remain active after revocation.
-40. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
+Run this section after section A so at least one Eligible credential exists. A fresh seed followed by section A is enough.
+
+37. Give Vera contact details the export must never carry, then export as Olive Organizer and save the file:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); $staff->forceFill(["phone" => "+1-208-555-0100", "emergency_contact_name" => "Quinn Contact", "emergency_contact_phone" => "+1-208-555-0199"])->save(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\CredentialEligibilityExportAccess::class)->resolve($olive, $event); $export = app(App\Services\Reporting\CredentialEligibilityExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    ```
+38. Confirm `event_wide` is true, the header row is `event_name,staff_legal_name,staff_preferred_name,staff_handle,staff_email,departments,credential_status,status_reason,status_reason_label,credential_shift_count,credential_updated_at,revoked_at`, and Vera appears with status `eligible`, department `Rangers`, and a credential shift count of at least 1.
+39. Confirm the saved file contains no phone number, emergency contact, or date of birth:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\CredentialEligibilityExportAccess::class)->resolve($olive, $event); $csv = app(App\Services\Reporting\CredentialEligibilityExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => str_contains($csv, (string) $staff->phone), "emergency_name_present" => str_contains($csv, (string) $staff->emergency_contact_name), "emergency_phone_present" => str_contains($csv, (string) $staff->emergency_contact_phone), "date_of_birth_present" => $staff->date_of_birth !== null && str_contains($csv, $staff->date_of_birth->format("Y-m-d"))], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+40. Confirm all four values are `false`.
+41. Export as Dana Departmentlead and confirm the department-scoped file:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\CredentialEligibilityExportAccess::class)->resolve($dana, $event); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $export = app(App\Services\Reporting\CredentialEligibilityExportService::class)->export($event, $scope, $dana); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentIds, "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    ```
+42. Confirm `event_wide` is false, `department_ids` contains only the Rangers id, the filename carries `rangers`, and every exported row belongs to a Rangers member.
+43. Confirm an unauthorized actor resolves no export scope at all:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $access = app(App\Services\Reporting\CredentialEligibilityExportAccess::class); foreach (["omar.icoperator@idaho-burners.test", "ivy.icviewer@idaho-burners.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
+    ```
+44. Confirm both IC personas are `denied`; incident authority is not export authority.
+45. Confirm each successful export was audited:
+    ```bash
+    php artisan tinker --execute='App\Models\AuditEvent::query()->where("action", "event_credential_eligibility.exported")->latest("created_at")->take(5)->get(["actor_user_id", "event_id", "department_id", "after_json"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+    ```
+46. Confirm one audit event per export with the acting user, the event, a `scope` of `event` or `department`, and a `row_count` matching the file.
+47. Optional HTTP check when a browser session is available for Olive (log in with `QA-AUTH-01`): download `/api/events/{event id}/exports/credential-eligibility` and confirm the browser saves a `.csv` attachment. Add `?department_id={department id}` to narrow an organizer export to one department, and confirm a department id from another organization returns 404.
+
+### H. Explicit non-goals for this script
+
+48. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
+49. Confirm physical credential issuance is out of scope.
+50. Confirm recorded hours preservation is noted as deferred to Milestone 10 once hours records exist; this script only verifies completed shift assignments remain active after revocation.
+51. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
+52. Confirm the credential eligibility export in section G is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).
 
 ## Expected results
 
@@ -189,6 +228,10 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
 - Manual revocation is limited to organizers and IC leads; department leads and IC operators are denied.
 - Revocation sets `revoked` / `manual_revocation` / `revoked_at`, removes future non-completed assignments, preserves completed assignments, writes audit events, and is not undone by automatic recalculation.
 - Unscheduled lead assignments created after shift start do not grant credential eligibility; planned lead assignments before shift start do.
+- The credential eligibility export produces a CSV with the documented header, reports recorded credential status and reason without recalculating it, and counts only credential-counting shifts.
+- Organizers export the whole event; department leads export only their own department; IC roles resolve no export scope.
+- No phone number, emergency contact, or date of birth appears in the export.
+- Every successful export writes one `event_credential_eligibility.exported` audit event naming the actor, event, scope, and row count.
 - No physical credential issuance, Orchid/API UI, offline sync, or hours-record preservation beyond completed assignments is required for this Alpha 1 QA gate.
 
 ## Evidence to capture
@@ -203,6 +246,10 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
 - Recalculation output proving revoked state is preserved.
 - IC lead revocation evidence for Sam.
 - Unscheduled vs planned assignment counting evidence.
+- The saved organizer export file, plus the department-scoped export output and its filename.
+- Sensitive-field check output showing all four values false.
+- Denied export-scope output for the IC personas.
+- Export audit event output.
 
 ## Failure notes
 
@@ -216,3 +263,6 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
 - If recalculation moves a revoked credential back to eligible/blocked, stop and file a CRED-009 issue.
 - If an unscheduled after-start assignment grants credential eligibility, stop and file a blocking CRED-014 issue.
 - If this script appears to require Orchid credential UI, physical badge issuance, offline sync, or hours-record checks beyond completed assignments, stop and report scope leakage.
+- If the export carries a phone number, emergency contact, or date of birth, stop and file a blocking REPORT-008 / REPORT-010 issue.
+- If a department lead export returns another department's staff, or an IC persona resolves an export scope, stop and file a blocking REPORT-006 / REPORT-007 issue.
+- If a successful export writes no audit event, stop and file a blocking data/API section 8 issue.
