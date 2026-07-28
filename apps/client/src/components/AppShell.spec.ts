@@ -189,11 +189,13 @@ describe("AppShell fixed UI mode display", () => {
       expect(workflowLabels).toContain("Logistics");
       expect(workflowLabels).toContain("Operations");
       expect(workflowLabels).toContain("Admin");
+      // The author's own Field Report workspace is a personal page and rides
+      // with Me, in every role.
+      expect(workflowLabels).toContain("My Field Reports");
       // IMS Field Reports is reached from inside Incidents and from the home
       // directory, not from the tab bar.
       expect(workflowLabels).not.toContain("Reports");
       expect(workflowLabels).not.toContain("Field Reports");
-      expect(workflowLabels).not.toContain("My Field Reports");
       expect(workflowLabels).not.toContain("Notes");
       expect(workflowLabels).not.toContain("Operations Center");
       expect(workflowLabels).not.toContain("Team");
@@ -325,6 +327,7 @@ describe("AppShell fixed UI mode display", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "My Field Reports",
       "Overview",
       "Planning",
       "Logistics",
@@ -358,10 +361,10 @@ describe("AppShell fixed UI mode display", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "My Field Reports",
       "Documents",
       "Shifts",
       "Trainings",
-      "My Field Reports",
     ]);
   });
 
@@ -386,7 +389,7 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
     expect(
       wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
-    ).toEqual(["Me", "Event Info", "Team", "Admin"]);
+    ).toEqual(["Me", "Event Info", "My Field Reports", "Team", "Admin"]);
   });
 
   it("closes the fixture user dropdown after choosing an item", async () => {

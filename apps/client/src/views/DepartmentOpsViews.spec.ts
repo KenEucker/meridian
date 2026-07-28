@@ -374,7 +374,10 @@ describe("department operations surfaces", () => {
     expect(
       fieldReportCards.find((card) => card.text().includes("Event total"))?.text(),
     ).toContain("3");
-    expect(wrapper.text()).not.toContain("My Field Reports");
+    // The page composes shortcuts from capability, so it does not restate the
+    // author's personal workspace. That link lives in the shell's staff menu,
+    // which is why this assertion reads the page rather than the whole app.
+    expect(wrapper.get(".dept-ops").text()).not.toContain("My Field Reports");
     expect(wrapper.text()).not.toContain(
       "Incident overview requires event-scoped Incident Command capability.",
     );
