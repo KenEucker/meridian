@@ -111,6 +111,10 @@ class PermissionCatalogTest extends TestCase
             // department trainings through the product path.
             $this->assertContains('department.trainings.manage', $permissions);
 
+            // REPORT-001 / REPORT-006 / M13.1: organizers export event-wide
+            // credential eligibility.
+            $this->assertContains('reports.credential_eligibility.export', $permissions);
+
             // ORG-015: membership in the Organizers Department does not grant
             // access to all incidents or all field reports.
             $this->assertNotContains('incidents.view', $permissions);
@@ -136,10 +140,13 @@ class PermissionCatalogTest extends TestCase
         // department trainings through the product path.
         // M15A.7 / BRAND-019: and their own department's branding profile —
         // logo, accent, and surface background only.
+        // M13.1 / REPORT-007: and department-scoped credential eligibility
+        // exports, which stay narrower than the organizer event-wide export.
         $this->assertSame([
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',
+            'reports.credential_eligibility.export',
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
@@ -147,6 +154,7 @@ class PermissionCatalogTest extends TestCase
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',
+            'reports.credential_eligibility.export',
         ], $this->permissionCodesFor('department_lead'));
 
         $this->assertSame([

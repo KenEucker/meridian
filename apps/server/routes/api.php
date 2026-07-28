@@ -23,6 +23,7 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
+use App\Http\Controllers\Reporting\CredentialEligibilityExportController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
@@ -331,6 +332,11 @@ Route::middleware('local.field')->group(function (): void {
 
     Route::get('/events/{event}/info', [EventInfoReadController::class, 'show'])
         ->name('api.events.info');
+
+    // Credential eligibility export (REPORT-001). Scope comes from the
+    // caller's own authority; `department_id` may only narrow it.
+    Route::get('/events/{event}/exports/credential-eligibility', [CredentialEligibilityExportController::class, 'credentialEligibility'])
+        ->name('api.events.exports.credential-eligibility');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');
