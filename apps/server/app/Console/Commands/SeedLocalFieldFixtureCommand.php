@@ -199,6 +199,20 @@ class SeedLocalFieldFixtureCommand extends Command
                 [
                     'node_name' => 'local-field-node',
                     'node_role' => Node::ROLE_DEVELOPMENT,
+                    /*
+                     * This row is the install's *own* node, not a peer learned
+                     * through pairing, and `is_local` is what says so.
+                     *
+                     * The column defaults to false, so omitting it here left
+                     * the fixture with no resolvable local node at all —
+                     * `NodeSetupService::activeNode()` filters on it. Nothing
+                     * failed loudly: `GET /api/health` simply reported a null
+                     * node role, organization, and event; the desktop wrapper
+                     * never branded its window; and an install that names an
+                     * event in this very row behaved as though it were locked
+                     * to none.
+                     */
+                    'is_local' => true,
                     'public_key' => base64_encode(str_repeat('L', 32)),
                     'organization_id' => LocalFieldFixture::ORGANIZATION_ID,
                     'event_id' => LocalFieldFixture::EVENT_ID,

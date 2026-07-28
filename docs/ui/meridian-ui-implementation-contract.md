@@ -647,6 +647,41 @@ Branding reaches the DOM through two attributes rather than through per-componen
 
 `--m-department-accent` is not scoped this way. An accent is a small identifier that appears wherever the department appears, including on surfaces that must not take the background — a `DepartmentBadge` inside The Briefing still shows the department's accent.
 
+### 10.4 Marks in the App Shell Header
+
+The header carries three identities at once, and they are kept visually separate because they are not the same claim.
+
+- The **organization** mark and name sit on the left, in the home link. This is the product's identity, and it is the one that replaces Meridian's (BRAND-002).
+- The **current department's** mark sits in the context block, immediately left of the department name and the event name, so a user reading the context reads one identity rather than a name and a mark in different places (BRAND-027).
+- The **other departments** the signed-in user belongs to render as marks only, right-adjusted, immediately left of the user menu. Each is a control that switches department context. The current department is excluded: it is already named two elements to the left, and a switcher offering the department you are in is a control with nothing to do (BRAND-027).
+
+Sizing in this bar runs the other way round from the rest of the product: the marks set the row height and the padding is fitted to them, rather than the marks being fitted into a padded row. The organization mark and the current department's mark both fill the masthead content row (`BrandMark` size `xxl`); the switcher marks take the largest size that still sits inside that row without setting it (`xl`), which keeps the hierarchy readable — the department you are in is visibly the subject, the ones you can move to are visibly secondary. Block padding on the masthead is deliberately thin, because every pixel of it is a pixel the marks do not get and it buys nothing but a taller bar.
+
+### 10.5 The Chrome Identity
+
+The product's own identity — the application header mark and name, the browser tab icon, the document title, and the desktop window icon — resolves from one precedence, in one place, so those surfaces cannot drift apart:
+
+1. the **locked event's** logo and name, when the node this install talks to is locked to an event and that event has a logo (BRAND-029);
+2. the organization's **compact mark** and display name;
+3. the organization's **full lockup** and display name;
+4. the generated **lettermark**, or Meridian's own mark and name when there is no branding profile at all.
+
+**The mark and the name move together** (BRAND-030). An event's logo beside the producing company's name — or beside "Meridian" — is the same failure the event mark exists to fix: it asks a staff member to recognise something they have no reason to know, in the one place they look to confirm they are in the right app. Whoever's mark is showing, their name is showing.
+
+The precedence is keyed on the event having a **logo**, not merely on the install being event-locked. An event that has set nothing has not asked to be presented as the product, and a locked install with no event mark reads exactly as it did before the event existed.
+
+When the header carries the event, the context block drops the event name and shows the department alone — otherwise the same string appears twice in one bar, a few centimetres apart. The department is the part the header never carries.
+
+The event comes first because of who is looking at it. Most staff working an event were recruited by the event rather than by the company producing it, and many will never have heard the organization's name; a producer's mark identifies nothing to them. The event's mark is the one they can place, on the app they were told to use for that event.
+
+It wins even for an organization with no branding profile of its own. Uploading an event logo is a deliberate act by an organizer, and there is no reading of it under which they wanted it stored and not shown.
+
+It reaches no further than that chrome. The palette, generated PDF exports, system email, and every surface that is not event-locked stay the organization's (BRAND-031) — a document or a message naming an event but not the organization behind it gives its recipient no accountable party. The surfaces BRAND-003 protects — login, the magic-link landing, node first-run setup, Orchid, desktop chrome and installers — never resolve an event mark at all, because they render from Meridian's own profile which carries no locked event.
+
+"Locked to an event" is a property of the **node**, not of the signed-in user. A Kiosk at a gate has no user, and the node is what knows which event this install is running — the same source the desktop wrapper already reads.
+
+The header marks are never the only way to switch. The labelled department switch, with role summaries, stays in the user menu; the header row is the one-click path for someone who works across departments all day.
+
 ---
 
 ## 11. Component Contract
@@ -709,6 +744,28 @@ Rules:
 - visible text may be the short label, but the accessible name must include the full department name;
 - the badge renders the accent even on surfaces that do not take a department background (section 10.3), and renders without an accent when the organization has department overrides switched off (BRAND-013);
 - the badge does not set `data-department-surface`.
+
+### 11.3a BrandMark
+
+Purpose: Render a department's or a team's mark on its own, where the entity's name is already on screen beside it.
+
+Inputs:
+
+- `name`: the department or team name, used to generate the fallback lettermark;
+- `logoUrl`: stored logo, or `null`;
+- `lettermark`: server-generated lettermark, or `null` to derive it from `name`;
+- `accentColor`: department accent, or `null`;
+- `size`: `sm`, `md`, `lg`;
+- `label`: accessible name; omit to render the mark as decorative.
+
+Rules:
+
+- content precedence for the glyph is logo, then generated lettermark — there is always something to render, so an empty slot is never mistaken for a broken image (BRAND-005, BRAND-010, BRAND-026);
+- the tinted rounded chip belongs to the lettermark, not to the mark. Two letters need a shape to read as an identity; an uploaded logo already is one, and boxing it adds a second edge competing with the artwork's own. The component sets `data-mark="logo"` or `data-mark="lettermark"` so a container can follow the same rule — a control wrapping a logo mark must not draw a border or a card around it, and one wrapping a lettermark should;
+- the mark is decorative by default, because the name it identifies is beside it; `label` is passed only where the mark is the whole control, such as the header department switcher;
+- the accent tints the glyph background and never fills it, for the reason DepartmentBadge gives above;
+- a team mark takes no accent: a team has no branding value other than its logo (BRAND-025);
+- use DepartmentBadge, not this, wherever the name is not already rendered next to the mark.
 
 ### 11.4 DataTable
 

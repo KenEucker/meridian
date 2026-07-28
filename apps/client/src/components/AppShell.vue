@@ -3,9 +3,17 @@ import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, routerKey, useRoute } from "vue-router";
 
 import { meridianAppConfig, type MeridianAppConfig } from "@/app/appConfig";
-import { brandingState } from "@/branding/brandingProfile";
+import BrandMark from "@/branding/BrandMark.vue";
+import {
+  brandingState,
+  chromeIdentityName,
+  chromeMarkUrl,
+  findDepartmentBranding,
+  showsEventIdentity,
+} from "@/branding/brandingProfile";
 import { departmentSurfaceAttributes } from "@/branding/departmentSurfaceScope";
 import { applyDocumentTitle } from "@/branding/documentTitle";
+import { applyFavicon } from "@/branding/favicon";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
   useCombinedNavigation,
@@ -50,13 +58,37 @@ const route = useRoute();
  * looking like Meridian rather than like a nameless product.
  */
 const branding = computed(() => brandingState.profile);
-const productName = computed(() =>
-  branding.value.is_branded ? branding.value.display_name : "Meridian",
-);
-const markUrl = computed(() =>
-  branding.value.is_branded
-    ? (branding.value.compact_mark_url ?? branding.value.full_lockup_url ?? null)
-    : meridianMarkUrl,
+
+/*
+ * The name beside the mark, resolved from the same rule the mark is
+ * (BRAND-029). They are one identity: an event's logo next to the producing
+ * company's name — or next to "Meridian" — asks a staff member to recognise
+ * something they have no reason to know, in the place they look to confirm
+ * they are in the right app.
+ */
+const productName = computed(() => chromeIdentityName(branding.value));
+
+/*
+ * Whether the header is already carrying the event's identity.
+ *
+ * When it is, the context block drops the event name: it would otherwise print
+ * the same string twice in one bar, a few centimetres apart. The department is
+ * what the context block is left to say, and that is the part the header never
+ * carries.
+ */
+const headerCarriesEvent = computed(() => showsEventIdentity(branding.value));
+/*
+ * The mark beside the product name.
+ *
+ * Precedence lives in `chromeMarkUrl` so the header, the favicon, and the
+ * desktop window icon cannot drift apart: locked event's logo, then the
+ * organization's compact mark, then its full lockup (BRAND-005, BRAND-028).
+ * Meridian's own mark is used only when the organization has no branding
+ * profile and no event mark applies, which is what keeps an unconfigured
+ * install looking like Meridian rather than like a nameless product.
+ */
+const markUrl = computed(
+  () => chromeMarkUrl(branding.value) ?? (branding.value.is_branded ? null : meridianMarkUrl),
 );
 const showLettermark = computed(() => markUrl.value === null);
 
@@ -68,6 +100,51 @@ const departmentBrandingAttributes = computed(() =>
     typeof route?.name === "string" ? route.name : null,
     selectedFixtureDepartment.value.departmentId,
   ),
+);
+
+/**
+ * The mark for one department the signed-in user has access to (BRAND-010).
+ *
+ * Resolved from the branding payload, falling back to a lettermark generated
+ * from the department name — a department that has uploaded nothing still has
+ * a mark, so the header never has a hole where one department sits.
+ */
+function departmentMark(department: {
+  readonly departmentId: string;
+  readonly departmentLabel: string;
+}) {
+  const branding = findDepartmentBranding(department.departmentId);
+
+  return {
+    id: department.departmentId,
+    name: department.departmentLabel,
+    logoUrl: branding?.logo_url ?? null,
+    lettermark: branding?.lettermark ?? null,
+    accentColor: branding?.accent ?? null,
+  };
+}
+
+const currentDepartmentMark = computed(() =>
+  departmentMark(selectedFixtureDepartment.value),
+);
+
+/**
+ * The other departments this user belongs to, as marks beside the user menu.
+ *
+ * The current department is excluded: it is already named in the context block
+ * two elements to the left, and a switcher that offers the department you are
+ * in is a control with nothing to do. The same switch still lives in the user
+ * menu with role summaries; this is the one-click path for someone who works
+ * across departments all day.
+ */
+const otherDepartmentMarks = computed(() =>
+  fixtureDepartmentAccesses
+    .filter(
+      (department) =>
+        department.departmentId !==
+        selectedFixtureDepartment.value.departmentId,
+    )
+    .map(departmentMark),
 );
 const fixtureUserMenuOpen = ref(false);
 const workflowMenuOpen = ref(false);
@@ -253,6 +330,20 @@ watch(
   { immediate: true },
 );
 
+/*
+ * The tab icon follows the same mark the header does (BRAND-002, BRAND-028).
+ *
+ * Driven off `chromeMarkUrl` rather than off `markUrl`, because the two differ
+ * in exactly one case: with no branding at all the header shows Meridian's PNG
+ * mark while the tab wants Meridian's `.ico`, which is what `applyFavicon`
+ * falls back to when handed null.
+ */
+watch(
+  () => chromeMarkUrl(branding.value),
+  (url) => applyFavicon(url),
+  { immediate: true },
+);
+
 // The document title carries the organization's name, not Meridian's, once a
 // branding profile exists (BRAND-002).
 watch(
@@ -355,8 +446,8 @@ onBeforeUnmount(() => {
             class="app-shell__mark"
             :src="markUrl ?? meridianMarkUrl"
             alt=""
-            width="44"
-            height="44"
+            width="50"
+            height="50"
             aria-hidden="true"
           />
           <span v-else class="app-shell__mark app-shell__lettermark" aria-hidden="true">
@@ -369,11 +460,49 @@ onBeforeUnmount(() => {
         </RouterLink>
 
         <div class="app-shell__context" aria-label="Current operations context">
-          <p>{{ selectedFixtureDepartment.departmentLabel }}</p>
-          <span>{{ selectedFixtureDepartment.eventLabel }}</span>
+          <BrandMark
+            class="app-shell__context-mark"
+            :name="currentDepartmentMark.name"
+            :logo-url="currentDepartmentMark.logoUrl"
+            :lettermark="currentDepartmentMark.lettermark"
+            :accent-color="currentDepartmentMark.accentColor"
+            size="xxl"
+          />
+          <div class="app-shell__context-text">
+            <p>{{ selectedFixtureDepartment.departmentLabel }}</p>
+            <span v-if="!headerCarriesEvent">
+              {{ selectedFixtureDepartment.eventLabel }}
+            </span>
+          </div>
         </div>
 
         <div class="app-shell__actions">
+          <div
+            v-if="otherDepartmentMarks.length > 0"
+            class="app-shell__department-marks"
+            role="group"
+            aria-label="Switch to another of your departments"
+          >
+            <button
+              v-for="department in otherDepartmentMarks"
+              :key="department.id"
+              type="button"
+              class="app-shell__department-mark"
+              :data-mark="department.logoUrl ? 'logo' : 'lettermark'"
+              :title="`Switch to ${department.name}`"
+              @click="switchFixtureDepartment(department.id)"
+            >
+              <BrandMark
+                :name="department.name"
+                :logo-url="department.logoUrl"
+                :lettermark="department.lettermark"
+                :accent-color="department.accentColor"
+                size="xl"
+                :label="`Switch to ${department.name}`"
+              />
+            </button>
+          </div>
+
           <div ref="fixtureUserElement" class="app-shell__user">
             <button
               type="button"
@@ -669,13 +798,32 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--m-border-subtle);
 }
 
+/*
+ * One row at every width: organization lockup, current department context,
+ * then the department switchers and the user menu.
+ *
+ * It does not re-flow to two rows on a phone, and that is the constraint the
+ * rest of this band is built around. The marks are how a user confirms which
+ * event and which department they are in, and a masthead that stacks puts the
+ * organization's name under a department's mark — two identities in a column,
+ * reading as one lockup that means nothing. What gives instead is text: the
+ * middle column is the only flexible one and every string in this row
+ * truncates, so the row narrows by shortening names rather than by wrapping.
+ */
 .app-shell__masthead {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--m-space-3);
   min-width: 0;
-  padding: var(--m-space-3);
+  /*
+   * Block padding is deliberately thin. The identity marks are the tallest
+   * thing in this row and they set the bar's height; padding around them buys
+   * nothing but a taller bar, and every pixel spent there is a pixel the marks
+   * do not get. Inline padding stays generous — that edge is a margin, not
+   * wasted height.
+   */
+  padding: var(--m-space-1) var(--m-space-3);
   border: 1px solid var(--m-border-default);
   border-radius: 8px;
   background: var(--m-surface-raised);
@@ -694,10 +842,28 @@ onBeforeUnmount(() => {
   color: var(--m-text-primary);
 }
 
+/*
+ * The three mark sizes in this bar are fluid, not stepped.
+ *
+ * Fixed sizes behind breakpoints left dead zones: at 600px the marks were still
+ * at their desktop size while the row had lost a third of its width, so the
+ * department mark overflowed its column and the department and event names were
+ * squeezed to nothing. Anything that scales the row has to scale with it
+ * continuously, because the row is a single line at every width and there is no
+ * wrap to absorb the mistake.
+ *
+ * The floor is what stays legible on the narrowest phone; the ceiling is the
+ * size chosen for the desktop bar. Both marks share one scale so the
+ * organization and the current department always read as the same weight.
+ */
+.app-shell__mark,
+.app-shell__context .app-shell__context-mark {
+  width: clamp(2.5rem, 7vw, 5rem);
+  height: clamp(2.5rem, 7vw, 5rem);
+}
+
 .app-shell__mark {
   display: block;
-  width: 2.25rem;
-  height: 2.25rem;
   object-fit: contain;
 }
 
@@ -726,11 +892,15 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__product-name {
+  min-width: 0;
+  overflow: hidden;
   color: var(--m-text-primary);
   font-family: var(--m-font-heading);
   font-size: var(--m-text-lg);
   font-weight: 800;
   line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell__mode-name {
@@ -746,13 +916,25 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__context {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  padding: 0 0 0 var(--m-space-3);
+  border-left: 1px solid var(--m-border-subtle);
+}
+
+/*
+ * The department mark sits with the department name it belongs to, not with
+ * the organization mark on the left. The two are different identities and
+ * putting them side by side reads as one lockup.
+ */
+.app-shell__context-text {
   display: grid;
   gap: 0.15rem;
-  grid-column: 1 / -1;
-  grid-row: 2;
   min-width: 0;
-  padding: var(--m-space-2) 0 0;
-  border-top: 1px solid var(--m-border-subtle);
 }
 
 .app-shell__context p,
@@ -774,15 +956,92 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+/*
+ * One row, always. The department switchers and the user menu are a single
+ * control cluster; wrapping them onto two lines reads as two unrelated groups
+ * and pushes the masthead taller than the lockup beside it.
+ */
 .app-shell__actions {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-self: end;
   gap: var(--m-space-2);
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   min-width: 0;
   max-width: 100%;
+}
+
+/*
+ * The user's other departments, immediately left of the user menu.
+ *
+ * Marks only. A row of names would compete with the context block for the
+ * reader's attention, and the point of these is recognition at a glance — the
+ * full name is on the tooltip and on the accessible name, and the labelled
+ * switch with role summaries is still in the user menu.
+ */
+.app-shell__department-marks {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--m-space-1);
+  min-width: 0;
+}
+
+/*
+ * Subordinate to the identity marks at every width, on the same fluid scale so
+ * the ratio between them never inverts.
+ */
+.app-shell__department-marks .app-shell__department-mark :deep(.brand-mark) {
+  width: clamp(1.75rem, 5vw, 4rem);
+  height: clamp(1.75rem, 5vw, 4rem);
+  font-size: clamp(0.65rem, 1.4vw, 1.4rem);
+}
+
+.app-shell__department-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--m-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+/*
+ * A department that uploaded a logo is shown as that logo and nothing else —
+ * no button border, no card behind it. The artwork is the control.
+ *
+ * A department with no logo has only two generated letters, which need an edge
+ * to read as a thing you can click, so the outline is drawn there and only
+ * there. Hover is carried by the box for a lettermark and by the artwork's own
+ * opacity for a logo, so neither state depends on a border the logo does not
+ * have.
+ */
+.app-shell__department-mark[data-mark="lettermark"] {
+  /*
+   * Inset shadow rather than a border, so a lettermark switcher and a logo
+   * switcher occupy exactly the same box and sit on the same baseline. A real
+   * border would make the outlined ones 2px larger and visibly misaligned in
+   * the row.
+   */
+  box-shadow: inset 0 0 0 1px var(--m-border-default);
+}
+
+.app-shell__department-mark[data-mark="lettermark"]:hover {
+  box-shadow: inset 0 0 0 1px var(--m-text-secondary);
+  background: color-mix(in srgb, var(--m-surface-base) 80%, transparent);
+}
+
+.app-shell__department-mark[data-mark="logo"]:hover {
+  opacity: 0.75;
+}
+
+.app-shell__department-mark:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .app-shell__menu-theme {
@@ -1145,24 +1404,17 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 50rem) {
+  /*
+   * The middle column gets a floor once there is room for one, so the context
+   * stops giving up width to the lockup and the switchers on a wide screen.
+   * Below this the floor is dropped rather than the row being broken.
+   */
   .app-shell__masthead {
-    grid-template-columns: auto minmax(14rem, 1fr) auto;
-  }
-
-  .app-shell__home {
-    grid-column: 1;
+    grid-template-columns: minmax(0, auto) minmax(14rem, 1fr) auto;
   }
 
   .app-shell__context {
-    grid-column: 2;
-    grid-row: 1;
-    padding: 0 0 0 var(--m-space-4);
-    border-top: 0;
-    border-left: 1px solid var(--m-border-subtle);
-  }
-
-  .app-shell__actions {
-    grid-column: 3;
+    padding-left: var(--m-space-4);
   }
 
   .app-shell__workflow-button {
@@ -1193,14 +1445,23 @@ onBeforeUnmount(() => {
     padding-top: calc(var(--m-space-2) + env(safe-area-inset-top));
   }
 
+  /*
+   * The row still does not wrap here; it gets denser.
+   *
+   * Everything fixed-width in it shrinks together — both identity marks, the
+   * switchers, and the gaps between them — because the alternative is the
+   * middle column being squeezed to nothing and the department mark sliding
+   * under the switchers. Text is what absorbs the rest: the organization name,
+   * the department, and the event all truncate.
+   */
   .app-shell__masthead {
     gap: var(--m-space-2);
-    padding: var(--m-space-2);
+    padding: var(--m-space-1) var(--m-space-2);
   }
 
-  .app-shell__mark {
-    width: 2rem;
-    height: 2rem;
+  .app-shell__context {
+    gap: var(--m-space-1);
+    padding-left: var(--m-space-2);
   }
 
   .app-shell__product-name {
@@ -1219,6 +1480,12 @@ onBeforeUnmount(() => {
     display: inline;
   }
 
+  /*
+   * The switcher marks stay on a phone rather than being hidden. They are the
+   * only one-tap way between departments, and the space they cost is a row
+   * that already collapses the user button to an icon for the same reason.
+   * Their size comes from the fluid scale above; nothing is stepped here.
+   */
   .app-shell__user-button {
     min-height: 2.25rem;
     width: 2.25rem;
@@ -1233,6 +1500,22 @@ onBeforeUnmount(() => {
 
   .app-shell__user-icon {
     color: var(--m-text-primary);
+  }
+}
+
+/*
+ * The narrowest phones. The organization's name goes and its mark stays.
+ *
+ * By this width something has to give or the department and event names are
+ * squeezed to nothing, and of the three strings the organization's is the one
+ * already answered elsewhere — its mark is immediately to the left of where the
+ * name was, and the document title carries it in full. Which department and
+ * which event you are in is the thing a user is reading this bar to check, and
+ * it is what an event-locked install exists to make obvious.
+ */
+@media (max-width: 24rem) {
+  .app-shell__product {
+    display: none;
   }
 }
 </style>

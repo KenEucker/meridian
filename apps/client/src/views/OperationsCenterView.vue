@@ -214,7 +214,6 @@ function addDeployment(): void {
     title="Operations Center"
     :eyebrow="center.context.departmentLabel"
     lede="High-level operational picture composed from capabilities you already hold."
-    :freshness="center.context.dataFreshnessLabel"
   >
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>

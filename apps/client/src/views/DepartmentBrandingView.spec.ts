@@ -41,6 +41,8 @@ const baseProfile: BrandingProfilePayload = {
       logo_url: null,
     },
   ],
+  teams: [],
+  event: null,
 };
 
 const props = {

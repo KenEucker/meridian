@@ -58,16 +58,6 @@ const availableDates = computed(() =>
     ),
   ),
 );
-const syncStateLabel = computed(() => {
-  const prefix =
-    table.syncState === "offline"
-      ? "Offline aggregate cache"
-      : table.syncState === "stale"
-        ? "Stale aggregate cache"
-        : "Fresh aggregate cache";
-
-  return `${prefix} / ${table.context.dataFreshnessLabel}`;
-});
 const selectedShift = computed(
   () =>
     visibleRows.value.find((row) => row.shiftId === selectedShiftId.value) ??
@@ -232,7 +222,6 @@ function formatTimelineMarker(timestamp: number): string {
     title="Planning Table"
     :eyebrow="table.context.departmentLabel"
     lede="Identity-free comparison of what was planned and how the department is tracking."
-    :freshness="syncStateLabel"
   >
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>

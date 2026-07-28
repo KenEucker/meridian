@@ -147,6 +147,18 @@ Route::middleware('local.field')->group(function (): void {
     Route::post('/commands/remove-branding-asset', [BrandingCommandController::class, 'removeAsset'])
         ->name('api.commands.remove-branding-asset');
 
+    /*
+     * The organization's events and their marks, for the branding surface
+     * (BRAND-028).
+     *
+     * Authenticated and permission-gated, unlike the branding profile read.
+     * That read has to resolve before a session does and so is open, which is
+     * exactly why it publishes only the one event an install is locked to — the
+     * roster of everything an organization is running belongs behind a session.
+     */
+    Route::get('/organizations/{organization}/branding/events', [BrandingCommandController::class, 'events'])
+        ->name('api.organizations.branding.events');
+
     Route::post('/commands/create-department', [DepartmentCommandController::class, 'create'])
         ->name('api.commands.create-department');
 

@@ -101,11 +101,54 @@ describe("desktop window branding", () => {
     expect(resolveWindowIconUrl(null)).toBeNull();
   });
 
-  it("ignores department logos, which are not organization identity", () => {
+  it("prefers the locked event's logo over the organization mark", () => {
+    // BRAND-029. This function only runs on an event-locked install, and the
+    // people using one were recruited by the event rather than by the company
+    // producing it — a producer's mark in the taskbar identifies nothing to
+    // someone who has never heard of the producer.
     expect(
       resolveWindowIconUrl({
         is_branded: true,
-        assets: [{ slot: "department_logo:dept-1", url: "/branding/assets/dept" }],
+        locked_event_id: "event-1",
+        assets: [
+          { slot: "compact_mark", url: "/branding/assets/mark" },
+          { slot: "full_lockup", url: "/branding/assets/lockup" },
+          { slot: "event_logo", url: "/branding/assets/event" },
+        ],
+      }),
+    ).toBe("/branding/assets/event");
+  });
+
+  it("uses the event logo even when the organization is unbranded", () => {
+    // Uploading an event logo is a deliberate act; an event running under an
+    // otherwise unbranded organization is the case BRAND-028 exists for.
+    expect(
+      resolveWindowIconUrl({
+        is_branded: false,
+        locked_event_id: "event-1",
+        assets: [{ slot: "event_logo", url: "/branding/assets/event" }],
+      }),
+    ).toBe("/branding/assets/event");
+  });
+
+  it("falls back to the organization mark when the locked event has no logo", () => {
+    expect(
+      resolveWindowIconUrl({
+        is_branded: true,
+        locked_event_id: "event-1",
+        assets: [{ slot: "compact_mark", url: "/branding/assets/mark" }],
+      }),
+    ).toBe("/branding/assets/mark");
+  });
+
+  it("ignores department and team logos, which are not product identity", () => {
+    expect(
+      resolveWindowIconUrl({
+        is_branded: true,
+        assets: [
+          { slot: "department_logo:dept-1", url: "/branding/assets/dept" },
+          { slot: "team_logo:team-1", url: "/branding/assets/team" },
+        ],
       }),
     ).toBeNull();
   });

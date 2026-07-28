@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Event;
 
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
 use App\Models\User;
+use App\Orchid\Layouts\Event\EventBrandingLayout;
 use App\Orchid\Layouts\Event\EventEditLayout;
+use App\Orchid\Support\BrandingScreenSupport;
+use App\Services\Branding\Lettermark;
 use App\Services\Events\IncidentCommandDepartmentSelectionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,18 +31,32 @@ use Orchid\Support\Facades\Toast;
 
 class EventEditScreen extends Screen
 {
+    use BrandingScreenSupport;
+
     /**
      * @var Event
      */
     public $event;
 
     /**
-     * @return array<string, Event>
+     * @return array<string, mixed>
      */
     public function query(Event $event): iterable
     {
+        $logoUrl = $this->brandingAssetUrl($event->branding_logo_attachment_id);
+
         return [
             'event' => $event,
+            'branding' => [
+                'logo_url' => $logoUrl,
+            ],
+            'branding_slots' => [
+                [
+                    'label' => __('Event logo'),
+                    'url' => $logoUrl,
+                    'lettermark' => Lettermark::forName((string) $event->name),
+                ],
+            ],
         ];
     }
 
@@ -83,11 +101,40 @@ class EventEditScreen extends Screen
      */
     public function layout(): iterable
     {
-        return [
+        $layouts = [
             Layout::block(EventEditLayout::class)
                 ->title(__('Event'))
                 ->description(__('Events represent organization-produced occurrences with scheduled and active windows.')),
         ];
+
+        // Branding needs an event to attach to, which arrives with the first
+        // save — the same reason the organization, department, and team screens
+        // defer theirs.
+        if ($this->event->exists) {
+            $layouts[] = Layout::view('orchid.branding.assets');
+            $layouts[] = Layout::block(EventBrandingLayout::class)
+                ->title(__('Branding'))
+                ->description($this->brandingDescription());
+        }
+
+        return $layouts;
+    }
+
+    private function brandingDescription(): string
+    {
+        $base = __(
+            'A logo only. On a node locked to this event the event mark replaces the organization mark in the '
+            .'application header, the browser tab icon, and the desktop window icon, so staff who know the event but '
+            .'not the company producing it can still tell which app they are in. Colors stay the organization\'s.'
+        );
+
+        $organizationId = $this->event->organization_id !== null
+            ? (string) $this->event->organization_id
+            : null;
+
+        $lock = $this->brandingLockReason($organizationId);
+
+        return $lock !== null ? $base.' '.$lock : $base;
     }
 
     public function save(Request $request, Event $event): RedirectResponse
@@ -177,6 +224,14 @@ class EventEditScreen extends Screen
                 'event.ic_department_id' => $exception->getMessage(),
             ]);
         }
+
+        $this->applyBrandingAsset(
+            $request,
+            $event,
+            Attachment::BRANDING_SLOT_EVENT_LOGO,
+            'branding.logo',
+            'branding.remove_logo',
+        );
 
         Toast::info(__('Event was saved.'));
 

@@ -165,6 +165,51 @@ class BrandingOrchidTest extends TestCase
         $this->assertDatabaseHas('attachments', ['id' => $attachmentId]);
     }
 
+    public function test_an_upload_php_itself_rejected_is_reported_against_the_field(): void
+    {
+        /*
+         * PHP's `upload_max_filesize` defaults to 2M, which is the branding
+         * ceiling exactly, so a logo at the top of its permitted range arrives
+         * as an `UploadedFile` that already failed: no temp path, and
+         * `getRealPath()` returning `false`.
+         *
+         * Reading that path produced "file_get_contents(.../public): Failed to
+         * open stream: Permission denied" — an error naming the document root
+         * rather than the upload, with nothing in it to tell an operator their
+         * file was too large for the server. The reason belongs on the field.
+         */
+        Storage::fake('attachments');
+
+        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+
+        $payload = $this->organizationPayload($organization);
+        $payload['branding']['full_lockup'] = new UploadedFile(
+            path: UploadedFile::fake()->image('lockup.png')->getRealPath(),
+            originalName: 'lockup.png',
+            mimeType: 'image/png',
+            error: UPLOAD_ERR_INI_SIZE,
+            test: false,
+        );
+
+        $response = $this->actingAs($this->admin())
+            ->from(route('platform.organizations.edit', $organization))
+            ->post(
+                route('platform.organizations.edit', ['organization' => $organization, 'method' => 'save']),
+                $payload,
+            )
+            ->assertSessionHasErrors('branding.full_lockup');
+
+        $message = (string) session('errors')->first('branding.full_lockup');
+
+        $this->assertStringContainsString('could not be uploaded', $message);
+        $this->assertStringNotContainsString('Permission denied', $message);
+        $this->assertStringNotContainsString('public', $message);
+
+        $this->assertNull($organization->fresh()->branding_full_lockup_attachment_id);
+
+        unset($response);
+    }
+
     public function test_an_svg_logo_is_refused_from_orchid_too(): void
     {
         Storage::fake('attachments');

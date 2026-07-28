@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 
 import {
   MERIDIAN_DEFAULT_PALETTE,
@@ -11,10 +11,12 @@ import {
   BRANDING_SLOTS,
   BrandingRejectedError,
   describeFailure,
+  listEventBranding,
   previewOrganizationPalette,
   previewTokens,
   saveOrganizationBranding,
   type ContrastFailure,
+  type EventBrandingSummary,
 } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
 import { brandingState, loadBrandingProfile } from "@/branding/brandingProfile";
@@ -75,6 +77,50 @@ const logos = reactive<{ fullLockup: string | null; compactMark: string | null }
   fullLockup: null,
   compactMark: null,
 });
+
+/**
+ * The organization's events and their marks (BRAND-028).
+ *
+ * Fetched here rather than read off the branding profile: that profile is
+ * unauthenticated and publishes only the event an install is locked to, so the
+ * full list lives behind a session.
+ *
+ * A failure is held rather than thrown. An organizer who cannot reach the event
+ * list can still edit the palette and the organization's own logos, and taking
+ * the whole screen down over a section would be the worse trade.
+ */
+const events = ref<readonly EventBrandingSummary[]>([]);
+const eventsError = ref<string | null>(null);
+
+async function refreshEvents(): Promise<void> {
+  if (!canManage.value) {
+    return;
+  }
+
+  eventsError.value = null;
+
+  try {
+    events.value = await listEventBranding(props.organizationId);
+  } catch (error) {
+    eventsError.value =
+      error instanceof Error
+        ? error.message
+        : "Unable to load this organization's events.";
+  }
+}
+
+onMounted(() => void refreshEvents());
+
+function onEventLogoChanged(eventId: string, url: string | null): void {
+  events.value = events.value.map((event) =>
+    event.event_id === eventId ? { ...event, logo_url: url } : event,
+  );
+
+  // The header, tab icon, and window icon of an install locked to this event
+  // read the mark from the branding profile, so re-resolve rather than leave
+  // them on the previous one until a reload.
+  void loadBrandingProfile(props.organizationId);
+}
 
 const failures = ref<readonly ContrastFailure[]>([]);
 const previewChecked = ref(false);
@@ -300,6 +346,50 @@ function resetToDefaults(): void {
           A logo change saves immediately and is audited. With no logo, Meridian
           renders the generated lettermark shown above.
         </p>
+      </fieldset>
+
+      <!--
+        Event marks (BRAND-028). Separate from the organization's own logos
+        because they answer a different question: the logos above are who
+        produces this, and these are what an install locked to one event shows
+        the staff working it.
+      -->
+      <fieldset
+        v-if="canManage"
+        data-section="event-logos"
+        :disabled="busy"
+      >
+        <legend>Event logos</legend>
+
+        <p class="branding-admin__note">
+          On a node locked to one of these events, the event's logo replaces the
+          organization mark in the application header, the browser tab icon, and
+          the desktop window icon. Staff who know the event but not the company
+          producing it can still tell which app they are in. An event with no
+          logo shows the organization mark, and nodes not locked to an event are
+          never affected.
+        </p>
+
+        <p v-if="eventsError" class="branding-admin__blocked" role="alert">
+          {{ eventsError }}
+        </p>
+
+        <p v-else-if="events.length === 0" role="status">
+          This organization has no events yet. An event can carry a logo once it
+          has been created.
+        </p>
+
+        <BrandingLogoField
+          v-for="event in events"
+          :key="event.event_id"
+          :label="event.archived ? `${event.name} (archived)` : event.name"
+          description="Shown as the application mark, tab icon, and desktop window icon on any node locked to this event."
+          :slot="BRANDING_SLOTS.eventLogo"
+          :event-id="event.event_id"
+          :url="event.logo_url"
+          :lettermark="event.lettermark"
+          @changed="(url) => onEventLogoChanged(event.event_id, url)"
+        />
       </fieldset>
 
       <fieldset data-section="palette" :disabled="!canManage || busy">

@@ -2,8 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import { appConfigForUiMode, type UiMode } from "@/app/appConfig";
+import {
+  installBrandingProfileForTests,
+  MERIDIAN_PROFILE,
+  resetToMeridian,
+} from "@/branding/brandingProfile";
 import AppShell from "@/components/AppShell.vue";
-import { resetSelectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
+import {
+  FIXTURE_GATE_DEPARTMENT_ID,
+  FIXTURE_RANGERS_DEPARTMENT_ID,
+  resetSelectedFixtureDepartment,
+  selectFixtureDepartment,
+  selectedFixtureDepartment,
+} from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
@@ -27,6 +38,7 @@ function setDeviceOnLine(value: boolean): void {
 }
 
 afterEach(() => {
+  resetToMeridian();
   resetSelectedFixtureDepartment();
   setDeviceOnLine(true);
   window.localStorage.removeItem("meridian.ui.theme");
@@ -523,5 +535,235 @@ describe("AppShell fixed UI mode display", () => {
       "/assets/brand/meridian-mark.png",
     );
     expect(wrapper.get(".app-shell__mode-name").text()).toBe("Kiosk");
+  });
+});
+
+describe("AppShell event mark", () => {
+  const eventProfile = {
+    ...MERIDIAN_PROFILE,
+    organization_id: "org-1",
+    is_branded: true,
+    display_name: "Deep Harbor Collective",
+    compact_mark_url: "/branding/assets/org",
+    event: {
+      event_id: "event-1",
+      name: "Desert Bloom",
+      lettermark: "DB",
+      logo_url: "/branding/assets/event",
+    },
+  };
+
+  it("shows the locked event's logo instead of the organization mark", () => {
+    // BRAND-029: staff working the event know the event, not necessarily the
+    // company producing it.
+    installBrandingProfileForTests(eventProfile);
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(wrapper.get(".app-shell__mark").attributes("src")).toBe(
+      "/branding/assets/event",
+    );
+    expect(
+      document.querySelector('link[rel~="icon"]')?.getAttribute("href"),
+    ).toBe("/branding/assets/event");
+  });
+
+  it("shows the event's name beside the event's mark", () => {
+    // BRAND-030: the mark and the name identify the same party. An event logo
+    // beside the producing company's name asks a staff member to recognise
+    // something they have no reason to know.
+    installBrandingProfileForTests(eventProfile);
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(wrapper.get(".app-shell__product-name").text()).toBe("Desert Bloom");
+    expect(document.title).toContain("Desert Bloom");
+  });
+
+  it("drops the event name from the context block when the header carries it", () => {
+    // The same string twice in one bar, a few centimetres apart, is noise. The
+    // department is the part the header never carries.
+    installBrandingProfileForTests(eventProfile);
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+    const context = wrapper.get(".app-shell__context-text");
+
+    expect(context.get("p").text()).toBe("Rangers");
+    expect(context.find("span").exists()).toBe(false);
+  });
+
+  it("returns the event name to the context block when the header stops carrying it", () => {
+    installBrandingProfileForTests({
+      ...eventProfile,
+      event: { ...eventProfile.event, logo_url: null },
+    });
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(wrapper.get(".app-shell__product-name").text()).toBe(
+      "Deep Harbor Collective",
+    );
+    expect(wrapper.get(".app-shell__context-text span").text()).toBe(
+      "Local Field Event",
+    );
+  });
+
+  it("falls back to the organization mark when the event has no logo", () => {
+    installBrandingProfileForTests({
+      ...eventProfile,
+      event: { ...eventProfile.event, logo_url: null },
+    });
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(wrapper.get(".app-shell__mark").attributes("src")).toBe(
+      "/branding/assets/org",
+    );
+  });
+
+  it("keeps Meridian's mark and icon on an install with no branding at all", () => {
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(wrapper.get(".app-shell__mark").attributes("src")).toBe(
+      "/assets/brand/meridian-mark.png",
+    );
+    expect(
+      document.querySelector('link[rel~="icon"]')?.getAttribute("href"),
+    ).toBe("/favicon.ico");
+  });
+});
+
+describe("AppShell department marks", () => {
+  /** A profile giving Rangers a logo and leaving the others without one. */
+  function installDepartmentLogos(): void {
+    installBrandingProfileForTests({
+      ...MERIDIAN_PROFILE,
+      organization_id: "org-1",
+      departments: [
+        {
+          department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+          name: "Rangers",
+          accent: "#1f5f4b",
+          surface: null,
+          lettermark: "RA",
+          logo_url: "/branding/assets/rangers",
+        },
+      ],
+    });
+  }
+
+  it("shows the current department's logo beside the department and event names", () => {
+    installDepartmentLogos();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+    const context = wrapper.get(".app-shell__context");
+
+    expect(context.get(".app-shell__context-mark img").attributes("src")).toBe(
+      "/branding/assets/rangers",
+    );
+    expect(context.get(".app-shell__context-text p").text()).toBe("Rangers");
+  });
+
+  it("falls back to a lettermark for a department with no logo", async () => {
+    installDepartmentLogos();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+    await wrapper
+      .findAll(".app-shell__department-switch button")[3]!
+      .trigger("click");
+
+    const mark = wrapper.get(".app-shell__context-mark");
+    expect(mark.find("img").exists()).toBe(false);
+    // One word, so the lettermark is its first two letters — the same rule
+    // `App\Services\Branding\Lettermark` applies.
+    expect(mark.get(".brand-mark__lettermark").text()).toBe("DP");
+  });
+
+  it("offers the user's other departments as marks and never the current one", () => {
+    installDepartmentLogos();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+    const marks = wrapper.findAll(".app-shell__department-mark");
+
+    // Four fixture departments, minus the one currently selected.
+    expect(marks).toHaveLength(3);
+    expect(marks.map((mark) => mark.attributes("title"))).toEqual([
+      "Switch to Organizer",
+      "Switch to Gate",
+      "Switch to DPW",
+    ]);
+
+    // The mark is the whole control, so it carries the accessible name rather
+    // than being decorative the way the context mark is.
+    expect(marks[0]!.get(".brand-mark").attributes("aria-label")).toBe(
+      "Switch to Organizer",
+    );
+  });
+
+  it("marks a logo switcher and a lettermark switcher apart for styling", () => {
+    // A real logo is shown as itself: no button outline and no chip behind it.
+    // Two generated letters need an edge to read as something clickable, so
+    // the outline is drawn there and only there.
+    installDepartmentLogos();
+    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+    const byTitle = (title: string) =>
+      wrapper
+        .findAll(".app-shell__department-mark")
+        .find((mark) => mark.attributes("title") === title)!;
+
+    const rangers = byTitle("Switch to Rangers");
+    expect(rangers.attributes("data-mark")).toBe("logo");
+    expect(rangers.get(".brand-mark").attributes("data-mark")).toBe("logo");
+
+    const dpw = byTitle("Switch to DPW");
+    expect(dpw.attributes("data-mark")).toBe("lettermark");
+    expect(dpw.get(".brand-mark").attributes("data-mark")).toBe("lettermark");
+  });
+
+  it("switches department context when a header mark is clicked", async () => {
+    installDepartmentLogos();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(selectedFixtureDepartment.value.departmentId).toBe(
+      FIXTURE_RANGERS_DEPARTMENT_ID,
+    );
+
+    await wrapper.findAll(".app-shell__department-mark")[1]!.trigger("click");
+
+    expect(selectedFixtureDepartment.value.departmentId).toBe(
+      FIXTURE_GATE_DEPARTMENT_ID,
+    );
+    expect(wrapper.get(".app-shell__context-text p").text()).toBe("Gate");
+
+    // The department just left rejoins the row; the one just entered leaves it.
+    const titles = wrapper
+      .findAll(".app-shell__department-mark")
+      .map((mark) => mark.attributes("title"));
+    expect(titles).toContain("Switch to Rangers");
+    expect(titles).not.toContain("Switch to Gate");
+  });
+
+  it("keeps the labelled department switch in the user menu", async () => {
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+
+    const entries = wrapper.findAll(".app-shell__department-switch button");
+    expect(entries).toHaveLength(4);
+    expect(entries[0]!.text()).toContain("Organizer");
+  });
+
+  it("renders a mark for every department when no branding profile has loaded", () => {
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(
+      wrapper.get(".app-shell__context-mark .brand-mark__lettermark").text(),
+    ).toBe("RA");
+    expect(wrapper.findAll(".app-shell__department-mark")).toHaveLength(3);
   });
 });

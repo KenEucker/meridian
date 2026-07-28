@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { lettermarkFor } from "@/branding/lettermark";
+
 /**
  * Department identity badge (M15A.9; BRAND-010; UI implementation contract
  * 11.3; component library 5.1).
@@ -49,41 +51,6 @@ const props = withDefaults(
     label: null,
   },
 );
-
-const STOP_WORDS = new Set(["the", "of", "and", "a", "an", "for", "de", "la"]);
-
-/**
- * Mirrors `App\Services\Branding\Lettermark`. Duplicated rather than fetched
- * because a badge must render for a department the branding payload has never
- * mentioned — one with no branding profile at all — and a network round trip
- * to compute two letters would be absurd.
- */
-function lettermarkFor(name: string): string {
-  const candidates = name
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .split(/\s+/u)
-    .filter((word) => word.length > 0);
-
-  if (candidates.length === 0) {
-    return "?";
-  }
-
-  const meaningful = candidates.filter(
-    (word) => !STOP_WORDS.has(word.toLowerCase()),
-  );
-  const words = meaningful.length > 0 ? meaningful : candidates;
-
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-
-  return words
-    .slice(0, 3)
-    .map((word) => word.slice(0, 1))
-    .join("")
-    .toUpperCase();
-}
 
 const visibleLabel = computed(
   () => props.label ?? props.department.shortLabel ?? props.department.name,

@@ -43,15 +43,26 @@ withDefaults(
     </p>
 
     <header class="workflow-page-heading__card">
-      <div class="workflow-page-heading__title">
-        <p v-if="departmentName" class="workflow-page-heading__department">
-          {{ departmentName }}
-        </p>
-        <h1 :id="headingId">{{ title }}</h1>
-        <p v-if="description" class="workflow-page-heading__description">
-          {{ description }}
-        </p>
-        <slot name="under-title" />
+      <!--
+        The mark slot carries the identity of whatever this page is about — a
+        team's logo on Team Overview, for instance (BRAND-025). It sits beside
+        the heading strings rather than above them so the band does not grow a
+        row on a phone for a 2rem glyph.
+      -->
+      <div class="workflow-page-heading__identity">
+        <div v-if="$slots.mark" class="workflow-page-heading__mark">
+          <slot name="mark" />
+        </div>
+        <div class="workflow-page-heading__title">
+          <p v-if="departmentName" class="workflow-page-heading__department">
+            {{ departmentName }}
+          </p>
+          <h1 :id="headingId">{{ title }}</h1>
+          <p v-if="description" class="workflow-page-heading__description">
+            {{ description }}
+          </p>
+          <slot name="under-title" />
+        </div>
       </div>
 
       <div
@@ -112,6 +123,21 @@ withDefaults(
   border-radius: 8px;
   background: var(--m-surface-raised);
   box-shadow: var(--m-shadow-sm);
+}
+
+.workflow-page-heading__identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--m-space-3);
+  min-width: 0;
+}
+
+.workflow-page-heading__mark {
+  display: flex;
+  flex: none;
+  /* Optically aligned with the eyebrow rather than the top of the box, so the
+     mark reads as part of the heading rather than as a floating badge. */
+  margin-top: 0.1rem;
 }
 
 .workflow-page-heading__title {

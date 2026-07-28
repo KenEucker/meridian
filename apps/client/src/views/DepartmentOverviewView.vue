@@ -42,7 +42,6 @@ function onShiftChange(shiftId: string): void {
     title="Department Overview"
     :eyebrow="overview.context.departmentLabel"
     lede="Lead situational awareness for the selected shift."
-    :freshness="overview.context.dataFreshnessLabel"
   >
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>

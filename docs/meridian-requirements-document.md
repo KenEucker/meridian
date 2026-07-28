@@ -4306,6 +4306,34 @@ Logo uploads shall be constrained by permitted MIME type and maximum file size, 
 
 Typography customization shall not be part of this scope. Organizations and departments shall not select or upload fonts.
 
+### BRAND-025
+
+Teams shall be able to define a team logo. Teams shall not define an accent color, a surface background color, or any other branding value; those shall resolve from the department and organization branding profiles. A team logo shall be edited under the same authority as the department branding profile of the team's department.
+
+### BRAND-026
+
+The team logo shall appear where a team is identified on its own: the team overview, team lists and pickers, and team rosters. If the team has no logo, Meridian shall render a generated lettermark from the team name.
+
+### BRAND-027
+
+The department logo shall appear in the application header beside the department name and the event name, and the logos of the other departments the signed-in user belongs to shall appear in the header as controls that switch department context.
+
+### BRAND-028
+
+Events shall be able to define an event logo. Events shall not define an accent color, a surface background color, or any other branding value; those shall resolve from the organization branding profile. An event logo shall be edited under the same authority as the organization branding profile.
+
+### BRAND-029
+
+Where an install is locked to an event and that event has a logo, that logo and the event name shall replace the organization mark and name in the application header, the browser tab icon, and the document title, and the logo shall replace the organization mark in the desktop window icon. Where the install is not locked to an event, or the locked event has no logo, the organization mark and name shall be shown, falling back to Meridian's where the organization has no branding profile. Whether an install is locked to an event shall be read from the node, not from the signed-in user.
+
+### BRAND-030
+
+The mark and the name shall always identify the same party. A surface shall not present one party's mark beside another party's name.
+
+### BRAND-031
+
+Event branding shall not extend beyond the chrome named in BRAND-029. The organization palette, generated PDF exports, and system email shall continue to carry organization identity, every surface that is not event-locked shall continue to carry organization identity, and the surfaces BRAND-003 protects shall continue to carry Meridian's.
+
 ---
 
 ## 7.21 God Mode Console Requirements

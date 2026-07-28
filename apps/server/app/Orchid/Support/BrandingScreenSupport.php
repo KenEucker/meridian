@@ -7,8 +7,11 @@ namespace App\Orchid\Support;
 use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
+use App\Models\Event;
 use App\Models\Organization;
+use App\Models\Team;
 use App\Models\User;
+use App\Services\Branding\BrandingAssetLimits;
 use App\Services\Branding\BrandingAssetService;
 use App\Services\Branding\BrandingAuthorityException;
 use App\Services\Branding\BrandingGovernance;
@@ -19,8 +22,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Shared branding handling for the Orchid organization and department screens
- * (M15A.6, M15A.7).
+ * Shared branding handling for the Orchid organization, department, team, and
+ * event screens (M15A.6, M15A.7; BRAND-025, BRAND-028).
  *
  * The two screens do the same four things — read the current profile into the
  * form, apply a logo upload, apply a logo removal, and turn a refusal into
@@ -43,7 +46,7 @@ trait BrandingScreenSupport
      */
     private function applyBrandingAsset(
         Request $request,
-        Organization|Department $owner,
+        Organization|Department|Team|Event $owner,
         string $slot,
         string $fileKey,
         string $removeKey,
@@ -68,16 +71,52 @@ trait BrandingScreenSupport
             return;
         }
 
+        $bytes = $this->uploadedBytes($file, $fileKey);
+
         $this->guardBranding(
-            fn () => $assets->put(
-                $owner,
-                $slot,
-                (string) file_get_contents($file->getRealPath()),
-                $actor,
-                AuditEvent::SOURCE_ORCHID,
-            ),
+            fn () => $assets->put($owner, $slot, $bytes, $actor, AuditEvent::SOURCE_ORCHID),
             $fileKey,
         );
+    }
+
+    /**
+     * Read an upload's bytes, or fail with the reason it cannot be read.
+     *
+     * An `UploadedFile` can arrive already failed — most often because PHP's
+     * own `upload_max_filesize` or `post_max_size` rejected it before Laravel
+     * ever saw it, which a branding logo at the top of its size range hits
+     * whenever those ini values are lower than {@see BrandingAssetLimits}. Such
+     * a file has no temp path: `getRealPath()` returns `false`, and passing
+     * that to `file_get_contents` resolved to the process working directory and
+     * failed with "Permission denied" against `public/` — a message about the
+     * wrong file, naming the wrong problem, with no hint that the upload was
+     * the thing that failed.
+     *
+     * @throws ValidationException
+     */
+    private function uploadedBytes(UploadedFile $file, string $fileKey): string
+    {
+        if (! $file->isValid()) {
+            throw ValidationException::withMessages([
+                $fileKey => [__(
+                    'The logo could not be uploaded: :reason',
+                    ['reason' => $file->getErrorMessage()],
+                )],
+            ]);
+        }
+
+        $path = $file->getRealPath();
+        $bytes = is_string($path) && $path !== '' && is_file($path)
+            ? @file_get_contents($path)
+            : false;
+
+        if ($bytes === false) {
+            throw ValidationException::withMessages([
+                $fileKey => [__('The uploaded logo could not be read. Please try the upload again.')],
+            ]);
+        }
+
+        return $bytes;
     }
 
     /**

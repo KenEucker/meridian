@@ -396,7 +396,6 @@ describe("department operations surfaces", () => {
     const { wrapper } = await mountAt(planningPath());
 
     expect(wrapper.get("#dept-ops-heading").text()).toBe("Planning Table");
-    expect(wrapper.text()).toContain("Offline aggregate cache");
     expect(wrapper.text()).toContain("Plan versus actual");
     expect(wrapper.text()).toContain("Signed up / assigned");
     expect(wrapper.text()).toContain("No target");

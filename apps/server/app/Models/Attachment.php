@@ -32,6 +32,12 @@ class Attachment extends Model
     /** Department branding logo assets (BRAND-010, BRAND-023). */
     public const MORPH_DEPARTMENT = 'department';
 
+    /** Team branding logo assets (BRAND-025, BRAND-023). */
+    public const MORPH_TEAM = 'team';
+
+    /** Event branding logo assets (BRAND-028, BRAND-023). */
+    public const MORPH_EVENT = 'event';
+
     /**
      * Branding logo slots. The slot is stored in `metadata_json` so one
      * attachable can hold more than one current asset — an organization has
@@ -43,6 +49,10 @@ class Attachment extends Model
     public const BRANDING_SLOT_COMPACT_MARK = 'compact_mark';
 
     public const BRANDING_SLOT_DEPARTMENT_LOGO = 'department_logo';
+
+    public const BRANDING_SLOT_TEAM_LOGO = 'team_logo';
+
+    public const BRANDING_SLOT_EVENT_LOGO = 'event_logo';
 
     public $incrementing = false;
 
@@ -127,7 +137,12 @@ class Attachment extends Model
     {
         return in_array(
             $this->attachable_type,
-            [self::MORPH_ORGANIZATION, self::MORPH_DEPARTMENT],
+            [
+                self::MORPH_ORGANIZATION,
+                self::MORPH_DEPARTMENT,
+                self::MORPH_TEAM,
+                self::MORPH_EVENT,
+            ],
             true,
         );
     }

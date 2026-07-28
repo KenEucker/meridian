@@ -177,15 +177,62 @@ export interface BrandingAssetResult {
   readonly url: string;
 }
 
-/** Branding logo slots (BRAND-004, BRAND-010). */
+/** Branding logo slots (BRAND-004, BRAND-010, BRAND-025). */
 export const BRANDING_SLOTS = {
   fullLockup: "full_lockup",
   compactMark: "compact_mark",
   departmentLogo: "department_logo",
+  teamLogo: "team_logo",
+  eventLogo: "event_logo",
 } as const;
 
 export type BrandingSlot =
   (typeof BRANDING_SLOTS)[keyof typeof BRANDING_SLOTS];
+
+/**
+ * Which entity a logo belongs to. Exactly one id is sent; the server picks the
+ * owner from whichever arrives, and the slot it will accept follows from that.
+ */
+export interface BrandingAssetOwner {
+  readonly organizationId?: string;
+  readonly departmentId?: string;
+  readonly teamId?: string;
+  readonly eventId?: string;
+}
+
+/** One event and the mark it carries, for the branding surface (BRAND-028). */
+export interface EventBrandingSummary {
+  readonly event_id: string;
+  readonly name: string;
+  readonly lettermark: string;
+  readonly archived: boolean;
+  readonly logo_url: string | null;
+}
+
+/**
+ * The organization's events and their marks.
+ *
+ * A separate authenticated call rather than a field on the branding profile:
+ * that profile is read unauthenticated so branding can resolve before a session
+ * does, and it publishes only the event an install is locked to. The full list
+ * of what an organization is running belongs behind a session.
+ */
+export async function listEventBranding(
+  organizationId: string,
+): Promise<readonly EventBrandingSummary[]> {
+  try {
+    const result = await meridianJson<{ events?: EventBrandingSummary[] }>(
+      `/api/organizations/${organizationId}/branding/events`,
+    );
+
+    // Defaulted rather than trusted. A 200 carrying a body this did not expect
+    // is not worth taking the branding screen down over, and the section
+    // renders its empty state from exactly the same value.
+    return result.events ?? [];
+  } catch (error) {
+    return rethrow(error);
+  }
+}
 
 /** Types and size the server will accept, mirrored for a pre-flight message. */
 export const BRANDING_ASSET_ACCEPT = "image/png,image/webp,image/jpeg";
@@ -199,7 +246,7 @@ export const BRANDING_ASSET_MAX_BYTES = 2 * 1024 * 1024;
  * inline to every signed-in surface.
  */
 export async function uploadBrandingAsset(
-  owner: { readonly organizationId?: string; readonly departmentId?: string },
+  owner: BrandingAssetOwner,
   slot: BrandingSlot,
   file: File,
 ): Promise<BrandingAssetResult> {
@@ -207,7 +254,11 @@ export async function uploadBrandingAsset(
   body.set("slot", slot);
   body.set("logo", file);
 
-  if (owner.departmentId) {
+  if (owner.eventId) {
+    body.set("event_id", owner.eventId);
+  } else if (owner.teamId) {
+    body.set("team_id", owner.teamId);
+  } else if (owner.departmentId) {
     body.set("department_id", owner.departmentId);
   } else if (owner.organizationId) {
     body.set("organization_id", owner.organizationId);
@@ -223,6 +274,23 @@ export async function uploadBrandingAsset(
   }
 }
 
+/** The single owner id a command carries, most specific first. */
+function ownerIdentity(owner: BrandingAssetOwner): Record<string, string> {
+  if (owner.eventId) {
+    return { event_id: owner.eventId };
+  }
+
+  if (owner.teamId) {
+    return { team_id: owner.teamId };
+  }
+
+  if (owner.departmentId) {
+    return { department_id: owner.departmentId };
+  }
+
+  return owner.organizationId ? { organization_id: owner.organizationId } : {};
+}
+
 /**
  * Clear the current logo for a slot.
  *
@@ -231,7 +299,7 @@ export async function uploadBrandingAsset(
  * preserving — or deleting — a superseded logo.
  */
 export async function removeBrandingAsset(
-  owner: { readonly organizationId?: string; readonly departmentId?: string },
+  owner: BrandingAssetOwner,
   slot: BrandingSlot,
 ): Promise<{ readonly slot: string; readonly attachment_id: null }> {
   try {
@@ -239,12 +307,7 @@ export async function removeBrandingAsset(
       "/api/commands/remove-branding-asset",
       {
         method: "POST",
-        body: JSON.stringify({
-          slot,
-          ...(owner.departmentId
-            ? { department_id: owner.departmentId }
-            : { organization_id: owner.organizationId }),
-        }),
+        body: JSON.stringify({ slot, ...ownerIdentity(owner) }),
       },
     );
   } catch (error) {

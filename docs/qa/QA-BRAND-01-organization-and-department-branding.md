@@ -8,9 +8,9 @@ This script covers the whole of Milestone 15A. A reviewer following it end to en
 
 ## Requirements covered
 
-`BRAND-001` through `BRAND-024`, including `BRAND-003A`.
+`BRAND-001` through `BRAND-031`, including `BRAND-003A`.
 
-Supporting references: UI style guide section 4; UI operating guide sections 6.3 and 8.3; UI implementation contract sections 10 and 11.3; component library specification sections 3 and 5.1; accessibility checklist section 6; data/API specification sections 10.1 and 10.6.
+Supporting references: UI style guide section 4; UI operating guide sections 6.3 and 8.3; UI implementation contract sections 10, 10.4, 11.3, and 11.3a; component library specification sections 3 and 5.1; accessibility checklist section 6; data/API specification sections 10.1 and 10.6.
 
 ## Environment
 
@@ -50,7 +50,7 @@ Supporting references: UI style guide section 4; UI operating guide sections 6.3
 5. **Set the display name and save.** Enter `Idaho Burners Collective` and save. Confirm the header, the Home control, and the browser tab title now say *Idaho Burners Collective*.
 6. **Upload the organization logos.** In the *Logos* section, use the **Full lockup** file control to upload the PNG, then the **Compact mark** control to upload it again. A logo saves as soon as it is chosen — there is no separate save for logos. Confirm the header mark changes. Then upload the SVG and confirm it is refused with a message naming the permitted types.
 7. **Replace and remove.** Upload a different PNG as the compact mark and confirm the header updates. Press **Remove logo** on the compact mark and confirm the header falls back — first to the full lockup, and if you remove that too, to a generated lettermark reading `IBC`. Confirm the empty slot in the form shows that same lettermark rather than an empty box.
-8. **Check the lettermark rule for a department.** Open any surface showing the **DPW** department badge. Confirm it renders a generated `DPW` lettermark, and that a screen reader (or the element's accessible name) reads the full department name, not the initials.
+8. **Check the lettermark rule for a department.** Open any surface showing the **DPW** department badge. Confirm it renders a generated `DP` lettermark — one word yields its first two letters — and that a screen reader (or the element's accessible name) reads the full department name, not the initials.
 9. **Set department branding.** Sign in as Dana and open *Department pages → Branding* (route `events.departments.branding`, path `/events/:eventId/departments/:departmentId/branding`). Upload the PNG as the department logo and confirm the department badge picks it up. Confirm the colors section offers only accent and surface background, and that the screen states that text, border, focus, status, severity, priority, and chart colors come from the organization palette. Set accent `#1f5f4b` and background `#eef6f2`, check contrast, and save.
 10. **Confirm department surface scoping.** As Dana, visit a Rangers operations surface (overview, logistics, teams, shifts, or equipment) and confirm the content area carries the department background. Then visit an IMS/incident surface, The Briefing, and an organizer-level surface, and confirm **none** of them are tinted. Confirm the Rangers badge still shows its accent on those untinted surfaces.
 11. **Confirm the department boundary.** As Dana, attempt to reach Gate's branding surface. Confirm it is refused. As Vera, confirm the branding surfaces are not editable.
@@ -63,6 +63,17 @@ Supporting references: UI style guide section 4; UI operating guide sections 6.3
 18. **Confirm identity in generated output.** As Olive, export a published policy document and confirm the export names *Idaho Burners Collective* as the producer. As Ingrid, print an incident to PDF and confirm the same.
 19. **Confirm state legibility.** With the branded palette and the Rangers background both active, review a screen showing several statuses and an IMS priority. Confirm every state is readable, carries a text label and an icon or structure, and is not distinguishable by color alone. Repeat in dark mode and confirm the department background is not applied there and the interface stays legible.
 20. **Confirm the audit trail.** As Gwen, review the audit log and confirm entries exist for the branding create, the branding updates, the logo add, the logo replace, and the logo removal, each naming the actor.
+21. **Confirm the department mark in the header.** As Dana, look at the header context block. Confirm the Rangers logo uploaded in step 9 renders immediately left of the department name and the event name. Remove the Rangers logo and confirm a generated `RA` lettermark renders in its place rather than a gap.
+22. **Confirm the header department switchers.** Still as Dana, confirm the marks of the other departments Dana belongs to render right-adjusted, immediately left of the user menu, and that Rangers — the department Dana is currently in — is **not** among them. Click one and confirm the context switches to that department, that the clicked mark leaves the row, and that Rangers appears in it. Confirm each mark's accessible name names the department it switches to. Confirm the labelled department switch is still in the user menu.
+23. **Change the department logo from department details.** As Dana, open *Admin* and confirm the *Department details* panel shows the current logo (or its lettermark). Press **Edit details**, upload a different PNG in the department logo control, and confirm the header mark and the department badge both change without a reload — and without pressing *Save department details*. Confirm the same logo is what the *Branding* surface now shows.
+24. **Set a team logo.** As Dana, open *Admin → Teams* and edit the **Dirt** team. Confirm the form offers a team logo and offers **no** team accent and no team background. Upload the PNG and confirm it saves on choose. Confirm the team row in the Teams table and the *Teams you lead* card now show that mark, and that Team Overview for Dirt shows it beside the heading. Confirm a team with no logo — for example Rangers Default — shows a generated lettermark in the same places.
+25. **Confirm the team branding boundary.** As Vera (staff, Rangers), confirm the team edit surface is not reachable. Attempt a team logo upload for a Gate team as Dana and confirm it is refused. Confirm a team logo cannot be uploaded into a department or organization slot, and that a department logo cannot be uploaded into a team slot.
+26. **Set an event logo.** As Olive, open *Branding* and find the **Event logos** section. Confirm it lists this organization's events and offers a logo for each, and no colors. Upload the PNG for the event this node is locked to. Confirm it saves on choose. Then open the same event in the Orchid console and confirm the Branding block there shows the same logo.
+27. **Confirm the event identity replaces the organization's.** On a node locked to that event, reload the app. Confirm the application header mark, the browser tab icon, and — on the desktop/Kiosk build — the running window and taskbar icon all show the **event** logo, not the organization's compact mark. Confirm the header name and the browser tab title now read the **event name**, not *Idaho Burners Collective* and not *Meridian*: the mark and the name identify the same party. Confirm the context block shows the department alone and no longer repeats the event name. Confirm the palette is unchanged, and that a generated PDF export and a system email still name *Idaho Burners Collective* — event identity is chrome only.
+28. **Confirm the fallback and the boundary.** Remove the event logo and confirm the mark **and the name** both fall back together: the organization's compact mark beside *Idaho Burners Collective*, then the full lockup, then the `IBC` lettermark. Confirm the event name returns to the context block when the header stops carrying it. Point the node at no event and confirm the organization identity returns. Point a node at an event belonging to a **different** organization and confirm this organization's chrome shows its own mark and never the stranger's.
+29. **Confirm the event mark on an unbranded organization.** Using an organization with no display name, palette, or logos, set a logo on its event and lock a node to it. Confirm the header, tab icon, and window icon show the event mark, and that login, the magic-link landing, node first-run setup, and Orchid still show Meridian's.
+30. **Confirm the event branding boundary.** As Dana, confirm the *Event logos* section is not offered and an event logo upload is refused. Confirm an event logo cannot be uploaded into an organization, department, or team slot, and that none of those can be uploaded into the event slot.
+31. **Confirm the event mark survives offline.** With the event logo set and the node locked to that event, load the app once, disable the network, and reload. Confirm the header and tab icon still show the event mark.
 
 ## Expected results
 
@@ -80,6 +91,18 @@ Supporting references: UI style guide section 4; UI operating guide sections 6.3
 - The desktop/Kiosk window and taskbar icon shows the organization mark while the install is locked to an event, and Meridian's mark otherwise. The installer and packaged application icon are always Meridian's.
 - No branding profile makes canonical status, severity, priority, or restriction unreadable or color-only, in light or dark mode, with or without a department background.
 - Branding create, update, and asset removal are audited.
+- The current department's mark renders in the header beside the department and event names, falling back to a lettermark.
+- The marks of the user's other departments render right-adjusted beside the user menu and switch department context on click. The current department is never among them, and the labelled switch stays in the user menu.
+- The department logo can be changed from department details as well as from the branding surface, and either one updates every surface holding the mark without a reload.
+- A team carries a logo and no other branding value, edited under the department's branding authority, and rendered wherever the team is identified on its own. A team with no logo renders a generated lettermark.
+- A logo cannot be uploaded into a slot that does not belong to its owner.
+- An event carries a logo and no other branding value, edited under organization branding authority.
+- On an install locked to an event with a logo, that logo and the event name are the application header identity, the browser tab icon, and the document title, and the logo is the desktop window icon — including for an organization that has set no branding of its own. The mark and the name always identify the same party; neither appears beside the other's.
+- The context block shows the department alone while the header carries the event, and the event name returns to it when the header stops.
+- The organization's palette, generated PDF exports, and system email are unaffected by event branding.
+- An install not locked to an event, or locked to an event with no logo, shows the organization mark. A node locked to another organization's event never leaks that event's mark.
+- Meridian's identity still survives on login, the magic-link landing, node first-run setup, the Orchid console, and desktop chrome and installers, with or without an event mark set.
+- The event mark renders from cache on an offline device.
 
 ## Evidence to capture
 
@@ -87,6 +110,9 @@ Supporting references: UI style guide section 4; UI operating guide sections 6.3
 - A screenshot of the refused contrast check showing the pair and both ratios.
 - Screenshots of a department-scoped surface with the background applied, and an IMS surface and The Briefing without it.
 - A screenshot of a lettermark badge for a department with no logo.
+- A screenshot of the header showing the current department's mark in the context block and the other departments' marks beside the user menu, before and after switching.
+- A screenshot of Team Overview and the Teams table showing a team logo, and one showing a team lettermark.
+- Screenshots of the header, browser tab, and desktop window icon on an event-locked install, before and after the event logo is set.
 - A screenshot of the login screen and the Orchid console after branding is applied.
 - The generated policy export and incident PDF showing the organization name.
 - A screenshot of the app rendering while offline.
