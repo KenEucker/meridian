@@ -1,3 +1,4 @@
+import { FIXTURE_RANGERS_DIRT_TEAM_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 
 import type {
@@ -273,6 +274,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: dayShiftId,
           title: "Ranger Dirt Day Shift",
+          teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
           teamLabel: "Dirt",
           startsAt: "2027-07-04T16:00:00.000Z",
           endsAt: "2027-07-04T22:00:00.000Z",
@@ -286,6 +288,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: swingShiftId,
           title: "Ranger Dirt Swing Shift",
+          teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
           teamLabel: "Dirt",
           startsAt: "2027-07-04T22:00:00.000Z",
           endsAt: "2027-07-05T04:00:00.000Z",
@@ -299,6 +302,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: overnightShiftId,
           title: "Ranger Command Overnight",
+          teamId: LOCAL_FIELD_FIXTURE.teamId,
           teamLabel: "Command",
           startsAt: "2027-07-04T04:00:00.000Z",
           endsAt: "2027-07-04T10:00:00.000Z",
@@ -346,6 +350,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: dayShiftId,
           title: "Ranger Dirt Day Shift",
+          teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
           teamLabel: "Dirt",
           startsAt: "2027-07-04T16:00:00.000Z",
           endsAt: "2027-07-04T22:00:00.000Z",
@@ -375,6 +380,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: dayShiftId,
           title: "Ranger Dirt Day Shift",
+          teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
           teamLabel: "Dirt",
           startsAt: "2027-07-04T16:00:00.000Z",
           endsAt: "2027-07-04T22:00:00.000Z",
@@ -388,6 +394,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
         {
           shiftId: swingShiftId,
           title: "Ranger Dirt Swing Shift",
+          teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
           teamLabel: "Dirt",
           startsAt: "2027-07-04T22:00:00.000Z",
           endsAt: "2027-07-05T04:00:00.000Z",

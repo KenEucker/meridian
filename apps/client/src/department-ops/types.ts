@@ -131,6 +131,11 @@ export interface LogisticsSearchContext {
 export interface LogisticsShiftCard {
   readonly shiftId: string;
   readonly title: string;
+  // The team is carried by id as well as label because a shift card is what
+  // tells the rest of the app which team a staff member is working for right
+  // now — a Field Report filed on shift records that team, and a label cannot
+  // be recorded against anything.
+  readonly teamId: string;
   readonly teamLabel: string;
   readonly startsAt: string;
   readonly endsAt: string;
