@@ -28,6 +28,16 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-BRAND-01-organization-and-department-branding.md`](QA-BRAND-01-organization-and-department-branding.md) | Organization palette/display name/logo replacement of Meridian identity with login, Orchid, and desktop preserved; blocking WCAG 2.1 AA validation with no auto-repair; department logo/accent/surface bounded to department-scoped surfaces; the organization-wide override switch; lettermark fallback; central authority and active-event freeze; audit; offline rendering; state legibility | M15A.14 |
 
+## Alpha 1 God Mode console script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-GOD-01-console-orientation-docs-changelog.md`](QA-GOD-01-console-orientation-docs-changelog.md) | Meridian orientation summary and the God-Mode-is-repair-tooling boundary replacing framework welcome content; the read-only attention list across configuration readiness, organizational data gaps, and unresolved sync conflicts, with resolve links and an explicit all-clear; the in-console Documentation page serving only `docs/operator/` offline with title/heading filtering and documentation-versus-build version; the version-grouped, unfiltered Changelog rendering offline from the packaged baseline; central-node-only refresh with degradation, event-window skip, and credential redaction; removal of external framework documentation/changelog links and the framework version badge | M15B.12 |
+
+Console *appearance* — logo, favicon, palette, typography, spacing, and the
+footer license and copyright range — is Milestone 15C and belongs to
+`QA-GOD-02`, not to this script.
+
 ## Alpha 1 Briefing script
 
 | ID | Coverage | Owning task |

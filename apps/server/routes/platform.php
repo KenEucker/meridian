@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Http\Controllers\Documents\DocumentExportController;
 use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
+use App\Orchid\Screens\Console\ChangelogScreen;
+use App\Orchid\Screens\Console\DocumentationScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
 use App\Orchid\Screens\Department\DepartmentListScreen;
 use App\Orchid\Screens\Document\DocumentFragmentEditScreen;
@@ -354,3 +356,20 @@ Route::screen('node-config', NodeConfigScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Node Configuration'), route('platform.node.config')));
+
+// Platform > Meridian > Documentation
+// Meridian's own operator documentation, served from content packaged with the
+// deployment rather than linked to an external framework site (GOD-012,
+// GOD-027).
+Route::screen('documentation', DocumentationScreen::class)
+    ->name('platform.documentation')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Documentation'), route('platform.documentation')));
+
+// Platform > Meridian > Changelog
+Route::screen('changelog', ChangelogScreen::class)
+    ->name('platform.changelog')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Changelog'), route('platform.changelog')));

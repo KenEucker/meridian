@@ -53,6 +53,55 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operator Documentation
+    |--------------------------------------------------------------------------
+    |
+    | The God Mode Documentation page renders operator documentation packaged
+    | with the deployment and never fetches it from a network service
+    | (GOD-012, GOD-014). `corepack pnpm run docs:package` copies docs/operator/
+    | here along with a manifest recording the Meridian version it was packaged
+    | from, which the page shows beside the running build version (GOD-017).
+    |
+    | Only docs/operator/ is packaged, so specification, QA, planning, and issue
+    | documents are not present to be served (GOD-015).
+    |
+    */
+
+    'operator_docs' => [
+        'path' => env('MERIDIAN_OPERATOR_DOCS_PATH', resource_path('operator-docs')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Changelog
+    |--------------------------------------------------------------------------
+    |
+    | The God Mode Changelog page renders a data file generated at release build
+    | time from repository history and packaged with the deployment, so it
+    | renders completely without network access (GOD-021).
+    |
+    | Only the central node refreshes from the source repository, and refresh is
+    | never required for the page to render (GOD-022 through GOD-025). The
+    | source-repository token is read-only in scope, is never displayed in the
+    | console, and is never written to logs (GOD-026).
+    |
+    */
+
+    'changelog' => [
+        'path' => env('MERIDIAN_CHANGELOG_PATH', resource_path('changelog/changelog.json')),
+
+        'refresh' => [
+            'enabled' => filter_var(env('MERIDIAN_CHANGELOG_REFRESH_ENABLED', true), FILTER_VALIDATE_BOOL),
+            'repository' => env('MERIDIAN_CHANGELOG_REPOSITORY', 'KenEucker/meridian'),
+            'api_url' => env('MERIDIAN_CHANGELOG_API_URL', 'https://api.github.com'),
+            'token' => env('MERIDIAN_CHANGELOG_TOKEN'),
+            'request_timeout_seconds' => (float) env('MERIDIAN_CHANGELOG_TIMEOUT_SECONDS', 5),
+            'cache_minutes' => (int) env('MERIDIAN_CHANGELOG_CACHE_MINUTES', 60),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Node Configuration
     |--------------------------------------------------------------------------
     |
