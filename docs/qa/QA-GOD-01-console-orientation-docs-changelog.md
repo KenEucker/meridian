@@ -6,7 +6,7 @@ Prove that the God Mode console is about Meridian rather than about the administ
 
 This script covers the whole of Milestone 15B. A reviewer following it end to end exercises the orientation summary, all three attention groups in both degraded and healthy states, the read-only guarantee, the Documentation page and its exposure boundary, the packaged changelog, and central-node-only refresh with its degradation paths.
 
-The console's *appearance* is out of scope here. Meridian's logo, favicon, palette, typography, and footer license are Milestone 15C and are covered by `QA-GOD-02`. Expect the console to still look like a default framework installation while following this script, including a footer stating the framework's MIT license.
+The console's *appearance* is out of scope here. Meridian's logo, favicon, palette, typography, spacing, and footer license are Milestone 15C and are covered by [`QA-GOD-02`](QA-GOD-02-console-visual-identity.md). Record an appearance failure there, not here.
 
 ## Requirements covered
 

@@ -1,0 +1,206 @@
+/*
+ * Meridian standalone server-rendered surfaces (M15C.6; GOD-038).
+ *
+ * Login, magic-link, logout, and node first-run setup are rendered by the
+ * server outside both the Vue product shell and the God Mode console, so they
+ * have no shell to inherit an identity from. This file gives them the same
+ * identity the console gets from `meridian-console.css`: the shared Meridian
+ * tokens, the brand lockup, and the same focus and contrast behavior.
+ *
+ * These surfaces permanently render Meridian's own palette. They are the
+ * surfaces BRAND-003 protects — a person signing in may not belong to any
+ * organization yet, and a node being set up has no organization at all — so
+ * nothing here resolves an organization branding profile.
+ *
+ * Load order is `meridian-tokens.css` then this file.
+ */
+
+:root {
+    color-scheme: light dark;
+}
+
+body {
+    background: var(--m-surface-app);
+    color: var(--m-text-primary);
+    font-family: var(--m-font-body);
+    font-size: var(--m-text-md);
+    line-height: 1.5;
+    margin: 0;
+    min-height: 100vh;
+}
+
+main {
+    inline-size: min(100% - 2rem, 42rem);
+    margin: 0 auto;
+    padding-block: var(--m-space-7);
+}
+
+/* Brand lockup, matching the console navigation and the product shell
+   masthead: the Meridian mark and the product name (GOD-030, GOD-038). */
+.meridian-brand {
+    align-items: center;
+    color: var(--m-text-primary);
+    display: inline-flex;
+    gap: var(--m-space-3);
+    margin-bottom: var(--m-space-6);
+    text-decoration: none;
+}
+
+.meridian-brand__mark {
+    block-size: 2.5rem;
+    flex: none;
+    inline-size: 2.5rem;
+    object-fit: contain;
+}
+
+.meridian-brand__product {
+    font-family: var(--m-font-heading);
+    font-size: var(--m-text-xl);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+h1 {
+    font-family: var(--m-font-heading);
+    font-size: var(--m-text-xl);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 var(--m-space-4);
+}
+
+h2 {
+    font-family: var(--m-font-heading);
+    font-size: var(--m-text-lg);
+    font-weight: 600;
+    margin: 0;
+}
+
+.lede,
+.help {
+    color: var(--m-text-muted);
+    margin: 0 0 var(--m-space-4);
+}
+
+.help {
+    font-size: var(--m-text-sm);
+    font-weight: 400;
+}
+
+form,
+.panel {
+    background: var(--m-surface-base);
+    border: 1px solid var(--m-border-subtle);
+    border-radius: var(--m-radius-md);
+    box-shadow: var(--m-shadow-sm);
+    display: grid;
+    gap: var(--m-space-4);
+    padding: var(--m-space-5);
+}
+
+label {
+    display: grid;
+    font-size: var(--m-text-sm);
+    font-weight: 600;
+    gap: var(--m-space-1);
+}
+
+input,
+select {
+    background: var(--m-surface-base);
+    border: 1px solid var(--m-border-default);
+    border-radius: var(--m-radius-sm);
+    color: var(--m-text-primary);
+    font: inherit;
+    font-size: var(--m-text-sm);
+    min-block-size: 2.5rem;
+    padding: var(--m-space-2) var(--m-space-3);
+}
+
+button {
+    background: var(--m-action-primary-bg);
+    border: 0;
+    border-radius: var(--m-radius-sm);
+    color: var(--m-action-primary-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--m-text-sm);
+    font-weight: 700;
+    inline-size: fit-content;
+    min-block-size: 2.5rem;
+    padding: var(--m-space-2) var(--m-space-4);
+}
+
+button:hover {
+    background: color-mix(in srgb, var(--m-action-primary-bg) 86%, var(--m-text-primary));
+}
+
+a {
+    color: var(--m-text-secondary);
+}
+
+/* One visible focus indicator for every control, in the focus token
+   (accessibility checklist section 6). */
+:is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--m-focus-ring);
+    outline-offset: 2px;
+}
+
+/* Status and errors are carried by wording, an edge marker, and placement as
+   well as by color. They sit on the raised surface rather than on the canvas
+   because that is the background their marker color is contrast-validated
+   against as a non-text indicator. Their text is the ordinary foreground: a
+   status color is an indicator here, not a label. */
+.status,
+.errors {
+    background: var(--m-surface-base);
+    border-inline-start: 3px solid var(--m-status-neutral);
+    border-radius: var(--m-radius-sm);
+    color: var(--m-text-primary);
+    font-size: var(--m-text-sm);
+    margin: 0 0 var(--m-space-4);
+    padding: var(--m-space-3);
+}
+
+.errors {
+    border-inline-start-color: var(--m-status-danger);
+    padding-inline-start: var(--m-space-6);
+}
+
+.alternatives {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--m-space-4);
+    margin-block: var(--m-space-4);
+}
+
+dl {
+    display: grid;
+    gap: var(--m-space-2) var(--m-space-4);
+    grid-template-columns: max-content 1fr;
+    margin: 0;
+}
+
+dt {
+    font-weight: 700;
+}
+
+dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.meridian-footer {
+    color: var(--m-text-muted);
+    font-size: var(--m-text-xs);
+    line-height: 1.5;
+    margin-block: var(--m-space-6);
+    text-align: center;
+}
+
+.meridian-footer p {
+    margin-bottom: var(--m-space-1);
+}
+
+.meridian-footer a {
+    color: var(--m-text-secondary);
+}

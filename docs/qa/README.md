@@ -34,9 +34,10 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 |---|---|---|
 | [`QA-GOD-01-console-orientation-docs-changelog.md`](QA-GOD-01-console-orientation-docs-changelog.md) | Meridian orientation summary and the God-Mode-is-repair-tooling boundary replacing framework welcome content; the read-only attention list across configuration readiness, organizational data gaps, and unresolved sync conflicts, with resolve links and an explicit all-clear; the in-console Documentation page serving only `docs/operator/` offline with title/heading filtering and documentation-versus-build version; the version-grouped, unfiltered Changelog rendering offline from the packaged baseline; central-node-only refresh with degradation, event-window skip, and credential redaction; removal of external framework documentation/changelog links and the framework version badge | M15B.12 |
 
-Console *appearance* — logo, favicon, palette, typography, spacing, and the
-footer license and copyright range — is Milestone 15C and belongs to
-`QA-GOD-02`, not to this script.
+| [`QA-GOD-02-console-visual-identity.md`](QA-GOD-02-console-visual-identity.md) | Meridian palette, typography, and spacing resolved from the shared design tokens in place of framework defaults; the Meridian logo in expanded and collapsed navigation and the Meridian favicon across console, authentication, and setup; a footer stating the repository's actual license, a 2026-to-present copyright range, and the Meridian build version with no framework license, version, credit, or link left anywhere; login, magic-link, sign-out, and node first-run setup brought onto the same identity; an active organization branding profile leaving the console unchanged; contrast and focus visibility across tables, forms, badges, and disabled states in both themes; the vendor view override inventory | M15C.10 |
+
+The two God Mode scripts split by *content* and *appearance*: `QA-GOD-01`
+covers what the console says, `QA-GOD-02` covers how it looks.
 
 ## Alpha 1 Briefing script
 
