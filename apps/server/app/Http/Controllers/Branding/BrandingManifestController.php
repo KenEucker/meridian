@@ -44,6 +44,22 @@ final class BrandingManifestController extends Controller
             'stylesheet_url' => $profile->organizationId !== null
                 ? route('branding.stylesheet', ['organization' => $profile->organizationId])
                 : null,
+            // The event this install is locked to, so a cached copy can tell
+            // afterwards which mark its chrome is supposed to be carrying
+            // (BRAND-028).
+            'locked_event_id' => $profile->lockedEvent?->eventId,
+            'locked_event_name' => $profile->lockedEvent?->name,
+            /*
+             * The name that goes with the chrome mark, which is the event's
+             * where one is showing (BRAND-029).
+             *
+             * Alongside `display_name` rather than replacing it: that field is
+             * the organization's identity, and it is what a cached copy needs
+             * for anything that leaves the product — a generated export or a
+             * message naming an event but no organization gives its recipient
+             * no accountable party.
+             */
+            'chrome_display_name' => $profile->chromeIdentityName(),
             'assets' => $this->assets($profile),
         ]);
     }
@@ -58,9 +74,24 @@ final class BrandingManifestController extends Controller
             Attachment::BRANDING_SLOT_COMPACT_MARK => $profile->compactMarkAttachmentId,
         ];
 
+        // The locked event's mark is what the chrome on this install actually
+        // renders, so a device warming its cache needs the bytes before it goes
+        // offline as much as it needs the organization's (BRAND-022,
+        // BRAND-028).
+        if ($profile->lockedEvent?->logoAttachmentId !== null) {
+            $ids[Attachment::BRANDING_SLOT_EVENT_LOGO] = $profile->lockedEvent->logoAttachmentId;
+        }
+
         foreach ($profile->departments as $branding) {
             if ($branding->logoAttachmentId !== null) {
                 $ids[Attachment::BRANDING_SLOT_DEPARTMENT_LOGO.':'.$branding->departmentId]
+                    = $branding->logoAttachmentId;
+            }
+        }
+
+        foreach ($profile->teams as $branding) {
+            if ($branding->logoAttachmentId !== null) {
+                $ids[Attachment::BRANDING_SLOT_TEAM_LOGO.':'.$branding->teamId]
                     = $branding->logoAttachmentId;
             }
         }
@@ -106,6 +137,12 @@ final class BrandingManifestController extends Controller
             $profile->identityName(),
             $profile->palette->toArray(),
             $profile->departmentOverridesEnabled,
+            // Re-pointing a node at a different event changes what its chrome
+            // renders without changing a single colour, so the lock is part of
+            // what a cached copy has to match.
+            $profile->lockedEvent?->eventId,
+            $profile->lockedEvent?->name,
+            $profile->lockedEvent?->logoAttachmentId,
             array_map(
                 static fn ($branding): array => [
                     $branding->departmentId,

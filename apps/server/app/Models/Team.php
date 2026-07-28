@@ -36,6 +36,8 @@ class Team extends Model
         'code',
         'description',
         'is_default',
+        'branding_logo_attachment_id',
+        'branding_updated_at',
         'archived_at',
     ];
 
@@ -73,12 +75,28 @@ class Team extends Model
         return [
             'is_default' => 'boolean',
             'archived_at' => 'datetime',
+            'branding_updated_at' => 'datetime',
         ];
     }
 
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function brandingLogo(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'branding_logo_attachment_id');
+    }
+
+    /**
+     * Whether this team has a logo of its own, which is the only branding a
+     * team carries (BRAND-025). Used to choose between the stored logo and a
+     * generated lettermark, not to decide whether the team may be shown.
+     */
+    public function hasBrandingProfile(): bool
+    {
+        return $this->branding_logo_attachment_id !== null;
     }
 
     public function memberships(): HasMany

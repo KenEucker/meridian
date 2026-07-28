@@ -2,6 +2,13 @@
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
+import BrandingLogoField from "@/branding/BrandingLogoField.vue";
+import {
+  findTeamBranding,
+  loadBrandingProfile,
+} from "@/branding/brandingProfile";
+import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
 import {
   archiveDepartmentTeam,
   canAdministerDepartment,
@@ -66,6 +73,37 @@ watch(
 );
 
 const heading = computed(() => (isCreate.value ? "Create team" : "Edit team"));
+
+/**
+ * The team's mark (BRAND-025).
+ *
+ * A logo and nothing else: accent and surface background belong to the
+ * department this team sits in, so a team never re-colors a surface the
+ * department already colors.
+ *
+ * Absent while creating, for the reason the department screens defer theirs —
+ * the asset attaches to a team id that does not exist until the first save.
+ */
+const branding = computed(() =>
+  isCreate.value ? null : findTeamBranding(teamId.value),
+);
+const logoUrl = ref<string | null>(null);
+
+watch(
+  branding,
+  (current) => {
+    logoUrl.value = current?.logo_url ?? null;
+  },
+  { immediate: true },
+);
+
+async function onLogoChanged(url: string | null): Promise<void> {
+  logoUrl.value = url;
+
+  // Re-resolve so the team overview, rosters, and team pickers holding this
+  // mark pick it up without a reload.
+  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+}
 
 const teamsIndexRoute = computed(() => ({
   name: "events.departments.teams.index",
@@ -181,6 +219,24 @@ async function onRestore(): Promise<void> {
           Description
           <textarea v-model="draft.description" rows="4" />
         </label>
+
+        <!--
+          The logo saves on upload through the branding asset command rather
+          than with this form, so "Save" is never holding an unsaved logo.
+        -->
+        <BrandingLogoField
+          v-if="!isCreate"
+          label="Team logo"
+          description="Shown wherever this team is named on its own: the team overview, team rosters and pickers, and team shift rows. Saved as soon as you choose a file."
+          :slot="BRANDING_SLOTS.teamLogo"
+          :team-id="teamId"
+          :url="logoUrl"
+          :lettermark="branding?.lettermark ?? draft.code.slice(0, 2).toUpperCase()"
+          @changed="onLogoChanged"
+        />
+        <p v-else class="dept-team-edit__hint">
+          A team logo can be uploaded once the team has been created.
+        </p>
 
         <p v-if="existing?.isDefault" class="dept-team-edit__hint">
           This is the department default team. It can be renamed but cannot be

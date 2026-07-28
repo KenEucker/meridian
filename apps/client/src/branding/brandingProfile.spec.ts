@@ -4,8 +4,11 @@ import {
   MERIDIAN_PROFILE,
   applyBrandingProfile,
   brandingState,
+  chromeIdentityName,
+  chromeMarkUrl,
   departmentBrandingTokens,
   findDepartmentBranding,
+  findTeamBranding,
   loadBrandingProfile,
   readCachedProfile,
   resetToMeridian,
@@ -49,6 +52,16 @@ const harborProfile: BrandingProfilePayload = {
       logo_url: null,
     },
   ],
+  teams: [
+    {
+      team_id: "team-dirt",
+      department_id: "dept-rangers",
+      name: "Dirt",
+      lettermark: "DI",
+      logo_url: "/branding/assets/team-dirt",
+    },
+  ],
+  event: null,
 };
 
 describe("branding profile", () => {
@@ -232,5 +245,118 @@ describe("branding profile", () => {
     expect(departmentBrandingTokens("dept-gate")).toEqual({});
     expect(findDepartmentBranding("dept-gate")).toBeNull();
     expect(findDepartmentBranding("dept-rangers")?.lettermark).toBe("RA");
+  });
+
+  it("resolves a team's mark and reports nothing for a team without one", () => {
+    // Only teams that have uploaded a logo are in the payload; a null answer
+    // is the common case, and every consumer falls back to a lettermark.
+    applyBrandingProfile(harborProfile);
+
+    expect(findTeamBranding("team-dirt")?.logo_url).toBe(
+      "/branding/assets/team-dirt",
+    );
+    expect(findTeamBranding("team-dirt")?.department_id).toBe("dept-rangers");
+    expect(findTeamBranding("team-greeters")).toBeNull();
+  });
+
+  it("prefers the locked event's mark for product chrome", () => {
+    // BRAND-029: on an event-locked install the event's mark is the one its
+    // staff can recognise, so it replaces the organization's in the header,
+    // the tab icon, and the window icon.
+    const eventProfile: BrandingProfilePayload = {
+      ...harborProfile,
+      event: {
+        event_id: "event-1",
+        name: "Desert Bloom",
+        lettermark: "DB",
+        logo_url: "/branding/assets/event",
+      },
+    };
+
+    expect(chromeMarkUrl(eventProfile)).toBe("/branding/assets/event");
+
+    // BRAND-030: the name comes with it. A surface never shows one party's
+    // mark beside another party's name.
+    expect(chromeIdentityName(eventProfile)).toBe("Desert Bloom");
+
+    // Uploading an event mark is a deliberate act, so it shows even for an
+    // organization that never replaced Meridian's identity (BRAND-028).
+    expect(
+      chromeMarkUrl({ ...eventProfile, is_branded: false }),
+    ).toBe("/branding/assets/event");
+    expect(
+      chromeIdentityName({ ...eventProfile, is_branded: false }),
+    ).toBe("Desert Bloom");
+  });
+
+  it("keys the event identity on the logo, not on being event-locked", () => {
+    // An event that has set nothing has not asked to be presented as the
+    // product; the install reads as it did before the event existed.
+    const noLogo: BrandingProfilePayload = {
+      ...harborProfile,
+      event: {
+        event_id: "event-1",
+        name: "Desert Bloom",
+        lettermark: "DB",
+        logo_url: null,
+      },
+    };
+
+    expect(chromeIdentityName(noLogo)).toBe("Deep Harbor Collective");
+    expect(chromeMarkUrl(noLogo)).toBe(harborProfile.compact_mark_url);
+
+    expect(
+      chromeIdentityName({ ...noLogo, is_branded: false }),
+    ).toBe("Meridian");
+  });
+
+  it("falls back to the organization mark, compact before lockup", () => {
+    expect(chromeMarkUrl(harborProfile)).toBe(harborProfile.compact_mark_url);
+
+    expect(
+      chromeMarkUrl({ ...harborProfile, compact_mark_url: null }),
+    ).toBe(harborProfile.full_lockup_url);
+
+    // Locked to an event that has no mark of its own: still the organization's.
+    expect(
+      chromeMarkUrl({
+        ...harborProfile,
+        event: {
+          event_id: "event-1",
+          name: "Desert Bloom",
+          lettermark: "DB",
+          logo_url: null,
+        },
+      }),
+    ).toBe(harborProfile.compact_mark_url);
+
+    // Nothing to show: the caller renders a lettermark or Meridian's own mark.
+    expect(
+      chromeMarkUrl({
+        ...harborProfile,
+        is_branded: false,
+        compact_mark_url: null,
+        full_lockup_url: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("reads a cache entry written before teams were in the payload", () => {
+    // A device offline across an upgrade reads exactly this. The entry still
+    // carries the organization's identity, which is what BRAND-022 is for, so
+    // the missing collection is defaulted rather than the entry discarded.
+    const { teams: _teams, ...withoutTeams } = harborProfile;
+    window.localStorage.setItem(
+      "meridian.branding.org-harbor",
+      JSON.stringify(withoutTeams),
+    );
+
+    const cached = readCachedProfile("org-harbor");
+
+    expect(cached?.display_name).toBe("Deep Harbor Collective");
+    expect(cached?.teams).toEqual([]);
+
+    applyBrandingProfile(cached!);
+    expect(findTeamBranding("team-dirt")).toBeNull();
   });
 });

@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import BrandMark from "@/branding/BrandMark.vue";
+import { findTeamBranding } from "@/branding/brandingProfile";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import {
   attendanceStateLabel,
@@ -21,6 +23,14 @@ const overview = computed<TeamOverviewModel | null>(() =>
     typeof route.params.teamId === "string" ? route.params.teamId : null,
   ),
 );
+/**
+ * This team's own mark (BRAND-025). Null for a team that has uploaded none,
+ * which BrandMark renders as a lettermark from the team name.
+ */
+const teamBranding = computed(() =>
+  overview.value ? findTeamBranding(overview.value.team.id) : null,
+);
+
 const routeParams = computed(() => ({
   eventId: String(route.params.eventId ?? ""),
   departmentId: String(route.params.departmentId ?? ""),
@@ -49,6 +59,15 @@ function onTeamChange(event: Event): void {
   >
     <template #nav>
       <RouterLink :to="{ name: 'staff.me' }">Back To Me</RouterLink>
+    </template>
+
+    <template v-if="overview" #mark>
+      <BrandMark
+        :name="overview.team.name"
+        :logo-url="teamBranding?.logo_url ?? null"
+        :lettermark="teamBranding?.lettermark ?? null"
+        size="lg"
+      />
     </template>
 
     <p v-if="!overview" class="team-overview__restricted" role="status">

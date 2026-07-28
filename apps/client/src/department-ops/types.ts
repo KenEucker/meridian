@@ -40,7 +40,6 @@ export interface DepartmentOpsContext {
   readonly selectedTeamId: string | null;
   readonly selectedTeamLabel: string | null;
   readonly asOf: string;
-  readonly dataFreshnessLabel: string;
 }
 
 export interface CapabilityContext {

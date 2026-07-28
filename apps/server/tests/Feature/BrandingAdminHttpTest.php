@@ -82,7 +82,7 @@ class BrandingAdminHttpTest extends TestCase
 
     public function test_ordinary_staff_cannot_edit_branding(): void
     {
-        [$organization, , ] = $this->departmentWith('department_lead');
+        [$organization] = $this->departmentWith('department_lead');
         $stranger = User::factory()->create();
 
         $this->actingAs($stranger)
@@ -290,6 +290,222 @@ class BrandingAdminHttpTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_a_department_lead_can_upload_replace_and_remove_a_team_logo(): void
+    {
+        // BRAND-025: a team's only branding value, edited under the
+        // department's branding authority rather than a permission of its own.
+        Storage::fake('attachments');
+
+        [, $department, $departmentLead] = $this->departmentWith('department_lead');
+        $team = $this->teamIn($department, 'Dirt');
+
+        $uploaded = $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'team_id' => $team->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+                'logo' => UploadedFile::fake()->image('dirt.png', 200, 200),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('slot', Attachment::BRANDING_SLOT_TEAM_LOGO);
+
+        $attachmentId = (string) $uploaded->json('attachment_id');
+        $this->assertSame($attachmentId, (string) $team->fresh()->branding_logo_attachment_id);
+        $this->assertNotNull($team->fresh()->branding_updated_at);
+
+        // The audit record is scoped to the team's department, not to no
+        // department at all, so a department's branding history is complete.
+        $added = AuditEvent::query()->where('action', 'branding.asset_added')->sole();
+        $this->assertSame($department->id, $added->department_id);
+
+        $replacement = $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'team_id' => $team->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+                'logo' => UploadedFile::fake()->image('dirt-v2.png', 200, 200),
+            ])
+            ->assertCreated();
+
+        $this->assertNotSame($attachmentId, (string) $replacement->json('attachment_id'));
+        $this->assertDatabaseHas('attachments', ['id' => $attachmentId]);
+
+        $this->actingAs($departmentLead)
+            ->postJson('/api/commands/remove-branding-asset', [
+                'team_id' => $team->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+            ])
+            ->assertOk()
+            ->assertJsonPath('attachment_id', null);
+
+        $this->assertNull($team->fresh()->branding_logo_attachment_id);
+    }
+
+    public function test_a_team_logo_cannot_be_uploaded_into_a_department_slot(): void
+    {
+        // The slot is the owner's, not the request's to choose. A team holds
+        // only the team logo slot, and a department only the department one.
+        Storage::fake('attachments');
+
+        [, $department, $departmentLead] = $this->departmentWith('department_lead');
+        $team = $this->teamIn($department, 'Dirt');
+
+        $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'team_id' => $team->id,
+                'slot' => Attachment::BRANDING_SLOT_DEPARTMENT_LOGO,
+                'logo' => UploadedFile::fake()->image('logo.png'),
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'department_id' => $department->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+                'logo' => UploadedFile::fake()->image('logo.png'),
+            ])
+            ->assertStatus(422);
+
+        $this->assertNull($team->fresh()->branding_logo_attachment_id);
+        $this->assertNull($department->fresh()->branding_logo_attachment_id);
+    }
+
+    public function test_a_department_lead_cannot_set_a_logo_on_another_departments_team(): void
+    {
+        Storage::fake('attachments');
+
+        [$organization, , $rangersLead] = $this->departmentWith('department_lead');
+        $gate = Department::factory()->for($organization)->create([
+            'name' => 'Gate',
+            'code' => 'GATE',
+        ]);
+        $gateTeam = $this->teamIn($gate, 'Credentials');
+
+        $this->actingAs($rangersLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'team_id' => $gateTeam->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+                'logo' => UploadedFile::fake()->image('logo.png'),
+            ])
+            ->assertForbidden();
+
+        $this->assertNull($gateTeam->fresh()->branding_logo_attachment_id);
+    }
+
+    public function test_only_teams_with_a_logo_appear_in_the_branding_read_payload(): void
+    {
+        Storage::fake('attachments');
+
+        [$organization, $department, $departmentLead] = $this->departmentWith('department_lead');
+        $withLogo = $this->teamIn($department, 'Dirt');
+        $this->teamIn($department, 'Greeters');
+
+        $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'team_id' => $withLogo->id,
+                'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
+                'logo' => UploadedFile::fake()->image('dirt.png'),
+            ])
+            ->assertCreated();
+
+        $payload = $this->getJson("/api/organizations/{$organization->id}/branding")
+            ->assertOk()
+            ->json('teams');
+
+        // A team with no logo renders a lettermark the client derives from the
+        // name it already has, so it has no reason to be in the payload.
+        $this->assertCount(1, $payload);
+        $this->assertSame((string) $withLogo->id, $payload[0]['team_id']);
+        $this->assertSame((string) $department->id, $payload[0]['department_id']);
+        $this->assertSame('DI', $payload[0]['lettermark']);
+        $this->assertNotNull($payload[0]['logo_url']);
+    }
+
+    public function test_an_organizer_can_set_an_event_logo_and_a_department_lead_cannot(): void
+    {
+        // BRAND-028: an event's mark is what most of its staff take the whole
+        // product to be, and it spans every department in the event, so it is
+        // organizer authority rather than any one department's.
+        Storage::fake('attachments');
+
+        [$organization, $organizer] = $this->organizationWith('organizer');
+        $event = Event::factory()->for($organization)->create(['name' => 'Desert Bloom']);
+
+        $this->actingAs($organizer)
+            ->post('/api/commands/upload-branding-asset', [
+                'event_id' => $event->id,
+                'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
+                'logo' => UploadedFile::fake()->image('bloom.png', 256, 256),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('slot', Attachment::BRANDING_SLOT_EVENT_LOGO);
+
+        $this->assertNotNull($event->fresh()->branding_logo_attachment_id);
+
+        $departmentLead = $this->userWithRoleIn(
+            Department::factory()->for($organization)->create(['code' => 'RANGERS2']),
+            'department_lead',
+        );
+
+        $this->actingAs($departmentLead)
+            ->post('/api/commands/upload-branding-asset', [
+                'event_id' => $event->id,
+                'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
+                'logo' => UploadedFile::fake()->image('other.png'),
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_an_event_logo_cannot_be_uploaded_into_another_owners_slot(): void
+    {
+        Storage::fake('attachments');
+
+        [$organization, $organizer] = $this->organizationWith('organizer');
+        $event = Event::factory()->for($organization)->create();
+
+        $this->actingAs($organizer)
+            ->post('/api/commands/upload-branding-asset', [
+                'event_id' => $event->id,
+                'slot' => Attachment::BRANDING_SLOT_COMPACT_MARK,
+                'logo' => UploadedFile::fake()->image('mark.png'),
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($organizer)
+            ->post('/api/commands/upload-branding-asset', [
+                'organization_id' => $organization->id,
+                'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
+                'logo' => UploadedFile::fake()->image('mark.png'),
+            ])
+            ->assertStatus(422);
+
+        $this->assertNull($event->fresh()->branding_logo_attachment_id);
+    }
+
+    public function test_the_event_branding_list_is_organizer_only(): void
+    {
+        [$organization, $organizer] = $this->organizationWith('organizer');
+        $event = Event::factory()->for($organization)->create(['name' => 'Desert Bloom']);
+
+        $payload = $this->actingAs($organizer)
+            ->getJson("/api/organizations/{$organization->id}/branding/events")
+            ->assertOk()
+            ->json('events');
+
+        $row = collect($payload)->firstWhere('event_id', (string) $event->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame('DB', $row['lettermark']);
+        $this->assertNull($row['logo_url']);
+        $this->assertFalse($row['archived']);
+
+        // The unauthenticated profile read publishes only the locked event;
+        // the roster of what an organization is running is behind a session.
+        [, , $departmentLead] = $this->departmentWith('department_lead');
+
+        $this->actingAs($departmentLead)
+            ->getJson("/api/organizations/{$organization->id}/branding/events")
+            ->assertForbidden();
+    }
+
     public function test_branding_edits_are_blocked_during_the_active_event_window(): void
     {
         // BRAND-021: branding freezes with the rest of governance content.
@@ -396,6 +612,15 @@ class BrandingAdminHttpTest extends TestCase
         ]);
 
         return [$organization, $department, $this->userWithRoleIn($department, $roleCode)];
+    }
+
+    private function teamIn(Department $department, string $name): Team
+    {
+        return Team::factory()->for($department)->create([
+            'name' => $name,
+            'code' => strtoupper($name),
+            'is_default' => false,
+        ]);
     }
 
     private function userWithRoleIn(Department $department, string $roleCode): User

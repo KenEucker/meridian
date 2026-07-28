@@ -90,8 +90,8 @@ class OrganizationBrandingLayout extends Rows
 
             CheckBox::make('branding.remove_full_lockup')
                 ->sendTrueOrFalse()
-                ->title(__('Remove full logo lockup'))
-                ->placeholder(__('Clear the current full lockup on save')),
+                ->title(__('Remove the full logo lockup'))
+                ->placeholder(__('Only tick this to go back to no lockup. Uploading a file above already replaces the current one.')),
 
             Input::make('branding.compact_mark')
                 ->type('file')
@@ -101,8 +101,8 @@ class OrganizationBrandingLayout extends Rows
 
             CheckBox::make('branding.remove_compact_mark')
                 ->sendTrueOrFalse()
-                ->title(__('Remove compact logo mark'))
-                ->placeholder(__('Clear the current compact mark on save')),
+                ->title(__('Remove the compact logo mark'))
+                ->placeholder(__('Only tick this to go back to no mark. Uploading a file above already replaces the current one.')),
         ];
     }
 

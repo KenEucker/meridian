@@ -1,5 +1,6 @@
 /**
- * Organization branding for the desktop wrapper's window icon (BRAND-003A).
+ * Event and organization branding for the desktop wrapper's window icon
+ * (BRAND-003A, BRAND-028).
  *
  * BRAND-003 keeps Meridian's identity on desktop chrome and installers, and
  * BRAND-003A carves out exactly one thing from that: the running window and
@@ -27,6 +28,7 @@ export interface NodeIdentity {
 /** The subset of the branding manifest the wrapper needs. */
 export interface BrandingManifest {
   is_branded?: boolean | null;
+  locked_event_id?: string | null;
   assets?: ReadonlyArray<{ slot?: string | null; url?: string | null }> | null;
 }
 
@@ -54,25 +56,41 @@ export function resolveBrandedOrganizationId(
 /**
  * The asset URL to use for the window icon, or null to keep Meridian's.
  *
- * Compact mark first, then the full lockup. A window icon is rendered at
+ * The locked event's mark first (BRAND-028). This function only ever runs on an
+ * install that is locked to an event — that is what
+ * {@link resolveBrandedOrganizationId} gates on — and on such an install the
+ * event is what the people using it were recruited by. A staff member who has
+ * never heard of the production company gains nothing from its mark in their
+ * taskbar; the event's mark is the one they can pick out.
+ *
+ * Then compact mark, then the full lockup. A window icon is rendered at
  * 32 pixels or less, where a wide lockup becomes an unreadable smear, so the
  * square mark is preferred whenever one exists — the same precedence the
- * application header uses.
+ * application header and the favicon use.
  *
  * An organization with no branding profile keeps Meridian's icon even if it
  * somehow has an asset row, because an unbranded organization has not asked to
- * replace Meridian's identity anywhere (BRAND-002).
+ * replace Meridian's identity anywhere (BRAND-002). An event mark is exempt
+ * from that: uploading one is a deliberate act by an organizer, and an event
+ * running under an otherwise unbranded organization is exactly the case
+ * BRAND-028 exists for.
  */
 export function resolveWindowIconUrl(
   manifest: BrandingManifest | null,
 ): string | null {
+  const assets = manifest?.assets ?? [];
+  const bySlot = (slot: string): string | null =>
+    assets.find((asset) => asset?.slot === slot)?.url?.trim() || null;
+
+  const eventLogo = bySlot("event_logo");
+
+  if (eventLogo) {
+    return eventLogo;
+  }
+
   if (!manifest?.is_branded) {
     return null;
   }
-
-  const assets = manifest.assets ?? [];
-  const bySlot = (slot: string): string | null =>
-    assets.find((asset) => asset?.slot === slot)?.url?.trim() || null;
 
   return bySlot("compact_mark") ?? bySlot("full_lockup");
 }

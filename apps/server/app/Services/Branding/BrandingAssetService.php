@@ -7,8 +7,10 @@ namespace App\Services\Branding;
 use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
+use App\Models\Event;
 use App\Models\Node;
 use App\Models\Organization;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Node\NodeSetupService;
@@ -19,7 +21,12 @@ use Illuminate\Support\Str;
 
 /**
  * Upload, replace, and remove branding logo assets (M15A.5; BRAND-004,
- * BRAND-010, BRAND-020, BRAND-023).
+ * BRAND-010, BRAND-020, BRAND-023, BRAND-025).
+ *
+ * Four owners, one path. An organization holds two slots; a department, a team,
+ * and an event hold one each. The slot a given owner may fill is the only thing
+ * that varies, so the sniffing, the size ceiling, the governance check, and the
+ * audit record are written once here rather than four times.
  *
  * Assets go through the existing attachment path — same table, same private
  * disk, same checksum — so branding inherits the storage, immutability, and
@@ -53,7 +60,7 @@ class BrandingAssetService
      * @throws BrandingValidationException|BrandingAuthorityException
      */
     public function put(
-        Organization|Department $owner,
+        Organization|Department|Team|Event $owner,
         string $slot,
         string $bytes,
         User $actor,
@@ -116,7 +123,7 @@ class BrandingAssetService
                 action: $previousId === null ? 'branding.asset_added' : 'branding.asset_replaced',
                 actorUser: $actor,
                 organizationId: $this->organizationIdFor($owner),
-                departmentId: $owner instanceof Department ? (string) $owner->getKey() : null,
+                departmentId: $this->departmentIdFor($owner),
                 before: ['slot' => $slot, 'attachment_id' => $previousId !== null ? (string) $previousId : null],
                 after: ['slot' => $slot, 'attachment_id' => (string) $attachment->getKey()],
                 sourceContext: $sourceContext,
@@ -132,7 +139,7 @@ class BrandingAssetService
      * @throws BrandingAuthorityException
      */
     public function remove(
-        Organization|Department $owner,
+        Organization|Department|Team|Event $owner,
         string $slot,
         User $actor,
         string $sourceContext = AuditEvent::SOURCE_API,
@@ -158,7 +165,7 @@ class BrandingAssetService
                 action: 'branding.asset_removed',
                 actorUser: $actor,
                 organizationId: $this->organizationIdFor($owner),
-                departmentId: $owner instanceof Department ? (string) $owner->getKey() : null,
+                departmentId: $this->departmentIdFor($owner),
                 before: ['slot' => $slot, 'attachment_id' => (string) $previousId],
                 after: ['slot' => $slot, 'attachment_id' => null],
                 sourceContext: $sourceContext,
@@ -206,11 +213,17 @@ class BrandingAssetService
     /**
      * @throws BrandingValidationException
      */
-    private function assertSlot(Organization|Department $owner, string $slot): void
+    private function assertSlot(Organization|Department|Team|Event $owner, string $slot): void
     {
-        $permitted = $owner instanceof Organization
-            ? [Attachment::BRANDING_SLOT_FULL_LOCKUP, Attachment::BRANDING_SLOT_COMPACT_MARK]
-            : [Attachment::BRANDING_SLOT_DEPARTMENT_LOGO];
+        $permitted = match (true) {
+            $owner instanceof Organization => [
+                Attachment::BRANDING_SLOT_FULL_LOCKUP,
+                Attachment::BRANDING_SLOT_COMPACT_MARK,
+            ],
+            $owner instanceof Department => [Attachment::BRANDING_SLOT_DEPARTMENT_LOGO],
+            $owner instanceof Team => [Attachment::BRANDING_SLOT_TEAM_LOGO],
+            default => [Attachment::BRANDING_SLOT_EVENT_LOGO],
+        };
 
         if (! in_array($slot, $permitted, true)) {
             throw BrandingValidationException::unsupportedAsset($slot);
@@ -228,23 +241,59 @@ class BrandingAssetService
 
     private function morphFor(Model $owner): string
     {
-        return $owner instanceof Organization
-            ? Attachment::MORPH_ORGANIZATION
-            : Attachment::MORPH_DEPARTMENT;
+        return match (true) {
+            $owner instanceof Organization => Attachment::MORPH_ORGANIZATION,
+            $owner instanceof Department => Attachment::MORPH_DEPARTMENT,
+            $owner instanceof Team => Attachment::MORPH_TEAM,
+            default => Attachment::MORPH_EVENT,
+        };
     }
 
-    private function organizationIdFor(Organization|Department $owner): string
+    private function organizationIdFor(Organization|Department|Team|Event $owner): string
     {
-        return $owner instanceof Organization
-            ? (string) $owner->getKey()
-            : (string) $owner->organization_id;
+        if ($owner instanceof Organization) {
+            return (string) $owner->getKey();
+        }
+
+        if ($owner instanceof Department || $owner instanceof Event) {
+            return (string) $owner->organization_id;
+        }
+
+        // A team reaches its organization only through its department, and
+        // governance is an organization-level question, so the relation is
+        // loaded rather than assumed to be present on the passed model.
+        $owner->loadMissing('department');
+
+        return (string) $owner->department?->organization_id;
     }
 
-    private function describe(Organization|Department $owner, string $slot): string
+    /**
+     * The department an audit record is scoped to, or null when the owner is
+     * the organization itself.
+     */
+    private function departmentIdFor(Organization|Department|Team|Event $owner): ?string
+    {
+        if ($owner instanceof Department) {
+            return (string) $owner->getKey();
+        }
+
+        if ($owner instanceof Team) {
+            return $owner->department_id !== null ? (string) $owner->department_id : null;
+        }
+
+        return null;
+    }
+
+    private function describe(Organization|Department|Team|Event $owner, string $slot): string
     {
         return sprintf(
             '%s branding (%s)',
-            $owner instanceof Organization ? 'organization' : 'department',
+            match (true) {
+                $owner instanceof Organization => 'organization',
+                $owner instanceof Department => 'department',
+                $owner instanceof Team => 'team',
+                default => 'event',
+            },
             str_replace('_', ' ', $slot),
         );
     }

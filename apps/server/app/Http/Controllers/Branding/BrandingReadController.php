@@ -57,6 +57,20 @@ final class BrandingReadController extends Controller
             ];
         }
 
+        $teams = [];
+
+        foreach ($profile->teams as $teamId => $branding) {
+            $teams[] = [
+                'team_id' => $teamId,
+                'department_id' => $branding->departmentId,
+                'name' => $branding->name,
+                'lettermark' => $branding->lettermark(),
+                'logo_url' => $branding->logoAttachmentId !== null
+                    ? route('branding.asset', ['attachment' => $branding->logoAttachmentId])
+                    : null,
+            ];
+        }
+
         return [
             'organization_id' => $profile->organizationId,
             'display_name' => $profile->displayName,
@@ -74,6 +88,25 @@ final class BrandingReadController extends Controller
                 ? route('branding.asset', ['attachment' => $profile->compactMarkAttachmentId])
                 : null,
             'departments' => $departments,
+            'teams' => $teams,
+            /*
+             * The event this install is locked to (BRAND-028), or null.
+             *
+             * Only the locked event is published here. The endpoint is
+             * deliberately unauthenticated — branding has to resolve before a
+             * session does — so it must not become a list of everything an
+             * organization is running. One event, the one this install is
+             * already showing, is not a disclosure; the roster of an
+             * organization's events would be.
+             */
+            'event' => $profile->lockedEvent === null ? null : [
+                'event_id' => $profile->lockedEvent->eventId,
+                'name' => $profile->lockedEvent->name,
+                'lettermark' => $profile->lockedEvent->lettermark(),
+                'logo_url' => $profile->lockedEvent->logoAttachmentId !== null
+                    ? route('branding.asset', ['attachment' => $profile->lockedEvent->logoAttachmentId])
+                    : null,
+            ],
         ];
     }
 }

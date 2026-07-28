@@ -50,6 +50,26 @@ class BrandingSchemaTest extends TestCase
         }
     }
 
+    public function test_teams_table_has_a_branding_logo_column_and_nothing_else(): void
+    {
+        // BRAND-025: a team carries a logo and no color of its own. An accent
+        // or surface column here would be the first step toward a second
+        // identity color on a screen the department already colors.
+        foreach (['branding_logo_attachment_id', 'branding_updated_at'] as $column) {
+            $this->assertTrue(
+                Schema::hasColumn('teams', $column),
+                "teams.{$column} is missing",
+            );
+        }
+
+        foreach (['branding_accent_color', 'branding_surface_color'] as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('teams', $column),
+                "teams.{$column} should not exist",
+            );
+        }
+    }
+
     public function test_an_organization_starts_with_no_branding_and_department_overrides_enabled(): void
     {
         $organization = Organization::factory()->create();

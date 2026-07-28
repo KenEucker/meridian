@@ -40,6 +40,8 @@ final class BrandingAssetLimits
         \App\Models\Attachment::BRANDING_SLOT_FULL_LOCKUP,
         \App\Models\Attachment::BRANDING_SLOT_COMPACT_MARK,
         \App\Models\Attachment::BRANDING_SLOT_DEPARTMENT_LOGO,
+        \App\Models\Attachment::BRANDING_SLOT_TEAM_LOGO,
+        \App\Models\Attachment::BRANDING_SLOT_EVENT_LOGO,
     ];
 
     public static function permits(string $mimeType): bool

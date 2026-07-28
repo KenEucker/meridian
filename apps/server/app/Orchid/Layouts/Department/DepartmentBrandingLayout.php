@@ -36,10 +36,15 @@ class DepartmentBrandingLayout extends Rows
                     .'department appears, including surfaces that never take a department background.'
                 )),
 
-            CheckBox::make('branding.clear_accent')
+            // The colour input beside this has no empty state — with nothing
+            // stored the browser submits #000000 — so this checkbox is what
+            // says whether the department has an accent at all. The screen
+            // reads `set_accent`, and a differently named checkbox here left
+            // the control rendered but never consulted.
+            CheckBox::make('branding.set_accent')
                 ->sendTrueOrFalse()
-                ->title(__('Clear accent'))
-                ->placeholder(__('Remove the stored accent color on save')),
+                ->title(__('This department sets an accent'))
+                ->placeholder(__('Leave unticked to store no accent color')),
 
             Input::make('branding.surface')
                 ->type('color')
@@ -50,10 +55,10 @@ class DepartmentBrandingLayout extends Rows
                     .'all while the organization has department overrides switched off.'
                 )),
 
-            CheckBox::make('branding.clear_surface')
+            CheckBox::make('branding.set_surface')
                 ->sendTrueOrFalse()
-                ->title(__('Clear surface background'))
-                ->placeholder(__('Remove the stored surface background on save')),
+                ->title(__('This department sets a surface background'))
+                ->placeholder(__('Leave unticked to store no surface background')),
 
             Input::make('branding.logo')
                 ->type('file')
@@ -61,10 +66,15 @@ class DepartmentBrandingLayout extends Rows
                 ->title(__('Department logo'))
                 ->help($this->logoHelp()),
 
+            // Not needed to save an upload — choosing a file above replaces
+            // the stored logo on its own. This exists only to get back to no
+            // logo at all, and the wording says so, because a checkbox next to
+            // a file input reads as a step in the upload rather than as its
+            // opposite.
             CheckBox::make('branding.remove_logo')
                 ->sendTrueOrFalse()
-                ->title(__('Remove department logo'))
-                ->placeholder(__('Clear the current logo on save')),
+                ->title(__('Remove the department logo'))
+                ->placeholder(__('Only tick this to go back to no logo. Uploading a file above already replaces the current one.')),
         ];
     }
 

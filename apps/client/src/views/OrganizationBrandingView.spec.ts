@@ -52,8 +52,16 @@ describe("OrganizationBrandingView", () => {
     await flushPromises();
 
     expect(wrapper.find("[data-result='pass']").exists()).toBe(true);
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/commands/preview-branding");
+
+    // The claim is about which command ran, not about how many requests the
+    // screen made: mounting also loads the event list (BRAND-028). Checking a
+    // total would break every time the screen reads something else.
+    const requested = fetchMock.mock.calls.map((call) => String(call[0]));
+    const asked = (path: string) =>
+      requested.some((url) => url.includes(path));
+
+    expect(asked("/api/commands/preview-branding")).toBe(true);
+    expect(asked("/api/commands/update-organization-branding")).toBe(false);
   });
 
   it("lists the failing pair with measured and required ratios", async () => {

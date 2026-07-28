@@ -2,6 +2,13 @@
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
+import BrandingLogoField from "@/branding/BrandingLogoField.vue";
+import {
+  findDepartmentBranding,
+  loadBrandingProfile,
+} from "@/branding/brandingProfile";
+import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
 import {
   archiveOrganizerDepartment,
   canManageOrganizerDepartments,
@@ -56,6 +63,32 @@ watch(
 const heading = computed(() =>
   isCreate.value ? "Create department" : "Edit department",
 );
+
+/**
+ * The department's logo, reachable from department details as well as from the
+ * department's own Branding surface (BRAND-010, BRAND-019).
+ *
+ * Absent while creating: the logo is an attachment against a department id,
+ * and there is no department to attach it to until the first save. The same
+ * reason the Orchid screen defers its branding block.
+ */
+const branding = computed(() =>
+  isCreate.value ? null : findDepartmentBranding(departmentId.value),
+);
+const logoUrl = ref<string | null>(null);
+
+watch(
+  branding,
+  (current) => {
+    logoUrl.value = current?.logo_url ?? null;
+  },
+  { immediate: true },
+);
+
+async function onLogoChanged(url: string | null): Promise<void> {
+  logoUrl.value = url;
+  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+}
 
 async function onSubmit(): Promise<void> {
   if (!canManage.value) {
@@ -156,6 +189,24 @@ async function onRestore(): Promise<void> {
         Description
         <textarea v-model="draft.description" rows="4" />
       </label>
+
+      <!--
+        The logo saves on upload through the branding asset command, not with
+        this form, so "Save changes" is never holding an unsaved logo.
+      -->
+      <BrandingLogoField
+        v-if="!isCreate"
+        label="Department logo"
+        description="Shown in the application header beside the department name, on department badges, and on department-scoped surfaces. Saved as soon as you choose a file."
+        :slot="BRANDING_SLOTS.departmentLogo"
+        :department-id="departmentId"
+        :url="logoUrl"
+        :lettermark="branding?.lettermark ?? draft.code.slice(0, 2).toUpperCase()"
+        @changed="onLogoChanged"
+      />
+      <p v-else class="org-dept-edit__meta">
+        A department logo can be uploaded once the department has been created.
+      </p>
 
       <p v-if="existing?.defaultTeamId" class="org-dept-edit__meta">
         Default team is created automatically when the department is created.

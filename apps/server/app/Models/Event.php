@@ -42,6 +42,8 @@ class Event extends Model
         'minimum_staff_age',
         'status',
         'ic_department_id',
+        'branding_logo_attachment_id',
+        'branding_updated_at',
         'active_event_window_starts_at',
         'active_event_window_ends_at',
         'archived_at',
@@ -90,8 +92,23 @@ class Event extends Model
             'active_event_window_starts_at' => 'datetime',
             'active_event_window_ends_at' => 'datetime',
             'archived_at' => 'datetime',
+            'branding_updated_at' => 'datetime',
             'minimum_staff_age' => 'integer',
         ];
+    }
+
+    public function brandingLogo(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'branding_logo_attachment_id');
+    }
+
+    /**
+     * Whether this event has a mark of its own, which is the only branding an
+     * event carries (BRAND-028).
+     */
+    public function hasBrandingProfile(): bool
+    {
+        return $this->branding_logo_attachment_id !== null;
     }
 
     public function credentials(): HasMany

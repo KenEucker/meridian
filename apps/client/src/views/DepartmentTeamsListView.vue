@@ -4,6 +4,15 @@ import ControlBar from "@/components/ControlBar.vue";
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import BrandMark from "@/branding/BrandMark.vue";
+import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
+import BrandingLogoField from "@/branding/BrandingLogoField.vue";
+import {
+  findDepartmentBranding,
+  findTeamBranding,
+  loadBrandingProfile,
+} from "@/branding/brandingProfile";
+import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import DocumentLibrarySection from "@/components/sections/DocumentLibrarySection.vue";
@@ -90,6 +99,37 @@ const detailsBusy = ref(false);
 const detailsEditing = ref(false);
 const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
+
+/**
+ * The department's logo, editable from department details as well as from the
+ * Branding surface (BRAND-010, BRAND-019).
+ *
+ * Two places for one control is deliberate. Branding is where a department
+ * lead goes to work on identity; details is where they already are when they
+ * are correcting the department's name or code, and a logo is the same kind of
+ * fact. The field writes through the same command either way, so there is one
+ * behavior and two doors to it.
+ */
+const departmentBranding = computed(() =>
+  findDepartmentBranding(session.value?.departmentId ?? ""),
+);
+const departmentLogoUrl = ref<string | null>(null);
+
+watch(
+  departmentBranding,
+  (branding) => {
+    departmentLogoUrl.value = branding?.logo_url ?? null;
+  },
+  { immediate: true },
+);
+
+async function onDepartmentLogoChanged(url: string | null): Promise<void> {
+  departmentLogoUrl.value = url;
+
+  // Re-resolve so the shell header, the department badge, and every other
+  // surface holding this mark pick it up without a reload.
+  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+}
 
 watch(
   administeredDepartment,
@@ -241,6 +281,19 @@ function onRemoveLead(member: DepartmentTeamStaffMember): void {
 }
 
 
+/**
+ * A team's mark for the lists on this page (BRAND-025). A team that has
+ * uploaded nothing still gets a lettermark, so the column has no holes in it.
+ */
+function teamMark(team: DepartmentTeam) {
+  const branding = findTeamBranding(team.id);
+
+  return {
+    logoUrl: branding?.logo_url ?? null,
+    lettermark: branding?.lettermark ?? null,
+  };
+}
+
 function formatArchived(team: DepartmentTeam): string {
   return team.archivedAt === null ? "Active" : "Archived";
 }
@@ -339,6 +392,25 @@ function teamCreateRoute() {
 
           <dl v-if="!detailsEditing" class="dept-teams__readout">
             <div>
+              <dt>Logo</dt>
+              <dd class="dept-teams__logo-readout">
+                <BrandMark
+                  :name="administeredDepartment?.name ?? 'Department'"
+                  :logo-url="departmentLogoUrl"
+                  :lettermark="departmentBranding?.lettermark ?? null"
+                  :accent-color="departmentBranding?.accent ?? null"
+                  size="lg"
+                />
+                <span>
+                  {{
+                    departmentLogoUrl
+                      ? "Shown in the header, on department badges, and on department surfaces."
+                      : "No logo set; the generated lettermark shown here renders in its place."
+                  }}
+                </span>
+              </dd>
+            </div>
+            <div>
               <dt>Name</dt>
               <dd>{{ administeredDepartment?.name ?? "Not set" }}</dd>
             </div>
@@ -355,6 +427,26 @@ function teamCreateRoute() {
           </dl>
 
           <form v-else class="dept-teams__form" @submit.prevent="onSaveDetails">
+            <!--
+              The logo saves on upload rather than with the form, because it
+              goes through the branding asset command and not through the
+              department details update. "Save department details" below
+              therefore never has an unsaved logo waiting behind it.
+            -->
+            <div class="dept-teams__field--wide">
+              <BrandingLogoField
+                label="Department logo"
+                description="Shown in the application header beside the department name, on department badges, and on department-scoped surfaces. Saved as soon as you choose a file."
+                :slot="BRANDING_SLOTS.departmentLogo"
+                :department-id="session?.departmentId"
+                :url="departmentLogoUrl"
+                :lettermark="
+                  departmentBranding?.lettermark ??
+                  (administeredDepartment?.code ?? '').slice(0, 2).toUpperCase()
+                "
+                @changed="onDepartmentLogoChanged"
+              />
+            </div>
             <label class="dept-teams__field">
               Name
               <input v-model="detailsDraft.name" type="text" required />
@@ -395,6 +487,13 @@ function teamCreateRoute() {
           </div>
           <ul class="dept-teams__lead-teams" aria-label="Teams you lead">
             <li v-for="team in leadTeams" :key="team.id">
+              <BrandMark
+                class="dept-teams__team-mark"
+                :name="team.name"
+                :logo-url="teamMark(team).logoUrl"
+                :lettermark="teamMark(team).lettermark"
+                size="md"
+              />
               <strong>{{ team.name }}</strong>
               <span>{{ team.description ?? "No description set." }}</span>
               <small>{{ team.code }} - {{ formatArchived(team) }}</small>
@@ -555,9 +654,17 @@ function teamCreateRoute() {
               </tr>
               <tr v-for="team in teams" :key="team.id">
                 <td>
-                  <RouterLink :to="teamEditRoute(team.id)">
-                    {{ team.name }}
-                  </RouterLink>
+                  <span class="dept-teams__team-cell">
+                    <BrandMark
+                      :name="team.name"
+                      :logo-url="teamMark(team).logoUrl"
+                      :lettermark="teamMark(team).lettermark"
+                      size="sm"
+                    />
+                    <RouterLink :to="teamEditRoute(team.id)">
+                      {{ team.name }}
+                    </RouterLink>
+                  </span>
                 </td>
                 <td>{{ team.code }}</td>
                 <td>{{ formatDefault(team) }}</td>
@@ -711,6 +818,17 @@ function teamCreateRoute() {
   overflow-wrap: anywhere;
 }
 
+.dept-teams__logo-readout {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-3);
+}
+
+.dept-teams__logo-readout span {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
 .dept-teams__form-actions {
   display: flex;
   flex-wrap: wrap;
@@ -821,11 +939,25 @@ function teamCreateRoute() {
 
 .dept-teams__lead-teams li {
   display: grid;
-  gap: var(--m-space-1);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--m-space-1) var(--m-space-3);
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-raised);
+}
+
+/* The mark spans the card's rows so the three text lines stack beside it. */
+.dept-teams__team-mark {
+  grid-row: 1 / -1;
+  align-self: start;
+}
+
+.dept-teams__team-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  min-width: 0;
 }
 
 .dept-teams__lead-teams strong {

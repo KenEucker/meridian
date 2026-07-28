@@ -14,10 +14,10 @@ import {
  * Upload, replace, and remove one branding logo slot (M15A.5, M15A.6, M15A.7;
  * BRAND-004, BRAND-005, BRAND-010, BRAND-023).
  *
- * One component for all three slots — organization full lockup, organization
- * compact mark, and department logo — because the rules are identical and the
- * only differences are the label and which owner id is sent. Three near-copies
- * would be three places to forget the size check.
+ * One component for all five slots — organization full lockup, organization
+ * compact mark, department logo, team logo, and event logo — because the rules
+ * are identical and the only differences are the label and which owner id is
+ * sent. Five near-copies would be five places to forget the size check.
  *
  * The current state is always visible: either the stored logo, or the
  * generated lettermark that renders in its place (BRAND-005, BRAND-010). An
@@ -31,6 +31,8 @@ const props = defineProps<{
   readonly slot: BrandingSlot;
   readonly organizationId?: string;
   readonly departmentId?: string;
+  readonly teamId?: string;
+  readonly eventId?: string;
   /** Current asset URL, or null when the slot is empty. */
   readonly url: string | null;
   /** Letters rendered when the slot is empty. */
@@ -55,6 +57,8 @@ const currentUrl = computed(() =>
 const owner = computed(() => ({
   organizationId: props.organizationId,
   departmentId: props.departmentId,
+  teamId: props.teamId,
+  eventId: props.eventId,
 }));
 
 const maxKilobytes = Math.floor(BRANDING_ASSET_MAX_BYTES / 1024);

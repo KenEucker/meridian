@@ -32,6 +32,9 @@ withDefaults(
       <template v-if="$slots.actions" #actions>
         <slot name="actions" />
       </template>
+      <template v-if="$slots.mark" #mark>
+        <slot name="mark" />
+      </template>
       <template v-if="$slots['under-title']" #under-title>
         <slot name="under-title" />
       </template>

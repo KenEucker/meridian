@@ -1039,15 +1039,27 @@ Key fields:
 - `status`
 - `ic_department_id`
 - `placement_department_id`
+- `branding_logo_attachment_id`
+- `branding_updated_at`
 - `active_event_window_starts_at`
 - `active_event_window_ends_at`
 - `created_at`
 - `updated_at`
 - `archived_at`
 
+Branding fields (BRAND-028, BRAND-029, BRAND-030):
+
+- An event carries a logo reference and nothing else. There is no event accent and no event palette: the palette is the organization's, and a second settable palette would be a second set of contrast pairs nobody validated.
+- The logo is an attachment reference on the existing branding asset path, subject to the same MIME and size constraints as every other branding logo (BRAND-023).
+- Where a node is locked to this event, the logo replaces the organization mark in the application header, the browser tab icon, and the desktop window icon. Most staff working an event were recruited by the event rather than by the company producing it, and a producer's mark identifies nothing to someone who has never heard of the producer.
+- The lock is read from `nodes.event_id`, not from the signed-in user — a Kiosk has no user, and the node is what knows which event the install is running. A node whose lock names an event belonging to a different organization resolves to no locked event, so one organization's chrome can never show another's mark.
+- Event logos are edited under organization branding authority (`organization.branding.manage`), not under a department's. An event spans every department in it, and its mark is what most of its staff will take the whole product to be.
+- Only the locked event appears in the unauthenticated branding profile read. The full list of an organization's events and their marks is served separately, behind a session.
+
 Relationships:
 
 - belongs to organization
+- has a current branding logo attachment
 - has many event department assignments
 - has many shifts
 - has many attendance operations
@@ -1403,9 +1415,18 @@ Key fields:
 - `code`
 - `description`
 - `is_default`
+- `branding_logo_attachment_id`
+- `branding_updated_at`
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+Branding fields (BRAND-025, BRAND-026, and see `events` for BRAND-028):
+
+- A team carries a logo reference and nothing else. There is no team accent and no team surface background: a team appears inside a department's surface, so a team color would put a second identity color on a screen the department already colors, against a background nobody validated it for.
+- The logo is an attachment reference on the existing branding asset path, subject to the same MIME and size constraints as organization and department logos (BRAND-023).
+- A team with no logo renders a generated lettermark from the team name; only teams that have uploaded one appear in the branding read payload.
+- Team logos are edited under the department's branding authority (`department.branding.manage`, or an organizer of the owning organization), not under a permission of their own.
 
 Rules:
 

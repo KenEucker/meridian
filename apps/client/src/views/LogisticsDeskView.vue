@@ -418,7 +418,6 @@ const equipmentInventoryRoute = computed(() => ({
     title="Logistics Window"
     :eyebrow="desk.context.departmentLabel"
     lede="Staff-first service station for presence, attendance, and equipment handoff."
-    :freshness="desk.context.dataFreshnessLabel"
   >
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>

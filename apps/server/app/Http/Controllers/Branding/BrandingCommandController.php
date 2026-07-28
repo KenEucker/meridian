@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Branding;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Department;
+use App\Models\Event;
 use App\Models\Organization;
+use App\Models\Team;
 use App\Models\User;
 use App\Services\Branding\BrandingAccess;
 use App\Services\Branding\BrandingAdminService;
@@ -163,6 +165,42 @@ final class BrandingCommandController extends Controller
         return response()->json($result);
     }
 
+    /**
+     * The organization's events and the mark each one carries (BRAND-028).
+     *
+     * Archived events are included. An archived event still has staff reading
+     * its records, and an organizer correcting a mark on last year's event
+     * should not have to un-archive it to do so.
+     */
+    public function events(Request $request, Organization $organization, BrandingAccess $access): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user !== null, 401);
+
+        if (! $access->canManageOrganizationBranding($user, $organization)) {
+            return $this->denied('You do not have permission to see this organization\'s event branding.');
+        }
+
+        $events = Event::query()
+            ->where('organization_id', $organization->getKey())
+            ->orderByRaw('starts_at is null')
+            ->orderByDesc('starts_at')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'events' => $events->map(fn (Event $event): array => [
+                'event_id' => (string) $event->getKey(),
+                'name' => (string) $event->name,
+                'lettermark' => Lettermark::forName((string) $event->name),
+                'archived' => $event->archived_at !== null,
+                'logo_url' => $event->branding_logo_attachment_id !== null
+                    ? route('branding.asset', ['attachment' => $event->branding_logo_attachment_id])
+                    : null,
+            ])->all(),
+        ]);
+    }
+
     public function uploadAsset(
         Request $request,
         BrandingAccess $access,
@@ -173,8 +211,10 @@ final class BrandingCommandController extends Controller
 
         $validated = $request->validate([
             'slot' => ['required', 'string', Rule::in(BrandingAssetLimits::SLOTS)],
-            'organization_id' => ['required_without:department_id', 'nullable', 'uuid', Rule::exists(Organization::class, 'id')],
-            'department_id' => ['required_without:organization_id', 'nullable', 'uuid', Rule::exists(Department::class, 'id')],
+            'organization_id' => ['required_without_all:department_id,team_id,event_id', 'nullable', 'uuid', Rule::exists(Organization::class, 'id')],
+            'department_id' => ['required_without_all:organization_id,team_id,event_id', 'nullable', 'uuid', Rule::exists(Department::class, 'id')],
+            'team_id' => ['required_without_all:organization_id,department_id,event_id', 'nullable', 'uuid', Rule::exists(Team::class, 'id')],
+            'event_id' => ['required_without_all:organization_id,department_id,team_id', 'nullable', 'uuid', Rule::exists(Event::class, 'id')],
             'logo' => ['required', 'file', 'max:'.(int) (BrandingAssetLimits::MAX_BYTES / 1024)],
         ]);
 
@@ -184,7 +224,26 @@ final class BrandingCommandController extends Controller
             return $this->denied('You do not have permission to change this branding logo.');
         }
 
-        $bytes = (string) file_get_contents($request->file('logo')->getRealPath());
+        /*
+         * The `file` validation rule above already refuses an upload PHP
+         * itself failed, so this is belt-and-braces — but the failure mode it
+         * prevents is worth the three lines: `getRealPath()` returns `false`
+         * for a file with no temp path, and passing that to
+         * `file_get_contents` resolves to the process working directory and
+         * reports a permission error against `public/`, which names neither
+         * the real file nor the real problem.
+         */
+        $path = $request->file('logo')->getRealPath();
+        $bytes = is_string($path) && $path !== '' && is_file($path)
+            ? @file_get_contents($path)
+            : false;
+
+        if ($bytes === false) {
+            return response()->json([
+                'message' => 'The uploaded logo could not be read. Please try the upload again.',
+                'failures' => [],
+            ], 422);
+        }
 
         try {
             $attachment = $assets->put(
@@ -219,8 +278,10 @@ final class BrandingCommandController extends Controller
 
         $validated = $request->validate([
             'slot' => ['required', 'string', Rule::in(BrandingAssetLimits::SLOTS)],
-            'organization_id' => ['required_without:department_id', 'nullable', 'uuid', Rule::exists(Organization::class, 'id')],
-            'department_id' => ['required_without:organization_id', 'nullable', 'uuid', Rule::exists(Department::class, 'id')],
+            'organization_id' => ['required_without_all:department_id,team_id,event_id', 'nullable', 'uuid', Rule::exists(Organization::class, 'id')],
+            'department_id' => ['required_without_all:organization_id,team_id,event_id', 'nullable', 'uuid', Rule::exists(Department::class, 'id')],
+            'team_id' => ['required_without_all:organization_id,department_id,event_id', 'nullable', 'uuid', Rule::exists(Team::class, 'id')],
+            'event_id' => ['required_without_all:organization_id,department_id,team_id', 'nullable', 'uuid', Rule::exists(Event::class, 'id')],
         ]);
 
         $owner = $this->resolveOwner($validated);
@@ -243,8 +304,20 @@ final class BrandingCommandController extends Controller
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function resolveOwner(array $validated): Organization|Department
+    private function resolveOwner(array $validated): Organization|Department|Team|Event
     {
+        $eventId = $validated['event_id'] ?? null;
+
+        if ($eventId !== null) {
+            return Event::query()->with('organization')->findOrFail((string) $eventId);
+        }
+
+        $teamId = $validated['team_id'] ?? null;
+
+        if ($teamId !== null) {
+            return Team::query()->with('department.organization')->findOrFail((string) $teamId);
+        }
+
         $departmentId = $validated['department_id'] ?? null;
 
         if ($departmentId !== null) {
@@ -254,11 +327,14 @@ final class BrandingCommandController extends Controller
         return Organization::query()->findOrFail((string) $validated['organization_id']);
     }
 
-    private function permits(BrandingAccess $access, User $user, Organization|Department $owner): bool
+    private function permits(BrandingAccess $access, User $user, Organization|Department|Team|Event $owner): bool
     {
-        return $owner instanceof Organization
-            ? $access->canManageOrganizationBranding($user, $owner)
-            : $access->canManageDepartmentBranding($user, $owner);
+        return match (true) {
+            $owner instanceof Organization => $access->canManageOrganizationBranding($user, $owner),
+            $owner instanceof Department => $access->canManageDepartmentBranding($user, $owner),
+            $owner instanceof Team => $access->canManageTeamBranding($user, $owner),
+            default => $access->canManageEventBranding($user, $owner),
+        };
     }
 
     private function denied(string $message): JsonResponse
