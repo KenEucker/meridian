@@ -20,6 +20,7 @@ use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
+use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\Organization\OrganizationEditScreen;
 use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\PlatformScreen;
@@ -96,6 +97,13 @@ Route::screen('roles/create', RoleEditScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.systems.roles')
         ->push(__('Create'), route('platform.systems.roles.create')));
+
+// Platform > God Mode > Permission Catalog
+Route::screen('permission-catalog', PermissionCatalogScreen::class)
+    ->name('platform.permissions')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Permission Catalog'), route('platform.permissions')));
 
 // Platform > System > Roles
 Route::screen('roles', RoleListScreen::class)

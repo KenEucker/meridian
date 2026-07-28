@@ -70,6 +70,7 @@
     "changelog:generate": "node scripts/release/generate-changelog.mjs",
     "release:package": "corepack pnpm run docs:package && corepack pnpm run changelog:generate && corepack pnpm run build",
     "tokens:sync": "node -e \"require('fs').copyFileSync('packages/ui-tokens/tokens.css','apps/server/public/css/meridian-tokens.css')\"",
+    "brand:sync": "node -e \"require('fs').copyFileSync('apps/client/public/assets/brand/meridian-mark.png','apps/server/public/img/brand/meridian-mark.png')\"",
     "tokens:typecheck": "corepack pnpm --filter @meridian/ui-tokens run typecheck",
     "tokens:test": "corepack pnpm --filter @meridian/ui-tokens run test",
     "build": "corepack pnpm run client:build && corepack pnpm run mobile:build && corepack pnpm run desktop:build",

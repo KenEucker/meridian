@@ -17,6 +17,8 @@
  * (QA-ELECTRON-01).
  */
 
+import { join } from "node:path";
+
 import { app, BrowserWindow, globalShortcut, nativeImage } from "electron";
 
 import {
@@ -27,7 +29,9 @@ import {
   resolveHealthUrl,
   resolveAppIconPath,
   resolveAppUrlOverride,
-  resolveServerUrl,
+  resolveServerUrlSetting,
+  NODE_SETTINGS_FILE,
+  type ResolvedServerUrl,
 } from "./config";
 import {
   brandingManifestUrl,
@@ -46,6 +50,23 @@ let healthWindow: BrowserWindow | null = null;
 let clientServer: ClientStaticServer | null = null;
 let currentAppUrl = "";
 let currentMeridianVersion = "unknown";
+
+/**
+ * The node this wrapper reads health and branding from.
+ *
+ * Resolved per call rather than cached at startup, so an operator who writes
+ * the settings file while the app is running sees it take effect on the next
+ * health refresh instead of after a restart. Electron's userData path is only
+ * available once the app is ready, so this is a function rather than a
+ * constant.
+ */
+function nodeSetting(): ResolvedServerUrl {
+  const settingsPath = app.isReady()
+    ? join(app.getPath("userData"), NODE_SETTINGS_FILE)
+    : null;
+
+  return resolveServerUrlSetting(process.env, settingsPath);
+}
 
 function createMainWindow(appUrl: string): BrowserWindow {
   const window = new BrowserWindow({
@@ -95,14 +116,15 @@ function createMainWindow(appUrl: string): BrowserWindow {
 }
 
 async function refreshHealthWindow(window: BrowserWindow): Promise<void> {
-  const serverUrl = resolveServerUrl(process.env);
-  const healthUrl = resolveHealthUrl(process.env, serverUrl);
+  const node = nodeSetting();
+  const healthUrl = resolveHealthUrl(process.env, node.url);
   const health = await fetchServerHealth(healthUrl);
   const model = buildHealthPanelModel({
     appUrl: currentAppUrl,
     appVersion: currentMeridianVersion,
     clientVersion: currentMeridianVersion,
     health,
+    node,
   });
   const html = renderHealthPanelHtml(model);
   if (!window.isDestroyed()) {
@@ -167,8 +189,8 @@ async function resolveMainAppUrl(): Promise<string> {
  */
 async function applyOrganizationWindowIcon(window: BrowserWindow): Promise<void> {
   try {
-    const serverUrl = resolveServerUrl(process.env);
-    const health = await fetchServerHealth(resolveHealthUrl(process.env));
+    const serverUrl = nodeSetting().url;
+    const health = await fetchServerHealth(resolveHealthUrl(process.env, serverUrl));
     const organizationId = resolveBrandedOrganizationId(health);
 
     if (organizationId === null) {

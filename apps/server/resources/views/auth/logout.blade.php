@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    @include('meridian.surface-head')
     <title>Sign out of Meridian</title>
 </head>
 <body>
     <main>
+        @include('meridian.brand', ['context' => __('Sign out')])
+
         <h1>Sign out</h1>
-        <p>Signed in as <strong>{{ $email }}</strong>.</p>
+        <p class="lede">Signed in as <strong>{{ $email }}</strong>.</p>
 
         <form method="POST" action="{{ route('logout.destroy') }}">
             @csrf
@@ -16,6 +17,8 @@
         </form>
 
         <p><a href="{{ route('home') }}">Back to home</a></p>
+
+        @include('meridian.footer')
     </main>
 </body>
 </html>

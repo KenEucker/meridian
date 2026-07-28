@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
+import NodeConnectionPanel from "@/components/NodeConnectionPanel.vue";
 import ReadinessChecklist from "@/components/ReadinessChecklist.vue";
 import {
   resolveReadinessChecklist,
@@ -11,21 +12,25 @@ import {
 
 // Technical spec section 14: readiness is tracked per user/device/event, is
 // advisory only, is visible to the user, and is never visible to organizers. It
-// does not expire automatically and the app must avoid nagging. The checklist
-// is probed from the current client scope once when the surface renders.
-const items = resolveReadinessChecklist();
+// does not expire automatically and the app must avoid nagging.
+//
+// Resolved reactively rather than once, because the node connection panel below
+// changes one of the signals — pointing the device at a node is a readiness
+// step the user takes on this screen, and the checklist has to reflect it
+// immediately or the screen contradicts itself.
+const items = computed(() => resolveReadinessChecklist());
 const readinessStatusOrder: Record<ReadinessItemStatus, number> = {
   ready: 0,
   "not-ready": 1,
   pending: 2,
 };
 const sortedItems = computed(() =>
-  [...items].sort(
+  [...items.value].sort(
     (left, right) =>
       readinessStatusOrder[left.status] - readinessStatusOrder[right.status],
   ),
 );
-const summary = computed(() => summarizeReadiness(items));
+const summary = computed(() => summarizeReadiness(items.value));
 </script>
 
 <template>
@@ -42,6 +47,7 @@ const summary = computed(() => summarizeReadiness(items));
     <p class="readiness__summary" role="status">
       {{ summary.ready }} of {{ summary.total }} checks ready.
     </p>
+    <NodeConnectionPanel />
     <ReadinessChecklist :items="sortedItems" />
   </section>
 </template>

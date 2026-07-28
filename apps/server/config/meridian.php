@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\RootPackageLicense;
 use App\Support\RootPackageVersion;
 
 return [
@@ -16,6 +17,20 @@ return [
     */
 
     'version' => RootPackageVersion::resolve(base_path('../..')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | License
+    |--------------------------------------------------------------------------
+    |
+    | The SPDX identifier Meridian is published under, read from the same root
+    | manifest as the version. The God Mode console footer states this value so
+    | it cannot claim a license the repository does not actually carry
+    | (GOD-032, GOD-033).
+    |
+    */
+
+    'license' => RootPackageLicense::resolve(base_path('../..')),
 
     /*
     |--------------------------------------------------------------------------

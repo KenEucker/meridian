@@ -218,30 +218,12 @@ class ConsoleDocumentationTest extends TestCase
         $this->assertStringNotContainsString('https://orchid.software/en/docs', $body);
         $this->assertStringNotContainsString('orchidsoftware/platform/blob/master/CHANGELOG.md', $body);
 
-        // GOD-028: the version badged in navigation is Meridian's build
-        // version. The framework version survives only in the vendor footer,
-        // which M15C.5 replaces, so the assertion stops where that footer
-        // starts.
-        $footerAt = strpos($body, 'MIT license');
-        $this->assertNotFalse($footerAt);
-
-        $navigation = substr($body, 0, $footerAt);
-        $this->assertStringContainsString((string) config('meridian.version'), $navigation);
-        $this->assertStringNotContainsString(Dashboard::version(), $navigation);
-    }
-
-    /**
-     * The vendor footer still carries the framework's license, copyright range,
-     * and version. That is M15C.5's scope (GOD-032, GOD-033) and is deliberately
-     * left in place here; this test records the boundary rather than asserting a
-     * clean page.
-     */
-    public function test_the_remaining_framework_footer_is_left_to_the_visual_identity_task(): void
-    {
-        $response = $this->actingAs($this->godModeUser())->get(route('platform.main'));
-
-        $response->assertOk();
-        $this->assertStringContainsString('MIT license', (string) $response->getContent());
+        // GOD-028: the version displayed in the console is Meridian's build
+        // version. Since M15C.5 replaced the vendor footer, the framework
+        // version has nowhere left to appear, so the assertion covers the
+        // whole page rather than stopping at the footer.
+        $this->assertStringContainsString((string) config('meridian.version'), $body);
+        $this->assertStringNotContainsString(Dashboard::version(), $body);
     }
 
     private function godModeUser(): User

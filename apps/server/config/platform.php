@@ -127,10 +127,27 @@ return [
      |
      | Example: '/css/styles.css', 'https://example.com/scripts.js'
      |
+     | Meridian's console visual identity is loaded here (M15C.1, M15C.8;
+     | GOD-029, GOD-034, GOD-037). This is the framework's supported extension
+     | point for adding dashboard styling, so the identity survives a framework
+     | upgrade without reapplying it by hand.
+     |
+     | Order matters: 'meridian-tokens.css' declares the shared Meridian
+     | semantic tokens (the same file the field app loads) and
+     | 'meridian-console.css' maps the framework's own custom properties onto
+     | them. Both load after the framework stylesheet, which is what lets the
+     | second file override framework defaults without patching them.
+     |
+     | Paths are root-relative rather than asset() URLs because this file is
+     | cacheable configuration and must not bake a host name into the cache.
+     |
      */
 
     'resource' => [
-        'stylesheets' => [],
+        'stylesheets' => [
+            '/css/meridian-tokens.css',
+            '/css/meridian-console.css',
+        ],
         'scripts'     => [],
     ],
 
@@ -161,11 +178,16 @@ return [
      | Example: If your file exists at '/views/brand/header.blade.php', the value for
      | the 'header' key should be 'brand.header'.
      |
+     | Meridian replaces both (M15C.3, M15C.4, M15C.5; GOD-030 through
+     | GOD-033, GOD-037). The header carries the Meridian mark, the product
+     | name, and the Meridian favicon; the footer states Meridian's license,
+     | copyright range, and build version in place of the framework's.
+     |
      */
 
     'template' => [
-        'header' => '',
-        'footer' => '',
+        'header' => 'meridian.console-header',
+        'footer' => 'meridian.footer',
     ],
 
     /*

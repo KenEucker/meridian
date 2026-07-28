@@ -13,6 +13,7 @@ REQUIRED_FILES = [
     "docs/process/github-branch-protection.md",
     "docs/process/conventional-commits.md",
     "docs/process/versioning-strategy.md",
+    "docs/process/god-mode-console-override-inventory.md",
     "docs/adr/0001-shared-vue-client.md",
     "docs/qa/README.md",
     "docs/qa/QA-BOOT-01-fresh-checkout-boots.md",

@@ -1,0 +1,824 @@
+/*
+ * Meridian God Mode console visual identity (M15C.1, M15C.2; GOD-029, GOD-034,
+ * GOD-036).
+ *
+ * The console is built on an administrative framework whose chrome ships its
+ * own palette, type scale, and spacing. This file is the bridge: it maps the
+ * framework's Bootstrap custom properties onto the shared Meridian semantic
+ * tokens in `meridian-tokens.css`, so console surface, foreground, border,
+ * focus, and action colors resolve from `@meridian/ui-tokens` rather than from
+ * framework defaults.
+ *
+ * Rules this file follows:
+ *
+ *   - It never restates a color. Every value is `var(--m-*)` or a `color-mix()`
+ *     over one, so a token change re-resolves the console and the console can
+ *     never disagree with the field app about what Meridian's palette is.
+ *   - It is loaded through `platform.resource.stylesheets` in
+ *     `config/platform.php` — a supported configuration extension point — and
+ *     it overrides framework styling from the outside. No vendor stylesheet is
+ *     patched and no vendor view is copied into the application (GOD-037; see
+ *     docs/process/god-mode-console-override-inventory.md).
+ *   - It is Meridian's own palette permanently. The console never loads an
+ *     organization branding stylesheet and never carries the
+ *     `[data-organization-branding]` attribute the branding layer is scoped to,
+ *     so a branded organization cannot change how the console looks
+ *     (GOD-035, BRAND-003).
+ *
+ * Contrast. Every pair introduced here is checked in `ConsoleContrastTest`
+ * against the same WCAG 2.1 AA thresholds the branding validator applies
+ * (GOD-036; accessibility checklist section 6).
+ */
+
+/* -------------------------------------------------------------------------
+ * 1. Token bridge (M15C.1)
+ * ---------------------------------------------------------------------- */
+
+:root,
+[data-bs-theme="light"] {
+    /* The console follows the operator's theme preference through the shared
+       tokens, so scrollbars and native form widgets are told to follow too
+       rather than staying light against a dark console. */
+    color-scheme: light dark;
+
+    /* Surfaces. The framework paints the workspace on its own grey; Meridian
+       paints it on the app canvas and lifts cards to the base surface. */
+    --bs-body-bg: var(--m-surface-app);
+    --bs-secondary-bg: var(--m-surface-base);
+    --bs-tertiary-bg: var(--m-surface-raised);
+
+    /* Foreground */
+    --bs-body-color: var(--m-text-primary);
+    --bs-emphasis-color: var(--m-text-primary);
+    --bs-heading-color: var(--m-text-primary);
+    --bs-secondary-color: var(--m-text-muted);
+    --bs-tertiary-color: var(--m-text-muted);
+    --bs-link-color: var(--m-text-secondary);
+    --bs-link-hover-color: var(--m-text-primary);
+    --bs-code-color: var(--m-text-secondary);
+
+    /*
+     * Borders and radii.
+     *
+     * `--m-border-strong` is the token set's component boundary and
+     * `--m-border-subtle` is its decorative divider, which the token file
+     * deliberately allows below the 3:1 non-text threshold. The console keeps
+     * that split: dividers and card edges take the subtle token, and anything
+     * that bounds a control takes `--m-console-border`.
+     *
+     * `--m-console-border` restates the light-mode formula for
+     * `--m-border-strong` — the border color pulled 30% toward the foreground —
+     * rather than using the token, because the dark theme replaces that token
+     * with a literal that measures 2.17:1 against the dark surface. Applying
+     * the formula in both themes keeps every control boundary above 3:1
+     * (GOD-036) without changing a shared token the field app also reads.
+     */
+    --m-console-border: color-mix(in srgb, var(--m-border-default) 70%, var(--m-text-primary));
+
+    --bs-border-color: var(--m-console-border);
+    --bs-border-color-translucent: var(--m-border-subtle);
+    --bs-border-radius: var(--m-radius-md);
+    --bs-border-radius-sm: var(--m-radius-sm);
+    --bs-border-radius-lg: var(--m-radius-lg);
+    --bs-border-radius-xl: var(--m-radius-lg);
+    --bs-border-radius-xxl: var(--m-radius-lg);
+    --bs-border-radius-pill: var(--m-radius-pill);
+
+    /* Elevation */
+    --bs-box-shadow-sm: var(--m-shadow-sm);
+    --bs-box-shadow: var(--m-shadow-md);
+    --bs-box-shadow-lg: var(--m-shadow-overlay);
+
+    /* Focus. The framework's ring is a translucent wash of its own blue; the
+       visible indicator is re-declared in section 6 so it does not depend on
+       the wash alone. */
+    --bs-focus-ring-width: 3px;
+    --bs-focus-ring-color: color-mix(in srgb, var(--m-focus-ring) 40%, transparent);
+
+    /* Theme colors. The console has no product state of its own, so these are
+       mapped to the semantic action and status tokens rather than to the
+       platform palette directly. */
+    --bs-primary: var(--m-action-primary-bg);
+    --bs-secondary: var(--m-action-secondary-bg);
+    --bs-success: var(--m-status-success);
+    --bs-info: var(--m-status-neutral);
+    --bs-warning: var(--m-status-warning);
+    --bs-danger: var(--m-status-danger);
+    --bs-light: var(--m-surface-raised);
+    --bs-dark: var(--m-platform-primary);
+
+    /* Subtle variants back the alert, badge, and table tints. Each is the
+       status color mixed into the surface it is drawn on, so the tint follows
+       the palette and stays light in light mode and deep in dark mode. Their
+       text emphasis is the ordinary foreground: a status tint is a background,
+       and the message on it is read at full foreground contrast. */
+    --bs-primary-text-emphasis: var(--m-text-primary);
+    --bs-secondary-text-emphasis: var(--m-text-primary);
+    --bs-success-text-emphasis: var(--m-text-primary);
+    --bs-info-text-emphasis: var(--m-text-primary);
+    --bs-warning-text-emphasis: var(--m-text-primary);
+    --bs-danger-text-emphasis: var(--m-text-primary);
+    --bs-light-text-emphasis: var(--m-text-primary);
+    --bs-dark-text-emphasis: var(--m-text-primary);
+
+    --bs-primary-bg-subtle: color-mix(in srgb, var(--m-status-neutral) 14%, var(--m-surface-base));
+    --bs-secondary-bg-subtle: color-mix(in srgb, var(--m-status-neutral) 8%, var(--m-surface-base));
+    --bs-success-bg-subtle: color-mix(in srgb, var(--m-status-success) 14%, var(--m-surface-base));
+    --bs-info-bg-subtle: color-mix(in srgb, var(--m-status-neutral) 14%, var(--m-surface-base));
+    --bs-warning-bg-subtle: color-mix(in srgb, var(--m-status-warning) 14%, var(--m-surface-base));
+    --bs-danger-bg-subtle: color-mix(in srgb, var(--m-status-danger) 14%, var(--m-surface-base));
+    --bs-light-bg-subtle: var(--m-surface-raised);
+    --bs-dark-bg-subtle: color-mix(in srgb, var(--m-platform-primary) 14%, var(--m-surface-base));
+
+    /* A status border takes the same treatment as any other console boundary:
+       the color pulled 30% toward the foreground, which clears the 3:1
+       non-text threshold against the surface in both themes where the status
+       color alone does not. */
+    --bs-primary-border-subtle: color-mix(in srgb, var(--m-status-neutral) 70%, var(--m-text-primary));
+    --bs-secondary-border-subtle: var(--m-console-border);
+    --bs-success-border-subtle: color-mix(in srgb, var(--m-status-success) 70%, var(--m-text-primary));
+    --bs-info-border-subtle: color-mix(in srgb, var(--m-status-neutral) 70%, var(--m-text-primary));
+    --bs-warning-border-subtle: color-mix(in srgb, var(--m-status-warning) 70%, var(--m-text-primary));
+    --bs-danger-border-subtle: color-mix(in srgb, var(--m-status-danger) 70%, var(--m-text-primary));
+    --bs-light-border-subtle: var(--m-border-subtle);
+    --bs-dark-border-subtle: var(--m-console-border);
+
+    --bs-highlight-color: var(--m-text-primary);
+    --bs-highlight-bg: color-mix(in srgb, var(--m-status-warning) 24%, var(--m-surface-base));
+
+    /* Status text. A status color is validated as a filled background and as a
+       non-text indicator, not as body text on a surface — the accent reaches
+       3.23:1 on the surface, which is an indicator, not a label. Status *text*
+       is therefore the status color pulled toward the foreground until it
+       clears the normal-text threshold, which it does in both themes because
+       the foreground it is pulled toward flips with the theme. */
+    --m-console-text-success: color-mix(in srgb, var(--m-status-success) 55%, var(--m-text-primary));
+    --m-console-text-warning: color-mix(in srgb, var(--m-status-warning) 55%, var(--m-text-primary));
+    --m-console-text-danger: color-mix(in srgb, var(--m-status-danger) 55%, var(--m-text-primary));
+
+    --bs-form-valid-color: var(--m-console-text-success);
+    --bs-form-valid-border-color: var(--m-status-success);
+    --bs-form-invalid-color: var(--m-console-text-danger);
+    --bs-form-invalid-border-color: var(--m-status-danger);
+
+    /* Typography (M15C.2). Style guide section 5.3: Inter, with UI body at
+       14px and the heading scale stepping up from it. The framework shrinks
+       the root font to 0.95rem to fit its own scale; Meridian sets its sizes
+       from the token scale instead, so the root goes back to the browser
+       default and `rem` means what the tokens say it means. */
+    --bs-root-font-size: 1rem;
+    --bs-body-font-family: var(--m-font-body);
+    --bs-body-font-size: var(--m-text-sm);
+    --bs-body-line-height: 1.45;
+}
+
+/* -------------------------------------------------------------------------
+ * 2. Console chrome
+ * ---------------------------------------------------------------------- */
+
+body {
+    background-color: var(--m-surface-app);
+    color: var(--m-text-primary);
+    font-family: var(--m-font-body);
+    font-size: var(--m-text-sm);
+    line-height: 1.45;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--m-text-primary);
+    font-family: var(--m-font-heading);
+}
+
+/* Style guide 5.3, converted from the type table. H3 and below resolve from
+   the token scale; H1 and H2 are documentation-title and section sizes that
+   sit above the largest UI token. */
+h1, .h1 { font-size: 2.5rem; font-weight: 700; line-height: 1.15; }
+h2, .h2 { font-size: 2rem; font-weight: 650; line-height: 1.2; }
+h3, .h3 { font-size: var(--m-text-xl); font-weight: 600; line-height: 1.25; }
+h4, .h4 { font-size: var(--m-text-lg); font-weight: 600; line-height: 1.3; }
+h5, .h5 { font-size: var(--m-text-md); font-weight: 600; line-height: 1.35; }
+h6, .h6 { font-size: var(--m-text-sm); font-weight: 600; line-height: 1.4; }
+
+small, .small { font-size: var(--m-text-xs); line-height: 1.35; }
+
+.text-muted,
+.text-body-secondary {
+    color: var(--m-text-muted) !important;
+}
+
+.text-body-emphasis,
+.link-body-emphasis {
+    color: var(--m-text-primary) !important;
+}
+
+.text-success { color: var(--m-console-text-success) !important; }
+.text-warning { color: var(--m-console-text-warning) !important; }
+.text-danger { color: var(--m-console-text-danger) !important; }
+.text-primary,
+.text-info { color: var(--m-text-secondary) !important; }
+
+/* The framework groups `.layout` — the screen title block and every layout
+   wrapper — with `.bg-white` in one `!important` rule, so the override has to
+   name the same set. Missing `.layout` leaves the screen heading white on an
+   otherwise dark console. */
+.bg-white,
+.layout,
+.editor-preview-side,
+.dropzone .dz-preview,
+.dropzone-wrapper .dz-preview {
+    background-color: var(--m-surface-base) !important;
+}
+
+.bg-light {
+    background-color: var(--m-surface-raised) !important;
+}
+
+.shadow-sm { box-shadow: var(--m-shadow-sm) !important; }
+.shadow { box-shadow: var(--m-shadow-md) !important; }
+.shadow-lg { box-shadow: var(--m-shadow-overlay) !important; }
+
+.rounded { border-radius: var(--m-radius-md) !important; }
+
+/* Screen layout. The workspace is the framework's content column; the
+   breadcrumb, title block, and command bar sit inside it. */
+.workspace {
+    padding-inline: var(--m-space-4);
+}
+
+.workspace > .command-bar-wrapper {
+    margin-bottom: var(--m-space-4);
+}
+
+.breadcrumb {
+    --bs-breadcrumb-font-size: var(--m-text-xs);
+    --bs-breadcrumb-margin-bottom: var(--m-space-2);
+    --bs-breadcrumb-item-active-color: var(--m-text-muted);
+    --bs-breadcrumb-divider-color: var(--m-text-muted);
+}
+
+/* -------------------------------------------------------------------------
+ * 3. Navigation (M15C.1, M15C.3)
+ *
+ * The framework paints the sidebar with its `bg-dark` utility and forces
+ * `data-bs-theme="dark"` on it regardless of the user's theme, so the region
+ * needs a foreground that is light in both Meridian themes. That pair already
+ * exists and is already contrast-validated: `--m-action-primary-bg` is the
+ * platform primary in light and dark alike, and `--m-action-primary-text` is
+ * the label color the branding token resolver pairs with it. The navigation is
+ * therefore styled as one large primary-colored surface rather than as a
+ * second theme.
+ * ---------------------------------------------------------------------- */
+
+.aside {
+    --m-console-nav-bg: var(--m-action-primary-bg);
+    --m-console-nav-fg: var(--m-action-primary-text);
+    --m-console-nav-muted: color-mix(in srgb, var(--m-console-nav-fg) 78%, var(--m-console-nav-bg));
+    --m-console-nav-hover: color-mix(in srgb, var(--m-console-nav-fg) 16%, transparent);
+
+    /* The recessed panel at the foot of the navigation. Pulled toward the
+       destructive action's label color rather than toward the foreground,
+       because that token is the token set's theme-invariant dark and keeps
+       this panel darker than the navigation in both themes. */
+    --m-console-nav-sunken: color-mix(in srgb, var(--m-console-nav-bg) 82%, var(--m-action-destructive-text));
+
+    --bs-body-bg: var(--m-console-nav-bg);
+    --bs-body-color: var(--m-console-nav-fg);
+    --bs-emphasis-color: var(--m-console-nav-fg);
+    --bs-heading-color: var(--m-console-nav-fg);
+    --bs-secondary-color: var(--m-console-nav-muted);
+    --bs-tertiary-color: var(--m-console-nav-muted);
+    --bs-secondary-bg: var(--m-console-nav-hover);
+    --bs-tertiary-bg: var(--m-console-nav-hover);
+    --bs-border-color: color-mix(in srgb, var(--m-console-nav-fg) 30%, transparent);
+    --bs-border-color-translucent: color-mix(in srgb, var(--m-console-nav-fg) 20%, transparent);
+    --bs-link-color: var(--m-console-nav-fg);
+    --bs-link-hover-color: var(--m-console-nav-fg);
+    --bs-focus-ring-color: color-mix(in srgb, var(--m-console-nav-fg) 55%, transparent);
+
+    --bs-nav-link-bg: var(--m-console-nav-hover);
+    --bs-nav-pills-link-active-bg: var(--m-console-nav-fg);
+    --bs-nav-pills-link-active-color: var(--m-console-nav-bg);
+    --bs-nav-pills-border-radius: var(--m-radius-sm);
+}
+
+.aside,
+.aside.bg-dark,
+.aside .bg-dark {
+    background-color: var(--m-console-nav-bg) !important;
+    color: var(--m-console-nav-fg);
+}
+
+.aside .nav-pills {
+    --bs-nav-link-bg: var(--m-console-nav-hover);
+    --bs-nav-pills-link-active-bg: var(--m-console-nav-fg);
+    padding-inline: var(--m-space-2);
+}
+
+.aside .nav-pills > li > a {
+    color: var(--m-console-nav-fg) !important;
+    font-size: var(--m-text-sm);
+    padding: var(--m-space-2) var(--m-space-3);
+}
+
+.aside .nav-pills > li > a:focus,
+.aside .nav-pills > li > a:hover {
+    background-color: var(--m-console-nav-hover) !important;
+    color: var(--m-console-nav-fg) !important;
+}
+
+/* The active screen is carried by a filled pill and a heavier weight, not by
+   color alone (accessibility checklist section 6). */
+.aside .nav-pills .nav-link.active,
+.aside .nav-pills .show > .nav-link {
+    background-color: var(--m-console-nav-fg) !important;
+    color: var(--m-console-nav-bg) !important;
+    font-weight: 600;
+}
+
+/* Menu group titles and the scroll-to-top affordance are supporting text. The
+   `!important` matches the utility it has to beat: the framework marks them
+   `text-muted`, which resolves to the workspace's muted foreground and is not
+   readable on the navigation. */
+.aside .nav-title,
+.aside .scroll-to-top,
+.aside small,
+.aside .text-muted,
+.aside .text-body-secondary {
+    color: var(--m-console-nav-muted) !important;
+    font-size: var(--m-text-xs);
+    letter-spacing: 0.04em;
+}
+
+.aside hr,
+.aside .dropdown-divider {
+    border-color: color-mix(in srgb, var(--m-console-nav-fg) 30%, transparent);
+    opacity: 1;
+}
+
+.aside .form-control,
+.aside .form-select {
+    background-color: var(--m-console-nav-hover);
+    border-color: color-mix(in srgb, var(--m-console-nav-fg) 40%, transparent);
+    color: var(--m-console-nav-fg);
+}
+
+.aside .form-control::placeholder {
+    color: var(--m-console-nav-muted);
+}
+
+/* The signed-in-user panel, which the framework paints its own near-black. */
+.aside .profile-container {
+    background: var(--m-console-nav-sunken);
+    border-radius: var(--m-radius-md);
+}
+
+/* -------------------------------------------------------------------------
+ * 4. Brand lockup (M15C.3; GOD-030)
+ *
+ * Expanded navigation shows the Meridian mark with the product name; the
+ * collapsed navigation state shows the mark alone. The framework collapses the
+ * sidebar below the `lg` breakpoint, which is the same breakpoint its own
+ * header partial used to swap a house icon for the application name, so the
+ * compact state is driven from the breakpoint rather than from a class the
+ * framework does not expose.
+ * ---------------------------------------------------------------------- */
+
+.meridian-brand {
+    align-items: center;
+    color: var(--m-text-primary);
+    display: inline-flex;
+    gap: var(--m-space-3);
+    text-decoration: none;
+}
+
+.aside .meridian-brand {
+    color: var(--m-console-nav-fg);
+}
+
+.meridian-brand__mark {
+    block-size: 2.25rem;
+    flex: none;
+    inline-size: 2.25rem;
+    object-fit: contain;
+}
+
+.meridian-brand__name {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.meridian-brand__product {
+    font-family: var(--m-font-heading);
+    font-size: var(--m-text-lg);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.meridian-brand__context {
+    color: var(--m-text-muted);
+    font-size: var(--m-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.aside .meridian-brand__context {
+    color: var(--m-console-nav-muted);
+}
+
+/* Collapsed navigation: the compact mark, and nothing else. */
+@media (max-width: 991.98px) {
+    .aside .meridian-brand__name {
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        block-size: 1px;
+        inline-size: 1px;
+        margin: -1px;
+        overflow: hidden;
+        padding: 0;
+        position: absolute;
+        white-space: nowrap;
+    }
+
+    .aside .meridian-brand__mark {
+        block-size: 1.75rem;
+        inline-size: 1.75rem;
+    }
+}
+
+/* -------------------------------------------------------------------------
+ * 5. Tables, forms, and actions (M15C.1, M15C.2)
+ * ---------------------------------------------------------------------- */
+
+/* The framework hard-codes its own corner radii on top of Bootstrap's
+   variables, so the Meridian radius scale is applied to the shapes directly
+   rather than only through `--bs-border-radius`. */
+.btn,
+.btn-group,
+.form-control,
+.form-select {
+    border-radius: var(--m-radius-sm);
+}
+
+.card,
+.panel,
+.ts-dropdown,
+.ts-dropdown.form-control,
+.ts-dropdown.form-select {
+    border-radius: var(--m-radius-md);
+}
+
+.table {
+    --bs-table-color: var(--m-text-primary);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--m-border-subtle);
+    --bs-table-striped-color: var(--m-text-primary);
+    --bs-table-striped-bg: color-mix(in srgb, var(--m-text-primary) 4%, transparent);
+    --bs-table-active-color: var(--m-text-primary);
+    --bs-table-active-bg: color-mix(in srgb, var(--m-text-primary) 8%, transparent);
+    --bs-table-hover-color: var(--m-text-primary);
+    --bs-table-hover-bg: color-mix(in srgb, var(--m-text-primary) 6%, transparent);
+    font-size: var(--m-text-sm);
+}
+
+/* The framework styles table cells at `.table thead tr th` and
+   `.table tbody tr td`, which outrank Bootstrap's own child selector, so the
+   Meridian scale is applied at the same selectors rather than a shorter one. */
+.table thead tr th,
+.table tbody tr td {
+    padding: var(--m-space-3) var(--m-space-4);
+}
+
+.table tbody tr td {
+    color: var(--m-text-primary);
+    font-size: var(--m-text-sm);
+}
+
+.table thead tr th {
+    border-bottom-color: var(--m-console-border);
+    color: var(--m-text-muted);
+    font-size: var(--m-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.form-control,
+.form-select {
+    background-color: var(--m-surface-base);
+    border-color: var(--m-console-border);
+    border-radius: var(--m-radius-sm);
+    color: var(--m-text-primary);
+    font-size: var(--m-text-sm);
+    padding: var(--m-space-2) var(--m-space-3);
+}
+
+.form-select {
+    padding-inline-end: var(--m-space-8);
+}
+
+.form-control::placeholder {
+    color: var(--m-text-muted);
+}
+
+.form-label,
+.form-check-label {
+    color: var(--m-text-primary);
+    font-size: var(--m-text-sm);
+    font-weight: 600;
+    margin-bottom: var(--m-space-1);
+}
+
+.form-text {
+    color: var(--m-text-muted);
+    font-size: var(--m-text-xs);
+}
+
+/* A disabled control recedes to the canvas rather than fading to the
+   framework's grey at reduced opacity, so its label stays above the
+   muted-foreground contrast floor in both themes, and it is marked by more
+   than color: the surface drops out of the input set, the cursor changes, and
+   the native disabled state remains (accessibility checklist section 6). */
+.form-control:disabled,
+.form-select:disabled,
+.btn:disabled,
+.btn.disabled,
+fieldset:disabled .btn {
+    background-color: var(--m-surface-app);
+    border-color: var(--m-console-border);
+    color: var(--m-text-muted);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+/*
+ * Buttons.
+ *
+ * The framework does not theme its buttons through Bootstrap's `--bs-btn-*`
+ * variables — it paints each variant with hard-coded colors carrying
+ * `!important`. Sizing and shape still come from the variables, but the colors
+ * have to be re-declared at the same weight. Each variant is mapped to the
+ * semantic action or status token whose meaning it carries, together with the
+ * label color the token set already pairs with that fill, so no button is a
+ * legible fill with an illegible label.
+ */
+.btn {
+    --bs-btn-padding-y: var(--m-space-2);
+    --bs-btn-padding-x: var(--m-space-4);
+    --bs-btn-font-size: var(--m-text-sm);
+    --bs-btn-border-radius: var(--m-radius-sm);
+    font-weight: 600;
+}
+
+/* The framework's neutral button: a surface with a boundary, not a fill. */
+.btn-default,
+.btn-light,
+.btn-outline-primary {
+    background-color: var(--m-surface-base) !important;
+    border-color: var(--m-console-border) !important;
+    box-shadow: var(--m-shadow-sm);
+    color: var(--m-text-primary) !important;
+}
+
+.btn-default:hover,
+.btn-default:focus,
+.btn-default:active,
+.btn-default.active,
+.btn-light:hover,
+.btn-light:focus,
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    background-color: var(--m-surface-raised) !important;
+    border-color: var(--m-console-border) !important;
+    color: var(--m-text-primary) !important;
+}
+
+.btn-primary,
+.btn-info {
+    background-color: var(--m-action-primary-bg) !important;
+    border-color: var(--m-action-primary-bg) !important;
+    color: var(--m-action-primary-text) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active,
+.btn-primary.active,
+.btn-info:hover,
+.btn-info:focus {
+    background-color: color-mix(in srgb, var(--m-action-primary-bg) 86%, var(--m-text-primary)) !important;
+    border-color: color-mix(in srgb, var(--m-action-primary-bg) 86%, var(--m-text-primary)) !important;
+    color: var(--m-action-primary-text) !important;
+}
+
+.btn-secondary,
+.btn-success {
+    background-color: var(--m-action-secondary-bg) !important;
+    border-color: var(--m-action-secondary-bg) !important;
+    color: var(--m-action-secondary-text) !important;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus,
+.btn-success:hover,
+.btn-success:focus {
+    background-color: color-mix(in srgb, var(--m-action-secondary-bg) 86%, var(--m-text-primary)) !important;
+    border-color: color-mix(in srgb, var(--m-action-secondary-bg) 86%, var(--m-text-primary)) !important;
+    color: var(--m-action-secondary-text) !important;
+}
+
+/* The warning fill is a warm mid-tone that needs a dark label in both themes,
+   so it takes the destructive action's label color rather than the
+   foreground, which flips light in dark mode and drops the pair to 3:1. */
+.btn-warning {
+    background-color: var(--m-status-warning) !important;
+    border-color: var(--m-status-warning) !important;
+    color: var(--m-action-destructive-text) !important;
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+    background-color: color-mix(in srgb, var(--m-status-warning) 86%, var(--m-action-destructive-text)) !important;
+    border-color: color-mix(in srgb, var(--m-status-warning) 86%, var(--m-action-destructive-text)) !important;
+    color: var(--m-action-destructive-text) !important;
+}
+
+.btn-danger {
+    background-color: var(--m-action-destructive-bg) !important;
+    border-color: var(--m-action-destructive-bg) !important;
+    color: var(--m-action-destructive-text) !important;
+}
+
+.btn-danger:hover,
+.btn-danger:focus,
+.btn-danger:active,
+.btn-danger.active {
+    background-color: color-mix(in srgb, var(--m-action-destructive-bg) 86%, var(--m-text-primary)) !important;
+    border-color: color-mix(in srgb, var(--m-action-destructive-bg) 86%, var(--m-text-primary)) !important;
+    color: var(--m-action-destructive-text) !important;
+}
+
+.btn-link {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    color: var(--m-text-secondary) !important;
+}
+
+.btn-link:hover,
+.btn-link:focus {
+    color: var(--m-text-primary) !important;
+}
+
+.btn:disabled,
+.btn.disabled,
+.btn[disabled],
+fieldset:disabled .btn {
+    background-color: var(--m-surface-app) !important;
+    border-color: var(--m-console-border) !important;
+    box-shadow: none;
+    color: var(--m-text-muted) !important;
+}
+
+/* The framework's own selection color, which is neither a Meridian action nor
+   a Meridian status. */
+.list-group-item.active {
+    background-color: var(--m-action-primary-bg) !important;
+    border-color: var(--m-action-primary-bg) !important;
+    color: var(--m-action-primary-text) !important;
+}
+
+/* Badges pair a filled status color with the label color the token set
+   already pairs with it, so a badge is never the one place a status color
+   carries text it fails against. */
+.badge {
+    --bs-badge-border-radius: var(--m-radius-pill);
+    --bs-badge-font-size: var(--m-text-xs);
+    --bs-badge-padding-x: var(--m-space-2);
+    --bs-badge-padding-y: var(--m-space-1);
+}
+
+.badge.bg-primary,
+.badge.bg-info,
+.badge.bg-dark {
+    background-color: var(--m-action-primary-bg) !important;
+    color: var(--m-action-primary-text);
+}
+
+.badge.bg-secondary,
+.badge.bg-success {
+    background-color: var(--m-action-secondary-bg) !important;
+    color: var(--m-action-secondary-text);
+}
+
+.badge.bg-danger,
+.badge.bg-warning {
+    background-color: var(--m-action-destructive-bg) !important;
+    color: var(--m-action-destructive-text);
+}
+
+.card {
+    --bs-card-bg: var(--m-surface-base);
+    --bs-card-border-color: var(--m-border-subtle);
+    --bs-card-border-radius: var(--m-radius-md);
+    --bs-card-spacer-x: var(--m-space-4);
+    --bs-card-spacer-y: var(--m-space-4);
+    --bs-card-cap-bg: var(--m-surface-raised);
+}
+
+.dropdown-menu {
+    --bs-dropdown-bg: var(--m-surface-raised);
+    --bs-dropdown-border-color: var(--m-border-subtle);
+    --bs-dropdown-border-radius: var(--m-radius-md);
+    --bs-dropdown-color: var(--m-text-primary);
+    --bs-dropdown-font-size: var(--m-text-sm);
+    --bs-dropdown-link-color: var(--m-text-primary);
+    --bs-dropdown-link-hover-bg: var(--m-surface-overlay);
+    --bs-dropdown-link-hover-color: var(--m-text-primary);
+    --bs-dropdown-link-active-bg: var(--m-action-primary-bg);
+    --bs-dropdown-link-active-color: var(--m-action-primary-text);
+    --bs-dropdown-link-disabled-color: var(--m-text-muted);
+    --bs-dropdown-box-shadow: var(--m-shadow-overlay);
+}
+
+.modal {
+    --bs-modal-bg: var(--m-surface-base);
+    --bs-modal-border-radius: var(--m-radius-lg);
+    --bs-modal-color: var(--m-text-primary);
+    --bs-modal-box-shadow: var(--m-shadow-overlay);
+    --bs-modal-padding: var(--m-space-5);
+}
+
+.pagination {
+    --bs-pagination-bg: var(--m-surface-base);
+    --bs-pagination-border-color: var(--m-border-subtle);
+    --bs-pagination-border-radius: var(--m-radius-sm);
+    --bs-pagination-color: var(--m-text-secondary);
+    --bs-pagination-font-size: var(--m-text-sm);
+    --bs-pagination-hover-bg: var(--m-surface-raised);
+    --bs-pagination-hover-color: var(--m-text-primary);
+    --bs-pagination-active-bg: var(--m-action-primary-bg);
+    --bs-pagination-active-border-color: var(--m-action-primary-bg);
+    --bs-pagination-active-color: var(--m-action-primary-text);
+    --bs-pagination-disabled-bg: var(--m-surface-app);
+    --bs-pagination-disabled-color: var(--m-text-muted);
+}
+
+.alert {
+    --bs-alert-border-radius: var(--m-radius-md);
+    --bs-alert-padding-x: var(--m-space-4);
+    --bs-alert-padding-y: var(--m-space-3);
+}
+
+/* -------------------------------------------------------------------------
+ * 6. Focus visibility (M15C.9; GOD-036)
+ *
+ * A visible ring on every focusable control, drawn in the focus token rather
+ * than left to the framework's translucent wash. The navigation overrides the
+ * ring color because its surface is the primary color, against which the
+ * focus token does not reach the 3:1 non-text threshold.
+ * ---------------------------------------------------------------------- */
+
+:is(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+    outline: 2px solid var(--m-focus-ring);
+    outline-offset: 2px;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--m-focus-ring);
+    box-shadow: 0 0 0 var(--bs-focus-ring-width) var(--bs-focus-ring-color);
+}
+
+.aside :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline-color: var(--m-console-nav-fg);
+}
+
+/* -------------------------------------------------------------------------
+ * 7. Footer (M15C.5; GOD-032, GOD-033, GOD-028)
+ * ---------------------------------------------------------------------- */
+
+.meridian-footer {
+    color: var(--m-text-muted);
+    font-size: var(--m-text-xs);
+    line-height: 1.5;
+    margin-block: var(--m-space-6);
+    padding-inline: var(--m-space-4);
+    text-align: center;
+}
+
+.meridian-footer p {
+    margin-bottom: var(--m-space-1);
+}
+
+.meridian-footer a {
+    color: var(--m-text-secondary);
+}
+
+.meridian-footer__version {
+    font-variant-numeric: tabular-nums;
+}

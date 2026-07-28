@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { clearNodeUrl, setNodeUrl } from "@/app/nodeConnection";
 import {
   buildReadinessChecklist,
   resolveReadinessChecklist,
@@ -9,6 +10,31 @@ import {
 } from "@/readiness/checklist";
 import type { DeviceSigningReadiness } from "@/readiness/deviceSigning";
 import type { LocalEncryptionReadiness } from "@/readiness/localEncryption";
+
+afterEach(() => {
+  clearNodeUrl();
+  window.localStorage.clear();
+});
+
+/** No node has been configured and none served this client. */
+function unknownNode() {
+  return {
+    url: "http://127.0.0.1:8000",
+    source: "default" as const,
+    servedUrl: null,
+    overridesServingNode: false,
+  };
+}
+
+/** This device has been pointed at a node. */
+function configuredNode() {
+  return {
+    url: "https://onsite.example.org",
+    source: "configured" as const,
+    servedUrl: null,
+    overridesServingNode: false,
+  };
+}
 
 // Technical spec section 14 lists the readiness items in this exact order.
 const SECTION_14_ORDER: ReadinessItemKey[] = [
@@ -68,6 +94,7 @@ function inputs(
   return {
     localEncryption: availableEncryption(),
     deviceSigning: availableSigning(),
+    node: configuredNode(),
     ...overrides,
   };
 }
@@ -150,7 +177,6 @@ describe("buildReadinessChecklist", () => {
       "eventSelected",
       "localCacheComplete",
       "lastSyncCompleted",
-      "trustedServerKnown",
     ]);
     for (const item of items) {
       if (item.status === "pending") {
@@ -164,7 +190,7 @@ describe("summarizeReadiness", () => {
   it("counts items by status", () => {
     const summary = summarizeReadiness(buildReadinessChecklist(inputs()));
 
-    expect(summary).toEqual({ ready: 2, notReady: 0, pending: 6, total: 8 });
+    expect(summary).toEqual({ ready: 3, notReady: 0, pending: 5, total: 8 });
   });
 
   it("counts a failing capability as not ready", () => {
@@ -172,7 +198,54 @@ describe("summarizeReadiness", () => {
       buildReadinessChecklist(inputs({ localEncryption: unavailableEncryption() })),
     );
 
-    expect(summary).toEqual({ ready: 1, notReady: 1, pending: 6, total: 8 });
+    expect(summary).toEqual({ ready: 2, notReady: 1, pending: 5, total: 8 });
+  });
+});
+
+describe("trusted server known", () => {
+  it("is ready once this device knows which node it works against", () => {
+    const items = buildReadinessChecklist(inputs());
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.trustedServerKnown.status).toBe("ready");
+    expect(byKey.trustedServerKnown.detail).toBe("https://onsite.example.org");
+  });
+
+  it("is not ready while the device is falling back to the development default", () => {
+    const items = buildReadinessChecklist(inputs({ node: unknownNode() }));
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.trustedServerKnown.status).toBe("not-ready");
+    expect(byKey.trustedServerKnown.detail).toContain("No node is configured");
+  });
+
+  it("says so when the device is pointed somewhere other than the serving node", () => {
+    const items = buildReadinessChecklist(
+      inputs({
+        node: {
+          url: "https://onsite.example.org",
+          source: "configured",
+          servedUrl: "https://central.example.org",
+          overridesServingNode: true,
+        },
+      }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.trustedServerKnown.status).toBe("ready");
+    expect(byKey.trustedServerKnown.detail).toContain(
+      "not the node that served this app",
+    );
+  });
+
+  it("reflects a node set on this device", () => {
+    setNodeUrl("https://onsite.example.org");
+
+    const items = resolveReadinessChecklist(capableScope());
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.trustedServerKnown.status).toBe("ready");
+    expect(byKey.trustedServerKnown.detail).toBe("https://onsite.example.org");
   });
 });
 
