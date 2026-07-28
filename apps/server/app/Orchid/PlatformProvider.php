@@ -23,10 +23,11 @@ class PlatformProvider extends OrchidServiceProvider
 
         parent::boot($dashboard);
 
-        // Expose the shared Meridian semantic UI tokens (M2.5) on the admin
-        // surface so admin components draw from the same baseline as the field
-        // app. The served file mirrors packages/ui-tokens/tokens.css.
-        $dashboard->registerResource('stylesheets', asset('css/meridian-tokens.css'));
+        // The shared Meridian semantic UI tokens (M2.5) and the console token
+        // bridge (M15C.1) are registered through `platform.resource.stylesheets`
+        // in config/platform.php instead of here, so the console's visual
+        // identity lives entirely in the framework's supported configuration
+        // extension points (GOD-037).
         $dashboard->registerResource('scripts', asset('js/meridian-admin.js'));
     }
 
@@ -48,9 +49,13 @@ class PlatformProvider extends OrchidServiceProvider
                 ->icon('bs.people')
                 ->route('platform.systems.users')
                 ->permission('platform.systems.users')
-                ->title(__('Access Controls')),
+                ->title(__('Console Access')),
 
-            Menu::make(__('Roles'))
+            // The administrative framework's own roles, which decide who may
+            // open this console and nothing else. Labelled for what they do,
+            // because "Roles" next to Meridian's Permission Catalog reads as
+            // though one of them is the operational permission model.
+            Menu::make(__('Console Roles'))
                 ->icon('bs.shield')
                 ->route('platform.systems.roles')
                 ->permission('platform.systems.roles')
@@ -113,11 +118,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.document-fragments')
                 ->permission('platform.document-fragments'),
 
+            Menu::make(__('Permission Catalog'))
+                ->icon('bs.key')
+                ->route('platform.permissions')
+                ->permission('platform.permissions')
+                ->title(__('God Mode')),
+
             Menu::make(__('Sync Conflicts'))
                 ->icon('bs.exclamation-diamond')
                 ->route('platform.sync-conflicts')
-                ->permission('platform.sync-conflicts')
-                ->title(__('God Mode')),
+                ->permission('platform.sync-conflicts'),
 
             Menu::make(__('Node Configuration'))
                 ->icon('bs.server')
@@ -151,8 +161,8 @@ class PlatformProvider extends OrchidServiceProvider
     public function permissions(): array
     {
         return [
-            ItemPermission::group(__('System'))
-                ->addPermission('platform.systems.roles', __('Roles'))
+            ItemPermission::group(__('Console Access'))
+                ->addPermission('platform.systems.roles', __('Console roles'))
                 ->addPermission('platform.systems.users', __('Users')),
 
             ItemPermission::group(__('Operations'))
@@ -169,6 +179,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.document-fragments', __('Document fragments')),
 
             ItemPermission::group(__('God Mode'))
+                ->addPermission('platform.permissions', __('Permission catalog'))
                 ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
                 ->addPermission('platform.node.config', __('Node configuration'))
                 ->addPermission('platform.documentation', __('Operator documentation'))
