@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -39,14 +41,16 @@ describe("resolveServerUrl", () => {
 
 describe("resolveClientDistPath", () => {
   it("defaults to the fixed Meridian Kiosk dist directory beside the desktop app", () => {
+    // Compared through `resolve` rather than against a literal, because these
+    // helpers return native paths and the separator differs by platform.
     expect(resolveClientDistPath({}, "/repo/apps/desktop")).toBe(
-      "/repo/apps/client/dist/kiosk",
+      resolve("/repo/apps/client/dist/kiosk"),
     );
   });
 
   it("uses MERIDIAN_CLIENT_DIST_DIR when provided", () => {
     expect(resolveClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "../custom-dist" }, "/repo/apps/desktop")).toBe(
-      "/repo/apps/custom-dist",
+      resolve("/repo/apps/custom-dist"),
     );
   });
 });
@@ -54,7 +58,7 @@ describe("resolveClientDistPath", () => {
 describe("resolveAppIconPath", () => {
   it("defaults to the Meridian desktop icon asset beside the desktop app", () => {
     expect(resolveAppIconPath({}, "/repo/apps/desktop")).toBe(
-      "/repo/apps/desktop/assets/icon.png",
+      resolve("/repo/apps/desktop/assets/icon.png"),
     );
   });
 });
@@ -132,7 +136,7 @@ describe("resolveAppUrlOverride", () => {
 describe("resolveClientVersion", () => {
   it("reads the root package version by default", () => {
     const readFile = ((path: Parameters<typeof import("node:fs").readFileSync>[0]) => {
-      if (String(path) === "/repo/package.json") {
+      if (String(path) === resolve("/repo/package.json")) {
         return JSON.stringify({ name: "meridian", version: "2.0.0" });
       }
 
@@ -152,7 +156,7 @@ describe("resolveClientVersion", () => {
 
   it("returns unknown when the root package version is not numeric", () => {
     const readFile = ((path: Parameters<typeof import("node:fs").readFileSync>[0]) => {
-      if (String(path) === "/repo/package.json") {
+      if (String(path) === resolve("/repo/package.json")) {
         return JSON.stringify({ name: "meridian", version: "2.0.0-alpha" });
       }
 
