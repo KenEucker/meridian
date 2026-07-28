@@ -22,7 +22,7 @@ versions are valid and somebody has to choose.
 
 ## Where the queue is
 
-**God Mode → Sync Conflicts.** The list is grouped by entity type so you can
+**Infrastructure → Sync Conflicts.** The list is grouped by entity type so you can
 work one class of disagreement at a time, which is faster and produces more
 consistent decisions than working chronologically.
 

@@ -192,7 +192,9 @@ function imsDirectoryLinks(hasIncidentCommand: boolean): WorkflowLink[] {
  * workflow.
  *
  * Me is always here, and Event Info sits next to it whenever the interface is
- * locked to an event. Leads stop there, because their Documents/Shifts/
+ * locked to an event. My Field Reports belongs here too: authoring a Field
+ * Report is something a person does, not something a department workflow owns,
+ * and every role can do it. Leads stop there, because their Documents/Shifts/
  * Trainings pages are reached from inside the Admin and Planning workflows they
  * already work out of; members get those pages here, since they have no
  * workflow to reach them from.
@@ -223,6 +225,12 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
         },
       });
     }
+
+    links.push({
+      label: "My Field Reports",
+      description: "Field report author workspace.",
+      to: { name: "staff.field-reports.index" },
+    });
 
     if (
       fixtureDepartmentHasAdminAccess(department) ||
@@ -255,11 +263,6 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
           name: "events.departments.trainings.index",
           params: departmentRouteParams.value,
         },
-      },
-      {
-        label: "My Field Reports",
-        description: "Field report author workspace.",
-        to: { name: "staff.field-reports.index" },
       },
     );
 
@@ -397,12 +400,6 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         },
       });
     }
-
-    departmentPages.push({
-      label: "My Field Reports",
-      description: "Field report author workspace.",
-      to: { name: "staff.field-reports.index" },
-    });
 
     const remainingDepartmentPages = departmentPages.filter(
       (link) => !staffRouteNames.has(link.to.name),

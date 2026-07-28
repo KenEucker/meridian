@@ -21,7 +21,7 @@ editing a file and restarting the server, so the database override wins.
 
 ## Where to look
 
-**God Mode → Node Configuration** lists every known value with its resolved
+**Infrastructure → Node Configuration** lists every known value with its resolved
 value and its source label. That table is the answer to "why is this setting not
 what I put in the env file" — if the source says *database override*, your file
 value is being shadowed.
@@ -48,7 +48,7 @@ it. Do not expect the console to show it back to you.
 
 ## Changing node settings
 
-On **God Mode → Node Configuration**, **Save settings** writes node name, node
+On **Infrastructure → Node Configuration**, **Save settings** writes node name, node
 role, and central node URL as database overrides.
 
 Two things happen that are easy to miss:

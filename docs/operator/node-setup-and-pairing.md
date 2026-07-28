@@ -19,7 +19,7 @@ Setup runs once. A node that already has an active local node refuses to run it
 again — that is deliberate, because a second identity would orphan everything
 the first one signed.
 
-If you chose the wrong role, change it on **God Mode → Node Configuration**
+If you chose the wrong role, change it on **Infrastructure → Node Configuration**
 rather than trying to re-run setup.
 
 ## Pairing an on-site node with central
@@ -34,7 +34,7 @@ pairing form.
 
 ### On central
 
-1. Open **God Mode → Node Configuration**.
+1. Open **Infrastructure → Node Configuration**.
 2. Select **Create pairing token**.
 3. Copy the token immediately. It is stored only as a hash and is never shown
    again.
@@ -45,7 +45,7 @@ pair will need a new one.
 
 ### On the on-site node
 
-1. Open **God Mode → Node Configuration**.
+1. Open **Infrastructure → Node Configuration**.
 2. Confirm the node role is `onsite` or `standalone`.
 3. Under **Central pairing**, enter central's URL and paste the token.
 4. Select **Pair with central**.
