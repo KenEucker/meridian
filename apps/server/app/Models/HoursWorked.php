@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HoursWorked extends Model
 {
@@ -81,5 +82,19 @@ class HoursWorked extends Model
     public function correctedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'corrected_by_user_id');
+    }
+
+    public function creditLedgerEntries(): HasMany
+    {
+        return $this->hasMany(CreditLedgerEntry::class, 'hours_worked_id');
+    }
+
+    /**
+     * Whether the correction grace period has closed on this record
+     * (HOURS-008). Only finalized hours may be credited (CREDIT-001).
+     */
+    public function isFinalized(): bool
+    {
+        return $this->frozen_at !== null;
     }
 }
