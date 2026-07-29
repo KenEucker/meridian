@@ -3,6 +3,7 @@
 use App\Services\NameReferences\NameReferenceIndexService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -26,3 +27,21 @@ if ((bool) config('meridian.node.sync.schedule_enabled', true)) {
         ->everyMinute()
         ->withoutOverlapping();
 }
+
+// The scheduler heartbeat is how diagnostics can tell a node's cron/worker is
+// actually firing (technical spec 22A.8). It is a cache timestamp, written
+// every minute, read by the scheduler-heartbeat diagnostic check.
+Schedule::call(function (): void {
+    Cache::put(
+        \App\Services\Diagnostics\Checks\SchedulerHeartbeatCheck::CACHE_KEY,
+        now()->toIso8601String(),
+        now()->addHour(),
+    );
+})->everyMinute()->name('meridian-scheduler-heartbeat');
+
+// Sanitized node health reports ride the signed node sync channel to central
+// (technical spec 22A.11). The command refuses quietly on nodes that do not
+// report, so scheduling it unconditionally is safe.
+Schedule::command('meridian:health-report')
+    ->everyTenMinutes()
+    ->withoutOverlapping();
