@@ -12,6 +12,7 @@
 **Additive Update:** Immutable Field Report titles added for MVP.
 **Additive Update:** Fixed Meridian UI modes and deployment target requirements added.
 **Additive Update:** The Briefing (Command hub: Notes, After Action Reports, Directions, Action Plan, Notices) added. Notes are standalone; Command adds them to The Briefing/AAR by reference or link. Alpha 1 implements Notes + add-to-Briefing + hub shells.
+**Additive Update:** Milestone 18 gap-closure requirements added — organization configuration and lifecycle evaluation (ORG-017–ORG-021), staff profile surface (VOL-014), applicant self-service portal (APP-012–APP-015), department team designations, the Department Operator role, and Staff Coordinator (TEAM-011–TEAM-018, section 4.8A), trainer authority (TRAIN-011), document-backed waivers and waiver administration (WAIVER-007–WAIVER-010), relative schedule cutoff and staff shift signup (SHIFT-017, SHIFT-018), Logistics Desk hours correction (SLB-031, SLB-032), Field Reports taken on behalf of another staff member (FR-015–FR-017), equipment assignment scope and the EQUIP-007 duplicate renumbered to EQUIP-008 (EQUIP-009), reporting surfaces (REPORT-014, REPORT-015), notifications (7.24), and public platform surfaces (7.25).
 
 ---
 
@@ -1818,6 +1819,16 @@ Department Administration may:
 - manage department team membership and department settings as permitted
 - view department logistics, operations, and planning settings
 
+Department Operator is the department's dispatch and console function. Department Operator may:
+
+- create Field Reports on behalf of another staff member of the department, recording the reporting staff member as the author and the Operator as the submitter
+- access the field report shortcut
+- access the incident shortcut
+
+Department Operator is the role a person holds while sitting at a radio, taking a report from someone in the field who cannot file it themselves. Further dispatch duties may attach to this role later; the capabilities above are what MVP defines.
+
+Where the department carrying the Operator designation is the event's Incident Command Department, Department Operator additionally carries the event-scoped `ic_operator` capabilities defined in the technical specification section 16.2, including incident create and edit. That authority is event-scoped and applies only for events where that department is the designated Incident Command Department.
+
 ---
 
 ## 4.9 Trainer
@@ -2590,6 +2601,32 @@ Membership in the Organizers Department shall not grant default access to all in
 
 Organizers shall be able to view all published policy/procedure documents in the organization.
 
+### ORG-017
+
+Organizations shall define an hours correction grace period, expressed in days after event end, during which authorized attendance managers may correct hours (HOURS-007) and after which hours freeze (HOURS-008).
+
+The grace period shall default to 14 days after event end. Credits shall not be calculated for an event before its grace period closes (CREDIT-001).
+
+### ORG-018
+
+Organizations shall provide a configuration surface in Meridian Admin covering the organization values that govern staff lifecycle and operational timing, including the Prospective and Active inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.
+
+Organization configuration shall not be reachable only through God Mode.
+
+### ORG-019
+
+Meridian shall evaluate the organization staff lifecycle thresholds on a schedule and apply the resulting status transitions, so that Prospective staff become Inactive after the configured Prospective threshold (STAT-011) and Active staff become Inactive after the configured Active threshold without a person performing the transition.
+
+Evaluation shall be idempotent, shall respect STAT-009, and shall write each transition through the audited status path.
+
+### ORG-020
+
+Only organizers and Lead Organizers shall edit organization configuration. Configuration changes shall be audited.
+
+### ORG-021
+
+Organization configuration shall be organization governance data. The central node shall be authoritative for it, and configuration edits shall be blocked during the active event window under the same governance edit rules that apply to policy and procedure documents (BRAND-021).
+
 ---
 
 ## 7.2 Staff Requirements
@@ -2647,6 +2684,12 @@ Department leads shall have access to emergency contacts for staff in their depa
 Active staff may upload, replace, and remove one current picture on their own staff profile.
 
 Staff profile pictures shall be visible only to users who can already view that staff profile.
+
+### VOL-014
+
+Meridian shall provide a staff profile surface on which a staff member maintains their own profile fields (VOL-009) and their profile picture (VOL-013).
+
+Profile picture upload, replace, and remove shall be online-only. The surface shall be available in every UI mode where the authenticated user can reach their own profile.
 
 ---
 
@@ -2764,6 +2807,24 @@ Rules:
 - There is no “Other / not listed” option and no team interest or team selection on the application form.
 - If a department is archived, removed from the event, or renamed after applications are submitted, submitted interest records are preserved for review and history. UI may display the department’s current name when available and shall use inactive or archived treatment when applicable. Historical interest records are not deleted merely because the department is no longer eligible for new applications.
 
+### APP-012
+
+An applicant shall be able to reach their own applications through a signed magic link sent to the email address recorded on the application, without holding a Meridian staff record or an existing session.
+
+The link shall use the same signed magic-link mechanism as primary email verification (AUTH-010) and shall be requestable from the public application surface by entering an email address.
+
+### APP-013
+
+The applicant portal shall show the applicant every application submitted under that email address, with event, submission date, and current application status, and shall allow the applicant to withdraw an application that is still withdrawable (APP-004).
+
+### APP-014
+
+The applicant portal shall not disclose whether an email address has any applications when a link is requested, and shall not reveal DNS auto-rejection (STAT-006). An auto-rejected DNS application shall not appear in the portal.
+
+### APP-015
+
+Requesting an applicant portal link shall be rate limited per email address and per requesting client. Portal link issuance and applicant withdrawal shall be audited.
+
 ---
 
 ## 7.5 Team Requirements
@@ -2807,6 +2868,56 @@ Team membership may grant system authority.
 ### TEAM-010
 
 System authority shall not be granted as free-floating permissions outside organization, department, or team membership.
+
+### TEAM-011
+
+A department shall be able to designate which of its teams carries each department operational function, following the same designation pattern the organization uses for its Organizers, default Incident Command, and default Placement departments.
+
+A designation is a configuration act that attaches a department operational grant to a named team. It does not create a new hierarchy level, does not rename the team, and does not bypass TEAM-010: authority still reaches a staff member through membership in the designated team.
+
+### TEAM-012
+
+Department team designations shall cover the department operational roles defined in section 4.8A:
+
+- Logistics — carries `department_logistics`
+- Operations — carries `department_operations`
+- Planning — carries `department_planning`
+- Administration — carries `department_administration`
+- Operator — carries `department_operator`
+
+A department may designate zero or one team per function. The same team may hold more than one designation. A team holding no designation carries no department operational grant.
+
+### TEAM-012A
+
+Where a department holds the Operator designation and that department is the event's designated Incident Command Department, members of the designated Operator team shall additionally hold the event-scoped `ic_operator` role for that event.
+
+That elevation shall be derived from the designation and the Incident Command designation together. It shall not persist for events where the department is not the Incident Command Department, and it shall not be separately grantable.
+
+### TEAM-013
+
+Designating a team shall not remove the ability to attach a department operational grant to an additional team directly. Designation is the ordinary configuration path; direct grants remain available for departments whose structure does not fit a single team per function.
+
+### TEAM-014
+
+An organization shall be able to designate which team within its configured Organizers Department carries Staff Coordinator authority.
+
+Staff Coordinator shall be an effective permission role scoped to the organization, carrying application review, approval, rejection, and deferral authority (section 4.4) without carrying the remaining organizer governance authority.
+
+### TEAM-015
+
+Authorized attendance managers, as referenced in HOURS-007, SLB-007, and SLB-029, shall be the holders of `department_logistics` for the department, together with department leads and shift leads for that department.
+
+### TEAM-016
+
+Department team designations shall be maintained from the department administration surface by department leads and department administration. Organization-level designations shall be maintained from the organization configuration surface (ORG-018) by organizers and Lead Organizers.
+
+### TEAM-017
+
+Creating, changing, and removing a team designation shall be audited, and the audit entry shall record the department or organization, the function designated, and the team designated.
+
+### TEAM-018
+
+A permission explanation shown to a user shall name the designation that granted the authority where one exists, so that a user reads why they hold an operational capability rather than only that they hold it.
 
 ---
 
@@ -2852,6 +2963,12 @@ Trainings shall be marked as in-person or online. In-person trainings with a sch
 
 Every training shall have a training page describing when and where the training is available, the time commitment, and what follows completion.
 
+### TRAIN-011
+
+Trainer authority (section 4.9) shall come from team leadership: a team lead is the authorized trainer for trainings scoped to their team, and a department lead is the authorized trainer for trainings scoped to their department.
+
+Trainer shall not be a separately grantable role.
+
 ### WAIVER-001
 
 Waivers may be assigned at organization, department, or team level.
@@ -2875,6 +2992,28 @@ A staff member shall not sign up for or be added to a shift without required wai
 ### WAIVER-006
 
 If a required waiver expires before the event, credential eligibility shall become Blocked until renewed.
+
+### WAIVER-007
+
+A waiver shall be able to reference a published policy or procedure document as the text the staff member is agreeing to.
+
+A document-backed waiver renders that document's content, including fragment text inline (POL-022), at the point of completion. Meridian still stores completion rather than a signed document (WAIVER-004).
+
+### WAIVER-008
+
+Completing a document-backed waiver shall record the acknowledged document and document version alongside the waiver completion, using the same version-recording rule as policy/procedure acknowledgments (POL-043).
+
+A document-backed waiver completion and a policy/procedure acknowledgment remain distinct records: the acknowledgment satisfies a signup or training requirement (POL-046), while the waiver completion gates the operational events listed in section 3.9.
+
+### WAIVER-009
+
+A waiver shall not be required to reference a document. A waiver with no document reference behaves exactly as specified in WAIVER-001 through WAIVER-006.
+
+### WAIVER-010
+
+Meridian shall provide waiver administration surfaces where authorized maintainers create waivers, assign them to organization, department, or team scope, set expiration, and optionally attach a published document; and where authorized staff record waiver completion.
+
+Waiver administration authority shall follow the scope of the waiver, matching the policy/procedure maintenance rule: organization-scoped waivers by organizers, department-scoped by department leads, team-scoped by team leads.
 
 ---
 
@@ -2943,6 +3082,18 @@ Authorized leads may assign overlapping shifts.
 ### SHIFT-016
 
 Required trainings and waivers shall be enforced for both scheduled and unscheduled shift additions.
+
+### SHIFT-017
+
+A department shall be able to express its schedule lock/cutoff (SHIFT-009) relative to the event's active event window as well as by an absolute timestamp, so that a cutoff configured once remains correct when event dates move.
+
+A relative cutoff shall be expressed as an offset before the active event window start and shall resolve to an absolute time whenever the window is known.
+
+### SHIFT-018
+
+Meridian shall provide a staff shift signup surface on which a staff member browses the shifts they are eligible for in an event and signs up (SHIFT-011), and removes themselves before the cutoff (section 3.11).
+
+The surface shall show why an ineligible shift is unavailable, using the eligibility reasons in section 3.12, and shall surface overlap as a warning rather than a block (SHIFT-014).
 
 ---
 
@@ -3128,6 +3279,16 @@ The manual mark-no-show operation shall remain available to authorized attendanc
 
 A staff member shall be considered to have arrived late when they check in after the end of the accepted sign-in window defined in SLB-024. Given SLB-025 and SLB-028, a late arrival is an automatic no-show that a later check-in superseded, so one threshold separates on time, late, and missed with no gap or overlap between them.
 
+### SLB-031
+
+Hours correction (SLB-007, HOURS-007) shall be performed from the Logistics Desk staff workspace. An authorized attendance manager searches for the staff member, opens their workspace, selects a completed shift, and edits the recorded actual start and end times.
+
+Correction shall be refused once the hours record is frozen (HOURS-008), and the refusal shall state that the correction grace period has closed.
+
+### SLB-032
+
+A correction shall write an attendance operation through the existing append-only attendance path, preserving the prior values in history and auditing the change, so a corrected record shows what it was as well as what it became.
+
 ---
 
 ## 7.10 Hours and Credit Requirements
@@ -3245,6 +3406,22 @@ When a field report is appended, only the added content shall be copied into ass
 ### FR-014
 
 When a field report is removed from an incident, the incident history shall show the relationship as stricken.
+
+### FR-015
+
+A Department Operator, and an `ic_operator` or `ic_lead`, may create a Field Report on behalf of another staff member who is reporting to them and cannot file it themselves.
+
+A Field Report created this way shall record the reporting staff member as the author and the creating user as the submitter. Both shall be preserved and both shall be visible wherever the report is shown, so a reader can tell that the report was taken rather than written.
+
+### FR-016
+
+A Field Report taken on behalf of another staff member shall be immutable on the same terms as any other Field Report (FR-007, FR-008).
+
+Append authority shall follow the recorded author (FR-009). The submitter shall not gain append authority from having taken the report, and taking a report shall not grant the submitter any access they did not already hold.
+
+### FR-017
+
+The reporting staff member selectable when taking a Field Report shall be limited to staff the creating user is already permitted to see, and selection shall not disclose staff outside that scope.
 
 ---
 
@@ -3398,6 +3575,8 @@ Department Logistics may check equipment in/out.
 
 MVP equipment states shall include Available, Checked out, Returned, Missing, and Damaged.
 
+These five are the stored states. Presentation distinctions such as overdue, lost, or unknown shall be derived from a stored state plus the associated shift or event window, and shall not be added as stored states.
+
 ### EQUIP-006
 
 Department-to-department allotments are out of scope for MVP.
@@ -3406,9 +3585,15 @@ Department-to-department allotments are out of scope for MVP.
 
 Equipment may be checked out to staff before, during, or after a shift.
 
-### EQUIP-007
+### EQUIP-008
 
 Full inventory custody chains are out of scope for MVP.
+
+### EQUIP-009
+
+An equipment checkout shall record whether it is assigned for a shift or for the event, so that a checkout still open after its shift ends can be distinguished from one still open after the event ends.
+
+A shift-assigned checkout shall reference the shift it was issued for. An event-assigned checkout shall reference no shift.
 
 ---
 
@@ -3465,6 +3650,16 @@ Provision eligibility export is not required for October MVP.
 ### REPORT-013
 
 Incident spreadsheet export is not required for October MVP.
+
+### REPORT-014
+
+Meridian shall provide reporting surfaces from which an authorized user runs the exports in REPORT-001 through REPORT-005: an organization/event-scoped surface for organizers and a department-scoped surface for department leads.
+
+Each surface shall offer only the exports the actor is authorized to run, and shall state the scope and the excluded fields of an export before it is generated, so an organizer sees that emergency contacts are excluded (REPORT-010) without having to open the file.
+
+### REPORT-015
+
+Exports shall be retrieved through a short-lived scoped download URL (CLIENT-019, CLIENT-020) rather than a credentialed link, and export generation shall be audited with the requesting user, scope, and export type.
 
 ---
 
@@ -4981,6 +5176,108 @@ Meridian shall provide an equipment not returned Insight Metric. Equipment is no
 #### INSIGHT-062
 
 Meridian shall provide an extended shift presence Insight Metric identifying how many people remain on shift beyond their scheduled time. Its detailed calculation is designed with the metric and is not specified here.
+
+---
+
+## 7.24 Notification Requirements
+
+Meridian sends transactional email. It does not send SMS or push notifications, and it is not a messaging platform: a notification tells a staff member that something happened to a record they are party to, and points them at the surface where they can act on it.
+
+### NOTIFY-001
+
+Meridian shall send transactional email for the operational events that change what a person may do and that the person would otherwise have no reason to check for.
+
+The MVP notification set is:
+
+- application approved
+- application rejected
+- application deferred
+- staff member added to a department
+- staff member added to a team
+- required document acknowledgment outstanding
+
+- required waiver outstanding or expired
+- credential eligibility blocked
+- staff removed from a shift by a lead
+- shift cancelled
+
+### NOTIFY-001A
+
+One operational action shall produce at most one notification.
+
+Because a staff member cannot belong to a department without belonging to a team (VOL-006), department addition and team addition occur together on first assignment. That pair shall send one notification naming both the department and the team. A later team addition within a department the staff member already belongs to shall send its own notification.
+
+### NOTIFY-002
+
+An application auto-rejected due to Do Not Staff shall send no notification (STAT-006). No notification shall disclose Do Not Staff status, and no notification shall disclose the existence of a staff record to a sender who is not its subject.
+
+### NOTIFY-003
+
+Notification email shall carry organization identity per BRAND-002: the organization display name, the organization mark, and organization palette values, falling back to Meridian's identity where the organization has no branding profile.
+
+### NOTIFY-004
+
+Notification content shall be human-readable operational language and shall name the event, organization, and department the notification concerns.
+
+A notification shall link to the Meridian surface where the recipient can act, and following that link shall not bypass authentication or authorization.
+
+### NOTIFY-005
+
+Notifications shall be addressed to a user's verified primary email address, or to the application email address where the recipient has no user account.
+
+An unverified address shall not receive notification email.
+
+### NOTIFY-006
+
+Notification delivery shall be queued and shall not block the operation that caused it. A delivery failure shall not roll back the underlying operation.
+
+### NOTIFY-007
+
+Notification sends shall be recorded with the recipient, notification type, subject record, and delivery outcome, so an operator can answer whether a person was told. Message bodies shall not be retained in the audit trail.
+
+### NOTIFY-008
+
+Only the central node shall send notification email. An on-site node shall queue notifications generated during the active event window and shall hand them to central through the existing node sync path.
+
+### NOTIFY-009
+
+Meridian shall support a configured send-suppression switch per organization and a global development suppression, so a test deployment and a restored backup do not mail real people.
+
+Suppression shall be visible in the God Mode console readiness surface.
+
+### NOTIFY-010
+
+Per-user notification preferences, digests, opt-out categories, and notification history surfaces are out of scope for MVP. Every notification in NOTIFY-001 is transactional and is sent when its event occurs.
+
+---
+
+## 7.25 Public Platform Surface Requirements
+
+### PUBLIC-001
+
+Meridian shall serve a public marketing surface at the deployment root describing the platform to organizations that do not yet use it.
+
+The marketing surface shall carry Meridian identity and shall not resolve an organization branding profile (BRAND-003).
+
+### PUBLIC-002
+
+The marketing surface shall present an organization interest form collecting the prospective organization name, a contact name, a contact email, and a free-text description of what the organization runs.
+
+### PUBLIC-003
+
+An organization interest submission shall be stored as an inquiry record. It shall not create an organization, a user, a staff record, or any operational data.
+
+### PUBLIC-004
+
+Organization interest submissions shall be reviewable in the God Mode console. Organization creation shall remain a God Mode action for MVP.
+
+### PUBLIC-005
+
+The organization interest form shall be rate limited and shall be protected against automated submission without requiring the submitter to solve a challenge that blocks legitimate use. Submissions shall be audited.
+
+### PUBLIC-006
+
+The marketing surface shall not be served by an on-site node, and shall not be reachable when the node is locked to an event.
 
 ---
 

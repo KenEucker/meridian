@@ -60,12 +60,29 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_OUTPUT, "bumped=true\n");
           NODE
 
+      # The operator documentation manifest records the Meridian version the
+      # documentation was packaged from (GOD-017), so bumping the root version
+      # is what makes the committed manifest stale. Repackaging here keeps the
+      # bump atomic: without it every subsequent pull request fails
+      # `docs:check` for a version drift no contributor caused and no
+      # contributor's change can fix. The script is dependency-free, so it
+      # needs no install step.
+      - name: Repackage operator documentation
+        if: ${{ steps.version.outputs.bumped == 'true' }}
+        shell: bash
+        run: node scripts/release/package-operator-docs.mjs
+
       - name: Commit version bump
         if: ${{ steps.version.outputs.bumped == 'true' }}
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add package.json apps/server/resources/operator-docs
           git commit -m "chore(release): bump version to ${{ steps.version.outputs.version }}"
           git push origin HEAD:production
+
+      - name: Verify packaged documentation is current
+        if: ${{ steps.version.outputs.bumped == 'true' }}
+        shell: bash
+        run: node scripts/release/package-operator-docs.mjs --check
