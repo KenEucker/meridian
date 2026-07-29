@@ -59,9 +59,10 @@ final class ReportingExportFile
         string $timestamp,
     ): string {
         $parts = [$report, Str::slug((string) ($event->slug ?: $event->name)) ?: 'event'];
+        $departmentIds = $scope->departmentFilter();
 
-        if (count($scope->departmentIds) === 1) {
-            $department = Department::query()->find($scope->departmentIds[0]);
+        if (count($departmentIds) === 1) {
+            $department = Department::query()->find($departmentIds[0]);
             $label = Str::slug((string) ($department?->code ?: $department?->name));
 
             if ($label !== '') {

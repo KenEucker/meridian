@@ -30,9 +30,9 @@ use Illuminate\Support\Str;
  * Sensitive fields are excluded by construction: no phone number, no emergency
  * contact, and no date of birth reaches the file, so an organizer export cannot
  * carry emergency contacts (REPORT-008, REPORT-010) and an age-related block is
- * conveyed by its reason rather than by exporting a birth date. Department
- * staff contact exports that may carry contact details are REPORT-003 /
- * REPORT-009 work and belong to M13.3.
+ * conveyed by its reason rather than by exporting a birth date. Contact details
+ * belong to {@see StaffContactExportService}, which is the one export
+ * REPORT-009 lets carry them, and only for a department the caller leads.
  */
 final class CredentialEligibilityExportService
 {
@@ -86,6 +86,7 @@ final class CredentialEligibilityExportService
         string $sourceContext = AuditEvent::SOURCE_API,
     ): ReportingExport {
         $exportedAt = now()->utc();
+        $departmentIds = $scope->departmentFilter();
         $credentials = $this->credentialsInScope($event, $scope);
         $shiftDetails = $this->credentialCountingShiftDetails($event, $credentials->pluck('staff_id')->all());
 
@@ -113,11 +114,11 @@ final class CredentialEligibilityExportService
             actorUser: $actor,
             organizationId: (string) $event->organization_id,
             eventId: (string) $event->id,
-            departmentId: count($scope->departmentIds) === 1 ? $scope->departmentIds[0] : null,
+            departmentId: count($departmentIds) === 1 ? $departmentIds[0] : null,
             after: [
                 'format' => $export->format,
-                'scope' => $scope->organizationWide ? 'event' : 'department',
-                'department_ids' => $scope->departmentIds,
+                'scope' => $scope->isEventWide() ? 'event' : 'department',
+                'department_ids' => $departmentIds,
                 'row_count' => $export->rowCount,
                 'exported_at' => $export->exportedAt->toIso8601String(),
             ],
@@ -144,10 +145,12 @@ final class CredentialEligibilityExportService
             ->where('event_id', $event->id)
             ->with('staff');
 
-        if (! $scope->organizationWide) {
+        $departmentIds = $scope->departmentFilter();
+
+        if ($departmentIds !== []) {
             $query->whereIn('staff_id', DepartmentMembership::query()
                 ->active()
-                ->whereIn('department_id', $scope->departmentIds)
+                ->whereIn('department_id', $departmentIds)
                 ->select('staff_id'));
         }
 

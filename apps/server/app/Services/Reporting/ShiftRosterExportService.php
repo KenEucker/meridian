@@ -24,8 +24,9 @@ use Illuminate\Support\Str;
  * Sensitive fields are excluded by construction. No phone number and no
  * emergency contact reaches the file, which is what REPORT-008 requires of
  * every shift roster export and what REPORT-010 requires of every organizer
- * export. Contact details belong to the department staff contact export
- * (REPORT-003, REPORT-009), which is M13.3 work.
+ * export. Contact details belong to {@see StaffContactExportService}, which is
+ * the one export REPORT-009 lets carry them, and only for a department the
+ * caller leads.
  *
  * The roster reports assignments as the shift domain recorded them and never
  * re-decides eligibility: removed assignments are gone from the roster, and a
@@ -79,6 +80,7 @@ final class ShiftRosterExportService
         string $sourceContext = AuditEvent::SOURCE_API,
     ): ReportingExport {
         $exportedAt = now()->utc();
+        $departmentIds = $scope->departmentFilter();
         $rows = [];
 
         foreach ($this->shiftsInScope($event, $scope) as $shift) {
@@ -110,11 +112,11 @@ final class ShiftRosterExportService
             actorUser: $actor,
             organizationId: (string) $event->organization_id,
             eventId: (string) $event->id,
-            departmentId: count($scope->departmentIds) === 1 ? $scope->departmentIds[0] : null,
+            departmentId: count($departmentIds) === 1 ? $departmentIds[0] : null,
             after: [
                 'format' => $export->format,
-                'scope' => $scope->organizationWide ? 'event' : 'department',
-                'department_ids' => $scope->departmentIds,
+                'scope' => $scope->isEventWide() ? 'event' : 'department',
+                'department_ids' => $departmentIds,
                 'row_count' => $export->rowCount,
                 'exported_at' => $export->exportedAt->toIso8601String(),
             ],
@@ -140,8 +142,10 @@ final class ShiftRosterExportService
             ->where('event_id', $event->id)
             ->with(['department', 'eligibleTeam']);
 
-        if (! $scope->organizationWide) {
-            $query->whereIn('department_id', $scope->departmentIds);
+        $departmentIds = $scope->departmentFilter();
+
+        if ($departmentIds !== []) {
+            $query->whereIn('department_id', $departmentIds);
         }
 
         return $query

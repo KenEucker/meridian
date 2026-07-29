@@ -94,6 +94,8 @@ final class PermissionCatalog
 
     public const PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT = 'reports.shift_roster.export';
 
+    public const PERMISSION_REPORTS_STAFF_CONTACT_EXPORT = 'reports.staff_contact.export';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -155,6 +157,7 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_BRANDING_MANAGE => 'Edit the department branding profile: logo, accent color, and surface background color.',
             self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT => 'Export event credential eligibility; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT => 'Export the event shift roster without phone numbers or emergency contacts; organizers export the whole event, department roles export their own department.',
+            self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT => 'Export the staff contact list; organizers export the whole event without emergency contacts, department roles export their own department with them.',
         ];
     }
 
@@ -174,12 +177,16 @@ final class PermissionCatalog
      * department_administration, and organizer roles for product-path training
      * creation, prerequisite/expiration setup, rosters, and completion
      * recording/import (TRAIN-001 through TRAIN-006).
-     * M13.1 adds reports.credential_eligibility.export and M13.2 adds
-     * reports.shift_roster.export to the two organizer roles and to department
+     * M13.1 adds reports.credential_eligibility.export, M13.2 adds
+     * reports.shift_roster.export, and M13.3 adds reports.staff_contact.export
+     * to the two organizer roles and to department
      * lead/department_administration, which is the split REPORT-006 and
      * REPORT-007 draw: organizers export event-wide, department leads export
      * their own department. Each report carries its own permission so a later
-     * export cannot inherit authority it was never granted.
+     * export cannot inherit authority it was never granted. The permission
+     * grants the export, not its emergency contact columns: those follow
+     * REPORT-009/REPORT-010 from the resolved scope, so an organizer holding
+     * reports.staff_contact.export still gets a file without them.
      * M15A.6/M15A.7 add organization.branding.manage to the two organizer roles
      * and department.branding.manage to department lead and
      * department_administration, which is exactly the split BRAND-019 draws:
@@ -199,6 +206,7 @@ final class PermissionCatalog
                 self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
+                self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
             ],
             self::ROLE_IC_LEAD => [
                 self::PERMISSION_INCIDENTS_VIEW,
@@ -240,6 +248,7 @@ final class PermissionCatalog
                 self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
+                self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
             ],
             self::ROLE_DEPARTMENT_PLANNING => [
                 self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
@@ -252,6 +261,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
+                self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -261,6 +271,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
+                self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
             ],
         ];
     }
