@@ -19,6 +19,8 @@ use App\Orchid\Screens\Equipment\EquipmentEditScreen;
 use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
+use App\Orchid\Screens\Import\TeamImportScreen;
+use App\Orchid\Screens\Import\UserImportScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
 use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\Organization\OrganizationEditScreen;
@@ -104,6 +106,19 @@ Route::screen('permission-catalog', PermissionCatalogScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Permission Catalog'), route('platform.permissions')));
+
+// Platform > God Mode > Imports (technical spec 22.2)
+Route::screen('imports/users', UserImportScreen::class)
+    ->name('platform.imports.users')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Import Users'), route('platform.imports.users')));
+
+Route::screen('imports/teams', TeamImportScreen::class)
+    ->name('platform.imports.teams')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Import Teams'), route('platform.imports.teams')));
 
 // Platform > System > Roles
 Route::screen('roles', RoleListScreen::class)

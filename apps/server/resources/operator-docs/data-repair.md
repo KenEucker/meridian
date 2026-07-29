@@ -50,6 +50,36 @@ your user, the entity, the before and after values, and the timestamp.
 Write what a reviewer will need six months from now: what was wrong, who asked,
 and what you changed. "Fixed" is not a reason.
 
+## Bulk import from a spreadsheet
+
+**Import Users** and **Import Teams** take a CSV, either uploaded or pasted.
+Use them when a list arrives as a spreadsheet and entering it by hand would take
+an afternoon.
+
+Both work the same way:
+
+- Column names are matched case-insensitively, order does not matter, and
+  unknown columns are ignored. A file missing a required column is refused
+  whole; a single bad row is skipped with a reason and the rest still imports.
+- **Preview** first. It runs the file and throws the result away, so you see the
+  per-row outcome — created, updated, or skipped and why — before anything is
+  written.
+- Rows match records that already exist: users by email address, teams by
+  department and team code. Re-running a corrected file updates rather than
+  duplicating, so fixing a bad row and importing again is the normal loop.
+- Nothing is removed. A record missing from the file is left alone. If something
+  should stop being used, archive it on its own screen.
+
+Users carry an email address and a name and nothing else. A file cannot set a
+password, a console permission, a role, or the disabled flag, and an imported
+account arrives with no console access and an unverified address — the first
+magic-link sign-in still has to establish that the address belongs to someone.
+Granting access stays one deliberate act at a time on the user screen.
+
+Teams name their department by organization slug and department code, so a code
+reused across organizations still lands in the right place. Every created and
+updated record is audited, plus one summary entry per run.
+
 ## Common repairs
 
 ### A staff member is on the wrong team

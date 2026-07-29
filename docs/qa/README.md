@@ -83,6 +83,12 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 |---|---|---|
 | [`QA-EQUIP-01-equipment-inventory-setup.md`](QA-EQUIP-01-equipment-inventory-setup.md) | Department logistics/administration Meridian Admin equipment inventory create/edit/archive/restore and bulk CSV import before operations, feeding Logistics checkout/check-in, outside Orchid/God Mode | M11.18 |
 
+## Alpha 1 God Mode import script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-IMPORT-01-users-teams-import.md`](QA-IMPORT-01-users-teams-import.md) | Orchid / God Mode CSV import for users and teams: upload or paste, preview that writes nothing, per-row created/updated/skipped outcomes, match-on-re-run instead of duplicate, whole-file rejection for a missing required column, no permissions or deletions from a file, and audit history | M13.7 |
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |

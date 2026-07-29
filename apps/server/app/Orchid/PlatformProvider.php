@@ -126,6 +126,20 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.permissions')
                 ->title(__('God Mode')),
 
+            // Bulk CSV import (technical spec 22.2). Filed under God Mode
+            // rather than beside the list screens they write to: importing a
+            // file writes many records at once from outside the normal product
+            // workflow, which is repair tooling, not an everyday admin action.
+            Menu::make(__('Import Users'))
+                ->icon('bs.file-earmark-arrow-up')
+                ->route('platform.imports.users')
+                ->permission('platform.imports'),
+
+            Menu::make(__('Import Teams'))
+                ->icon('bs.file-earmark-arrow-up')
+                ->route('platform.imports.teams')
+                ->permission('platform.imports'),
+
             // Node identity, pairing, and sync conflicts describe how this
             // deployment is wired together rather than how the organization
             // operates, so they carry their own heading instead of trailing the
@@ -197,6 +211,7 @@ class PlatformProvider extends OrchidServiceProvider
             // access finds a capability under the heading they saw it under.
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.permissions', __('Permission catalog'))
+                ->addPermission('platform.imports', __('Bulk CSV imports'))
                 ->addPermission('platform.documentation', __('Operator documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),
 
