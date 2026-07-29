@@ -202,6 +202,31 @@ h6, .h6 { font-size: var(--m-text-sm); font-weight: 600; line-height: 1.4; }
 
 small, .small { font-size: var(--m-text-xs); line-height: 1.35; }
 
+/*
+ * Links paint from the bridged color rather than from the framework's own.
+ *
+ * The framework's stylesheet paints links as
+ * `rgba(var(--bs-link-color-rgb), var(--bs-link-opacity, 1))`, and it sets
+ * that `-rgb` triple next to `--bs-link-color`. The token bridge in section 1
+ * replaces `--bs-link-color`, but a hex token cannot produce the comma-separated
+ * triple the framework's rule actually reads, so the framework's near-black kept
+ * winning. In light mode that is invisible — near-black on a light surface reads
+ * fine. In dark mode it left every link near-black on a dark surface, which is
+ * where a person's name in the users table became unreadable.
+ *
+ * Painting from `--bs-link-color` directly is what the bridge already intends
+ * and what `ConsoleContrastTest` already asserts. The framework's link-opacity
+ * utilities are the one thing this drops, and nothing in the console uses them.
+ */
+a {
+    color: var(--bs-link-color);
+}
+
+a:hover,
+a:focus {
+    color: var(--bs-link-hover-color);
+}
+
 .text-muted,
 .text-body-secondary {
     color: var(--m-text-muted) !important;

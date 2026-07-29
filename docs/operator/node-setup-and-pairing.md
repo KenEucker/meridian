@@ -15,9 +15,14 @@ asks for three things:
 Setup generates the node's signing keypair. The private key is stored as node
 configuration; the public key is what a peer verifies signatures against.
 
-Setup runs once. A node that already has an active local node refuses to run it
-again — that is deliberate, because a second identity would orphan everything
-the first one signed.
+**Infrastructure → Node Configuration** in the console asks for the same three
+things and does the same work, so a node can be set up from there instead. The
+`/setup` page exists for the moment before anyone can sign in; once you are in
+the console, you do not have to leave it to give this install an identity.
+
+Setup runs once, from either entry point. A node that already has an active
+local node refuses to run it again — that is deliberate, because a second
+identity would orphan everything the first one signed.
 
 If you chose the wrong role, change it on **Infrastructure → Node Configuration**
 rather than trying to re-run setup.
