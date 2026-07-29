@@ -32,6 +32,7 @@ Exact patch versions are enforced by lockfiles and CI. This document defines the
 | Offline sync service | PowerSync Service 1.22.x | Prefer explicit Docker tag such as `journeyapps/powersync-service:1.22.0` until reviewed | Self-hosted sync service. PowerSync is sync infrastructure, not the source of business-rule truth. |
 | Offline sync web/client SDK | PowerSync JavaScript/Web Client SDK 1.38.x | Use latest compatible `1.38.x`; lock exact package version | Used for offline-first web/PWA/Electron client state. |
 | God Mode / repair tooling | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for God Mode, configuration override, repair, and generic data administration, not as the primary product UI. |
+| API token issuance | Laravel Sanctum 4.x | `laravel/sanctum:^4.3`, locked by Composer | First-party Laravel package, MIT licensed. Named by technical spec 11.4 and data/API 5.4 as the issuer of the bearer tokens Meridian client applications authenticate with. Meridian uses the API-token half of Sanctum only: the stateful-SPA cookie mode and its `sanctum/csrf-cookie` route are disabled in `config/sanctum.php`, because AUTH-018 requires that clients not depend on a browser session cookie. |
 | JavaScript runtime | Node.js 24 LTS | `24.x`; prefer current patched 24.x in CI | Do not move to Node 26 until it is LTS and Meridian compatibility is verified. |
 | JavaScript package manager | pnpm 11.x | Set `packageManager` in `package.json`; commit `pnpm-lock.yaml` | Use Corepack. Do not use npm or yarn for project installs unless explicitly approved. |
 | Frontend build tool | Vite 8.x | `vite:^8.0`, locked by pnpm | Used for the shared Vue client. Vue plugin via `@vitejs/plugin-vue:^6.0`. |
@@ -215,6 +216,16 @@ Authentication must remain aligned with the Meridian technical spec:
 - multiple providers per email
 - kiosk/shared workstation user switching
 - offline token behavior for trusted on-site nodes
+
+Client applications authenticate to the API with a Sanctum bearer token rather
+than a browser session cookie, so the web client, the mobile Field application,
+and the desktop application share one mechanism and none of them depends on
+being served same-origin by the node it talks to. Sanctum's stateful-SPA cookie
+mode is not used and is disabled in configuration.
+
+Adding a bearer token does not add a login method: what a token proves is still
+a verified external-provider identity, and the token is only what the client
+carries afterwards.
 
 ## Dependency approval checklist
 

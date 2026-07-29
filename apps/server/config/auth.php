@@ -42,6 +42,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Meridian client applications — web, mobile Field, and desktop —
+        // authenticate to the API with a Sanctum bearer token rather than a
+        // browser session cookie (AUTH-018; technical spec 11.4). Sanctum
+        // registers this guard itself, but it is declared here so the API's
+        // authentication path is visible where every other guard is.
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
     ],
 
     /*
