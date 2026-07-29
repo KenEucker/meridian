@@ -14,6 +14,7 @@ connection.
 | [Deployment](deployment.md) | You are standing up a Meridian server for the first time, or moving one. |
 | [Node setup and pairing](node-setup-and-pairing.md) | A node has no identity yet, or an on-site node needs to join central. |
 | [Configuration](configuration.md) | A setting is not taking effect and you need to know which layer wins. |
+| [System diagnostics](system-diagnostics.md) | You need to know whether this node is operating correctly, or you are producing a support bundle. |
 | [Data repair](data-repair.md) | Something in the data is wrong and normal product screens cannot fix it. |
 | [Sync conflict resolution](sync-conflict-resolution.md) | The conflict queue has entries waiting for a decision. |
 | [Break-glass procedures](break-glass.md) | An event is running and something is blocking work right now. |

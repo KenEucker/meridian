@@ -36,6 +36,10 @@ use App\Orchid\Screens\Staff\StaffEditScreen;
 use App\Orchid\Screens\Staff\StaffListScreen;
 use App\Orchid\Screens\SyncConflict\SyncConflictDetailScreen;
 use App\Orchid\Screens\SyncConflict\SyncConflictListScreen;
+use App\Orchid\Screens\System\NodeHealthScreen;
+use App\Orchid\Screens\System\SystemConfigurationEditScreen;
+use App\Orchid\Screens\System\SystemConfigurationScreen;
+use App\Orchid\Screens\System\SystemDiagnosticsScreen;
 use App\Orchid\Screens\Team\TeamEditScreen;
 use App\Orchid\Screens\Team\TeamListScreen;
 use App\Orchid\Screens\User\UserEditScreen;
@@ -393,6 +397,33 @@ Route::screen('node-config', NodeConfigScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Node Configuration'), route('platform.node.config')));
+
+// Platform > Infrastructure > System Configuration (technical spec 22A.7)
+Route::screen('system/configuration/{variable}', SystemConfigurationEditScreen::class)
+    ->name('platform.system.configuration.edit')
+    ->breadcrumbs(fn (Trail $trail, string $variable) => $trail
+        ->parent('platform.system.configuration')
+        ->push($variable, route('platform.system.configuration.edit', $variable)));
+
+Route::screen('system/configuration', SystemConfigurationScreen::class)
+    ->name('platform.system.configuration')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('System Configuration'), route('platform.system.configuration')));
+
+// Platform > Infrastructure > System Diagnostics (technical spec 22A.8, 22A.9)
+Route::screen('system/diagnostics', SystemDiagnosticsScreen::class)
+    ->name('platform.system.diagnostics')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('System Diagnostics'), route('platform.system.diagnostics')));
+
+// Platform > Infrastructure > Node Health (technical spec 22A.11)
+Route::screen('system/node-health', NodeHealthScreen::class)
+    ->name('platform.system.node-health')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Node Health'), route('platform.system.node-health')));
 
 // Platform > Meridian > Documentation
 // Meridian's own operator documentation, served from content packaged with the

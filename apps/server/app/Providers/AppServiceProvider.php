@@ -16,7 +16,10 @@ use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
 use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\GovernanceWriteGuard;
+use App\Services\Diagnostics\Checks;
+use App\Services\Diagnostics\DiagnosticRunner;
 use App\Services\Node\NodeOperationApplierRegistry;
+use App\Services\SystemConfig\ApplySystemConfigOverrides;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -43,6 +46,36 @@ class AppServiceProvider extends ServiceProvider
         // guard the rest of the request writes through (technical spec 10.2).
         $this->app->singleton(EventScopedWriteGuard::class);
         $this->app->singleton(GovernanceWriteGuard::class);
+
+        // One applier instance per boot: diagnostics reads the same load
+        // state the boot pass produced (technical spec 22A.6).
+        $this->app->singleton(ApplySystemConfigOverrides::class);
+
+        // The diagnostics runner and its registered checks (technical spec
+        // 22A.8). Registration order is display order.
+        $this->app->singleton(DiagnosticRunner::class, function ($app): DiagnosticRunner {
+            $runner = new DiagnosticRunner;
+
+            foreach ([
+                Checks\ApplicationCheck::class,
+                Checks\SecurityCheck::class,
+                Checks\SystemConfigOverridesCheck::class,
+                Checks\DatabaseCheck::class,
+                Checks\CacheCheck::class,
+                Checks\QueueCheck::class,
+                Checks\SchedulerHeartbeatCheck::class,
+                Checks\StorageCheck::class,
+                Checks\WiringCheck::class,
+                Checks\PowerSyncCheck::class,
+                Checks\NodeSyncCheck::class,
+                Checks\NodeIdentityCheck::class,
+                Checks\IntegrationsCheck::class,
+            ] as $check) {
+                $runner->register($app->make($check));
+            }
+
+            return $runner;
+        });
     }
 
     /**
@@ -73,5 +106,13 @@ class AppServiceProvider extends ServiceProvider
         // the active event window on every node, so the same fail-closed
         // boundary covers governance content (technical spec 10.2, 21.10).
         $this->app->make(GovernanceWriteGuard::class)->register();
+
+        // Valid node-local database overrides are applied over the (possibly
+        // cached) file configuration, so application code keeps reading
+        // config() and the precedence stays database, then environment/.env,
+        // then Laravel default (technical spec 22A.6). Fails soft: an
+        // unreadable override table leaves the node on environment
+        // configuration and surfaces through diagnostics (SYS-022).
+        $this->app->make(ApplySystemConfigOverrides::class)->apply();
     }
 }

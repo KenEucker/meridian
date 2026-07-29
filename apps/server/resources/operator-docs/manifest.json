@@ -53,7 +53,29 @@
         "Sensitive values",
         "Changing node settings",
         "Event mode",
-        "Where to see the effect"
+        "Where to see the effect",
+        "The full configuration catalogue",
+        "Applying an override",
+        "What cannot be overridden",
+        "Secrets",
+        "Recovering from a bad override",
+        "When the override table is unreachable",
+        "CLI"
+      ]
+    },
+    {
+      "slug": "system-diagnostics",
+      "file": "system-diagnostics.md",
+      "title": "System Diagnostics",
+      "headings": [
+        "System Diagnostics",
+        "Where to look",
+        "Reading the statuses",
+        "Offline on-site nodes are not broken",
+        "Running diagnostics from the CLI",
+        "Exporting a support bundle",
+        "The scheduler heartbeat",
+        "When the override check is critical"
       ]
     },
     {

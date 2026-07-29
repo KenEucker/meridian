@@ -21,6 +21,7 @@ use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
+use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
 use App\Http\Controllers\Reporting\ReportingExportController;
@@ -52,6 +53,13 @@ Route::post('/node-pairing', [NodePairingController::class, 'store'])
 Route::post('/node-sync', [NodeSyncController::class, 'store'])
     ->middleware('throttle:120,1')
     ->name('api.node-sync.store');
+
+// Sanitized node health reports (technical spec 22A.11). Like the sync
+// exchange, the reporting node's signature over the report is the credential.
+// Reports arrive every ten minutes per node, so the throttle stays modest.
+Route::post('/node-health-report', [NodeHealthReportController::class, 'store'])
+    ->middleware('throttle:60,1')
+    ->name('api.node-health-report.store');
 
 // Branding is chrome, not operational content: every signed-in user of an
 // organization sees its identity on every screen (BRAND-002), and a device

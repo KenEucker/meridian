@@ -440,6 +440,46 @@ The MVP product UI gap-closure tasks in this milestone are forward-scheduled wor
 
 ---
 
+### Milestone 13A: System Configuration and Diagnostics
+
+**Goal:** Give operators a first-party system administration surface: an environment and runtime configuration dashboard backed by node-local database overrides, a system diagnostics and health dashboard, sanitized diagnostics exports, CLI diagnostics for deployment tooling, and sanitized node health reporting from paired nodes to central.
+
+This milestone is deployment/operator tooling rather than product behavior. It is placed after Milestone 13 because it builds on the node model and pairing (Milestone 3, Milestone 12), the signed node sync channel (Milestone 12), the audit service (Milestone 4), and the God Mode console groundwork (Milestones 15B/15C precede it in number only; 13A depends on none of their tasks). It extends — and does not replace — the existing `node_config_values` store and the Node Configuration screen: node identity and pairing state remain administered there, and the new catalogue links to that surface as managed, read-only entries.
+
+**Primary source docs:** Requirements section 7.26 (SYS-001 through SYS-041); Technical spec sections 22A, 22.4, 23, 26.2; data/API sections 13.2, 13.7 through 13.9, 14.1; `docs/operator/configuration.md`; `docs/operator/system-diagnostics.md`.
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M13A.1 Catalogue metadata | Annotate `apps/server/.env.example` with `@tag` metadata (label, type, config mapping, secret, required, bootstrap, managed, readonly, restart) and section headings, keeping it the single catalogue source. | SYS-001 through SYS-004; technical spec 22A.2 | Catalogue parsing tests; a test asserting every mapped config key exists |
+| M13A.2 Override schema and store | Add `system_config_overrides` with typed JSON values, encrypted secrets, active flags, change reasons, and the audited write path refusing bootstrap-locked/managed/unmapped variables. | SYS-005 through SYS-015; data/API 13.7 | Schema/store/audit tests; secret encryption-at-rest test |
+| M13A.3 Boot-time application | Apply valid, active node-local overrides into `config()` at boot with database → environment/.env → default precedence, config-cache compatibility, and soft failure to environment configuration. | SYS-005, SYS-008 through SYS-010, SYS-022 | Precedence tests; invalid/disabled/bootstrap-locked skip tests; unreadable-table fallback test |
+| M13A.4 Configuration screens | Add System → Configuration list and per-variable edit screens with search/filters, truthful source badges, activation warnings, secret masking and replace-only editing, and redacted audit history. | SYS-016 through SYS-021; technical spec 22A.7 | Screen/permission/masking tests |
+| M13A.5 Diagnostics framework | Add the `DiagnosticCheck` contract, runner, statuses, overall-health aggregation, and the application/security/configuration/database/cache/queue/scheduler/storage/wiring/PowerSync/node-sync/node-identity/integrations checks with a scheduler heartbeat. | SYS-029 through SYS-033, SYS-036; technical spec 22A.8 | Aggregation/status tests; expected-offline test; throwing-check isolation test |
+| M13A.6 Diagnostics screen and export | Add System → Diagnostics with filters and manual refresh, plus the permission-gated sanitized JSON export. | SYS-028, SYS-034, SYS-035; technical spec 22A.9, 22A.10 | Screen/permission tests; export redaction tests seeding known secrets |
+| M13A.7 CLI commands | Add `meridian:diagnostics [--json]` (non-zero exit on required critical), `meridian:config:list`, and `meridian:config:validate`. | SYS-041; technical spec 22A.12 | Exit-code tests; masking tests |
+| M13A.8 Node health reporting | Add `node_health_reports`, the sanitized report builder, node-key signing and verification mirroring the sync exchange, the report endpoint, the scheduled `meridian:health-report` run, and the central Node Health screen with staleness labels. | SYS-037 through SYS-040; data/API 13.8, 13.9; technical spec 22A.11 | Signature/tamper/stale/unknown-node refusal tests; sanitization tests; screen test |
+| M13A.9 Permissions | Register the granular `platform.system.*` console permissions (view/manage configuration, manage secrets, audit history, view diagnostics, export), defaulting to God Mode operators only. | SYS-024 through SYS-027 | Permission enforcement tests including view-does-not-grant-manage |
+| M13A.10 Operator docs and QA | Extend `docs/operator/configuration.md`, add `docs/operator/system-diagnostics.md`, and add `QA-SYS-01-system-configuration-and-diagnostics.md`. | SYS requirements; QA README | Human QA script |
+
+**Acceptance criteria and human QA checks:**
+
+- `.env.example` defines the discoverable variable scope, and the configuration page shows truthful effective sources including the combined Environment / `.env` badge;
+- an authorized operator creates, disables, and removes a safe override; the change applies through `config()` and removal restores the underlying value;
+- bootstrap-locked values (application key, database credentials, cache/session stores, node signing key) render read-only and are skipped at load even if a row exists;
+- activation requirements are visible, and an override that has not reached every process shows as pending rather than active;
+- secrets are encrypted at rest, masked everywhere, replaceable without being readable, excluded from exports and audit records, and require a change reason;
+- overrides are node-local, keep working offline, and never travel through PowerSync or node sync;
+- the diagnostics page reports the required categories, distinguishes required from optional checks, and presents an intentionally offline on-site node as expected offline rather than failed;
+- the diagnostics export is sanitized, with automated proof that known secrets are redacted;
+- `meridian:diagnostics` exits non-zero when a required check is critical;
+- paired nodes deliver signed sanitized health reports every ten minutes; central refuses and audits tampered, stale, or unknown-node reports; the Node Health screen labels stale reports;
+- all capabilities are granular `platform.system.*` permissions defaulting to God Mode, and organization roles gain nothing;
+- failure to read the override table leaves the node bootable on environment configuration and surfaces as a critical diagnostics result.
+
+**QA gate:** A reviewer can open System → Configuration, trace a value to its source, apply and remove an override with its activation requirement stated, confirm a secret can be replaced but never read, open System → Diagnostics and export the sanitized bundle, run the CLI diagnostics and see the exit code gate, and — with a paired pair of nodes — watch a sanitized health report arrive on central and go stale when the peer stops reporting. Run `QA-SYS-01`.
+
+---
+
 ### Milestone 14: Event Geography & Maps
 
 **Goal:** Deliver the MVP Event Geography & Maps feature (event maps, camps, map locations, the event-level Placement department designation, operations-window locking, optional IMS references, and offline map sync) before pilot/release readiness. This is a required MVP feature and intentionally simple; it must not become a full GIS, dispatch, or live-tracking system.
@@ -904,15 +944,16 @@ QA should run in this order:
 8. Incident management QA.
 9. Central/on-site sync QA.
 10. Export/reporting QA.
-11. Event geography and maps QA.
-12. The Briefing Notes + add-to-Briefing + hub shells QA.
-13. Organization and department branding QA.
-14. God Mode console orientation, documentation, and changelog QA.
-15. God Mode console visual identity QA.
-16. Client session and API wiring QA.
-17. Insights framework and initial metrics QA.
-18. Gap closure QA.
-19. Release candidate QA.
+11. `QA-SYS-01`: system configuration and diagnostics QA.
+12. Event geography and maps QA.
+13. The Briefing Notes + add-to-Briefing + hub shells QA.
+14. Organization and department branding QA.
+15. God Mode console orientation, documentation, and changelog QA.
+16. God Mode console visual identity QA.
+17. Client session and API wiring QA.
+18. Insights framework and initial metrics QA.
+19. Gap closure QA.
+20. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 

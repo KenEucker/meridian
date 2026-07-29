@@ -13,6 +13,7 @@
 **Additive Update:** Fixed Meridian UI modes and deployment target requirements added.
 **Additive Update:** The Briefing (Command hub: Notes, After Action Reports, Directions, Action Plan, Notices) added. Notes are standalone; Command adds them to The Briefing/AAR by reference or link. Alpha 1 implements Notes + add-to-Briefing + hub shells.
 **Additive Update:** Milestone 18 gap-closure requirements added — organization configuration and lifecycle evaluation (ORG-017–ORG-021), staff profile surface (VOL-014), applicant self-service portal (APP-012–APP-015), department team designations, the Department Operator role, and Staff Coordinator (TEAM-011–TEAM-018, section 4.8A), trainer authority (TRAIN-011), document-backed waivers and waiver administration (WAIVER-007–WAIVER-010), relative schedule cutoff and staff shift signup (SHIFT-017, SHIFT-018), Logistics Desk hours correction (SLB-031, SLB-032), Field Reports taken on behalf of another staff member (FR-015–FR-017), equipment assignment scope and the EQUIP-007 duplicate renumbered to EQUIP-008 (EQUIP-009), reporting surfaces (REPORT-014, REPORT-015), notifications (7.24), and public platform surfaces (7.25).
+**Additive Update:** System Configuration and Diagnostics requirements (SYS-001-SYS-041, section 7.26) added for the environment/configuration catalogue, node-local database overrides, the diagnostics framework, sanitized exports, and node health reporting.
 
 ---
 
@@ -5278,6 +5279,174 @@ The organization interest form shall be rate limited and shall be protected agai
 ### PUBLIC-006
 
 The marketing surface shall not be served by an on-site node, and shall not be reachable when the node is locked to an event.
+
+---
+
+## 7.26 System Configuration and Diagnostics Requirements
+
+### SYS-001
+
+The Meridian server's `.env.example` file shall be the catalogue of environment variables known to Meridian. A variable absent from `.env.example` is not a catalogued variable.
+
+### SYS-002
+
+The catalogue shall derive each variable's label, description, section, example value, data type, Laravel configuration key mapping, secret status, required status, bootstrap-lock status, managed status, and activation requirement from `.env.example` content and its structured `@tag` metadata comments. No separately maintained registry of environment variables shall exist.
+
+### SYS-003
+
+Catalogue sections shall come from `## Heading` lines and descriptions from the contiguous comment block above each variable. Commented-out variables of the form `# NAME=value` remain catalogued.
+
+### SYS-004
+
+The catalogue shall not infer types or configuration-key mappings where inference could change configuration semantics. A variable without a declared `@config` mapping shall be treated as unmapped and shall not be overridable from the database.
+
+### SYS-005
+
+Meridian shall support node-local database overrides for editable catalogued variables. Overrides shall be applied to Laravel's runtime configuration repository at application boot, and application code shall continue to read settings through `config()`. Effective precedence shall be: database override, then process environment / `.env`, then Laravel configuration default.
+
+### SYS-006
+
+Override values shall be validated against the variable's declared type before saving, and again before being loaded at boot. An override that fails validation shall never reach the runtime configuration repository.
+
+### SYS-007
+
+Override storage shall preserve the distinction between a missing value, an empty string, `null`, `false`, `0`, and the string `"0"`. Values shall not be flattened to untyped strings.
+
+### SYS-008
+
+Each variable shall carry an activation class: bootstrap-locked, active for new requests and newly booted processes, requires worker restart, or requires service restart/redeployment. The UI shall display the activation requirement, and a saved override that is not yet effective in the running process shall be shown as pending activation rather than active.
+
+### SYS-009
+
+Removing or disabling an override shall restore the normal environment/`.env` or Laravel default value at the next activation point.
+
+### SYS-010
+
+Bootstrap-locked variables - the application key, primary database credentials, cache and session bootstrap stores, and node signing identity - shall be visible in the catalogue but shall never be overridable from the database, even when a stored row claims otherwise.
+
+### SYS-011
+
+System configuration overrides and secret values shall never be replicated through PowerSync device sync.
+
+### SYS-012
+
+System configuration overrides shall be node-local. They shall not be carried by node-to-node sync, and central overrides shall not be copied to on-site nodes automatically. Overrides shall keep working while the node is offline.
+
+### SYS-013
+
+Secret values shall be encrypted at rest and masked in every table, detail screen, log line, export, and CLI output. No Meridian surface shall display a stored secret's plaintext.
+
+### SYS-014
+
+A user authorized to manage secret configuration may replace, disable, or remove a secret override but shall not be able to retrieve the stored plaintext. Secret presence shall be described with states such as configured, overridden, missing, invalid, or pending activation.
+
+### SYS-015
+
+Every override create, change, disable, enable, and removal shall be audited through the standard audit service with actor, node, variable name, action, redacted values, secret status, and change reason. Secret plaintext shall never be stored in audit records. Changing a secret shall require a change reason.
+
+### SYS-016
+
+The System Configuration screen shall show, for each catalogued variable: name, label, section, effective value, effective source, override state, mapped configuration keys, type, secret indicator, editability, activation requirement, validation status, and last-change metadata.
+
+### SYS-017
+
+Effective sources shall be truthful. Because Laravel loads `.env` into the process environment, the two shall be presented as one combined source ("Environment / .env"), alongside Database Override, Laravel Default, Missing, Invalid, and Unmapped.
+
+### SYS-018
+
+The configuration table shall support search by name, label, section, and configuration key, and filtering by section, source, override state, secret status, editability, bootstrap lock, validation state, and unmapped state.
+
+### SYS-019
+
+Bootstrap-locked variables shall render read-only with an explanation of why, and with the deployment-level change path stated.
+
+### SYS-020
+
+Variables managed by another Meridian surface (node identity and pairing state managed by Node Configuration) shall render read-only on the configuration screen with a pointer to that surface, so their side effects run where they are defined.
+
+### SYS-021
+
+Editing a critical or secret setting shall present a prominent warning stating the expected effect and the restart/redeployment steps required, and shall require a change reason for secrets.
+
+### SYS-022
+
+The application shall remain bootable when the override table cannot be read: it shall log one sanitized error naming the exception class only, continue on environment configuration, avoid re-querying during the same boot, and surface the failure as a critical diagnostics result. Invalid or undecryptable overrides shall be skipped and reported.
+
+### SYS-023
+
+Parsed catalogue metadata shall be cached and invalidated when the Meridian build version or the `.env.example` file changes. Secret plaintext shall not be cached outside normal process memory.
+
+### SYS-024
+
+Capabilities for viewing system configuration, managing system configuration, managing secret configuration, viewing configuration audit history, viewing system diagnostics, and exporting sanitized diagnostics shall be separate console permissions.
+
+### SYS-025
+
+System configuration and diagnostics permissions shall default to God Mode operators. Organization, organizer, department, and team roles shall never receive infrastructure administration capabilities through the organization permission model.
+
+### SYS-026
+
+Viewing system configuration shall not grant changing it, and managing non-secret configuration shall not grant changing secrets.
+
+### SYS-027
+
+Exporting the sanitized diagnostics bundle shall require its own capability, enforced at the endpoint rather than only in the UI.
+
+### SYS-028
+
+System Configuration and System Diagnostics shall be separate screens. The diagnostics screen shall not display environment or configuration values.
+
+### SYS-029
+
+Diagnostics shall be implemented as independent checks behind a common contract with a stable key, label, category, required/optional flag, and a run method returning a status, summary, sanitized details, and recommended action. One check failing shall not stop the run.
+
+### SYS-030
+
+Supported check statuses shall include healthy, warning, critical, unknown, and not applicable. Each completed check shall record its duration and timestamp.
+
+### SYS-031
+
+Overall node health shall be derived consistently from individual results: a critical result from a required check makes the node critical; a critical result from an optional check, any warning, or a required check that could not run degrades the node to warning; not-applicable results are ignored. One failed optional integration shall never mark the installation critical.
+
+### SYS-032
+
+Checks shall be read-only against Meridian state and non-destructive against external services: no messages sent, no external resources created, and probe files cleaned up. A check that cannot measure something - worker liveness, host metrics without privileged access - shall report unknown rather than pretending it ran.
+
+### SYS-033
+
+Diagnostics shall cover, where applicable to the install: application runtime and build state, security configuration warnings, override loading, database availability and latency, cache and session stores, queue backlog and failed jobs, scheduler liveness, storage writability and disk space, required providers/bindings/routes, PowerSync reachability, node-to-node sync state, node identity and keys, and configured external integrations.
+
+### SYS-034
+
+Authorized users shall be able to export a sanitized JSON diagnostics bundle carrying build and version information, node identity and type, check results, and configuration-source metadata.
+
+### SYS-035
+
+The diagnostics export shall never contain secret values, tokens, passwords, keys, cookies, session identifiers, connection strings, or personally identifiable operational data. Non-secret configuration shall export as source and status metadata, not raw values. Automated tests shall prove known secrets are redacted.
+
+### SYS-036
+
+An intentionally offline on-site node shall not be presented as failed. Queued sync operations on an offline on-site node shall be presented as expected offline operation, and only failures, refusals, and open conflicts shall ask for attention.
+
+### SYS-037
+
+Each node shall periodically build a sanitized health report, store it locally, and deliver it to its paired central node signed with the node private key over the node-authenticated report channel. The central installation shall display the latest report per known node.
+
+### SYS-038
+
+Central shall verify each received report's origin node, pairing status, freshness, and signature against the public key learned at pairing, and shall refuse and audit anything unverified. An unverified report shall never be stored.
+
+### SYS-039
+
+A node health report shall carry only node identity, versions, overall and per-category statuses, numeric sync/disk/memory summaries, and sanitized warning lines. It shall never contain environment values, secrets, credentials, connection strings, tokens, user data, incident data, field-report content, or volunteer data.
+
+### SYS-040
+
+Node health reports older than the staleness window shall be labelled stale rather than silently trusted.
+
+### SYS-041
+
+CLI diagnostics (`meridian:diagnostics`) shall exit non-zero when any required check is critical so container health checks and deployment tooling can gate on it, and shall apply the same redaction rules as every other surface. CLI commands shall also list the configuration catalogue and validate stored overrides.
 
 ---
 

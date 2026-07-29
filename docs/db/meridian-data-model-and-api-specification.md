@@ -4205,6 +4205,73 @@ as designed; failures and refused exchanges are what ask for a human.
 
 ---
 
+### 13.7 `system_config_overrides`
+
+Node-local database overrides for catalogued environment variables (technical
+spec 22A.3, 22A.5; SYS-005 through SYS-015). The catalogue itself is
+`apps/server/.env.example`; this table stores only the overrides.
+
+Key fields:
+
+- `id`
+- `node_id` (unique with `name`; overrides are node-local and never synced)
+- `name` (environment-variable name)
+- `type` (declared type at save time)
+- `value_json` (JSON-encoded non-secret value; preserves `""`/`null`/`false`/`0`/`"0"` distinctions)
+- `secret_value` (encrypted at rest; never readable back through any surface)
+- `is_secret`
+- `is_active`
+- `change_reason`
+- `created_by_user_id`
+- `updated_by_user_id`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- never replicated through PowerSync; never carried by node sync (SYS-011, SYS-012)
+- bootstrap-locked variables are refused at write and skipped at load (SYS-010)
+- invalid rows are skipped at boot and reported through diagnostics (SYS-006, SYS-022)
+- every write is audited with redacted values (SYS-015)
+
+### 13.8 `node_health_reports`
+
+Latest sanitized health report per known node (technical spec 22A.11; SYS-037
+through SYS-040). One row per node, replaced on each verified delivery.
+
+Key fields:
+
+- `id`
+- `node_id` (unique)
+- `report_uuid`
+- `overall_status`
+- `node_name`
+- `node_role`
+- `meridian_version`
+- `config_schema_version`
+- `category_statuses_json`
+- `summary_json` (numeric sync/disk/memory summaries only)
+- `warnings_json` (sanitized `key`/`status`/`summary` lines)
+- `generated_at`
+- `received_at`
+
+Reports never contain environment values, secrets, credentials, connection
+strings, tokens, or operational/volunteer data (SYS-039).
+
+### 13.9 Node health report endpoint
+
+```text
+POST /api/node-health-report
+```
+
+Node-to-node, no user session. The body is the report payload signed with the
+reporting node's private key over the `meridian.node-health-report.v1`
+canonical payload. The receiver verifies origin node, pairing status,
+freshness inside the node-sync replay window, and the signature against the
+public key learned at pairing; anything unverified is refused with a reason
+code and audited (SYS-037, SYS-038). Response: `{"status": "stored",
+"report_uuid": "..."}`.
+
 ## 14. Audit and Sync Conflicts
 
 ### 14.1 `audit_events`
