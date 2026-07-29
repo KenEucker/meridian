@@ -1353,6 +1353,10 @@ Rules:
 - Staff profile picture blobs sync lazily as they are accessed; metadata may sync before the image blob.
 - Missing profile picture blobs should render as a placeholder or pending image state until synced.
 - Profile picture visibility follows staff profile visibility.
+- Preferred name, phone, and city/state are self-service fields a staff member edits directly (VOL-015).
+- Legal name, email, and date of birth are not self-editable and change only through an assisted path (VOL-016).
+- `handle` changes through `staff_profile_change_requests`, self-service for the first two applied changes and by review after that (VOL-017).
+- The current picture columns hold the approved picture only. A submitted picture awaiting review lives on its request row and never on `staff` (VOL-021).
 
 Relationships:
 
@@ -1365,6 +1369,69 @@ Relationships:
 - has attendance/hours records
 - may submit Field Reports
 - may be associated with incidents
+- has profile change requests
+
+#### `staff_profile_change_requests`
+
+Represents a staff-initiated profile change that a reviewer decides: a handle change beyond the self-service allowance, or a profile picture submission.
+
+Key fields:
+
+- `id`
+- `staff_id`
+- `organization_id`, the organization whose organizers and Staff Coordinators review it
+- `requested_by_user_id`
+- `kind`, one of the kinds below
+- `status`, one of the statuses below
+- `previous_handle`, nullable
+- `requested_handle`, nullable
+- `pending_picture_path`, nullable
+- `pending_picture_mime_type`, nullable
+- `pending_picture_size_bytes`, nullable
+- `pending_picture_width`, nullable
+- `pending_picture_height`, nullable
+- `self_service`, whether the change applied without review under the VOL-017 allowance
+- `decided_by_user_id`, nullable
+- `decided_at`, nullable
+- `decision_reason`, nullable
+- `created_at`
+- `updated_at`
+
+Kinds:
+
+```text
+handle
+profile_picture
+```
+
+Statuses:
+
+```text
+pending
+approved
+rejected
+withdrawn
+```
+
+Rules:
+
+- every handle change is recorded here, including the two self-service changes VOL-017 allows. A self-service change is written `approved` with `self_service` true, no `decided_by_user_id`, and `decided_at` set to when it applied.
+- the VOL-017 allowance is the count of applied handle changes for the staff record, so no separate counter column exists and the history is the accounting.
+- setting a handle where the staff record holds none is not a change and is written with `previous_handle` null and `self_service` true without consuming the allowance (VOL-017).
+- only `approved` rows count against the allowance. `rejected` and `withdrawn` rows do not (VOL-018).
+- a staff member holds at most one `pending` row per kind (VOL-024).
+- a `pending` handle row names any other staff member with `active` status in `organization_id` already holding `requested_handle`, resolved at review time rather than stored, so the reviewer decides a collision (VOL-020).
+- a submitted picture is stored under the same processing and limits as a current picture — JPEG/PNG/WebP, 10 MB before processing, resized within 1024 x 1024, EXIF stripped — and is readable only by the submitting staff member and the users who may review it (VOL-021).
+- approving a `profile_picture` row moves its stored image to the staff record's current picture columns and clears the pending columns; rejecting or withdrawing one discards the stored image (VOL-022).
+- removing a current picture is not a request and creates no row here (VOL-023).
+- a decision notifies the submitting staff member through the notification path in requirements section 7.24, carrying `decision_reason` on a rejection (VOL-025).
+- creation, decision, and withdrawal are audited with actor, kind, and previous and requested value (VOL-026).
+
+Relationships:
+
+- belongs to a staff record
+- belongs to an organization
+- references the requesting user and, once decided, the deciding user
 
 #### `staff_organization_statuses`
 
@@ -2256,12 +2323,21 @@ Key fields:
 - `event_id`, nullable
 - `department_id`, nullable
 - `name`
+- `tracking`, one of the tracking kinds below
 - `asset_tag`
 - `serial_number`
+- `quantity_total`, the pool size for pooled records and 1 for individually tracked records
 - `status`
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+Tracking kinds:
+
+```text
+individual
+pooled
+```
 
 Statuses:
 
@@ -2284,6 +2360,8 @@ Key fields:
 - `event_id`
 - `staff_id`
 - `shift_id`, nullable
+- `quantity`, 1 for an individually tracked item and the handed-out count for a pooled one
+- `quantity_returned`, nullable
 - `checked_out_at`
 - `checked_out_by_user_id`
 - `returned_at`
@@ -2296,6 +2374,26 @@ Rules:
 
 - MVP tracking is visible/manual
 - checkout/check-in is to individual staff members
+- an `individual` record is one physical unit and carries `quantity_total` 1; a
+  `pooled` record is interchangeable units of one kind and carries no
+  `asset_tag` or `serial_number` (EQUIP-010)
+- a checkout of an `individual` record names the unit and carries `quantity` 1; a
+  checkout of a `pooled` record carries the quantity handed out (EQUIP-011)
+- the quantity of a `pooled` record available to hand out is
+  `quantity_total` less the sum of `quantity` over its open checkouts, derived
+  rather than stored, and a `pooled` record is never stored `checked_out`
+  (EQUIP-016)
+- a `pooled` checkout may be returned in parts; `quantity_returned` accumulates
+  and the checkout closes when it reaches `quantity`
+- pooled units returned `missing` or `damaged` reduce `quantity_total` through an
+  audited adjustment carrying a reason, rather than changing the pooled record's
+  `status` (EQUIP-017)
+- equipment lookup at checkout matches `name`, `asset_tag`, and `serial_number`
+  within the operator's authorized department and event scope, and discloses
+  nothing outside it (EQUIP-015)
+- a lookup value matching exactly one `asset_tag` or `serial_number` resolves to
+  that item directly; a value matching several or none reports that rather than
+  choosing (EQUIP-013)
 - equipment does not need to be tied to a shift for MVP
 - equipment may be checked out before, during, or after a shift
 - checkout department scope is derived from the shift when present, otherwise from the equipment item's event/department scope
@@ -2307,7 +2405,10 @@ Rules:
   `department.administer`, never writes `checked_out`/`returned`, and refuses to
   change state or archive an item that has an open checkout
 - `asset_tag` is unique among equipment items in a department, so bulk import is
-  re-runnable without duplicating equipment
+  re-runnable without duplicating equipment. A `pooled` record has no
+  `asset_tag`, so import matches one by department, name, and tracking kind and
+  updates its `quantity_total` rather than adding a second pool of the same
+  kind
 - equipment is archived (`archived_at`), never deleted, so checkout history and
   historical labels survive
 

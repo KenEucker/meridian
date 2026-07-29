@@ -14,6 +14,8 @@
 **Additive Update:** The Briefing (Command hub: Notes, After Action Reports, Directions, Action Plan, Notices) added. Notes are standalone; Command adds them to The Briefing/AAR by reference or link. Alpha 1 implements Notes + add-to-Briefing + hub shells.
 **Additive Update:** Milestone 18 gap-closure requirements added — organization configuration and lifecycle evaluation (ORG-017–ORG-021), staff profile surface (VOL-014), applicant self-service portal (APP-012–APP-015), department team designations, the Department Operator role, and Staff Coordinator (TEAM-011–TEAM-018, section 4.8A), trainer authority (TRAIN-011), document-backed waivers and waiver administration (WAIVER-007–WAIVER-010), relative schedule cutoff and staff shift signup (SHIFT-017, SHIFT-018), Logistics Desk hours correction (SLB-031, SLB-032), Field Reports taken on behalf of another staff member (FR-015–FR-017), equipment assignment scope and the EQUIP-007 duplicate renumbered to EQUIP-008 (EQUIP-009), reporting surfaces (REPORT-014, REPORT-015), notifications (7.24), and public platform surfaces (7.25).
 **Additive Update:** System Configuration and Diagnostics requirements (SYS-001-SYS-041, section 7.26) added for the environment/configuration catalogue, node-local database overrides, the diagnostics framework, sanitized exports, and node health reporting.
+**Additive Update:** Pooled and individually tracked equipment requirements (EQUIP-010–EQUIP-017) added for equipment lookup by asset tag, serial number, or search at checkout, quantity-based pooled equipment, and derived pooled availability, replacing the unit-by-unit checklist as the way equipment is handed out.
+**Additive Update:** Staff self-service profile maintenance requirements (VOL-015–VOL-026) added for direct editing of preferred name, phone, and city/state, a two-change allowance on self-service handle changes with reviewed handle change requests beyond it, reviewed profile picture change requests, and the audit and notification of both.
 
 ---
 
@@ -2692,6 +2694,58 @@ Meridian shall provide a staff profile surface on which a staff member maintains
 
 Profile picture upload, replace, and remove shall be online-only. The surface shall be available in every UI mode where the authenticated user can reach their own profile.
 
+### VOL-015
+
+A staff member shall change their own preferred name, phone number, and city/state from their staff profile surface, taking effect immediately and without review.
+
+### VOL-016
+
+Legal name, email address, and date of birth shall not be self-editable from the staff profile surface. Each is identity or eligibility data rather than presentation: legal name and email identify the person to the organization and to authentication, and date of birth governs event age eligibility. Changing any of them shall remain an assisted path through an organizer or God mode.
+
+### VOL-017
+
+A staff member shall change their own handle without review twice. Setting a handle where the staff record holds none is not a change and shall not count against that allowance.
+
+Every later handle change shall be submitted as a handle change request and shall take effect only on approval.
+
+### VOL-018
+
+Only an applied handle change shall count against the allowance in VOL-017. A request that is rejected or withdrawn, and a self-service change that fails validation, shall leave the allowance as it was.
+
+### VOL-019
+
+A handle change request shall be reviewed by an organizer or a Staff Coordinator of an organization the staff member holds a status with. Approval shall apply the requested handle; rejection shall leave the handle unchanged. Approval and rejection shall be audited with the reviewer, the decision, and the previous and requested handle.
+
+### VOL-020
+
+A handle change request under review shall name to the reviewer any other staff member with active status in the same organization already using the requested handle, so a handle collision is a decision a reviewer makes rather than one Meridian makes silently.
+
+### VOL-021
+
+Submitting a profile picture shall create a profile picture change request. The staff member's current picture shall remain the visible picture until the request is approved.
+
+A submitted picture awaiting review shall be visible only to the staff member who submitted it and to the users who may review it.
+
+### VOL-022
+
+Approving a profile picture change request shall make the submitted picture the staff member's current picture under VOL-013. Rejecting one shall discard the submitted picture and leave the current picture unchanged. Both shall be audited with the reviewer and the decision.
+
+### VOL-023
+
+Removing one's own current profile picture shall require no review. A staff member shall not need permission to stop displaying a picture of themselves.
+
+### VOL-024
+
+A staff member shall hold at most one outstanding request of each kind at a time, shall be able to withdraw their own outstanding request, and shall be able to see the state of their requests and the decisions already made on them.
+
+### VOL-025
+
+A decision on a profile change request shall notify the staff member who submitted it, through the notification path in section 7.24. A rejection shall carry the reason the reviewer gave.
+
+### VOL-026
+
+Self-service profile changes and profile change request decisions shall be audited with the actor and the previous and new value of each changed field.
+
 ---
 
 ## 7.3 Status Requirements
@@ -3595,6 +3649,52 @@ Full inventory custody chains are out of scope for MVP.
 An equipment checkout shall record whether it is assigned for a shift or for the event, so that a checkout still open after its shift ends can be distinguished from one still open after the event ends.
 
 A shift-assigned checkout shall reference the shift it was issued for. An event-assigned checkout shall reference no shift.
+
+### EQUIP-010
+
+Equipment shall be recorded as either individually tracked or pooled.
+
+Individually tracked equipment is one physical unit per record, identified by an asset tag or a serial number, whose whereabouts Meridian follows unit by unit.
+
+Pooled equipment is interchangeable units of one kind held as a quantity on a single record, carrying no per-unit identifier. A department hands out three of them without Meridian needing to know which three.
+
+### EQUIP-011
+
+A checkout of individually tracked equipment shall name the unit checked out. A checkout of pooled equipment shall record the quantity handed out.
+
+### EQUIP-012
+
+An operator shall find individually tracked equipment for checkout by entering or scanning an asset tag or serial number, or by searching name, asset tag, or serial number.
+
+A department's individually tracked equipment shall not be presented as a list of every unit for the operator to read through. A department may hold hundreds of tracked units, and a list of that length is slower to work than the handoff it is meant to support.
+
+### EQUIP-013
+
+An entered value matching exactly one item's asset tag or serial number shall add that item to the checkout without further selection, so that a barcode scanner acting as a keyboard completes a handoff without the operator touching the screen.
+
+An entered value matching more than one item, or none, shall report that rather than guessing.
+
+### EQUIP-014
+
+Pooled equipment shall be presented as a short list of kinds with the quantity available for each, and the operator shall choose a quantity for each kind rather than selecting units.
+
+### EQUIP-015
+
+Equipment lookup shall offer only equipment within the department and event scope the operator is authorized for, and shall not disclose the existence of equipment outside it.
+
+Lookup shall resolve against the department inventory the surface already holds, so it works on a node or device with no connectivity.
+
+### EQUIP-016
+
+The quantity of a pooled record available to hand out shall be derived from its total quantity less the quantity currently checked out and not returned.
+
+A pooled record shall never be stored in the `checked_out` state, because a pool is not wholly held by one staff member.
+
+### EQUIP-017
+
+Returning pooled equipment shall record the quantity returned and its condition.
+
+Pooled units returned Missing or Damaged shall reduce the pool's serviceable quantity through an audited inventory adjustment carrying a reason, rather than changing the pooled record's state.
 
 ---
 
