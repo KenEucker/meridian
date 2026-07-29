@@ -2944,6 +2944,163 @@ version from section 26.3, not the administrative framework version (GOD-028).
 
 ---
 
+# 22A. System Configuration and Diagnostics
+
+## 22A.1 Purpose
+
+Two God Mode console pages give an operator the truth about a Meridian node
+(SYS-001 through SYS-041):
+
+- **System Configuration** answers: which environment variables exist, what is
+  each one's effective value, where did it come from, is a database override
+  active, is overriding it safe, and what has to restart before a change is
+  live.
+- **System Diagnostics** answers: is this installation operating correctly -
+  services, storage, queues, scheduler, sync, node identity, integrations, and
+  security warnings.
+
+The two stay separate. Diagnostics never displays configuration values
+(SYS-028); node identity administration stays on Node Configuration (section
+22.4), which the configuration catalogue links to rather than duplicates.
+
+## 22A.2 Configuration catalogue
+
+`apps/server/.env.example` is the catalogue (SYS-001). Structured metadata
+lives in `@tag` comments directly above each variable:
+
+```text
+# @label Human label
+# @type boolean|integer|float|string|json|url|duration|enum:a|b|c
+# @config dotted.laravel.key[,second.key]
+# @secret
+# @required
+# @bootstrap
+# @managed <surface>
+# @readonly
+# @restart workers|deploy
+```
+
+`## Heading` lines open catalogue sections. The parsed catalogue is cached
+keyed by build version and file mtime/size (SYS-023). A variable with no
+`@config` mapping is unmapped and read-only - the system never guesses where a
+value would land (SYS-004).
+
+## 22A.3 Override storage
+
+`system_config_overrides` stores node-scoped overrides: one row per node and
+variable, carrying the declared type, a JSON-encoded non-secret value or an
+encrypted secret value, an active flag, a change reason, and creator/updater
+references. Overrides are deployment infrastructure: they are never replicated
+through PowerSync, never carried by node-to-node sync, and never copied from
+central to on-site nodes (SYS-011, SYS-012). The existing
+`node_config_values` store remains the write path for node identity and
+pairing state; the catalogue marks those variables managed and read-only here
+(SYS-020).
+
+## 22A.4 Activation classes
+
+Every variable carries an activation class (SYS-008):
+
+- **bootstrap** - needed before overrides can load (application key, primary
+  database credentials, cache/session bootstrap stores, node signing key).
+  Visible, never overridable (SYS-010).
+- **request** - applied at boot; effective for new web requests and newly
+  booted CLI/scheduler processes immediately, and for long-running queue
+  workers after a worker restart.
+- **workers** - consumed primarily by long-running workers; a worker restart
+  is required before the change is fully active.
+- **deploy** - consumed outside the PHP process; requires service restart or
+  redeployment and is never applied to the runtime repository.
+
+The configuration screen shows the stored override, the effective value in the
+running process, and a pending-activation flag whenever the two differ.
+
+## 22A.5 Value typing and secrets
+
+Values are validated against the declared type on save and again at load
+(SYS-006). Non-secret values are stored JSON-encoded so `""`, `null`, `false`,
+`0`, and `"0"` survive storage distinctly (SYS-007). Secrets are stored only
+in an encrypted column, masked on every surface, and replaceable but never
+readable back (SYS-013, SYS-014). Secret changes require a change reason and
+the separate secret-configuration permission (SYS-015, SYS-026).
+
+## 22A.6 Boot application and precedence
+
+A boot-time applier loads valid, active overrides for the local active node
+and writes them into Laravel's configuration repository, giving the effective
+precedence: database override, then process environment / `.env`, then Laravel
+default (SYS-005). It runs once per boot, works over a cached configuration,
+skips invalid rows with a sanitized log line, and fails soft when the table is
+unreadable: the node continues on environment configuration and diagnostics
+reports the failure as critical (SYS-022). Application code reads `config()`
+everywhere; nothing performs per-setting database lookups.
+
+## 22A.7 Configuration screen
+
+`System Configuration` lists the catalogue with search and filters (SYS-016
+through SYS-018) and truthful source badges: Database Override, Environment /
+`.env` (the two cannot be reliably distinguished, so they are not), Laravel
+Default, Missing, Invalid, Unmapped (SYS-017). The per-variable edit screen
+shows the catalogue metadata, activation warnings, the override form for
+editable variables, and the redacted audit history for holders of the audit
+permission (SYS-019 through SYS-021).
+
+## 22A.8 Diagnostics framework
+
+Diagnostics are independent checks behind one contract (`DiagnosticCheck`:
+key, label, category, required flag, run) returning healthy, warning,
+critical, unknown, or not-applicable results with sanitized details and a
+recommended action (SYS-029, SYS-030). The runner isolates failures, records
+durations, and derives overall health consistently: required critical makes
+the node critical; optional critical, any warning, or an unrunnable required
+check degrades to warning; not-applicable is ignored (SYS-031). Checks are
+read-only and non-destructive, clean up probe files, and report unknown
+instead of pretending (SYS-032). Registered categories: application, security,
+configuration overrides, database, cache, queue and scheduler heartbeat,
+storage, wiring, PowerSync, node sync, node identity, integrations (SYS-033).
+A scheduler-written heartbeat makes scheduler liveness measurable; queue
+checks never claim worker liveness from a reachable connection.
+
+## 22A.9 Diagnostics screen
+
+`System Diagnostics` shows overall health, per-status counts, and check cards
+with filters by status, category, and required/optional. Checks run at page
+load and on explicit refresh; there is no background polling. An intentionally
+offline on-site node holding a sync backlog is presented as expected offline
+operation, not failure (SYS-036).
+
+## 22A.10 Sanitized export
+
+Authorized users export a JSON bundle: build/version info, node identity,
+check results, and per-variable configuration metadata restricted to source
+and status - never values, and nothing at all about secret contents (SYS-034,
+SYS-035). Automated tests seed known secrets and assert the export never
+contains them.
+
+## 22A.11 Node health reports
+
+Every ten minutes each node builds a sanitized health summary from its
+diagnostics run, stores it locally, and - when paired - delivers it to central
+signed with the node private key (`meridian.node-health-report.v1` canonical
+payload). Central verifies origin, pairing, freshness (the node sync replay
+window), and signature against the pairing public key; anything unverified is
+refused and audited, mirroring the sync exchange (SYS-037, SYS-038). Reports
+carry a whitelist only: identity, versions, statuses, numeric sync/disk/memory
+summaries, and warning lines (SYS-039). The Node Health screen shows the
+latest report per node with staleness labelling (SYS-040) and works offline
+from the node's own local report.
+
+## 22A.12 CLI
+
+```text
+meridian:diagnostics [--json]   # exits non-zero on required critical (SYS-041)
+meridian:config:list [--json]   # catalogue with sources; secrets masked
+meridian:config:validate        # exits non-zero on invalid overrides/missing required
+meridian:health-report          # build/store/deliver this node's health report
+```
+
+---
+
 # 23. Audit Log
 
 Every meaningful change should be attributable to a user and timestamped.

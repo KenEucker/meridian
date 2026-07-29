@@ -39,6 +39,12 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 The two God Mode scripts split by *content* and *appearance*: `QA-GOD-01`
 covers what the console says, `QA-GOD-02` covers how it looks.
 
+## Alpha 1 System Configuration and Diagnostics script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-SYS-01-system-configuration-and-diagnostics.md`](QA-SYS-01-system-configuration-and-diagnostics.md) | The `.env.example`-driven configuration catalogue with truthful source badges; node-local database overrides with typed validation, activation requirements, and audited changes; bootstrap-locked and managed variables refusing overrides; secret encryption, masking, and replace-only editing; granular `platform.system.*` permission enforcement; the diagnostics screen with required/optional checks and expected-offline handling; sanitized export and CLI exit-code gating; signed node health reports on central with staleness labelling | M13A.10 |
+
 ## Alpha 1 Briefing script
 
 | ID | Coverage | Owning task |
