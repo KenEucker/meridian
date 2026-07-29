@@ -98,6 +98,8 @@ final class PermissionCatalog
 
     public const PERMISSION_REPORTS_HOURS_WORKED_EXPORT = 'reports.hours_worked.export';
 
+    public const PERMISSION_REPORTS_CREDITS_EARNED_EXPORT = 'reports.credits_earned.export';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -161,6 +163,7 @@ final class PermissionCatalog
             self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT => 'Export the event shift roster without phone numbers or emergency contacts; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT => 'Export the staff contact list; organizers export the whole event without emergency contacts, department roles export their own department with them.',
             self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT => 'Export actual hours worked with the scheduled window and correction state; organizers export the whole event, department roles export their own department.',
+            self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT => 'Export credits earned with the calculation basis each number was frozen at; organizers export the whole event, department roles export their own department.',
         ];
     }
 
@@ -181,8 +184,9 @@ final class PermissionCatalog
      * creation, prerequisite/expiration setup, rosters, and completion
      * recording/import (TRAIN-001 through TRAIN-006).
      * M13.1 adds reports.credential_eligibility.export, M13.2 adds
-     * reports.shift_roster.export, M13.3 adds reports.staff_contact.export, and
-     * M13.4 adds reports.hours_worked.export to the two organizer roles and to
+     * reports.shift_roster.export, M13.3 adds reports.staff_contact.export,
+     * M13.4 adds reports.hours_worked.export, and M13.6 adds
+     * reports.credits_earned.export to the two organizer roles and to
      * department lead/department_administration, which is the split REPORT-006
      * and REPORT-007 draw: organizers export event-wide, department leads export
      * their own department. Each report carries its own permission so a later
@@ -192,7 +196,10 @@ final class PermissionCatalog
      * reports.staff_contact.export still gets a file without them.
      * Reading hours is not correcting them: reports.hours_worked.export is a
      * read of what attendance already recorded, and the authority to change a
-     * record stays with the attendance managers HOURS-007 names.
+     * record stays with the attendance managers HOURS-007 names. The same holds
+     * one step further on: reports.credits_earned.export reads a frozen ledger
+     * (CREDIT-004), and nothing about holding it lets a role start a
+     * calculation run or reprice one that already happened.
      * M15A.6/M15A.7 add organization.branding.manage to the two organizer roles
      * and department.branding.manage to department lead and
      * department_administration, which is exactly the split BRAND-019 draws:
@@ -214,6 +221,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
+                self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
             ],
             self::ROLE_IC_LEAD => [
                 self::PERMISSION_INCIDENTS_VIEW,
@@ -257,6 +265,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
+                self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
             ],
             self::ROLE_DEPARTMENT_PLANNING => [
                 self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
@@ -271,6 +280,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
+                self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -282,6 +292,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT,
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
+                self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
             ],
         ];
     }
