@@ -91,11 +91,18 @@ class PermissionCatalogScreen extends Screen
             Layout::view('orchid.permissions.explainer'),
             Layout::view('orchid.permissions.drift'),
 
+            // Vertical, because these blocks hold data tables rather than
+            // forms. The framework's default puts the heading beside the
+            // content and gives the content seven of twelve columns, which
+            // suits a narrow form and wastes half the screen on a table of
+            // capability codes.
             Layout::block(PermissionRoleListLayout::class)
+                ->vertical()
                 ->title(__('Effective roles'))
                 ->description(__('Every role a person can hold in Meridian, the scope it is held at, and how many teams currently grant it.')),
 
             Layout::block(PermissionListLayout::class)
+                ->vertical()
                 ->title(__('Registered capabilities'))
                 ->description(__('Every capability a role can carry. A capability with no roles is defined but not yet granted by anything.')),
         ];
