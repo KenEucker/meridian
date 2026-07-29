@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ApiTokenExpiry;
 use App\Support\RootPackageLicense;
 use App\Support\RootPackageVersion;
 
@@ -201,6 +202,35 @@ return [
         'expires_minutes' => (int) env('MERIDIAN_MAGIC_LINK_EXPIRES_MINUTES', 15),
         'post_login_redirect' => env('MERIDIAN_MAGIC_LINK_REDIRECT', '/home'),
         'allow_account_creation' => filter_var(env('MERIDIAN_MAGIC_LINK_ALLOW_ACCOUNT_CREATION', true), FILTER_VALIDATE_BOOL),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Bearer Tokens
+    |--------------------------------------------------------------------------
+    |
+    | Meridian client applications authenticate to the API with a Sanctum bearer
+    | token (AUTH-018; technical spec 11.4; data/API 5.4). `expiration_minutes`
+    | is the node-configured token lifetime required by AUTH-024; its documented
+    | default is six weeks, matching the trusted-session window in technical
+    | spec 11.2. It is independent of the 5-minute shared-workstation inactivity
+    | timeout in technical spec 13.3.
+    |
+    | `login_code` covers the API magic-link login codes a client exchanges for
+    | a token. `attempt_limit` bounds online guessing of a single issued code;
+    | route throttling bounds the rate of requests and attempts.
+    |
+    */
+
+    'api_tokens' => [
+        'expiration_minutes' => ApiTokenExpiry::minutes(),
+
+        'default_client_name' => 'Meridian client',
+
+        'login_code' => [
+            'expires_minutes' => (int) env('MERIDIAN_API_LOGIN_CODE_EXPIRES_MINUTES', 15),
+            'attempt_limit' => (int) env('MERIDIAN_API_LOGIN_CODE_ATTEMPT_LIMIT', 5),
+        ],
     ],
 
     /*

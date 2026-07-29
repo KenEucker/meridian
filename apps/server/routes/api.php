@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
+use App\Http\Controllers\Auth\ApiAuthController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
@@ -60,6 +61,30 @@ Route::post('/node-sync', [NodeSyncController::class, 'store'])
 Route::post('/node-health-report', [NodeHealthReportController::class, 'store'])
     ->middleware('throttle:60,1')
     ->name('api.node-health-report.store');
+
+/*
+ * API login (AUTH-018, AUTH-019, AUTH-024; technical spec 11.4; data/API 5.4).
+ *
+ * A client posts an email address, the node mails a login code, and the client
+ * posts that code back for a bearer token, so verification completes without
+ * leaving the application. Neither route can carry a session — that is the
+ * point of them — so both are rate limited instead. Requesting a code sends
+ * mail, and submitting one guesses a credential, so the request route is the
+ * tighter of the two.
+ */
+Route::post('/auth/magic-link', [ApiAuthController::class, 'requestMagicLink'])
+    ->middleware('throttle:5,1')
+    ->name('api.auth.magic-link.store');
+
+Route::post('/auth/magic-link/verify', [ApiAuthController::class, 'verifyMagicLink'])
+    ->middleware('throttle:10,1')
+    ->name('api.auth.magic-link.verify');
+
+// A client disposing of its own token. God Mode revocation by token and by
+// device (AUTH-022) arrives with M16.2.
+Route::delete('/auth/session', [ApiAuthController::class, 'destroySession'])
+    ->middleware('auth:sanctum')
+    ->name('api.auth.session.destroy');
 
 // Branding is chrome, not operational content: every signed-in user of an
 // organization sees its identity on every screen (BRAND-002), and a device
