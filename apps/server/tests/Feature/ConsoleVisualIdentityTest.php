@@ -82,6 +82,28 @@ class ConsoleVisualIdentityTest extends TestCase
         $this->assertStringContainsString('outline: 2px solid var(--m-focus-ring);', $css);
     }
 
+    /**
+     * Bridging `--bs-link-color` is not enough on its own: the framework paints
+     * links from a separate `--bs-link-color-rgb` triple that a hex token
+     * cannot produce, so links kept the framework's near-black and turned
+     * unreadable against a dark surface. The bridge has to paint links itself.
+     */
+    public function test_links_paint_from_the_bridged_link_color(): void
+    {
+        $css = $this->bridge();
+
+        $this->assertStringContainsString('--bs-link-color: var(--m-text-secondary);', $css);
+        $this->assertStringContainsString('--bs-link-hover-color: var(--m-text-primary);', $css);
+
+        $this->assertSame(
+            "a {\n    color: var(--bs-link-color);\n}",
+            $this->ruleBlock($css, "a {\n"),
+            'Links must paint from the bridged color, not from the framework --bs-link-color-rgb triple.',
+        );
+
+        $this->assertStringContainsString("a:hover,\na:focus {\n    color: var(--bs-link-hover-color);\n}", $css);
+    }
+
     public function test_the_token_bridge_never_restates_a_color(): void
     {
         // A hex value in the bridge would be a Meridian color the token file
