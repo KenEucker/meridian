@@ -11,15 +11,18 @@ use App\Models\User;
 use App\Services\Permissions\EffectiveRoleResolver;
 
 /**
- * Authorization and scope resolution for the credential eligibility export
- * (M13.1; REPORT-001, REPORT-006, REPORT-007).
+ * Authorization and scope resolution for the Alpha 1 reporting exports
+ * (REPORT-006, REPORT-007).
  *
  * Authority is never inferred from the requested event alone: a role only
  * counts when the team carrying it belongs to a department of the event's own
  * organization, so an organizer of one organization cannot export another
  * organization's event.
+ *
+ * Every export resolves its scope here against its own permission code, so the
+ * organizer/department split is decided once rather than once per report.
  */
-final class CredentialEligibilityExportAccess
+final class ReportingExportAccess
 {
     /**
      * Roles whose export authority covers the whole event (REPORT-006).
@@ -34,20 +37,17 @@ final class CredentialEligibilityExportAccess
     public function __construct(private readonly EffectiveRoleResolver $roles) {}
 
     /**
-     * Resolve what the user may export for the event, or null when the user
-     * may not export it at all.
+     * Resolve what the user may export for the event under the given export
+     * permission, or null when the user may not export it at all.
      */
-    public function resolve(User $user, Event $event): ?CredentialEligibilityExportScope
+    public function resolve(User $user, Event $event, string $permission): ?ReportingExportScope
     {
         $organizationWide = false;
         $departmentIds = [];
 
         foreach ($user->staffProfiles()->get() as $staff) {
             foreach ($this->roles->resolveForStaff($staff, $event) as $role) {
-                if (! PermissionCatalog::roleHasPermission(
-                    $role->roleCode,
-                    PermissionCatalog::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
-                )) {
+                if (! PermissionCatalog::roleHasPermission($role->roleCode, $permission)) {
                     continue;
                 }
 
@@ -72,7 +72,7 @@ final class CredentialEligibilityExportAccess
             return null;
         }
 
-        return new CredentialEligibilityExportScope(
+        return new ReportingExportScope(
             organizationWide: $organizationWide,
             departmentIds: array_values(array_unique($departmentIds)),
         );

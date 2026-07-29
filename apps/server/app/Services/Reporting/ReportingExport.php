@@ -7,10 +7,10 @@ namespace App\Services\Reporting;
 use Carbon\CarbonInterface;
 
 /**
- * A server-generated credential eligibility export ready for download
- * (REPORT-001; technical spec 22.2 CSV export).
+ * A server-generated reporting export ready for download (REPORT-001 through
+ * REPORT-005; technical spec 22.2 CSV export).
  */
-final class CredentialEligibilityExport
+final class ReportingExport
 {
     public const FORMAT_CSV = 'csv';
 

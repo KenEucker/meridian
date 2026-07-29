@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Reporting;
 
 use App\Models\AuditEvent;
-use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\EventCredential;
@@ -16,7 +15,6 @@ use App\Services\Credential\CredentialEligibilityService;
 use App\Services\Credential\CredentialRevocationService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 /**
  * Generates and audits the event credential eligibility export (M13.1;
@@ -83,10 +81,10 @@ final class CredentialEligibilityExportService
 
     public function export(
         Event $event,
-        CredentialEligibilityExportScope $scope,
+        ReportingExportScope $scope,
         User $actor,
         string $sourceContext = AuditEvent::SOURCE_API,
-    ): CredentialEligibilityExport {
+    ): ReportingExport {
         $exportedAt = now()->utc();
         $credentials = $this->credentialsInScope($event, $scope);
         $shiftDetails = $this->credentialCountingShiftDetails($event, $credentials->pluck('staff_id')->all());
@@ -100,9 +98,9 @@ final class CredentialEligibilityExportService
             ->values()
             ->all();
 
-        $export = new CredentialEligibilityExport(
-            contents: $this->csv($rows),
-            filename: $this->filename($event, $scope, $exportedAt->format('Ymd-His')),
+        $export = new ReportingExport(
+            contents: ReportingExportFile::csv(self::COLUMNS, $rows),
+            filename: ReportingExportFile::filename('credential-eligibility', $event, $scope, $exportedAt->format('Ymd-His')),
             rowCount: count($rows),
             exportedAt: $exportedAt,
         );
@@ -140,7 +138,7 @@ final class CredentialEligibilityExportService
      *
      * @return Collection<int, EventCredential>
      */
-    private function credentialsInScope(Event $event, CredentialEligibilityExportScope $scope): Collection
+    private function credentialsInScope(Event $event, ReportingExportScope $scope): Collection
     {
         $query = EventCredential::query()
             ->where('event_id', $event->id)
@@ -211,7 +209,6 @@ final class CredentialEligibilityExportService
         return $details;
     }
 
-
     /**
      * @param  list<string>  $departments
      * @return array<string, string>
@@ -234,51 +231,5 @@ final class CredentialEligibilityExportService
             'credential_updated_at' => $credential->updated_at?->utc()->toIso8601String() ?? '',
             'revoked_at' => $credential->revoked_at?->utc()->toIso8601String() ?? '',
         ];
-    }
-
-    /**
-     * @param  list<array<string, string>>  $rows
-     */
-    private function csv(array $rows): string
-    {
-        $handle = fopen('php://temp', 'r+');
-
-        if ($handle === false) {
-            throw new RuntimeException('Unable to open a buffer for the credential eligibility export.');
-        }
-
-        fputcsv($handle, self::COLUMNS, escape: '');
-
-        foreach ($rows as $row) {
-            fputcsv(
-                $handle,
-                array_map(static fn (string $column): string => $row[$column] ?? '', self::COLUMNS),
-                escape: '',
-            );
-        }
-
-        rewind($handle);
-        $contents = (string) stream_get_contents($handle);
-        fclose($handle);
-
-        return $contents;
-    }
-
-    private function filename(Event $event, CredentialEligibilityExportScope $scope, string $timestamp): string
-    {
-        $parts = ['credential-eligibility', Str::slug((string) ($event->slug ?: $event->name)) ?: 'event'];
-
-        if (count($scope->departmentIds) === 1) {
-            $department = Department::query()->find($scope->departmentIds[0]);
-            $label = Str::slug((string) ($department?->code ?: $department?->name));
-
-            if ($label !== '') {
-                $parts[] = $label;
-            }
-        }
-
-        $parts[] = $timestamp;
-
-        return implode('-', $parts).'.csv';
     }
 }
