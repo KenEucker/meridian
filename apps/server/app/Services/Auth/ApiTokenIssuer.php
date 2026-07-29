@@ -2,43 +2,86 @@
 
 namespace App\Services\Auth;
 
+use App\Models\ApiToken;
+use App\Models\AuditEvent;
+use App\Models\Device;
 use App\Models\User;
+use App\Services\Audit\AuditService;
 use App\Support\ApiTokenExpiry;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\NewAccessToken;
-use Laravel\Sanctum\PersonalAccessToken;
 
 /**
- * Issues and revokes Sanctum bearer tokens for Meridian client applications
- * (AUTH-018, AUTH-024; technical spec 11.4; data/API 5.4, 12.5).
+ * Issues Sanctum bearer tokens for Meridian client applications (AUTH-018,
+ * AUTH-021, AUTH-024, AUTH-025; technical spec 11.4; data/API 5.4, 12.5).
  *
- * Every token is stamped with an expiry from the node configuration. Stamping
- * the row as well as configuring the guard is deliberate: the guard requires
- * both to pass, so lowering the node setting expires tokens already issued,
- * while the stored `expires_at` is what God Mode reads when it lists tokens and
- * what makes a token's own lifetime visible without recomputing it.
+ * Every token is bound to a `devices` record and stamped with an expiry from the
+ * node configuration. Stamping the row as well as configuring the guard is
+ * deliberate: the guard requires both to pass, so lowering the node setting
+ * expires tokens already issued, while the stored `expires_at` is what God Mode
+ * reads when it lists tokens and what makes a token's own lifetime visible
+ * without recomputing it.
  *
- * Binding a token to a `devices` record — required by AUTH-021 before a token
- * may be issued at all — arrives with M16.2, along with God Mode listing and
- * revocation. This class is the one place issuance happens, so that binding
- * lands here rather than in each caller.
+ * Issuance does not go through Sanctum's `createToken()`, because that helper
+ * writes the row before a caller could add the device binding, and a token row
+ * that exists unbound — even for the width of one statement — is the state
+ * AUTH-021 exists to prevent. The row and its binding are written together
+ * instead, in the same transaction as the audit entry that records the issuance.
+ *
+ * The plaintext token is returned to the caller and never stored, logged, or
+ * audited (AUTH-025). Audit entries name the token by identifier and by bound
+ * device.
  */
 class ApiTokenIssuer
 {
+    public const AUDIT_ISSUED = 'api_token.issued';
+
+    public function __construct(private readonly AuditService $audit) {}
+
     /**
-     * Issue a bearer token for a user.
+     * Issue a bearer token for a user, bound to the device that will hold it.
      *
      * @param  string|null  $clientName  what the client calls itself, shown to
      *                                   the user when tokens are listed
      */
-    public function issue(User $user, ?string $clientName = null): NewAccessToken
+    public function issue(User $user, Device $device, ?string $clientName = null): NewAccessToken
     {
-        return $user->createToken(
-            $this->resolveClientName($clientName),
-            ['*'],
-            $this->expiresAt(),
-        );
+        $plainTextToken = $user->generateTokenString();
+        $name = $this->resolveClientName($clientName);
+        $expiresAt = $this->expiresAt();
+
+        $token = DB::transaction(function () use ($user, $device, $plainTextToken, $name, $expiresAt): ApiToken {
+            /** @var ApiToken $token */
+            $token = $user->tokens()->create([
+                'name' => $name,
+                'token' => hash('sha256', $plainTextToken),
+                'abilities' => ['*'],
+                'expires_at' => $expiresAt,
+                'device_id' => $device->getKey(),
+            ]);
+
+            $this->audit->recordForEntity(
+                entity: $token,
+                action: self::AUDIT_ISSUED,
+                actorUser: $user,
+                actorDevice: $device,
+                after: [
+                    // Identifier and bound device only. The token value exists
+                    // in the response and nowhere else (AUTH-025).
+                    'token_id' => $token->getKey(),
+                    'device_id' => $device->getKey(),
+                    'client_name' => $name,
+                    'expires_at' => $expiresAt->toIso8601String(),
+                ],
+                sourceContext: AuditEvent::SOURCE_API,
+            );
+
+            return $token;
+        });
+
+        return new NewAccessToken($token, $token->getKey().'|'.$plainTextToken);
     }
 
     /**
@@ -54,22 +97,6 @@ class ApiTokenIssuer
         $minutes = (int) config('meridian.api_tokens.expiration_minutes');
 
         return $minutes > 0 ? $minutes : ApiTokenExpiry::DEFAULT_MINUTES;
-    }
-
-    /**
-     * Revoke the token the current request authenticated with, so the client
-     * that holds it stops authenticating on its next request.
-     */
-    public function revokeCurrentToken(User $user): void
-    {
-        $token = $user->currentAccessToken();
-
-        // Only a real issued token can be revoked. Sanctum hands back a
-        // transient placeholder when a request authenticated some other way,
-        // and there is nothing on record to revoke in that case.
-        if ($token instanceof PersonalAccessToken) {
-            $token->delete();
-        }
     }
 
     private function resolveClientName(?string $clientName): string

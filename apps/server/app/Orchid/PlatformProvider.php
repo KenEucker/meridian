@@ -175,6 +175,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.node.config')
                 ->permission('platform.node.config'),
 
+            // Bearer tokens issued to client applications, listed by user and
+            // by device and revocable as either (AUTH-022). Filed with node and
+            // system administration rather than with Users, because what is
+            // administered here is which devices may reach this node, not who
+            // the people are.
+            Menu::make(__('API Tokens'))
+                ->icon('bs.key')
+                ->route('platform.api-tokens')
+                ->permission('platform.api-tokens'),
+
             // System configuration and diagnostics (technical spec 22A). Two
             // deliberately separate pages: configuration answers "what is this
             // node running on and where did each value come from", diagnostics
@@ -250,6 +260,10 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('Infrastructure'))
                 ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
                 ->addPermission('platform.node.config', __('Node configuration'))
+                // Listing and revoking issued API tokens (AUTH-022). Revoking a
+                // token ends a person's access from a device, so it stays a God
+                // Mode capability alongside the rest of node administration.
+                ->addPermission('platform.api-tokens', __('API tokens'))
                 // System configuration and diagnostics capabilities are
                 // granular (SYS-024 through SYS-027): viewing configuration,
                 // changing it, changing secrets, viewing diagnostics,

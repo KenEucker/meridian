@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\ApiToken;
+use App\Models\Device;
 use App\Models\Node;
 use App\Models\User;
 use App\Services\Auth\ApiTokenIssuer;
@@ -26,7 +28,11 @@ class ApiTokenExpiryTest extends TestCase
 
     private function issueTokenFor(User $user): string
     {
-        return app(ApiTokenIssuer::class)->issue($user)->plainTextToken;
+        // Every token is bound to a device (AUTH-021), so expiry is measured on
+        // a bound token like any other.
+        return app(ApiTokenIssuer::class)
+            ->issue($user, Device::factory()->create())
+            ->plainTextToken;
     }
 
     /**
@@ -89,7 +95,9 @@ class ApiTokenExpiryTest extends TestCase
 
         // Expiry is evaluated at request time rather than by deleting the row,
         // so an expired token is still on record for God Mode to account for.
-        $this->assertDatabaseCount('personal_access_tokens', 1);
+        // So is the one the successful probe revoked.
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+        $this->assertSame(0, ApiToken::query()->active()->count());
     }
 
     public function test_lowering_the_node_setting_expires_tokens_already_issued(): void
