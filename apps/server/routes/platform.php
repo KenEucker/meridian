@@ -19,6 +19,8 @@ use App\Orchid\Screens\Equipment\EquipmentEditScreen;
 use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
+use App\Orchid\Screens\Import\AssignmentImportScreen;
+use App\Orchid\Screens\Import\ShiftImportScreen;
 use App\Orchid\Screens\Import\TeamImportScreen;
 use App\Orchid\Screens\Import\UserImportScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
@@ -119,6 +121,18 @@ Route::screen('imports/teams', TeamImportScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Import Teams'), route('platform.imports.teams')));
+
+Route::screen('imports/shifts', ShiftImportScreen::class)
+    ->name('platform.imports.shifts')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Import Shifts'), route('platform.imports.shifts')));
+
+Route::screen('imports/assignments', AssignmentImportScreen::class)
+    ->name('platform.imports.assignments')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Import Assignments'), route('platform.imports.assignments')));
 
 // Platform > System > Roles
 Route::screen('roles', RoleListScreen::class)

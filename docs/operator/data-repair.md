@@ -52,11 +52,11 @@ and what you changed. "Fixed" is not a reason.
 
 ## Bulk import from a spreadsheet
 
-**Import Users** and **Import Teams** take a CSV, either uploaded or pasted.
-Use them when a list arrives as a spreadsheet and entering it by hand would take
-an afternoon.
+**Import Users**, **Import Teams**, **Import Shifts**, and **Import
+Assignments** take a CSV, either uploaded or pasted. Use them when a list
+arrives as a spreadsheet and entering it by hand would take an afternoon.
 
-Both work the same way:
+They all work the same way:
 
 - Column names are matched case-insensitively, order does not matter, and
   unknown columns are ignored. A file missing a required column is refused
@@ -65,8 +65,9 @@ Both work the same way:
   per-row outcome — created, updated, or skipped and why — before anything is
   written.
 - Rows match records that already exist: users by email address, teams by
-  department and team code. Re-running a corrected file updates rather than
-  duplicating, so fixing a bad row and importing again is the normal loop.
+  department and team code, shifts by event, department, team, title, and start.
+  Re-running a corrected file updates rather than duplicating, so fixing a bad
+  row and importing again is the normal loop.
 - Nothing is removed. A record missing from the file is left alone. If something
   should stop being used, archive it on its own screen.
 
@@ -79,6 +80,27 @@ Granting access stays one deliberate act at a time on the user screen.
 Teams name their department by organization slug and department code, so a code
 reused across organizations still lands in the right place. Every created and
 updated record is audited, plus one summary entry per run.
+
+Shifts name their event, department, and eligible team the same way. Times
+written without a timezone — `2026-08-28 09:00` — are read in the event's own
+timezone, because that is the time the shift is worked; a value carrying `Z` or
+an offset is taken as written. What identifies a shift is its event, department,
+team, title, and start together, so correcting a capacity or an end time updates
+the shift, while changing a title or a start creates a second one. Check the
+preview counts: a run reporting created where you expected updated is usually a
+retitled row. Training and waiver requirements already set on a shift are kept —
+the file cannot express them, so an import never removes them — and no import
+cancels a shift.
+
+Assignments name a staff member by email and the shift by title and start; add a
+`team_code` column only when one department runs two shifts with the same title
+and start. Import the shifts first. Every row is eligibility-checked exactly like
+a lead assignment — Do Not Staff, department and team membership, Ineligible
+status, required trainings and waivers all still refuse the row — and an
+imported assignment is recorded as assigned by you, because that is what
+happened. The one gate an import passes is the signup window, since a roster
+usually arrives as a spreadsheet after signup closed. Nobody is removed from a
+shift by an import.
 
 ## Common repairs
 

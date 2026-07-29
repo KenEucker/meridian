@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Lead-driven shift assignment with elevated overlap authority (SHIFT-015).
+ *
+ * Two callers reach the same write: a department lead through
+ * {@see self::assignStaffToShift}, and the God Mode CSV import through
+ * {@see self::assignStaffToShiftFromImport}. They differ only in where their
+ * authority comes from and whether the signup window applies; the eligibility
+ * rules, the record written, the audit entry, and the credential recalculation
+ * are one implementation, so an imported assignment cannot drift from a
+ * lead's.
  */
 class ShiftAssignmentService
 {
@@ -37,20 +45,67 @@ class ShiftAssignmentService
         User $assigner,
         ?Carbon $moment = null,
     ): ShiftAssignmentOutcome {
-        $moment ??= Carbon::now();
-
         if (! $this->access->canAssignToShift($assigner, $shift)) {
             throw ShiftAssignmentException::unauthorized();
         }
 
-        return DB::transaction(function () use ($shift, $staff, $assigner, $moment): ShiftAssignmentOutcome {
+        return $this->assign($shift, $staff, $assigner, $moment, true, AuditEvent::SOURCE_API);
+    }
+
+    /**
+     * Assignment from the God Mode CSV import (technical spec 22.2).
+     *
+     * Authority comes from the `platform.imports` console permission instead of
+     * a department lead role, and the signup window is not a gate, because an
+     * import records rostering decisions that were already made off-system —
+     * usually after signup closed, which is exactly when a schedule arrives as
+     * a spreadsheet.
+     *
+     * Nothing else is relaxed. Every rule that protects the person being
+     * assigned still applies: Do Not Staff, department membership, eligible team
+     * membership, department Ineligible status, and required trainings and
+     * waivers. A file cannot put someone on a shift they are not allowed to
+     * work, and the assignment is written, audited, and credential-recalculated
+     * exactly like a lead's.
+     *
+     * @throws ShiftAssignmentException when assignment is not permitted
+     */
+    public function assignStaffToShiftFromImport(
+        Shift $shift,
+        Staff $staff,
+        User $actor,
+        ?Carbon $moment = null,
+    ): ShiftAssignmentOutcome {
+        if (! $actor->hasAccess('platform.imports')) {
+            throw ShiftAssignmentException::unauthorized();
+        }
+
+        return $this->assign($shift, $staff, $actor, $moment, false, AuditEvent::SOURCE_ORCHID);
+    }
+
+    /**
+     * @param  bool  $enforceSignupWindow  Whether a closed signup window refuses the assignment.
+     *
+     * @throws ShiftAssignmentException when assignment is not permitted
+     */
+    private function assign(
+        Shift $shift,
+        Staff $staff,
+        User $assigner,
+        ?Carbon $moment,
+        bool $enforceSignupWindow,
+        string $sourceContext,
+    ): ShiftAssignmentOutcome {
+        $moment ??= Carbon::now();
+
+        return DB::transaction(function () use ($shift, $staff, $assigner, $moment, $enforceSignupWindow, $sourceContext): ShiftAssignmentOutcome {
             $shift = Shift::query()
                 ->with(['event', 'department'])
                 ->whereKey($shift->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->assertShiftAcceptsAssignment($shift, $moment);
+            $this->assertShiftAcceptsAssignment($shift, $moment, $enforceSignupWindow);
             $this->assertStaffEligibleForAssignment($shift, $staff, $moment);
 
             $existingAssignment = ShiftAssignment::query()
@@ -80,7 +135,7 @@ class ShiftAssignmentService
                 eventId: $shift->event_id,
                 departmentId: $shift->department_id,
                 after: $this->auditSnapshot($assignment),
-                sourceContext: AuditEvent::SOURCE_API,
+                sourceContext: $sourceContext,
             );
 
             $shift->loadMissing('event');
@@ -96,13 +151,13 @@ class ShiftAssignmentService
     /**
      * @throws ShiftAssignmentException
      */
-    private function assertShiftAcceptsAssignment(Shift $shift, Carbon $moment): void
+    private function assertShiftAcceptsAssignment(Shift $shift, Carbon $moment, bool $enforceSignupWindow): void
     {
         if ($shift->isCancelled()) {
             throw ShiftAssignmentException::cancelledShift();
         }
 
-        if (! $shift->isSignupOpenAt($moment)) {
+        if ($enforceSignupWindow && ! $shift->isSignupOpenAt($moment)) {
             throw ShiftAssignmentException::signupClosed();
         }
     }

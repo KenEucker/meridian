@@ -1,0 +1,4 @@
+organization_slug,event_slug,department_code,shift_title,shift_starts_at,staff_email
+idaho-burners,idaho-decompression-2026,RANGERS,"Dirt Patrol Day",2026-08-28 09:00,vera.staff@example.org
+idaho-burners,idaho-decompression-2026,RANGERS,"Dirt Patrol Night",2026-08-28 17:00,vera.staff@example.org
+idaho-burners,idaho-decompression-2026,GATE,"Gate Opening",2026-08-28 06:00,gwen.greeter@example.org

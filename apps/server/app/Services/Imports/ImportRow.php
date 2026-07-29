@@ -36,9 +36,15 @@ final class ImportRow
         public readonly ?string $reason = null,
     ) {}
 
-    public static function imported(int $row, string $identifier): self
+    /**
+     * @param  string|null  $reason  A note about a row that was written anyway,
+     *                               such as an assignment that double-books
+     *                               someone. Skipped rows explain a refusal;
+     *                               this explains something worth a second look.
+     */
+    public static function imported(int $row, string $identifier, ?string $reason = null): self
     {
-        return new self($row, $identifier, self::STATUS_IMPORTED);
+        return new self($row, $identifier, self::STATUS_IMPORTED, $reason);
     }
 
     public static function updated(int $row, string $identifier): self

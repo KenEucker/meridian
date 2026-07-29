@@ -6,7 +6,6 @@ namespace App\Services\Imports;
 
 use App\Models\AuditEvent;
 use App\Models\Department;
-use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Audit\AuditService;
@@ -56,6 +55,7 @@ final class TeamImportService
     public function __construct(
         private readonly AuditService $audit,
         private readonly TeamAdminService $teams,
+        private readonly ImportLookup $lookup,
     ) {}
 
     /**
@@ -235,17 +235,12 @@ final class TeamImportService
 
     private function resolveDepartment(string $organizationSlug, string $departmentCode): ?Department
     {
-        $organization = Organization::query()
-            ->whereRaw('lower(slug) = ?', [Str::lower($organizationSlug)])
-            ->first();
+        $organization = $this->lookup->organization($organizationSlug);
 
         if ($organization === null) {
             return null;
         }
 
-        return Department::query()
-            ->where('organization_id', $organization->id)
-            ->whereRaw('lower(code) = ?', [Str::lower($departmentCode)])
-            ->first();
+        return $this->lookup->department($organization, $departmentCode);
     }
 }
