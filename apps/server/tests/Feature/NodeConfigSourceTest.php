@@ -155,4 +155,109 @@ class NodeConfigSourceTest extends TestCase
         $this->assertSame(Node::ROLE_ONSITE, $roleOverride->value_json);
         $this->assertSame('https://central.example.org', $centralUrlOverride->value_json);
     }
+
+    /**
+     * An install with no node identity yet is configurable from the console,
+     * not only from the first-run setup page (technical spec 7.1, 22.2).
+     */
+    public function test_orchid_node_config_screen_sets_up_the_first_node(): void
+    {
+        config(['meridian.event_mode.enabled' => false]);
+
+        $user = $this->nodeConfigUser();
+
+        $screen = $this->screen('platform.node.config')->actingAs($user)->display();
+        $screen->assertOk();
+        $screen->assertSee('Set up this node');
+
+        $response = $this->screen('platform.node.config')
+            ->actingAs($user)
+            ->withoutFollowingRedirects()
+            ->method('setUp', [
+                'node' => [
+                    'node_name' => 'godmode.standalone',
+                    'node_role' => Node::ROLE_DEVELOPMENT,
+                    'central_node_url' => null,
+                ],
+            ]);
+
+        $response->assertRedirect(route('platform.node.config'));
+
+        $node = Node::query()->where('node_name', 'godmode.standalone')->firstOrFail();
+
+        $this->assertSame(Node::ROLE_DEVELOPMENT, $node->node_role);
+        $this->assertTrue((bool) $node->is_local);
+        $this->assertNotNull($node->public_key);
+
+        // The console path produces the same stored configuration the setup
+        // page does, including the signing keypair.
+        foreach (['node_name', 'node_role', 'node_public_key', 'node_private_key'] as $key) {
+            $value = NodeConfigValue::query()
+                ->where('node_id', $node->id)
+                ->where('key', $key)
+                ->firstOrFail();
+
+            $this->assertSame(NodeConfigValue::SOURCE_DATABASE, $value->source);
+            $this->assertSame((string) $user->id, (string) $value->updated_by_user_id);
+        }
+    }
+
+    public function test_orchid_node_setup_refuses_a_second_node(): void
+    {
+        config(['meridian.event_mode.enabled' => false]);
+
+        Node::factory()->create([
+            'node_name' => 'local.existing',
+            'node_role' => Node::ROLE_DEVELOPMENT,
+        ]);
+
+        $this->screen('platform.node.config')
+            ->actingAs($this->nodeConfigUser())
+            ->withoutFollowingRedirects()
+            ->method('setUp', [
+                'node' => [
+                    'node_name' => 'local.second',
+                    'node_role' => Node::ROLE_DEVELOPMENT,
+                    'central_node_url' => null,
+                ],
+            ]);
+
+        $this->assertSame(0, Node::query()->where('node_name', 'local.second')->count());
+    }
+
+    /**
+     * Setting up an event-mode role from the console fails closed the same way
+     * the setup page does (technical spec 8.6, 26.2).
+     */
+    public function test_orchid_node_setup_fails_closed_for_an_event_role_that_is_not_ready(): void
+    {
+        config([
+            'meridian.event_mode.enabled' => true,
+            'meridian.event_mode.require_https' => true,
+            'app.url' => 'http://insecure.example.org',
+        ]);
+
+        $this->screen('platform.node.config')
+            ->actingAs($this->nodeConfigUser())
+            ->withoutFollowingRedirects()
+            ->method('setUp', [
+                'node' => [
+                    'node_name' => 'onsite.primary',
+                    'node_role' => Node::ROLE_ONSITE,
+                    'central_node_url' => null,
+                ],
+            ]);
+
+        $this->assertSame(0, Node::query()->count());
+    }
+
+    private function nodeConfigUser(): User
+    {
+        return User::factory()->create([
+            'permissions' => [
+                'platform.index' => true,
+                'platform.node.config' => true,
+            ],
+        ]);
+    }
 }

@@ -10,6 +10,7 @@ use App\Orchid\Layouts\Node\NodePairingLayout;
 use App\Orchid\Layouts\Node\NodeSettingsLayout;
 use App\Services\EventMode\EventModeGuard;
 use App\Services\EventMode\EventModeNotReadyException;
+use App\Services\Node\NodeAlreadyConfiguredException;
 use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodePairingClient;
 use App\Services\Node\NodePairingException;
@@ -91,6 +92,16 @@ class NodeConfigScreen extends Screen
     public function commandBar(): iterable
     {
         return [
+            // An install with no node yet is configured from here as well as
+            // from the first-run setup page. The setup page exists for the
+            // moment before anyone can sign in; once someone can, the console
+            // is where node identity is administered, and sending an operator
+            // back out to a separate page to do it was the odd part.
+            Button::make(__('Set up node'))
+                ->icon('bs.check-circle')
+                ->method('setUp')
+                ->canSee(! $this->node instanceof Node),
+
             Button::make(__('Save settings'))
                 ->icon('bs.check-circle')
                 ->method('save')
@@ -119,13 +130,13 @@ class NodeConfigScreen extends Screen
      */
     public function layout(): iterable
     {
-        $layouts = [];
-
-        if ($this->node instanceof Node) {
-            $layouts[] = Layout::block(NodeSettingsLayout::class)
-                ->title(__('Node settings'))
-                ->description(__('These fields configure this Meridian server/node. Client devices discover their settings from the server/API URL and trusted-device flow.'));
-        }
+        $layouts = [
+            Layout::block(NodeSettingsLayout::class)
+                ->title($this->node instanceof Node ? __('Node settings') : __('Set up this node'))
+                ->description($this->node instanceof Node
+                    ? __('These fields configure this Meridian server/node. Client devices discover their settings from the server/API URL and trusted-device flow.')
+                    : __('This install has no node identity yet. Naming it here creates the node and its signing keypair, the same as the first-run setup page does.')),
+        ];
 
         if ($this->node instanceof Node && $this->node->canPairWithCentral()) {
             $layouts[] = Layout::block(NodePairingLayout::class)
@@ -139,6 +150,45 @@ class NodeConfigScreen extends Screen
         ];
     }
 
+    /**
+     * Create this install's node from the console (technical spec 7.1, 22.2).
+     *
+     * Runs the same validation, the same event-mode fail-closed check, and the
+     * same setup service the first-run setup page uses, so a node created here
+     * is indistinguishable from one created there — including its generated
+     * signing keypair (technical spec 8.6, 26.2).
+     */
+    public function setUp(Request $request, EventModeGuard $eventMode, NodeSetupService $nodes): RedirectResponse
+    {
+        $settings = $this->validatedSettings($request);
+
+        try {
+            $eventMode->ensureReady($settings['node_role']);
+        } catch (EventModeNotReadyException $exception) {
+            return redirect()
+                ->route('platform.node.config')
+                ->withErrors(['node.node_role' => $exception->getMessage()])
+                ->withInput();
+        }
+
+        try {
+            $node = $nodes->setupFirstNode(
+                nodeName: $settings['node_name'],
+                nodeRole: $settings['node_role'],
+                centralNodeUrl: $settings['central_node_url'],
+                updatedBy: $request->user(),
+            );
+        } catch (NodeAlreadyConfiguredException $exception) {
+            return redirect()
+                ->route('platform.node.config')
+                ->withErrors(['node.node_name' => $exception->getMessage()]);
+        }
+
+        Toast::info(__('This node is set up as :name.', ['name' => $node->node_name]));
+
+        return redirect()->route('platform.node.config');
+    }
+
     public function save(Request $request, EventModeGuard $eventMode, NodeSetupService $nodes): RedirectResponse
     {
         $node = $nodes->activeNode()?->load('configValues');
@@ -149,20 +199,8 @@ class NodeConfigScreen extends Screen
             return redirect()->route('platform.node.config');
         }
 
-        $validated = $request->validate([
-            'node.node_name' => [
-                'required',
-                'string',
-                'max:255',
-                'regex:/\A[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\z/i',
-            ],
-            'node.node_role' => ['required', Rule::in(Node::ROLES)],
-            'node.central_node_url' => ['nullable', 'url', 'max:2048'],
-        ]);
-
-        $settings = $validated['node'];
-        $centralNodeUrl = $settings['central_node_url'] ?? null;
-        $centralNodeUrl = $centralNodeUrl === '' ? null : $centralNodeUrl;
+        $settings = $this->validatedSettings($request);
+        $centralNodeUrl = $settings['central_node_url'];
 
         try {
             $eventMode->ensureReady($settings['node_role']);
@@ -276,6 +314,34 @@ class NodeConfigScreen extends Screen
         ]));
 
         return redirect()->route('platform.node.config');
+    }
+
+    /**
+     * The node settings form, validated the same way whether it is creating
+     * this install's node or editing it.
+     *
+     * @return array{node_name: string, node_role: string, central_node_url: string|null}
+     */
+    private function validatedSettings(Request $request): array
+    {
+        $validated = $request->validate([
+            'node.node_name' => [
+                'required',
+                'string',
+                'max:255',
+                'regex:/\A[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\z/i',
+            ],
+            'node.node_role' => ['required', Rule::in(Node::ROLES)],
+            'node.central_node_url' => ['nullable', 'url', 'max:2048'],
+        ]);
+
+        $centralNodeUrl = $validated['node']['central_node_url'] ?? null;
+
+        return [
+            'node_name' => $validated['node']['node_name'],
+            'node_role' => $validated['node']['node_role'],
+            'central_node_url' => $centralNodeUrl === '' ? null : $centralNodeUrl,
+        ];
     }
 
     private function storeDatabaseOverride(
