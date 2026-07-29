@@ -438,6 +438,17 @@ Use these labels exactly in UI unless the requirements document later changes th
 | Missing |
 | Damaged |
 
+Pooled equipment is never labelled Checked out. A pool that has some units out reads as Available with its available quantity, because the pool itself is not held by anyone (EQUIP-016).
+
+### 9.6A Equipment Tracking Kind
+
+| Canonical label | Meaning |
+|---|---|
+| Tracked | One physical unit per record, identified by asset tag or serial number, found at checkout by entering, scanning, or searching for it |
+| Pooled | Interchangeable units of one kind held as a quantity, handed out by choosing a count |
+
+Checkout surfaces present the two differently and never mix them into one list: pooled kinds as a short quantity list, tracked units through lookup (EQUIP-012, EQUIP-014).
+
 ### 9.7 Policy/Procedure Document State
 
 | Canonical label |
@@ -1200,6 +1211,8 @@ Organization and event selection are connected-only. A client resolves its conte
 |---|---|---|---|
 | `staff.dashboard` | `staff.dashboard` | Staff task dashboard | Authenticated staff |
 | `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
+| `staff.profile-edit` | `staff.profile.edit` | Edit own preferred name, phone, and city/state; change own handle; submit or remove own profile picture | Authenticated staff |
+| `staff.profile-requests` | `staff.profile.requests` | State of own handle and profile picture change requests, remaining self-service handle changes, and decisions already made | Authenticated staff |
 | `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
 | `event.info` | `events.info` | Staff-safe event information assembled from visible published documents for directions, arrival requirements, packing, food, housing, and event requirements | Staff with event access |
@@ -1331,6 +1344,7 @@ shifts are distinguished, and data freshness/offline state is visible.
 | `organizer.procedure-documents` | `organizer.procedure-documents.index` | Organization procedure document administration | Organizer |
 | `organizer.document-fragments` | `organizer.document-fragments.index` | Organization reusable fragment administration | Organizer |
 | `organizer.document-acknowledgments` | `organizer.document-acknowledgments.index` | Policy/procedure acknowledgment review | Organizer/elevated |
+| `organizer.profile-change-requests` | `organizer.profile-change-requests.index` | Staff handle and profile picture change request review | Organizer, Staff Coordinator |
 | `organizer.audit` | `organizer.audit.index` | Audit review | Organizer/elevated |
 
 Organizer screens must not display IMS incidents unless the user also has IC team-granted authority.
