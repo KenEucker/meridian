@@ -113,9 +113,13 @@ class PermissionCatalogTest extends TestCase
 
             // REPORT-001 / REPORT-006 / M13.1: organizers export event-wide
             // credential eligibility. REPORT-002 / M13.2: and the event-wide
-            // shift roster, under its own permission.
+            // shift roster, under its own permission. REPORT-003 / M13.3: and
+            // the event-wide staff contact list — the permission grants the
+            // export, while REPORT-010 / VOL-011 keep emergency contacts out of
+            // the file it produces.
             $this->assertContains('reports.credential_eligibility.export', $permissions);
             $this->assertContains('reports.shift_roster.export', $permissions);
+            $this->assertContains('reports.staff_contact.export', $permissions);
 
             // ORG-015: membership in the Organizers Department does not grant
             // access to all incidents or all field reports.
@@ -145,12 +149,16 @@ class PermissionCatalogTest extends TestCase
         // M13.1 / REPORT-007: and department-scoped credential eligibility
         // exports, which stay narrower than the organizer event-wide export.
         // M13.2 / REPORT-002: and department-scoped shift roster exports.
+        // M13.3 / REPORT-003, REPORT-009, VOL-012: and their own department's
+        // staff contact list, the one export permitted to carry emergency
+        // contacts.
         $this->assertSame([
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',
             'reports.credential_eligibility.export',
             'reports.shift_roster.export',
+            'reports.staff_contact.export',
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
@@ -160,6 +168,7 @@ class PermissionCatalogTest extends TestCase
             'department.branding.manage',
             'reports.credential_eligibility.export',
             'reports.shift_roster.export',
+            'reports.staff_contact.export',
         ], $this->permissionCodesFor('department_lead'));
 
         $this->assertSame([
