@@ -89,6 +89,17 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 |---|---|---|
 | [`QA-IMPORT-01-users-teams-import.md`](QA-IMPORT-01-users-teams-import.md) | Orchid / God Mode CSV import for users, teams, shifts, and assignments: upload or paste, preview that writes nothing, per-row created/updated/skipped outcomes, match-on-re-run instead of duplicate, whole-file rejection for a missing required column, event-timezone shift times, preserved shift requirements, lead-equivalent assignment eligibility, no permissions or deletions from a file, and audit history | M13.7, M13.8 |
 
+## Alpha 1 Reporting export script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-EXPORT-01-alpha-1-exports.md`](QA-EXPORT-01-alpha-1-exports.md) | All five Alpha 1 exports in one sitting — credential eligibility, shift roster, staff contacts, hours worked, and credits earned: organizer event-wide and department-role department scope, narrowing that cannot widen, refusals for incident-only and unroled actors, the documented column set of each file, phone/emergency-contact/date-of-birth exclusions, emergency contacts only for a caller who leads every exported department, a frozen credits basis that a later policy rename does not restate, and one audit entry per export | M13.9 |
+
+The individual Milestone 13 scripts verify one export beside the domain that
+produces it (`QA-CRED-01` section G, `QA-SHIFT-01`, `QA-STAFF-01`, `QA-SLB-01`
+section H); `QA-EXPORT-01` is the consolidated script that answers the milestone
+QA gate.
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |
