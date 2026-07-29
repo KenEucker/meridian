@@ -117,11 +117,13 @@ class PermissionCatalogTest extends TestCase
             // the event-wide staff contact list — the permission grants the
             // export, while REPORT-010 / VOL-011 keep emergency contacts out of
             // the file it produces. REPORT-004 / M13.4: and event-wide actual
-            // hours worked.
+            // hours worked. REPORT-005 / CREDIT-005 / M13.6: and event-wide
+            // credits earned with the basis each was calculated from.
             $this->assertContains('reports.credential_eligibility.export', $permissions);
             $this->assertContains('reports.shift_roster.export', $permissions);
             $this->assertContains('reports.staff_contact.export', $permissions);
             $this->assertContains('reports.hours_worked.export', $permissions);
+            $this->assertContains('reports.credits_earned.export', $permissions);
 
             // HOURS-007: reading hours is not correcting them, which stays with
             // the department attendance managers.
@@ -161,6 +163,9 @@ class PermissionCatalogTest extends TestCase
         // M13.4 / REPORT-004: and their own department's actual hours worked,
         // which reads what attendance recorded without granting the authority
         // to correct it (HOURS-007).
+        // M13.6 / REPORT-005, CREDIT-005: and their own department's credits
+        // earned, which reads a frozen ledger (CREDIT-004) without granting the
+        // authority to run or redo a calculation.
         $this->assertSame([
             'department.administer',
             'department.trainings.manage',
@@ -169,6 +174,7 @@ class PermissionCatalogTest extends TestCase
             'reports.shift_roster.export',
             'reports.staff_contact.export',
             'reports.hours_worked.export',
+            'reports.credits_earned.export',
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
@@ -180,6 +186,7 @@ class PermissionCatalogTest extends TestCase
             'reports.shift_roster.export',
             'reports.staff_contact.export',
             'reports.hours_worked.export',
+            'reports.credits_earned.export',
         ], $this->permissionCodesFor('department_lead'));
 
         $this->assertSame([
