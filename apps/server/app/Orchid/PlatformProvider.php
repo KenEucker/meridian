@@ -175,6 +175,26 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.node.config')
                 ->permission('platform.node.config'),
 
+            // System configuration and diagnostics (technical spec 22A). Two
+            // deliberately separate pages: configuration answers "what is this
+            // node running on and where did each value come from", diagnostics
+            // answers "is this node operating correctly" — and never dumps
+            // configuration values (SYS-028).
+            Menu::make(__('System Configuration'))
+                ->icon('bs.sliders')
+                ->route('platform.system.configuration')
+                ->permission('platform.system.configuration'),
+
+            Menu::make(__('System Diagnostics'))
+                ->icon('bs.heart-pulse')
+                ->route('platform.system.diagnostics')
+                ->permission('platform.system.diagnostics'),
+
+            Menu::make(__('Node Health'))
+                ->icon('bs.activity')
+                ->route('platform.system.node-health')
+                ->permission('platform.system.diagnostics'),
+
             // Meridian's own documentation and changelog, served from content
             // packaged with this deployment. These are console pages, not
             // external links, and they do not open an external browser context
@@ -229,7 +249,21 @@ class PlatformProvider extends OrchidServiceProvider
 
             ItemPermission::group(__('Infrastructure'))
                 ->addPermission('platform.sync-conflicts', __('Sync conflicts'))
-                ->addPermission('platform.node.config', __('Node configuration')),
+                ->addPermission('platform.node.config', __('Node configuration'))
+                // System configuration and diagnostics capabilities are
+                // granular (SYS-024 through SYS-027): viewing configuration,
+                // changing it, changing secrets, viewing diagnostics,
+                // exporting the sanitized bundle, and reading configuration
+                // audit history are separate grants. These are infrastructure
+                // administration and default to God Mode operators only —
+                // organizers and department leads never receive them through
+                // organization roles (SYS-025).
+                ->addPermission('platform.system.configuration', __('View system configuration'))
+                ->addPermission('platform.system.configuration.manage', __('Manage system configuration'))
+                ->addPermission('platform.system.secrets', __('Manage secret configuration'))
+                ->addPermission('platform.system.configuration.audit', __('View configuration audit history'))
+                ->addPermission('platform.system.diagnostics', __('View system diagnostics and node health'))
+                ->addPermission('platform.system.diagnostics.export', __('Export sanitized diagnostics')),
         ];
     }
 }
