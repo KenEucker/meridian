@@ -11,6 +11,7 @@ use App\Models\Department;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\Reporting\CredentialEligibilityExportService;
+use App\Services\Reporting\HoursWorkedExportService;
 use App\Services\Reporting\ReportingExport;
 use App\Services\Reporting\ReportingExportAccess;
 use App\Services\Reporting\ReportingExportScope;
@@ -21,8 +22,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 /**
- * Alpha 1 reporting export downloads (M13.1, M13.2, M13.3; REPORT-001 through
- * REPORT-003, REPORT-006, REPORT-007).
+ * Alpha 1 reporting export downloads (M13.1 through M13.4; REPORT-001 through
+ * REPORT-004, REPORT-006, REPORT-007).
  *
  * Delivered as ordinary browser GETs so an authorized organizer or department
  * lead can save the file directly. Exports are server-generated and online-only
@@ -76,6 +77,23 @@ final class ReportingExportController extends Controller
             $access,
             PermissionCatalog::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
             'staff contacts',
+            fn (ReportingExportScope $scope, User $user): ReportingExport => $exports
+                ->export($event, $scope, $user, AuditEvent::SOURCE_API),
+        );
+    }
+
+    public function hoursWorked(
+        Request $request,
+        Event $event,
+        ReportingExportAccess $access,
+        HoursWorkedExportService $exports,
+    ): Response|JsonResponse {
+        return $this->download(
+            $request,
+            $event,
+            $access,
+            PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
+            'hours worked',
             fn (ReportingExportScope $scope, User $user): ReportingExport => $exports
                 ->export($event, $scope, $user, AuditEvent::SOURCE_API),
         );
