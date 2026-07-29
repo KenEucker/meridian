@@ -63,11 +63,13 @@ Route::post('/node-health-report', [NodeHealthReportController::class, 'store'])
     ->name('api.node-health-report.store');
 
 /*
- * API login (AUTH-018, AUTH-019, AUTH-024; technical spec 11.4; data/API 5.4).
+ * API login (AUTH-018, AUTH-019, AUTH-021, AUTH-024; technical spec 11.4;
+ * data/API 5.4).
  *
  * A client posts an email address, the node mails a login code, and the client
- * posts that code back for a bearer token, so verification completes without
- * leaving the application. Neither route can carry a session — that is the
+ * posts that code back — with the device the token will be bound to — for a
+ * bearer token, so verification completes without leaving the application.
+ * Neither route can carry a session — that is the
  * point of them — so both are rate limited instead. Requesting a code sends
  * mail, and submitting one guesses a credential, so the request route is the
  * tighter of the two.
@@ -81,7 +83,7 @@ Route::post('/auth/magic-link/verify', [ApiAuthController::class, 'verifyMagicLi
     ->name('api.auth.magic-link.verify');
 
 // A client disposing of its own token. God Mode revocation by token and by
-// device (AUTH-022) arrives with M16.2.
+// device (AUTH-022) lives in the console, at `platform.api-tokens`.
 Route::delete('/auth/session', [ApiAuthController::class, 'destroySession'])
     ->middleware('auth:sanctum')
     ->name('api.auth.session.destroy');

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Documents\DocumentExportController;
+use App\Orchid\Screens\ApiToken\ApiTokenListScreen;
 use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
 use App\Orchid\Screens\Console\ChangelogScreen;
@@ -390,6 +391,13 @@ Route::screen('sync-conflicts', SyncConflictListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Sync Conflicts'), route('platform.sync-conflicts')));
+
+// Platform > Infrastructure > API Tokens
+Route::screen('api-tokens', ApiTokenListScreen::class)
+    ->name('platform.api-tokens')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('API Tokens'), route('platform.api-tokens')));
 
 // Platform > Infrastructure > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)

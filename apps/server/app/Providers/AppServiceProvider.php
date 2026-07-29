@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Http\Middleware\MeridianOrchidAccess;
+use App\Models\ApiToken;
 use App\Models\Attachment;
 use App\Models\Department;
 use App\Models\DeviceTrust;
@@ -14,6 +15,7 @@ use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
+use App\Services\Auth\ApiTokenAuthentication;
 use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Diagnostics\Checks;
@@ -23,6 +25,7 @@ use App\Services\SystemConfig\ApplySystemConfigOverrides;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Sanctum;
 use Orchid\Attachment\Models\Attachment as OrchidPlatformAttachment;
 use Orchid\Platform\Dashboard;
 use Orchid\Platform\Http\Middleware\Access as OrchidAccess;
@@ -95,6 +98,21 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(DeviceTrust::class, DeviceTrustPolicy::class);
         Gate::policy(FieldReport::class, FieldReportPolicy::class);
+
+        // Meridian's own token model carries the device binding and revocation
+        // stamp that Sanctum's does not (AUTH-021, AUTH-022; data/API 12.5).
+        // Registering it here rather than only at issuance means the guard
+        // resolves the same model on an incoming request.
+        Sanctum::usePersonalAccessTokenModel(ApiToken::class);
+
+        // Revocation is evaluated at request time, so a revoked token stops
+        // authenticating on its next request without the client cooperating
+        // (AUTH-023, technical spec 11.4).
+        Sanctum::authenticateAccessTokensUsing(
+            fn (mixed $accessToken, bool $isValid): bool => $this->app
+                ->make(ApiTokenAuthentication::class)
+                ->accepts($accessToken, $isValid)
+        );
 
         // During an active event window the on-site primary node is
         // authoritative for event-scoped records, so every local write path on a

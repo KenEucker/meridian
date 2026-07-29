@@ -26,6 +26,12 @@ class ApiLoginException extends RuntimeException
     /** The address resolves to no user and magic-link account creation is off. */
     public const REASON_ACCOUNT_CREATION_DISABLED = 'account_creation_disabled';
 
+    /** The request carries no device identity a token could be bound to. */
+    public const REASON_DEVICE_UNRESOLVABLE = 'device_unresolvable';
+
+    /** The named device is on record and revoked. */
+    public const REASON_DEVICE_REVOKED = 'device_revoked';
+
     public function __construct(
         public readonly string $reason,
         string $message,
@@ -57,6 +63,29 @@ class ApiLoginException extends RuntimeException
         return new self(
             self::REASON_ACCOUNT_CREATION_DISABLED,
             'This email cannot be used to sign in yet.',
+            403,
+        );
+    }
+
+    /**
+     * AUTH-021: a token that cannot be associated with a device is not issued.
+     * The refusal names what is missing, because the client can supply it and
+     * retry — unlike the refusals above, which are about the account.
+     */
+    public static function deviceUnresolvable(string $detail): self
+    {
+        return new self(
+            self::REASON_DEVICE_UNRESOLVABLE,
+            $detail,
+            422,
+        );
+    }
+
+    public static function deviceRevoked(): self
+    {
+        return new self(
+            self::REASON_DEVICE_REVOKED,
+            'This device has been revoked and cannot sign in.',
             403,
         );
     }

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Auth\ApiDeviceResolver;
 use App\Services\Auth\ApiLoginCodeService;
 use App\Services\Auth\ApiLoginException;
 use App\Services\Auth\ApiTokenIssuer;
+use App\Services\Auth\ApiTokenRevoker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -29,6 +31,8 @@ class ApiAuthController extends Controller
     public function __construct(
         private readonly ApiLoginCodeService $loginCodes,
         private readonly ApiTokenIssuer $tokens,
+        private readonly ApiTokenRevoker $revoker,
+        private readonly ApiDeviceResolver $devices,
     ) {}
 
     /**
@@ -60,6 +64,12 @@ class ApiAuthController extends Controller
 
     /**
      * `POST /api/auth/magic-link/verify` — exchange a login code for a token.
+     *
+     * The request carries the device the token will be bound to (AUTH-021). A
+     * client sends a stable install identifier it generates once, plus the
+     * label, platform, and device public key the node needs the first time it
+     * sees that identifier. A request that cannot supply a resolvable device is
+     * refused rather than issued an unbound token.
      */
     public function verifyMagicLink(Request $request): JsonResponse
     {
@@ -67,7 +77,23 @@ class ApiAuthController extends Controller
             'email' => ['required', 'string', 'email:rfc', 'max:255'],
             'code' => ['required', 'string', 'max:64'],
             'client_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'device' => ['sometimes', 'array'],
+            'device.id' => ['sometimes', 'string', 'max:64'],
+            'device.label' => ['sometimes', 'string', 'max:255'],
+            'device.platform' => ['sometimes', 'string', 'max:64'],
+            'device.public_key' => ['sometimes', 'string', 'max:'.ApiDeviceResolver::MAX_PUBLIC_KEY_LENGTH],
         ]);
+
+        // The device is checked before the code is spent, so a client sending a
+        // good code from an unusable device gets its code back rather than
+        // losing a single-use credential to a refusal it can correct. The
+        // `devices` row itself is written afterwards, so a failed sign-in does
+        // not register hardware that never authenticated.
+        try {
+            $identity = $this->devices->identify($validated['device'] ?? null);
+        } catch (ApiLoginException $exception) {
+            return $this->refusal($exception);
+        }
 
         try {
             $user = $this->loginCodes->redeem($validated['email'], $validated['code']);
@@ -77,13 +103,16 @@ class ApiAuthController extends Controller
                 'errors' => ['email' => ['Enter a valid email address.']],
             ], 422);
         } catch (ApiLoginException $exception) {
-            return response()->json([
-                'message' => $exception->getMessage(),
-                'reason' => $exception->reason,
-            ], $exception->status);
+            return $this->refusal($exception);
         }
 
-        $token = $this->tokens->issue($user, $validated['client_name'] ?? null);
+        try {
+            $device = $this->devices->register($identity);
+        } catch (ApiLoginException $exception) {
+            return $this->refusal($exception);
+        }
+
+        $token = $this->tokens->issue($user, $device, $validated['client_name'] ?? null);
 
         return response()->json([
             // The one moment the plaintext token exists outside the client that
@@ -96,6 +125,14 @@ class ApiAuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
             ],
+            // Echoed so a client can confirm which device record its token is
+            // bound to, and notice if it has been issuing under a new
+            // identifier on every sign-in.
+            'device' => [
+                'id' => $device->getKey(),
+                'label' => $device->device_label,
+                'platform' => $device->platform,
+            ],
         ], 201);
     }
 
@@ -104,17 +141,29 @@ class ApiAuthController extends Controller
      * with, so the client that holds it stops authenticating on its next
      * request.
      *
-     * God Mode revocation by token and by device is AUTH-022 and arrives with
-     * M16.2. This is only a client disposing of its own token.
+     * This is a client disposing of its own token. God Mode revocation by token
+     * and by device (AUTH-022) is in the console.
      */
     public function destroySession(Request $request): JsonResponse
     {
         $user = $request->user();
 
         if ($user instanceof User) {
-            $this->tokens->revokeCurrentToken($user);
+            $this->revoker->revokeCurrentToken($user);
         }
 
         return response()->json(['status' => 'revoked'], 200);
+    }
+
+    /**
+     * A refused login attempt, carrying the stable reason code every client
+     * explains the refusal from.
+     */
+    private function refusal(ApiLoginException $exception): JsonResponse
+    {
+        return response()->json([
+            'message' => $exception->getMessage(),
+            'reason' => $exception->reason,
+        ], $exception->status);
     }
 }

@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Mail\ApiLoginCodeMail;
 use App\Models\ApiLoginCode;
+use App\Models\ApiToken;
 use App\Models\AuthIdentity;
+use App\Models\Device;
 use App\Models\User;
 use App\Services\Auth\ApiLoginCodeGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,10 +19,24 @@ use Tests\TestCase;
  * API login endpoints and bearer token issuance (M16.1).
  *
  * Source: AUTH-018, AUTH-019, AUTH-024; technical spec 11.4; data/API 5.4.
+ * Device binding and revocation (M16.2) have their own scripts; what is
+ * asserted here is the login exchange, so these cases sign in from an
+ * already-registered device.
  */
 class ApiTokenIssuanceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * The device a client signs in from. Every issued token is bound to one
+     * (AUTH-021), so the verify request carries it.
+     *
+     * @return array<string, string>
+     */
+    private function devicePayload(): array
+    {
+        return ['id' => (string) Device::factory()->create()->getKey()];
+    }
 
     /**
      * Capture the plaintext code out of the mail Meridian sends, which is the
@@ -110,6 +126,7 @@ class ApiTokenIssuanceTest extends TestCase
             'email' => 'new.client@example.com',
             'code' => $code,
             'client_name' => 'Meridian Field (Pixel 9)',
+            'device' => $this->devicePayload(),
         ]);
 
         $response->assertStatus(201);
@@ -139,6 +156,7 @@ class ApiTokenIssuanceTest extends TestCase
         $token = $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'client@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])->json('token');
 
         $this->withHeader('Authorization', 'Bearer '.$token)
@@ -170,13 +188,17 @@ class ApiTokenIssuanceTest extends TestCase
         $token = $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'revoker@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])->json('token');
 
         $this->withHeader('Authorization', 'Bearer '.$token)
             ->deleteJson(route('api.auth.session.destroy'))
             ->assertOk();
 
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        // The row stays on record with a revocation stamp rather than being
+        // deleted, so God Mode can still account for the credential that
+        // existed and the audit entries naming it keep resolving (AUTH-025).
+        $this->assertNotNull(ApiToken::query()->sole()->revoked_at);
 
         // Every HTTP call in one test shares a container, and a resolved guard
         // caches the user it found. A client makes each request against a fresh
@@ -195,11 +217,13 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'once@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])->assertStatus(201);
 
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'once@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])
             ->assertStatus(401)
             ->assertJsonPath('reason', 'invalid_login_code');
@@ -214,6 +238,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'typed@example.com',
             'code' => strtolower(ApiLoginCodeGenerator::format($code)),
+            'device' => $this->devicePayload(),
         ])->assertStatus(201);
     }
 
@@ -225,6 +250,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'bystander@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])
             ->assertStatus(401)
             ->assertJsonPath('reason', 'invalid_login_code');
@@ -240,6 +266,7 @@ class ApiTokenIssuanceTest extends TestCase
             $this->postJson(route('api.auth.magic-link.verify'), [
                 'email' => 'guessed@example.com',
                 'code' => 'ZZZZZZZZ',
+                'device' => $this->devicePayload(),
             ])->assertStatus(401);
         }
 
@@ -252,6 +279,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'guessed@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])->assertStatus(401);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -266,6 +294,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'stale@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])
             ->assertStatus(401)
             ->assertJsonPath('reason', 'invalid_login_code');
@@ -285,6 +314,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'disabled@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])
             ->assertStatus(403)
             ->assertJsonPath('reason', 'account_disabled');
@@ -301,6 +331,7 @@ class ApiTokenIssuanceTest extends TestCase
         $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'stranger@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])
             ->assertStatus(403)
             ->assertJsonPath('reason', 'account_creation_disabled');
@@ -331,6 +362,7 @@ class ApiTokenIssuanceTest extends TestCase
         $plaintext = $this->postJson(route('api.auth.magic-link.verify'), [
             'email' => 'hashed@example.com',
             'code' => $code,
+            'device' => $this->devicePayload(),
         ])->json('token');
 
         $stored = PersonalAccessToken::query()->sole();
