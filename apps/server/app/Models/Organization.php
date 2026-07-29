@@ -167,6 +167,20 @@ class Organization extends Model
         return $this->belongsTo(Department::class, 'default_ic_department_id');
     }
 
+    /**
+     * The organization default credit policy (ORG-009), used for any shift that
+     * does not name its own (CREDIT-003).
+     */
+    public function defaultCreditPolicy(): BelongsTo
+    {
+        return $this->belongsTo(CreditPolicy::class, 'default_credit_policy_id');
+    }
+
+    public function creditPolicies(): HasMany
+    {
+        return $this->hasMany(CreditPolicy::class);
+    }
+
     public function staffOrganizationStatuses(): HasMany
     {
         return $this->hasMany(StaffOrganizationStatus::class);

@@ -45,6 +45,7 @@ class Shift extends Model
         'signup_opens_at',
         'signup_closes_at',
         'schedule_lock_at',
+        'credit_policy_id',
         'cancelled_at',
     ];
 
@@ -129,6 +130,16 @@ class Shift extends Model
     public function eligibleTeam(): BelongsTo
     {
         return $this->belongsTo(Team::class, 'eligible_team_id');
+    }
+
+    /**
+     * The shift-specific credit policy, when the shift defines one (SHIFT-010).
+     * Null means hours worked on this shift are credited at the organization
+     * default (CREDIT-003).
+     */
+    public function creditPolicy(): BelongsTo
+    {
+        return $this->belongsTo(CreditPolicy::class);
     }
 
     public function trainingRequirements(): HasMany
