@@ -4,6 +4,8 @@
 
 Verify Milestone 7 shift signup eligibility through the domain services that power Alpha 1: a reviewer can configure training and waiver requirements on a shift, sign up an eligible staff member immediately, observe denials for missing training, missing waiver, department Ineligible status, full capacity, closed signup window, and schedule lock, receive advisory overlap warnings without a hard block, and confirm that an authorized department lead can assign overlapping shifts and remove staff after schedule lock.
 
+Section H additionally verifies the Milestone 13 shift roster export (M13.2): an organizer exports the whole event, a department lead exports only their own department, unauthorized actors are refused, phone numbers and emergency contacts never reach the file, an unstaffed shift still appears, a removed staff member does not, and each successful export is audited.
+
 Orchid/API/UI signup surfaces are not required for this script. Use the documented Laravel domain-service tinker commands until dedicated staff-facing screens exist.
 
 ## Requirements covered
@@ -21,9 +23,15 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - `SHIFT-016`
 - `TRAIN-008`
 - `WAIVER-005`
-- Requirements sections 3.11, 3.12, and 5.5
+- `REPORT-002`
+- `REPORT-006`
+- `REPORT-007`
+- `REPORT-008`
+- `REPORT-010`
+- Requirements sections 3.11, 3.12, 5.5, 5.12, and 7.14
 - Data/API spec section 10.9
-- Meridian Alpha 1 tasks M7.4 through M7.8 and M7.11
+- Technical spec section 22.2 (CSV export)
+- Meridian Alpha 1 tasks M7.4 through M7.8, M7.11, and M13.2
 
 ## Environment
 
@@ -171,11 +179,47 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
     ```
 35. Confirm `removed_at` is set and a `shift_assignment.removed` audit event is attributed to Dana.
 
-### H. Explicit non-goals for this script
+### H. Shift roster export (M13.2)
 
-36. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or PowerSync operations.
-37. Confirm unscheduled shift additions during live operations are out of scope here and belong to Milestone 10 / `QA-SLB-01`.
-38. Confirm credential eligibility recalculation after signup/removal is verified in `QA-CRED-01-credential-eligibility.md`, not as a duplicate pass/fail gate in this script.
+Run this section after sections A through G so the event carries a staffed shift, an unstaffed shift, a lead-assigned staff member, and a removed one.
+
+36. Give Sam contact details the export must never carry, then export as Olive Organizer and save the file:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "sam.shiftlead@idaho-burners.test")->firstOrFail(); $staff->forceFill(["phone" => "+1-208-555-0100", "emergency_contact_name" => "Quinn Contact", "emergency_contact_phone" => "+1-208-555-0199"])->save(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT); $export = app(App\Services\Reporting\ShiftRosterExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    ```
+37. Confirm `event_wide` is true, the header row is `event_name,department,team,shift_title,shift_status,shift_starts_at,shift_ends_at,shift_capacity,assigned_staff_count,staff_legal_name,staff_preferred_name,staff_handle,staff_email,assignment_status,assignment_source`, and the file lists the QA shifts in schedule order with `Rangers` / `Dirt` as their department and team.
+38. Confirm Sam appears on `QA SHIFT Overlap Afternoon` with `assignment_status` `assigned` and `assignment_source` `lead_assigned`, and that a self-signup row instead reads `signed_up` / `self_signup`.
+39. Confirm the roster reflects what the shift domain recorded, not a recalculation:
+    - `QA SHIFT Eligibility Morning` still appears after Dana removed Vera in section G, with `assigned_staff_count` `0` and empty staff columns; an unstaffed shift stays visible.
+    - Vera has no row on that shift; a removed staff member is off the roster.
+40. Confirm the saved file contains no phone number and no emergency contact:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "sam.shiftlead@idaho-burners.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT); $csv = app(App\Services\Reporting\ShiftRosterExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => str_contains($csv, (string) $staff->phone), "emergency_name_present" => str_contains($csv, (string) $staff->emergency_contact_name), "emergency_phone_present" => str_contains($csv, (string) $staff->emergency_contact_phone)], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+41. Confirm all three values are `false`.
+42. Export as Dana Departmentlead and confirm the department-scoped file:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT); $export = app(App\Services\Reporting\ShiftRosterExportService::class)->export($event, $scope, $dana); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentIds, "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    ```
+43. Confirm `event_wide` is false, `department_ids` contains only the Rangers id, the filename carries `rangers`, and every exported row belongs to a Rangers shift.
+44. Confirm an unauthorized actor resolves no export scope at all, including a staff member who is on the roster themselves:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $access = app(App\Services\Reporting\ReportingExportAccess::class); foreach (["vera.staff@idaho-burners.test", "omar.icoperator@idaho-burners.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_SHIFT_ROSTER_EXPORT) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
+    ```
+45. Confirm both personas are `denied`; being on a roster is not authority to export it, and incident authority is not export authority.
+46. Confirm each successful export was audited:
+    ```bash
+    php artisan tinker --execute='App\Models\AuditEvent::query()->where("action", "event_shift_roster.exported")->latest("created_at")->take(5)->get(["actor_user_id", "event_id", "department_id", "after_json"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+    ```
+47. Confirm one audit event per export with the acting user, the event, a `scope` of `event` or `department`, and a `row_count` matching the file.
+48. Optional HTTP check when a browser session is available for Olive (log in with `QA-AUTH-01`): download `/api/events/{event id}/exports/shift-roster` and confirm the browser saves a `.csv` attachment. Add `?department_id={department id}` to narrow an organizer export to one department, and confirm a department id from another organization returns 404.
+
+### I. Explicit non-goals for this script
+
+49. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or PowerSync operations.
+50. Confirm unscheduled shift additions during live operations are out of scope here and belong to Milestone 10 / `QA-SLB-01`.
+51. Confirm credential eligibility recalculation after signup/removal is verified in `QA-CRED-01-credential-eligibility.md`, not as a duplicate pass/fail gate in this script.
+52. Confirm the shift roster export in section H is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.3 through M13.9 (`QA-EXPORT-01`).
 
 ## Expected results
 
@@ -186,6 +230,11 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - Schedule overlaps warn by default and do not hard-block self-signup.
 - Authorized department leads may assign overlapping shifts; unauthorized users cannot.
 - Self-withdrawal is blocked after schedule lock; department-lead removal remains allowed and soft-removes the assignment.
+- The shift roster export produces a CSV with the documented header, one row per staff member on a shift, and one row for a shift nobody is on.
+- The roster reports assignments as recorded: self-signups and lead assignments are distinguished, removed staff are absent, and a cancelled shift is reported as cancelled rather than dropped.
+- Organizers export the whole event; department leads export only their own department; staff on a roster and IC roles resolve no export scope.
+- No phone number or emergency contact appears in the export.
+- Every successful export writes one `event_shift_roster.exported` audit event naming the actor, event, scope, and row count.
 - No Orchid/API/UI signup surface, offline queue, or unscheduled operational add is required for this Alpha 1 QA gate.
 
 ## Evidence to capture
@@ -199,6 +248,10 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - Lead overlap assignment output with `assigned` status and Dana as assigner.
 - Unauthorized lead-assignment denial message.
 - Schedule-lock self-withdrawal denial and successful lead removal with `shift_assignment.removed` audit evidence.
+- The saved organizer roster export file, plus the department-scoped export output and its filename.
+- Sensitive-field check output showing all three values false.
+- Denied export-scope output for the staff and IC personas.
+- Roster export audit event output.
 
 ## Failure notes
 
@@ -210,3 +263,7 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - If a department lead cannot assign an overlapping shift, stop and file a SHIFT-015 issue.
 - If self-service changes remain allowed after schedule lock, or lead removal is blocked after lock, stop and file a SHIFT-009 / SHIFT-013 issue.
 - If this script appears to require Orchid shift UI, public API clients, offline sync, or unscheduled operational adds, stop and report scope leakage; those surfaces are deferred.
+- If the roster export carries a phone number or emergency contact, stop and file a blocking REPORT-008 / REPORT-010 issue.
+- If a department lead export returns another department's shifts, or a plain staff member resolves an export scope, stop and file a blocking REPORT-006 / REPORT-007 issue.
+- If an unstaffed shift is missing from the roster, or a removed staff member is still listed, stop and file a blocking REPORT-002 / SHIFT-013 issue.
+- If a successful export writes no audit event, stop and file a blocking data/API section 8 issue.
