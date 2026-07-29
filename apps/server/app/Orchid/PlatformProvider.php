@@ -140,6 +140,18 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.imports.teams')
                 ->permission('platform.imports'),
 
+            // Shifts before assignments, which is also the order they have to
+            // be imported in: an assignment names a shift that already exists.
+            Menu::make(__('Import Shifts'))
+                ->icon('bs.file-earmark-arrow-up')
+                ->route('platform.imports.shifts')
+                ->permission('platform.imports'),
+
+            Menu::make(__('Import Assignments'))
+                ->icon('bs.file-earmark-arrow-up')
+                ->route('platform.imports.assignments')
+                ->permission('platform.imports'),
+
             // Node identity, pairing, and sync conflicts describe how this
             // deployment is wired together rather than how the organization
             // operates, so they carry their own heading instead of trailing the

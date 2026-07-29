@@ -87,7 +87,7 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 
 | ID | Coverage | Owning task |
 |---|---|---|
-| [`QA-IMPORT-01-users-teams-import.md`](QA-IMPORT-01-users-teams-import.md) | Orchid / God Mode CSV import for users and teams: upload or paste, preview that writes nothing, per-row created/updated/skipped outcomes, match-on-re-run instead of duplicate, whole-file rejection for a missing required column, no permissions or deletions from a file, and audit history | M13.7 |
+| [`QA-IMPORT-01-users-teams-import.md`](QA-IMPORT-01-users-teams-import.md) | Orchid / God Mode CSV import for users, teams, shifts, and assignments: upload or paste, preview that writes nothing, per-row created/updated/skipped outcomes, match-on-re-run instead of duplicate, whole-file rejection for a missing required column, event-timezone shift times, preserved shift requirements, lead-equivalent assignment eligibility, no permissions or deletions from a file, and audit history | M13.7, M13.8 |
 
 ## Alpha 1 Department self-administration script
 

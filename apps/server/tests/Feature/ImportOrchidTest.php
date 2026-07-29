@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Department;
+use App\Models\Event;
 use App\Models\Organization;
+use App\Models\Shift;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,6 +35,16 @@ class ImportOrchidTest extends TestCase
         $teams->assertOk();
         $teams->assertSee('Import Teams');
         $teams->assertSee('Required columns: organization_slug, department_code, name, code.', false);
+
+        $shifts = $this->actingAs($user)->get(route('platform.imports.shifts'));
+        $shifts->assertOk();
+        $shifts->assertSee('Import Shifts');
+        $shifts->assertSee('Required columns: organization_slug, event_slug, department_code, team_code, title, starts_at, ends_at.', false);
+
+        $assignments = $this->actingAs($user)->get(route('platform.imports.assignments'));
+        $assignments->assertOk();
+        $assignments->assertSee('Import Assignments');
+        $assignments->assertSee('Required columns: organization_slug, event_slug, department_code, shift_title, shift_starts_at, staff_email.', false);
     }
 
     public function test_a_console_user_without_the_import_permission_is_denied(): void
@@ -47,6 +59,8 @@ class ImportOrchidTest extends TestCase
 
         $this->actingAs($user)->get(route('platform.imports.users'))->assertForbidden();
         $this->actingAs($user)->get(route('platform.imports.teams'))->assertForbidden();
+        $this->actingAs($user)->get(route('platform.imports.shifts'))->assertForbidden();
+        $this->actingAs($user)->get(route('platform.imports.assignments'))->assertForbidden();
 
         $this->actingAs($user)
             ->post(route('platform.imports.users', ['method' => 'import']), [
@@ -98,6 +112,35 @@ class ImportOrchidTest extends TestCase
             ->assertRedirect(route('platform.imports.teams'));
 
         $this->assertSame(1, Team::query()->where('code', 'DIRT')->count());
+    }
+
+    public function test_pasted_csv_imports_shifts_and_reports_each_row(): void
+    {
+        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $event = Event::factory()->for($organization)->create([
+            'slug' => 'idaho-decompression-2026',
+            'timezone' => 'America/Boise',
+        ]);
+        $department = Department::factory()->for($organization)->create(['code' => 'RANGERS']);
+        Team::factory()->for($department)->create(['code' => 'DIRT']);
+
+        $user = $this->importUser();
+
+        $this->actingAs($user)
+            ->post(route('platform.imports.shifts', ['method' => 'import']), [
+                'csv' => "organization_slug,event_slug,department_code,team_code,title,starts_at,ends_at\n"
+                    ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2030-08-28 09:00,2030-08-28 17:00\n"
+                    ."idaho-burners,idaho-decompression-2026,RANGERS,NOPE,Ghost Shift,2030-08-28 09:00,2030-08-28 17:00\n",
+            ])
+            ->assertRedirect(route('platform.imports.shifts'));
+
+        $this->assertSame(1, Shift::query()->where('event_id', $event->id)->count());
+
+        $screen = $this->actingAs($user)->get(route('platform.imports.shifts'));
+        $screen->assertOk();
+        $screen->assertSee('Import result');
+        $screen->assertSee('Dirt Patrol Day');
+        $screen->assertSee('No team &quot;NOPE&quot; in department &quot;RANGERS&quot;.', false);
     }
 
     public function test_a_preview_shows_outcomes_without_saving(): void
