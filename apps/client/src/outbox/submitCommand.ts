@@ -141,6 +141,26 @@ export async function sendConnectedCommand(
 }
 
 /**
+ * Put a refused command back in the queue, because the person who was shown the
+ * refusal decided it is worth another go.
+ *
+ * User-initiated only. Nothing retries a rejection automatically (CLIENT-017),
+ * and the command keeps its original idempotency key, so if the node did apply
+ * some part of it before refusing, sending it again is still the same command.
+ */
+export function retryCommand(
+  idempotencyKey: string,
+  dependencies: QueueCommandDependencies = {},
+): OutboxCommand {
+  const notify = dependencies.notifyQueueChanged ?? notifyCommandOutbox;
+  const command = commandOutbox.retry(idempotencyKey);
+
+  notify();
+
+  return command;
+}
+
+/**
  * Drop a command the node settled.
  *
  * The user acting on a rejection is what closes it out; nothing dismisses one on

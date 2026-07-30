@@ -227,6 +227,34 @@ export class CommandOutbox {
   }
 
   /**
+   * Put a refused command back in the queue, by a deliberate act.
+   *
+   * The drain will never do this on its own — a rejection is the node's decision
+   * and retrying it automatically would loop forever and bury the refusal the
+   * user was meant to see (CLIENT-017). But a refusal is not always the last
+   * word: a node misconfigured, a shift not yet started, a department not yet
+   * assigned are all reasons a command that failed at noon succeeds at one. The
+   * person who was shown the reason is the one who can judge that, so they get a
+   * way to act on it that is not "retype the whole thing".
+   */
+  retry(idempotencyKey: string): OutboxCommand {
+    const command = this.require(idempotencyKey);
+
+    if (command.status !== "rejected") {
+      throw new CommandOutboxError(
+        "Only a command the node refused can be retried.",
+      );
+    }
+
+    return this.replace({
+      ...command,
+      status: "queued",
+      settledAt: null,
+      statusReason: null,
+    });
+  }
+
+  /**
    * Drop a settled command, by a deliberate act.
    *
    * Refuses anything still in flight: a queued or sending command is unsent

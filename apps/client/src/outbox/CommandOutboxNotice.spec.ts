@@ -96,6 +96,26 @@ describe("the command outbox notice", () => {
     );
   });
 
+  it("offers a refused command back to the queue, on the person's say-so", async () => {
+    queue("11111111-1111-4111-8111-111111111111", "Vera Staff");
+    reject("11111111-1111-4111-8111-111111111111", "The shift has already ended.");
+
+    const wrapper = mount(CommandOutboxNotice);
+    const buttons = wrapper.findAll(".command-outbox__action");
+    const tryAgain = buttons.find((button) => button.text() === "Try again");
+
+    expect(tryAgain).toBeDefined();
+    await tryAgain!.trigger("click");
+
+    expect(
+      commandOutbox.get("11111111-1111-4111-8111-111111111111")?.status,
+    ).toBe("queued");
+    // Back to the ordinary held-work state rather than gone.
+    expect(wrapper.find(".command-outbox").attributes("data-outbox-state")).toBe(
+      "queued",
+    );
+  });
+
   it("drops a refused command only when a person says so", async () => {
     queue("11111111-1111-4111-8111-111111111111");
     reject("11111111-1111-4111-8111-111111111111", "The shift has already ended.");
@@ -103,7 +123,7 @@ describe("the command outbox notice", () => {
     const wrapper = mount(CommandOutboxNotice);
     expect(commandOutbox.size).toBe(1);
 
-    await wrapper.find(".command-outbox__dismiss").trigger("click");
+    await wrapper.findAll(".command-outbox__action").find((button) => button.text() === "Dismiss")!.trigger("click");
 
     expect(commandOutbox.size).toBe(0);
     expect(wrapper.find(".command-outbox").exists()).toBe(false);

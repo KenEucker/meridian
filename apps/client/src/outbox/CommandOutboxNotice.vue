@@ -7,7 +7,7 @@ import {
   commandOutbox,
   commandOutboxRevision,
 } from "@/outbox/commandOutboxRuntime";
-import { dismissCommand } from "@/outbox/submitCommand";
+import { dismissCommand, retryCommand } from "@/outbox/submitCommand";
 
 /*
  * What the client says about the commands it is holding (M16.10; CLIENT-017;
@@ -93,6 +93,17 @@ function describe(command: OutboxCommand): string {
 function dismiss(command: OutboxCommand): void {
   dismissCommand(command.idempotencyKey);
 }
+
+/**
+ * Put a refusal back in the queue.
+ *
+ * Offered because a rejection is not always the last word — the condition the
+ * node refused on can be fixed — and the alternative for the user is retyping
+ * work they already did. Nothing retries on their behalf.
+ */
+function retry(command: OutboxCommand): void {
+  retryCommand(command.idempotencyKey);
+}
 </script>
 
 <template>
@@ -121,13 +132,22 @@ function dismiss(command: OutboxCommand): void {
           <span class="command-outbox__item-reason">
             {{ command.statusReason ?? "The node gave no reason." }}
           </span>
-          <button
-            type="button"
-            class="command-outbox__dismiss"
-            @click="dismiss(command)"
-          >
-            Dismiss
-          </button>
+          <span class="command-outbox__item-actions">
+            <button
+              type="button"
+              class="command-outbox__action"
+              @click="retry(command)"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              class="command-outbox__action"
+              @click="dismiss(command)"
+            >
+              Dismiss
+            </button>
+          </span>
         </li>
       </ul>
     </div>
@@ -206,8 +226,13 @@ function dismiss(command: OutboxCommand): void {
   color: var(--m-text-secondary);
 }
 
-.command-outbox__dismiss {
+.command-outbox__item-actions {
+  display: flex;
+  gap: var(--m-space-2);
   margin-left: auto;
+}
+
+.command-outbox__action {
   min-height: 2.25rem;
   padding: 0 var(--m-space-3);
   border: 1px solid var(--m-border-default);
@@ -220,7 +245,7 @@ function dismiss(command: OutboxCommand): void {
   cursor: pointer;
 }
 
-.command-outbox__dismiss:focus-visible {
+.command-outbox__action:focus-visible {
   outline: 2px solid var(--m-focus-ring);
   outline-offset: 2px;
 }

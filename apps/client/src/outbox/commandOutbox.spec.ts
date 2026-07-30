@@ -94,6 +94,48 @@ describe("the command outbox", () => {
     expect(outbox.size).toBe(0);
   });
 
+  it("puts a refused command back in the queue when asked to", () => {
+    // A refusal is not always the last word: the condition the node refused on
+    // can be fixed. The drain never does this on its own — that would loop and
+    // bury the reason — so it is the user's action, and the key does not change,
+    // which keeps it the same command rather than a second one.
+    const outbox = new CommandOutbox();
+    const command = enqueue(outbox, "11111111-1111-4111-8111-111111111111");
+
+    outbox.markSending(command.idempotencyKey, QUEUED_AT);
+    outbox.markRejected(
+      command.idempotencyKey,
+      "2027-07-04T16:00:05.000Z",
+      "The shift has already ended.",
+    );
+
+    const retried = outbox.retry(command.idempotencyKey);
+
+    expect(retried.status).toBe("queued");
+    expect(retried.statusReason).toBeNull();
+    expect(retried.settledAt).toBeNull();
+    expect(retried.idempotencyKey).toBe(command.idempotencyKey);
+    expect(outbox.pending()).toHaveLength(1);
+  });
+
+  it("refuses to retry anything the node did not refuse", () => {
+    const outbox = new CommandOutbox();
+    const command = enqueue(outbox, "11111111-1111-4111-8111-111111111111");
+
+    expect(() => outbox.retry(command.idempotencyKey)).toThrow(
+      CommandOutboxError,
+    );
+
+    outbox.markSending(command.idempotencyKey, QUEUED_AT);
+    outbox.markAccepted(command.idempotencyKey, QUEUED_AT);
+
+    // An accepted command is done. Sending it again is not a retry, it is a
+    // second submission of work the node already has.
+    expect(() => outbox.retry(command.idempotencyKey)).toThrow(
+      CommandOutboxError,
+    );
+  });
+
   it("refuses to dismiss work that has not reached the node", () => {
     const outbox = new CommandOutbox();
     const command = enqueue(outbox, "11111111-1111-4111-8111-111111111111");

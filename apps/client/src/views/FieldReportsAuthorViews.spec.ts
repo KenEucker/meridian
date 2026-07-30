@@ -14,6 +14,11 @@ import {
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
 import { applyLocalFieldReportAcceptance } from "@/field-reports/submitFieldReport";
+import {
+  commandOutbox,
+  notifyCommandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -62,6 +67,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await resetFieldReportRuntime();
+  resetCommandOutbox();
   clearFieldSession();
   clearClientSession();
 });
@@ -95,6 +101,66 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
       .find((item) => item.find("h3").text() === "My Field Reports");
 
     expect(link?.attributes("href")).toBe("/staff/field-reports");
+  });
+
+  it("says the node refused a report rather than that it is queued", async () => {
+    /*
+     * The record's own `pending_sync` flag and the queue answer different
+     * questions, and a refused report is where they part: nothing is going to
+     * send it. Reporting "Queued locally" here tells an author their work is on
+     * its way when it is not, and the "Retry sync" beside it drains a queue the
+     * report is deliberately not in (CLIENT-017), so pressing it reported
+     * "Nothing pending to sync" — which reads as reassurance.
+     */
+    const { wrapper } = await mountAt("/staff/field-reports/create");
+
+    await wrapper.get("#fr-title").setValue("Medical assist near Gate A");
+    await wrapper.get("#fr-body").setValue("Observed a medical assist.");
+    await wrapper.get(".fr-create__form").trigger("submit");
+    await flushPromises();
+
+    const key = commandOutbox.all()[0]!.idempotencyKey;
+    commandOutbox.markSending(key, "2027-06-01T12:00:00.000Z");
+    commandOutbox.markRejected(
+      key,
+      "2027-06-01T12:00:01.000Z",
+      "Field Report team is not active in the supplied department.",
+    );
+    notifyCommandOutbox();
+    await flushPromises();
+
+    const panel = wrapper.get('[aria-label="Field Report sync status"]');
+    expect(panel.text()).toContain(
+      "Refused by the node: Field Report team is not active in the supplied department.",
+    );
+    expect(panel.text()).not.toContain("Queued locally");
+    expect(wrapper.text()).not.toContain("Retry sync");
+  });
+
+  it("lets the author send a refused report again", async () => {
+    // The condition the node refused on can be fixed, and the alternative for
+    // the author is retyping work they already did. Nothing retries for them.
+    const { wrapper } = await mountAt("/staff/field-reports/create");
+
+    await wrapper.get("#fr-title").setValue("Medical assist near Gate A");
+    await wrapper.get("#fr-body").setValue("Observed a medical assist.");
+    await wrapper.get(".fr-create__form").trigger("submit");
+    await flushPromises();
+
+    const key = commandOutbox.all()[0]!.idempotencyKey;
+    commandOutbox.markSending(key, "2027-06-01T12:00:00.000Z");
+    commandOutbox.markRejected(key, "2027-06-01T12:00:01.000Z", "Refused.");
+    notifyCommandOutbox();
+    await flushPromises();
+
+    await wrapper.get(".fr-detail__retry").trigger("click");
+    await flushPromises();
+
+    // Back in the queue under the same key, so the node still treats it as the
+    // same command rather than as a second report.
+    expect(commandOutbox.get(key)?.status).toBe("queued");
+    expect(commandOutbox.get(key)?.statusReason).toBeNull();
+    expect(commandOutbox.size).toBe(1);
   });
 
   it("submits a finalized Field Report with Submit and shows it on detail", async () => {
