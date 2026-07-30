@@ -93,7 +93,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
    corepack pnpm run client:dev:kiosk -- --host 127.0.0.1
    ```
 6. Open `http://127.0.0.1:5173/login` and sign in, reading the login code out of
-   the mail log with `corepack pnpm run server:logs -- --filter "login code"`.
+   the mail log with
+   `grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`.
    Attendance commands carry the token this issues (AUTH-018; M16.11), so a run
    that skips this step queues operations and sends none. A workstation that has
    been through kiosk code entry (QA-AUTH-01) is signed in already and needs

@@ -68,7 +68,7 @@ python -c "import uuid; print(uuid.uuid4())"
    ```
 
 10. Confirm the response is `202 Accepted` with `{"status":"sent","expires_in_minutes":15}` and that it says nothing about whether the address is known to Meridian. Repeat with an address that definitely has no account and confirm the response is identical.
-11. Read the code out of the mail log — with `MAIL_MAILER=log` the message body is written there. Run `pnpm run server:logs -- --filter "login code"` and copy the eight-character code.
+11. Read the code out of the mail log — with `MAIL_MAILER=log` the message body is written there, and the code sits on its own line below "Enter this code in the Meridian app you are signing in to:". Print the most recent one with `grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`, or run `pnpm run server:logs` and watch it arrive. A `--filter` on "login code" matches the subject line rather than the code.
 12. Try the exchange with no device first, and confirm it is refused:
 
     ```bash
@@ -248,7 +248,7 @@ php apps/server/artisan meridian:seed-local-field-fixture
 Start the client in Field mode with `pnpm run client:dev:field -- --host 127.0.0.1` and point it at the node from the browser console if it is not already: `localStorage.setItem("meridian.node.url", "http://127.0.0.1:8000")`.
 
 57. Open `http://127.0.0.1:5173/login`, enter `local-field@meridian.test`, and submit. Confirm the application moves to the code entry screen, names the address the code went to, and states how long the code lasts.
-58. Read the code out of the mail log (`pnpm run server:logs -- --filter "login code"`), enter it, and confirm the application lands on Home with the fixture user's name in the shell's user menu.
+58. Read the code out of the mail log (`grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`), enter it, and confirm the application lands on Home with the fixture user's name in the shell's user menu.
 59. In the browser console, confirm `localStorage` holds `meridian.api-token.v1` and `meridian.device.id`, and that the stored entry carries the token and no password.
 60. In the God Mode console's **API Tokens** screen, confirm a token is listed for that user, bound to a device labeled for the client application and platform that signed in.
 61. Submit a Field Report from the client (see QA-FR-01) and confirm the node accepts it — the upload path now authenticates with this token and nothing else.

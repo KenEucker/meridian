@@ -87,7 +87,7 @@ staff record to work with.
 
 It configures no credential: sign in at `/login` as the seeded fixture user
 `local-field@meridian.test` and read the login code out of the mail log
-(`corepack pnpm run server:logs -- --filter "login code"`). The token is stored
+(`grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`). The token is stored
 under `meridian.api-token.v1` in `localStorage`, alongside this device's
 identifier under `meridian.device.id`; Settings reports whether the device is
 signed in, and the command outbox holds its work rather than sending it when it

@@ -93,7 +93,7 @@ tasks.
    ```
 6. Open `http://127.0.0.1:5173/login` and sign in as the seeded fixture author
    `local-field@meridian.test`. Read the login code out of the mail log
-   with `corepack pnpm run server:logs -- --filter "login code"`. Uploads carry
+   with `grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`. Uploads carry
    the token this sign-in issues, so a run that skips this step will queue
    reports and send nothing (QA-AUTH-01 covers sign-in itself).
 7. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
