@@ -22,12 +22,23 @@ import { FIELD_REPORT_ACCEPTED } from "@/field-reports/offlineFieldReport";
 import { pendingFieldReportPhotoReportIds } from "@/field-reports/pendingFieldReportPhotos";
 import { syncPendingFieldReportPhotos } from "@/field-reports/syncFieldReportPhotos";
 import { uploadFieldReportPhoto } from "@/field-reports/uploadFieldReportPhoto";
+import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
 
 export interface SyncFieldReportOutboxResult {
   readonly textAttempted: number;
   readonly textAccepted: number;
   readonly textFailed: number;
+  /**
+   * Field Report commands still owed to the node once the pass is over.
+   *
+   * Read from the queue rather than derived from the counts, because a pass can
+   * legitimately attempt nothing and still leave work outstanding — a drain
+   * already in flight when this one was asked for, most obviously. A surface
+   * that reports "nothing pending" while the queue holds the author's report is
+   * telling them their work is gone.
+   */
+  readonly textPending: number;
   readonly photosAttempted: number;
   readonly photosUploaded: number;
   readonly photosFailed: number;
@@ -40,6 +51,7 @@ export async function syncFieldReportOutbox(): Promise<SyncFieldReportOutboxResu
     textAttempted: 0,
     textAccepted: 0,
     textFailed: 0,
+    textPending: 0,
     photosAttempted: 0,
     photosUploaded: 0,
     photosFailed: 0,
@@ -48,9 +60,10 @@ export async function syncFieldReportOutbox(): Promise<SyncFieldReportOutboxResu
   };
 
   const commands = await syncCommandOutbox();
+  const textPending = commandOutbox.unsent("submit-field-report").length;
 
   if (commands.blockedReason !== null) {
-    return { ...empty, blockedReason: commands.blockedReason };
+    return { ...empty, textPending, blockedReason: commands.blockedReason };
   }
 
   const text = commands.results.filter(
@@ -70,6 +83,7 @@ export async function syncFieldReportOutbox(): Promise<SyncFieldReportOutboxResu
       textAttempted,
       textAccepted,
       textFailed: textAttempted - textAccepted,
+      textPending,
       blockedReason: "Field session is unavailable.",
       lastError,
     };
@@ -110,6 +124,7 @@ export async function syncFieldReportOutbox(): Promise<SyncFieldReportOutboxResu
     textAttempted,
     textAccepted,
     textFailed: textAttempted - textAccepted,
+    textPending,
     photosAttempted,
     photosUploaded,
     photosFailed,

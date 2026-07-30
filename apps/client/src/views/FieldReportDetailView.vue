@@ -218,6 +218,14 @@ async function onRetrySync(): Promise<void> {
       syncMessage.value = result.blockedReason;
     } else if (result.lastError) {
       syncMessage.value = result.lastError;
+    } else if (result.textPending > 0) {
+      /*
+       * Work is still owed to the node and this pass did not clear it — most
+       * often because a drain was already running when the button was pressed.
+       * Saying "nothing pending" here would tell an author their report had
+       * gone somewhere when the device is still the only copy of it.
+       */
+      syncMessage.value = "Still queued; this device will send it when the node is reachable.";
     } else if (result.photosUploaded === 0 && result.textAccepted === 0) {
       syncMessage.value = "Nothing pending to sync.";
     } else {
