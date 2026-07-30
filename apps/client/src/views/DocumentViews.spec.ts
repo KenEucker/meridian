@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -10,6 +10,8 @@ import {
   selectFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 import { routes } from "@/router";
 import DocumentEditView from "@/views/DocumentEditView.vue";
 import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
@@ -22,9 +24,15 @@ function buildRouter() {
   });
 }
 
+// The home directory follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
 afterEach(() => {
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
+  clearClientSession();
 });
 
 describe("product document authoring", () => {

@@ -4,7 +4,7 @@ import { mount } from "@vue/test-utils";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import {
   clearClientSession,
-  installClientSessionForTests,
+  installClientSession,
 } from "@/session/clientSession";
 import {
   fixtureSessionDocument,
@@ -26,7 +26,7 @@ describe("session permissions notice", () => {
   });
 
   it("says nothing when the node has just answered", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument(),
       "network",
       insideWindow,
@@ -38,7 +38,7 @@ describe("session permissions notice", () => {
   });
 
   it("says permissions are cached and when they were last refreshed", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument(),
       "cache",
       insideWindow,
@@ -57,7 +57,7 @@ describe("session permissions notice", () => {
   });
 
   it("renders the refresh time on the event's own clock", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument({
         events: [fixtureSessionEvent({ timezone: "America/Boise" })],
       }),
@@ -73,7 +73,7 @@ describe("session permissions notice", () => {
   });
 
   it("warns and offers a refresh once the event window has ended", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument(),
       "cache",
       afterWindow,
@@ -92,7 +92,7 @@ describe("session permissions notice", () => {
   });
 
   it("explains a missing event context in its own terms", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument({
         context: {
           organization_id: null,

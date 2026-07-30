@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 
 function buildRouter() {
   return createRouter({
@@ -24,6 +26,15 @@ async function mountAt(path: string) {
     },
   });
 }
+
+// The home directory follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
+afterEach(() => {
+  clearClientSession();
+});
 
 describe("readiness surface", () => {
   it("is reachable at the /readiness route", async () => {

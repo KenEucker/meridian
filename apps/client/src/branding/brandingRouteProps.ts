@@ -1,23 +1,32 @@
 import {
-  fixtureDepartmentHasBrandingAccess,
-  fixtureDepartmentHasOrganizerDepartmentAccess,
-  selectedFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
+  departmentHasCapability,
+  selectedSessionDepartment,
+} from "@/session/sessionAccess";
+import {
+  CAPABILITY_DEPARTMENT_BRANDING_MANAGE,
+  CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
+} from "@/session/permissionCodes";
 
 /**
  * Route props for the two branding administration surfaces (M15A.6, M15A.7).
  *
- * Organization and department identity still come from the development fixture
- * session the rest of the client uses until auth and organization selection
- * land. Keeping that resolution here rather than inside the views means the
- * views take plain props and can be mounted in tests without a router or a
- * fixture — which is what lets the permission-denied and overrides-disabled
- * states be tested directly.
+ * Resolving here rather than inside the views means the views take plain props
+ * and can be mounted in tests without a router or a session — which is what lets
+ * the permission-denied and overrides-disabled states be tested directly.
+ *
+ * `canManage` comes from the capability codes the session response carries
+ * (M16.6; CLIENT-004). It is what the views render their denied state from, and
+ * BRAND-019 draws the split the two capabilities already encode: organizers own
+ * the organization profile, department leads and department administration own
+ * their own department's. A team lead holds neither and is refused by the view
+ * and by the server alike.
  */
 
 /**
- * The organization the fixture session is operating in.
+ * The organization the client is operating in.
  *
+ * Still the seeded local organization: resolving the branding organization from
+ * the session context is part of the organization and event switcher (M16.7).
  * Shared with the server fixture seeded by
  * `php artisan meridian:seed-local-field-fixture`.
  */
@@ -38,21 +47,23 @@ export interface DepartmentBrandingRouteProps {
 export function organizationBrandingRouteProps(): OrganizationBrandingRouteProps {
   return {
     organizationId: FIXTURE_ORGANIZATION_ID,
-    // BRAND-019: organization branding is organizer-only. The fixture models
-    // organizer reach as organizer-department access.
-    canManage: fixtureDepartmentHasOrganizerDepartmentAccess(
-      selectedFixtureDepartment.value,
+    canManage: departmentHasCapability(
+      selectedSessionDepartment.value,
+      CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
     ),
   };
 }
 
 export function departmentBrandingRouteProps(): DepartmentBrandingRouteProps {
-  const department = selectedFixtureDepartment.value;
+  const department = selectedSessionDepartment.value;
 
   return {
     organizationId: FIXTURE_ORGANIZATION_ID,
-    departmentId: department.departmentId,
-    departmentName: department.departmentLabel,
-    canManage: fixtureDepartmentHasBrandingAccess(department),
+    departmentId: department?.departmentId ?? "",
+    departmentName: department?.departmentLabel ?? "",
+    canManage: departmentHasCapability(
+      department,
+      CAPABILITY_DEPARTMENT_BRANDING_MANAGE,
+    ),
   };
 }

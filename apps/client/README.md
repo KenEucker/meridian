@@ -110,10 +110,37 @@ refresh** instead and the client grants no capability until a refresh succeeds.
 A refresh the node answers with 401 or 403 clears the stored session outright,
 because the node was reached and refused the credential.
 
+### Permission-aware navigation (local QA)
+
+Navigation, the department switcher, the name on the user button, and the
+department in the shell's context block all come from the session response
+(CLIENT-004, CLIENT-005). Nothing renders for a capability the user does not
+hold, and a client that has resolved no session renders no navigation at all —
+not a reduced menu, none.
+
 `GET /api/me` sits behind `auth:sanctum`, so until client login is wired the
-endpoint answers 401 in local development and no session is established. Nothing
-in the client reads these capabilities yet — navigation still comes from the
-department fixtures — so an unestablished session changes nothing visible.
+endpoint answers 401 in local development. To see a populated shell, set
+
+```dotenv
+VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=true
+```
+
+in `apps/client/.env.development` — the same switch that installs the Field
+Report development session. It installs a development session document
+(`src/session/localFieldSession.ts`) for the staff member
+`php artisan meridian:seed-local-field-fixture` seeds, and only when the node
+produced no document of its own. A node that answers always replaces it, on
+startup and on every later refresh.
+
+That seeded user is in four departments, and switching between them in the user
+menu is the quickest way to see the rule at work:
+
+| Department | Holds | Reaches |
+|---|---|---|
+| Rangers | department lead, logistics, operations, planning, IC lead, team lead of Dirt | every workflow |
+| Organizer | organizer | the organization pages, and no department workflow |
+| Gate | staff | their own pages and Gate's member pages |
+| DPW | team lead of Bikes | their own pages, DPW's member pages, and Team Overview |
 
 ## Routes
 

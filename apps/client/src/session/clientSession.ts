@@ -20,9 +20,9 @@
 //     (CLIENT-010).
 //
 // What this module does not do is decide which screens exist. It publishes the
-// codes and the access verdict; deriving navigation from them is M16.6, and the
-// client still reads navigation from fixture data until that lands. Nothing here
-// interprets a capability code or maps one to a surface.
+// codes and the access verdict; `sessionAccess` scopes them to a department and
+// `workflowLinks` turns them into navigation (M16.6). Nothing here interprets a
+// capability code or maps one to a surface.
 
 import { computed, reactive, readonly } from "vue";
 
@@ -309,8 +309,15 @@ export async function refreshClientSessionOnReconnect(
   return refreshClientSession();
 }
 
-/** Test seam: install a document without touching the network or the cache. */
-export function installClientSessionForTests(
+/**
+ * Install a document without touching the network or the cache.
+ *
+ * The seam the specs establish a session through, and the one the local
+ * development session document is installed through (M16.6). Deliberately not
+ * writing the durable copy: nothing that did not come from the node belongs in
+ * the cache the client boots from.
+ */
+export function installClientSession(
   document: SessionDocument,
   source: "network" | "cache" = "network",
   now: Date = new Date(),

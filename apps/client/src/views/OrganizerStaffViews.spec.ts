@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -15,6 +15,8 @@ import {
   selectFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 import HomeView from "@/views/HomeView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 
@@ -25,10 +27,16 @@ function buildRouter() {
   });
 }
 
+// The home directory follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
 afterEach(() => {
   clearOrganizerDepartmentSession();
   resetOrganizerStaffFixtures();
   resetSelectedFixtureDepartment();
+  clearClientSession();
 });
 
 describe("organizer staff administration", () => {

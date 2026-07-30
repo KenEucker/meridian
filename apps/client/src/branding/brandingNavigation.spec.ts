@@ -1,20 +1,26 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   FIXTURE_ORGANIZER_DEPARTMENT_ID,
   FIXTURE_RANGERS_DEPARTMENT_ID,
   FIXTURE_GATE_DEPARTMENT_ID,
-  selectFixtureDepartment,
+  FIXTURE_DPW_DEPARTMENT_ID,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { useNavigationSections } from "@/components/workflowLinks";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 
 /**
  * The branding surfaces have to be reachable, not merely routable (M15A.6,
  * M15A.7; BRAND-019).
  *
  * A screen with no navigation entry is a screen nobody finds. These assert the
- * two entries exist and that each appears only for the role BRAND-019 gives
- * the authority to.
+ * two entries exist and that each appears only for the capability BRAND-019
+ * gives the authority to.
  */
 
 function linkLabels(): { section: string; labels: string[] }[] {
@@ -29,36 +35,49 @@ function labelsIn(section: string): string[] {
 }
 
 describe("branding navigation", () => {
+  beforeEach(() => {
+    installLocalFieldSession();
+  });
+
   afterEach(() => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    clearClientSession();
+    resetSelectedSessionDepartment();
   });
 
   it("offers organization branding to an organizer", () => {
-    selectFixtureDepartment(FIXTURE_ORGANIZER_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_ORGANIZER_DEPARTMENT_ID);
 
     expect(labelsIn("Organization pages")).toContain("Branding");
   });
 
   it("does not offer organization branding from a normal department", () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
 
     expect(labelsIn("Organization pages")).not.toContain("Branding");
   });
 
   it("offers department branding to a department lead", () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
 
     expect(labelsIn("Department pages")).toContain("Branding");
   });
 
   it("does not offer department branding to a department member with no admin authority", () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+
+    expect(labelsIn("Department pages")).not.toContain("Branding");
+  });
+
+  it("does not offer department branding to a team lead", () => {
+    // BRAND-019 is narrower than department admin: `department.branding.manage`
+    // is what permits the surface, and a designated team lead holds none.
+    selectSessionDepartment(FIXTURE_DPW_DEPARTMENT_ID);
 
     expect(labelsIn("Department pages")).not.toContain("Branding");
   });
 
   it("routes department branding at the selected department", () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
 
     const link = useNavigationSections()
       .value.flatMap((section) => section.links)

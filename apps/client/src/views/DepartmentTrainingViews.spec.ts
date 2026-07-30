@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -8,6 +8,8 @@ import {
   resetSelectedFixtureDepartment,
   selectFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   FIXTURE_TRAINING_IDS,
   resetTrainingFixtures,
@@ -27,9 +29,15 @@ function buildRouter() {
   });
 }
 
+// The home directory follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
 afterEach(() => {
   resetTrainingFixtures();
   resetSelectedFixtureDepartment();
+  clearClientSession();
 });
 
 describe("product training management", () => {

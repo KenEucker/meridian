@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
+import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 
 function buildRouter() {
   return createRouter({
@@ -48,6 +55,18 @@ function homeCardByHeading(wrapper: VueWrapper, heading: string) {
     .findAll(".home__card")
     .find((item) => item.find("h3").text() === heading);
 }
+
+// Navigation follows the session response (M16.6), so the home directory has
+// nothing in it until one is established.
+beforeEach(() => {
+  installLocalFieldSession();
+  selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+});
+
+afterEach(() => {
+  clearClientSession();
+  resetSelectedSessionDepartment();
+});
 
 describe("department operations surfaces", () => {
   it("registers workflow routes and home links", async () => {

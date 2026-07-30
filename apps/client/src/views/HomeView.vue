@@ -8,11 +8,22 @@ import {
 } from "@/department-ops/fixtures";
 import { formatTimestamp } from "@/department-ops/labels";
 import { useNavigationSections } from "@/components/workflowLinks";
-import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
+import { selectedSessionDepartment } from "@/session/sessionAccess";
 
 // Home lists every page the current user can reach, grouped so workflows stay
-// distinguishable from the individual pages they contain.
+// distinguishable from the individual pages they contain. What that is comes
+// from the capability codes the session response carries (M16.6).
 const navigationSections = useNavigationSections();
+
+// Named from the session's department selection; a client that has resolved no
+// department describes the workspace without claiming one (M16.6).
+const workspaceLede = computed(() => {
+  const department = selectedSessionDepartment.value;
+
+  return department === null
+    ? "Operations workspace."
+    : `${department.departmentLabel} operations workspace.`;
+});
 
 const eventWindow = computed(() => {
   const sortedStarts = LOCAL_PLANNING_TABLE.rows
@@ -66,10 +77,7 @@ const operationsWindowLabel = computed(() => {
         <h1 id="home-heading" class="home__heading">
           {{ LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel }}
         </h1>
-        <p class="home__lede">
-          {{ selectedFixtureDepartment.departmentLabel }}
-          operations workspace.
-        </p>
+        <p class="home__lede">{{ workspaceLede }}</p>
         <dl class="home__event-details" aria-label="Event information">
           <div>
             <dt>Operations</dt>
