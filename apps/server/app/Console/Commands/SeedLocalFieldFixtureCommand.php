@@ -85,6 +85,25 @@ class SeedLocalFieldFixtureCommand extends Command
                 uniqueBy: ['department_id' => $department->id, 'code' => 'COMMAND'],
             );
 
+            /*
+             * The team the client's shift fixtures have the fixture staff member
+             * working. A Field Report filed on shift carries that team, so the
+             * node has to know it exists before it can accept one.
+             */
+            $this->upsert(
+                Team::class,
+                LocalFieldFixture::RANGERS_DIRT_TEAM_ID,
+                [
+                    'department_id' => $department->id,
+                    'name' => 'Dirt',
+                    'code' => 'DIRT',
+                    'description' => 'Local fixture Ranger field team.',
+                    'is_default' => false,
+                    'archived_at' => null,
+                ],
+                uniqueBy: ['department_id' => $department->id, 'code' => 'DIRT'],
+            );
+
             $organization->forceFill([
                 'default_ic_department_id' => $department->id,
             ])->save();

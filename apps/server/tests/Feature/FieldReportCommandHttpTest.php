@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attachment;
 use App\Models\Event;
+use App\Models\FieldReport;
 use App\Models\Incident;
 use App\Support\LocalFieldFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +72,76 @@ class FieldReportCommandHttpTest extends TestCase
 
         $attachment = Attachment::query()->findOrFail($photoId);
         $this->assertTrue(Storage::disk('attachments')->exists($attachment->storage_path));
+    }
+
+    /**
+     * A Field Report filed on the author's own behalf carries no department and
+     * no team, and the node accepts it.
+     *
+     * FR-003 records author, title, and text; FR-010 lets a Field Report exist
+     * independently; technical spec 17.3 lists department/team context "if
+     * available"; data/API 10.15 makes both columns nullable. Nothing about
+     * filing a report depends on belonging to a department or working a team,
+     * and this asserts the node agrees.
+     */
+    public function test_a_field_report_needs_no_department_or_team(): void
+    {
+        $reportId = (string) Str::uuid();
+
+        $this->postJson('/api/commands/submit-field-report', [
+            'id' => $reportId,
+            'event_id' => LocalFieldFixture::EVENT_ID,
+            'department_id' => null,
+            'team_id' => null,
+            'staff_id' => LocalFieldFixture::STAFF_ID,
+            'temporary_local_number' => 'LOCAL-HTTP0002',
+            'title' => 'Filed on my own behalf',
+            'body' => 'No department, no team, no shift.',
+            'device_submitted_at' => '2027-07-04T13:20:00Z',
+            'origin_device_id' => LocalFieldFixture::DEVICE_ID,
+            'origin_node_id' => LocalFieldFixture::NODE_ID,
+        ], [
+            'Authorization' => 'Bearer test-local-field-token',
+        ])->assertCreated()
+            ->assertJsonPath('sync_status', 'accepted');
+
+        $report = FieldReport::query()->findOrFail($reportId);
+        $this->assertNull($report->department_id);
+        $this->assertNull($report->team_id);
+    }
+
+    /**
+     * The team the client puts an on-shift author on resolves on the node.
+     *
+     * A report filed while checked into a shift carries that shift's team, so
+     * the client's shift fixtures and `LocalFieldFixture` have to describe the
+     * same teams. When they did not, every on-shift report was refused with
+     * "Field Report team is not active in the supplied department" — the client
+     * naming a team the server had never been told about.
+     */
+    public function test_the_fixture_on_shift_team_is_accepted_as_report_context(): void
+    {
+        $reportId = (string) Str::uuid();
+
+        $this->postJson('/api/commands/submit-field-report', [
+            'id' => $reportId,
+            'event_id' => LocalFieldFixture::EVENT_ID,
+            'department_id' => LocalFieldFixture::DEPARTMENT_ID,
+            'team_id' => LocalFieldFixture::RANGERS_DIRT_TEAM_ID,
+            'staff_id' => LocalFieldFixture::STAFF_ID,
+            'temporary_local_number' => 'LOCAL-HTTP0003',
+            'title' => 'Filed on a Dirt shift',
+            'body' => 'Attributed to the team whose shift it was.',
+            'device_submitted_at' => '2027-07-04T13:20:00Z',
+            'origin_device_id' => LocalFieldFixture::DEVICE_ID,
+            'origin_node_id' => LocalFieldFixture::NODE_ID,
+        ], [
+            'Authorization' => 'Bearer test-local-field-token',
+        ])->assertCreated();
+
+        $report = FieldReport::query()->findOrFail($reportId);
+        $this->assertSame(LocalFieldFixture::DEPARTMENT_ID, $report->department_id);
+        $this->assertSame(LocalFieldFixture::RANGERS_DIRT_TEAM_ID, $report->team_id);
     }
 
     public function test_local_field_api_rejects_missing_or_wrong_token(): void

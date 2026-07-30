@@ -136,37 +136,43 @@ describe("resolveFieldSession while on shift", () => {
 });
 
 describe("resolveFieldSession while off shift", () => {
-  it("records the active department with no team", () => {
+  it("records no department and no team", () => {
+    // A report filed on the author's own behalf is theirs and the event's.
+    // FR-003 records author, title, and text; FR-010 lets a report exist
+    // independently; technical spec 17.3 lists department/team context "if
+    // available"; data/API 10.15 makes both columns nullable. Off shift it is
+    // not available, so the record says so instead of guessing.
     offShift();
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-
     expect(resolveFieldSession()).toMatchObject({
-      departmentId: FIXTURE_GATE_DEPARTMENT_ID,
-      departmentLabel: "Gate",
+      departmentId: null,
+      departmentLabel: null,
       teamId: null,
       teamLabel: OFF_SHIFT_TEAM_LABEL,
     });
   });
 
-  it("follows a later switch rather than resolving once at install", () => {
+  it("does not take the department the author happens to be looking at", () => {
+    // The switcher is navigation state — which department's screens are open —
+    // and never a claim about where somebody was standing. Attributing an
+    // immutable record to it on the strength of what the author was reading is
+    // the behavior this replaced.
     offShift();
     installDevelopmentFieldSession();
 
     selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+
+    expect(resolveFieldSession()?.departmentId).toBeNull();
+
     selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
 
-    expect(resolveFieldSession()).toMatchObject({
-      departmentId: FIXTURE_DPW_DEPARTMENT_ID,
-      departmentLabel: "DPW",
-      teamLabel: OFF_SHIFT_TEAM_LABEL,
-    });
+    expect(resolveFieldSession()?.departmentId).toBeNull();
   });
 
   it("never borrows a team nobody was working", () => {
-    // The department has teams, and the author belongs to one of them. They
-    // were not working it, so the report does not claim they were.
+    // The author belongs to teams in Rangers. They were not working one, so the
+    // report does not claim they were — not even the department's default team.
     offShift();
     installDevelopmentFieldSession();
 
