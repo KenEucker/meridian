@@ -5,9 +5,9 @@ import { followSessionBranding } from "@/branding/brandingContext";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { router } from "@/router";
-// Imported for its side effect: adopting the token this device already holds and
-// registering it as the credential every request carries (M16.11).
-import "@/session/apiLogin";
+// Importing this adopts the token this device already holds and registers it as
+// the credential every request carries (M16.11).
+import { signedIn } from "@/session/apiLogin";
 import { loadClientSession } from "@/session/clientSession";
 import { registerSessionContextReset } from "@/session/sessionContext";
 import { installLocalFieldSessionFromEnv } from "@/session/localFieldSession";
@@ -60,9 +60,16 @@ registerSessionContextReset((context) => {
  * that answers always wins, here and on every later refresh, and so does a
  * cached session from a real sign-in.
  */
+// Whether this device came up holding a token, captured before the refresh can
+// drop it. A refused refresh means two different things depending on the answer:
+// somebody was signed out, or nobody was ever signed in (M16.11).
+const bootedSignedIn = signedIn.value;
+
 void loadClientSession().then((outcome) => {
   if (outcome !== "refreshed") {
-    installLocalFieldSessionFromEnv();
+    installLocalFieldSessionFromEnv({
+      credentialRefused: outcome === "unauthenticated" && bootedSignedIn,
+    });
   }
 });
 
