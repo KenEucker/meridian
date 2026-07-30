@@ -1,12 +1,56 @@
+// Navigation, derived from the capability codes the session response carries
+// (M16.6; CLIENT-004, CLIENT-005; UI operating guide 18.1; UI contract 19A.1).
+//
+// Every entry below names the code that permits it. Nothing is built from
+// fixture data, build configuration, or a hardcoded list of who sees what, and
+// no entry renders for a user holding no permitting code — which is the whole of
+// CLIENT-005 on the client side. It is still presentation: the server refuses
+// the request regardless of what was rendered (CLIENT-006), and a rendered link
+// is not evidence of authority.
+//
+// Three kinds of entry appear here and they are permitted by different things,
+// so it is worth being explicit about which is which:
+//
+//  - **Capability-permitted.** The ordinary case. Logistics needs
+//    `department.attendance.manage`, Admin needs `department.administer`, and so
+//    on, read from `PermissionCatalog` through the session response.
+//  - **Role-permitted.** Department Overview and Team Overview, for which the
+//    catalog registers no capability today. Both use the effective role code the
+//    same response carries; see `permissionCodes` for why.
+//  - **Association-permitted.** Me, the author's own Field Reports, and the
+//    member's Documents/Shifts/Trainings pages. These are not permission-scoped
+//    surfaces — they are the user's own, or their department's published pages —
+//    so what permits them is holding a session and belonging to a team, both of
+//    which come from the session response too.
+
 import { computed, type ComputedRef } from "vue";
 
 import {
-  fixtureDepartmentHasAdminAccess,
-  fixtureDepartmentHasBrandingAccess,
-  fixtureDepartmentHasOrganizerDepartmentAccess,
-  selectedFixtureDepartment,
-  selectedFixtureDepartmentRouteParams,
-} from "@/department-teams/fixtureDepartmentAccess";
+  CAPABILITY_DEPARTMENT_ADMINISTER,
+  CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
+  CAPABILITY_DEPARTMENT_BRANDING_MANAGE,
+  CAPABILITY_DEPARTMENT_DEPLOYMENTS_ASSIGN,
+  CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE,
+  CAPABILITY_DEPARTMENT_PRESENCE_MANAGE,
+  CAPABILITY_DEPARTMENT_SCHEDULE_MANAGE,
+  CAPABILITY_INCIDENTS_VIEW,
+  CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
+  CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
+  CAPABILITY_ORGANIZATION_STAFF_MANAGE,
+  CAPABILITY_POLICIES_VIEW_PUBLISHED,
+  ROLE_DEPARTMENT_LEAD,
+  ROLE_SHIFT_LEAD,
+} from "@/session/permissionCodes";
+import {
+  departmentHasCapability,
+  departmentHasRole,
+  selectedSessionDepartment,
+  selectedSessionDepartmentRouteParams,
+  sessionEstablished,
+  sessionEventContext,
+  sessionLedTeams,
+  type SessionDepartmentAccess,
+} from "@/session/sessionAccess";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -34,23 +78,17 @@ export type NavigationSection = {
 export const COMBINED_NAVIGATION_MAX_ITEMS = 10;
 
 /**
- * The event the interface is currently locked to, or null when the context is
- * organization-level and no single event is in scope.
+ * The event the interface is currently working in, or null when the session
+ * resolved no single event.
  *
  * Event Info and the other event-scoped staff pages are only constructible with
  * an event id, so this is the gate for showing them at all.
  */
 export function useEventContext(): ComputedRef<{
   readonly eventId: string;
-  readonly eventLabel: string;
+  readonly eventLabel: string | null;
 } | null> {
-  return computed(() => {
-    const department = selectedFixtureDepartment.value;
-
-    return department.eventId
-      ? { eventId: department.eventId, eventLabel: department.eventLabel }
-      : null;
-  });
+  return computed(() => sessionEventContext.value);
 }
 
 /**
@@ -62,30 +100,32 @@ export function useEventContext(): ComputedRef<{
  * Planning. Personal pages live in the Staff menu instead.
  */
 export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
-  const departmentRouteParams = computed(
-    () => selectedFixtureDepartmentRouteParams.value,
-  );
-
   return computed(() => {
-    const department = selectedFixtureDepartment.value;
+    const department = selectedSessionDepartment.value;
+    const params = selectedSessionDepartmentRouteParams.value;
     const links: WorkflowLink[] = [];
 
-    if (department.isDepartmentLead) {
+    if (params === null) {
+      // Incidents is event-scoped rather than department-scoped, so it is the
+      // one workflow that survives having no department route to build.
+      return incidentLinks(department);
+    }
+
+    const isDepartmentLead = departmentHasRole(department, ROLE_DEPARTMENT_LEAD);
+
+    if (isDepartmentLead) {
       links.push({
         label: "Overview",
         description: "Shift health, exceptions, and current staffing.",
-        to: {
-          name: "events.departments.overview",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.overview", params },
       });
     }
 
     // Team leads without department lead authority get the team-scoped
     // equivalent rather than a narrowed copy of Department Overview (M11.20).
-    const ledTeam = department.isDepartmentLead
+    const ledTeam = isDepartmentLead
       ? undefined
-      : department.teams.find((team) => team.isTeamLead);
+      : sessionLedTeams(department, ROLE_SHIFT_LEAD)[0];
 
     if (ledTeam) {
       links.push({
@@ -94,74 +134,85 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
         description: "Your team's shifts, roster, and current staffing.",
         to: {
           name: "events.departments.teams.show",
-          params: {
-            ...departmentRouteParams.value,
-            teamId: ledTeam.teamId,
-          },
+          params: { ...params, teamId: ledTeam.teamId },
         },
       });
     }
 
-    if (department.capabilities.hasPlanning) {
+    if (departmentHasCapability(department, CAPABILITY_DEPARTMENT_SCHEDULE_MANAGE)) {
       links.push({
         label: "Planning",
         description: "Coverage across teams and time, plus shifts and trainings.",
-        to: {
-          name: "events.departments.planning",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.planning", params },
       });
     }
 
-    if (department.capabilities.hasLogistics) {
+    // The Logistics desk is roster, attendance, and equipment handoff — the
+    // three capabilities the department logistics role carries — so any one of
+    // them is something to do there.
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_DEPARTMENT_PRESENCE_MANAGE,
+        CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
+        CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE,
+      )
+    ) {
       links.push({
         label: "Logistics",
         description: "Roster, attendance, and equipment handoff.",
-        to: {
-          name: "events.departments.logistics",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.logistics", params },
       });
     }
 
-    if (department.capabilities.hasOperations) {
+    if (
+      departmentHasCapability(department, CAPABILITY_DEPARTMENT_DEPLOYMENTS_ASSIGN)
+    ) {
       links.push({
         label: "Operations",
         description:
           "Operations Center deployments and capability-based shortcuts.",
-        to: {
-          name: "events.departments.operations",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.operations", params },
       });
     }
 
-    // IMS Field Reports is deliberately absent from the workflow tab bar. It is
-    // a page IC roles reach from inside the Incidents workspace they already
-    // work out of, not a hub they sit in for a stretch of the event, so it is
-    // listed in the home directory and linked from Incidents instead.
-    // {@see imsDirectoryLinks} keeps it in the home directory.
-    if (department.capabilities.hasIncidentCommand) {
-      links.push({
-        label: "Incidents",
-        description: "Restricted incident workspace for IC roles.",
-        to: { name: "ims.incidents.index" },
-      });
-    }
+    links.push(...incidentLinks(department));
 
-    if (fixtureDepartmentHasAdminAccess(department)) {
+    if (departmentHasCapability(department, CAPABILITY_DEPARTMENT_ADMINISTER)) {
       links.push({
         label: "Admin",
         description: "Department details, teams and staff, and documents.",
-        to: {
-          name: "events.departments.teams.index",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.teams.index", params },
       });
     }
 
     return links;
   });
+}
+
+/**
+ * The Incidents workspace.
+ *
+ * IMS Field Reports is deliberately absent from the workflow tab bar. It is a
+ * page IC roles reach from inside the Incidents workspace they already work out
+ * of, not a hub they sit in for a stretch of the event, so it is listed in the
+ * home directory and linked from Incidents instead.
+ * {@see imsDirectoryLinks} keeps it in the home directory.
+ */
+function incidentLinks(
+  department: SessionDepartmentAccess | null,
+): WorkflowLink[] {
+  if (!departmentHasCapability(department, CAPABILITY_INCIDENTS_VIEW)) {
+    return [];
+  }
+
+  return [
+    {
+      label: "Incidents",
+      description: "Restricted incident workspace for IC roles.",
+      to: { name: "ims.incidents.index" },
+    },
+  ];
 }
 
 /**
@@ -173,8 +224,10 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
  * the tab bar because the tab bar names hubs, and a reader scanning eight tabs
  * should not have to tell "Incidents" and "Reports" apart mid-event.
  */
-function imsDirectoryLinks(hasIncidentCommand: boolean): WorkflowLink[] {
-  if (!hasIncidentCommand) {
+function imsDirectoryLinks(
+  department: SessionDepartmentAccess | null,
+): WorkflowLink[] {
+  if (!departmentHasCapability(department, CAPABILITY_INCIDENTS_VIEW)) {
     return [];
   }
 
@@ -191,22 +244,24 @@ function imsDirectoryLinks(hasIncidentCommand: boolean): WorkflowLink[] {
  * The Staff menu: the pages that belong to the person rather than to a
  * workflow.
  *
- * Me is always here, and Event Info sits next to it whenever the interface is
- * locked to an event. My Field Reports belongs here too: authoring a Field
- * Report is something a person does, not something a department workflow owns,
- * and every role can do it. Leads stop there, because their Documents/Shifts/
- * Trainings pages are reached from inside the Admin and Planning workflows they
- * already work out of; members get those pages here, since they have no
- * workflow to reach them from.
+ * Me is always here for a signed-in user, and Event Info sits next to it
+ * whenever the session resolved an event. My Field Reports belongs here too:
+ * authoring a Field Report is something a person does, not something a
+ * department workflow owns, and every role can do it. Leads stop there, because
+ * their Documents/Shifts/Trainings pages are reached from inside the Admin and
+ * Planning workflows they already work out of; members get those pages here,
+ * since they have no workflow to reach them from.
  */
 export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
-  const departmentRouteParams = computed(
-    () => selectedFixtureDepartmentRouteParams.value,
-  );
   const eventContext = useEventContext();
 
   return computed(() => {
-    const department = selectedFixtureDepartment.value;
+    if (!sessionEstablished.value) {
+      return [];
+    }
+
+    const department = selectedSessionDepartment.value;
+    const params = selectedSessionDepartmentRouteParams.value;
     const links: WorkflowLink[] = [
       {
         label: "Me",
@@ -233,8 +288,10 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
     });
 
     if (
-      fixtureDepartmentHasAdminAccess(department) ||
-      !department.teams.some((team) => team.isMember)
+      params === null ||
+      department === null ||
+      department.teams.length === 0 ||
+      departmentHasCapability(department, CAPABILITY_DEPARTMENT_ADMINISTER)
     ) {
       return links;
     }
@@ -243,26 +300,17 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       {
         label: "Documents",
         description: "Policies and procedures published to your department.",
-        to: {
-          name: "events.departments.documents.index",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.documents.index", params },
       },
       {
         label: "Shifts",
         description: "Shifts your teams are eligible for.",
-        to: {
-          name: "events.departments.shifts.index",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.shifts.index", params },
       },
       {
         label: "Trainings",
         description: "Department training schedule, signup, and completion.",
-        to: {
-          name: "events.departments.trainings.index",
-          params: departmentRouteParams.value,
-        },
+        to: { name: "events.departments.trainings.index", params },
       },
     );
 
@@ -305,19 +353,24 @@ export function useShowStaffMenu(): ComputedRef<boolean> {
 }
 
 /**
- * Every page the current fixture user can reach, grouped for the home screen.
+ * Every page the signed-in user can reach, grouped for the home screen.
  * Personal pages come first, then the workflows they work out of, then the
  * lead-only department pages those workflows contain.
+ *
+ * A client with no established session gets nothing at all, rather than a map of
+ * pages it would be refused at (CLIENT-005).
  */
 export function useNavigationSections(): ComputedRef<NavigationSection[]> {
   const workflowLinks = useWorkflowLinks();
   const staffLinks = useStaffLinks();
-  const departmentRouteParams = computed(
-    () => selectedFixtureDepartmentRouteParams.value,
-  );
 
   return computed(() => {
-    const department = selectedFixtureDepartment.value;
+    if (!sessionEstablished.value) {
+      return [];
+    }
+
+    const department = selectedSessionDepartment.value;
+    const params = selectedSessionDepartmentRouteParams.value;
     const sections: NavigationSection[] = [
       {
         title: "You",
@@ -328,7 +381,7 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
 
     const workflowDirectory = [
       ...workflowLinks.value,
-      ...imsDirectoryLinks(department.capabilities.hasIncidentCommand),
+      ...imsDirectoryLinks(department),
     ];
 
     if (workflowDirectory.length > 0) {
@@ -344,61 +397,57 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     );
     const departmentPages: WorkflowLink[] = [];
 
-    if (fixtureDepartmentHasAdminAccess(department)) {
-      departmentPages.push(
-        {
-          label: "Shifts",
-          description: "Create and maintain department and team shifts.",
-          to: {
-            name: "events.departments.shifts.index",
-            params: departmentRouteParams.value,
+    if (params !== null) {
+      // Shifts, Documents, and Trainings are the department administration
+      // pages the Admin workflow contains. Trainings additionally needs
+      // `department.trainings.manage`, which both roles holding
+      // `department.administer` also hold, so it is not a second check.
+      if (departmentHasCapability(department, CAPABILITY_DEPARTMENT_ADMINISTER)) {
+        departmentPages.push(
+          {
+            label: "Shifts",
+            description: "Create and maintain department and team shifts.",
+            to: { name: "events.departments.shifts.index", params },
           },
-        },
-        {
-          label: "Documents",
-          description:
-            "Department and team policies, procedures, and fragments.",
-          to: {
-            name: "events.departments.documents.index",
-            params: departmentRouteParams.value,
+          {
+            label: "Documents",
+            description:
+              "Department and team policies, procedures, and fragments.",
+            to: { name: "events.departments.documents.index", params },
           },
-        },
-        {
-          label: "Trainings",
-          description: "Department training schedule, signup, and completion.",
-          to: {
-            name: "events.departments.trainings.index",
-            params: departmentRouteParams.value,
+          {
+            label: "Trainings",
+            description: "Department training schedule, signup, and completion.",
+            to: { name: "events.departments.trainings.index", params },
           },
-        },
-      );
-    }
+        );
+      }
 
-    // Equipment inventory setup is department logistics/administration work
-    // that feeds the Logistics checkout/check-in workflow (M11.18).
-    if (department.isDepartmentLead || department.capabilities.hasLogistics) {
-      departmentPages.push({
-        label: "Equipment",
-        description: "Department equipment inventory and bulk CSV import.",
-        to: {
-          name: "events.departments.equipment.index",
-          params: departmentRouteParams.value,
-        },
-      });
-    }
+      // Equipment inventory setup is department logistics/administration work
+      // that feeds the Logistics checkout/check-in workflow (M11.18), and the
+      // capability that permits it is the one the checkout desk uses.
+      if (
+        departmentHasCapability(department, CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE)
+      ) {
+        departmentPages.push({
+          label: "Equipment",
+          description: "Department equipment inventory and bulk CSV import.",
+          to: { name: "events.departments.equipment.index", params },
+        });
+      }
 
-    // Department branding is department lead / department administration work
-    // and, unlike the rest of department admin, is not open to team leads
-    // (BRAND-019, M15A.7).
-    if (fixtureDepartmentHasBrandingAccess(department)) {
-      departmentPages.push({
-        label: "Branding",
-        description: "Department logo, accent color, and surface background.",
-        to: {
-          name: "events.departments.branding",
-          params: departmentRouteParams.value,
-        },
-      });
+      // Department branding is narrower than general department admin access:
+      // department leads and department administration edit a department
+      // branding profile, and a team lead does not (BRAND-019, M15A.7).
+      if (
+        departmentHasCapability(department, CAPABILITY_DEPARTMENT_BRANDING_MANAGE)
+      ) {
+        departmentPages.push({
+          label: "Branding",
+          description: "Department logo, accent color, and surface background.",
+          to: { name: "events.departments.branding", params },
+        });
+      }
     }
 
     const remainingDepartmentPages = departmentPages.filter(
@@ -413,39 +462,60 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       });
     }
 
-    if (fixtureDepartmentHasOrganizerDepartmentAccess(department)) {
-      sections.push({
-        title: "Organization pages",
-        description: "Organizer administration across departments.",
-        links: [
-          {
-            label: "Staff",
-            description: "Organizer staff intake and lead selection.",
-            to: { name: "organizer.staff.index" },
-          },
-          {
-            label: "Departments",
-            description: "Organizer department administration.",
-            to: { name: "organizer.departments.index" },
-          },
-          {
-            label: "Documents",
-            description:
-              "Organization policies, procedures, fragments, and exports.",
-            to: { name: "organizer.documents.index" },
-          },
-          // Organization branding is organizer / Lead Organizer work
-          // (BRAND-019, M15A.6).
-          {
-            label: "Branding",
-            description:
-              "Organization display name, logos, palette, and the department override switch.",
-            to: { name: "organizer.branding" },
-          },
-        ],
+    const organizationPages: WorkflowLink[] = [];
+
+    if (departmentHasCapability(department, CAPABILITY_ORGANIZATION_STAFF_MANAGE)) {
+      organizationPages.push({
+        label: "Staff",
+        description: "Organizer staff intake and lead selection.",
+        to: { name: "organizer.staff.index" },
       });
     }
 
+    if (
+      departmentHasCapability(department, CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE)
+    ) {
+      organizationPages.push({
+        label: "Departments",
+        description: "Organizer department administration.",
+        to: { name: "organizer.departments.index" },
+      });
+    }
+
+    if (departmentHasCapability(department, CAPABILITY_POLICIES_VIEW_PUBLISHED)) {
+      organizationPages.push({
+        label: "Documents",
+        description:
+          "Organization policies, procedures, fragments, and exports.",
+        to: { name: "organizer.documents.index" },
+      });
+    }
+
+    // Organization branding is organizer / Lead Organizer work
+    // (BRAND-019, M15A.6).
+    if (
+      departmentHasCapability(department, CAPABILITY_ORGANIZATION_BRANDING_MANAGE)
+    ) {
+      organizationPages.push({
+        label: "Branding",
+        description:
+          "Organization display name, logos, palette, and the department override switch.",
+        to: { name: "organizer.branding" },
+      });
+    }
+
+    if (organizationPages.length > 0) {
+      sections.push({
+        title: "Organization pages",
+        description: "Organizer administration across departments.",
+        links: organizationPages,
+      });
+    }
+
+    // Device diagnostics, which are properties of the hardware rather than
+    // permission-scoped surfaces: there is no capability in the catalog for
+    // them and the server enforces none. They still require a session, because
+    // a client with no user has no shell to show them in.
     sections.push({
       title: "Device",
       description: "Diagnostics for this device and its local server.",

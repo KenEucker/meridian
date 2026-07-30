@@ -15,6 +15,8 @@ import {
 } from "@/field-reports/fieldSession";
 import { applyLocalFieldReportAcceptance } from "@/field-reports/submitFieldReport";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 
 const SESSION: FieldSessionContext = {
   eventId: "event-1",
@@ -54,11 +56,14 @@ beforeEach(async () => {
   await resetFieldReportRuntime();
   clearFieldSession();
   installFieldSession(SESSION);
+  // The home directory follows the session response (M16.6).
+  installLocalFieldSession();
 });
 
 afterEach(async () => {
   await resetFieldReportRuntime();
   clearFieldSession();
+  clearClientSession();
 });
 
 describe("Field Report author list/detail surfaces (M9.4)", () => {

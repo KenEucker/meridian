@@ -21,19 +21,23 @@ import {
   useStaffLinks,
   useWorkflowLinks,
 } from "@/components/workflowLinks";
-import {
-  fixtureDepartmentAccesses,
-  fixtureDepartmentRoleSummary,
-  selectFixtureDepartment,
-  selectedFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { useConnectivity } from "@/offline/useConnectivity";
 import {
   describeConnectivityState,
   type ConnectivityState,
 } from "@/offline/syncStatus";
-import { refreshClientSessionOnReconnect } from "@/session/clientSession";
+import {
+  clientSessionState,
+  refreshClientSessionOnReconnect,
+} from "@/session/clientSession";
+import {
+  selectSessionDepartment,
+  selectedSessionDepartment,
+  sessionDepartmentAccesses,
+  sessionDepartmentRoleSummary,
+  sessionEventContext,
+} from "@/session/sessionAccess";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
@@ -100,7 +104,7 @@ const showLettermark = computed(() => markUrl.value === null);
 const departmentBrandingAttributes = computed(() =>
   departmentSurfaceAttributes(
     typeof route?.name === "string" ? route.name : null,
-    selectedFixtureDepartment.value.departmentId,
+    selectedSessionDepartment.value?.departmentId ?? null,
   ),
 );
 
@@ -126,8 +130,19 @@ function departmentMark(department: {
   };
 }
 
+/*
+ * The department the client is working in, or nothing at all.
+ *
+ * Nothing is a real state now that the context comes from the session response
+ * (CLIENT-001): a client that has not resolved a session, or whose user is
+ * associated with no department, has no department to name and says so by
+ * leaving the block out rather than by printing a placeholder identity.
+ */
+const currentDepartment = computed(() => selectedSessionDepartment.value);
 const currentDepartmentMark = computed(() =>
-  departmentMark(selectedFixtureDepartment.value),
+  currentDepartment.value === null
+    ? null
+    : departmentMark(currentDepartment.value),
 );
 
 /**
@@ -140,17 +155,16 @@ const currentDepartmentMark = computed(() =>
  * across departments all day.
  */
 const otherDepartmentMarks = computed(() =>
-  fixtureDepartmentAccesses
+  sessionDepartmentAccesses.value
     .filter(
       (department) =>
-        department.departmentId !==
-        selectedFixtureDepartment.value.departmentId,
+        department.departmentId !== currentDepartment.value?.departmentId,
     )
     .map(departmentMark),
 );
-const fixtureUserMenuOpen = ref(false);
+const userMenuOpen = ref(false);
 const workflowMenuOpen = ref(false);
-const fixtureUserElement = ref<HTMLElement | null>(null);
+const userElement = ref<HTMLElement | null>(null);
 const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
 const workflowLinks = useWorkflowLinks();
@@ -167,7 +181,16 @@ const primaryMenuLinks = computed(() =>
 );
 const staffMenuOpen = ref(false);
 const staffMenuElement = ref<HTMLElement | null>(null);
-const fixtureUserLabel = "Fixture user";
+/*
+ * Who the shell says is signed in (CLIENT-001).
+ *
+ * The name comes from the session response and nowhere else. Before one
+ * resolves there is no user to name, and the button says so rather than
+ * borrowing an identity from bundled data.
+ */
+const userLabel = computed(
+  () => clientSessionState.document?.user.name ?? "Not signed in",
+);
 const connectionStatus = computed(() =>
   connectionStatusFor(connectivity.value),
 );
@@ -189,32 +212,32 @@ function setTheme(value: ThemeChoice): void {
   theme.value = value;
 }
 
-function toggleFixtureUserMenu(): void {
-  fixtureUserMenuOpen.value = !fixtureUserMenuOpen.value;
+function toggleUserMenu(): void {
+  userMenuOpen.value = !userMenuOpen.value;
 }
 
-function closeFixtureUserMenu(): void {
-  fixtureUserMenuOpen.value = false;
+function closeUserMenu(): void {
+  userMenuOpen.value = false;
 }
 
-function switchFixtureDepartment(departmentId: string): void {
-  selectFixtureDepartment(departmentId);
-  closeFixtureUserMenu();
+function switchDepartment(departmentId: string): void {
+  selectSessionDepartment(departmentId);
+  closeUserMenu();
   void router?.push?.({ name: "staff.me" });
 }
 
-function handleFixtureUserOutsideClick(event: Event): void {
+function handleUserOutsideClick(event: Event): void {
   const target = event.target;
 
   if (
-    !fixtureUserMenuOpen.value ||
+    !userMenuOpen.value ||
     !(target instanceof Node) ||
-    fixtureUserElement.value?.contains(target)
+    userElement.value?.contains(target)
   ) {
     return;
   }
 
-  closeFixtureUserMenu();
+  closeUserMenu();
 }
 
 function toggleWorkflowMenu(): void {
@@ -387,17 +410,17 @@ watch(
   { immediate: true },
 );
 
-watch(fixtureUserMenuOpen, (isOpen) => {
+watch(userMenuOpen, (isOpen) => {
   if (typeof document === "undefined") {
     return;
   }
 
   if (isOpen) {
-    document.addEventListener("pointerdown", handleFixtureUserOutsideClick);
+    document.addEventListener("pointerdown", handleUserOutsideClick);
     return;
   }
 
-  document.removeEventListener("pointerdown", handleFixtureUserOutsideClick);
+  document.removeEventListener("pointerdown", handleUserOutsideClick);
 });
 
 watch(workflowMenuOpen, (isOpen) => {
@@ -428,7 +451,7 @@ watch(staffMenuOpen, (isOpen) => {
 
 onBeforeUnmount(() => {
   if (typeof document !== "undefined") {
-    document.removeEventListener("pointerdown", handleFixtureUserOutsideClick);
+    document.removeEventListener("pointerdown", handleUserOutsideClick);
     document.removeEventListener("pointerdown", handleWorkflowMenuOutsideClick);
     document.removeEventListener("pointerdown", handleStaffMenuOutsideClick);
   }
@@ -470,7 +493,17 @@ onBeforeUnmount(() => {
           </span>
         </RouterLink>
 
-        <div class="app-shell__context" aria-label="Current operations context">
+        <!--
+          Present only once the session names a department. A client that has
+          not resolved one has no operations context to state, and a placeholder
+          in this spot is worse than a gap: this is the block a staff member
+          reads to confirm which department they are filing against.
+        -->
+        <div
+          v-if="currentDepartment && currentDepartmentMark"
+          class="app-shell__context"
+          aria-label="Current operations context"
+        >
           <BrandMark
             class="app-shell__context-mark"
             :name="currentDepartmentMark.name"
@@ -480,12 +513,13 @@ onBeforeUnmount(() => {
             size="xxl"
           />
           <div class="app-shell__context-text">
-            <p>{{ selectedFixtureDepartment.departmentLabel }}</p>
-            <span v-if="!headerCarriesEvent">
-              {{ selectedFixtureDepartment.eventLabel }}
+            <p>{{ currentDepartment.departmentLabel }}</p>
+            <span v-if="!headerCarriesEvent && sessionEventContext?.eventLabel">
+              {{ sessionEventContext.eventLabel }}
             </span>
           </div>
         </div>
+        <div v-else class="app-shell__context-placeholder"></div>
 
         <div class="app-shell__actions">
           <div
@@ -501,7 +535,7 @@ onBeforeUnmount(() => {
               class="app-shell__department-mark"
               :data-mark="department.logoUrl ? 'logo' : 'lettermark'"
               :title="`Switch to ${department.name}`"
-              @click="switchFixtureDepartment(department.id)"
+              @click="switchDepartment(department.id)"
             >
               <BrandMark
                 :name="department.name"
@@ -514,15 +548,15 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div ref="fixtureUserElement" class="app-shell__user">
+          <div ref="userElement" class="app-shell__user">
             <button
               type="button"
               class="app-shell__user-button"
               :data-connection-status="connectionStatus.tone"
-              :aria-label="`${fixtureUserLabel}. ${connectionStatus.label}.`"
-              :aria-expanded="fixtureUserMenuOpen"
+              :aria-label="`${userLabel}. ${connectionStatus.label}.`"
+              :aria-expanded="userMenuOpen"
               aria-haspopup="menu"
-              @click="toggleFixtureUserMenu"
+              @click="toggleUserMenu"
             >
               <svg
                 class="app-shell__user-icon"
@@ -547,7 +581,7 @@ onBeforeUnmount(() => {
                   stroke-width="2"
                 />
               </svg>
-              <span class="app-shell__user-label">{{ fixtureUserLabel }}</span>
+              <span class="app-shell__user-label">{{ userLabel }}</span>
               <svg
                 class="app-shell__dropdown-icon app-shell__user-dropdown-icon"
                 aria-hidden="true"
@@ -565,13 +599,13 @@ onBeforeUnmount(() => {
               </svg>
             </button>
             <div
-              v-if="fixtureUserMenuOpen"
+              v-if="userMenuOpen"
               class="app-shell__user-menu"
               role="menu"
-              aria-label="Fixture user menu"
+              aria-label="User menu"
             >
-              <p>Local fixture</p>
-              <strong>{{ fixtureUserLabel }}</strong>
+              <p>Signed in as</p>
+              <strong>{{ userLabel }}</strong>
               <div
                 class="app-shell__connection-note"
                 :data-connection-status="connectionStatus.tone"
@@ -586,7 +620,7 @@ onBeforeUnmount(() => {
               <RouterLink
                 role="menuitem"
                 :to="{ name: 'settings.about' }"
-                @click="closeFixtureUserMenu"
+                @click="closeUserMenu"
               >
                 Settings
               </RouterLink>
@@ -594,7 +628,7 @@ onBeforeUnmount(() => {
                 type="button"
                 role="menuitem"
                 aria-disabled="true"
-                @click="closeFixtureUserMenu"
+                @click="closeUserMenu"
               >
                 Switch user
               </button>
@@ -603,32 +637,39 @@ onBeforeUnmount(() => {
                 type="button"
                 role="menuitem"
                 aria-disabled="true"
-                @click="closeFixtureUserMenu"
+                @click="closeUserMenu"
               >
                 Switch organization
               </button>
+              <!--
+                The departments the session says this user is associated with,
+                and the standing they hold in each. Absent entirely for a user
+                with one department or none: a switcher with a single
+                destination is a control with nothing to do.
+              -->
               <div
+                v-if="sessionDepartmentAccesses.length > 1"
                 class="app-shell__department-switch"
                 role="group"
                 aria-label="Switch department"
               >
                 <p>Switch department</p>
                 <button
-                  v-for="department in fixtureDepartmentAccesses"
+                  v-for="department in sessionDepartmentAccesses"
                   :key="department.departmentId"
                   type="button"
                   role="menuitemradio"
                   :aria-checked="
-                    department.departmentId === selectedFixtureDepartment.departmentId
+                    department.departmentId === currentDepartment?.departmentId
                   "
                   :data-selected="
-                    department.departmentId === selectedFixtureDepartment.departmentId
+                    department.departmentId === currentDepartment?.departmentId
                   "
-                  @click="switchFixtureDepartment(department.departmentId)"
+                  @click="switchDepartment(department.departmentId)"
                 >
                   <span>
                     <strong>{{ department.departmentLabel }}</strong>
-                    <small>{{ fixtureDepartmentRoleSummary(department) }}</small>
+                    <small>{{ sessionDepartmentRoleSummary(department) }}</small>
                   </span>
                 </button>
               </div>
@@ -637,7 +678,7 @@ onBeforeUnmount(() => {
                 type="button"
                 role="menuitem"
                 aria-disabled="true"
-                @click="closeFixtureUserMenu"
+                @click="closeUserMenu"
               >
                 Switch event
               </button>
@@ -645,7 +686,7 @@ onBeforeUnmount(() => {
                 type="button"
                 role="menuitem"
                 aria-disabled="true"
-                @click="closeFixtureUserMenu"
+                @click="closeUserMenu"
               >
                 Sign out
               </button>
@@ -930,6 +971,17 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * Holds the middle column open when there is no department to name, so the
+ * lockup and the user menu keep their places instead of the row re-flowing the
+ * moment a session resolves.
+ */
+.app-shell__context-placeholder {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
 }
 
 .app-shell__context {

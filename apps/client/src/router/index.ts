@@ -46,7 +46,7 @@ import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
-import { selectFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
+import { selectSessionDepartment } from "@/session/sessionAccess";
 import {
   installDevelopmentOrganizerDepartmentSession,
   resolveOrganizerDepartmentSession,
@@ -93,12 +93,19 @@ function ensureOrganizerDepartmentSession(): void {
  * Development department self-admin session until auth owns the real
  * department-lead context. Screens still fail closed without administer
  * authority (M11.13).
+ *
+ * The department in the route is also what the client is working in, so it is
+ * recorded as the session's department selection (M16.6). Following the URL
+ * rather than the other way round is what makes a deep link land in the right
+ * department: the shell, the navigation, and the surface then all read the same
+ * selection, and the capabilities that apply are the ones the session response
+ * carries for it.
  */
 function ensureDepartmentSelfAdminSession(to: {
   params: Record<string, string | string[]>;
 }): void {
   if (typeof to.params.departmentId === "string") {
-    selectFixtureDepartment(to.params.departmentId);
+    selectSessionDepartment(to.params.departmentId);
   }
 
   if (!resolveDepartmentSelfAdminSession()) {

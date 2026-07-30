@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 
 import { appConfigForUiMode, type UiMode } from "@/app/appConfig";
@@ -11,15 +11,21 @@ import AppShell from "@/components/AppShell.vue";
 import {
   FIXTURE_GATE_DEPARTMENT_ID,
   FIXTURE_RANGERS_DEPARTMENT_ID,
-  resetSelectedFixtureDepartment,
-  selectFixtureDepartment,
-  selectedFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import {
   clearClientSession,
-  installClientSessionForTests,
+  installClientSession,
 } from "@/session/clientSession";
+import {
+  installLocalFieldSession,
+  localFieldSessionDocument,
+} from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+  selectedSessionDepartment,
+} from "@/session/sessionAccess";
 import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
@@ -42,9 +48,20 @@ function setDeviceOnLine(value: boolean): void {
   });
 }
 
+/*
+ * The shell reads its user, its departments, and its navigation from the session
+ * response and from nothing else (M16.6; CLIENT-001, CLIENT-004), so every test
+ * that expects to see any of them establishes a session first. No server is
+ * involved: the document is the same shape `GET /api/me` returns (CLIENT-024).
+ */
+beforeEach(() => {
+  installLocalFieldSession();
+  selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+});
+
 afterEach(() => {
   resetToMeridian();
-  resetSelectedFixtureDepartment();
+  resetSelectedSessionDepartment();
   setDeviceOnLine(true);
   clearClientSession();
   window.localStorage.removeItem("meridian.ui.theme");
@@ -134,7 +151,7 @@ describe("AppShell offline/sync display", () => {
     // Contract 19A.2: a device can be online with stale permissions or offline
     // with fresh ones, so the two indicators are two elements.
     setDeviceOnLine(true);
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument(),
       "cache",
       new Date("2026-09-11T18:35:00+00:00"),
@@ -157,7 +174,7 @@ describe("AppShell offline/sync display", () => {
   });
 
   it("says nothing about permissions when the session is current", () => {
-    installClientSessionForTests(
+    installClientSession(
       fixtureSessionDocument(),
       "network",
       new Date("2026-09-11T18:35:00+00:00"),
@@ -219,8 +236,10 @@ describe("AppShell fixed UI mode display", () => {
         "Local Field Event",
       );
       expect(wrapper.find(".app-shell__menu-theme").exists()).toBe(false);
+      // CLIENT-001: the name on the button is the one the session response
+      // carries, not one the client brought with it.
       expect(wrapper.get(".app-shell__user-button").text()).toContain(
-        "Fixture user",
+        "Local Field Author",
       );
       expect(
         wrapper.get(".app-shell__user-button").attributes(
@@ -255,7 +274,55 @@ describe("AppShell fixed UI mode display", () => {
     },
   );
 
-  it("opens a fixture user dropdown from the shell", async () => {
+  it("renders no navigation and no identity before a session resolves", () => {
+    // CLIENT-005 through the shell: an empty menu rather than a menu of pages
+    // the server would refuse, and no borrowed name in the place a user checks
+    // who they are signed in as (CLIENT-001).
+    clearClientSession();
+
+    const wrapper = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    expect(wrapper.findAll(".app-shell__tab")).toHaveLength(0);
+    expect(wrapper.find(".app-shell__context").exists()).toBe(false);
+    expect(wrapper.findAll(".app-shell__department-mark")).toHaveLength(0);
+    expect(wrapper.get(".app-shell__user-button").text()).toContain(
+      "Not signed in",
+    );
+  });
+
+  it("offers no department switcher to a user with one department", async () => {
+    installClientSession(
+      localFieldSessionDocument({
+        departments: [
+          {
+            id: FIXTURE_RANGERS_DEPARTMENT_ID,
+            organization_id: "88888888-8888-4888-8888-888888888888",
+            name: "Rangers",
+            code: "RANGERS",
+            membership_status: "active",
+            archived_at: null,
+          },
+        ],
+      }),
+      "network",
+    );
+
+    const wrapper = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+
+    expect(wrapper.findAll(".app-shell__department-mark")).toHaveLength(0);
+    expect(wrapper.find(".app-shell__department-switch").exists()).toBe(false);
+    expect(wrapper.get(".app-shell__context-text p").text()).toBe("Rangers");
+  });
+
+  it("opens the user dropdown from the shell", async () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -267,7 +334,7 @@ describe("AppShell fixed UI mode display", () => {
     await wrapper.get(".app-shell__user-button").trigger("click");
 
     expect(wrapper.get(".app-shell__user-menu").text()).toContain(
-      "Fixture user",
+      "Local Field Author",
     );
     expect(wrapper.get(".app-shell__connection-note").text()).toContain(
       "Connected and fully capable",
@@ -314,7 +381,9 @@ describe("AppShell fixed UI mode display", () => {
     );
   });
 
-  it("updates workflow access when the fixture user switches departments", async () => {
+  it("updates workflow access when the user switches departments", async () => {
+    // Every entry below follows a capability the session response scopes to the
+    // department being switched into (CLIENT-004, CLIENT-005).
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -349,13 +418,17 @@ describe("AppShell fixed UI mode display", () => {
 
     expect(wrapper.get(".app-shell__context").text()).toContain("DPW");
     workflowLabels = wrapper.findAll(".app-shell__tab").map((tab) => tab.text());
-    expect(workflowLabels).toContain("Admin");
+    // A designated team lead reaches their own team and nothing else here.
+    // `department.administer` is what opens Admin and the shift lead role does
+    // not carry it, so the entry is gone rather than shown and refused.
+    expect(workflowLabels).toContain("Team");
+    expect(workflowLabels).not.toContain("Admin");
     expect(workflowLabels).not.toContain("Overview");
     expect(workflowLabels).not.toContain("Logistics");
     expect(workflowLabels).not.toContain("Incidents");
   });
 
-  it("still combines the menus for the fullest fixture role", () => {
+  it("still combines the menus for the fullest role in the session", () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -363,8 +436,9 @@ describe("AppShell fixed UI mode display", () => {
       global: { stubs: routerLinkStub },
     });
 
-    // The Rangers department lead reaches every workflow the fixtures grant,
-    // and still lands under the combine threshold at nine items.
+    // The Rangers department lead holds every department capability the seeded
+    // session carries, and still lands under the combine threshold at nine
+    // items.
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
 
@@ -397,8 +471,9 @@ describe("AppShell fixed UI mode display", () => {
       .find((button) => button.text().includes("Gate"))!
       .trigger("click");
 
-    // The Gate fixture user is a plain member: six items total, so splitting
-    // them across two dropdowns would only make the reader guess.
+    // In Gate the user is a plain member holding no capability at all: six
+    // personal and member items total, so splitting them across two dropdowns
+    // would only make the reader guess.
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
 
@@ -433,12 +508,24 @@ describe("AppShell fixed UI mode display", () => {
       .trigger("click");
 
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
+    // A team lead has no Admin workflow to reach the department's member pages
+    // from, so those pages sit with their personal ones — which is the rule the
+    // Staff menu has always applied, now answered from `department.administer`
+    // rather than from a fixture flag.
     expect(
       wrapper.findAll(".app-shell__tab").map((tab) => tab.text()),
-    ).toEqual(["Me", "Event Info", "My Field Reports", "Team", "Admin"]);
+    ).toEqual([
+      "Me",
+      "Event Info",
+      "My Field Reports",
+      "Documents",
+      "Shifts",
+      "Trainings",
+      "Team",
+    ]);
   });
 
-  it("closes the fixture user dropdown after choosing an item", async () => {
+  it("closes the user dropdown after choosing an item", async () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -454,7 +541,7 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.find(".app-shell__user-menu").exists()).toBe(false);
   });
 
-  it("closes the fixture user dropdown after clicking outside it", async () => {
+  it("closes the user dropdown after clicking outside it", async () => {
     const wrapper = mount(AppShell, {
       props: {
         config: appConfigForUiMode("admin"),
@@ -756,7 +843,7 @@ describe("AppShell department marks", () => {
     // Two generated letters need an edge to read as something clickable, so
     // the outline is drawn there and only there.
     installDepartmentLogos();
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(FIXTURE_GATE_DEPARTMENT_ID);
 
     const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
     const byTitle = (title: string) =>
@@ -778,13 +865,13 @@ describe("AppShell department marks", () => {
 
     const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
 
-    expect(selectedFixtureDepartment.value.departmentId).toBe(
+    expect(selectedSessionDepartment.value?.departmentId).toBe(
       FIXTURE_RANGERS_DEPARTMENT_ID,
     );
 
     await wrapper.findAll(".app-shell__department-mark")[1]!.trigger("click");
 
-    expect(selectedFixtureDepartment.value.departmentId).toBe(
+    expect(selectedSessionDepartment.value?.departmentId).toBe(
       FIXTURE_GATE_DEPARTMENT_ID,
     );
     expect(wrapper.get(".app-shell__context-text p").text()).toBe("Gate");

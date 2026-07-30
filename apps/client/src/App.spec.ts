@@ -4,11 +4,18 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
+import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import {
   clearFieldSession,
   installDevelopmentFieldSession,
 } from "@/field-reports/fieldSession";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 
 function buildRouter() {
   return createRouter({
@@ -20,11 +27,16 @@ function buildRouter() {
 afterEach(() => {
   configureMeridianApi(null);
   clearFieldSession();
+  clearClientSession();
+  resetSelectedSessionDepartment();
   vi.unstubAllGlobals();
 });
 
 describe("shared client shell", () => {
   it("renders the app shell with the operations home dashboard", async () => {
+    installLocalFieldSession();
+    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+
     const router = buildRouter();
     await router.push("/");
     await router.isReady();

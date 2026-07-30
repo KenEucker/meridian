@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -23,6 +23,8 @@ import {
 } from "@/department-teams/teamAdminModel";
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
@@ -46,11 +48,17 @@ function departmentPath(departmentId: string, suffix: string): string {
   return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${departmentId}/${suffix}`;
 }
 
+// Navigation follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
 afterEach(() => {
   clearDepartmentSelfAdminSession();
   resetDepartmentSelfAdminFixtures();
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
+  clearClientSession();
 });
 
 describe("staff page template", () => {

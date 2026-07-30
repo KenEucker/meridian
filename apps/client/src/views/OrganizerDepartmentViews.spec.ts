@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -15,6 +15,8 @@ import {
   selectFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
 import HomeView from "@/views/HomeView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
@@ -26,10 +28,16 @@ function buildRouter() {
   });
 }
 
+// The home directory follows the session response (M16.6).
+beforeEach(() => {
+  installLocalFieldSession();
+});
+
 afterEach(() => {
   clearOrganizerDepartmentSession();
   resetOrganizerDepartmentFixtures();
   resetSelectedFixtureDepartment();
+  clearClientSession();
 });
 
 describe("organizer department administration", () => {
@@ -131,7 +139,9 @@ describe("organizer department administration", () => {
       .map((heading) => heading.text());
 
     expect(homeWrapper.text()).toContain("DPW operations workspace");
-    expect(homeCardLabels).toContain("Admin");
+    // A designated team lead reaches their own team, and holds neither
+    // `department.administer` nor `organization.departments.manage`.
+    expect(homeCardLabels).toContain("Team Overview");
     expect(homeCardLabels).not.toContain("Departments");
 
     router = buildRouter();

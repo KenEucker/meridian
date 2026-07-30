@@ -1,30 +1,41 @@
-import { computed, ref } from "vue";
+// Seed data for the department surfaces that have not been bound to their API
+// endpoints yet (M16.14 through M16.22).
+//
+// It no longer answers "what may this user do". Navigation, the shell, and the
+// router read that from the session response (M16.6), and this module reads the
+// department selection they set rather than owning one of its own — two
+// selections would mean the surface and the shell could disagree about which
+// department is being worked.
 
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import { computed } from "vue";
 
-export const FIXTURE_RANGERS_DEPARTMENT_ID =
-  "66666666-6666-4666-8666-666666666666";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_FIXTURE,
+  LOCAL_FIELD_TEAM_IDS,
+} from "@/field-reports/localFieldFixture";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+  selectedSessionDepartmentId,
+} from "@/session/sessionAccess";
+
+export const FIXTURE_RANGERS_DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
 export const FIXTURE_ORGANIZER_DEPARTMENT_ID =
-  "22222222-2222-4222-8222-222222222201";
-export const FIXTURE_GATE_DEPARTMENT_ID =
-  "22222222-2222-4222-8222-222222222202";
-export const FIXTURE_DPW_DEPARTMENT_ID =
-  "22222222-2222-4222-8222-222222222203";
+  LOCAL_FIELD_DEPARTMENT_IDS.organizer;
+export const FIXTURE_GATE_DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.gate;
+export const FIXTURE_DPW_DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.dpw;
 
 export const FIXTURE_ORGANIZER_DEFAULT_TEAM_ID =
-  "77777777-7777-4777-8777-777777777760";
-export const FIXTURE_RANGERS_DIRT_TEAM_ID =
-  "77777777-7777-4777-8777-777777777771";
+  LOCAL_FIELD_TEAM_IDS.organizerDefault;
+export const FIXTURE_RANGERS_DIRT_TEAM_ID = LOCAL_FIELD_TEAM_IDS.rangersDirt;
 export const FIXTURE_RANGERS_DEFAULT_TEAM_ID =
-  "77777777-7777-4777-8777-777777777770";
-export const FIXTURE_GATE_DEFAULT_TEAM_ID =
-  "77777777-7777-4777-8777-777777777780";
+  LOCAL_FIELD_TEAM_IDS.rangersDefault;
+export const FIXTURE_GATE_DEFAULT_TEAM_ID = LOCAL_FIELD_TEAM_IDS.gateDefault;
 export const FIXTURE_GATE_CREDENTIALS_TEAM_ID =
-  "77777777-7777-4777-8777-777777777781";
-export const FIXTURE_DPW_DEFAULT_TEAM_ID =
-  "77777777-7777-4777-8777-777777777790";
-export const FIXTURE_DPW_BIKES_TEAM_ID =
-  "77777777-7777-4777-8777-777777777791";
+  LOCAL_FIELD_TEAM_IDS.gateCredentials;
+export const FIXTURE_DPW_DEFAULT_TEAM_ID = LOCAL_FIELD_TEAM_IDS.dpwDefault;
+export const FIXTURE_DPW_BIKES_TEAM_ID = LOCAL_FIELD_TEAM_IDS.dpwBikes;
 
 export interface FixtureTeamStaffMember {
   readonly staffId: string;
@@ -281,15 +292,25 @@ export const fixtureDepartmentAccesses: readonly FixtureDepartmentAccess[] =
     }),
   ]);
 
-const fixtureDepartmentStorageKey = "meridian.fixture.departmentId";
-
-const selectedDepartmentId = ref(readSelectedFixtureDepartmentId());
-
+/**
+ * The fixture record for the department the client is working in.
+ *
+ * Resolved from the session's department selection, falling back to Rangers —
+ * the fullest of the seeded departments — when the selection names one this
+ * fixture has no data for. A fixture surface that cannot find its seed data is a
+ * gap in seed data, not a permission decision, and the permission decision was
+ * already made from the session response before the surface rendered.
+ */
 export const selectedFixtureDepartment = computed(
   () =>
     fixtureDepartmentAccesses.find(
-      (department) => department.departmentId === selectedDepartmentId.value,
-    ) ?? fixtureDepartmentAccesses[0]!,
+      (department) =>
+        department.departmentId === selectedSessionDepartmentId.value,
+    ) ??
+    fixtureDepartmentAccesses.find(
+      (department) => department.departmentId === FIXTURE_RANGERS_DEPARTMENT_ID,
+    ) ??
+    fixtureDepartmentAccesses[0]!,
 );
 
 export const selectedFixtureDepartmentRouteParams = computed(() => ({
@@ -307,18 +328,24 @@ export function fixtureDepartmentById(
   );
 }
 
+/**
+ * Work in one of the seeded departments.
+ *
+ * Delegates to the session's selection rather than keeping a second one, and
+ * still refuses an id this fixture knows nothing about — the callers left are
+ * fixture surfaces and their specs, for which an unknown id is a mistake rather
+ * than a department the session happens to carry.
+ */
 export function selectFixtureDepartment(departmentId: string): void {
   if (fixtureDepartmentById(departmentId) === null) {
     return;
   }
 
-  selectedDepartmentId.value = departmentId;
-  writeSelectedFixtureDepartmentId(departmentId);
+  selectSessionDepartment(departmentId);
 }
 
 export function resetSelectedFixtureDepartment(): void {
-  selectedDepartmentId.value = FIXTURE_RANGERS_DEPARTMENT_ID;
-  clearSelectedFixtureDepartmentId();
+  resetSelectedSessionDepartment();
 }
 
 export function fixtureDepartmentHasAdminAccess(
@@ -336,86 +363,7 @@ export function fixtureDepartmentHasOrganizerDepartmentAccess(
   return department.capabilities.hasOrganizerDepartmentAdministration;
 }
 
-/**
- * Branding authority is narrower than general department admin access
- * (BRAND-019): department leads and department administration edit a
- * department branding profile, and a team lead does not.
- *
- * Kept separate from {@see fixtureDepartmentHasAdminAccess} rather than reusing
- * it, because that helper deliberately includes team leads — who reach shifts
- * and team pages but have no say over the department's identity. Reusing it
- * would show a Branding link the server then refuses, which is exactly the
- * client/server disagreement this split exists to prevent.
- */
-export function fixtureDepartmentHasBrandingAccess(
-  department: FixtureDepartmentAccess,
-): boolean {
-  return department.isDepartmentLead;
-}
-
-export function fixtureDepartmentRoleSummary(
-  department: FixtureDepartmentAccess,
-): string {
-  if (fixtureDepartmentHasOrganizerDepartmentAccess(department)) {
-    return "Organizer";
-  }
-
-  const leadTeams = department.teams
-    .filter((team) => team.isTeamLead)
-    .map((team) => team.teamLabel);
-
-  if (department.isDepartmentLead && leadTeams.length > 0) {
-    return `Department lead; team lead for ${leadTeams.join(", ")}`;
-  }
-
-  if (department.isDepartmentLead) {
-    return "Department lead";
-  }
-
-  if (leadTeams.length > 0) {
-    return `Team lead for ${leadTeams.join(", ")}`;
-  }
-
-  return "Staff member";
-}
-
-function readSelectedFixtureDepartmentId(): string {
-  if (typeof window === "undefined") {
-    return FIXTURE_RANGERS_DEPARTMENT_ID;
-  }
-
-  try {
-    const saved = window.localStorage.getItem(fixtureDepartmentStorageKey);
-    if (saved === null || fixtureDepartmentById(saved) === null) {
-      return FIXTURE_RANGERS_DEPARTMENT_ID;
-    }
-
-    return saved;
-  } catch {
-    return FIXTURE_RANGERS_DEPARTMENT_ID;
-  }
-}
-
-function writeSelectedFixtureDepartmentId(departmentId: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(fixtureDepartmentStorageKey, departmentId);
-  } catch {
-    // Fixture selection persistence is a local development convenience.
-  }
-}
-
-function clearSelectedFixtureDepartmentId(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.removeItem(fixtureDepartmentStorageKey);
-  } catch {
-    // Fixture selection persistence is a local development convenience.
-  }
-}
+// Branding authority and the role summary used to live here. Both were
+// permission questions rather than seed data, and both are now answered from the
+// session response: `department.branding.manage` in `brandingRouteProps`, and
+// `sessionDepartmentRoleSummary` in `sessionAccess`.

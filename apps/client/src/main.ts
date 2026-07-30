@@ -6,6 +6,7 @@ import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { router } from "@/router";
 import { loadClientSession } from "@/session/clientSession";
+import { installLocalFieldSessionFromEnv } from "@/session/localFieldSession";
 import "@meridian/ui-tokens/tokens.css";
 import "@/assets/base.css";
 
@@ -36,11 +37,16 @@ void loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
  * do; the node's answer replaces it when one arrives. Awaiting it would hold the
  * mount on a network call, which is the failure this cache exists to prevent.
  *
- * Navigation still comes from fixture data until M16.6 binds it to these
- * capabilities. Until then this establishes and discloses the session without
- * anything reading its codes, which is why a node that cannot answer yet — the
- * client holds no bearer token until login is wired — changes nothing visible.
+ * Navigation follows from this and from nothing else (M16.6, CLIENT-004), which
+ * is why the local development session is installed only when the node produced
+ * no document: the client holds no bearer token until login is wired into it,
+ * and a developer running against a seeded node would otherwise be shown an
+ * empty shell. A node that answers always wins, here and on every later refresh.
  */
-void loadClientSession();
+void loadClientSession().then((outcome) => {
+  if (outcome !== "refreshed") {
+    installLocalFieldSessionFromEnv();
+  }
+});
 
 createApp(App).use(router).mount("#app");
