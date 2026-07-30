@@ -1406,6 +1406,12 @@ Sheets the user cannot access are omitted from `insights.index`, not listed as i
 | `kiosk.shift-board` | `kiosk.shift-board` | Kiosk-safe shift board entry | Authorized shift/department lead |
 | `kiosk.safe-timeout` | `kiosk.safe-timeout` | Safe timeout surface | Trusted workstation |
 
+The Kiosk shell carries a session bar above the routed surface, outside anything a screen can collapse or scroll away, because "the active user is shown prominently at all times" (technical spec 13.3) is not a property a screen can be trusted to preserve. It shows the active user's name as its largest element, warns before the inactivity timeout with a control that continues the session, and offers the control that ends it. It renders nothing while the workstation is locked.
+
+`kiosk.workstation-login` is unreachable while a session is live and redirects to `kiosk.home`, which is where "users must explicitly end their session before switching users" is enforced. Every other Kiosk route redirects to it while the workstation is locked. `kiosk.safe-timeout` stays reachable with no session at all, and holds no name, event, or record.
+
+A timeout lands on `kiosk.safe-timeout`. An explicit end lands on `kiosk.workstation-login`.
+
 ### 12.9 Orchid / God Mode Admin Screens
 
 | Screen ID | Route name | Purpose | Access |

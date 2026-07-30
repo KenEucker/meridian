@@ -572,7 +572,32 @@ Rules:
 - generation is rate limited per user and per node (AUTH-029)
 - the code appears in this response and nowhere else: it is stored only as a keyed hash, is not logged or audited, and cannot be printed or exported
 
-God mode generating a code for another user is a console screen rather than an endpoint, because it is operator tooling. Entering a code is the shared-workstation session in 12.3 and technical spec 13.3.
+God mode generating a code for another user is a console screen rather than an endpoint, because it is operator tooling. Entering a code is the shared-workstation session below.
+
+#### Shared workstation sessions
+
+Entering a login code at a trusted shared workstation establishes a shared-workstation session (12.6, technical spec 13.3). It is not an API credential: it issues no bearer token and trusts no device (AUTH-030), so it has its own endpoints and its own guard rather than arriving through `POST /api/auth/session`.
+
+```text
+POST   /api/auth/shared-workstation-session   enter a code and start a session
+GET    /api/auth/shared-workstation-session   read the session, and record activity
+DELETE /api/auth/shared-workstation-session   end the session
+```
+
+The start request carries the shared workstation and the typed code. Its response carries the session key once, and every response carries the session's start, last activity, and inactivity deadline, the active user's identity, the workstation with its pinned organization and optional department, and the event the session is scoped to.
+
+Requests thereafter carry the session key in the `X-Meridian-Workstation-Session` header. Deliberately not `Authorization: Bearer`, so nothing on either side can treat a workstation session as a personal token.
+
+Rules:
+
+- the typed code is the whole credential for the start request, which therefore carries no session and is rate limited, on top of the per-workstation entry limit in 12.4 (AUTH-029)
+- a successful entry issues no API token under 12.5 and establishes no trusted personal device session under 12.2 (AUTH-030)
+- the session key exists in the start response and nowhere else; only a keyed hash is stored, so it cannot be re-read from the node or recovered from a backup
+- the response carries the node's inactivity deadline rather than a duration, so the workstation counts down against the node's clock and the 5-minute rule in 12.3 has one owner
+- reading the session is activity: it is the action behind the timeout warning, so a person saying they are still there slides the window by saying it
+- roles and capabilities are not in these responses; the session key authenticates `GET /api/me`, so there is one answer to what the active user may do
+- a workstation holds one session at a time, so starting one closes whatever was still open there: `superseded` if it was live, `timed_out` if it had already lapsed
+- ending is answered the same way whether or not there was a session to end, because a workstation asking to be signed out gets to be signed out
 
 ### 5.5 Session resolution
 
@@ -3823,7 +3848,7 @@ Rules:
 - missing pinned organization/event context sends Meridian Kiosk to setup
 - authorized organizers, lead organizers, and God Mode users may change pinned context
 - pinned context constrains Kiosk shell/scope selection but does not grant authority
-- inactivity timeout is 5 minutes for MVP
+- inactivity timeout is 5 minutes for MVP; the session it bounds is `shared_workstation_sessions` in 12.6
 - timeout abandons unsaved work while saved local queued operations remain queued for sync
 - Admin mode may configure, review, and support Kiosk context/session surfaces but does not provide quick switching for Admin's own session
 
@@ -3850,7 +3875,7 @@ Rules:
 - generation and use are audited
 - codes are scoped to one user, event, and trusted shared workstation
 - codes are valid for 6 weeks
-- a successful code entry establishes a shared workstation session under 12.3 and does not issue an API token under 12.5
+- a successful code entry establishes a shared workstation session under 12.6 and does not issue an API token under 12.5
 
 Generation authority:
 
@@ -3887,6 +3912,37 @@ Rules:
 - revoking a device revokes its tokens
 - raw token values are never logged, audited, or exported; audit entries reference the token identifier and bound device
 - token lifetime is independent of the 5-minute shared-workstation inactivity timeout in 12.3
+
+### 12.6 `shared_workstation_sessions`
+
+Represents the session a shared-workstation login code establishes: one user signed in at one workstation, scoped to that workstation's pinned event, ending 5 minutes after their last activity.
+
+A separate table from 12.5 because these are separate credentials with separate rules. A code entry issues no token (AUTH-030) and the two lifetimes are independent, so storing a workstation session as a token would have made the distinction a column rather than a type.
+
+Key fields:
+
+- `id`
+- `shared_workstation_id`
+- `user_id`
+- `event_id`
+- `login_code_id`
+- `session_key_hash`
+- `started_at`
+- `last_activity_at`
+- `ended_at`, nullable
+- `ended_reason`, nullable: `signed_out`, `timed_out`, or `superseded`
+- `created_at` and `updated_at`
+
+Rules:
+
+- the raw session key is never stored; only a keyed hash, so a leaked database or backup hands out no live sessions
+- `event_id` comes from the code, which took it from the workstation's pinned Kiosk context in 12.3, and never from a request
+- expiry is derived from `last_activity_at` rather than stamped, so there is one 5-minute rule and no second copy of it to drift
+- every authenticated request slides `last_activity_at`; the session is over 5 minutes after the last slide whether or not anything has yet observed it
+- a session observed past its window is ended and stamped at the moment it expired, not at the moment it was noticed, so a workstation nobody touched for an hour records an hour of nobody being signed in
+- the session is not authority of its own: it resolves to a user, and a disabled user resolves to nobody (technical spec 13.3, permissions come entirely from the active user)
+- a session end is audited as `shared_workstation_session.ended` with the reason, which is the part not already recorded by the code's use
+- ending a session touches nothing a device has queued; queued commands are not session data
 
 ---
 

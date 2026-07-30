@@ -1098,7 +1098,21 @@ A successful code entry establishes a shared workstation session as described in
 Shared workstation sessions time out after 5 minutes of inactivity or when the
 user explicitly ends the session.
 
-Users must explicitly end their session before switching users.
+The 5 minutes are the node's. A session carries an inactivity deadline derived
+from its last activity, every authenticated request slides it, and the node ends a
+session it observes past that deadline. The Kiosk counts down against the deadline
+it is given rather than against its own idea of when it last did something.
+
+The Kiosk warns before the timeout and offers a way to continue. Continuing is
+activity, so it slides the window rather than asking for anything to be re-entered.
+
+Users must explicitly end their session before switching users. This is enforced
+where switching happens: a workstation holding a live session offers no code entry
+and cannot be navigated to one. It is deliberately not enforced as a node-side
+refusal to start a second session — a Kiosk that crashed still holds a session it
+can no longer present, and refusing would lock the workstation out for up to five
+minutes at exactly the moment somebody needs it. Starting a session closes
+whatever the workstation still had open and records that it did.
 
 The active user is shown prominently at all times.
 
@@ -1114,6 +1128,17 @@ state is abandoned. Saved local queued operations remain in the local queue and
 sync when available.
 
 If the Electron app restarts, the shared workstation session locks immediately.
+This is a property of the credential rather than a behavior of the renderer: the
+session key is held in memory only and is never written to disk, so a restarted
+Kiosk has nothing left to present. Nothing resolved under a workstation session is
+cached for the next start either — a session document on disk is how the user who
+was signed in five minutes ago comes back on screen for whoever restarts the
+machine.
+
+A timeout lands on the safe-timeout surface rather than on the login screen,
+because a timeout means nobody is watching and the screen must hold nobody's
+records. An explicit end lands on the login screen, because the person who ended it
+is standing there.
 
 For MVP, shared workstation login is allowed only on the on-site server machine or on explicitly designated trusted shared workstations.
 

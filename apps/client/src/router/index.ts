@@ -20,6 +20,10 @@ import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
 import HomeView from "@/views/HomeView.vue";
+import KioskHomeView from "@/views/KioskHomeView.vue";
+import KioskSafeTimeoutView from "@/views/KioskSafeTimeoutView.vue";
+import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
+import { workstationSessionState } from "@/session/workstationSession";
 import {
   installDevelopmentIncidentSession,
   resolveIncidentSession,
@@ -113,6 +117,31 @@ function ensureDepartmentSelfAdminSession(to: {
   if (!resolveDepartmentSelfAdminSession()) {
     installDevelopmentDepartmentSelfAdminSession();
   }
+}
+
+/**
+ * A kiosk surface that needs somebody signed in (M16.9; technical spec 13.3).
+ *
+ * A locked workstation goes to the login screen instead. It is not the security
+ * boundary — the node authenticates every request from the session key, and a
+ * workstation with no session holds no key — it is what keeps a screen that would
+ * render nothing from being reachable by typing a URL.
+ */
+function requireWorkstationSession() {
+  return workstationSessionState.status === "active"
+    ? true
+    : { name: "kiosk.workstation-login" };
+}
+
+/**
+ * Code entry, refused while somebody is signed in.
+ *
+ * Technical spec 13.3 requires the current user to end their session before
+ * another signs in, so the login surface is not reachable from a live session —
+ * "there is no quiet handover" (kiosk guide 4.4).
+ */
+function refuseWorkstationSwitch() {
+  return workstationSessionState.status === "active" ? { name: "kiosk.home" } : true;
 }
 
 function legacyShiftBoardRedirect(surface: string) {
@@ -430,6 +459,33 @@ export const routes: RouteRecordRaw[] = [
     name: "organizer.documents.edit",
     component: DocumentEditView,
     beforeEnter: ensureOrganizerDepartmentSession,
+  },
+  /*
+   * Kiosk surfaces (UI contract 12.8; M16.9). Three of the six exist: the two a
+   * shared-workstation session begins and ends at, and the dashboard it holds
+   * open. `kiosk.switch-user`, `kiosk.reauth`, and `kiosk.shift-board` are their
+   * own tasks.
+   *
+   * The safe-timeout surface is reachable whether or not a session is live,
+   * because a timeout is precisely the case where there is no session left to
+   * check by the time somebody arrives at it.
+   */
+  {
+    path: "/kiosk",
+    name: "kiosk.home",
+    component: KioskHomeView,
+    beforeEnter: requireWorkstationSession,
+  },
+  {
+    path: "/kiosk/sign-in",
+    name: "kiosk.workstation-login",
+    component: KioskWorkstationLoginView,
+    beforeEnter: refuseWorkstationSwitch,
+  },
+  {
+    path: "/kiosk/timed-out",
+    name: "kiosk.safe-timeout",
+    component: KioskSafeTimeoutView,
   },
   {
     path: "/:pathMatch(.*)*",

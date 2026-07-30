@@ -6,15 +6,18 @@ Verify that Meridian central authentication supports a verified-email magic-link
 
 ## Requirements covered
 
-- `AUTH-018`, `AUTH-019`, `AUTH-021`, `AUTH-022`, `AUTH-023`, `AUTH-024`, `AUTH-025`, `AUTH-026`, `AUTH-027`, `AUTH-028`, `AUTH-029`
+- `AUTH-018`, `AUTH-019`, `AUTH-021`, `AUTH-022`, `AUTH-023`, `AUTH-024`, `AUTH-025`, `AUTH-026`, `AUTH-027`, `AUTH-028`, `AUTH-029`, `AUTH-030`
 - Technical spec: Section 11.1 Authentication providers
 - Technical spec: Section 11.4 API tokens
 - Technical spec: Section 13.2 Shared workstation login
+- Technical spec: Section 13.3 Shared workstation session behavior
 - Data/API spec: Section 10.3 Users and Authentication
 - Data/API spec: Section 5.4 API authentication
 - Data/API spec: Section 12.4 `shared_workstation_login_codes`
 - Data/API spec: Section 12.5 API tokens
+- Data/API spec: Section 12.6 `shared_workstation_sessions`
 - UI Implementation Contract: Section 12.1 (`auth.login`, `auth.magic-link-sent`)
+- UI Implementation Contract: Section 12.8 (`kiosk.home`, `kiosk.workstation-login`, `kiosk.safe-timeout`)
 - UI Implementation Contract: Section 12.9 (`orchid.api-tokens`)
 
 ## Environment
@@ -112,7 +115,7 @@ python -c "import uuid; print(uuid.uuid4())"
 
 ### Shared workstation login codes
 
-A shared workstation is signed in to with a typed code rather than with a token, and a code can be generated two ways: by God Mode for any known user, and by a user for themselves from a device where they already hold a session. The second is the path that works when the node has no internet — which is the point of it. The kiosk session a code establishes arrives with M16.9; these steps cover generating, listing, and revoking codes.
+A shared workstation is signed in to with a typed code rather than with a token, and a code can be generated two ways: by God Mode for any known user, and by a user for themselves from a device where they already hold a session. The second is the path that works when the node has no internet — which is the point of it. These steps cover generating, listing, and revoking codes; the session a code establishes is the section after this one.
 
 Create a trusted shared workstation pinned to an event, since a code is scoped to one:
 
@@ -152,6 +155,86 @@ php apps/server/artisan tinker --execute="\$event = App\Models\Event::query()->f
     php apps/server/artisan tinker --execute="App\Models\SharedWorkstationLoginCode::query()->get(['id','user_id','generated_by_user_id','code_hash','expires_at','used_at','revoked_at'])->each(fn (\$c) => print_r(\$c->toArray()));"
     ```
 
+### Shared workstation sessions
+
+What entering a code establishes. The rules being checked here are the ones a shared machine in a public place depends on: it forgets whoever was signed in when nobody is watching, it cannot be handed over quietly, and it does not throw away work somebody already did.
+
+Generate a fresh code for a user on `qa-kiosk-1` through step 28 or 31, then enter it:
+
+```bash
+curl -i -X POST http://127.0.0.1:8000/api/auth/shared-workstation-session -H "Content-Type: application/json" -H "Accept: application/json" -d '{"shared_workstation_id":"PASTE-WORKSTATION-UUID","code":"PASTE-CODE"}'
+```
+
+39. Confirm the response is `201 Created` and carries `session_key`, the session's `started_at`, `last_activity_at`, `expires_at`, and `inactivity_timeout_seconds` of `300`, the active user's name, the workstation with its pinned organization and department, and `event_id`. Confirm it carries no `token`, `access_token`, or `plainTextToken`.
+40. Confirm no token was issued and no device was trusted by the entry:
+
+    ```bash
+    php apps/server/artisan tinker --execute="echo App\Models\ApiToken::query()->count().' tokens '.App\Models\DeviceTrust::query()->count().' trusts'.PHP_EOL;"
+    ```
+
+41. Confirm the session key authenticates `/api/me` in its own header, and is refused as a bearer token:
+
+    ```bash
+    curl -s http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "X-Meridian-Workstation-Session: PASTE-SESSION-KEY"
+    curl -i http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "Authorization: Bearer PASTE-SESSION-KEY"
+    ```
+
+42. Confirm the first answers `200` with the active user's roles and capabilities, and the second answers `401`.
+43. Read the session and confirm reading it slides the deadline — this is the "I'm still here" action behind the timeout warning:
+
+    ```bash
+    curl -s http://127.0.0.1:8000/api/auth/shared-workstation-session -H "Accept: application/json" -H "X-Meridian-Workstation-Session: PASTE-SESSION-KEY"
+    ```
+
+44. Age the session past its window and confirm it stops authenticating, and that the timeout is stamped at the moment it expired rather than now:
+
+    ```bash
+    php apps/server/artisan tinker --execute="\$s = App\Models\SharedWorkstationSession::query()->latest('started_at')->firstOrFail(); \$s->forceFill(['last_activity_at' => now()->subMinutes(30)])->save(); echo 'aged'.PHP_EOL;"
+    curl -i http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "X-Meridian-Workstation-Session: PASTE-SESSION-KEY"
+    php apps/server/artisan tinker --execute="\$s = App\Models\SharedWorkstationSession::query()->latest('started_at')->firstOrFail(); echo \$s->ended_reason.' at '.\$s->ended_at.' (last activity '.\$s->last_activity_at.')'.PHP_EOL;"
+    ```
+
+45. Confirm the request answered `401`, `ended_reason` is `timed_out`, and `ended_at` is five minutes after `last_activity_at` — around twenty-five minutes ago, not the time the check ran. A workstation nobody touched for half an hour was signed out five minutes in.
+46. Establish a session with a fresh code, then establish another at the same workstation with a second fresh code. Confirm the first is closed as `superseded` and the second is live:
+
+    ```bash
+    php apps/server/artisan tinker --execute="App\Models\SharedWorkstationSession::query()->latest('started_at')->take(2)->get(['id','user_id','ended_at','ended_reason'])->each(fn (\$s) => print_r(\$s->toArray()));"
+    ```
+
+47. End the live session and confirm the key stops working:
+
+    ```bash
+    curl -i -X DELETE http://127.0.0.1:8000/api/auth/shared-workstation-session -H "Accept: application/json" -H "X-Meridian-Workstation-Session: PASTE-SESSION-KEY"
+    curl -i http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "X-Meridian-Workstation-Session: PASTE-SESSION-KEY"
+    ```
+
+48. Confirm the session ends are audited with their reasons and no session key anywhere:
+
+    ```bash
+    php apps/server/artisan tinker --execute="App\Models\AuditEvent::query()->where('action', 'shared_workstation_session.ended')->get(['action','entity_id','actor_user_id','actor_device_id','event_id','reason'])->each(fn (\$e) => print_r(\$e->toArray()));"
+    ```
+
+49. Confirm no readable session key is stored:
+
+    ```bash
+    php apps/server/artisan tinker --execute="App\Models\SharedWorkstationSession::query()->get(['id','user_id','event_id','session_key_hash','started_at','last_activity_at','ended_at','ended_reason'])->each(fn (\$s) => print_r(\$s->toArray()));"
+    ```
+
+Now the Kiosk surfaces. Start the client in Kiosk mode with `pnpm run client:dev:kiosk`, and point it at the node and at this workstation from the browser console before loading a Kiosk route:
+
+```js
+localStorage.setItem("meridian.node.url", "http://127.0.0.1:8000");
+localStorage.setItem("meridian.workstation.id", "PASTE-WORKSTATION-UUID");
+```
+
+50. Open `/kiosk` and confirm it redirects to `/kiosk/sign-in`.
+51. Enter a fresh code and confirm the kiosk lands on `/kiosk` with the active user's name shown in the session bar above the surface.
+52. Type `/kiosk/sign-in` into the address bar while signed in and confirm it redirects back to `/kiosk` — a user must end their session before another can sign in.
+53. Leave the workstation untouched for four minutes and confirm a warning appears in the session bar with a control to continue. Use it, and confirm the warning clears and the countdown restarts without asking for the code again.
+54. Leave it untouched for the full five minutes and confirm the kiosk lands on `/kiosk/timed-out`, which shows no name, event, or record.
+55. Sign in again, queue a Field Report offline (see QA-FR-01), then end the session with the session bar's control. Confirm the kiosk lands on `/kiosk/sign-in` and that the queued report is still queued afterwards — sign in again and confirm it is still listed as pending.
+56. With a session live, restart the client (reload the page, or restart the Electron wrapper). Confirm it comes up locked at `/kiosk/sign-in` rather than restoring the previous user, and that `localStorage` holds no session key and no cached session document.
+
 ## Expected results
 
 - `/login` is reachable without authentication.
@@ -179,6 +262,20 @@ php apps/server/artisan tinker --execute="\$event = App\Models\Event::query()->f
 - The console lists codes by user, workstation, event, generator, and status, shows no code value in any column, and offers no export or print of codes.
 - Generation and revocation appear in `audit_events` as `shared_workstation_login_code.generated` and `shared_workstation_login_code.revoked`, naming the code by identifier and the authority in the reason, with no code value anywhere.
 - `shared_workstation_login_codes.code_hash` holds a keyed hash; no column holds a readable code.
+- Entering a valid code answers `201` with a session key, the active user, the workstation, the event, and a five-minute inactivity deadline — and issues no API token, trusts no device, and returns nothing token-shaped.
+- The session key authenticates `/api/me` in `X-Meridian-Workstation-Session` and is refused in `Authorization: Bearer`. A shared-workstation session is never a personal token.
+- Reading the session slides its deadline, so continuing from the timeout warning requires nothing to be re-entered.
+- A session past its window stops authenticating, and its end is stamped at the moment it expired rather than the moment it was noticed.
+- A second entry at the same workstation closes the first as `superseded`. A workstation holds one session at a time.
+- Ending a session stops its key on the next request, and is answered as ended whether or not there was one to end.
+- Session ends appear in `audit_events` as `shared_workstation_session.ended` with `signed_out`, `timed_out`, or `superseded` as the reason and no session key anywhere.
+- `shared_workstation_sessions.session_key_hash` holds a keyed hash; no column holds a readable session key.
+- The Kiosk shows the active user's name in the session bar at all times while signed in, and nothing while locked.
+- `/kiosk/sign-in` is unreachable while a session is live. Switching users requires ending the session first, including by typing the URL.
+- The Kiosk warns before the timeout and offers a control that continues the session.
+- A timeout lands on `/kiosk/timed-out`, which holds no name, event, or record. An explicit end lands on `/kiosk/sign-in`.
+- Ending a session leaves queued Field Reports queued; they are still pending after signing in again.
+- Restarting the client comes up locked, with no session key and no cached session document in `localStorage`.
 - The raw login code and the raw bearer token appear only in the mail body and the HTTP response respectively. Neither appears in `storage/logs/laravel.log` from Meridian's own logging, and neither is stored in readable form — `api_login_codes.code_hash` and `personal_access_tokens.token` hold hashes.
 
 ## Evidence to capture
@@ -194,6 +291,12 @@ php apps/server/artisan tinker --execute="\$event = App\Models\Event::query()->f
 - Screenshot of the **Workstation Login Codes** screen immediately after generating a code, showing the code block, and a second screenshot after reload showing it gone.
 - The `201`, `403`, and `429` responses from steps 31–35, with the code value redacted.
 - The audit output from step 37 and the stored-code output from step 38.
+- The `201` from step 39 with the session key redacted, and the token/trust counts from step 40.
+- The paired `/api/me` responses from step 41 showing the session key accepted in its own header and refused as a bearer token.
+- The aged-session output from step 44 showing `timed_out` stamped five minutes after the last activity.
+- The audit output from step 48 and the stored-session output from step 49.
+- Screenshots of the Kiosk session bar signed in, showing the timeout warning, and of `/kiosk/timed-out` holding no name or event.
+- Screenshot of the pending Field Report still queued after the session ended and a new one began.
 
 ## Failure notes
 
@@ -202,6 +305,9 @@ php apps/server/artisan tinker --execute="\$event = App\Models\Event::query()->f
 - Disabled-user rejection is covered by automated tests and arrives with later admin workflows.
 - If `POST /api/auth/magic-link` returns `429`, the route's rate limit has been reached. Wait a minute; it is five requests per minute per client address by design.
 - If the API login code does not appear in the log, confirm `MAIL_MAILER=log`. Meridian never writes the code itself — it is only in the mail body, which is why the log mailer is what makes it readable in development.
+- If the Kiosk sign-in screen says the machine is not set up as a trusted shared workstation, `meridian.workstation.id` is unset or holds a workstation this node does not have. The screen offers no code field in that state on purpose: it is a setup problem, and a field the node could only refuse would teach the wrong lesson.
+- If a Kiosk sign-in is refused with `login_code_rate_limited`, the per-workstation entry limit has been reached by repeated QA attempts. A successful sign-in clears the counter; otherwise wait out the window.
+- If the Kiosk's countdown disagrees with when the node actually signs the session out, the two clocks disagree. The deadline in the response is the node's, and the Kiosk counts down against it, so a workstation whose clock is off shows the wrong number of seconds while still being signed out at the right moment.
 - If the exchange is refused with `device_unresolvable` while naming a device, check the identifier is a UUID and that the first request for a new identifier carries `label`, `platform`, and `public_key`. A device the node has never seen is registered from those three fields; without them there is nothing to register.
 - If it is refused with `"reason":"device_revoked"`, that device has been revoked. Use a new device identifier; a revoked device is not meant to sign in again.
 - Meridian accepts a base64 Ed25519 public key or a PEM RSA public key as `public_key`, the same key formats a device signs node operations with. Anything else is refused rather than stored.

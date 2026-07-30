@@ -3,6 +3,7 @@
 use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\Auth\ApiAuthController;
 use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
+use App\Http\Controllers\Auth\SharedWorkstationSessionController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
@@ -132,6 +133,33 @@ Route::post('/auth/shared-workstation-login-code', [SharedWorkstationLoginCodeCo
     ->name('api.auth.shared-workstation-login-code.store');
 
 /*
+ * Shared-workstation sessions (AUTH-030; technical spec 13.3; data/API 12.3).
+ *
+ * What entering a login code at a trusted shared workstation establishes: a
+ * session scoped to one workstation and one event that ends five minutes after
+ * the last thing its user did. It is not a bearer token and it trusts no device
+ * (AUTH-030), which is why it arrives on its own routes and its own guard
+ * instead of through `POST /auth/session`.
+ *
+ * Starting one carries no session — the typed code is the credential — so the
+ * route is rate limited, on top of the per-workstation entry limit AUTH-029
+ * already applies at the domain. Reading and ending one carry the session key,
+ * so they sit behind the `workstation` guard; reading is also the "continue"
+ * action behind the timeout warning, and resolving a session is activity.
+ */
+Route::post('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'store'])
+    ->middleware('throttle:20,1')
+    ->name('api.auth.shared-workstation-session.store');
+
+Route::get('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'show'])
+    ->middleware('auth:workstation')
+    ->name('api.auth.shared-workstation-session.show');
+
+Route::delete('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'destroy'])
+    ->middleware('auth:workstation')
+    ->name('api.auth.shared-workstation-session.destroy');
+
+/*
  * Session resolution (CLIENT-001 through CLIENT-003; technical spec 11A.2;
  * data/API 5.5).
  *
@@ -140,9 +168,15 @@ Route::post('/auth/shared-workstation-login-code', [SharedWorkstationLoginCodeCo
  * events, departments, and teams they are associated with. Behind
  * `auth:sanctum` rather than the local-field guard, because a session is
  * meaningless without the user whose token it belongs to.
+ *
+ * The `workstation` guard is accepted alongside it because a Kiosk needs the
+ * same document and has no bearer token to ask for it with (AUTH-030). Which
+ * credential a caller used changes nothing about the answer: the roles and
+ * capabilities are the active user's, and the workstation's pinned context
+ * grants no authority of its own (technical spec 13.3).
  */
 Route::get('/me', [SessionController::class, 'show'])
-    ->middleware('auth:sanctum')
+    ->middleware('auth:sanctum,workstation')
     ->name('api.me');
 
 // Branding is chrome, not operational content: every signed-in user of an
