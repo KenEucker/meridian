@@ -379,7 +379,7 @@ class EquipmentWorkflowTest extends TestCase
     {
         [$shift, $staff, , $shiftLead, $equipment] = $this->scheduledScenario();
 
-        $checkoutResponse = $this->actingAs($shiftLead)
+        $checkoutResponse = $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/checkout-equipment', [
                 'equipment_item_id' => $equipment->id,
                 'staff_id' => $staff->id,
@@ -395,7 +395,7 @@ class EquipmentWorkflowTest extends TestCase
 
         $checkoutId = (string) $checkoutResponse->json('equipment_checkout_id');
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/checkout-equipment', [
                 'equipment_item_id' => $equipment->id,
                 'staff_id' => $staff->id,
@@ -406,7 +406,7 @@ class EquipmentWorkflowTest extends TestCase
             ->assertJsonPath('equipment_checkout_id', $checkoutId)
             ->assertJsonPath('created_state_change', false);
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/return-equipment', [
                 'equipment_checkout_id' => $checkoutId,
                 'return_condition' => EquipmentItem::STATUS_RETURNED,

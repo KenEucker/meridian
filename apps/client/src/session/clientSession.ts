@@ -167,6 +167,26 @@ function reevaluate(now: Date): void {
   install(state.document, "cache", now);
 }
 
+/**
+ * What to do when the node refuses the credential this session was resolved
+ * with (M16.11).
+ *
+ * A registration rather than an import, because the credential belongs to
+ * `apiLogin` and the session belongs here. A refused token is not this module's
+ * to dispose of, but it is this module that finds out — the refusal arrives as
+ * the answer to a refresh — and a client that dropped the session while keeping
+ * the dead token would sit there re-sending it.
+ */
+type SessionCredentialRefusedListener = () => void;
+
+let credentialRefused: SessionCredentialRefusedListener | null = null;
+
+export function registerSessionCredentialRefusedListener(
+  listener: SessionCredentialRefusedListener | null,
+): void {
+  credentialRefused = listener;
+}
+
 /** Drop the session and its durable copy. */
 export function clearClientSession(): void {
   clearCachedSession();
@@ -268,6 +288,7 @@ export async function refreshClientSession(
       (error.status === 401 || error.status === 403)
     ) {
       clearClientSession();
+      credentialRefused?.();
 
       return "unauthenticated";
     }

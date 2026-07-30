@@ -195,11 +195,10 @@ class NodeHealthReportTest extends TestCase
         $this->assertNotSame('', $payload->overallStatus);
         $this->assertArrayHasKey('queued_operations', $payload->summary);
 
-        // Nothing configuration-like leaks: the database credentials from the
-        // test environment and the well-known local-field token must not
-        // appear anywhere in a report (SYS-039).
+        // Nothing configuration-like leaks: neither the database credentials
+        // from the test environment nor the application key may appear anywhere
+        // in a report (SYS-039).
         $this->assertStringNotContainsString('DB_PASSWORD', $serialized);
-        $this->assertStringNotContainsString('local-field-dev-token', $serialized);
         $this->assertStringNotContainsString((string) config('app.key'), $serialized);
 
         foreach ($payload->warnings as $warning) {

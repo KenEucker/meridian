@@ -266,7 +266,7 @@ class DeploymentAssignmentTest extends TestCase
             'assigned_at' => '2026-07-01T09:15:00Z',
         ];
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/set-current-deployment', $payload)
             ->assertCreated()
             ->assertJsonPath('shift_id', $shift->id)
@@ -274,7 +274,7 @@ class DeploymentAssignmentTest extends TestCase
             ->assertJsonPath('deployment_id', $deployment->id)
             ->assertJsonPath('created_state_change', true);
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/set-current-deployment', $payload)
             ->assertCreated()
             ->assertJsonPath('created_state_change', false);

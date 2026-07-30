@@ -29,7 +29,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
         $team = Team::factory()->for($department)->create(['name' => 'Dirt', 'code' => 'DIRT']);
         [$staff, $staffUser] = $this->departmentStaff($department, 'Sam');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-team-lead', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -53,14 +53,14 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
         ]);
 
         // The designated lead now has scoped team-lead access to the led team.
-        $this->actingAs($staffUser)
+        $this->actingAsClient($staffUser)
             ->getJson("/api/departments/{$department->id}/teams")
             ->assertOk()
             ->assertJsonPath('access.can_view_led_teams', true)
             ->assertJsonPath('access.led_team_ids.0', $team->id);
 
         // Removing the lead keeps the membership but drops lead authority.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/remove-team-lead', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -74,7 +74,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
             'actor_user_id' => $actor->id,
         ]);
 
-        $this->actingAs($staffUser)
+        $this->actingAsClient($staffUser)
             ->getJson("/api/departments/{$department->id}/teams")
             ->assertForbidden();
     }
@@ -87,7 +87,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
 
         [$teamLeadUser] = $this->teamLeadFor($team);
 
-        $this->actingAs($teamLeadUser)
+        $this->actingAsClient($teamLeadUser)
             ->postJson('/api/commands/select-team-lead', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -96,7 +96,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
 
         [, $otherAdmin] = $this->departmentWithSelfAdmin('department_lead');
 
-        $this->actingAs($otherAdmin)
+        $this->actingAsClient($otherAdmin)
             ->postJson('/api/commands/select-team-lead', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -110,7 +110,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
         $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
         $outsideStaff = Staff::factory()->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-team-lead', [
                 'staff_id' => $outsideStaff->id,
                 'team_id' => $team->id,
@@ -128,7 +128,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
 
         [$teamLeadUser] = $this->teamLeadFor($team);
 
-        $this->actingAs($teamLeadUser)
+        $this->actingAsClient($teamLeadUser)
             ->postJson('/api/commands/assign-staff-to-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -143,14 +143,14 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
             'source_context' => 'api',
         ]);
 
-        $this->actingAs($teamLeadUser)
+        $this->actingAsClient($teamLeadUser)
             ->postJson('/api/commands/assign-staff-to-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $peerTeam->id,
             ])
             ->assertForbidden();
 
-        $this->actingAs($teamLeadUser)
+        $this->actingAsClient($teamLeadUser)
             ->postJson('/api/commands/remove-staff-from-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -175,7 +175,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
         $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
         [$staff] = $this->departmentStaff($department, 'Vera');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/assign-staff-to-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -192,7 +192,7 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
             ->firstOrFail();
         [$staff] = $this->departmentStaff($department, 'Vera', assignDefaultTeam: true);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/remove-staff-from-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $defaultTeam->id,
@@ -215,14 +215,14 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
             ['status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF],
         );
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/assign-staff-to-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
             ])
             ->assertUnprocessable();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-team-lead', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
@@ -238,14 +238,14 @@ class TeamLeadAndStaffAssignmentHttpTest extends TestCase
         [$staff] = $this->departmentStaff($department, 'Vera');
         [, $plainUser] = $this->departmentStaff($department, 'Plain');
 
-        $this->actingAs($plainUser)
+        $this->actingAsClient($plainUser)
             ->postJson('/api/commands/assign-staff-to-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,
             ])
             ->assertForbidden();
 
-        $this->actingAs($plainUser)
+        $this->actingAsClient($plainUser)
             ->postJson('/api/commands/remove-staff-from-team', [
                 'staff_id' => $staff->id,
                 'team_id' => $team->id,

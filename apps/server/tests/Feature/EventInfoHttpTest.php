@@ -30,7 +30,7 @@ class EventInfoHttpTest extends TestCase
     {
         [$event, , , $actor] = $this->eventWithStaff();
 
-        $response = $this->actingAs($actor)
+        $response = $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('event.id', (string) $event->id)
@@ -68,7 +68,7 @@ class EventInfoHttpTest extends TestCase
             'markdown_source' => 'Bring dust goggles and a working headlamp.',
         ]);
 
-        $response = $this->actingAs($actor)
+        $response = $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.0.documents.0.title', 'Getting Here')
@@ -110,7 +110,7 @@ class EventInfoHttpTest extends TestCase
             'archived_at' => now(),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.0.documents', [])
@@ -144,7 +144,7 @@ class EventInfoHttpTest extends TestCase
             'event_info_section' => EventInfoSection::HOUSING,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.4.section', EventInfoSection::HOUSING)
@@ -159,7 +159,7 @@ class EventInfoHttpTest extends TestCase
             'membership_role' => 'member',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonCount(1, 'sections.4.documents')
@@ -183,7 +183,7 @@ class EventInfoHttpTest extends TestCase
             'event_info_section' => EventInfoSection::FOOD,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.3.section', EventInfoSection::FOOD)
@@ -200,7 +200,7 @@ class EventInfoHttpTest extends TestCase
         $outsider = User::factory()->create();
         $outsider->staffProfiles()->attach(Staff::factory()->create()->id);
 
-        $this->actingAs($outsider)
+        $this->actingAsClient($outsider)
             ->getJson("/api/events/{$event->id}/info")
             ->assertForbidden()
             ->assertJsonPath('message', 'Event information requires staff standing in this event organization.');
@@ -210,7 +210,7 @@ class EventInfoHttpTest extends TestCase
     {
         [$event, $organization, $department, $actor] = $this->eventWithStaff('department_lead');
 
-        $document = $this->actingAs($actor)
+        $document = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-procedure-document', [
                 'organization_id' => $organization->id,
                 'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
@@ -225,7 +225,7 @@ class EventInfoHttpTest extends TestCase
             ->assertJsonPath('event_info_section_label', 'Arrival requirements')
             ->json();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/publish-procedure-document', [
                 'document_id' => $document['id'],
                 'reason' => 'Ready for staff.',
@@ -234,12 +234,12 @@ class EventInfoHttpTest extends TestCase
             ->assertJsonPath('event_info_section', EventInfoSection::ARRIVAL)
             ->assertJsonPath('version', '1.00');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.1.documents.0.title', 'Arrival Checklist');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-procedure-document', [
                 'document_id' => $document['id'],
                 'organization_id' => $organization->id,
@@ -256,7 +256,7 @@ class EventInfoHttpTest extends TestCase
             ->assertJsonPath('version', '1.00')
             ->assertJsonPath('state', ProcedureDocument::STATE_PUBLISHED);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/info")
             ->assertOk()
             ->assertJsonPath('sections.1.documents', []);
@@ -266,7 +266,7 @@ class EventInfoHttpTest extends TestCase
     {
         [, $organization, $department, $actor] = $this->eventWithStaff('department_lead');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-procedure-document', [
                 'organization_id' => $organization->id,
                 'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,

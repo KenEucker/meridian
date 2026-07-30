@@ -3,7 +3,6 @@
 use App\Services\Node\EventAuthorityException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
-use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -13,11 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias([
-            'local.field' => \App\Http\Middleware\AuthenticateLocalFieldApi::class,
-        ]);
-    })
+    // Framework defaults, with nothing added. Meridian's own aliases went with
+    // the `local.field` shared-token middleware (M16.11); the API authenticates
+    // through the `sanctum` and `workstation` guards, which are configured in
+    // config/auth.php rather than aliased here. The call itself is still
+    // required — it is what installs the default `web` and `api` middleware
+    // groups on the HTTP kernel.
+    ->withMiddleware()
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),

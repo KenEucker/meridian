@@ -181,12 +181,30 @@ Route::get('/me', [SessionController::class, 'show'])
 
 // Branding is chrome, not operational content: every signed-in user of an
 // organization sees its identity on every screen (BRAND-002), and a device
-// resolves it before a session exists. Keeping this behind the local-field
-// guard meant the client could not read branding without a dev API token.
+// resolves it before a session exists, which is why this one read carries no
+// credential at all.
 Route::get('/organizations/{organization}/branding', [BrandingReadController::class, 'show'])
     ->name('api.organizations.branding.show');
 
-Route::middleware('local.field')->group(function (): void {
+/*
+ * Everything a client application reads and writes (AUTH-018; technical spec
+ * 11.4; M16.11).
+ *
+ * The credential is a device-bound bearer token. Until this task these routes
+ * sat behind `local.field`, a shared token configured on the node that
+ * authenticated every caller as one seeded fixture user; that middleware and its
+ * configuration are gone, so there is no longer any way to reach an operational
+ * endpoint without a token issued to a person.
+ *
+ * The `workstation` guard is accepted alongside `sanctum` for the same reason
+ * `GET /api/me` accepts it: a Kiosk holds a shared-workstation session key
+ * rather than a personal token (AUTH-030), and a shared workstation that could
+ * not check anybody in would not be a shared workstation. Which credential a
+ * caller presents changes nothing about what follows — every endpoint in here
+ * authorizes the resolved user against the same policies, and the workstation's
+ * pinned context grants no authority of its own (technical spec 13.3).
+ */
+Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/check-in-staff', [AttendanceCommandController::class, 'checkIn'])
         ->name('api.commands.check-in-staff');
 

@@ -9,7 +9,10 @@ import {
   clearFieldSession,
   installDevelopmentFieldSession,
 } from "@/field-reports/fieldSession";
+import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
+import { adoptHeldApiToken } from "@/session/apiLogin";
+import { clearApiToken, storeApiToken } from "@/session/apiToken";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
@@ -28,6 +31,8 @@ afterEach(() => {
   configureMeridianApi(null);
   clearFieldSession();
   clearClientSession();
+  clearApiToken();
+  adoptHeldApiToken();
   resetSelectedSessionDepartment();
   vi.unstubAllGlobals();
 });
@@ -120,14 +125,23 @@ describe("shared client shell", () => {
       "Reachable (ok); server 1.2.3.",
     );
     expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
-      "Missing VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN.",
+      "Not signed in; commands are held on this device.",
     );
   });
 
-  it("renders configured local Field command diagnostics on the settings/about route", async () => {
+  it("renders command diagnostics for a signed-in device on the settings/about route", async () => {
+    storeApiToken({
+      token: "device-token",
+      user: {
+        id: LOCAL_FIELD_FIXTURE.submittedByUserId,
+        name: "Local Field Author",
+        email: "local-field-author@example.test",
+      },
+    });
+    adoptHeldApiToken();
     configureMeridianApi({
       baseUrl: "http://localhost:8000",
-      bearerToken: "local-field-dev-token",
+      bearerToken: "device-token",
     });
     installDevelopmentFieldSession();
     vi.stubGlobal(
@@ -161,7 +175,7 @@ describe("shared client shell", () => {
     await flushPromises();
 
     const healthText = wrapper.get('[aria-label="Operational health"]').text();
-    expect(healthText).toContain("Configured for local Field command uploads.");
+    expect(healthText).toContain("Signed in as Local Field Author");
     expect(healthText).toContain("Local Field Event");
     expect(healthText).not.toContain("null");
     expect(healthText).toContain("Ready; no pending Field Report work.");

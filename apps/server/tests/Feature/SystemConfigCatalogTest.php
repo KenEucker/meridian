@@ -56,7 +56,7 @@ class SystemConfigCatalogTest extends TestCase
     {
         foreach ([
             'APP_KEY', 'DB_PASSWORD', 'MAIL_PASSWORD', 'AWS_SECRET_ACCESS_KEY', 'REDIS_PASSWORD',
-            'GOOGLE_OAUTH_CLIENT_SECRET', 'DISCORD_OAUTH_CLIENT_SECRET', 'MERIDIAN_LOCAL_FIELD_API_TOKEN',
+            'GOOGLE_OAUTH_CLIENT_SECRET', 'DISCORD_OAUTH_CLIENT_SECRET',
             'MERIDIAN_CHANGELOG_TOKEN', 'MERIDIAN_NODE_PRIVATE_KEY',
         ] as $name) {
             $this->assertTrue($this->catalog()->entry($name)?->secret, "{$name} should be secret");

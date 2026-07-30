@@ -43,7 +43,7 @@ class IncidentListPresetHttpTest extends TestCase
             'priority_label' => Incident::PRIORITY_ROUTINE,
         ]);
 
-        $saved = $this->actingAs($viewer)
+        $saved = $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'Critical only',
@@ -64,13 +64,13 @@ class IncidentListPresetHttpTest extends TestCase
         $presetId = $saved->json('preset.id');
         $query = http_build_query($saved->json('preset.query'));
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?{$query}")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $critical->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonPath('presets.0.id', $presetId)
@@ -83,7 +83,7 @@ class IncidentListPresetHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $viewer = $this->userWithEventRole('ic_viewer', $event);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'Second page',
@@ -101,7 +101,7 @@ class IncidentListPresetHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $viewer = $this->userWithEventRole('ic_viewer', $event);
 
-        $first = $this->actingAs($viewer)
+        $first = $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'My view',
@@ -109,7 +109,7 @@ class IncidentListPresetHttpTest extends TestCase
             ])
             ->assertCreated();
 
-        $second = $this->actingAs($viewer)
+        $second = $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'my view',
@@ -130,7 +130,7 @@ class IncidentListPresetHttpTest extends TestCase
 
         // Laravel trims before `required`, so a whitespace-only name is refused
         // at the request layer; the service keeps the same rule for direct use.
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => '   ',
@@ -139,14 +139,14 @@ class IncidentListPresetHttpTest extends TestCase
 
         $this->assertSame(0, IncidentListPreset::query()->count());
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => str_repeat('a', IncidentListPreset::MAX_NAME_LENGTH + 1),
             ])
             ->assertStatus(422);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'Bad filters',
@@ -160,7 +160,7 @@ class IncidentListPresetHttpTest extends TestCase
             ->count(IncidentListPreset::MAX_PER_USER_PER_EVENT)
             ->create();
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->postJson('/api/commands/save-incident-list-preset', [
                 'event_id' => $event->id,
                 'name' => 'One too many',
@@ -189,18 +189,18 @@ class IncidentListPresetHttpTest extends TestCase
             ->forUser($owner)
             ->create(['name' => 'Other event view']);
 
-        $this->actingAs($owner)
+        $this->actingAsClient($owner)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonPath('presets.0.name', 'Owner view')
             ->assertJsonCount(1, 'presets');
 
-        $this->actingAs($otherIcUser)
+        $this->actingAsClient($otherIcUser)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonCount(0, 'presets');
 
-        $this->actingAs($otherIcUser)
+        $this->actingAsClient($otherIcUser)
             ->postJson('/api/commands/delete-incident-list-preset', [
                 'event_id' => $event->id,
                 'preset_id' => $ownPreset->id,
@@ -220,7 +220,7 @@ class IncidentListPresetHttpTest extends TestCase
             ->forUser($owner)
             ->create(['name' => 'Temporary view']);
 
-        $this->actingAs($owner)
+        $this->actingAsClient($owner)
             ->postJson('/api/commands/delete-incident-list-preset', [
                 'event_id' => $event->id,
                 'preset_id' => $preset->id,
@@ -244,7 +244,7 @@ class IncidentListPresetHttpTest extends TestCase
         ])->assertUnauthorized();
 
         foreach ([$organizer, $revoked, $wrongEventViewer] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/save-incident-list-preset', [
                     'event_id' => $event->id,
                     'name' => 'Denied view',
@@ -255,7 +255,7 @@ class IncidentListPresetHttpTest extends TestCase
                     'This page requires Incident Command access for the event configured IC department.',
                 );
 
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/delete-incident-list-preset', [
                     'event_id' => $event->id,
                     'preset_id' => (string) Str::uuid(),

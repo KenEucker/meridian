@@ -28,6 +28,7 @@ import {
   describeConnectivityState,
   type ConnectivityState,
 } from "@/offline/syncStatus";
+import { signedIn, signOut } from "@/session/apiLogin";
 import {
   clientSessionState,
   refreshClientSessionOnReconnect,
@@ -218,6 +219,25 @@ const connectionStatus = computed(() =>
 const showContextSwitching = computed(
   () => appConfig.value.uiMode !== "kiosk" && sessionSwitchingAvailable.value,
 );
+
+/*
+ * Personal sign-in belongs to a personal device (M16.11; AUTH-018, AUTH-030).
+ *
+ * A Kiosk is somebody else's machine for five minutes at a time: it holds a
+ * shared-workstation session rather than a token, code entry is its own surface,
+ * and ending the session is the session bar's job. Offering "sign in" or "sign
+ * out" in the shell menu there would be a second, wrong way to do both.
+ */
+const showsPersonalSignIn = computed(
+  () => appConfig.value.uiMode !== "kiosk",
+);
+
+async function signOutOfDevice(): Promise<void> {
+  closeUserMenu();
+
+  await signOut();
+  await router?.push?.({ name: "login" });
+}
 
 /**
  * Why the entries are absent, stated as one line rather than as a disabled
@@ -770,11 +790,26 @@ onBeforeUnmount(() => {
                   </span>
                 </button>
               </div>
+              <!--
+                Signing in and out of this device (M16.11; AUTH-018).
+
+                A Kiosk is excluded from both: a shared workstation holds a
+                session rather than a token, it signs in by typed code on its own
+                surface, and its sign-out is the session bar's (AUTH-030).
+              -->
+              <RouterLink
+                v-if="showsPersonalSignIn && !signedIn"
+                role="menuitem"
+                :to="{ name: 'login' }"
+                @click="closeUserMenu"
+              >
+                Sign in
+              </RouterLink>
               <button
+                v-else-if="showsPersonalSignIn"
                 type="button"
                 role="menuitem"
-                aria-disabled="true"
-                @click="closeUserMenu"
+                @click="signOutOfDevice"
               >
                 Sign out
               </button>

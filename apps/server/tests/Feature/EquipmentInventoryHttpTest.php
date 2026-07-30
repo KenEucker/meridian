@@ -31,7 +31,7 @@ class EquipmentInventoryHttpTest extends TestCase
         [$department, $logistics] = $this->departmentWithRole('department_logistics');
         $event = Event::factory()->for($department->organization)->create();
 
-        $item = $this->actingAs($logistics)
+        $item = $this->actingAsClient($logistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Radio 12',
@@ -60,7 +60,7 @@ class EquipmentInventoryHttpTest extends TestCase
             'entity_id' => $item['id'],
         ]);
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->getJson("/api/departments/{$department->id}/equipment")
             ->assertOk()
             ->assertJsonCount(1, 'equipment')
@@ -73,7 +73,7 @@ class EquipmentInventoryHttpTest extends TestCase
     {
         [$department, $lead] = $this->departmentWithRole('department_lead');
 
-        $item = $this->actingAs($lead)
+        $item = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Vest 3',
@@ -81,7 +81,7 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertCreated()
             ->json();
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $item['id'],
                 'name' => 'Vest 3 (Large)',
@@ -97,7 +97,7 @@ class EquipmentInventoryHttpTest extends TestCase
             'entity_id' => $item['id'],
         ]);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/archive-equipment-item', ['equipment_item_id' => $item['id']])
             ->assertOk()
             ->assertJsonPath('archived_at', fn ($value) => $value !== null);
@@ -106,19 +106,19 @@ class EquipmentInventoryHttpTest extends TestCase
         // active inventory a Logistics maintainer picks from.
         $this->assertDatabaseHas('equipment_items', ['id' => $item['id']]);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->getJson("/api/departments/{$department->id}/equipment?status=active")
             ->assertOk()
             ->assertJsonCount(0, 'equipment');
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $item['id'],
                 'name' => 'Edited While Archived',
             ])
             ->assertStatus(422);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/restore-equipment-item', ['equipment_item_id' => $item['id']])
             ->assertOk()
             ->assertJsonPath('archived_at', null);
@@ -155,7 +155,7 @@ class EquipmentInventoryHttpTest extends TestCase
         ]);
 
         // Checked out and Returned are produced by check-in/check-out only.
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $item->id,
                 'name' => 'Radio 20',
@@ -164,7 +164,7 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertStatus(422);
 
         // A state correction cannot bypass an open checkout either.
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $item->id,
                 'name' => 'Radio 20',
@@ -173,12 +173,12 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', fn ($value) => str_contains((string) $value, 'Logistics Window'));
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/archive-equipment-item', ['equipment_item_id' => $item->id])
             ->assertStatus(422);
 
         // Non-state edits still work while the item is out.
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $item->id,
                 'name' => 'Radio 20 (Handheld)',
@@ -186,7 +186,7 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', EquipmentItem::STATUS_CHECKED_OUT);
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->getJson("/api/departments/{$department->id}/equipment")
             ->assertOk()
             ->assertJsonPath('equipment.0.has_open_checkout', true);
@@ -196,7 +196,7 @@ class EquipmentInventoryHttpTest extends TestCase
     {
         [$department, $logistics] = $this->departmentWithRole('department_logistics');
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Radio 12',
@@ -204,7 +204,7 @@ class EquipmentInventoryHttpTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Radio 12 Duplicate',
@@ -215,7 +215,7 @@ class EquipmentInventoryHttpTest extends TestCase
         // Another department may reuse the same physical labelling scheme.
         [$otherDepartment, $otherLogistics] = $this->departmentWithRole('department_logistics');
 
-        $this->actingAs($otherLogistics)
+        $this->actingAsClient($otherLogistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $otherDepartment->id,
                 'name' => 'Radio 12',
@@ -229,7 +229,7 @@ class EquipmentInventoryHttpTest extends TestCase
         [$department, $logistics] = $this->departmentWithRole('department_logistics');
         $foreignEvent = Event::factory()->for(Organization::factory()->create())->create();
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Borrowed Radio',
@@ -253,7 +253,7 @@ class EquipmentInventoryHttpTest extends TestCase
             'Vest 1,,,',
         ]);
 
-        $result = $this->actingAs($logistics)
+        $result = $this->actingAsClient($logistics)
             ->postJson('/api/commands/import-equipment-inventory', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,
@@ -281,7 +281,7 @@ class EquipmentInventoryHttpTest extends TestCase
 
         // Re-running the same file skips everything with an asset tag rather
         // than duplicating equipment; only the untagged vest is created again.
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/import-equipment-inventory', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,
@@ -304,7 +304,7 @@ class EquipmentInventoryHttpTest extends TestCase
     {
         [$department, $logistics] = $this->departmentWithRole('department_logistics');
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/import-equipment-inventory', [
                 'department_id' => $department->id,
                 'csv' => "asset_tag,serial_number\nRAD-012,SN-0012",
@@ -312,7 +312,7 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('message', 'The CSV must include a "name" header column.');
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/import-equipment-inventory', [
                 'department_id' => $department->id,
                 'csv' => '   ',
@@ -327,7 +327,7 @@ class EquipmentInventoryHttpTest extends TestCase
         [, $staffUser] = $this->departmentWithRole('staff');
         [, $otherLogistics] = $this->departmentWithRole('department_logistics');
 
-        $item = $this->actingAs($logistics)
+        $item = $this->actingAsClient($logistics)
             ->postJson('/api/commands/create-equipment-item', [
                 'department_id' => $department->id,
                 'name' => 'Radio 12',
@@ -336,29 +336,29 @@ class EquipmentInventoryHttpTest extends TestCase
             ->json();
 
         foreach ([$staffUser, $otherLogistics] as $denied) {
-            $this->actingAs($denied)
+            $this->actingAsClient($denied)
                 ->getJson("/api/departments/{$department->id}/equipment")
                 ->assertForbidden();
 
-            $this->actingAs($denied)
+            $this->actingAsClient($denied)
                 ->postJson('/api/commands/create-equipment-item', [
                     'department_id' => $department->id,
                     'name' => 'Unauthorized Radio',
                 ])
                 ->assertForbidden();
 
-            $this->actingAs($denied)
+            $this->actingAsClient($denied)
                 ->postJson('/api/commands/update-equipment-item', [
                     'equipment_item_id' => $item['id'],
                     'name' => 'Hijacked Radio',
                 ])
                 ->assertForbidden();
 
-            $this->actingAs($denied)
+            $this->actingAsClient($denied)
                 ->postJson('/api/commands/archive-equipment-item', ['equipment_item_id' => $item['id']])
                 ->assertForbidden();
 
-            $this->actingAs($denied)
+            $this->actingAsClient($denied)
                 ->postJson('/api/commands/import-equipment-inventory', [
                     'department_id' => $department->id,
                     'csv' => "name\nUnauthorized Radio",
@@ -375,7 +375,7 @@ class EquipmentInventoryHttpTest extends TestCase
             'name' => 'Organization Spare',
         ]);
 
-        $this->actingAs($logistics)
+        $this->actingAsClient($logistics)
             ->postJson('/api/commands/update-equipment-item', [
                 'equipment_item_id' => $organizationItem->id,
                 'name' => 'Claimed Spare',

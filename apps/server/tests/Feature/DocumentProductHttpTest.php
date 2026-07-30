@@ -28,7 +28,7 @@ class DocumentProductHttpTest extends TestCase
     {
         [$organization, $actor] = $this->organizationWithRole('organizer');
 
-        $fragment = $this->actingAs($actor)
+        $fragment = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-document-fragment', [
                 'organization_id' => $organization->id,
                 'scope_type' => DocumentFragment::SCOPE_ORGANIZATION,
@@ -41,7 +41,7 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('name', 'Conduct Baseline')
             ->json();
 
-        $policy = $this->actingAs($actor)
+        $policy = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-policy-document', [
                 'organization_id' => $organization->id,
                 'scope_type' => PolicyDocument::SCOPE_ORGANIZATION,
@@ -56,7 +56,7 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('fragment_references.0.fragment_id', $fragment['id'])
             ->json();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/publish-policy-document', [
                 'document_id' => $policy['id'],
                 'reason' => 'Ready for staff visibility.',
@@ -65,14 +65,14 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('state', PolicyDocument::STATE_PUBLISHED)
             ->assertJsonPath('visibility_summary', 'Published to staff in this organization.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/documents")
             ->assertOk()
             ->assertJsonCount(1, 'documents')
             ->assertJsonCount(1, 'fragments')
             ->assertJsonPath('documents.0.title', 'Volunteer Conduct');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->get("/api/policy-documents/{$policy['id']}/export/markdown")
             ->assertOk()
             ->assertSee('Be excellent to each other.');
@@ -88,7 +88,7 @@ class DocumentProductHttpTest extends TestCase
     {
         [$department, $actor] = $this->departmentWithRole('department_lead');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-procedure-document', [
                 'organization_id' => $department->organization_id,
                 'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
@@ -101,7 +101,7 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('document_type', 'procedure')
             ->assertJsonPath('scope_label', 'Department: Rangers');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-policy-document', [
                 'organization_id' => $department->organization_id,
                 'scope_type' => PolicyDocument::SCOPE_ORGANIZATION,
@@ -133,7 +133,7 @@ class DocumentProductHttpTest extends TestCase
 
         app(DocumentFragmentReferenceService::class)->synchronize($document);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-document-fragment', [
                 'fragment_id' => $fragment->id,
                 'organization_id' => $team->department->organization_id,
@@ -175,7 +175,7 @@ class DocumentProductHttpTest extends TestCase
             'name' => 'Maintainer Fragment',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$department->organization_id}/documents")
             ->assertOk()
             ->assertJsonCount(1, 'documents')

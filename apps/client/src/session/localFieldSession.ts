@@ -27,7 +27,10 @@ import {
   LOCAL_FIELD_FIXTURE,
   LOCAL_FIELD_TEAM_IDS,
 } from "@/field-reports/localFieldFixture";
-import { installClientSession } from "@/session/clientSession";
+import {
+  clientSessionState,
+  installClientSession,
+} from "@/session/clientSession";
 import {
   CAPABILITY_DEPARTMENT_ADMINISTER,
   CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
@@ -379,11 +382,16 @@ export function installLocalFieldSession(
 
 /**
  * Install the local development session when the environment asks for it and
- * the node did not answer.
+ * the client has no session of its own.
  *
  * Shares `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` with the Field Report
  * development session: they stand for the same seeded staff member on the same
  * seeded node, and two switches for one fixture is one switch too many.
+ *
+ * A client that already holds a document keeps it, cached copies included
+ * (M16.11). A developer can now sign in for real, and a real session that was
+ * resolved yesterday and is being booted from cache today must not be replaced
+ * by a fixture because the node happened to be unreachable this morning.
  */
 export function installLocalFieldSessionFromEnv(
   env: Pick<
@@ -391,7 +399,10 @@ export function installLocalFieldSessionFromEnv(
     "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"
   > = import.meta.env,
 ): boolean {
-  if (env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true") {
+  if (
+    env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true" ||
+    clientSessionState.document !== null
+  ) {
     return false;
   }
 

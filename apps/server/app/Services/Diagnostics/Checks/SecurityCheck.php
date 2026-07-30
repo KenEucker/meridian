@@ -60,15 +60,6 @@ class SecurityCheck implements DiagnosticCheck
             $critical[] = 'The application URL is not HTTPS while this node is in event mode.';
         }
 
-        if ((bool) config('meridian.local_field_api.enabled') && ! $local) {
-            $critical[] = 'The development-only local Field API is enabled outside local development.';
-        }
-
-        if ((bool) config('meridian.local_field_api.enabled')
-            && config('meridian.local_field_api.token') === 'local-field-dev-token') {
-            $warnings[] = 'The local Field API is using its well-known default token.';
-        }
-
         if (! $eventMode && ! $local && ! str_starts_with($appUrl, 'https://')) {
             $warnings[] = 'The application URL is not HTTPS.';
         }

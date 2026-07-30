@@ -28,7 +28,7 @@ class OrganizerStaffHttpTest extends TestCase
             'code' => 'RANGERS',
         ]);
 
-        $create = $this->actingAs($actor)
+        $create = $this->actingAsClient($actor)
             ->postJson('/api/commands/add-organization-staff', [
                 'organization_id' => $organization->id,
                 'legal_name' => '  Avery Staff  ',
@@ -66,7 +66,7 @@ class OrganizerStaffHttpTest extends TestCase
             'source_context' => AuditEvent::SOURCE_API,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/staff")
             ->assertOk()
             ->assertJsonPath('organization_id', $organization->id)
@@ -76,7 +76,7 @@ class OrganizerStaffHttpTest extends TestCase
                 'organization_status' => StaffOrganizationStatus::STATUS_ACTIVE,
             ]);
 
-        $lead = $this->actingAs($actor)
+        $lead = $this->actingAsClient($actor)
             ->postJson('/api/commands/select-department-lead', [
                 'department_id' => $department->id,
                 'staff_id' => $staffId,
@@ -100,7 +100,7 @@ class OrganizerStaffHttpTest extends TestCase
             'department_id' => $department->id,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/remove-department-lead', [
                 'department_id' => $department->id,
                 'staff_id' => $staffId,
@@ -121,7 +121,7 @@ class OrganizerStaffHttpTest extends TestCase
         [$organization, $actor] = $this->organizationWithOrganizer('lead_organizer');
         $staff = Staff::factory()->create(['email' => 'shared@example.test']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/add-organization-staff', [
                 'organization_id' => $organization->id,
                 'legal_name' => 'Ignored Name',
@@ -145,7 +145,7 @@ class OrganizerStaffHttpTest extends TestCase
             ->active()
             ->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/add-organization-staff', [
                 'organization_id' => $organization->id,
                 'legal_name' => 'Known Staff',
@@ -169,11 +169,11 @@ class OrganizerStaffHttpTest extends TestCase
         $actorStaff = Staff::factory()->create();
         $actor->staffProfiles()->attach($actorStaff->id);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/staff")
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/add-organization-staff', [
                 'organization_id' => $organization->id,
                 'legal_name' => 'Denied',
@@ -181,7 +181,7 @@ class OrganizerStaffHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-department-lead', [
                 'department_id' => $department->id,
                 'staff_id' => $staff->id,
@@ -199,7 +199,7 @@ class OrganizerStaffHttpTest extends TestCase
             ->for($staff)
             ->create(['status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-department-lead', [
                 'department_id' => $department->id,
                 'staff_id' => $staff->id,
@@ -223,7 +223,7 @@ class OrganizerStaffHttpTest extends TestCase
             ->for($staff)
             ->create(['status' => DepartmentMembership::STATUS_INELIGIBLE]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/select-department-lead', [
                 'department_id' => $department->id,
                 'staff_id' => $staff->id,

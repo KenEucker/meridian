@@ -16,7 +16,7 @@ Verify that Meridian central authentication supports a verified-email magic-link
 - Data/API spec: Section 12.4 `shared_workstation_login_codes`
 - Data/API spec: Section 12.5 API tokens
 - Data/API spec: Section 12.6 `shared_workstation_sessions`
-- UI Implementation Contract: Section 12.1 (`auth.login`, `auth.magic-link-sent`)
+- UI Implementation Contract: Section 12.1 (`auth.login`, `auth.magic-link-sent`, `auth.code-entry`)
 - UI Implementation Contract: Section 12.8 (`kiosk.home`, `kiosk.workstation-login`, `kiosk.safe-timeout`)
 - UI Implementation Contract: Section 12.9 (`orchid.api-tokens`)
 
@@ -235,6 +235,35 @@ localStorage.setItem("meridian.workstation.id", "PASTE-WORKSTATION-UUID");
 55. Sign in again, queue a Field Report offline (see QA-FR-01), then end the session with the session bar's control. Confirm the kiosk lands on `/kiosk/sign-in` and that the queued report is still queued afterwards — sign in again and confirm it is still listed as pending.
 56. With a session live, restart the client (reload the page, or restart the Electron wrapper). Confirm it comes up locked at `/kiosk/sign-in` rather than restoring the previous user, and that `localStorage` holds no session key and no cached session document.
 
+### Signing in from the client application
+
+The steps above stand in for a client with `curl`. These are the same exchange made by the application itself, from the sign-in screens, and they are also the regression cover for the shared token that used to authenticate this API (M16.11).
+
+Seed the development fixture first — it is seed data now, not a credential, and the account is reached by signing in as it:
+
+```bash
+php apps/server/artisan meridian:seed-local-field-fixture
+```
+
+Start the client in Field mode with `pnpm run client:dev:field -- --host 127.0.0.1` and point it at the node from the browser console if it is not already: `localStorage.setItem("meridian.node.url", "http://127.0.0.1:8000")`.
+
+57. Open `http://127.0.0.1:5173/login`, enter `local-field@meridian.test`, and submit. Confirm the application moves to the code entry screen, names the address the code went to, and states how long the code lasts.
+58. Read the code out of the mail log (`pnpm run server:logs -- --filter "login code"`), enter it, and confirm the application lands on Home with the fixture user's name in the shell's user menu.
+59. In the browser console, confirm `localStorage` holds `meridian.api-token.v1` and `meridian.device.id`, and that the stored entry carries the token and no password.
+60. In the God Mode console's **API Tokens** screen, confirm a token is listed for that user, bound to a device labeled for the client application and platform that signed in.
+61. Submit a Field Report from the client (see QA-FR-01) and confirm the node accepts it — the upload path now authenticates with this token and nothing else.
+62. Open the user menu and choose **Sign out**. Confirm the application returns to `/login`, that `meridian.api-token.v1` is gone from `localStorage`, and that the token is refused if it is replayed:
+
+    ```bash
+    curl -i http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "Authorization: Bearer PASTE-TOKEN"
+    ```
+
+63. Confirm the removed shared token authenticates nothing, with or without the settings a node used to carry:
+
+    ```bash
+    curl -i -X POST http://127.0.0.1:8000/api/commands/submit-field-report -H "Content-Type: application/json" -H "Accept: application/json" -H "Authorization: Bearer local-field-dev-token" -d '{"id":"11111111-1111-4111-8111-111111111111","event_id":"11111111-1111-4111-8111-111111111111","title":"Shared token","body":"Should be refused."}'
+    ```
+
 ## Expected results
 
 - `/login` is reachable without authentication.
@@ -276,6 +305,11 @@ localStorage.setItem("meridian.workstation.id", "PASTE-WORKSTATION-UUID");
 - A timeout lands on `/kiosk/timed-out`, which holds no name, event, or record. An explicit end lands on `/kiosk/sign-in`.
 - Ending a session leaves queued Field Reports queued; they are still pending after signing in again.
 - Restarting the client comes up locked, with no session key and no cached session document in `localStorage`.
+- A person signs in to the client application without leaving it: an address, a code, and a session — no browser redirect and no password.
+- The device the client registers appears in the God Mode token list, so a token issued to an application is revocable as a unit of hardware like any other.
+- Field Report upload works under that token, and only under it.
+- Signing out returns the application to `/login`, removes the stored token from the device, and stops that token working on the node.
+- The removed `local.field` shared token authenticates nothing. `Bearer local-field-dev-token` is refused like any other string that is not an issued token, whether or not the settings it used are present.
 - The raw login code and the raw bearer token appear only in the mail body and the HTTP response respectively. Neither appears in `storage/logs/laravel.log` from Meridian's own logging, and neither is stored in readable form — `api_login_codes.code_hash` and `personal_access_tokens.token` hold hashes.
 
 ## Evidence to capture
@@ -297,6 +331,8 @@ localStorage.setItem("meridian.workstation.id", "PASTE-WORKSTATION-UUID");
 - The audit output from step 48 and the stored-session output from step 49.
 - Screenshots of the Kiosk session bar signed in, showing the timeout warning, and of `/kiosk/timed-out` holding no name or event.
 - Screenshot of the pending Field Report still queued after the session ended and a new one began.
+- Screenshots of the client's sign-in and code entry screens, and of the shell user menu showing the signed-in name.
+- The `401` from step 62 after signing out, and the `401` from step 63 for the removed shared token.
 
 ## Failure notes
 

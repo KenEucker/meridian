@@ -60,7 +60,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['organizer'])
+        $response = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned");
 
         $response->assertOk();
@@ -79,7 +79,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent());
@@ -135,7 +135,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent());
@@ -164,7 +164,7 @@ class CreditsEarnedExportTest extends TestCase
             'credit_multiplier' => '2.000',
         ])->save();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent());
@@ -185,7 +185,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent();
@@ -204,7 +204,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario(configureCreditPolicies: false);
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent();
@@ -218,7 +218,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent();
@@ -237,7 +237,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['rangersLead'])
+        $response = $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned");
 
         $response->assertOk();
@@ -256,7 +256,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned?department_id={$scenario['gate']->id}")
             ->assertOk()
             ->getContent());
@@ -268,7 +268,7 @@ class CreditsEarnedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credits-earned")
             ->assertOk()
             ->getContent();
@@ -284,13 +284,13 @@ class CreditsEarnedExportTest extends TestCase
         $eventId = $scenario['event']->id;
 
         // A department lead may not reach another department's credits.
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/credits-earned?department_id={$scenario['gate']->id}")
             ->assertForbidden();
 
         // Plain staff hold no export capability, even over the credits they
         // themselves earned.
-        $this->actingAs($scenario['plainStaffUser'])
+        $this->actingAsClient($scenario['plainStaffUser'])
             ->get("/api/events/{$eventId}/exports/credits-earned")
             ->assertForbidden();
 
@@ -301,12 +301,12 @@ class CreditsEarnedExportTest extends TestCase
             ->where('code', 'organizer')
             ->firstOrFail());
 
-        $this->actingAs($foreignOrganizer)
+        $this->actingAsClient($foreignOrganizer)
             ->get("/api/events/{$eventId}/exports/credits-earned")
             ->assertForbidden();
 
         // A department outside this event's organization is not addressable.
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/credits-earned?department_id={$foreignDepartment->id}")
             ->assertNotFound();
 
@@ -320,7 +320,7 @@ class CreditsEarnedExportTest extends TestCase
         $scenario = $this->scenario();
         $eventId = $scenario['event']->id;
 
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/credits-earned")
             ->assertOk();
 
@@ -343,7 +343,7 @@ class CreditsEarnedExportTest extends TestCase
         $this->assertSame('17.50', $departmentExport->after_json['total_hours']);
         $this->assertSame('17.50', $departmentExport->after_json['total_credits']);
 
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/credits-earned")
             ->assertOk();
 

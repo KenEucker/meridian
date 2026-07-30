@@ -484,7 +484,7 @@ class GovernanceEditFreezeTest extends TestCase
 
         Carbon::setTestNow(self::DURING_WINDOW);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-policy-document', [
                 'document_id' => $policy->getKey(),
                 'organization_id' => $this->organization->getKey(),
@@ -507,7 +507,7 @@ class GovernanceEditFreezeTest extends TestCase
 
         Carbon::setTestNow(self::BEFORE_WINDOW);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-policy-document', [
                 'document_id' => $policy->getKey(),
                 'organization_id' => $this->organization->getKey(),

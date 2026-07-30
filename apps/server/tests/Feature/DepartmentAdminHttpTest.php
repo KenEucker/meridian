@@ -23,7 +23,7 @@ class DepartmentAdminHttpTest extends TestCase
     {
         [$organization, $actor] = $this->organizationWithOrganizer('organizer');
 
-        $create = $this->actingAs($actor)
+        $create = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-department', [
                 'organization_id' => $organization->id,
                 'name' => '  Rangers  ',
@@ -54,13 +54,13 @@ class DepartmentAdminHttpTest extends TestCase
         $this->assertSame($departmentId, $createdAudit->department_id);
         $this->assertSame(AuditEvent::SOURCE_API, $createdAudit->source_context);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/departments")
             ->assertOk()
             ->assertJsonPath('organization_id', $organization->id)
             ->assertJsonFragment(['id' => $departmentId, 'code' => 'RANGERS']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-department', [
                 'department_id' => $departmentId,
                 'name' => 'Rangers Updated',
@@ -77,7 +77,7 @@ class DepartmentAdminHttpTest extends TestCase
             'actor_user_id' => $actor->id,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-department', [
                 'department_id' => $departmentId,
             ])
@@ -90,17 +90,17 @@ class DepartmentAdminHttpTest extends TestCase
             'entity_id' => $departmentId,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/departments?status=archived")
             ->assertOk()
             ->assertJsonFragment(['id' => $departmentId]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/departments?status=active")
             ->assertOk()
             ->assertJsonMissing(['id' => $departmentId]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-department', [
                 'department_id' => $departmentId,
             ])
@@ -113,7 +113,7 @@ class DepartmentAdminHttpTest extends TestCase
             'entity_id' => $departmentId,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/departments/{$departmentId}")
             ->assertOk()
             ->assertJsonPath('name', 'Rangers Updated')
@@ -124,7 +124,7 @@ class DepartmentAdminHttpTest extends TestCase
     {
         [$organization, $actor] = $this->organizationWithOrganizer('lead_organizer');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-department', [
                 'organization_id' => $organization->id,
                 'name' => 'Gate',
@@ -142,11 +142,11 @@ class DepartmentAdminHttpTest extends TestCase
         $staff = Staff::factory()->create();
         $actor->staffProfiles()->attach($staff->id);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/organizations/{$organization->id}/departments")
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-department', [
                 'organization_id' => $organization->id,
                 'name' => 'Denied',
@@ -154,7 +154,7 @@ class DepartmentAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-department', [
                 'department_id' => $department->id,
                 'name' => 'Denied',
@@ -162,7 +162,7 @@ class DepartmentAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-department', [
                 'department_id' => $department->id,
             ])
@@ -174,7 +174,7 @@ class DepartmentAdminHttpTest extends TestCase
         [, $actor] = $this->organizationWithOrganizer('organizer');
         $otherOrganization = Organization::factory()->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-department', [
                 'organization_id' => $otherOrganization->id,
                 'name' => 'Cross Org',
@@ -188,7 +188,7 @@ class DepartmentAdminHttpTest extends TestCase
         [$organization, $actor] = $this->organizationWithOrganizer('organizer');
         Department::factory()->for($organization)->create(['code' => 'RANGERS']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-department', [
                 'organization_id' => $organization->id,
                 'name' => 'Rangers Two',
@@ -203,26 +203,26 @@ class DepartmentAdminHttpTest extends TestCase
         [$organization, $actor] = $this->organizationWithOrganizer('organizer');
         $department = Department::factory()->for($organization)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-department', [
                 'department_id' => $department->id,
             ])
             ->assertOk();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-department', [
                 'department_id' => $department->id,
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Department is already archived.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-department', [
                 'department_id' => $department->id,
             ])
             ->assertOk();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-department', [
                 'department_id' => $department->id,
             ])

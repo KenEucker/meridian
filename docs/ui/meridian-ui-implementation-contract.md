@@ -1194,6 +1194,10 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `auth.provider-callback` | framework route | External provider callback | Public/system |
 | `signup.policy-acknowledgment` | `signup.documents.acknowledge` | Required policy/procedure acknowledgment during signup | Applicant/authenticated user with server connection |
 
+In a client application, `auth.magic-link-sent` is a state of `auth.code-entry` rather than a screen of its own. Both belong to one exchange the person completes in a single sitting, and what the confirmation has to say — which address the code went to, and how long it lasts — is the heading of the screen where the code is typed. The screen stands separately in the browser flow, where the code is not entered in the application at all.
+
+Signing out is offered in the shell's user menu on personal devices, and never on a Kiosk: a shared workstation ends a session from its session bar, holds no personal token to dispose of, and must not become a switcher for somebody's own account (technical spec 13.3).
+
 ### 12.2 Home and Context Screens
 
 | Screen ID | Route name | Purpose | Access |

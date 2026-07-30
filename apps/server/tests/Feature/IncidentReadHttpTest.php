@@ -49,7 +49,7 @@ class IncidentReadHttpTest extends TestCase
             'title' => 'Other event incident',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonPath('event_id', $event->id)
@@ -157,7 +157,7 @@ class IncidentReadHttpTest extends TestCase
             'created_at' => Carbon::parse('2027-07-04T20:30:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
             ->assertOk()
             ->assertJsonPath('event_id', $event->id)
@@ -212,7 +212,7 @@ class IncidentReadHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
             ->assertOk()
             ->assertJsonPath('incident.id', $incident->id);
@@ -228,12 +228,12 @@ class IncidentReadHttpTest extends TestCase
             $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
             $incident = Incident::factory()->forEvent($event)->create();
 
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->getJson("/api/events/{$event->id}/incidents")
                 ->assertForbidden()
                 ->assertJsonPath('message', 'This page requires Incident Command access for the event configured IC department.');
 
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
                 ->assertForbidden()
                 ->assertJsonPath('message', 'This page requires Incident Command access for the event configured IC department.');
@@ -250,11 +250,11 @@ class IncidentReadHttpTest extends TestCase
         $incident = Incident::factory()->forEvent($event)->create();
 
         foreach ([$wrongEventActor, $revokedActor] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->getJson("/api/events/{$event->id}/incidents")
                 ->assertForbidden();
 
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
                 ->assertForbidden();
         }
@@ -278,7 +278,7 @@ class IncidentReadHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event);
         $incident = Incident::factory()->forEvent($otherEvent)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
             ->assertNotFound();
 

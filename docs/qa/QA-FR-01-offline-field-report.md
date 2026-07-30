@@ -45,10 +45,12 @@ smoke where delivered.
   `meridian-signal-camp-wordmark.webp`.
 - At least three terminals: Laravel server, shared client dev server, and QA commands.
 
-The local Field API used here is a development-only bearer-token seam. Keep it
-disabled outside local development. PowerSync transport, signed operation
-envelopes, node countersigning, and node-to-node blob sync remain owned by
-later sync tasks.
+Uploads authenticate with the device-bound bearer token the client holds after
+signing in (AUTH-018; technical spec 11.4), so this run starts by signing in as
+the seeded fixture user. The shared development token that used to authenticate
+this path was removed in M16.11. PowerSync transport, signed operation envelopes,
+node countersigning, and node-to-node blob sync remain owned by later sync
+tasks.
 
 ## Personas
 
@@ -89,10 +91,16 @@ later sync tasks.
    ```bash
    corepack pnpm run client:dev:field -- --host 127.0.0.1
    ```
-6. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
-   an earlier local Field Report run is present. Confirm the empty state says
+6. Open `http://127.0.0.1:5173/login` and sign in as the seeded fixture author
+   `local-field@meridian.test`. Read the login code out of the mail log
+   with `corepack pnpm run server:logs -- --filter "login code"`. Uploads carry
+   the token this sign-in issues, so a run that skips this step will queue
+   reports and send nothing (QA-AUTH-01 covers sign-in itself).
+7. Open `http://127.0.0.1:5173/staff/field-reports`. Clear site data first if
+   an earlier local Field Report run is present — signing in again afterwards —
+   and confirm the empty state says
    **You have not submitted any Field Reports yet.**
-7. Create a known GIF fixture for the rejection check:
+8. Create a known GIF fixture for the rejection check:
    ```bash
    php -r 'file_put_contents(sys_get_temp_dir()."/qa-fr-unsupported.gif", base64_decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="));'
    ```
@@ -193,9 +201,9 @@ later sync tasks.
 
 18. Restore the browser network condition to Online.
 19. Open the pending report and select **Retry sync**. Confirm the status
-    message says **Sync completed.** If the API token or Field session is not
-    available, confirm the status panel names that blocked state instead of
-    silently doing nothing.
+    message says **Sync completed.** If this device is not signed in, or the
+    Field session is not available, confirm the status panel names that blocked
+    state instead of silently doing nothing.
 20. Confirm the temporary number is replaced by an event-specific number in
     `FRA-2027-NNNNNN` form and the Sync value changes to **Synced**.
 21. Confirm both local photo entries show **Uploaded**. The text record may be
@@ -293,9 +301,9 @@ later sync tasks.
 - Record the failed step, exact UI/error text, operating system/browser,
   commit SHA, Node/pnpm/PHP versions, and whether the server and mobile test
   suites passed.
-- For sync failures, record browser network state, Laravel availability, local
-  API enabled state, API base URL, whether tokens match, Laravel log output,
-  and the detail-page upload error before retrying.
+- For sync failures, record browser network state, Laravel availability, API
+  base URL, whether this device is signed in (Settings shows the command auth
+  state), Laravel log output, and the detail-page upload error before retrying.
 - If offline submit does not produce a durable finalized local report, stop
   and file a blocking FR-001/FR-007 offline issue.
 - If acceptance changes title/body, creates a second report on retry, or

@@ -35,7 +35,7 @@ afterEach(async () => {
 });
 
 describe("syncFieldReportOutbox (M9.8)", () => {
-  it("no-ops when no API token is configured", async () => {
+  it("no-ops when this device holds no credential", async () => {
     configureMeridianApi({
       baseUrl: "http://127.0.0.1:8000",
       bearerToken: null,
@@ -47,7 +47,7 @@ describe("syncFieldReportOutbox (M9.8)", () => {
     const result = await syncFieldReportOutbox();
     expect(result.textAttempted).toBe(0);
     expect(result.blockedReason).toBe(
-      "Local Field API token is not configured.",
+      "This device is not signed in, so commands are waiting.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -56,7 +56,7 @@ describe("syncFieldReportOutbox (M9.8)", () => {
     configurePendingFieldReportPhotoStore(createFieldReportPhotoStore(null));
     configureMeridianApi({
       baseUrl: "http://127.0.0.1:8000",
-      bearerToken: "local-field-dev-token",
+      bearerToken: "device-token",
     });
     installFieldSession({
       ...LOCAL_FIELD_FIXTURE,
@@ -139,7 +139,7 @@ describe("syncFieldReportOutbox (M9.8)", () => {
     configurePendingFieldReportPhotoStore(createFieldReportPhotoStore(null));
     configureMeridianApi({
       baseUrl: "http://127.0.0.1:8000",
-      bearerToken: "local-field-dev-token",
+      bearerToken: "device-token",
     });
     installFieldSession(LOCAL_FIELD_FIXTURE);
 

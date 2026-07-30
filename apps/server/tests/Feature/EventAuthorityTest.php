@@ -372,7 +372,7 @@ class EventAuthorityTest extends TestCase
 
         Carbon::setTestNow(self::DURING_WINDOW);
 
-        $this->actingAs($user)
+        $this->actingAsClient($user)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->getKey(),
                 'title' => 'Medical assist at Gate A',

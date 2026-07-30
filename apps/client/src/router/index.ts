@@ -23,6 +23,8 @@ import HomeView from "@/views/HomeView.vue";
 import KioskHomeView from "@/views/KioskHomeView.vue";
 import KioskSafeTimeoutView from "@/views/KioskSafeTimeoutView.vue";
 import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
+import LoginCodeView from "@/views/LoginCodeView.vue";
+import LoginView from "@/views/LoginView.vue";
 import { workstationSessionState } from "@/session/workstationSession";
 import {
   installDevelopmentIncidentSession,
@@ -187,6 +189,25 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizations/:organizationId/events",
     name: "organizations.events.index",
     component: EventContextView,
+  },
+  /*
+   * Sign-in (UI contract 12.1; M16.11; AUTH-018, AUTH-019).
+   *
+   * Public, and public is the only thing they can be: they exist for a client
+   * that holds no credential. Nothing else is gated on them — a surface with no
+   * capabilities renders nothing, and the node refuses every request that
+   * arrives without a token — so these are the way in rather than a wall around
+   * everything else.
+   */
+  {
+    path: "/login",
+    name: "login",
+    component: LoginView,
+  },
+  {
+    path: "/login/code",
+    name: "auth.code.entry",
+    component: LoginCodeView,
   },
   {
     path: "/readiness",
