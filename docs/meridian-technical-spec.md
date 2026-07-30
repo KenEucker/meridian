@@ -862,6 +862,8 @@ The node exposes an authenticated endpoint that returns, for the calling user:
 
 The endpoint returns role codes and capability codes. It does not return navigation decisions, screen lists, or menu structures. A client that needs to know whether to render a surface answers that question from the capabilities it holds. This keeps the permission catalog the single source of truth and prevents a second, divergent permission model from growing inside the response shape.
 
+Capability codes are reported twice: as one flat list for the user, and against each role for the scope that role was resolved at. Authority in Meridian is scoped, so "may this user check equipment out" and "may this user check equipment out for this department" are different questions, and the client holds no copy of the role-to-capability mapping to tell them apart on its own. Both lists come from the catalog the server enforces from, so neither can drift from it.
+
 Clients derive navigation and available actions from capabilities, applying the existing UI rules in the operating guide: unavailable actions are generally hidden, and permission-denied surfaces explain the required role to elevated users while stating only that access is restricted to default staff.
 
 Client-side capability checks are presentation. Server-side authorization remains the enforcement boundary, and a client that fails to hide an action is still refused by the server.
@@ -871,6 +873,10 @@ Client-side capability checks are presentation. Server-side authorization remain
 A client resolves organization and event context from the node it is connected to. When the node is locked to an event, that lock determines organization and event, in the same way the branding resolver and Kiosk workstation pinning already resolve locked context. The session response then narrows that context to the user's own departments and teams.
 
 A connected client whose user belongs to more than one event, or to more than one organization, may switch to any other event or organization in which that user holds an association. Switching is a connected-only capability.
+
+Switching is offered by a node that is not locked to an event. A node locked to one holds that event's records and no others, so it reports the lock rather than a switcher, and the client says why the choice is absent instead of appearing to have lost it. The session response carries both, so a client never has to infer either.
+
+Where the node has no lock and the user is associated with exactly one event, that event is the context: there is nothing to choose between. Where more than one is available, the client asks, and names the chosen event when it resolves the session. Roles are resolved at whichever event that is, so event-scoped grants appear only where they apply.
 
 A client without connectivity is locked to the context the node provides and does not offer switching.
 
