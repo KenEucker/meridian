@@ -1,0 +1,481 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Department;
+use App\Models\DepartmentMembership;
+use App\Models\Device;
+use App\Models\Event;
+use App\Models\EventCredential;
+use App\Models\EventDepartmentAssignment;
+use App\Models\Node;
+use App\Models\Organization;
+use App\Models\PermissionRole;
+use App\Models\Staff;
+use App\Models\StaffOrganizationStatus;
+use App\Models\Team;
+use App\Models\TeamGrant;
+use App\Models\TeamMembership;
+use App\Models\User;
+use App\Services\Auth\ApiTokenIssuer;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
+use Tests\TestCase;
+
+/**
+ * `GET /api/me` session resolution (M16.4).
+ *
+ * Source: CLIENT-001 through CLIENT-003; technical spec 11A.2; data/API 5.5.
+ *
+ * What is asserted here is the session document itself: identity, effective role
+ * codes, capability codes from the permission catalog, the caller's own
+ * associations, the context the node resolves — and the absence of any
+ * navigation, screen list, or menu structure, which is the property that keeps
+ * the catalog the single source of truth.
+ */
+class SessionResolutionTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_the_session_endpoint_returns_identity_roles_capabilities_and_associations(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+
+        $response = $this->me($scenario['user']);
+
+        $response->assertOk();
+        $response->assertJsonPath('user.id', (string) $scenario['user']->getKey());
+        $response->assertJsonPath('user.email', $scenario['user']->email);
+        $response->assertJsonPath('user.staff_ids', [(string) $scenario['staff']->getKey()]);
+
+        $response->assertJsonPath('roles.0.role_code', PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $response->assertJsonPath('roles.0.role_name', 'Department Logistics');
+        $response->assertJsonPath('roles.0.scope_type', PermissionRole::SCOPE_DEPARTMENT);
+        $response->assertJsonPath('roles.0.department_id', (string) $scenario['department']->getKey());
+        $response->assertJsonPath('roles.0.organization_id', (string) $scenario['organization']->getKey());
+        $response->assertJsonPath('roles.0.team_id', (string) $scenario['team']->getKey());
+        $response->assertJsonPath('roles.0.event_id', null);
+
+        // The reason the authority exists, so an elevated user reaching a denied
+        // surface can be told what they hold (technical spec 15.2).
+        $this->assertStringContainsString(
+            'Department Logistics',
+            (string) $response->json('roles.0.reason'),
+        );
+
+        $response->assertJsonPath('organizations.0.id', (string) $scenario['organization']->getKey());
+        $response->assertJsonPath('organizations.0.status', StaffOrganizationStatus::STATUS_ACTIVE);
+        $response->assertJsonPath('events.0.id', (string) $scenario['event']->getKey());
+        $response->assertJsonPath('departments.0.id', (string) $scenario['department']->getKey());
+        $response->assertJsonPath('departments.0.membership_status', DepartmentMembership::STATUS_ACTIVE);
+        $response->assertJsonPath('teams.0.id', (string) $scenario['team']->getKey());
+
+        $this->assertNotNull($response->json('refreshed_at'));
+    }
+
+    public function test_capabilities_are_the_catalog_codes_the_held_roles_carry(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+
+        $response = $this->me($scenario['user']);
+
+        $expected = PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS];
+        sort($expected);
+
+        $this->assertSame($expected, $response->json('capabilities'));
+        $this->assertSame(
+            PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS],
+            $response->json('roles.0.capabilities'),
+        );
+
+        // A capability the held role does not carry is absent rather than
+        // reported false, so a client cannot read a denial as a grant.
+        $this->assertNotContains(
+            PermissionCatalog::PERMISSION_ORGANIZATION_STAFF_MANAGE,
+            $response->json('capabilities'),
+        );
+    }
+
+    public function test_the_payload_carries_no_navigation_screen_list_or_menu_structure(): void
+    {
+        // CLIENT-003: the endpoint publishes codes. A precomputed surface list
+        // would be a second permission model, divergent from the catalog the
+        // server enforces from.
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LEAD);
+
+        $response = $this->me($scenario['user']);
+
+        $this->assertSame([
+            'user',
+            'roles',
+            'capabilities',
+            'organizations',
+            'events',
+            'departments',
+            'teams',
+            'context',
+            'refreshed_at',
+        ], array_keys((array) $response->json()));
+
+        foreach ($this->keysOf((array) $response->json()) as $key) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/nav|menu|screen|route|surface|sidebar|tab|link/i',
+                $key,
+                "The session payload published a navigation-shaped key: {$key}",
+            );
+        }
+    }
+
+    public function test_one_user_cannot_read_another_users_associations(): void
+    {
+        $mine = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $theirs = $this->scenario(PermissionCatalog::ROLE_LEAD_ORGANIZER);
+
+        $body = (string) $this->me($mine['user'])->getContent();
+
+        foreach (['organization', 'event', 'department', 'team', 'staff', 'user'] as $association) {
+            $this->assertStringNotContainsString(
+                (string) $theirs[$association]->getKey(),
+                $body,
+                "The session document leaked another user's {$association}.",
+            );
+        }
+
+        // Naming someone else's event does not widen the answer either: the
+        // context parameter narrows to the caller's own associations.
+        $this->me($mine['user'], ['event_id' => (string) $theirs['event']->getKey()])
+            ->assertNotFound()
+            ->assertJsonPath('reason_code', 'event_context_unavailable');
+    }
+
+    public function test_the_endpoint_requires_a_bearer_token(): void
+    {
+        $this->getJson(route('api.me'))->assertUnauthorized();
+    }
+
+    public function test_a_browser_session_does_not_authenticate_the_session_endpoint(): void
+    {
+        // AUTH-018: clients authenticate with a bearer token, not the console's
+        // session cookie.
+        $this->actingAs(User::factory()->create())
+            ->getJson(route('api.me'))
+            ->assertUnauthorized();
+    }
+
+    public function test_a_revoked_token_stops_resolving_a_session(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $token = $this->tokenFor($scenario['user']);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(route('api.me'))
+            ->assertOk();
+
+        $scenario['user']->tokens()->update(['revoked_at' => now()]);
+
+        $this->app['auth']->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(route('api.me'))
+            ->assertUnauthorized();
+    }
+
+    public function test_a_user_with_no_staff_profile_resolves_an_empty_session(): void
+    {
+        $response = $this->me(User::factory()->create());
+
+        $response->assertOk();
+        $response->assertJsonPath('roles', []);
+        $response->assertJsonPath('capabilities', []);
+        $response->assertJsonPath('organizations', []);
+        $response->assertJsonPath('events', []);
+        $response->assertJsonPath('departments', []);
+        $response->assertJsonPath('teams', []);
+        $response->assertJsonPath('context.event_id', null);
+        $response->assertJsonPath('context.switching_available', false);
+    }
+
+    public function test_archived_memberships_and_revoked_grants_are_not_associations(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+
+        TeamMembership::query()->update(['archived_at' => now()]);
+        DepartmentMembership::query()->update(['archived_at' => now()]);
+
+        $response = $this->me($scenario['user']);
+
+        $response->assertJsonPath('roles', []);
+        $response->assertJsonPath('departments', []);
+        $response->assertJsonPath('teams', []);
+        // The department is no longer theirs, so neither is the event it runs.
+        $response->assertJsonPath('events', []);
+    }
+
+    public function test_a_team_lead_designation_is_reported_on_the_team(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_SHIFT_LEAD, membershipRole: 'lead');
+
+        $response = $this->me($scenario['user']);
+
+        $response->assertJsonPath('teams.0.is_lead', true);
+        $response->assertJsonPath('roles.0.role_code', PermissionCatalog::ROLE_SHIFT_LEAD);
+        $response->assertJsonPath('roles.0.scope_type', PermissionRole::SCOPE_TEAM);
+    }
+
+    public function test_context_resolves_from_the_node_event_lock(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $this->lockNodeTo($scenario['event']);
+
+        $response = $this->me($scenario['user']);
+
+        $response->assertJsonPath('context.event_id', (string) $scenario['event']->getKey());
+        $response->assertJsonPath('context.organization_id', (string) $scenario['organization']->getKey());
+        $response->assertJsonPath('context.department_id', (string) $scenario['department']->getKey());
+        $response->assertJsonPath('context.node_locked', true);
+        $response->assertJsonPath('context.node_locked_event_id', (string) $scenario['event']->getKey());
+        $response->assertJsonPath('events.0.is_node_locked', true);
+    }
+
+    public function test_event_scoped_roles_resolve_only_at_the_event_they_were_granted_for(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $event = $scenario['event'];
+        $event->forceFill(['ic_department_id' => $scenario['department']->getKey()])->save();
+
+        TeamGrant::factory()->create([
+            'team_id' => $scenario['team']->getKey(),
+            'event_id' => $event->getKey(),
+            'permission_role_id' => $this->role(PermissionCatalog::ROLE_IC_OPERATOR)->getKey(),
+        ]);
+
+        // A second association leaves the context ambiguous, so no event is
+        // resolved and the event-scoped grant is not in effect.
+        $other = Event::factory()->for($scenario['organization'])->create();
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $other->getKey(),
+            'department_id' => $scenario['department']->getKey(),
+        ]);
+
+        $withoutContext = $this->me($scenario['user']);
+        $withoutContext->assertJsonPath('context.event_id', null);
+        $withoutContext->assertJsonMissing(['role_code' => PermissionCatalog::ROLE_IC_OPERATOR]);
+        $this->assertNotContains(
+            PermissionCatalog::PERMISSION_INCIDENTS_CREATE,
+            $withoutContext->json('capabilities'),
+        );
+
+        // Asked for at the other event, it is still not in effect: the grant
+        // names one event and standing does not travel between them.
+        $this->me($scenario['user'], ['event_id' => (string) $other->getKey()])
+            ->assertJsonMissing(['role_code' => PermissionCatalog::ROLE_IC_OPERATOR]);
+
+        $withContext = $this->me($scenario['user'], ['event_id' => (string) $event->getKey()]);
+        $withContext->assertJsonFragment(['role_code' => PermissionCatalog::ROLE_IC_OPERATOR]);
+        $this->assertContains(
+            PermissionCatalog::PERMISSION_INCIDENTS_CREATE,
+            $withContext->json('capabilities'),
+        );
+
+        // And it is in effect when the node's own lock supplies the context.
+        $this->lockNodeTo($event);
+
+        $this->me($scenario['user'])
+            ->assertJsonPath('context.event_id', (string) $event->getKey())
+            ->assertJsonFragment(['role_code' => PermissionCatalog::ROLE_IC_OPERATOR]);
+    }
+
+    public function test_a_second_event_is_resolved_when_the_client_asks_for_it(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $second = Event::factory()->for($scenario['organization'])->create();
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $second->getKey(),
+            'department_id' => $scenario['department']->getKey(),
+        ]);
+
+        // Two events and no node lock: the client is told to choose, and may.
+        $unresolved = $this->me($scenario['user']);
+        $unresolved->assertJsonPath('context.event_id', null);
+        $unresolved->assertJsonPath('context.switching_available', true);
+
+        $this->me($scenario['user'], ['event_id' => (string) $second->getKey()])
+            ->assertOk()
+            ->assertJsonPath('context.event_id', (string) $second->getKey());
+    }
+
+    public function test_a_node_locked_to_an_event_offers_no_switching_and_refuses_another_context(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $second = Event::factory()->for($scenario['organization'])->create();
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $second->getKey(),
+            'department_id' => $scenario['department']->getKey(),
+        ]);
+        $this->lockNodeTo($scenario['event']);
+
+        $response = $this->me($scenario['user']);
+        $response->assertJsonPath('context.switching_available', false);
+        $response->assertJsonPath('context.event_id', (string) $scenario['event']->getKey());
+
+        $this->me($scenario['user'], ['event_id' => (string) $second->getKey()])
+            ->assertStatus(409)
+            ->assertJsonPath('reason_code', 'node_locked_to_event')
+            ->assertJsonPath('node_locked_event_id', (string) $scenario['event']->getKey());
+    }
+
+    public function test_a_credential_is_an_event_association_of_its_own(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $credentialed = Event::factory()->for($scenario['organization'])->create();
+
+        EventCredential::factory()->create([
+            'event_id' => $credentialed->getKey(),
+            'staff_id' => $scenario['staff']->getKey(),
+        ]);
+
+        $eventIds = collect($this->me($scenario['user'])->json('events'))->pluck('id');
+
+        $this->assertTrue($eventIds->contains((string) $credentialed->getKey()));
+    }
+
+    public function test_the_events_organization_is_always_listed_alongside_it(): void
+    {
+        // The document closes over itself: a client never has to display an
+        // organization it was not told about.
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        StaffOrganizationStatus::query()->delete();
+
+        $response = $this->me($scenario['user']);
+
+        $organizationIds = collect($response->json('organizations'))->pluck('id');
+
+        foreach ($response->json('events') as $event) {
+            $this->assertTrue($organizationIds->contains($event['organization_id']));
+        }
+
+        // With no status row the association is still reported, without a status.
+        $response->assertJsonPath('organizations.0.id', (string) $scenario['organization']->getKey());
+        $response->assertJsonPath('organizations.0.status', null);
+    }
+
+    /**
+     * A user holding one staff profile, in one department of one organization,
+     * on one team carrying the named role, with the department assigned to one
+     * event.
+     *
+     * @return array{
+     *     user: User,
+     *     staff: Staff,
+     *     organization: Organization,
+     *     department: Department,
+     *     team: Team,
+     *     event: Event
+     * }
+     */
+    private function scenario(string $roleCode, string $membershipRole = 'member'): array
+    {
+        $organization = Organization::factory()->create();
+        $department = Department::factory()->for($organization)->create();
+        $team = Team::factory()->for($department)->create();
+        $event = Event::factory()->for($organization)->create();
+        $staff = Staff::factory()->create();
+        $user = User::factory()->create();
+
+        $user->staffProfiles()->attach($staff);
+
+        StaffOrganizationStatus::factory()->active()->create([
+            'organization_id' => $organization->getKey(),
+            'staff_id' => $staff->getKey(),
+        ]);
+
+        $departmentMembership = DepartmentMembership::factory()->create([
+            'department_id' => $department->getKey(),
+            'staff_id' => $staff->getKey(),
+        ]);
+
+        TeamMembership::factory()->create([
+            'team_id' => $team->getKey(),
+            'staff_id' => $staff->getKey(),
+            'department_membership_id' => $departmentMembership->getKey(),
+            'membership_role' => $membershipRole,
+        ]);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->getKey(),
+            'permission_role_id' => $this->role($roleCode)->getKey(),
+        ]);
+
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $event->getKey(),
+            'department_id' => $department->getKey(),
+        ]);
+
+        return [
+            'user' => $user,
+            'staff' => $staff,
+            'organization' => $organization,
+            'department' => $department,
+            'team' => $team,
+            'event' => $event,
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $query
+     */
+    private function me(User $user, array $query = []): TestResponse
+    {
+        // One process serves every request in a test method, and the guard
+        // caches the user it resolved. A client makes each request against a
+        // fresh process, so the guard is forgotten to match.
+        $this->app['auth']->forgetGuards();
+
+        return $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
+            ->getJson(route('api.me', $query));
+    }
+
+    private function tokenFor(User $user): string
+    {
+        return app(ApiTokenIssuer::class)
+            ->issue($user, Device::factory()->create())
+            ->plainTextToken;
+    }
+
+    private function lockNodeTo(Event $event): Node
+    {
+        return Node::factory()->onsite()->create([
+            'organization_id' => $event->organization_id,
+            'event_id' => $event->getKey(),
+        ]);
+    }
+
+    private function role(string $code): PermissionRole
+    {
+        return PermissionRole::query()->where('code', $code)->firstOrFail();
+    }
+
+    /**
+     * Every key appearing anywhere in a decoded response body.
+     *
+     * @param  array<array-key, mixed>  $payload
+     * @return list<string>
+     */
+    private function keysOf(array $payload): array
+    {
+        $keys = [];
+
+        foreach ($payload as $key => $value) {
+            if (is_string($key)) {
+                $keys[] = $key;
+            }
+
+            if (is_array($value)) {
+                $keys = array_merge($keys, $this->keysOf($value));
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+}

@@ -26,6 +26,7 @@ use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
 use App\Http\Controllers\Reporting\ReportingExportController;
+use App\Http\Controllers\Session\SessionController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
@@ -109,6 +110,20 @@ Route::post('/auth/session', [ApiAuthController::class, 'createSession'])
 Route::delete('/auth/session', [ApiAuthController::class, 'destroySession'])
     ->middleware('auth:sanctum')
     ->name('api.auth.session.destroy');
+
+/*
+ * Session resolution (CLIENT-001 through CLIENT-003; technical spec 11A.2;
+ * data/API 5.5).
+ *
+ * The first call a client makes after login: who the user is, the role codes
+ * they hold, the capability codes those roles carry, and the organizations,
+ * events, departments, and teams they are associated with. Behind
+ * `auth:sanctum` rather than the local-field guard, because a session is
+ * meaningless without the user whose token it belongs to.
+ */
+Route::get('/me', [SessionController::class, 'show'])
+    ->middleware('auth:sanctum')
+    ->name('api.me');
 
 // Branding is chrome, not operational content: every signed-in user of an
 // organization sees its identity on every screen (BRAND-002), and a device

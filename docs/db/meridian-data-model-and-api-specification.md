@@ -556,11 +556,12 @@ Rules:
 
 ```text
 GET /api/me
+GET /api/me?event_id={event}
 ```
 
 Returns, for the calling user:
 
-- `user`: identity fields
+- `user`: identity fields, plus `staff_ids` — the staff records the login speaks for, which a client needs to recognize its own user in a roster it has been handed
 - `roles`: effective role codes resolved from active team memberships and active team grants, each with the scope it was resolved at and the reason it was granted
 - `capabilities`: permission capability codes carried by those roles, as published by the permission catalog
 - `organizations`: organizations the user holds an association with
@@ -571,9 +572,17 @@ Returns, for the calling user:
 
 The response returns codes, not navigation. It carries no screen list, menu structure, or precomputed surface availability. Clients derive navigation from `capabilities`, which keeps the permission catalog the single source of truth.
 
+Each entry in `roles` also carries the capability codes that role alone brings, because authority is scoped — a person may run logistics for one department and be ordinary staff in another — and the client holds no copy of the role-to-capability mapping to narrow the flat list for itself. Both lists are read from the same catalog the server enforces from.
+
+Each entry in `events` carries the event's own window and its active event window, which is what bounds the staleness of a cached session in 11A.4.
+
+Association is defined per record type: an organization by a `staff_organization_statuses` row, a department or team by a membership that is not archived, and an event by any of a department assignment to a department the user belongs to, a team grant scoped to that event on a team they belong to, or an unrevoked `event_credentials` row. The organizations of the listed departments and events are always listed too, so a client is never left displaying an organization it was not told about.
+
 Client-side capability checks are presentation only. Every endpoint enforces its own authorization regardless of what the client rendered.
 
 `GET /api/me` is permission-filtered like every other read: it returns the caller's own associations and never another user's.
+
+`event_id` selects which of the caller's own events roles are resolved at, so event-scoped roles — Incident Command in particular — resolve only where they apply. It narrows the answer and never widens it: an event the caller holds no association with is refused with `event_context_unavailable`, and so is an event that does not exist, because whether an unrelated organization is running an event under a guessed identifier is not the caller's business. A node locked to an event refuses any other value with `node_locked_to_event`; that node holds one event's records and resolving another there would answer for data it does not have. Omitted, context resolves as described in technical spec 11A.3.
 
 ### 5.6 Client command outbox
 
