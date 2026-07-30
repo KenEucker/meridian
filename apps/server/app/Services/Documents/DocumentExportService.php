@@ -91,13 +91,25 @@ class DocumentExportService
         return $export;
     }
 
-    private function assertActorCanExport(PolicyDocument|ProcedureDocument $document, User $actor): void
+    /**
+     * Whether the actor may export this document at all.
+     *
+     * Asked ahead of generation by the short-lived download URL path (technical
+     * spec 11A.6), so an unauthorized caller is refused a URL rather than handed
+     * one that would refuse them on arrival.
+     */
+    public function canExport(PolicyDocument|ProcedureDocument $document, User $actor): bool
     {
         $permission = $document instanceof PolicyDocument
             ? 'platform.policy-documents'
             : 'platform.procedure-documents';
 
-        if (! $actor->hasAccess($permission) && ! $this->access->canMaintainDocument($actor, $document)) {
+        return $actor->hasAccess($permission) || $this->access->canMaintainDocument($actor, $document);
+    }
+
+    private function assertActorCanExport(PolicyDocument|ProcedureDocument $document, User $actor): void
+    {
+        if (! $this->canExport($document, $actor)) {
             throw new AuthorizationException('You are not authorized to export this document.');
         }
     }

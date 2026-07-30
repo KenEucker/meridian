@@ -310,16 +310,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Field Report Photos
+    | Authenticated Downloads
     |--------------------------------------------------------------------------
     |
-    | Short-lived signed URL lifetime for server-side Field Report photo
-    | preview and download (technical spec 18.6; data/API 10.17).
+    | Lifetime of a short-lived scoped download URL (CLIENT-020; technical spec
+    | 11A.6; data/API 5.7). One setting covers every resource reached this way:
+    | reporting exports, generated incident PDFs, document exports, and Field
+    | Report photos.
+    |
+    | `MERIDIAN_FIELD_REPORT_PHOTO_SIGNED_URL_MINUTES` is the superseded name it
+    | carried while Field Report photos were the only such resource, and is
+    | still read so an existing node keeps the lifetime its operator chose.
     |
     */
 
-    'field_report_photos' => [
-        'signed_url_expires_minutes' => (int) env('MERIDIAN_FIELD_REPORT_PHOTO_SIGNED_URL_MINUTES', 5),
+    'downloads' => [
+        'signed_url_expires_minutes' => (int) env(
+            'MERIDIAN_DOWNLOAD_SIGNED_URL_MINUTES',
+            env('MERIDIAN_FIELD_REPORT_PHOTO_SIGNED_URL_MINUTES', 5),
+        ),
     ],
 
     'oauth' => [

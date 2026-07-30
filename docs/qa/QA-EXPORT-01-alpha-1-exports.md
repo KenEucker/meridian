@@ -20,10 +20,12 @@ section H each verify one export beside the domain that produces it; this script
 verifies all five together, and is the one that answers the Milestone 13 QA gate.
 
 Exports are server-generated and online-only in Alpha 1. No product UI entry
-point is required for this script: reporting surfaces (`REPORT-014`) and
-short-lived download URLs (`REPORT-015`) are their own requirements and remain
-deferred, so the checks below use the documented domain services and the HTTP
-download endpoints.
+point is required for this script: reporting surfaces (`REPORT-014`) are their
+own requirement and remain deferred, so the checks below use the documented
+domain services and the HTTP download endpoints. The short-lived download URL
+half of `REPORT-015` now exists for credential eligibility (M16.12) and is
+verified with the rest of that pattern rather than here; the export entry points
+that use it arrive with M16.22.
 
 ## Requirements covered
 

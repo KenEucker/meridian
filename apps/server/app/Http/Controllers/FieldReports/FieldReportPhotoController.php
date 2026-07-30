@@ -5,6 +5,8 @@ namespace App\Http\Controllers\FieldReports;
 use App\Http\Controllers\Controller;
 use App\Models\Attachment;
 use App\Models\FieldReport;
+use App\Models\User;
+use App\Services\Downloads\ShortLivedDownloadUrlService;
 use App\Services\FieldReports\FieldReportPhotoSignedUrlService;
 use App\Services\FieldReports\FieldReportPhotoUploadService;
 use Illuminate\Http\JsonResponse;
@@ -93,7 +95,7 @@ class FieldReportPhotoController extends Controller
             throw new AccessDeniedHttpException($exception->getMessage());
         }
 
-        return response()->json(['url' => $url]);
+        return response()->json($url->toArray());
     }
 
     public function issueDownloadUrl(
@@ -110,24 +112,37 @@ class FieldReportPhotoController extends Controller
             throw new AccessDeniedHttpException($exception->getMessage());
         }
 
-        return response()->json(['url' => $url]);
+        return response()->json($url->toArray());
     }
 
-    public function preview(Request $request, Attachment $attachment): Response
-    {
-        return $this->stream($request, $attachment, asDownload: false);
+    public function preview(
+        Request $request,
+        Attachment $attachment,
+        ShortLivedDownloadUrlService $downloadUrls,
+    ): Response {
+        return $this->stream($downloadUrls->actor($request), $attachment, asDownload: false);
     }
 
-    public function download(Request $request, Attachment $attachment): Response
-    {
-        return $this->stream($request, $attachment, asDownload: true);
+    public function download(
+        Request $request,
+        Attachment $attachment,
+        ShortLivedDownloadUrlService $downloadUrls,
+    ): Response {
+        return $this->stream($downloadUrls->actor($request), $attachment, asDownload: true);
     }
 
-    private function stream(Request $request, Attachment $attachment, bool $asDownload): Response
+    /**
+     * Serve the blob to the user the signed URL was issued to.
+     *
+     * The navigation carries no session and no bearer token — that is the whole
+     * reason the URL exists — so the person is named by the signature. Their
+     * policy runs again here rather than being taken on trust from issuance:
+     * it is the same decision about the same person, not a second credential to
+     * present, and re-running it means a permission withdrawn a minute ago
+     * takes effect now instead of when the link expires.
+     */
+    private function stream(User $user, Attachment $attachment, bool $asDownload): Response
     {
-        $user = $request->user();
-        abort_unless($user !== null, 401);
-
         if (! $attachment->isFieldReportPhoto()) {
             throw new NotFoundHttpException();
         }
