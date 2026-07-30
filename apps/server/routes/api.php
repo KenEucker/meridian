@@ -82,6 +82,28 @@ Route::post('/auth/magic-link/verify', [ApiAuthController::class, 'verifyMagicLi
     ->middleware('throttle:10,1')
     ->name('api.auth.magic-link.verify');
 
+/*
+ * Provider handoff (AUTH-020; technical spec 11.4; data/API 5.4).
+ *
+ * Starting a handoff opens a system browser at Google or Discord; exchanging its
+ * result issues the token. Neither route can carry a session either, so both are
+ * rate limited. Starting is the looser of the two — a person retrying a canceled
+ * consent screen starts several — while the exchange presents a credential.
+ *
+ * The provider is constrained in the route rather than validated in the
+ * controller, so an unsupported provider is a missing route instead of a login
+ * refusal describing something Meridian does not offer. The constraint mirrors
+ * the providers `App\Services\Auth\OAuthProviderRegistry::gateway()` resolves.
+ */
+Route::get('/auth/{provider}/start', [ApiAuthController::class, 'startProviderHandoff'])
+    ->whereIn('provider', ['google', 'discord'])
+    ->middleware('throttle:20,1')
+    ->name('api.auth.provider.start');
+
+Route::post('/auth/session', [ApiAuthController::class, 'createSession'])
+    ->middleware('throttle:10,1')
+    ->name('api.auth.session.store');
+
 // A client disposing of its own token. God Mode revocation by token and by
 // device (AUTH-022) lives in the console, at `platform.api-tokens`.
 Route::delete('/auth/session', [ApiAuthController::class, 'destroySession'])

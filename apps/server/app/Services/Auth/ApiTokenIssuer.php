@@ -38,6 +38,12 @@ class ApiTokenIssuer
 {
     public const AUDIT_ISSUED = 'api_token.issued';
 
+    /** The client exchanged a mailed API login code (AUTH-019). */
+    public const REASON_LOGIN_CODE = 'api_login_code';
+
+    /** The client completed a Google or Discord handoff in the system browser (AUTH-020). */
+    public const REASON_PROVIDER_HANDOFF = 'provider_handoff';
+
     public function __construct(private readonly AuditService $audit) {}
 
     /**
@@ -45,14 +51,21 @@ class ApiTokenIssuer
      *
      * @param  string|null  $clientName  what the client calls itself, shown to
      *                                   the user when tokens are listed
+     * @param  string|null  $reason  which issuance path produced the token, so an
+     *                               operator reading the audit trail can tell a
+     *                               login code from a provider handoff
      */
-    public function issue(User $user, Device $device, ?string $clientName = null): NewAccessToken
-    {
+    public function issue(
+        User $user,
+        Device $device,
+        ?string $clientName = null,
+        ?string $reason = null,
+    ): NewAccessToken {
         $plainTextToken = $user->generateTokenString();
         $name = $this->resolveClientName($clientName);
         $expiresAt = $this->expiresAt();
 
-        $token = DB::transaction(function () use ($user, $device, $plainTextToken, $name, $expiresAt): ApiToken {
+        $token = DB::transaction(function () use ($user, $device, $plainTextToken, $name, $expiresAt, $reason): ApiToken {
             /** @var ApiToken $token */
             $token = $user->tokens()->create([
                 'name' => $name,
@@ -75,6 +88,7 @@ class ApiTokenIssuer
                     'client_name' => $name,
                     'expires_at' => $expiresAt->toIso8601String(),
                 ],
+                reason: $reason,
                 sourceContext: AuditEvent::SOURCE_API,
             );
 

@@ -220,6 +220,14 @@ return [
     | a token. `attempt_limit` bounds online guessing of a single issued code;
     | route throttling bounds the rate of requests and attempts.
     |
+    | `provider_handoff` covers Google and Discord login completed in a system
+    | browser (AUTH-020). `return_targets` is the registered return address per
+    | client target: a client names the target it is, and the node resolves where
+    | the browser is sent from its own configuration, so a request cannot
+    | nominate a return address of its own. Blanking an entry disables provider
+    | login for that client target. `expires_minutes` bounds the whole round
+    | trip, from starting the handoff to exchanging its code for a token.
+    |
     */
 
     'api_tokens' => [
@@ -230,6 +238,16 @@ return [
         'login_code' => [
             'expires_minutes' => (int) env('MERIDIAN_API_LOGIN_CODE_EXPIRES_MINUTES', 15),
             'attempt_limit' => (int) env('MERIDIAN_API_LOGIN_CODE_ATTEMPT_LIMIT', 5),
+        ],
+
+        'provider_handoff' => [
+            'expires_minutes' => (int) env('MERIDIAN_API_HANDOFF_EXPIRES_MINUTES', 10),
+
+            'return_targets' => [
+                'web' => env('MERIDIAN_API_HANDOFF_RETURN_WEB', rtrim((string) env('APP_URL', 'http://localhost'), '/').'/login/handoff'),
+                'mobile' => env('MERIDIAN_API_HANDOFF_RETURN_MOBILE', 'org.meridian.field://auth/handoff'),
+                'desktop' => env('MERIDIAN_API_HANDOFF_RETURN_DESKTOP', 'org.meridian.kiosk://auth/handoff'),
+            ],
         ],
     ],
 

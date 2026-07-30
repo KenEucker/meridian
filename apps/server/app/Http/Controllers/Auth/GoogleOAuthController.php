@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthIdentity;
+use App\Services\Auth\ApiProviderHandoffService;
 use App\Services\Auth\DisabledUserException;
 use App\Services\Auth\GoogleOAuthService;
 use App\Services\Auth\OAuthConfigurationException;
@@ -14,7 +16,10 @@ use Illuminate\Support\Str;
 
 class GoogleOAuthController extends Controller
 {
-    public function __construct(private readonly GoogleOAuthService $googleOAuth) {}
+    public function __construct(
+        private readonly GoogleOAuthService $googleOAuth,
+        private readonly ApiProviderHandoffService $handoffs,
+    ) {}
 
     public function redirect(Request $request): RedirectResponse
     {
@@ -35,6 +40,23 @@ class GoogleOAuthController extends Controller
 
     public function callback(Request $request): RedirectResponse
     {
+        // A client application's sign-in comes back through this same callback,
+        // because a provider holds one registered redirect URI per node. The
+        // state says which kind of sign-in this is: a handoff state is one this
+        // node minted and stored, and it is answered by returning the browser to
+        // the waiting application rather than by opening a session here
+        // (AUTH-020).
+        $handoffReturnUrl = $this->handoffs->completeCallback(
+            AuthIdentity::PROVIDER_GOOGLE,
+            $request->query('state') === null ? null : (string) $request->query('state'),
+            $request->query('code') === null ? null : (string) $request->query('code'),
+            $request->query('error') === null ? null : (string) $request->query('error'),
+        );
+
+        if ($handoffReturnUrl !== null) {
+            return redirect()->away($handoffReturnUrl);
+        }
+
         $expectedState = $request->session()->pull(GoogleOAuthService::STATE_SESSION_KEY);
 
         if (! is_string($expectedState) || ! hash_equals($expectedState, (string) $request->query('state'))) {

@@ -9,11 +9,21 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
-class DiscordOAuthService
+class DiscordOAuthService implements OAuthProviderGateway
 {
     public const STATE_SESSION_KEY = 'auth.discord_oauth_state';
 
     public function __construct(private readonly MagicLinkService $verifiedEmailAuth) {}
+
+    public function providerKey(): string
+    {
+        return AuthIdentity::PROVIDER_DISCORD;
+    }
+
+    public function providerName(): string
+    {
+        return 'Discord';
+    }
 
     public function authorizationUrl(string $state): string
     {
@@ -37,9 +47,33 @@ class DiscordOAuthService
     }
 
     /**
+     * Resolve the user a callback code authenticates without logging anyone in,
+     * for the provider handoff in {@see ApiProviderHandoffService}.
+     */
+    public function resolveUserFromCallbackCode(string $code): User
+    {
+        $accessToken = $this->exchangeCodeForAccessToken($code);
+        $profile = $this->fetchUserProfile($accessToken);
+
+        return $this->resolveUserFromProfile($profile);
+    }
+
+    /**
      * @param  array<string, mixed>  $profile
      */
     public function authenticateFromProfile(array $profile): User
+    {
+        $user = $this->resolveUserFromProfile($profile);
+
+        Auth::login($user);
+
+        return $user;
+    }
+
+    /**
+     * @param  array<string, mixed>  $profile
+     */
+    public function resolveUserFromProfile(array $profile): User
     {
         $subject = $profile['id'] ?? null;
 
@@ -70,8 +104,6 @@ class DiscordOAuthService
         }
 
         $this->syncDiscordAuthIdentity($user, trim($subject), $normalizedEmail);
-
-        Auth::login($user);
 
         return $user;
     }
