@@ -38,6 +38,14 @@ import {
   sessionDepartmentRoleSummary,
   sessionEventContext,
 } from "@/session/sessionAccess";
+import {
+  sessionNodeLock,
+  sessionOrganizationId,
+  sessionOrganizationLabel,
+  sessionSwitchingAvailable,
+  sessionSwitchingUnavailableReason,
+} from "@/session/sessionContext";
+import { describeSwitchUnavailable } from "@/session/sessionContextCopy";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
@@ -194,6 +202,48 @@ const userLabel = computed(
 const connectionStatus = computed(() =>
   connectionStatusFor(connectivity.value),
 );
+
+/*
+ * Context switching in the user menu (M16.7; CLIENT-012, CLIENT-013).
+ *
+ * Links to the two context screens, never the switcher itself: the top bar must
+ * not become the organization or event switcher, and switching happens on Home
+ * or a dedicated context-switching surface (UI contract 4.3, 4.4, 6.1).
+ *
+ * Kiosk is excluded because a Kiosk requires pinned context setup rather than
+ * selecting its own (contract mode matrix, "Home / context selection"). Field
+ * and Admin both select context, so both get the entries when the session says
+ * there is something to select.
+ */
+const showContextSwitching = computed(
+  () => appConfig.value.uiMode !== "kiosk" && sessionSwitchingAvailable.value,
+);
+
+/**
+ * Why the entries are absent, stated as one line rather than as a disabled
+ * control (operating guide 8.3A).
+ *
+ * Only for the two states that are worth explaining. "One context" needs no
+ * explanation — nobody misses a switcher they have nothing to switch to — and a
+ * client with no session has a sign-in problem, not a context problem.
+ */
+const contextNotice = computed(() => {
+  const reason = sessionSwitchingUnavailableReason.value;
+
+  if (
+    appConfig.value.uiMode === "kiosk" ||
+    reason === null ||
+    reason === "single_context" ||
+    reason === "no_session"
+  ) {
+    return null;
+  }
+
+  return describeSwitchUnavailable(
+    reason,
+    sessionNodeLock.value?.eventLabel ?? null,
+  );
+});
 
 function readPreferredTheme(): ThemeChoice {
   if (typeof window === "undefined") {
@@ -632,15 +682,61 @@ onBeforeUnmount(() => {
               >
                 Switch user
               </button>
-              <button
-                v-if="appConfig.uiMode === 'admin'"
-                type="button"
-                role="menuitem"
-                aria-disabled="true"
-                @click="closeUserMenu"
+              <!--
+                Operating context: the organization the session resolved to, and
+                the way out of it (M16.7; CLIENT-011 through CLIENT-013).
+
+                Links to the context screens, never the switcher itself. The top
+                bar must not be the organization or event switcher (UI contract
+                4.3, 6.1), and switching happens on a dedicated surface (4.4).
+              -->
+              <div
+                v-if="showContextSwitching || contextNotice"
+                class="app-shell__context-switch"
+                role="group"
+                aria-label="Operating context"
               >
-                Switch organization
-              </button>
+                <p>Context</p>
+                <strong v-if="sessionOrganizationLabel">
+                  {{ sessionOrganizationLabel }}
+                </strong>
+                <template v-if="showContextSwitching">
+                  <RouterLink
+                    role="menuitem"
+                    :to="{ name: 'organizations.index' }"
+                    @click="closeUserMenu"
+                  >
+                    Switch organization
+                  </RouterLink>
+                  <RouterLink
+                    v-if="sessionOrganizationId"
+                    role="menuitem"
+                    :to="{
+                      name: 'organizations.events.index',
+                      params: { organizationId: sessionOrganizationId },
+                    }"
+                    @click="closeUserMenu"
+                  >
+                    Switch event
+                  </RouterLink>
+                </template>
+                <!--
+                  No switcher, and why. Absent rather than disabled, because a
+                  disabled control invites someone to keep trying something that
+                  cannot work here (operating guide 8.3A) — but silence would
+                  read as a control the client had lost, so the reason is stated
+                  (technical spec 11A.3).
+                -->
+                <small
+                  v-else-if="contextNotice"
+                  class="app-shell__context-notice"
+                  :data-reason="sessionSwitchingUnavailableReason"
+                  role="status"
+                >
+                  <strong>{{ contextNotice.label }}</strong>
+                  {{ contextNotice.meaning }}
+                </small>
+              </div>
               <!--
                 The departments the session says this user is associated with,
                 and the standing they hold in each. Absent entirely for a user
@@ -673,15 +769,6 @@ onBeforeUnmount(() => {
                   </span>
                 </button>
               </div>
-              <button
-                v-if="appConfig.uiMode === 'admin'"
-                type="button"
-                role="menuitem"
-                aria-disabled="true"
-                @click="closeUserMenu"
-              >
-                Switch event
-              </button>
               <button
                 type="button"
                 role="menuitem"
@@ -1328,13 +1415,39 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 
-.app-shell__department-switch {
+.app-shell__department-switch,
+.app-shell__context-switch {
   display: grid;
   gap: var(--m-space-1);
   margin: var(--m-space-1) 0;
   padding: var(--m-space-2) 0;
   border-top: 1px solid var(--m-border-subtle);
   border-bottom: 1px solid var(--m-border-subtle);
+}
+
+.app-shell__context-switch > strong {
+  padding: 0 var(--m-space-2);
+  color: var(--m-text-primary);
+  font-size: var(--m-text-sm);
+}
+
+/*
+ * A statement, not a control: no hover, no pointer, nothing that reads as
+ * something to press. It is here so the absence of the switcher is explained
+ * rather than looking like a control the client lost.
+ */
+.app-shell__context-notice {
+  display: block;
+  padding: 0 var(--m-space-2);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.app-shell__context-notice strong {
+  display: block;
+  color: var(--m-text-secondary);
 }
 
 .app-shell__department-switch button {

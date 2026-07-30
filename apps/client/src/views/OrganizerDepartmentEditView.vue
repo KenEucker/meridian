@@ -4,11 +4,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
-import {
-  findDepartmentBranding,
-  loadBrandingProfile,
-} from "@/branding/brandingProfile";
-import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
+import { reloadSessionBranding } from "@/branding/brandingContext";
+import { findDepartmentBranding } from "@/branding/brandingProfile";
 import {
   archiveOrganizerDepartment,
   canManageOrganizerDepartments,
@@ -87,7 +84,7 @@ watch(
 
 async function onLogoChanged(url: string | null): Promise<void> {
   logoUrl.value = url;
-  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+  await reloadSessionBranding();
 }
 
 async function onSubmit(): Promise<void> {

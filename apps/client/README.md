@@ -142,6 +142,40 @@ menu is the quickest way to see the rule at work:
 | Gate | staff | their own pages and Gate's member pages |
 | DPW | team lead of Bikes | their own pages, DPW's member pages, and Team Overview |
 
+### Organization and event context (local QA)
+
+The organization and event the client works in come from the node first
+(CLIENT-011). A node locked to an event decides both, and the session response
+narrows them to the user's own departments and teams. The branding the shell
+paints follows the same answer, so there is no organization identifier anywhere
+in the client any more.
+
+Switching lives on two surfaces, `/organizations` and
+`/organizations/:organizationId/events`, reached from the user menu and from
+Home. They are not in the top bar: the top bar must not be the organization or
+event switcher (UI implementation contract 4.3, 6.1).
+
+Switching is connected-only and is offered only by a node with no event lock:
+
+| State | What the client shows |
+|---|---|
+| Node locked to an event | No switcher, and a line saying the node runs that event and holds no other event's records |
+| Offline, or running on cached permissions | No switcher, and a line saying switching needs the node |
+| One organization and one event | Nothing at all — there is nothing to switch to |
+| Connected, more than one association | Both surfaces, listing only associations the session response carries |
+
+The seeded development node is locked to its one event, which is the right shape
+for an on-site node and the wrong shape for exercising a switcher. The specs
+build the unlocked shape through `switchableLocalFieldContext()` in
+`src/session/localFieldSession.ts`; to see it in the browser, point the client at
+a node whose `nodes` row carries no `event_id`.
+
+A switch that lands re-resolves permissions, navigation, branding, and the
+durable session copy, and drops what belonged to the context being left — the
+department selection and the previous event's Field Reports. Reports still
+pending sync are kept whatever event they belong to: they are unsent work this
+device is the only copy of.
+
 ## Routes
 
 Domain routes use the UI Implementation Contract route inventory and are shared

@@ -20,6 +20,7 @@ import {
 import {
   installLocalFieldSession,
   localFieldSessionDocument,
+  switchableLocalFieldContext,
 } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
@@ -41,11 +42,18 @@ const routerLinkStub = {
   RouterLink: { template: "<a><slot /></a>" },
 };
 
+/**
+ * Both the flag and the event, because two things read connectivity: the
+ * composable a mounted shell creates, and the process-wide signal the session
+ * modules read. Only the event reaches the second one, and leaving it un-fired
+ * would leak an offline device into the next test.
+ */
 function setDeviceOnLine(value: boolean): void {
   Object.defineProperty(window.navigator, "onLine", {
     configurable: true,
     value,
   });
+  window.dispatchEvent(new Event(value ? "online" : "offline"));
 }
 
 /*
@@ -346,40 +354,143 @@ describe("AppShell fixed UI mode display", () => {
       "Switch user",
     );
     expect(wrapper.get(".app-shell__user-menu").text()).toContain(
-      "Switch organization",
-    );
-    expect(wrapper.get(".app-shell__user-menu").text()).toContain(
       "Switch department",
     );
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Organizer");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Gate");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("DPW");
-    expect(wrapper.get(".app-shell__user-menu").text()).toContain(
-      "Switch event",
-    );
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Sign out");
   });
+});
 
-  it("keeps admin-only switching placeholders out of non-admin shells", async () => {
+/*
+ * The organization and event switcher in the shell (M16.7; CLIENT-011 through
+ * CLIENT-013).
+ *
+ * The shell links to the two context screens and never becomes the switcher
+ * itself, which is UI contract 4.3 and 6.1. What is asserted here is when those
+ * links exist at all.
+ */
+describe("AppShell context switching", () => {
+  async function openUserMenu(uiMode: UiMode = "admin") {
     const wrapper = mount(AppShell, {
-      props: {
-        config: appConfigForUiMode("field"),
-      },
+      props: { config: appConfigForUiMode(uiMode) },
       global: { stubs: routerLinkStub },
     });
 
     await wrapper.get(".app-shell__user-button").trigger("click");
 
-    expect(wrapper.get(".app-shell__user-menu").text()).toContain(
-      "Switch department",
+    return wrapper;
+  }
+
+  it("offers both context screens to a connected user with more than one context", async () => {
+    installClientSession(
+      localFieldSessionDocument(switchableLocalFieldContext()),
+      "network",
     );
-    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain(
-      "Switch organization",
-    );
-    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain(
-      "Switch event",
+
+    const menu = (await openUserMenu()).get(".app-shell__user-menu");
+
+    expect(menu.text()).toContain("Switch organization");
+    expect(menu.text()).toContain("Switch event");
+    // The organization the session resolved to, named where the way out of it
+    // is (contract rule 4.5: show operating context).
+    expect(menu.get(".app-shell__context-switch strong").text()).toBe(
+      "Idaho Burners",
     );
   });
+
+  it("says the node owns the context instead of offering a switcher", async () => {
+    // The seeded session is a locked on-site node: it holds one event's records
+    // and no others, so it reports the lock rather than a choice it could not
+    // serve (technical spec 11A.3).
+    const menu = (await openUserMenu()).get(".app-shell__user-menu");
+
+    expect(menu.text()).not.toContain("Switch organization");
+    expect(menu.text()).not.toContain("Switch event");
+    expect(menu.get(".app-shell__context-notice").attributes("data-reason")).toBe(
+      "node_locked",
+    );
+    expect(menu.get(".app-shell__context-notice").text()).toContain(
+      "Local Field Event",
+    );
+  });
+
+  it("offers no switcher to a client that cannot reach its node", async () => {
+    // CLIENT-013. Absent rather than disabled, because a disabled control
+    // invites the user to keep trying something that cannot work without
+    // connectivity they do not have (operating guide 8.3A).
+    installClientSession(
+      localFieldSessionDocument(switchableLocalFieldContext()),
+      "network",
+    );
+    setDeviceOnLine(false);
+
+    const menu = (await openUserMenu()).get(".app-shell__user-menu");
+
+    expect(menu.text()).not.toContain("Switch organization");
+    expect(menu.text()).not.toContain("Switch event");
+    expect(menu.find(".app-shell__context-notice").attributes("data-reason")).toBe(
+      "disconnected",
+    );
+  });
+
+  it("offers no switcher to a client running on cached permissions", async () => {
+    // A device can hold a network and still not reach its node, which on an
+    // event site is the more common of the two.
+    installClientSession(
+      localFieldSessionDocument(switchableLocalFieldContext()),
+      "cache",
+    );
+
+    const menu = (await openUserMenu()).get(".app-shell__user-menu");
+
+    expect(menu.text()).not.toContain("Switch organization");
+    expect(menu.find(".app-shell__context-notice").attributes("data-reason")).toBe(
+      "disconnected",
+    );
+  });
+
+  it("says nothing at all to a user with one organization and one event", async () => {
+    // Nobody misses a switcher they have nothing to switch to, so there is no
+    // notice either.
+    installClientSession(
+      localFieldSessionDocument({
+        context: {
+          ...localFieldSessionDocument().context,
+          node_locked: false,
+          node_locked_event_id: null,
+          switching_available: false,
+        },
+      }),
+      "network",
+    );
+
+    const menu = (await openUserMenu()).get(".app-shell__user-menu");
+
+    expect(menu.text()).not.toContain("Switch organization");
+    expect(menu.find(".app-shell__context-notice").exists()).toBe(false);
+  });
+
+  it("keeps context selection out of a Kiosk, which is pinned rather than choosing", async () => {
+    // Contract mode matrix, "Home / context selection": Field and Admin select
+    // context; Kiosk requires pinned context setup.
+    installClientSession(
+      localFieldSessionDocument(switchableLocalFieldContext()),
+      "network",
+    );
+
+    const kiosk = (await openUserMenu("kiosk")).get(".app-shell__user-menu");
+    expect(kiosk.text()).not.toContain("Switch organization");
+    expect(kiosk.find(".app-shell__context-notice").exists()).toBe(false);
+
+    const field = (await openUserMenu("field")).get(".app-shell__user-menu");
+    expect(field.text()).toContain("Switch organization");
+    expect(field.text()).toContain("Switch event");
+  });
+});
+
+describe("AppShell menu behavior", () => {
 
   it("updates workflow access when the user switches departments", async () => {
     // Every entry below follows a capability the session response scopes to the

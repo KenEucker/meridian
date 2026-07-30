@@ -72,3 +72,30 @@ export function useConnectivity(
 
   return readonly(state);
 }
+
+/**
+ * The same signal for modules that are not components.
+ *
+ * `useConnectivity` disposes its listeners with the effect scope that created
+ * it, which is exactly right for a component and impossible for a module: a
+ * module has no scope to dispose with and no mount to key off. This one is
+ * created once and lives as long as the process, which is what a question like
+ * "may this client switch event right now" needs — that answer has to be
+ * readable from a plain computed, not only from inside a mounted component.
+ *
+ * Both read `deviceConnectivityState`, so a component and a module cannot
+ * disagree about whether the device has a network.
+ */
+export const deviceConnectivity: Readonly<Ref<ConnectivityState>> = (() => {
+  const scope = globalThis as ConnectivityScope;
+  const state = ref<ConnectivityState>(deviceConnectivityState(scope));
+
+  scope.addEventListener?.("online", () => {
+    state.value = deviceConnectivityState(scope);
+  });
+  scope.addEventListener?.("offline", () => {
+    state.value = deviceConnectivityState(scope);
+  });
+
+  return readonly(state);
+})();
