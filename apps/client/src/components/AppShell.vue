@@ -33,6 +33,8 @@ import {
   describeConnectivityState,
   type ConnectivityState,
 } from "@/offline/syncStatus";
+import { refreshClientSessionOnReconnect } from "@/session/clientSession";
+import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
 type ThemeChoice = "light" | "dark";
@@ -321,11 +323,20 @@ const connectivity = useConnectivity();
 
 watch(
   connectivity,
-  (state) => {
+  (state, previous) => {
     if (state === "online") {
       void syncFieldReportOutbox();
       void syncAttendanceOutbox();
     }
+
+    /*
+     * Regaining connectivity also re-resolves the session, so a permission that
+     * was taken away is gone as soon as the device can be told (CLIENT-010). It
+     * is asked on the transition only, and only of a client that already holds a
+     * session; the guard is inside the call so the rule stays in one place with
+     * the rest of the session behavior.
+     */
+    void refreshClientSessionOnReconnect(state, previous);
   },
   { immediate: true },
 );
@@ -771,6 +782,12 @@ onBeforeUnmount(() => {
       </div>
     </header>
     <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
+    <!--
+      Cached-permission state sits beside connectivity state, not inside it. A
+      device can be online with stale permissions or offline with fresh ones, and
+      merging the two indicators loses the distinction (contract 19A.2).
+    -->
+    <SessionPermissionsNotice class="app-shell__session-notice" />
     <main class="app-shell__main">
       <slot />
     </main>
@@ -1374,7 +1391,8 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
-.app-shell__offline-banner {
+.app-shell__offline-banner,
+.app-shell__session-notice {
   width: var(--m-app-content-max);
   margin: var(--m-space-3) auto 0;
 }
