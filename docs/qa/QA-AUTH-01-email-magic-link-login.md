@@ -258,7 +258,8 @@ Start the client in Field mode with `pnpm run client:dev:field -- --host 127.0.0
     curl -i http://127.0.0.1:8000/api/me -H "Accept: application/json" -H "Authorization: Bearer PASTE-TOKEN"
     ```
 
-63. Confirm the removed shared token authenticates nothing, with or without the settings a node used to carry:
+63. With the client still signed in and open, revoke that device's token from the God Mode **API Tokens** screen, then switch back to the client window without reloading it. Confirm it signs itself out within a moment: the shell reports nobody signed in, `meridian.api-token.v1` and `meridian.session.v1` are gone from `localStorage`, and the application is on `/login`.
+64. Confirm the removed shared token authenticates nothing, with or without the settings a node used to carry:
 
     ```bash
     curl -i -X POST http://127.0.0.1:8000/api/commands/submit-field-report -H "Content-Type: application/json" -H "Accept: application/json" -H "Authorization: Bearer local-field-dev-token" -d '{"id":"11111111-1111-4111-8111-111111111111","event_id":"11111111-1111-4111-8111-111111111111","title":"Shared token","body":"Should be refused."}'
@@ -309,6 +310,8 @@ Start the client in Field mode with `pnpm run client:dev:field -- --host 127.0.0
 - The device the client registers appears in the God Mode token list, so a token issued to an application is revocable as a unit of hardware like any other.
 - Field Report upload works under that token, and only under it.
 - Signing out returns the application to `/login`, removes the stored token from the device, and stops that token working on the node.
+- A token revoked in God Mode signs its device out when somebody next returns to the application, with no reload: the credential and the cached session are dropped and the client is on the sign-in screen.
+- A client working from a cached session offline is not sent to sign in — it is an offline device mid-event, and the cache exists so it keeps working (CLIENT-007).
 - The removed `local.field` shared token authenticates nothing. `Bearer local-field-dev-token` is refused like any other string that is not an issued token, whether or not the settings it used are present.
 - The raw login code and the raw bearer token appear only in the mail body and the HTTP response respectively. Neither appears in `storage/logs/laravel.log` from Meridian's own logging, and neither is stored in readable form — `api_login_codes.code_hash` and `personal_access_tokens.token` hold hashes.
 
@@ -332,7 +335,7 @@ Start the client in Field mode with `pnpm run client:dev:field -- --host 127.0.0
 - Screenshots of the Kiosk session bar signed in, showing the timeout warning, and of `/kiosk/timed-out` holding no name or event.
 - Screenshot of the pending Field Report still queued after the session ended and a new one began.
 - Screenshots of the client's sign-in and code entry screens, and of the shell user menu showing the signed-in name.
-- The `401` from step 62 after signing out, and the `401` from step 63 for the removed shared token.
+- The `401` from step 62 after signing out, the signed-out client after revocation in step 63, and the `401` from step 64 for the removed shared token.
 
 ## Failure notes
 

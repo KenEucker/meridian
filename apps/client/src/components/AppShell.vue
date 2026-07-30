@@ -31,6 +31,7 @@ import {
 import { signedIn, signOut } from "@/session/apiLogin";
 import {
   clientSessionState,
+  refreshClientSessionOnFocus,
   refreshClientSessionOnReconnect,
 } from "@/session/clientSession";
 import {
@@ -436,6 +437,33 @@ watch(
 );
 
 /*
+ * Coming back to the application re-resolves the session too (AUTH-023).
+ *
+ * A revoked token stops working on its next request, and an application nobody
+ * is touching makes none — so without this, a device whose credential was
+ * revoked keeps showing the last thing it knew until somebody reloads it.
+ * Returning to the screen is when that matters, because it is when somebody is
+ * about to act on what the screen says.
+ *
+ * Both events, because they are different returns: `focus` covers moving
+ * between windows, `visibilitychange` covers a phone waking or a tab coming back
+ * to the front. The call rate limits itself and skips a client with no session,
+ * so registering both costs nothing.
+ */
+function refreshOnAttention(): void {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    return;
+  }
+
+  void refreshClientSessionOnFocus();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("focus", refreshOnAttention);
+  document.addEventListener("visibilitychange", refreshOnAttention);
+}
+
+/*
  * The tab icon follows the same mark the header does (BRAND-002, BRAND-028).
  *
  * Driven off `chromeMarkUrl` rather than off `markUrl`, because the two differ
@@ -525,6 +553,11 @@ onBeforeUnmount(() => {
     document.removeEventListener("pointerdown", handleUserOutsideClick);
     document.removeEventListener("pointerdown", handleWorkflowMenuOutsideClick);
     document.removeEventListener("pointerdown", handleStaffMenuOutsideClick);
+    document.removeEventListener("visibilitychange", refreshOnAttention);
+  }
+
+  if (typeof window !== "undefined") {
+    window.removeEventListener("focus", refreshOnAttention);
   }
 });
 </script>
