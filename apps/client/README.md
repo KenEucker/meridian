@@ -90,6 +90,31 @@ photos; detail shows local previews and syncs text then photos. Files land in
 `apps/server/storage/app/attachments/field-reports/`. Use **Retry upload** on
 detail if the server was offline at submit time.
 
+### Session and cached permissions (local QA)
+
+The client resolves its session from `GET /api/me` at startup and stores the
+answer under the `meridian.session.v1` key in `localStorage` (`src/session/`).
+That stored copy is what the client boots from when the node cannot be reached,
+so a device restarted out of coverage still knows what its user may do.
+
+To exercise it without a server:
+
+1. load the app once against a reachable node so a session is stored;
+2. stop the server, or take the device offline, and reload;
+3. the shell shows **Permissions are cached** with the time the node last
+   answered.
+
+The cached copy stays usable until the active event window of the event the
+session resolved to has ended. Past that the shell shows **Permissions need a
+refresh** instead and the client grants no capability until a refresh succeeds.
+A refresh the node answers with 401 or 403 clears the stored session outright,
+because the node was reached and refused the credential.
+
+`GET /api/me` sits behind `auth:sanctum`, so until client login is wired the
+endpoint answers 401 in local development and no session is established. Nothing
+in the client reads these capabilities yet — navigation still comes from the
+department fixtures — so an unestablished session changes nothing visible.
+
 ## Routes
 
 Domain routes use the UI Implementation Contract route inventory and are shared

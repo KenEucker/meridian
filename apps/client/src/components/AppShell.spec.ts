@@ -16,6 +16,11 @@ import {
   selectedFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
+import {
+  clearClientSession,
+  installClientSessionForTests,
+} from "@/session/clientSession";
+import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
 vi.mock("@/field-reports/syncFieldReportOutbox", () => ({
@@ -41,6 +46,7 @@ afterEach(() => {
   resetToMeridian();
   resetSelectedFixtureDepartment();
   setDeviceOnLine(true);
+  clearClientSession();
   window.localStorage.removeItem("meridian.ui.theme");
   delete document.documentElement.dataset.theme;
   vi.clearAllMocks();
@@ -122,6 +128,46 @@ describe("AppShell offline/sync display", () => {
         .get(".app-shell__connection-note")
         .attributes("data-connection-status"),
     ).toBe("degraded");
+  });
+
+  it("keeps cached-permission state separate from connectivity state", () => {
+    // Contract 19A.2: a device can be online with stale permissions or offline
+    // with fresh ones, so the two indicators are two elements.
+    setDeviceOnLine(true);
+    installClientSessionForTests(
+      fixtureSessionDocument(),
+      "cache",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = mount(AppShell, {
+      global: { stubs: routerLinkStub },
+    });
+
+    expect(wrapper.find(".offline-banner").exists()).toBe(false);
+    expect(
+      wrapper.get(".session-permissions").attributes("data-session-status"),
+    ).toBe("cached");
+    expect(wrapper.get(".session-permissions").text()).toContain(
+      "Permissions are cached",
+    );
+    expect(wrapper.get(".session-permissions").text()).toContain(
+      "Last refreshed",
+    );
+  });
+
+  it("says nothing about permissions when the session is current", () => {
+    installClientSessionForTests(
+      fixtureSessionDocument(),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = mount(AppShell, {
+      global: { stubs: routerLinkStub },
+    });
+
+    expect(wrapper.find(".session-permissions").exists()).toBe(false);
   });
 
   it("drains Field Report and attendance outboxes when online", () => {
