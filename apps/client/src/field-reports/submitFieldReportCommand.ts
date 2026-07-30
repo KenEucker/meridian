@@ -1,48 +1,28 @@
-import { meridianJson } from "@/api/meridianApi";
+// The `submit-field-report` request body (M9.3; M16.10).
+//
+// Since M16.10 this module builds the body and stops there: the shared command
+// outbox owns the request, the retry, and the acceptance. Building the body at
+// queue time rather than at send time is what lets a queued Field Report be sent
+// by a process that has never loaded the author catalog — after a restart, or
+// from a device whose user has since signed out of a shared workstation.
+
 import type { OfflineFieldReport } from "@/field-reports/offlineFieldReport";
 
-export interface SubmittedFieldReportAcceptance {
-  readonly id: string;
-  readonly fraNumber: string | null;
-  readonly serverReceivedAt: string | null;
-  readonly syncStatus: string;
-}
-
-interface SubmitFieldReportResponse {
-  readonly id: string;
-  readonly fra_number: string | null;
-  readonly server_received_at: string | null;
-  readonly sync_status: string;
-}
-
-/** POST /api/commands/submit-field-report for a locally finalized report. */
-export async function submitFieldReportCommand(
+/** POST body for `/api/commands/submit-field-report`. */
+export function fieldReportCommandPayload(
   report: OfflineFieldReport,
-): Promise<SubmittedFieldReportAcceptance> {
-  const response = await meridianJson<SubmitFieldReportResponse>(
-    "/api/commands/submit-field-report",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        id: report.id,
-        event_id: report.eventId,
-        department_id: report.departmentId,
-        team_id: report.teamId,
-        staff_id: report.staffId,
-        temporary_local_number: report.temporaryLocalNumber,
-        title: report.title,
-        body: report.body,
-        device_submitted_at: report.deviceSubmittedAt,
-        origin_device_id: report.originDeviceId,
-        origin_node_id: report.originNodeId,
-      }),
-    },
-  );
-
-  return {
-    id: response.id,
-    fraNumber: response.fra_number,
-    serverReceivedAt: response.server_received_at,
-    syncStatus: response.sync_status,
-  };
+): Readonly<Record<string, unknown>> {
+  return Object.freeze({
+    id: report.id,
+    event_id: report.eventId,
+    department_id: report.departmentId,
+    team_id: report.teamId,
+    staff_id: report.staffId,
+    temporary_local_number: report.temporaryLocalNumber,
+    title: report.title,
+    body: report.body,
+    device_submitted_at: report.deviceSubmittedAt,
+    origin_device_id: report.originDeviceId,
+    origin_node_id: report.originNodeId,
+  });
 }

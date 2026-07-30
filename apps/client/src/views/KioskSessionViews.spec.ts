@@ -4,16 +4,12 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import KioskSessionBar from "@/components/KioskSessionBar.vue";
+import { resetFieldReportRuntime } from "@/field-reports/fieldReportRuntime";
+import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import {
-  authorFieldReportCatalog,
-  persistFieldReportRuntime,
-  reloadFieldReportRuntimeFromLocalStore,
-  resetFieldReportRuntime,
-} from "@/field-reports/fieldReportRuntime";
-import {
-  createOfflineFieldReport,
-  FIELD_REPORT_PENDING_SYNC,
-} from "@/field-reports/offlineFieldReport";
+  reloadCommandOutboxFromLocalStore,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSession";
@@ -113,6 +109,7 @@ afterEach(async () => {
   resetWorkstationSession();
   clearClientSession();
   await resetFieldReportRuntime();
+  resetCommandOutbox();
   configureMeridianApi(null);
   window.localStorage.clear();
   vi.unstubAllGlobals();
@@ -274,28 +271,24 @@ describe("kiosk.safe-timeout", () => {
   it("says the queued work is still there", async () => {
     // The honest answer to "did the machine keep my check-in", stated rather
     // than left for somebody to worry about (kiosk guide 4.4).
-    authorFieldReportCatalog.recordSubmitted({
-      ...createOfflineFieldReport(
-        {
-          eventId: "event-1",
-          submittedByUserId: "user-1",
-          staffId: "staff-1",
-          originDeviceId: "device-1",
-          originNodeId: "node-1",
-          title: "Radio handed back at Gate A",
-          body: "Radio handed back at Gate A.",
-        },
-        {
-          generateId: () => "aaaaaaaa-1111-2222-3333-444455556666",
-          now: () => new Date("2027-06-01T12:01:00.000Z"),
-        },
-      ),
-      syncStatus: FIELD_REPORT_PENDING_SYNC,
-    });
-    persistFieldReportRuntime();
-    // The outbox is rebuilt from the durable store, which is the state this
-    // surface is reached in: the session end wiped the catalog and left the queue.
-    reloadFieldReportRuntimeFromLocalStore();
+    submitFieldReport(
+      {
+        eventId: "event-1",
+        submittedByUserId: "user-1",
+        staffId: "staff-1",
+        originDeviceId: "device-1",
+        originNodeId: "node-1",
+        title: "Radio handed back at Gate A",
+        body: "Radio handed back at Gate A.",
+      },
+      {
+        generateId: () => "aaaaaaaa-1111-2222-3333-444455556666",
+        now: () => new Date("2027-06-01T12:01:00.000Z"),
+      },
+    );
+    // Read back from the durable store, which is the state this surface is
+    // reached in: the session end wiped the catalog and left the queue.
+    reloadCommandOutboxFromLocalStore();
 
     const router = buildRouter();
     await router.push({ name: "kiosk.safe-timeout" });
@@ -304,7 +297,7 @@ describe("kiosk.safe-timeout", () => {
     const wrapper = mount(KioskSafeTimeoutView, { global: { plugins: [router] } });
 
     expect(wrapper.find(".safe-timeout__queued").text()).toContain(
-      "1 queued report is",
+      "1 queued command is",
     );
   });
 });

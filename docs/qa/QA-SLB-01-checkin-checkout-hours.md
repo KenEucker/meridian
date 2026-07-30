@@ -120,10 +120,13 @@ rows, unauthorized actors are refused, and each successful export is audited.
      src/department-ops/logistics.spec.ts \
      src/views/DepartmentOpsViews.spec.ts \
      src/shift-board/offlineAttendanceOperation.spec.ts \
-     src/shift-board/pendingAttendanceQueue.spec.ts \
-     src/shift-board/syncAttendanceOutbox.spec.ts \
-     src/shift-board/attendanceOperationLocalStore.spec.ts
+     src/outbox/commandOutbox.spec.ts \
+     src/outbox/submitCommand.spec.ts \
+     src/outbox/syncCommandOutbox.spec.ts
    ```
+   Attendance queueing, durability, and transport moved onto the shared command
+   outbox in M16.10, so the attendance evidence is now in the outbox suites:
+   attendance is a caller of that queue rather than the owner of one.
 3. Confirm all suites pass. Retain output proving:
    - check-in requires authorized Department Logistics/lead access and on-site
      department presence;

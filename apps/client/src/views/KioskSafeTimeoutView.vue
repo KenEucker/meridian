@@ -3,9 +3,9 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
 import {
-  fieldReportCatalogRevision,
-  pendingFieldReportQueue,
-} from "@/field-reports/fieldReportRuntime";
+  commandOutbox,
+  commandOutboxRevision,
+} from "@/outbox/commandOutboxRuntime";
 
 /*
  * `kiosk.safe-timeout` — the surface a timed-out session lands on (UI
@@ -23,9 +23,9 @@ import {
  */
 
 const queuedCount = computed(() => {
-  void fieldReportCatalogRevision.value;
+  void commandOutboxRevision.value;
 
-  return pendingFieldReportQueue.size;
+  return commandOutbox.unsent().length;
 });
 </script>
 
@@ -38,7 +38,7 @@ const queuedCount = computed(() => {
     </p>
 
     <p v-if="queuedCount > 0" class="safe-timeout__queued" role="status">
-      {{ queuedCount === 1 ? "1 queued report is" : `${queuedCount} queued reports are` }}
+      {{ queuedCount === 1 ? "1 queued command is" : `${queuedCount} queued commands are` }}
       still on this workstation and will sync when the node is reachable.
     </p>
 

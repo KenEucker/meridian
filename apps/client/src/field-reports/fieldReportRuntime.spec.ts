@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   authorFieldReportCatalog,
   discardFieldReportsOutsideEvent,
-  pendingFieldReportQueue,
   persistFieldReportRuntime,
   reloadFieldReportRuntimeFromLocalStore,
   resetFieldReportRuntime,
@@ -15,6 +14,11 @@ import {
   type CreateOfflineFieldReportInput,
   type OfflineFieldReport,
 } from "@/field-reports/offlineFieldReport";
+import {
+  commandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
+import { queueCommand } from "@/outbox/submitCommand";
 
 /*
  * What a context switch does to the author's Field Report catalog (M16.7;
@@ -59,6 +63,7 @@ function install(reports: readonly OfflineFieldReport[]): void {
 
 afterEach(async () => {
   await resetFieldReportRuntime();
+  resetCommandOutbox();
 });
 
 describe("discarding Field Reports on a context switch", () => {
@@ -87,6 +92,12 @@ describe("discarding Field Reports on a context switch", () => {
         FIELD_REPORT_PENDING_SYNC,
       ),
     ]);
+    queueCommand({
+      commandType: "submit-field-report",
+      idempotencyKey: "cccccccc-1111-2222-3333-444455556666",
+      payload: { id: "cccccccc-1111-2222-3333-444455556666" },
+      eventId: "event-previous",
+    });
 
     discardFieldReportsOutsideEvent("event-next");
 
@@ -94,7 +105,7 @@ describe("discarding Field Reports on a context switch", () => {
       ["cccccccc-1111-2222-3333-444455556666"],
     );
     expect(
-      pendingFieldReportQueue.pending().map((entry) => entry.id),
+      commandOutbox.unsent().map((command) => command.idempotencyKey),
     ).toEqual(["cccccccc-1111-2222-3333-444455556666"]);
   });
 
