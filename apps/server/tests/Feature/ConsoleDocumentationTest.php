@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Services\Console\OperatorDocumentation;
+use App\Services\Console\TechnicianDocumentation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Orchid\Platform\Dashboard;
 use Tests\TestCase;
@@ -16,13 +16,13 @@ class ConsoleDocumentationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_repository_operator_tree_is_packaged_with_the_server(): void
+    public function test_the_repository_technician_tree_is_packaged_with_the_server(): void
     {
-        $documentation = app(OperatorDocumentation::class);
+        $documentation = app(TechnicianDocumentation::class);
 
         $this->assertTrue(
             $documentation->isPackaged(),
-            'Operator documentation is missing. Run: corepack pnpm run docs:package',
+            'Technician documentation is missing. Run: corepack pnpm run docs:package',
         );
 
         $slugs = array_column($documentation->index(), 'slug');
@@ -45,8 +45,8 @@ class ConsoleDocumentationTest extends TestCase
 
     public function test_the_packaged_copy_matches_the_repository_source(): void
     {
-        $source = base_path('../../docs/operator');
-        $packaged = app(OperatorDocumentation::class)->directory();
+        $source = base_path('../../docs/technician');
+        $packaged = app(TechnicianDocumentation::class)->directory();
 
         $this->assertDirectoryExists($source);
 
@@ -55,7 +55,7 @@ class ConsoleDocumentationTest extends TestCase
 
             $this->assertFileExists(
                 $packaged.'/'.$name,
-                "docs/operator/{$name} is not packaged. Run: corepack pnpm run docs:package",
+                "docs/technician/{$name} is not packaged. Run: corepack pnpm run docs:package",
             );
             $this->assertSame(
                 file_get_contents($file),
@@ -70,7 +70,7 @@ class ConsoleDocumentationTest extends TestCase
         $response = $this->actingAs($this->godModeUser())->get(route('platform.documentation'));
 
         $response->assertOk();
-        $response->assertSee('Meridian operator documentation packaged with this deployment.');
+        $response->assertSee('Meridian technician documentation packaged with this deployment.');
         $response->assertSee('Deployment');
         $response->assertSee('Break-glass procedures');
 
@@ -93,7 +93,7 @@ class ConsoleDocumentationTest extends TestCase
 
     public function test_documents_can_be_filtered_by_title_and_by_heading(): void
     {
-        $documentation = app(OperatorDocumentation::class);
+        $documentation = app(TechnicianDocumentation::class);
 
         $byTitle = array_column($documentation->index('Deployment'), 'slug');
         $this->assertContains('deployment', $byTitle);
@@ -122,7 +122,7 @@ class ConsoleDocumentationTest extends TestCase
 
     public function test_the_page_shows_documentation_version_beside_build_version(): void
     {
-        $documentation = app(OperatorDocumentation::class);
+        $documentation = app(TechnicianDocumentation::class);
 
         $response = $this->actingAs($this->godModeUser())->get(route('platform.documentation'));
 
@@ -142,11 +142,11 @@ class ConsoleDocumentationTest extends TestCase
     }
 
     /**
-     * GOD-015: the Documentation page serves `docs/operator/` and nothing else.
+     * GOD-015: the Documentation page serves `docs/technician/` and nothing else.
      */
     public function test_specification_qa_plan_and_issue_documents_are_not_reachable(): void
     {
-        $documentation = app(OperatorDocumentation::class);
+        $documentation = app(TechnicianDocumentation::class);
 
         foreach ([
             'meridian-requirements-document',
@@ -172,9 +172,9 @@ class ConsoleDocumentationTest extends TestCase
         }
 
         // The boundary is enforced by what is packaged, so nothing outside the
-        // operator tree is even present to be served.
+        // technician tree is even present to be served.
         $packagedFiles = array_map('basename', glob($documentation->directory().'/*.md') ?: []);
-        $sourceFiles = array_map('basename', glob(base_path('../../docs/operator/*.md')) ?: []);
+        $sourceFiles = array_map('basename', glob(base_path('../../docs/technician/*.md')) ?: []);
 
         sort($packagedFiles);
         sort($sourceFiles);
@@ -184,7 +184,7 @@ class ConsoleDocumentationTest extends TestCase
 
     public function test_a_path_traversal_slug_resolves_to_nothing(): void
     {
-        $documentation = app(OperatorDocumentation::class);
+        $documentation = app(TechnicianDocumentation::class);
 
         foreach ([
             '../../../docs/meridian-technical-spec',

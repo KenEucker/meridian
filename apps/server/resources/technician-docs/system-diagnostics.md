@@ -56,7 +56,7 @@ sanitized bundle the export button produces.
 support request: build and version information, node identity, check results,
 and configuration *source/status* metadata. It never contains configuration
 values, secrets, tokens, credentials, or volunteer data — that is enforced by
-construction and by automated tests, not by operator care.
+construction and by automated tests, not by technician care.
 
 ## The scheduler heartbeat
 

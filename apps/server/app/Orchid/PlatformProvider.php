@@ -254,7 +254,7 @@ class PlatformProvider extends OrchidServiceProvider
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.permissions', __('Permission catalog'))
                 ->addPermission('platform.imports', __('Bulk CSV imports'))
-                ->addPermission('platform.documentation', __('Operator documentation'))
+                ->addPermission('platform.documentation', __('Technician documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),
 
             ItemPermission::group(__('Infrastructure'))

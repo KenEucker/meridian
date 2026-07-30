@@ -35,8 +35,8 @@ auth.json
 # Frontend app build output
 apps/*/dist/
 # Changelog data file, generated from repository history by the release build
-# step (GOD-021). The packaged operator documentation beside it is committed
-# because it mirrors authored content in docs/operator/; this one is derived
+# step (GOD-021). The packaged technician documentation beside it is committed
+# because it mirrors authored content in docs/technician/; this one is derived
 # from git history and would change on every merge.
 apps/server/resources/changelog/
 # Vue/TS incremental build info

@@ -32,11 +32,11 @@ beta and beta to release promotion PRs exact.
 Any generated artifact that is committed to the repository and records the root
 version must be regenerated inside the version bump commit itself.
 
-Today that is the packaged operator documentation manifest,
-`apps/server/resources/operator-docs/manifest.json`, which records the version
+Today that is the packaged technician documentation manifest,
+`apps/server/resources/technician-docs/manifest.json`, which records the version
 its documentation was packaged from so the God Mode Documentation page can show
 it beside the running build version (GOD-017). The bump workflow runs
-`scripts/release/package-operator-docs.mjs` and commits the result alongside
+`scripts/release/package-technician-docs.mjs` and commits the result alongside
 `package.json`.
 
 The reason is that `docs:check` runs on every pull request. A bump that changes

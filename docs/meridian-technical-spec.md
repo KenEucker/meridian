@@ -1075,7 +1075,7 @@ Login codes may be generated two ways.
 
 God mode generates a code for any known user. This is the assisted-recovery and event-preparation path.
 
-A user generates a code for themselves from a device on which they already hold a valid session. This is the on-site path: a staff member standing at a kiosk with no internet, no email delivery, and no operator available generates a code on their phone and types it into the workstation in front of them.
+A user generates a code for themselves from a device on which they already hold a valid session. This is the on-site path: a staff member standing at a kiosk with no internet, no email delivery, and no technician available generates a code on their phone and types it into the workstation in front of them.
 
 Self-service generation requires only that the generating device can reach the node that will accept the code. It does not require internet access, central node reachability, email delivery, or any other out-of-band channel. This is the reason the mechanism exists — it is the only login path that survives an on-site node with no route to central.
 
@@ -2872,10 +2872,10 @@ it reports (GOD-010).
 When every check passes, the landing screen states that explicitly instead of
 rendering an empty region (GOD-011).
 
-## 22.6 Operator documentation
+## 22.6 Technician documentation
 
-Operator documentation is maintained in the repository under `docs/operator/`
-and is written for node operators and God Mode users rather than as
+Technician documentation is maintained in the repository under `docs/technician/`
+and is written for node technicians and God Mode users rather than as
 specification. It covers deployment, node setup and pairing, configuration and
 config source resolution, data repair, sync conflict resolution, and break-glass
 procedures (GOD-013).
@@ -2885,14 +2885,14 @@ page:
 
 - renders documentation packaged with the deployment, requires no network
   access, and does not fetch from an external service (GOD-014);
-- serves `docs/operator/` only. The requirements document, technical
+- serves `docs/technician/` only. The requirements document, technical
   specification, data/API specification, UI documentation, QA scripts,
   architecture decision records, development plan, traceability matrix, and
   issue documents are not reachable from it (GOD-015);
 - provides a document index, renders Markdown headings, lists, tables, and
   fenced code, and allows filtering documents by title and heading (GOD-016);
-- displays the packaged operator documentation version alongside the running
-  build version so an operator can tell whether the two match (GOD-017).
+- displays the packaged technician documentation version alongside the running
+  build version so a technician can tell whether the two match (GOD-017).
 
 The packaged documentation version is the Meridian version the documentation was
 packaged from. It is recorded when documentation is packaged and is compared
@@ -2952,7 +2952,7 @@ version from section 26.3, not the administrative framework version (GOD-028).
 
 ## 22A.1 Purpose
 
-Two God Mode console pages give an operator the truth about a Meridian node
+Two God Mode console pages give a technician the truth about a Meridian node
 (SYS-001 through SYS-041):
 
 - **System Configuration** answers: which environment variables exist, what is

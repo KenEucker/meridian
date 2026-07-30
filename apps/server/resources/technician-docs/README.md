@@ -1,7 +1,7 @@
-# Meridian Operator Documentation
+# Meridian Technician Documentation
 
 This is the documentation for people who run a Meridian deployment: node
-operators, on-site technical leads, and God Mode users.
+technicians, on-site technical leads, and God Mode users.
 
 It is packaged with the deployment and is served inside the God Mode console
 under **Documentation**, so it is readable on an on-site node with no internet
@@ -21,7 +21,7 @@ connection.
 
 ## What is not here
 
-This tree is operator documentation, not specification. It does not contain the
+This tree is technician documentation, not specification. It does not contain the
 requirements document, the technical specification, the data/API specification,
 UI documentation, QA scripts, architecture decision records, the development
 plan, the traceability matrix, or issue documents. Those live elsewhere in

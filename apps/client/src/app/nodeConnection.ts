@@ -13,7 +13,7 @@
 //     whatever was baked in at build time.
 //
 // So the last two had no way to be pointed at a node without rebuilding, which
-// is not a thing an operator setting up an on-site node can do.
+// is not a thing a technician setting up an on-site node can do.
 //
 // Resolution order, highest first:
 //

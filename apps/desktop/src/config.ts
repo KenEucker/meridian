@@ -67,7 +67,7 @@ export interface ResolvedServerUrl {
  *
  * A missing file is the normal case and is not an error. A malformed one is
  * also treated as absent: the wrapper's job is to open the UI, and refusing to
- * start because a settings file has a stray comma would strand an operator with
+ * start because a settings file has a stray comma would strand a technician with
  * no way in.
  */
 export function readStoredServerUrl(
@@ -100,7 +100,7 @@ export function readStoredServerUrl(
   } catch {
     // Same policy as a malformed file: an address the wrapper cannot use is
     // no address. It falls back to the default and says so in the health
-    // panel, which is a state an operator can see and correct.
+    // panel, which is a state a technician can see and correct.
     return null;
   }
 }
@@ -109,7 +109,7 @@ export function readStoredServerUrl(
  * Resolve the node this wrapper works against, with its provenance.
  *
  * `MERIDIAN_SERVER_URL` stays highest so a scripted or containerized
- * deployment keeps deciding, and an operator's stored setting is next. The
+ * deployment keeps deciding, and a technician's stored setting is next. The
  * source travels with the value because "which node is this and who said so"
  * is the question the health panel exists to answer.
  */

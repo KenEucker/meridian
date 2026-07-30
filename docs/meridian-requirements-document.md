@@ -2478,7 +2478,7 @@ God Mode console:
 
 - Meridian orientation landing screen replacing the framework welcome content
 - attention list covering configuration readiness, organizational data gaps, and unresolved sync conflicts
-- in-console Documentation page served from a packaged `docs/operator/` tree
+- in-console Documentation page served from a packaged `docs/technician/` tree
 - in-console Changelog page grouped by Meridian version, generated at build time and refreshed from the source repository only by the central node
 - removal of framework documentation links, framework changelog links, and framework version display
 - Meridian logo, compact mark, and favicon throughout the console and its authentication surfaces
@@ -4794,7 +4794,7 @@ The God Mode console shall provide a Documentation page served from Meridian's o
 
 ### GOD-013
 
-Operator documentation shall be maintained in the repository under `docs/operator/` and shall be written for node operators and God Mode users, covering deployment, node setup and pairing, configuration and config source resolution, data repair, sync conflict resolution, and break-glass procedures.
+Technician documentation shall be maintained in the repository under `docs/technician/` and shall be written for node technicians and God Mode users, covering deployment, node setup and pairing, configuration and config source resolution, data repair, sync conflict resolution, and break-glass procedures.
 
 ### GOD-014
 
