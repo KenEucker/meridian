@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\Auth\ApiAuthController;
+use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
@@ -110,6 +111,25 @@ Route::post('/auth/session', [ApiAuthController::class, 'createSession'])
 Route::delete('/auth/session', [ApiAuthController::class, 'destroySession'])
     ->middleware('auth:sanctum')
     ->name('api.auth.session.destroy');
+
+/*
+ * Self-service shared-workstation login codes (AUTH-026 through AUTH-029;
+ * technical spec 13.2; data/API 12.4).
+ *
+ * The one login path that survives an on-site node with no route to central: a
+ * person generates a code on a device where they already hold a session and
+ * types it into the kiosk in front of them. Behind `auth:sanctum` because
+ * holding that session is the whole authority for the request, and the code is
+ * for whoever holds it — the route accepts no user field (AUTH-028).
+ *
+ * Throttled as well as domain rate limited (AUTH-029). The domain limits bound
+ * how many codes may exist per user and per node; this bounds how hard one
+ * caller may ask, which is a different question and the only one a refusal can
+ * answer before any state is read.
+ */
+Route::post('/auth/shared-workstation-login-code', [SharedWorkstationLoginCodeController::class, 'store'])
+    ->middleware(['auth:sanctum', 'throttle:20,1'])
+    ->name('api.auth.shared-workstation-login-code.store');
 
 /*
  * Session resolution (CLIENT-001 through CLIENT-003; technical spec 11A.2;

@@ -22,7 +22,16 @@ later.
    event it may have neither by design.
 2. Kiosk and shared workstations use login codes, not magic links. If personal
    devices are stuck, a shared workstation may still work.
-3. Do not create accounts by hand to get around a mail problem. A verified email
+3. A login code needs nothing but this node. Somebody who still holds a session
+   on their own phone can generate their own code for the workstation in front of
+   them, with no internet, no mail, and no help from you. Point them at it before
+   you do anything else — it is the fastest fix in this document.
+4. If they hold no session at all, generate a code for them in God Mode under
+   **Workstation Login Codes**. Pick the person and the workstation, and read the
+   code to them. It is shown once and is not recoverable; if it is lost, generate
+   another. A code lasts six weeks, works only at the workstation it was
+   generated for, and can be revoked from the same screen.
+5. Do not create accounts by hand to get around a mail problem. A verified email
    resolves to exactly one user, and hand-made duplicates have to be merged
    afterwards.
 

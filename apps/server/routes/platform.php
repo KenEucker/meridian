@@ -31,6 +31,7 @@ use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
 use App\Orchid\Screens\Role\RoleListScreen;
+use App\Orchid\Screens\SharedWorkstationLoginCode\SharedWorkstationLoginCodeListScreen;
 use App\Orchid\Screens\Shift\ShiftEditScreen;
 use App\Orchid\Screens\Shift\ShiftListScreen;
 use App\Orchid\Screens\Staff\StaffEditScreen;
@@ -398,6 +399,13 @@ Route::screen('api-tokens', ApiTokenListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('API Tokens'), route('platform.api-tokens')));
+
+// Platform > Infrastructure > Workstation Login Codes
+Route::screen('workstation-login-codes', SharedWorkstationLoginCodeListScreen::class)
+    ->name('platform.shared-workstation-login-codes')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Workstation Login Codes'), route('platform.shared-workstation-login-codes')));
 
 // Platform > Infrastructure > Node Configuration
 Route::screen('node-config', NodeConfigScreen::class)
