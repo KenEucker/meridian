@@ -27,7 +27,7 @@ class TeamAdminHttpTest extends TestCase
             ->where('is_default', true)
             ->firstOrFail();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-department-details', [
                 'department_id' => $department->id,
                 'name' => '  Rangers Updated  ',
@@ -45,7 +45,7 @@ class TeamAdminHttpTest extends TestCase
             'actor_user_id' => $actor->id,
         ]);
 
-        $create = $this->actingAs($actor)
+        $create = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $department->id,
                 'name' => '  Operators  ',
@@ -70,7 +70,7 @@ class TeamAdminHttpTest extends TestCase
             'source_context' => AuditEvent::SOURCE_API,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams")
             ->assertOk()
             ->assertJsonPath('department_id', $department->id)
@@ -78,7 +78,7 @@ class TeamAdminHttpTest extends TestCase
             ->assertJsonFragment(['id' => $teamId, 'code' => 'OPERATORS'])
             ->assertJsonFragment(['id' => $defaultTeam->id, 'is_default' => true]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-team', [
                 'team_id' => $defaultTeam->id,
                 'name' => 'Rangers Default Renamed',
@@ -97,7 +97,7 @@ class TeamAdminHttpTest extends TestCase
             'entity_id' => $defaultTeam->id,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-team', [
                 'team_id' => $teamId,
             ])
@@ -110,18 +110,18 @@ class TeamAdminHttpTest extends TestCase
             'entity_id' => $teamId,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams?status=archived")
             ->assertOk()
             ->assertJsonFragment(['id' => $teamId]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams?status=active")
             ->assertOk()
             ->assertJsonMissing(['id' => $teamId])
             ->assertJsonFragment(['id' => $defaultTeam->id]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-team', [
                 'team_id' => $teamId,
             ])
@@ -134,7 +134,7 @@ class TeamAdminHttpTest extends TestCase
             'entity_id' => $teamId,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams/{$teamId}")
             ->assertOk()
             ->assertJsonPath('name', 'Operators')
@@ -145,7 +145,7 @@ class TeamAdminHttpTest extends TestCase
     {
         [$department, $actor] = $this->departmentWithSelfAdmin('department_administration');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $department->id,
                 'name' => 'Planning Support',
@@ -222,7 +222,7 @@ class TeamAdminHttpTest extends TestCase
             'membership_role' => 'member',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams")
             ->assertOk()
             ->assertJsonPath('access.can_administer', false)
@@ -244,7 +244,7 @@ class TeamAdminHttpTest extends TestCase
             ->assertJsonMissing(['team_id' => $peerTeam->id])
             ->assertJsonPath('department_staff.2.staff_id', $assignedStaff->id);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams/{$ledTeam->id}")
             ->assertOk()
             ->assertJsonPath('access.can_administer', false)
@@ -252,11 +252,11 @@ class TeamAdminHttpTest extends TestCase
             ->assertJsonPath('id', $ledTeam->id)
             ->assertJsonFragment(['staff_id' => $assignedStaff->id]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams/{$peerTeam->id}")
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $department->id,
                 'name' => 'Denied',
@@ -274,11 +274,11 @@ class TeamAdminHttpTest extends TestCase
         $staff = Staff::factory()->create();
         $actor->staffProfiles()->attach($staff->id);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/teams")
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $department->id,
                 'name' => 'Denied',
@@ -286,7 +286,7 @@ class TeamAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-department-details', [
                 'department_id' => $department->id,
                 'name' => 'Denied',
@@ -294,7 +294,7 @@ class TeamAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-team', [
                 'team_id' => $team->id,
             ])
@@ -306,7 +306,7 @@ class TeamAdminHttpTest extends TestCase
         [, $actor] = $this->departmentWithSelfAdmin('department_lead');
         $otherDepartment = Department::factory()->create(['code' => 'GATE']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $otherDepartment->id,
                 'name' => 'Cross Dept',
@@ -314,7 +314,7 @@ class TeamAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-department-details', [
                 'department_id' => $otherDepartment->id,
                 'name' => 'Cross Dept',
@@ -331,7 +331,7 @@ class TeamAdminHttpTest extends TestCase
             ->where('is_default', true)
             ->firstOrFail();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-team', [
                 'team_id' => $defaultTeam->id,
             ])
@@ -344,7 +344,7 @@ class TeamAdminHttpTest extends TestCase
         [$department, $actor] = $this->departmentWithSelfAdmin('department_lead');
         Team::factory()->for($department)->create(['code' => 'OPERATORS']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-team', [
                 'department_id' => $department->id,
                 'name' => 'Operators Two',
@@ -359,26 +359,26 @@ class TeamAdminHttpTest extends TestCase
         [$department, $actor] = $this->departmentWithSelfAdmin('department_lead');
         $team = Team::factory()->for($department)->create(['code' => 'SWING']);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-team', [
                 'team_id' => $team->id,
             ])
             ->assertOk();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/archive-team', [
                 'team_id' => $team->id,
             ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Team is already archived.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-team', [
                 'team_id' => $team->id,
             ])
             ->assertOk();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-team', [
                 'team_id' => $team->id,
             ])

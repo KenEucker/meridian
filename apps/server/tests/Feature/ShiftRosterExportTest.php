@@ -44,7 +44,7 @@ class ShiftRosterExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['organizer'])
+        $response = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster");
 
         $response->assertOk();
@@ -63,7 +63,7 @@ class ShiftRosterExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = $this->actingAs($scenario['organizer'])
+        $contents = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster")
             ->assertOk()
             ->getContent();
@@ -81,7 +81,7 @@ class ShiftRosterExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster")
             ->assertOk()
             ->getContent());
@@ -123,7 +123,7 @@ class ShiftRosterExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster")
             ->assertOk()
             ->getContent());
@@ -149,7 +149,7 @@ class ShiftRosterExportTest extends TestCase
 
         // SHIFT-013: a department lead removed Bruno from the day shift, so the
         // roster no longer expects him.
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster")
             ->assertOk()
             ->getContent();
@@ -164,7 +164,7 @@ class ShiftRosterExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['rangersLead'])
+        $response = $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster");
 
         $response->assertOk();
@@ -186,7 +186,7 @@ class ShiftRosterExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster?department_id={$scenario['gate']->id}")
             ->assertOk()
             ->getContent());
@@ -203,13 +203,13 @@ class ShiftRosterExportTest extends TestCase
         $eventId = $scenario['event']->id;
 
         // A department lead may not reach another department's roster.
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/shift-roster?department_id={$scenario['gate']->id}")
             ->assertForbidden();
 
         // Plain staff hold no export capability at all, even for a shift they
         // are themselves on.
-        $this->actingAs($scenario['plainStaffUser'])
+        $this->actingAsClient($scenario['plainStaffUser'])
             ->get("/api/events/{$eventId}/exports/shift-roster")
             ->assertForbidden();
 
@@ -220,12 +220,12 @@ class ShiftRosterExportTest extends TestCase
             ->where('code', 'organizer')
             ->firstOrFail());
 
-        $this->actingAs($foreignOrganizer)
+        $this->actingAsClient($foreignOrganizer)
             ->get("/api/events/{$eventId}/exports/shift-roster")
             ->assertForbidden();
 
         // A department outside this event's organization is not addressable.
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/shift-roster?department_id={$foreignDepartment->id}")
             ->assertNotFound();
 
@@ -238,7 +238,7 @@ class ShiftRosterExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/shift-roster")
             ->assertOk();
 

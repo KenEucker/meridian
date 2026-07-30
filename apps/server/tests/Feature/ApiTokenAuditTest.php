@@ -13,6 +13,7 @@ use App\Services\Auth\ApiTokenRevoker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -88,6 +89,21 @@ class ApiTokenAuditTest extends TestCase
         $audit = AuditEvent::query()->where('action', ApiTokenIssuer::AUDIT_ISSUED)->sole();
 
         $this->assertSame((string) $token->getKey(), $audit->entity_id);
+
+        /*
+         * And that identifier is a UUID (M16.11).
+         *
+         * `audit_events.entity_id` is a `uuid` column, because every entity
+         * Meridian audits is identified by one. Sanctum's table arrived with an
+         * auto-incrementing key, and PostgreSQL refuses an integer written into
+         * that column outright — so on the database Meridian deploys on, this
+         * required audit entry took token issuance down with it. The suite runs
+         * on SQLite, which accepts the integer, so the shape is asserted here
+         * rather than left to the driver to notice.
+         */
+        $this->assertTrue(Str::isUuid($audit->entity_id), 'A token is audited by a UUID identifier.');
+        $this->assertTrue(Str::isUuid((string) $token->getKey()), 'A token is keyed by UUID.');
+
         $this->assertSame($user->id, $audit->actor_user_id);
         $this->assertSame((string) $device->getKey(), $audit->actor_device_id);
         $this->assertSame(AuditEvent::SOURCE_API, $audit->source_context);

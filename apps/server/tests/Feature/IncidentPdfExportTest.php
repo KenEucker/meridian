@@ -47,7 +47,7 @@ class IncidentPdfExportTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event);
         $incident = $this->seededIncident($event, $actor);
 
-        $response = $this->actingAs($actor)
+        $response = $this->actingAsClient($actor)
             ->get("/api/events/{$event->id}/incidents/{$incident->id}/pdf");
 
         $response->assertOk();
@@ -99,7 +99,7 @@ class IncidentPdfExportTest extends TestCase
         foreach (['ic_operator', 'ic_viewer'] as $role) {
             $actor = $this->userWithEventRole($role, $event);
 
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->get("/api/events/{$event->id}/incidents/{$incident->id}/pdf")
                 ->assertForbidden()
                 ->assertJsonPath(
@@ -126,19 +126,19 @@ class IncidentPdfExportTest extends TestCase
         $organizer = $this->userWithRole('organizer', $event, eventScoped: false);
         $departmentLead = $this->userWithRole('department_lead', $event, eventScoped: false);
 
-        $this->actingAs($wrongEventLead)
+        $this->actingAsClient($wrongEventLead)
             ->get("/api/events/{$event->id}/incidents/{$incident->id}/pdf")
             ->assertForbidden();
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->get("/api/events/{$event->id}/incidents/{$incident->id}/pdf")
             ->assertForbidden();
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->get("/api/events/{$event->id}/incidents/{$incident->id}/pdf")
             ->assertForbidden();
 
-        $this->actingAs($wrongEventLead)
+        $this->actingAsClient($wrongEventLead)
             ->get("/api/events/{$otherEvent->id}/incidents/{$incident->id}/pdf")
             ->assertNotFound();
 

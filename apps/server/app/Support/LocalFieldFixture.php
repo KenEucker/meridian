@@ -3,10 +3,14 @@
 namespace App\Support;
 
 /**
- * Well-known local QA identities shared with the field app development session.
+ * Well-known local development identities shared with the field app.
  *
- * Used only when `meridian.local_field_api` is enabled for Alpha 1 local
- * exercise of Field Report text/photo command upload without Sanctum.
+ * Ordinary development seed data, written by
+ * `php artisan meridian:seed-local-field-fixture` and reached by signing in as
+ * that user. It once backed the `local.field` shared-token middleware, which is
+ * removed (M16.11): the fixture no longer authenticates anything, it only gives
+ * a developer a populated organization, event, staff record, and device to sign
+ * in against.
  */
 final class LocalFieldFixture
 {

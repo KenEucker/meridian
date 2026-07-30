@@ -42,7 +42,7 @@ class ShiftAdminHttpTest extends TestCase
 
         $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
 
-        $create = $this->actingAs($actor)
+        $create = $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,
@@ -78,14 +78,14 @@ class ShiftAdminHttpTest extends TestCase
         ]);
 
         // Index lists the shift with team/requirement context.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->getJson("/api/departments/{$department->id}/shifts")
             ->assertOk()
             ->assertJsonPath('access.can_administer', true)
             ->assertJsonFragment(['id' => $shiftId, 'title' => 'Gate Watch']);
 
         // Update keeps the schedule but drops the waiver requirement.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 'shift_id' => $shiftId,
                 'eligible_team_id' => $team->id,
@@ -111,7 +111,7 @@ class ShiftAdminHttpTest extends TestCase
         ]);
 
         // Cancel and restore before start are soft transitions.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/cancel-shift', ['shift_id' => $shiftId])
             ->assertOk();
         $this->assertNotNull(Shift::query()->findOrFail($shiftId)->cancelled_at);
@@ -120,7 +120,7 @@ class ShiftAdminHttpTest extends TestCase
             'entity_id' => $shiftId,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/restore-shift', ['shift_id' => $shiftId])
             ->assertOk()
             ->assertJsonPath('cancelled_at', null);
@@ -146,7 +146,7 @@ class ShiftAdminHttpTest extends TestCase
         ];
 
         // End must be after start (SHIFT-002).
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [
                 ...$base,
                 'ends_at' => $startsAt->copy()->subHour()->toIso8601String(),
@@ -155,7 +155,7 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('message', 'Shift end must be after shift start.');
 
         // Signup close must be after open (SHIFT-008).
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [
                 ...$base,
                 'signup_opens_at' => Carbon::now()->addDays(3)->toIso8601String(),
@@ -165,14 +165,14 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('message', 'Signup close must be after signup open.');
 
         // Capacity must be positive when set (SHIFT-007).
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [...$base, 'capacity' => 0])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Capacity must be at least 1 when set.');
 
         // Eligible team must belong to the department (SHIFT-004).
         $foreignTeam = Team::factory()->create();
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [
                 ...$base,
                 'eligible_team_id' => $foreignTeam->id,
@@ -181,7 +181,7 @@ class ShiftAdminHttpTest extends TestCase
 
         // Event must belong to the department organization (SHIFT-001).
         $foreignEvent = Event::factory()->create();
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-shift', [
                 ...$base,
                 'event_id' => $foreignEvent->id,
@@ -214,7 +214,7 @@ class ShiftAdminHttpTest extends TestCase
         ];
 
         // Schedule changes are locked once the shift has started.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 ...$payload,
                 'ends_at' => Carbon::now()->addHours(6)->toIso8601String(),
@@ -223,7 +223,7 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('message', 'Scheduled times are locked once the shift has started.');
 
         // The eligible team is locked once the shift has started.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 ...$payload,
                 'eligible_team_id' => $otherTeam->id,
@@ -232,7 +232,7 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('message', 'The eligible team is locked once the shift has started.');
 
         // Non-schedule fields stay editable for permitted leads.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 ...$payload,
                 'title' => 'Started Watch (Renamed)',
@@ -242,7 +242,7 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('title', 'Started Watch (Renamed)');
 
         // Started shifts cannot be cancelled.
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/cancel-shift', ['shift_id' => $shift->id])
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Shifts cannot be cancelled once they have started.');
@@ -265,7 +265,7 @@ class ShiftAdminHttpTest extends TestCase
             'removed_at' => null,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 'shift_id' => $shift->id,
                 'eligible_team_id' => $team->id,
@@ -291,7 +291,7 @@ class ShiftAdminHttpTest extends TestCase
             'ends_at' => Carbon::now()->addWeek()->addHours(6),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-shift', [
                 'shift_id' => $shift->id,
                 'eligible_team_id' => $team->id,
@@ -328,7 +328,7 @@ class ShiftAdminHttpTest extends TestCase
         ]);
 
         // Index is scoped to led-team shifts.
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->getJson("/api/departments/{$department->id}/shifts")
             ->assertOk()
             ->assertJsonPath('access.can_administer', false)
@@ -337,7 +337,7 @@ class ShiftAdminHttpTest extends TestCase
 
         // Team lead can create shifts for the led team.
         $startsAt = Carbon::now()->addWeeks(2);
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->postJson('/api/commands/create-shift', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,
@@ -349,7 +349,7 @@ class ShiftAdminHttpTest extends TestCase
             ->assertCreated();
 
         // But not for peer teams.
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->postJson('/api/commands/create-shift', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,
@@ -360,7 +360,7 @@ class ShiftAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->postJson('/api/commands/update-shift', [
                 'shift_id' => $peerShift->id,
                 'eligible_team_id' => $peerTeam->id,
@@ -370,12 +370,12 @@ class ShiftAdminHttpTest extends TestCase
             ])
             ->assertForbidden();
 
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->getJson("/api/departments/{$department->id}/shifts/{$peerShift->id}")
             ->assertForbidden();
 
         // A led shift cannot be moved to a team the lead does not manage.
-        $this->actingAs($teamLead)
+        $this->actingAsClient($teamLead)
             ->postJson('/api/commands/update-shift', [
                 'shift_id' => $ledShift->id,
                 'eligible_team_id' => $peerTeam->id,
@@ -401,12 +401,12 @@ class ShiftAdminHttpTest extends TestCase
             'department_membership_id' => $membership->id,
         ]);
 
-        $this->actingAs($plainUser)
+        $this->actingAsClient($plainUser)
             ->getJson("/api/departments/{$department->id}/shifts")
             ->assertForbidden();
 
         $startsAt = Carbon::now()->addWeek();
-        $this->actingAs($plainUser)
+        $this->actingAsClient($plainUser)
             ->postJson('/api/commands/create-shift', [
                 'department_id' => $department->id,
                 'event_id' => $event->id,

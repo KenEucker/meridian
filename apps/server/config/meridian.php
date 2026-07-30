@@ -322,23 +322,6 @@ return [
         'signed_url_expires_minutes' => (int) env('MERIDIAN_FIELD_REPORT_PHOTO_SIGNED_URL_MINUTES', 5),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Local Field API (development only)
-    |--------------------------------------------------------------------------
-    |
-    | Enables Bearer-token auth for Field Report command uploads from the Vue
-    | field app during local QA (M9.8). Keep disabled outside local development.
-    | Seed identities with: php artisan meridian:seed-local-field-fixture
-    |
-    */
-
-    'local_field_api' => [
-        'enabled' => filter_var(env('MERIDIAN_LOCAL_FIELD_API_ENABLED', false), FILTER_VALIDATE_BOOL),
-        'token' => env('MERIDIAN_LOCAL_FIELD_API_TOKEN'),
-        'user_id' => env('MERIDIAN_LOCAL_FIELD_API_USER_ID', \App\Support\LocalFieldFixture::USER_ID),
-    ],
-
     'oauth' => [
         'post_login_redirect' => env('MERIDIAN_OAUTH_REDIRECT', '/home'),
 

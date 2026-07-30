@@ -135,6 +135,12 @@ corepack pnpm run setup:local
 configuration, runs migrations, and seeds the local Field fixture used by Field
 Report command upload QA. `server:setup` is an alias for this same path.
 
+It configures no API credential. Client applications authenticate with a
+device-bound bearer token, so a developer signs in to the client at `/login` as
+the seeded fixture user (`local-field@meridian.test`) and reads the login
+code out of the mail log with `corepack pnpm run server:logs -- --filter "login
+code"`.
+
 ### Quick Local Check
 
 Run the process checks before opening a pull request:

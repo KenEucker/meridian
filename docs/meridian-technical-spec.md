@@ -843,6 +843,10 @@ Token issuance, expiry, and revocation are audit-sensitive. Raw token values are
 
 The shared-token `local.field` middleware used during Alpha 1 mobile Field QA is superseded by this mechanism and is removed. The seeded local Field fixture user remains as ordinary development seed data and is reached by logging in as that user.
 
+Every operational endpoint accepts a bearer token or a shared-workstation session key, and nothing else. A Kiosk holds the second rather than the first (section 13.3), so both credentials reach the same routes and each one authorizes the user it resolves against the same policies; a workstation's pinned context grants no authority of its own. The routes that carry no credential at all are node-to-node exchange, which authenticates by node signature, the login paths themselves, and the organization branding profile a device resolves before it has a session.
+
+A client holds its token durably, so an application that was signed in yesterday is signed in when it is reopened without coverage today. It disposes of the token when the person signs out, and drops it when the node refuses it — a revoked token or a revoked device arrives as a refused session refresh, and a client that kept the credential would go on presenting one the node has already withdrawn.
+
 ---
 
 # 11A. Client Session and API Binding

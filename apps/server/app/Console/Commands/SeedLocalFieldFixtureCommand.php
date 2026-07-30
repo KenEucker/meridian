@@ -29,6 +29,11 @@ use Illuminate\Support\Facades\Hash;
 
 /**
  * Seeds the well-known local Field Report QA fixture (M9.8 local upload path).
+ *
+ * Development seed data and nothing more (M16.11). The rows it writes — an
+ * organization, an event, a staff member, a device, a node — are what a
+ * developer signs in against; the seeded user authenticates the same way every
+ * other user does, with a login code and a device-bound token.
  */
 class SeedLocalFieldFixtureCommand extends Command
 {
@@ -245,7 +250,11 @@ class SeedLocalFieldFixtureCommand extends Command
         $this->info('Local Field fixture seeded.');
         $this->line('User: '.LocalFieldFixture::USER_EMAIL.' / password');
         $this->line('Event ID: '.LocalFieldFixture::EVENT_ID);
-        $this->line('Run `corepack pnpm run env:local` from the repository root to configure matching local API/client env.');
+        // The fixture is seed data, not a credential (M16.11). A client reaches
+        // it by signing in as this user: ask for a login code from the client's
+        // sign-in screen and read the code out of the mail log.
+        $this->line('Sign in from a client with this email; the login code is mailed (storage/logs in local development).');
+        $this->line('Run `corepack pnpm run env:local` from the repository root to configure matching local client env.');
 
         return self::SUCCESS;
     }

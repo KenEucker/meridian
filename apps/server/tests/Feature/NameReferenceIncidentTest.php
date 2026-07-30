@@ -125,7 +125,7 @@ class NameReferenceIncidentTest extends TestCase
             body: 'Responder checked @Blue-Hat and @Gate_A.',
         );
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
             ->assertOk()
             ->assertJsonPath('incident.name_reference_chips.0.token', 'Blue-Hat')
@@ -178,7 +178,7 @@ class NameReferenceIncidentTest extends TestCase
             'stricken_reason' => 'Wrong incident.',
         ]);
 
-        $response = $this->actingAs($viewer)
+        $response = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents/{$incident->id}")
             ->assertOk()
             ->assertJsonMissing(['token' => 'HiddenReport']);
@@ -221,7 +221,7 @@ class NameReferenceIncidentTest extends TestCase
             body: 'Other event token @Shared_Name.',
         );
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=@Shared_Name")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $matching->id)
@@ -229,7 +229,7 @@ class NameReferenceIncidentTest extends TestCase
             ->assertJsonMissing(['id' => $unmatched->id])
             ->assertJsonMissing(['title' => 'Other event incident']);
 
-        $this->actingAs($wrongEventViewer)
+        $this->actingAsClient($wrongEventViewer)
             ->getJson("/api/events/{$event->id}/incidents?search=Shared_Name")
             ->assertForbidden();
     }
@@ -258,7 +258,7 @@ class NameReferenceIncidentTest extends TestCase
             'linked_at' => Carbon::parse('2027-07-04T20:30:00Z'),
         ]);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=AttachedSearch")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $incident->id)

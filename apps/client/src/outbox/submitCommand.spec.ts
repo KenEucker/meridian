@@ -32,7 +32,7 @@ beforeEach(() => {
   setDeviceOnLine(true);
   configureMeridianApi({
     baseUrl: "http://127.0.0.1:8000",
-    bearerToken: "local-field-dev-token",
+    bearerToken: "device-token",
   });
 });
 

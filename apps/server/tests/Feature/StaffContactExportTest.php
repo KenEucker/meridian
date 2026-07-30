@@ -44,7 +44,7 @@ class StaffContactExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['organizer'])
+        $response = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact");
 
         $response->assertOk();
@@ -63,7 +63,7 @@ class StaffContactExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact")
             ->assertOk()
             ->getContent();
@@ -90,7 +90,7 @@ class StaffContactExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['rangersLead'])
+        $response = $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact");
 
         $response->assertOk();
@@ -121,7 +121,7 @@ class StaffContactExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['rangersLead'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact")
             ->assertOk()
             ->getContent());
@@ -144,7 +144,7 @@ class StaffContactExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact")
             ->assertOk()
             ->getContent();
@@ -160,7 +160,7 @@ class StaffContactExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/staff-contact?department_id={$scenario['rangers']->id}")
             ->assertOk()
             ->getContent());
@@ -188,7 +188,7 @@ class StaffContactExportTest extends TestCase
 
         $eventId = $scenario['event']->id;
 
-        $narrowed = $this->rows((string) $this->actingAs($scenario['rangersLead'])
+        $narrowed = $this->rows((string) $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/staff-contact?department_id={$scenario['rangers']->id}")
             ->assertOk()
             ->getContent());
@@ -197,7 +197,7 @@ class StaffContactExportTest extends TestCase
 
         // Exporting the whole event is an organizer export again, and Gate's
         // staff are not theirs to pull emergency contacts for.
-        $eventWide = (string) $this->actingAs($scenario['rangersLead'])
+        $eventWide = (string) $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/staff-contact")
             ->assertOk()
             ->getContent();
@@ -212,13 +212,13 @@ class StaffContactExportTest extends TestCase
         $eventId = $scenario['event']->id;
 
         // A department lead may not reach another department's contact list.
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/staff-contact?department_id={$scenario['gate']->id}")
             ->assertForbidden();
 
         // Plain staff hold no export capability, even over the department whose
         // list they are themselves on.
-        $this->actingAs($scenario['plainStaffUser'])
+        $this->actingAsClient($scenario['plainStaffUser'])
             ->get("/api/events/{$eventId}/exports/staff-contact")
             ->assertForbidden();
 
@@ -234,12 +234,12 @@ class StaffContactExportTest extends TestCase
             'fern',
         );
 
-        $this->actingAs($foreignOrganizer['user'])
+        $this->actingAsClient($foreignOrganizer['user'])
             ->get("/api/events/{$eventId}/exports/staff-contact")
             ->assertForbidden();
 
         // A department outside this event's organization is not addressable.
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/staff-contact?department_id={$foreignDepartment->id}")
             ->assertNotFound();
 
@@ -253,7 +253,7 @@ class StaffContactExportTest extends TestCase
         $scenario = $this->scenario();
         $eventId = $scenario['event']->id;
 
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/staff-contact")
             ->assertOk();
 
@@ -271,7 +271,7 @@ class StaffContactExportTest extends TestCase
         $this->assertSame([(string) $scenario['rangers']->id], $departmentExport->after_json['department_ids']);
         $this->assertTrue($departmentExport->after_json['emergency_contacts_included']);
 
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/staff-contact")
             ->assertOk();
 

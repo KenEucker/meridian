@@ -53,7 +53,7 @@ class IncidentSearchHttpTest extends TestCase
         $this->note($byNote, 'Ranger reported a medical assist.');
         $this->attachFieldReport($byFieldReport, $event, $viewer, body: 'Observed a medical handoff.');
 
-        $response = $this->actingAs($viewer)
+        $response = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=medical&state=all")
             ->assertOk();
 
@@ -67,13 +67,13 @@ class IncidentSearchHttpTest extends TestCase
         $this->assertNotContains($byNumber->id, $ids);
         $this->assertNotContains($byLocation->id, $ids);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=INC-2027-000501")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $byNumber->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=gate+a")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $byLocation->id)
@@ -88,7 +88,7 @@ class IncidentSearchHttpTest extends TestCase
         $literal = $this->incident($event, ['title' => 'Shared_Name handoff']);
         $wildcard = $this->incident($event, ['title' => 'SharedXName handoff']);
 
-        $response = $this->actingAs($viewer)
+        $response = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=shared_name")
             ->assertOk();
 
@@ -115,7 +115,7 @@ class IncidentSearchHttpTest extends TestCase
             unlinked: true,
         );
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=retracted")
             ->assertOk()
             ->assertJsonCount(0, 'incidents');
@@ -141,7 +141,7 @@ class IncidentSearchHttpTest extends TestCase
             'linked_at' => Carbon::parse('2027-07-04T20:30:00Z'),
         ]);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=Blue-Hat")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $incident->id)
@@ -164,7 +164,7 @@ class IncidentSearchHttpTest extends TestCase
             'closed_at' => Carbon::parse('2027-07-04T22:00:00Z'),
         ]);
 
-        $default = $this->actingAs($viewer)
+        $default = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonPath('filters.state', 'active');
@@ -174,7 +174,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentIds($default->json('incidents')),
         );
 
-        $all = $this->actingAs($viewer)
+        $all = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?state=all")
             ->assertOk();
 
@@ -183,7 +183,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentIds($all->json('incidents')),
         );
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?state=closed")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $closed->id)
@@ -210,31 +210,31 @@ class IncidentSearchHttpTest extends TestCase
         $responder = $this->attachResponder($critical, 'Vera');
         $this->attachResponder($routine, 'Omar');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?priority=Critical")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $critical->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?type=medical")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $critical->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?responder={$responder->id}")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $critical->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?started_from=2027-07-05")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $routine->id)
             ->assertJsonCount(1, 'incidents');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?started_to=2027-07-04")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $critical->id)
@@ -258,7 +258,7 @@ class IncidentSearchHttpTest extends TestCase
             'closed_at' => Carbon::parse('2027-07-04T22:00:00Z'),
         ]);
 
-        $response = $this->actingAs($viewer)
+        $response = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=medical&priority=Serious")
             ->assertOk();
 
@@ -290,7 +290,7 @@ class IncidentSearchHttpTest extends TestCase
             'priority_label' => Incident::PRIORITY_CRITICAL,
         ]);
 
-        $byState = $this->actingAs($viewer)
+        $byState = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=state&direction=asc")
             ->assertOk();
 
@@ -299,7 +299,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentIds($byState->json('incidents')),
         );
 
-        $byPriority = $this->actingAs($viewer)
+        $byPriority = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=priority&direction=asc")
             ->assertOk();
 
@@ -308,7 +308,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentIds($byPriority->json('incidents')),
         );
 
-        $descending = $this->actingAs($viewer)
+        $descending = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=priority&direction=desc")
             ->assertOk();
 
@@ -334,13 +334,13 @@ class IncidentSearchHttpTest extends TestCase
             'location_name' => 'Zephyr camp',
         ]);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=incident&direction=asc")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $first->id)
             ->assertJsonPath('incidents.1.id', $second->id);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=location&direction=desc")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $second->id)
@@ -360,7 +360,7 @@ class IncidentSearchHttpTest extends TestCase
         $responder = $this->attachResponder($incident, 'Vera');
         $this->attachResponder($otherIncident, 'Wanda');
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents")
             ->assertOk()
             ->assertJsonPath('filter_options.types', ['Medical'])
@@ -386,7 +386,7 @@ class IncidentSearchHttpTest extends TestCase
             'started_from=not-a-date',
             'started_from=2027-07-06&started_to=2027-07-04T00:00:00Z',
         ] as $query) {
-            $response = $this->actingAs($viewer)
+            $response = $this->actingAsClient($viewer)
                 ->getJson("/api/events/{$event->id}/incidents?{$query}")
                 ->assertStatus(422);
 
@@ -407,7 +407,7 @@ class IncidentSearchHttpTest extends TestCase
             ]);
         }
 
-        $firstPage = $this->actingAs($viewer)
+        $firstPage = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=incident&direction=asc&per_page=2")
             ->assertOk()
             ->assertJsonPath('pagination.page', 1)
@@ -422,7 +422,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentNumbers($firstPage->json('incidents')),
         );
 
-        $lastPage = $this->actingAs($viewer)
+        $lastPage = $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?sort=incident&direction=asc&per_page=2&page=3")
             ->assertOk()
             ->assertJsonPath('pagination.page', 3)
@@ -434,7 +434,7 @@ class IncidentSearchHttpTest extends TestCase
             $this->incidentNumbers($lastPage->json('incidents')),
         );
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?per_page=2&page=9")
             ->assertOk()
             ->assertJsonPath('pagination.page', 9)
@@ -457,7 +457,7 @@ class IncidentSearchHttpTest extends TestCase
             'closed_at' => Carbon::parse('2027-07-04T22:00:00Z'),
         ]);
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=medical&priority=Critical&per_page=1")
             ->assertOk()
             ->assertJsonPath('pagination.total', 2)
@@ -472,7 +472,7 @@ class IncidentSearchHttpTest extends TestCase
         $this->incident($event, ['title' => 'Present record']);
 
         foreach (['page=0', 'page=-1', 'page=two', 'per_page=0', 'per_page=101', 'per_page=many'] as $query) {
-            $this->actingAs($viewer)
+            $this->actingAsClient($viewer)
                 ->getJson("/api/events/{$event->id}/incidents?{$query}")
                 ->assertStatus(422)
                 ->assertJsonMissingPath('incidents');
@@ -494,14 +494,14 @@ class IncidentSearchHttpTest extends TestCase
         $this->getJson("/api/events/{$event->id}/incidents?search=shared+search+term")
             ->assertUnauthorized();
 
-        $this->actingAs($viewer)
+        $this->actingAsClient($viewer)
             ->getJson("/api/events/{$event->id}/incidents?search=shared+search+term")
             ->assertOk()
             ->assertJsonPath('incidents.0.id', $mine->id)
             ->assertJsonCount(1, 'incidents');
 
         foreach ([$wrongEventViewer, $organizer, $revoked] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->getJson("/api/events/{$event->id}/incidents?search=shared+search+term&state=all")
                 ->assertForbidden()
                 ->assertJsonPath(

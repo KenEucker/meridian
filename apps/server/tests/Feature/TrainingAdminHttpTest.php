@@ -29,7 +29,7 @@ class TrainingAdminHttpTest extends TestCase
     {
         [$department, $lead] = $this->departmentWithRole('department_lead');
 
-        $orientation = $this->actingAs($lead)
+        $orientation = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Ranger Orientation',
@@ -40,7 +40,7 @@ class TrainingAdminHttpTest extends TestCase
             ->assertJsonPath('requires_scheduled_attendance', false)
             ->json();
 
-        $radio = $this->actingAs($lead)
+        $radio = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Radio Certification',
@@ -50,7 +50,7 @@ class TrainingAdminHttpTest extends TestCase
             ->assertJsonPath('expires_after_days', 365)
             ->json();
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/add-training-prerequisite', [
                 'training_id' => $radio['id'],
                 'prerequisite_training_id' => $orientation['id'],
@@ -67,14 +67,14 @@ class TrainingAdminHttpTest extends TestCase
         ]);
 
         // Prerequisite cycles stay blocked through the product path.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/add-training-prerequisite', [
                 'training_id' => $orientation['id'],
                 'prerequisite_training_id' => $radio['id'],
             ])
             ->assertStatus(422);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/remove-training-prerequisite', [
                 'training_id' => $radio['id'],
                 'prerequisite_training_id' => $orientation['id'],
@@ -89,7 +89,7 @@ class TrainingAdminHttpTest extends TestCase
         $department = Department::factory()->for($organization)->create(['name' => 'Gate', 'code' => 'GATE']);
         Team::factory()->for($department)->create(['is_default' => true]);
 
-        $training = $this->actingAs($organizer)
+        $training = $this->actingAsClient($organizer)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Gate Basics',
@@ -97,26 +97,26 @@ class TrainingAdminHttpTest extends TestCase
             ->assertCreated()
             ->json();
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/archive-training', ['training_id' => $training['id']])
             ->assertOk()
             ->assertJsonPath('archived_at', fn ($value) => $value !== null);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/restore-training', ['training_id' => $training['id']])
             ->assertOk()
             ->assertJsonPath('archived_at', null);
 
         [$otherDepartment, $staffUser] = $this->departmentWithRole('staff');
 
-        $this->actingAs($staffUser)
+        $this->actingAsClient($staffUser)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $otherDepartment->id,
                 'name' => 'Unauthorized Training',
             ])
             ->assertForbidden();
 
-        $this->actingAs($staffUser)
+        $this->actingAsClient($staffUser)
             ->postJson('/api/commands/update-training', [
                 'training_id' => $training['id'],
                 'name' => 'Hijacked',
@@ -129,7 +129,7 @@ class TrainingAdminHttpTest extends TestCase
         [$department] = $this->departmentWithRole('department_lead');
         [, $otherLead] = $this->departmentWithRole('department_lead');
 
-        $this->actingAs($otherLead)
+        $this->actingAsClient($otherLead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Cross-department Training',
@@ -145,7 +145,7 @@ class TrainingAdminHttpTest extends TestCase
         $memberUser = $this->staffUserInTeam($defaultTeam);
         $secondUser = $this->staffUserInTeam($defaultTeam);
 
-        $training = $this->actingAs($lead)
+        $training = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Scheduled Field Training',
@@ -158,28 +158,28 @@ class TrainingAdminHttpTest extends TestCase
             ->assertJsonPath('requires_scheduled_attendance', true)
             ->json();
 
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertCreated()
             ->assertJsonPath('active_signup_count', 1);
 
         // Duplicate signup is rejected.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertStatus(422);
 
         // Capacity is enforced for the second staff member.
-        $this->actingAs($secondUser)
+        $this->actingAsClient($secondUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertStatus(422);
 
         // The lead sees the roster; the staff member does not.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->getJson("/api/departments/{$department->id}/trainings/{$training['id']}")
             ->assertOk()
             ->assertJsonCount(1, 'roster');
 
-        $memberDetail = $this->actingAs($memberUser)
+        $memberDetail = $this->actingAsClient($memberUser)
             ->getJson("/api/departments/{$department->id}/trainings/{$training['id']}")
             ->assertOk()
             ->assertJsonPath('viewer.is_signed_up', true)
@@ -187,12 +187,12 @@ class TrainingAdminHttpTest extends TestCase
         $this->assertArrayNotHasKey('roster', $memberDetail);
 
         // Cancelling frees the seat for the second staff member.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/cancel-training-signup', ['training_id' => $training['id']])
             ->assertOk()
             ->assertJsonPath('active_signup_count', 0);
 
-        $this->actingAs($secondUser)
+        $this->actingAsClient($secondUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertCreated();
 
@@ -210,7 +210,7 @@ class TrainingAdminHttpTest extends TestCase
             ->for($department->organization)
             ->create(['department_id' => $department->id, 'name' => 'One-off Reading']);
 
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $unscheduled->id])
             ->assertStatus(422);
 
@@ -226,7 +226,7 @@ class TrainingAdminHttpTest extends TestCase
                 'scheduled_start_at' => now()->addDays(3),
             ]);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/add-training-prerequisite', [
                 'training_id' => $scheduled->id,
                 'prerequisite_training_id' => $prerequisite->id,
@@ -234,26 +234,26 @@ class TrainingAdminHttpTest extends TestCase
             ->assertOk();
 
         // Prerequisite incomplete blocks signup (TRAIN-004, TRAIN-008 spirit).
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $scheduled->id])
             ->assertStatus(422);
 
         $memberStaff = $memberUser->staffProfiles()->firstOrFail();
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/record-training-completion', [
                 'training_id' => $prerequisite->id,
                 'staff_id' => $memberStaff->id,
             ])
             ->assertCreated();
 
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $scheduled->id])
             ->assertCreated();
 
         // Users outside the department cannot sign up.
         [, $outsideUser] = $this->departmentWithRole('staff');
-        $this->actingAs($outsideUser)
+        $this->actingAsClient($outsideUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $scheduled->id])
             ->assertForbidden();
     }
@@ -274,14 +274,14 @@ class TrainingAdminHttpTest extends TestCase
             ]);
 
         // Staff cannot record their own completion.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/record-training-completion', [
                 'training_id' => $training->id,
                 'staff_id' => $memberStaff->id,
             ])
             ->assertForbidden();
 
-        $completion = $this->actingAs($lead)
+        $completion = $this->actingAsClient($lead)
             ->postJson('/api/commands/record-training-completion', [
                 'training_id' => $training->id,
                 'staff_id' => $memberStaff->id,
@@ -306,7 +306,7 @@ class TrainingAdminHttpTest extends TestCase
 
         $teamLeadUser = $this->staffUserInTeam($defaultTeam, 'shift_lead');
 
-        $this->actingAs($teamLeadUser)
+        $this->actingAsClient($teamLeadUser)
             ->postJson('/api/commands/record-training-completion', [
                 'training_id' => $teamTraining->id,
                 'staff_id' => $memberStaff->id,
@@ -336,7 +336,7 @@ class TrainingAdminHttpTest extends TestCase
             "{$memberStaff->email},not-a-date",
         ]);
 
-        $result = $this->actingAs($lead)
+        $result = $this->actingAsClient($lead)
             ->postJson('/api/commands/import-training-completions', [
                 'training_id' => $training->id,
                 'csv' => $csv,
@@ -357,7 +357,7 @@ class TrainingAdminHttpTest extends TestCase
         $this->assertDatabaseHas('audit_events', ['action' => 'training.completions_imported']);
 
         // Import without a usable header fails closed.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/import-training-completions', [
                 'training_id' => $training->id,
                 'csv' => "name\nAlex",
@@ -365,7 +365,7 @@ class TrainingAdminHttpTest extends TestCase
             ->assertStatus(422);
 
         // Staff cannot import completions.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/import-training-completions', [
                 'training_id' => $training->id,
                 'csv' => $csv,
@@ -380,7 +380,7 @@ class TrainingAdminHttpTest extends TestCase
         $memberUser = $this->staffUserInTeam($defaultTeam);
 
         // Online delivery without a URL fails closed.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Radio Theory Online',
@@ -388,7 +388,7 @@ class TrainingAdminHttpTest extends TestCase
             ])
             ->assertStatus(422);
 
-        $training = $this->actingAs($lead)
+        $training = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Radio Theory Online',
@@ -404,12 +404,12 @@ class TrainingAdminHttpTest extends TestCase
             ->json();
 
         // Online trainings never take signups; staff visit the URL instead.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertStatus(422);
 
         // In-person trainings reject a training URL.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'In Person With URL',
@@ -418,7 +418,7 @@ class TrainingAdminHttpTest extends TestCase
             ->assertStatus(422);
 
         // The staff detail page payload carries the webpage fields.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->getJson("/api/departments/{$department->id}/trainings/{$training['id']}")
             ->assertOk()
             ->assertJsonPath('time_commitment', 'About 45 minutes, self paced.')
@@ -435,7 +435,7 @@ class TrainingAdminHttpTest extends TestCase
         $memberStaff = $memberUser->staffProfiles()->firstOrFail();
 
         // A scheduled event training needs an end time to become a shift.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Field Session',
@@ -448,7 +448,7 @@ class TrainingAdminHttpTest extends TestCase
             ->for($organization)
             ->create(['department_id' => $department->id, 'name' => 'Orientation']);
 
-        $training = $this->actingAs($lead)
+        $training = $this->actingAsClient($lead)
             ->postJson('/api/commands/create-training', [
                 'department_id' => $department->id,
                 'name' => 'Field Session',
@@ -472,7 +472,7 @@ class TrainingAdminHttpTest extends TestCase
         ]);
 
         // Prerequisites become shift training requirements (TRAIN-008 machinery).
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/add-training-prerequisite', [
                 'training_id' => $training['id'],
                 'prerequisite_training_id' => $prerequisite->id,
@@ -485,18 +485,18 @@ class TrainingAdminHttpTest extends TestCase
         ]);
 
         // Signup flows through shift signup and enforces the prerequisite.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertStatus(422);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/record-training-completion', [
                 'training_id' => $prerequisite->id,
                 'staff_id' => $memberStaff->id,
             ])
             ->assertCreated();
 
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/sign-up-for-training', ['training_id' => $training['id']])
             ->assertCreated()
             ->assertJsonPath('shift_id', $shiftId)
@@ -510,25 +510,25 @@ class TrainingAdminHttpTest extends TestCase
 
         // The trainer roster reads from the linked shift assignments, and the
         // page derives shifts unlocked by the prerequisite training.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->getJson("/api/departments/{$department->id}/trainings/{$training['id']}")
             ->assertOk()
             ->assertJsonCount(1, 'roster')
             ->assertJsonPath('roster.0.staff_id', (string) $memberStaff->id);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->getJson("/api/departments/{$department->id}/trainings/{$prerequisite->id}")
             ->assertOk()
             ->assertJsonPath('unlocked_shifts.0.title', 'Training: Field Session');
 
         // Self-cancel withdraws the shift assignment.
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->postJson('/api/commands/cancel-training-signup', ['training_id' => $training['id']])
             ->assertOk()
             ->assertJsonPath('active_signup_count', 0);
 
         // Archiving the training cancels the linked shift.
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->postJson('/api/commands/archive-training', ['training_id' => $training['id']])
             ->assertOk();
 
@@ -549,12 +549,12 @@ class TrainingAdminHttpTest extends TestCase
             ->archived()
             ->create(['department_id' => $department->id, 'name' => 'Archived Training']);
 
-        $this->actingAs($lead)
+        $this->actingAsClient($lead)
             ->getJson("/api/departments/{$department->id}/trainings")
             ->assertOk()
             ->assertJsonCount(2, 'trainings');
 
-        $this->actingAs($memberUser)
+        $this->actingAsClient($memberUser)
             ->getJson("/api/departments/{$department->id}/trainings")
             ->assertOk()
             ->assertJsonCount(1, 'trainings')
@@ -563,7 +563,7 @@ class TrainingAdminHttpTest extends TestCase
 
         // Users with no relationship to the department fail closed.
         [, $outsideUser] = $this->departmentWithRole('staff');
-        $this->actingAs($outsideUser)
+        $this->actingAsClient($outsideUser)
             ->getJson("/api/departments/{$department->id}/trainings")
             ->assertForbidden();
     }

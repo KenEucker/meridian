@@ -2,7 +2,12 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
-import { meridianApiConfig, meridianFetch } from "@/api/meridianApi";
+import {
+  holdsMeridianCredential,
+  meridianApiConfig,
+  meridianFetch,
+} from "@/api/meridianApi";
+import { apiLoginState } from "@/session/apiLogin";
 import {
   authorFieldReportCatalog,
   fieldReportCatalogRevision,
@@ -62,7 +67,23 @@ const fieldSessionText = computed(() => {
     ? `${session.eventLabel} / ${context.join(" / ")}`
     : session.eventLabel;
 });
-const hasCommandToken = computed(() => Boolean(apiConfig.value.bearerToken));
+/*
+ * Whether this device can send anything at all (M16.11).
+ *
+ * A signed-in device holds a bearer token; a Kiosk holds a workstation session
+ * key instead (AUTH-030). Diagnostics reports the credential question the outbox
+ * actually asks, so "why is nothing syncing" has the same answer on both.
+ */
+const hasCommandCredential = computed(() => {
+  void apiConfig.value;
+
+  return holdsMeridianCredential();
+});
+const signedInAs = computed(() => {
+  const user = apiLoginState.user;
+
+  return user === null ? null : user.name || user.email;
+});
 const submittedReportCount = computed(() => {
   void fieldReportCatalogRevision.value;
   return authorFieldReportCatalog.size;
@@ -122,8 +143,8 @@ const serverHealthText = computed(() => {
 const fieldReportSyncText = computed(() => {
   const localPhotoWork = pendingPhotoCount.value + failedPhotoCount.value;
 
-  if (!hasCommandToken.value) {
-    return "Blocked: VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN is not configured.";
+  if (!hasCommandCredential.value) {
+    return "Blocked: this device is not signed in.";
   }
 
   if (!fieldSession.value) {
@@ -344,13 +365,18 @@ watch(
           <dd>{{ serverHealthText }}</dd>
         </div>
         <div>
-          <dt>Field command auth</dt>
+          <dt>Command auth</dt>
           <dd>
-            {{
-              hasCommandToken
-                ? "Configured for local Field command uploads."
-                : "Missing VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN."
-            }}
+            <template v-if="signedInAs">
+              Signed in as {{ signedInAs }}; commands are sent with this device's
+              token.
+            </template>
+            <template v-else-if="hasCommandCredential">
+              Authenticated by a shared-workstation session.
+            </template>
+            <template v-else>
+              Not signed in; commands are held on this device.
+            </template>
           </dd>
         </div>
         <div>

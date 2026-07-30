@@ -5,6 +5,9 @@ import { followSessionBranding } from "@/branding/brandingContext";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { router } from "@/router";
+// Importing this adopts the token this device already holds and registers it as
+// the credential every request carries (M16.11).
+import { signedIn } from "@/session/apiLogin";
 import { loadClientSession } from "@/session/clientSession";
 import { registerSessionContextReset } from "@/session/sessionContext";
 import { installLocalFieldSessionFromEnv } from "@/session/localFieldSession";
@@ -51,14 +54,22 @@ registerSessionContextReset((context) => {
  * mount on a network call, which is the failure this cache exists to prevent.
  *
  * Navigation follows from this and from nothing else (M16.6, CLIENT-004), which
- * is why the local development session is installed only when the node produced
- * no document: the client holds no bearer token until login is wired into it,
- * and a developer running against a seeded node would otherwise be shown an
- * empty shell. A node that answers always wins, here and on every later refresh.
+ * is why the local development session is installed only when the client ended
+ * up with no document at all: a developer running `npm run dev` against a seeded
+ * node, who has not signed in, would otherwise be shown an empty shell. A node
+ * that answers always wins, here and on every later refresh, and so does a
+ * cached session from a real sign-in.
  */
+// Whether this device came up holding a token, captured before the refresh can
+// drop it. A refused refresh means two different things depending on the answer:
+// somebody was signed out, or nobody was ever signed in (M16.11).
+const bootedSignedIn = signedIn.value;
+
 void loadClientSession().then((outcome) => {
   if (outcome !== "refreshed") {
-    installLocalFieldSessionFromEnv();
+    installLocalFieldSessionFromEnv({
+      credentialRefused: outcome === "unauthenticated" && bootedSignedIn,
+    });
   }
 });
 

@@ -532,6 +532,7 @@ Rules:
 - issuance, expiry, and revocation are audited; raw token values are never logged, audited, or exported
 - shared-workstation login codes do not issue tokens; see 12.4
 - the Alpha 1 `local.field` shared-token middleware is superseded by this mechanism and removed
+- every operational endpoint — every command in 5.3 and every read a client makes — requires either a bearer token or a shared-workstation session key; the only routes that carry no credential are node-to-node exchange, the login paths themselves, and the branding profile read a device resolves before it has a session
 
 #### Provider handoff
 

@@ -14,8 +14,19 @@ const clientEnvDir = resolve(repoRoot, "apps/client");
 
 const defaultApiBaseUrl = "http://127.0.0.1:8000";
 const defaultViteUrl = "http://localhost:5173";
-const defaultFieldToken = "local-field-dev-token";
-const defaultFieldUserId = "22222222-2222-4222-8222-222222222222";
+/*
+ * Settings the shared-token middleware used, cleared out of an environment that
+ * still carries them (M16.11).
+ *
+ * Nothing reads them any more, so leaving them would be harmless and confusing:
+ * a developer reading their own `.env` would find a credential that looks live.
+ */
+const removedLocalFieldApiKeys = [
+  "MERIDIAN_LOCAL_FIELD_API_ENABLED",
+  "MERIDIAN_LOCAL_FIELD_API_TOKEN",
+  "MERIDIAN_LOCAL_FIELD_API_USER_ID",
+  "VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN",
+];
 const clientEnvFiles = [
   ".env.development.local",
   ".env.meridian-admin.local",
@@ -27,31 +38,30 @@ function main() {
   ensureServerEnvExists();
 
   const serverEnv = readEnvFile(serverEnvPath);
-  const fieldToken = valueOrDefault(serverEnv.values.MERIDIAN_LOCAL_FIELD_API_TOKEN, defaultFieldToken);
   const apiBaseUrl = normalizeLocalApiBaseUrl(valueOrDefault(serverEnv.values.APP_URL, defaultApiBaseUrl));
 
+  // No API credential is configured anywhere here (M16.11). A developer signs in
+  // to the client as the seeded fixture user and the node issues a token bound
+  // to that browser's device, the same way a staff member's phone gets one.
   writeEnvFile(serverEnvPath, {
     APP_URL: apiBaseUrl,
     MERIDIAN_CLIENT_USE_DEV_SERVER: "true",
     MERIDIAN_CLIENT_DEV_SERVER_URL: defaultViteUrl,
-    MERIDIAN_LOCAL_FIELD_API_ENABLED: "true",
-    MERIDIAN_LOCAL_FIELD_API_TOKEN: fieldToken,
-    MERIDIAN_LOCAL_FIELD_API_USER_ID: valueOrDefault(
-      serverEnv.values.MERIDIAN_LOCAL_FIELD_API_USER_ID,
-      defaultFieldUserId,
-    ),
     MERIDIAN_CORS_ALLOWED_ORIGINS: mergeCsv(serverEnv.values.MERIDIAN_CORS_ALLOWED_ORIGINS, [
       "http://127.0.0.1:5173",
       "http://localhost:5173",
     ]),
-  });
+  }, removedLocalFieldApiKeys);
 
   for (const file of clientEnvFiles) {
-    writeEnvFile(resolve(clientEnvDir, file), {
-      VITE_MERIDIAN_API_BASE_URL: apiBaseUrl,
-      VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN: fieldToken,
-      VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "true",
-    });
+    writeEnvFile(
+      resolve(clientEnvDir, file),
+      {
+        VITE_MERIDIAN_API_BASE_URL: apiBaseUrl,
+        VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "true",
+      },
+      removedLocalFieldApiKeys,
+    );
   }
 
   if (withServer) {
@@ -88,18 +98,27 @@ function readEnvFile(path) {
   return { lines, values };
 }
 
-function writeEnvFile(path, updates) {
+function writeEnvFile(path, updates, removals = []) {
   const existing = readEnvFile(path);
   const remaining = new Map(Object.entries(updates));
-  const nextLines = existing.lines.map((line) => {
+  const dropped = new Set(removals);
+  const nextLines = existing.lines.flatMap((line) => {
     const match = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(line);
-    if (!match || !remaining.has(match[1])) {
-      return line;
+    if (!match) {
+      return [line];
+    }
+
+    if (dropped.has(match[1])) {
+      return [];
+    }
+
+    if (!remaining.has(match[1])) {
+      return [line];
     }
 
     const value = remaining.get(match[1]);
     remaining.delete(match[1]);
-    return `${match[1]}=${value}`;
+    return [`${match[1]}=${value}`];
   });
 
   if (nextLines.length > 0 && nextLines[nextLines.length - 1] !== "" && remaining.size > 0) {

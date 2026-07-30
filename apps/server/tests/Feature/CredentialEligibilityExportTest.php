@@ -46,7 +46,7 @@ class CredentialEligibilityExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['organizer'])
+        $response = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility");
 
         $response->assertOk();
@@ -66,7 +66,7 @@ class CredentialEligibilityExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = $this->actingAs($scenario['organizer'])
+        $contents = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility")
             ->assertOk()
             ->getContent();
@@ -89,7 +89,7 @@ class CredentialEligibilityExportTest extends TestCase
         // A credential Blocked because every shift was removed stays Blocked in
         // the file (CRED-010), and a revoked credential keeps its completed
         // shift while recalculation leaves the revoked state alone (CRED-013).
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility")
             ->assertOk()
             ->getContent());
@@ -144,7 +144,7 @@ class CredentialEligibilityExportTest extends TestCase
             'updated_at' => now()->subHour(),
         ]);
 
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility")
             ->assertOk()
             ->getContent());
@@ -161,7 +161,7 @@ class CredentialEligibilityExportTest extends TestCase
 
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['rangersLead'])
+        $response = $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility");
 
         $response->assertOk();
@@ -187,7 +187,7 @@ class CredentialEligibilityExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows($this->actingAs($scenario['organizer'])
+        $rows = $this->rows($this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility?department_id={$scenario['gate']->id}")
             ->assertOk()
             ->getContent());
@@ -204,12 +204,12 @@ class CredentialEligibilityExportTest extends TestCase
         $eventId = $scenario['event']->id;
 
         // A department lead may not reach another department's rows.
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/credential-eligibility?department_id={$scenario['gate']->id}")
             ->assertForbidden();
 
         // Plain staff hold no export capability at all.
-        $this->actingAs($scenario['plainStaffUser'])
+        $this->actingAsClient($scenario['plainStaffUser'])
             ->get("/api/events/{$eventId}/exports/credential-eligibility")
             ->assertForbidden();
 
@@ -220,12 +220,12 @@ class CredentialEligibilityExportTest extends TestCase
             ->where('code', 'organizer')
             ->firstOrFail());
 
-        $this->actingAs($foreignOrganizer)
+        $this->actingAsClient($foreignOrganizer)
             ->get("/api/events/{$eventId}/exports/credential-eligibility")
             ->assertForbidden();
 
         // A department outside this event's organization is not addressable.
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/credential-eligibility?department_id={$foreignDepartment->id}")
             ->assertNotFound();
 
@@ -238,7 +238,7 @@ class CredentialEligibilityExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/credential-eligibility")
             ->assertOk();
 

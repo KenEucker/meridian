@@ -72,8 +72,8 @@ Laravel, packaged Electron, and Capacitor consume that same build output.
 
 ### Field Report photo upload (local QA)
 
-Photos upload to the Laravel server over `POST /api/commands/*` when local Field
-API auth is enabled. From the repository root, run:
+Photos upload to the Laravel server over `POST /api/commands/*` under the bearer
+token this device holds. From the repository root, run:
 
 ```bash
 corepack pnpm run setup:local
@@ -81,9 +81,17 @@ corepack pnpm run setup:local
 
 The setup script writes ignored `.env.development.local`,
 `.env.meridian-admin.local`, `.env.meridian-field.local`, and
-`.env.meridian-kiosk.local` files with the same local Field API token configured
-in `apps/server/.env`. It also enables the development Field session fixture so
-the About/health view and command sync checks report a configured local session.
+`.env.meridian-kiosk.local` files pointing at the local node, and enables the
+development Field session fixture so the author surfaces have an event and a
+staff record to work with.
+
+It configures no credential: sign in at `/login` as the seeded fixture user
+`local-field@meridian.test` and read the login code out of the mail log
+(`grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`). The token is stored
+under `meridian.api-token.v1` in `localStorage`, alongside this device's
+identifier under `meridian.device.id`; Settings reports whether the device is
+signed in, and the command outbox holds its work rather than sending it when it
+is not.
 
 Restart server and client after changing env files. Submit a Field Report with
 photos; detail shows local previews and syncs text then photos. Files land in

@@ -27,7 +27,10 @@ import {
   LOCAL_FIELD_FIXTURE,
   LOCAL_FIELD_TEAM_IDS,
 } from "@/field-reports/localFieldFixture";
-import { installClientSession } from "@/session/clientSession";
+import {
+  clientSessionState,
+  installClientSession,
+} from "@/session/clientSession";
 import {
   CAPABILITY_DEPARTMENT_ADMINISTER,
   CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
@@ -378,20 +381,48 @@ export function installLocalFieldSession(
 }
 
 /**
- * Install the local development session when the environment asks for it and
- * the node did not answer.
+ * Install the local development session when the environment asks for it, the
+ * client has no session of its own, and the node has not just refused it.
  *
  * Shares `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` with the Field Report
  * development session: they stand for the same seeded staff member on the same
  * seeded node, and two switches for one fixture is one switch too many.
+ *
+ * Two states it stays out of, and they are different states (M16.11):
+ *
+ *  1. **A session is held.** A developer can now sign in for real, and a real
+ *     session resolved yesterday and booted from cache today must not be
+ *     replaced by a fixture because the node happened to be unreachable this
+ *     morning.
+ *  2. **A credential this client held was refused.** A revoked token or a
+ *     revoked device arrives as an unauthenticated refresh (AUTH-023), and the
+ *     honest state after one is signed out. Filling the shell back in with a
+ *     fixture would show a developer a populated session at the exact moment the
+ *     node stopped accepting them — the one moment the screen has to be
+ *     believed.
+ *
+ *     Deliberately narrower than "the refresh was unauthenticated". A client
+ *     that has never signed in is refused too, and that is the case this fixture
+ *     exists for: a developer who has not signed in should still see a populated
+ *     shell. Only a credential that was held and then refused means somebody was
+ *     signed out.
  */
 export function installLocalFieldSessionFromEnv(
-  env: Pick<
-    ImportMetaEnv,
-    "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"
-  > = import.meta.env,
+  options: {
+    readonly credentialRefused?: boolean;
+    readonly env?: Pick<
+      ImportMetaEnv,
+      "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"
+    >;
+  } = {},
 ): boolean {
-  if (env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true") {
+  const env = options.env ?? import.meta.env;
+
+  if (
+    env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true" ||
+    clientSessionState.document !== null ||
+    options.credentialRefused === true
+  ) {
     return false;
   }
 

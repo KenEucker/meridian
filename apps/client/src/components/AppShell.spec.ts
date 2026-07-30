@@ -13,6 +13,8 @@ import {
   FIXTURE_RANGERS_DEPARTMENT_ID,
 } from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
+import { adoptHeldApiToken } from "@/session/apiLogin";
+import { clearApiToken, storeApiToken } from "@/session/apiToken";
 import {
   clearClientSession,
   installClientSession,
@@ -67,6 +69,8 @@ afterEach(() => {
   resetSelectedSessionDepartment();
   setDeviceOnLine(true);
   clearClientSession();
+  clearApiToken();
+  adoptHeldApiToken();
   window.localStorage.removeItem("meridian.ui.theme");
   delete document.documentElement.dataset.theme;
   vi.clearAllMocks();
@@ -356,7 +360,65 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Organizer");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Gate");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("DPW");
-    expect(wrapper.get(".app-shell__user-menu").text()).toContain("Sign out");
+  });
+
+  /*
+   * Signing in and out of a personal device (M16.11; AUTH-018).
+   *
+   * The menu offers exactly one of the two, and which one follows from whether
+   * this device holds a token — not from whether a session document is installed.
+   * A development session and a cached session both put a name in the menu while
+   * the device holds no credential at all, and offering "sign out" there would be
+   * a control that disposes of nothing.
+   */
+  it("offers sign-in until this device holds a token, then sign-out", async () => {
+    const signedOut = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await signedOut.get(".app-shell__user-button").trigger("click");
+
+    expect(signedOut.get(".app-shell__user-menu").text()).toContain("Sign in");
+    expect(signedOut.get(".app-shell__user-menu").text()).not.toContain("Sign out");
+
+    storeApiToken({
+      token: "device-token",
+      user: { id: "user-1", name: "Local Field Author", email: "author@example.test" },
+    });
+    adoptHeldApiToken();
+
+    const signedIn = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await signedIn.get(".app-shell__user-button").trigger("click");
+
+    expect(signedIn.get(".app-shell__user-menu").text()).toContain("Sign out");
+  });
+
+  /*
+   * A Kiosk offers neither: it holds a shared-workstation session rather than a
+   * token, and both entering and ending one belong to its own surfaces
+   * (AUTH-030; technical spec 13.3).
+   */
+  it("offers no personal sign-in on a Kiosk", async () => {
+    storeApiToken({
+      token: "device-token",
+      user: { id: "user-1", name: "Local Field Author", email: "author@example.test" },
+    });
+    adoptHeldApiToken();
+
+    const wrapper = mount(AppShell, {
+      props: { config: appConfigForUiMode("kiosk") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+
+    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain("Sign in");
+    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain("Sign out");
   });
 });
 

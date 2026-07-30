@@ -25,7 +25,11 @@
 // device timestamp and its own key, so a stuck command is a stuck command rather
 // than a stopped queue.
 
-import { meridianApiConfig, MeridianApiError, meridianJson } from "@/api/meridianApi";
+import {
+  holdsMeridianCredential,
+  MeridianApiError,
+  meridianJson,
+} from "@/api/meridianApi";
 import { applyCommandAcceptance } from "@/outbox/commandAcceptance";
 import {
   describeCommand,
@@ -104,11 +108,17 @@ function summarize(
 }
 
 async function runSync(): Promise<SyncCommandOutboxResult> {
-  // Without a configured credential the client keeps its commands local rather
-  // than putting unauthenticated requests on the wire. M16.11 replaces this
-  // check when the client moves onto token authentication.
-  if (!meridianApiConfig().bearerToken) {
-    return summarize([], "Local Field API token is not configured.");
+  /*
+   * Nothing goes on the wire without a credential (M16.11).
+   *
+   * Either is enough, and which one it is depends on what this client is: a
+   * signed-in device holds a bearer token, and a Kiosk holds a shared-workstation
+   * session key instead (AUTH-030). A client holding neither keeps its commands
+   * rather than sending requests that can only be refused — the work is not lost,
+   * it is waiting for somebody to sign in.
+   */
+  if (!holdsMeridianCredential()) {
+    return summarize([], "This device is not signed in, so commands are waiting.");
   }
 
   const results: CommandSyncResult[] = [];

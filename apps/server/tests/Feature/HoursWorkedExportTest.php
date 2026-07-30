@@ -58,7 +58,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['organizer'])
+        $response = $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked");
 
         $response->assertOk();
@@ -77,7 +77,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked")
             ->assertOk()
             ->getContent());
@@ -114,7 +114,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked")
             ->assertOk()
             ->getContent();
@@ -135,7 +135,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked")
             ->assertOk()
             ->getContent());
@@ -168,7 +168,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked")
             ->assertOk()
             ->getContent();
@@ -187,7 +187,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $response = $this->actingAs($scenario['rangersLead'])
+        $response = $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked");
 
         $response->assertOk();
@@ -206,7 +206,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $rows = $this->rows((string) $this->actingAs($scenario['organizer'])
+        $rows = $this->rows((string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked?department_id={$scenario['gate']->id}")
             ->assertOk()
             ->getContent());
@@ -218,7 +218,7 @@ class HoursWorkedExportTest extends TestCase
     {
         $scenario = $this->scenario();
 
-        $contents = (string) $this->actingAs($scenario['organizer'])
+        $contents = (string) $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$scenario['event']->id}/exports/hours-worked")
             ->assertOk()
             ->getContent();
@@ -234,13 +234,13 @@ class HoursWorkedExportTest extends TestCase
         $eventId = $scenario['event']->id;
 
         // A department lead may not reach another department's hours.
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/hours-worked?department_id={$scenario['gate']->id}")
             ->assertForbidden();
 
         // Plain staff hold no export capability, even over the hours they
         // themselves worked.
-        $this->actingAs($scenario['plainStaffUser'])
+        $this->actingAsClient($scenario['plainStaffUser'])
             ->get("/api/events/{$eventId}/exports/hours-worked")
             ->assertForbidden();
 
@@ -251,12 +251,12 @@ class HoursWorkedExportTest extends TestCase
             ->where('code', 'organizer')
             ->firstOrFail());
 
-        $this->actingAs($foreignOrganizer)
+        $this->actingAsClient($foreignOrganizer)
             ->get("/api/events/{$eventId}/exports/hours-worked")
             ->assertForbidden();
 
         // A department outside this event's organization is not addressable.
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/hours-worked?department_id={$foreignDepartment->id}")
             ->assertNotFound();
 
@@ -270,7 +270,7 @@ class HoursWorkedExportTest extends TestCase
         $scenario = $this->scenario();
         $eventId = $scenario['event']->id;
 
-        $this->actingAs($scenario['rangersLead'])
+        $this->actingAsClient($scenario['rangersLead'])
             ->get("/api/events/{$eventId}/exports/hours-worked")
             ->assertOk();
 
@@ -291,7 +291,7 @@ class HoursWorkedExportTest extends TestCase
         // a later dispute about hours or credits is actually about.
         $this->assertSame(1050, $departmentExport->after_json['total_minutes_worked']);
 
-        $this->actingAs($scenario['organizer'])
+        $this->actingAsClient($scenario['organizer'])
             ->get("/api/events/{$eventId}/exports/hours-worked")
             ->assertOk();
 

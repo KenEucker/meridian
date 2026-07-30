@@ -33,7 +33,7 @@ class BrandingAdminHttpTest extends TestCase
     {
         [$organization, $organizer] = $this->organizationWith('organizer');
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'display_name' => '  Deep Harbor Collective  ',
@@ -56,7 +56,7 @@ class BrandingAdminHttpTest extends TestCase
     {
         [$organization, $leadOrganizer] = $this->organizationWith('lead_organizer');
 
-        $this->actingAs($leadOrganizer)
+        $this->actingAsClient($leadOrganizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -70,7 +70,7 @@ class BrandingAdminHttpTest extends TestCase
         // profile, and the organization palette is not theirs.
         [$organization, , $departmentLead] = $this->departmentWith('department_lead');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -85,7 +85,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization] = $this->departmentWith('department_lead');
         $stranger = User::factory()->create();
 
-        $this->actingAs($stranger)
+        $this->actingAsClient($stranger)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -99,7 +99,7 @@ class BrandingAdminHttpTest extends TestCase
 
         $palette = array_merge($this->validPalette(), ['muted_foreground' => '#c9cdd1']);
 
-        $response = $this->actingAs($organizer)
+        $response = $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $palette,
@@ -125,7 +125,7 @@ class BrandingAdminHttpTest extends TestCase
     {
         [$organization, $organizer] = $this->organizationWith('organizer');
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/preview-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -134,7 +134,7 @@ class BrandingAdminHttpTest extends TestCase
             ->assertJsonPath('valid', true)
             ->assertJsonPath('failures', []);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/preview-branding', [
                 'organization_id' => $organization->id,
                 'palette' => array_merge($this->validPalette(), ['border' => '#f2f4f6']),
@@ -151,7 +151,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization, $department, $departmentLead] = $this->departmentWith('department_lead');
         $otherDepartment = Department::factory()->for($organization)->create();
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/update-department-branding', [
                 'department_id' => $department->id,
                 'accent' => '#1f5f4b',
@@ -161,7 +161,7 @@ class BrandingAdminHttpTest extends TestCase
             ->assertJsonPath('accent', '#1f5f4b')
             ->assertJsonPath('surface', '#eef6f2');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/update-department-branding', [
                 'department_id' => $otherDepartment->id,
                 'accent' => '#1f5f4b',
@@ -177,7 +177,7 @@ class BrandingAdminHttpTest extends TestCase
 
         $organization->forceFill(['department_branding_enabled' => false])->save();
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/update-department-branding', [
                 'department_id' => $department->id,
                 'accent' => '#1f5f4b',
@@ -192,7 +192,7 @@ class BrandingAdminHttpTest extends TestCase
         // background is refused with the same evidence a palette gets.
         [, $department, $departmentLead] = $this->departmentWith('department_lead');
 
-        $response = $this->actingAs($departmentLead)
+        $response = $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/update-department-branding', [
                 'department_id' => $department->id,
                 'surface' => '#cc792f',
@@ -209,7 +209,7 @@ class BrandingAdminHttpTest extends TestCase
 
         [$organization, $organizer] = $this->organizationWith('organizer');
 
-        $first = $this->actingAs($organizer)
+        $first = $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'organization_id' => $organization->id,
                 'slot' => Attachment::BRANDING_SLOT_FULL_LOCKUP,
@@ -222,7 +222,7 @@ class BrandingAdminHttpTest extends TestCase
         $this->assertSame($firstId, (string) $organization->fresh()->branding_full_lockup_attachment_id);
         $this->assertSame('branding.asset_added', AuditEvent::query()->latest('id')->first()->action);
 
-        $second = $this->actingAs($organizer)
+        $second = $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'organization_id' => $organization->id,
                 'slot' => Attachment::BRANDING_SLOT_FULL_LOCKUP,
@@ -239,7 +239,7 @@ class BrandingAdminHttpTest extends TestCase
         // immutable and are never deleted in Alpha 1.
         $this->assertDatabaseHas('attachments', ['id' => $firstId]);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/remove-branding-asset', [
                 'organization_id' => $organization->id,
                 'slot' => Attachment::BRANDING_SLOT_FULL_LOCKUP,
@@ -261,7 +261,7 @@ class BrandingAdminHttpTest extends TestCase
         // SVG is the obvious logo format and is deliberately excluded: the
         // asset is served inline and unauthenticated so it renders in email
         // and PDFs, and an SVG is a document that can carry script.
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'organization_id' => $organization->id,
                 'slot' => Attachment::BRANDING_SLOT_COMPACT_MARK,
@@ -281,7 +281,7 @@ class BrandingAdminHttpTest extends TestCase
 
         [, $department, $departmentLead] = $this->departmentWith('department_lead');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'department_id' => $department->id,
                 'slot' => Attachment::BRANDING_SLOT_FULL_LOCKUP,
@@ -299,7 +299,7 @@ class BrandingAdminHttpTest extends TestCase
         [, $department, $departmentLead] = $this->departmentWith('department_lead');
         $team = $this->teamIn($department, 'Dirt');
 
-        $uploaded = $this->actingAs($departmentLead)
+        $uploaded = $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'team_id' => $team->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -317,7 +317,7 @@ class BrandingAdminHttpTest extends TestCase
         $added = AuditEvent::query()->where('action', 'branding.asset_added')->sole();
         $this->assertSame($department->id, $added->department_id);
 
-        $replacement = $this->actingAs($departmentLead)
+        $replacement = $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'team_id' => $team->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -328,7 +328,7 @@ class BrandingAdminHttpTest extends TestCase
         $this->assertNotSame($attachmentId, (string) $replacement->json('attachment_id'));
         $this->assertDatabaseHas('attachments', ['id' => $attachmentId]);
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->postJson('/api/commands/remove-branding-asset', [
                 'team_id' => $team->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -348,7 +348,7 @@ class BrandingAdminHttpTest extends TestCase
         [, $department, $departmentLead] = $this->departmentWith('department_lead');
         $team = $this->teamIn($department, 'Dirt');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'team_id' => $team->id,
                 'slot' => Attachment::BRANDING_SLOT_DEPARTMENT_LOGO,
@@ -356,7 +356,7 @@ class BrandingAdminHttpTest extends TestCase
             ])
             ->assertStatus(422);
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'department_id' => $department->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -379,7 +379,7 @@ class BrandingAdminHttpTest extends TestCase
         ]);
         $gateTeam = $this->teamIn($gate, 'Credentials');
 
-        $this->actingAs($rangersLead)
+        $this->actingAsClient($rangersLead)
             ->post('/api/commands/upload-branding-asset', [
                 'team_id' => $gateTeam->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -398,7 +398,7 @@ class BrandingAdminHttpTest extends TestCase
         $withLogo = $this->teamIn($department, 'Dirt');
         $this->teamIn($department, 'Greeters');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'team_id' => $withLogo->id,
                 'slot' => Attachment::BRANDING_SLOT_TEAM_LOGO,
@@ -429,7 +429,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization, $organizer] = $this->organizationWith('organizer');
         $event = Event::factory()->for($organization)->create(['name' => 'Desert Bloom']);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'event_id' => $event->id,
                 'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
@@ -445,7 +445,7 @@ class BrandingAdminHttpTest extends TestCase
             'department_lead',
         );
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->post('/api/commands/upload-branding-asset', [
                 'event_id' => $event->id,
                 'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
@@ -461,7 +461,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization, $organizer] = $this->organizationWith('organizer');
         $event = Event::factory()->for($organization)->create();
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'event_id' => $event->id,
                 'slot' => Attachment::BRANDING_SLOT_COMPACT_MARK,
@@ -469,7 +469,7 @@ class BrandingAdminHttpTest extends TestCase
             ])
             ->assertStatus(422);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->post('/api/commands/upload-branding-asset', [
                 'organization_id' => $organization->id,
                 'slot' => Attachment::BRANDING_SLOT_EVENT_LOGO,
@@ -485,7 +485,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization, $organizer] = $this->organizationWith('organizer');
         $event = Event::factory()->for($organization)->create(['name' => 'Desert Bloom']);
 
-        $payload = $this->actingAs($organizer)
+        $payload = $this->actingAsClient($organizer)
             ->getJson("/api/organizations/{$organization->id}/branding/events")
             ->assertOk()
             ->json('events');
@@ -501,7 +501,7 @@ class BrandingAdminHttpTest extends TestCase
         // the roster of what an organization is running is behind a session.
         [, , $departmentLead] = $this->departmentWith('department_lead');
 
-        $this->actingAs($departmentLead)
+        $this->actingAsClient($departmentLead)
             ->getJson("/api/organizations/{$organization->id}/branding/events")
             ->assertForbidden();
     }
@@ -516,7 +516,7 @@ class BrandingAdminHttpTest extends TestCase
             'active_event_window_ends_at' => now()->addDay(),
         ]);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -536,7 +536,7 @@ class BrandingAdminHttpTest extends TestCase
             'is_local' => true,
         ]);
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'palette' => $this->validPalette(),
@@ -552,7 +552,7 @@ class BrandingAdminHttpTest extends TestCase
         [$organization, $organizer] = $this->organizationWith('organizer');
         $department = Department::factory()->for($organization)->branded('#1f5f4b', '#eef6f2')->create();
 
-        $this->actingAs($organizer)
+        $this->actingAsClient($organizer)
             ->postJson('/api/commands/update-organization-branding', [
                 'organization_id' => $organization->id,
                 'department_branding_enabled' => false,

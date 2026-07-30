@@ -45,14 +45,14 @@ class AttendanceCommandHttpTest extends TestCase
             'origin_node_id' => $node->id,
         ];
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/check-in-staff', $payload)
             ->assertCreated()
             ->assertJsonPath('operation_uuid', $operationUuid)
             ->assertJsonPath('current_state', AttendanceRecord::STATE_CHECKED_IN)
             ->assertJsonPath('created_state_change', true);
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/check-in-staff', $payload)
             ->assertCreated()
             ->assertJsonPath('operation_uuid', $operationUuid)
@@ -80,7 +80,7 @@ class AttendanceCommandHttpTest extends TestCase
         [$shift, $staff, , $shiftLead, $device, $node] = $this->scheduledScenario();
         $operationUuid = (string) Str::uuid();
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/check-out-staff', [
                 'operation_uuid' => $operationUuid,
                 'shift_id' => $shift->id,
@@ -97,7 +97,7 @@ class AttendanceCommandHttpTest extends TestCase
             ->assertJsonPath('created_state_change', true)
             ->assertJsonPath('created_hours', true);
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/check-out-staff', [
                 'operation_uuid' => $operationUuid,
                 'shift_id' => $shift->id,
@@ -137,14 +137,14 @@ class AttendanceCommandHttpTest extends TestCase
             'origin_node_id' => $node->id,
         ];
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/mark-no-show', $payload)
             ->assertCreated()
             ->assertJsonPath('operation_uuid', $operationUuid)
             ->assertJsonPath('current_state', AttendanceRecord::STATE_NO_SHOW)
             ->assertJsonPath('created_state_change', true);
 
-        $this->actingAs($shiftLead)
+        $this->actingAsClient($shiftLead)
             ->postJson('/api/commands/mark-no-show', $payload)
             ->assertCreated()
             ->assertJsonPath('operation_uuid', $operationUuid)

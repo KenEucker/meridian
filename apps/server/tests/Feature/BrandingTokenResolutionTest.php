@@ -230,7 +230,7 @@ class BrandingTokenResolutionTest extends TestCase
             'name' => 'Department of Public Works',
         ]);
 
-        $response = $this->actingAs(User::factory()->create())
+        $response = $this->actingAsClient(User::factory()->create())
             ->getJson(route('api.organizations.branding.show', [
                 'organization' => $organization->id,
             ]));

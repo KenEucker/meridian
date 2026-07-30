@@ -250,6 +250,29 @@ class SharedWorkstationSessionTest extends TestCase
         $response->assertJsonPath('user.id', $subject->getKey());
     }
 
+    /**
+     * A session key also authenticates the operational endpoints, which is the
+     * whole point of a shared workstation (M16.11; technical spec 13.3).
+     *
+     * The command routes used to sit behind the `local.field` shared token and
+     * now sit behind `auth:sanctum,workstation`. A Kiosk holds no bearer token
+     * (AUTH-030), so without the second guard a workstation could sign somebody
+     * in and then refuse every check-in they tried to record. The empty command
+     * is refused on its contents rather than on its credential, which is the
+     * distinction being asserted.
+     */
+    public function test_a_session_reaches_the_command_endpoints(): void
+    {
+        $workstation = $this->workstation();
+        $sessionKey = $this->establish($workstation, User::factory()->create());
+
+        $this->app['auth']->forgetGuards();
+
+        $this->asWorkstation($sessionKey)
+            ->postJson('/api/commands/check-in-staff', [])
+            ->assertUnprocessable();
+    }
+
     public function test_a_session_whose_user_is_disabled_stops_authenticating(): void
     {
         $workstation = $this->workstation();

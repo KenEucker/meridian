@@ -75,7 +75,7 @@ function recordingFetch(
 beforeEach(() => {
   configureMeridianApi({
     baseUrl: "http://127.0.0.1:8000",
-    bearerToken: "local-field-dev-token",
+    bearerToken: "device-token",
   });
 });
 
@@ -87,7 +87,7 @@ afterEach(async () => {
 });
 
 describe("syncCommandOutbox", () => {
-  it("sends nothing without a configured credential", async () => {
+  it("sends nothing without a credential", async () => {
     configureMeridianApi({
       baseUrl: "http://127.0.0.1:8000",
       bearerToken: null,
@@ -104,7 +104,7 @@ describe("syncCommandOutbox", () => {
     const result = await syncCommandOutbox();
 
     expect(result.blockedReason).toBe(
-      "Local Field API token is not configured.",
+      "This device is not signed in, so commands are waiting.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(commandOutbox.pending()).toHaveLength(1);

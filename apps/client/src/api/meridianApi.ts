@@ -1,8 +1,14 @@
-// Minimal Meridian server HTTP client for Field Report command uploads (M9.8).
+// Minimal Meridian server HTTP client (M9.8).
 //
 // The node this client talks to is resolved by `@/app/nodeConnection`, which
 // lets a device be pointed at a node rather than only inheriting the one that
 // served it or the one baked in at build time.
+//
+// The credential comes from whoever holds it. Until M16.11 the bearer token was
+// read out of the build environment, which is how every install of Meridian
+// Field ended up carrying the same shared development token; now the module that
+// owns the token registers a source here, the same way a shared workstation
+// registers its session key, and this module knows nothing about either.
 
 import { resolveNodeUrl } from "@/app/nodeConnection";
 
@@ -23,12 +29,28 @@ export interface MeridianApiConfig {
   readonly bearerToken: string | null;
 }
 
-function readConfig(): MeridianApiConfig {
-  const env = import.meta.env as Record<string, string | undefined>;
+/**
+ * The bearer token every request carries, when this client holds one.
+ *
+ * A registration hook rather than an import, for the same reason the credential
+ * source below is one: `apiToken` owns the token's lifecycle and calls this
+ * module to send its requests, so the dependency points one way.
+ */
+export type MeridianBearerTokenSource = () => string | null;
 
+let bearerTokenSource: MeridianBearerTokenSource | null = null;
+
+/** Register where the bearer token comes from. */
+export function registerMeridianBearerTokenSource(
+  source: MeridianBearerTokenSource | null,
+): void {
+  bearerTokenSource = source;
+}
+
+function readConfig(): MeridianApiConfig {
   return {
     baseUrl: resolveNodeUrl(),
-    bearerToken: env.VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN ?? null,
+    bearerToken: bearerTokenSource?.() ?? null,
   };
 }
 
@@ -63,6 +85,21 @@ export function registerMeridianCredentialSource(
 
 export function meridianApiConfig(): MeridianApiConfig {
   return configOverride ?? readConfig();
+}
+
+/**
+ * Whether this client holds anything the node would authenticate.
+ *
+ * A bearer token or a workstation session key: a signed-in device has the first,
+ * a Kiosk has the second (AUTH-030), and a client with neither is signed out.
+ * Asked by the outbox before it sends, so queued work waits for a credential
+ * instead of being spent on requests that can only be refused.
+ */
+export function holdsMeridianCredential(): boolean {
+  return (
+    Boolean(meridianApiConfig().bearerToken) ||
+    Object.keys(credentialSource?.() ?? {}).length > 0
+  );
 }
 
 export async function meridianFetch(

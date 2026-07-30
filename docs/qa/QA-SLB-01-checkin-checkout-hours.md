@@ -92,11 +92,18 @@ rows, unauthorized actors are refused, and each successful export is audited.
    ```bash
    corepack pnpm run client:dev:kiosk -- --host 127.0.0.1
    ```
-6. Open `http://127.0.0.1:5173`, then choose **Logistics desk** from the home
-   surface. The direct route pattern is
+6. Open `http://127.0.0.1:5173/login` and sign in, reading the login code out of
+   the mail log with
+   `grep -A 2 "Enter this code" apps/server/storage/logs/laravel.log | tail -1`.
+   Attendance commands carry the token this issues (AUTH-018; M16.11), so a run
+   that skips this step queues operations and sends none. A workstation that has
+   been through kiosk code entry (QA-AUTH-01) is signed in already and needs
+   nothing here.
+7. Choose **Logistics desk** from the home surface. The direct route pattern is
    `/events/:eventId/departments/:departmentId/logistics`.
-7. Clear site data first if an earlier local attendance/offline run is present.
-8. Confirm the seeded event/department context is Idaho Decompression 2026 /
+8. Clear site data first if an earlier local attendance/offline run is present,
+   signing in again afterwards.
+9. Confirm the seeded event/department context is Idaho Decompression 2026 /
    Rangers and that Logistics search uses the department-scoped offline cache.
 
 ## Steps

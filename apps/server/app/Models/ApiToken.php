@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Sanctum\PersonalAccessToken as SanctumPersonalAccessToken;
 use Orchid\Filters\Filterable;
@@ -27,8 +28,23 @@ class ApiToken extends SanctumPersonalAccessToken
 {
     use AsSource;
     use Filterable;
+    use HasUuids;
 
     protected $table = 'personal_access_tokens';
+
+    /**
+     * Keyed by UUID like every other Meridian entity.
+     *
+     * Sanctum's own table is auto-incrementing, and an integer identifier has
+     * nowhere to go in `audit_events.entity_id`, which is a `uuid` column
+     * because everything Meridian audits is identified by one. Auditing token
+     * issuance is required (AUTH-025), so the token carries the identifier the
+     * audit trail can hold. The plaintext token Sanctum hands a client is still
+     * `{id}|{secret}` and still resolves through `findToken()`.
+     */
+    public $incrementing = false;
+
+    protected $keyType = 'string';
 
     /**
      * @var list<string>

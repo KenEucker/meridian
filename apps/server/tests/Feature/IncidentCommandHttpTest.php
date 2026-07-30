@@ -42,7 +42,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_lead', $event);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => '  Medical assist at Gate A  ',
@@ -85,7 +85,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_operator', $event);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => 'Operations assist',
@@ -108,7 +108,7 @@ class IncidentCommandHttpTest extends TestCase
             'handle' => 'vera-ranger',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => 'Responder dispatch',
@@ -142,7 +142,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_operator', $event);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'priority_label' => Incident::PRIORITY_IMPORTANT,
@@ -181,7 +181,7 @@ class IncidentCommandHttpTest extends TestCase
             'updated_at' => Carbon::parse('2027-07-04T21:00:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -244,7 +244,7 @@ class IncidentCommandHttpTest extends TestCase
             'updated_at' => Carbon::parse('2027-07-04T20:00:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -283,7 +283,7 @@ class IncidentCommandHttpTest extends TestCase
             'priority_label' => Incident::PRIORITY_ROUTINE,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -292,7 +292,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incident priority label is invalid.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -317,7 +317,7 @@ class IncidentCommandHttpTest extends TestCase
             'started_at' => Carbon::parse('2027-07-04T20:00:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -349,7 +349,7 @@ class IncidentCommandHttpTest extends TestCase
             'location_name' => null,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -400,7 +400,7 @@ class IncidentCommandHttpTest extends TestCase
         $otherEvent = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_lead', $otherEvent);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => 'Wrong event attempt',
@@ -417,7 +417,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_operator', $event, revoked: true);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => 'Revoked attempt',
@@ -437,7 +437,7 @@ class IncidentCommandHttpTest extends TestCase
             'title' => 'Original title',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -459,7 +459,7 @@ class IncidentCommandHttpTest extends TestCase
             'title' => 'Original title',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -503,7 +503,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithEventRole('ic_lead', $event);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => '   ',
@@ -526,7 +526,7 @@ class IncidentCommandHttpTest extends TestCase
         ]);
         $wrongEventIncident = Incident::factory()->forEvent($otherEvent)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -535,7 +535,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('title', '');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $wrongEventIncident->id,
@@ -557,7 +557,7 @@ class IncidentCommandHttpTest extends TestCase
             'updated_at' => Carbon::parse('2027-07-04T20:00:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -592,7 +592,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -630,7 +630,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_operator', $otherEvent);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -649,7 +649,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event, revoked: true);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -668,7 +668,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_lead', $event);
         $incident = Incident::factory()->forEvent($otherEvent)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -686,7 +686,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithEventRole('ic_operator', $event);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -735,7 +735,7 @@ class IncidentCommandHttpTest extends TestCase
             'normalized_token' => 'hiddenname',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -792,7 +792,7 @@ class IncidentCommandHttpTest extends TestCase
             'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -802,7 +802,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incident note is already stricken.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -812,7 +812,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Only operational notes may be stricken.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -822,7 +822,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incident note must belong to this incident.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -856,7 +856,7 @@ class IncidentCommandHttpTest extends TestCase
         ]);
 
         foreach ([$wrongEventActor, $revokedActor] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/strike-incident-note', [
                     'event_id' => $event->id,
                     'incident_id' => $incident->id,
@@ -906,7 +906,7 @@ class IncidentCommandHttpTest extends TestCase
             'updated_at' => Carbon::parse('2027-07-04T22:05:00Z'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -947,7 +947,7 @@ class IncidentCommandHttpTest extends TestCase
 
         Carbon::setTestNow('2027-07-04 23:30:00 UTC');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -986,7 +986,7 @@ class IncidentCommandHttpTest extends TestCase
         $target = Incident::factory()->forEvent($event)->create();
         $otherEventIncident = Incident::factory()->forEvent($otherEvent)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -995,7 +995,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'An incident cannot be linked to itself.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1003,7 +1003,7 @@ class IncidentCommandHttpTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1012,7 +1012,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incidents are already linked.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $target->id,
@@ -1021,7 +1021,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incidents are already linked.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1042,7 +1042,7 @@ class IncidentCommandHttpTest extends TestCase
         $target = Incident::factory()->forEvent($event)->create();
         $otherEventIncident = Incident::factory()->forEvent($otherEvent)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1051,7 +1051,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Incidents are not currently linked.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1082,7 +1082,7 @@ class IncidentCommandHttpTest extends TestCase
         $target = Incident::factory()->forEvent($event)->create();
 
         foreach ([$wrongEventActor, $revokedActor] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/link-incident', [
                     'event_id' => $event->id,
                     'incident_id' => $incident->id,
@@ -1141,7 +1141,7 @@ class IncidentCommandHttpTest extends TestCase
                 'body' => "Observed a medical assist near Gate A.\nRanger requested follow-up.",
             ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1182,7 +1182,7 @@ class IncidentCommandHttpTest extends TestCase
             'body' => "Observed a medical assist near Gate A.\nRanger requested follow-up.",
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $secondIncident->id,
@@ -1196,7 +1196,7 @@ class IncidentCommandHttpTest extends TestCase
 
         Carbon::setTestNow('2027-07-05 00:05:00 UTC');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1244,7 +1244,7 @@ class IncidentCommandHttpTest extends TestCase
         $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
         $otherEventReport = FieldReport::factory()->forEvent($otherEvent)->receivedByServer()->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1252,7 +1252,7 @@ class IncidentCommandHttpTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1261,7 +1261,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Field Report is already linked to this incident.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1282,7 +1282,7 @@ class IncidentCommandHttpTest extends TestCase
         $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
         $otherEventReport = FieldReport::factory()->forEvent($otherEvent)->receivedByServer()->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1291,7 +1291,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Field Report is not currently linked to this incident.');
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/unlink-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1322,7 +1322,7 @@ class IncidentCommandHttpTest extends TestCase
         $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
 
         foreach ([$wrongEventActor, $revokedActor] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/link-field-report', [
                     'event_id' => $event->id,
                     'incident_id' => $incident->id,
@@ -1369,7 +1369,7 @@ class IncidentCommandHttpTest extends TestCase
             'checksum' => hash('sha256', 'incident-photo'),
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-attachment', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1420,7 +1420,7 @@ class IncidentCommandHttpTest extends TestCase
         $fieldReport = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
         $fieldReportPhoto = Attachment::factory()->forFieldReport($fieldReport)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-attachment', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1431,7 +1431,7 @@ class IncidentCommandHttpTest extends TestCase
             ->assertJsonPath('message', 'Incident attachment is already stricken.');
 
         foreach ([$otherIncidentAttachment, $fieldReportPhoto] as $invalidAttachment) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/strike-incident-attachment', [
                     'event_id' => $event->id,
                     'incident_id' => $incident->id,
@@ -1465,7 +1465,7 @@ class IncidentCommandHttpTest extends TestCase
         $attachment = Attachment::factory()->forIncident($incident)->create();
 
         foreach ([$wrongEventActor, $revokedActor] as $actor) {
-            $this->actingAs($actor)
+            $this->actingAsClient($actor)
                 ->postJson('/api/commands/strike-incident-attachment', [
                     'event_id' => $event->id,
                     'incident_id' => $incident->id,
@@ -1504,7 +1504,7 @@ class IncidentCommandHttpTest extends TestCase
         $event = $this->eventWithIncidentCommandDepartment();
         $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
                 'event_id' => $event->id,
                 'title' => "{$roleCode} attempt",
@@ -1522,7 +1522,7 @@ class IncidentCommandHttpTest extends TestCase
         $actor = $this->userWithRole($roleCode, $event, eventScoped: $eventScoped);
         $incident = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/append-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1544,7 +1544,7 @@ class IncidentCommandHttpTest extends TestCase
             'entry_type' => IncidentTimelineEntry::TYPE_OPERATIONAL_NOTE,
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-note', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1565,7 +1565,7 @@ class IncidentCommandHttpTest extends TestCase
         $incident = Incident::factory()->forEvent($event)->create();
         $report = FieldReport::factory()->forEvent($event)->receivedByServer()->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-field-report', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1586,7 +1586,7 @@ class IncidentCommandHttpTest extends TestCase
         $incident = Incident::factory()->forEvent($event)->create();
         $attachment = Attachment::factory()->forIncident($incident)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/strike-incident-attachment', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1609,7 +1609,7 @@ class IncidentCommandHttpTest extends TestCase
             'title' => 'Original title',
         ]);
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
@@ -1630,7 +1630,7 @@ class IncidentCommandHttpTest extends TestCase
         $incident = Incident::factory()->forEvent($event)->create();
         $target = Incident::factory()->forEvent($event)->create();
 
-        $this->actingAs($actor)
+        $this->actingAsClient($actor)
             ->postJson('/api/commands/link-incident', [
                 'event_id' => $event->id,
                 'incident_id' => $incident->id,
