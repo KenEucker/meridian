@@ -533,6 +533,25 @@ Rules:
 - shared-workstation login codes do not issue tokens; see 12.4
 - the Alpha 1 `local.field` shared-token middleware is superseded by this mechanism and removed
 
+#### Provider handoff
+
+Google and Discord login completes in a system browser and returns the token to the requesting application. The provider exchange is performed by the node and is not reimplemented in any client.
+
+`GET /api/auth/{provider}/start` is called by the client, not opened in the browser. It takes the client target the caller is (`web`, `mobile`, or `desktop`) and a PKCE `code_challenge` (`S256` only), and answers with the provider authorization URL to open the system browser at, the return address the browser will be sent to, and the handoff `state`.
+
+The provider returns the browser to the node's existing provider callback, which recognizes a handoff state, resolves the identity, and sends the browser on to the return address carrying a one-time `code` and the `state`. A failed handoff returns the same way carrying an `error` reason instead, because the client application is the only surface that can explain the failure to the person.
+
+`POST /api/auth/session` exchanges that code, the PKCE `code_verifier`, and a device identity for a bearer token.
+
+Rules:
+
+- the return address is resolved from node configuration per client target, never from the request, so a handoff cannot be turned into an open redirect
+- a client target with no configured return address does not offer provider login
+- the exchange code is single use and expires with the handoff
+- redemption requires the PKCE verifier, because on mobile and desktop the return leg travels through a custom scheme another application can register
+- a handoff establishes no browser session; the credential belongs to the client application that started it
+- state values and exchange codes are stored only as keyed hashes
+
 ### 5.5 Session resolution
 
 ```text

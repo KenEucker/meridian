@@ -826,8 +826,12 @@ Tokens are issued by Laravel Sanctum.
 Token issuance paths:
 
 - API magic link. A client posts an email address, the node issues a magic link or code, and the client completes verification through an API endpoint rather than through a browser redirect. On success the client receives a token.
-- Provider handoff. Google and Discord login opens a system browser at the existing provider redirect. On completion the node returns a token to the requesting application through a registered callback or custom scheme. The provider exchange itself is not reimplemented in the client.
+- Provider handoff. Google and Discord login opens a system browser at the existing provider redirect. On completion the node returns the result to the requesting application through a registered callback or custom scheme. The provider exchange itself is not reimplemented in the client.
 - Shared workstation login codes do not issue tokens. See section 13.
+
+What the browser carries back to the application is a one-time exchange code, not the token. The client redeems that code, together with the PKCE verifier for the challenge it started the handoff with and its device identity, for the token. The return leg travels through a custom scheme on mobile and desktop, and another application on the same machine can register the same scheme, so the value in the URL must not itself be a credential and possession of it must not be sufficient to obtain one. The return address is resolved from node configuration per client target rather than from the request, and a client target with no configured return address does not offer provider login.
+
+A provider handoff establishes no browser session. The browser performing the sign-in is not the application receiving the credential, and a Meridian session left open in a system browser is one nobody signs out of.
 
 Every token is bound to a `devices` record. Token issuance requires a resolvable device identity, and a request that cannot supply one is refused rather than issued an unbound token. The device binding is what makes a token revocable as a unit of hardware rather than only as a unit of session.
 

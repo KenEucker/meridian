@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuthIdentity;
+use App\Services\Auth\ApiProviderHandoffService;
 use App\Services\Auth\DisabledUserException;
 use App\Services\Auth\DiscordOAuthService;
 use App\Services\Auth\OAuthConfigurationException;
@@ -14,7 +16,10 @@ use Illuminate\Support\Str;
 
 class DiscordOAuthController extends Controller
 {
-    public function __construct(private readonly DiscordOAuthService $discordOAuth) {}
+    public function __construct(
+        private readonly DiscordOAuthService $discordOAuth,
+        private readonly ApiProviderHandoffService $handoffs,
+    ) {}
 
     public function redirect(Request $request): RedirectResponse
     {
@@ -35,6 +40,21 @@ class DiscordOAuthController extends Controller
 
     public function callback(Request $request): RedirectResponse
     {
+        // See GoogleOAuthController::callback: a client application's handoff
+        // comes back through the same registered redirect URI, and is answered by
+        // returning the browser to the waiting application instead of opening a
+        // session here (AUTH-020).
+        $handoffReturnUrl = $this->handoffs->completeCallback(
+            AuthIdentity::PROVIDER_DISCORD,
+            $request->query('state') === null ? null : (string) $request->query('state'),
+            $request->query('code') === null ? null : (string) $request->query('code'),
+            $request->query('error') === null ? null : (string) $request->query('error'),
+        );
+
+        if ($handoffReturnUrl !== null) {
+            return redirect()->away($handoffReturnUrl);
+        }
+
         $expectedState = $request->session()->pull(DiscordOAuthService::STATE_SESSION_KEY);
 
         if (! is_string($expectedState) || ! hash_equals($expectedState, (string) $request->query('state'))) {

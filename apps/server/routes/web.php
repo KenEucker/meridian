@@ -63,14 +63,26 @@ Route::middleware('guest')->group(function (): void {
     Route::get('login/google', [GoogleOAuthController::class, 'redirect'])
         ->middleware('throttle:10,1')
         ->name('auth.google.redirect');
-    Route::get('login/google/callback', [GoogleOAuthController::class, 'callback'])
-        ->name('auth.google.callback');
     Route::get('login/discord', [DiscordOAuthController::class, 'redirect'])
         ->middleware('throttle:10,1')
         ->name('auth.discord.redirect');
-    Route::get('login/discord/callback', [DiscordOAuthController::class, 'callback'])
-        ->name('auth.discord.callback');
 });
+
+/*
+ * Provider callbacks. A provider holds one registered redirect URI per node, so
+ * these routes answer both an ordinary browser login and a client application's
+ * system-browser handoff (AUTH-020; technical spec 11.4).
+ *
+ * They sit outside the `guest` group because the browser completing a handoff may
+ * already hold a Meridian session of its own — on the web client it is the same
+ * browser — and bouncing it to `/home` would abandon a sign-in a client
+ * application is waiting on. A handoff callback establishes no session either
+ * way; an ordinary browser login still does.
+ */
+Route::get('login/google/callback', [GoogleOAuthController::class, 'callback'])
+    ->name('auth.google.callback');
+Route::get('login/discord/callback', [DiscordOAuthController::class, 'callback'])
+    ->name('auth.discord.callback');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('home', ClientAppController::class)->name('home');
