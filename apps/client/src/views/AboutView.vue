@@ -7,12 +7,16 @@ import {
   authorFieldReportCatalog,
   fieldReportCatalogRevision,
   fieldReportPhotoRevision,
-  pendingFieldReportQueue,
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import { describeConnectivityState } from "@/offline/syncStatus";
 import { useConnectivity } from "@/offline/useConnectivity";
+import { describeCommand } from "@/outbox/commandCatalog";
+import {
+  commandOutbox,
+  commandOutboxRevision,
+} from "@/outbox/commandOutboxRuntime";
 import { CLIENT_VERSION } from "@/version";
 
 interface ServerHealth {
@@ -63,9 +67,44 @@ const submittedReportCount = computed(() => {
   void fieldReportCatalogRevision.value;
   return authorFieldReportCatalog.size;
 });
+/*
+ * Device diagnostics is where the full command outbox is reported, accepted
+ * commands included (M16.10; CLIENT-017; UI operating guide 17.4 — sync detail
+ * belongs in advanced mode). The shell notice states held and refused work; this
+ * is the whole queue, by state and by command.
+ */
+const outboxCounts = computed(() => {
+  void commandOutboxRevision.value;
+
+  return {
+    queued: commandOutbox.byStatus("queued").length,
+    sending: commandOutbox.byStatus("sending").length,
+    accepted: commandOutbox.byStatus("accepted").length,
+    rejected: commandOutbox.byStatus("rejected").length,
+  };
+});
+const outboxText = computed(() => {
+  const { queued, sending, accepted, rejected } = outboxCounts.value;
+
+  if (queued + sending + accepted + rejected === 0) {
+    return "Empty; no commands held on this device.";
+  }
+
+  return `${queued} queued; ${sending} sending; ${accepted} accepted; ${rejected} rejected.`;
+});
+const rejectedCommands = computed(() => {
+  void commandOutboxRevision.value;
+
+  return commandOutbox.byStatus("rejected").map((command) => ({
+    key: command.idempotencyKey,
+    label: describeCommand(command.commandType).label,
+    detail: command.detail,
+    reason: command.statusReason ?? "The node gave no reason.",
+  }));
+});
 const pendingTextCount = computed(() => {
-  void fieldReportCatalogRevision.value;
-  return pendingFieldReportQueue.size;
+  void commandOutboxRevision.value;
+  return commandOutbox.unsent("submit-field-report").length;
 });
 const serverHealthText = computed(() => {
   if (serverHealthState.value === "checking") {
@@ -319,6 +358,19 @@ watch(
           <dd>{{ fieldSessionText }}</dd>
         </div>
         <div>
+          <dt>Command outbox</dt>
+          <dd>
+            {{ outboxText }}
+            <ul v-if="rejectedCommands.length > 0" class="diagnostics__rejected">
+              <li v-for="command in rejectedCommands" :key="command.key">
+                {{ command.label
+                }}<template v-if="command.detail"> — {{ command.detail }}</template
+                >: {{ command.reason }}
+              </li>
+            </ul>
+          </dd>
+        </div>
+        <div>
           <dt>FR command sync</dt>
           <dd>{{ fieldReportSyncText }}</dd>
         </div>
@@ -370,6 +422,12 @@ watch(
 <style scoped>
 .about {
   width: var(--m-content-narrow);
+}
+
+.diagnostics__rejected {
+  margin: var(--m-space-2) 0 0;
+  padding-left: var(--m-space-4);
+  color: var(--m-text-secondary);
 }
 
 .about__nav {

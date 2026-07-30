@@ -16,10 +16,11 @@ import {
   createFieldReportPhotoStore,
   fieldReportPhotoStore,
 } from "@/field-reports/pendingFieldReportPhotoStore";
+import { resetFieldReportRuntime } from "@/field-reports/fieldReportRuntime";
 import {
-  pendingFieldReportQueue,
-  resetFieldReportRuntime,
-} from "@/field-reports/fieldReportRuntime";
+  commandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 
@@ -29,6 +30,7 @@ afterEach(async () => {
   await clearPendingFieldReportPhotos();
   configurePendingFieldReportPhotoStore(fieldReportPhotoStore);
   await resetFieldReportRuntime();
+  resetCommandOutbox();
   clearFieldSession();
 });
 
@@ -86,7 +88,7 @@ describe("syncFieldReportOutbox (M9.8)", () => {
       }),
     ]);
 
-    expect(pendingFieldReportQueue.size).toBe(1);
+    expect(commandOutbox.unsent("submit-field-report")).toHaveLength(1);
 
     const fetchMock = vi.fn(async (input: RequestInfo) => {
       const url = String(input);
@@ -118,13 +120,15 @@ describe("syncFieldReportOutbox (M9.8)", () => {
       textAttempted: 1,
       textAccepted: 1,
       textFailed: 0,
+      textPending: 0,
       photosAttempted: 1,
       photosUploaded: 1,
       photosFailed: 0,
       blockedReason: null,
       lastError: null,
     });
-    expect(pendingFieldReportQueue.size).toBe(0);
+    expect(commandOutbox.unsent("submit-field-report")).toHaveLength(0);
+    expect(commandOutbox.get(report.id)?.status).toBe("accepted");
     const photos = await listPendingFieldReportPhotoRecords(report.id);
     expect(photos).toHaveLength(1);
     expect(photos[0]?.syncStatus).toBe("uploaded");
@@ -175,6 +179,7 @@ describe("syncFieldReportOutbox (M9.8)", () => {
       textAttempted: 1,
       textAccepted: 0,
       textFailed: 1,
+      textPending: 1,
       photosAttempted: 0,
       photosUploaded: 0,
       photosFailed: 0,

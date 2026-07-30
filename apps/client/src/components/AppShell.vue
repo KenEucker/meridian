@@ -23,6 +23,7 @@ import {
 } from "@/components/workflowLinks";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { useConnectivity } from "@/offline/useConnectivity";
+import CommandOutboxNotice from "@/outbox/CommandOutboxNotice.vue";
 import {
   describeConnectivityState,
   type ConnectivityState,
@@ -47,7 +48,6 @@ import {
 } from "@/session/sessionContext";
 import { describeSwitchUnavailable } from "@/session/sessionContextCopy";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
-import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
 type ThemeChoice = "light" | "dark";
 const meridianMarkUrl = "/assets/brand/meridian-mark.png";
@@ -390,8 +390,10 @@ function connectionStatusFor(state: ConnectivityState | null): {
 // (UI implementation contract section 16.2). Richer sync states are fed through
 // the same OfflineBanner view-model by later Alpha 1 milestones.
 //
-// When the device reports online, drain supported local operation outboxes to
-// the local Meridian server command API.
+// When the device reports online, drain the command outbox to the node. One
+// call for every command the device holds (M16.10; technical spec 11A.5) —
+// Field Report photo uploads ride along behind it, because a photo can only be
+// attached to a report the node has already accepted (technical spec 18.2).
 const connectivity = useConnectivity();
 
 watch(
@@ -399,7 +401,6 @@ watch(
   (state, previous) => {
     if (state === "online") {
       void syncFieldReportOutbox();
-      void syncAttendanceOutbox();
     }
 
     /*
@@ -916,6 +917,12 @@ onBeforeUnmount(() => {
       merging the two indicators loses the distinction (contract 19A.2).
     -->
     <SessionPermissionsNotice class="app-shell__session-notice" />
+    <!--
+      Held and refused commands, in the shell rather than on the surface that
+      issued them: a person who queued a check-in and moved on is the one
+      CLIENT-017 is about, and they are no longer on that screen.
+    -->
+    <CommandOutboxNotice class="app-shell__outbox-notice" />
     <main class="app-shell__main">
       <slot />
     </main>
@@ -1557,7 +1564,8 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__offline-banner,
-.app-shell__session-notice {
+.app-shell__session-notice,
+.app-shell__outbox-notice {
   width: var(--m-app-content-max);
   margin: var(--m-space-3) auto 0;
 }

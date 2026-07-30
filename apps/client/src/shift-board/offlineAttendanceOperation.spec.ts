@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   ATTENDANCE_PENDING_SYNC,
-  applyAttendanceSyncAcceptance,
   createOfflineAttendanceOperation,
   OfflineAttendanceOperationError,
   type AttendanceOperationType,
@@ -132,27 +131,5 @@ describe("createOfflineAttendanceOperation", () => {
         },
       ),
     ).toThrow("operation type must be check_in, check_out, or mark_no_show");
-  });
-
-  it("applies server acceptance without mutating the queued operation", () => {
-    const operation = createOfflineAttendanceOperation(
-      {
-        ...BASE_INPUT,
-        operationType: "mark_no_show",
-      },
-      {
-        generateId: () => "77777777-7777-4777-8777-777777777777",
-        now: () => new Date("2027-07-04T16:10:00.000Z"),
-      },
-    );
-
-    const accepted = applyAttendanceSyncAcceptance(operation, {
-      operationUuid: operation.operationUuid,
-      serverReceivedAt: "2027-07-04T16:10:05.000Z",
-    });
-
-    expect(operation.syncStatus).toBe("pending_sync");
-    expect(accepted.syncStatus).toBe("accepted");
-    expect(accepted.serverReceivedAt).toBe("2027-07-04T16:10:05.000Z");
   });
 });

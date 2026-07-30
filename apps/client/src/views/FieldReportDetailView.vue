@@ -17,6 +17,11 @@ import {
 } from "@/field-reports/offlineFieldReport";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
+import {
+  commandOutbox,
+  commandOutboxRevision,
+} from "@/outbox/commandOutboxRuntime";
+import { retryCommand } from "@/outbox/submitCommand";
 
 // View submitted Field Report — UI contract 12.3 `staff.field-reports.show`
 // (M9.4 / M9.7A / M9.8). Authors may view their own reports (FR-004). Original
@@ -126,15 +131,61 @@ const failedPhotoCount = ref(0);
 const localPhotoPreviews = ref<LocalPhotoPreview[]>([]);
 const syncing = ref(false);
 const syncMessage = ref<string | null>(null);
+/**
+ * The command that will carry this report to the node, if one is still held.
+ *
+ * The record's own `pending_sync` flag says how the report should read, not what
+ * is still owed to the node — those are different questions and the outbox is
+ * the only thing that answers the second one. A report whose command the node
+ * refused is not "queued locally": nothing is going to send it, and saying
+ * otherwise is how an author walks away believing their work is on its way.
+ */
+const submissionCommand = computed(() => {
+  void commandOutboxRevision.value;
+
+  const id = report.value?.id;
+
+  return id === undefined ? undefined : commandOutbox.get(id);
+});
+
 const hasSyncWork = computed(
   () =>
     Boolean(submission.value?.pendingSync) ||
+    submissionCommand.value !== undefined ||
     pendingPhotoCount.value > 0 ||
     failedPhotoCount.value > 0,
 );
-const syncTextStatus = computed(() =>
-  submission.value?.pendingSync ? "Queued locally" : "Accepted by server",
+
+const syncTextStatus = computed(() => {
+  const command = submissionCommand.value;
+
+  if (command?.status === "rejected") {
+    return `Refused by the node: ${command.statusReason ?? "no reason given"}`;
+  }
+
+  if (command?.status === "sending") {
+    return "Sending";
+  }
+
+  return submission.value?.pendingSync ? "Queued locally" : "Accepted by server";
+});
+
+/** Whether the node refused this report, so the author can ask again. */
+const submissionRefused = computed(
+  () => submissionCommand.value?.status === "rejected",
 );
+
+function retrySubmission(): void {
+  const command = submissionCommand.value;
+
+  if (command === undefined) {
+    return;
+  }
+
+  retryCommand(command.idempotencyKey);
+  syncMessage.value = null;
+  void onRetrySync();
+}
 const syncPhotoStatus = computed(() => {
   if (localPhotoPreviews.value.length === 0) {
     return "No local photos";
@@ -218,6 +269,14 @@ async function onRetrySync(): Promise<void> {
       syncMessage.value = result.blockedReason;
     } else if (result.lastError) {
       syncMessage.value = result.lastError;
+    } else if (result.textPending > 0) {
+      /*
+       * Work is still owed to the node and this pass did not clear it — most
+       * often because a drain was already running when the button was pressed.
+       * Saying "nothing pending" here would tell an author their report had
+       * gone somewhere when the device is still the only copy of it.
+       */
+      syncMessage.value = "Still queued; this device will send it when the node is reachable.";
     } else if (result.photosUploaded === 0 && result.textAccepted === 0) {
       syncMessage.value = "Nothing pending to sync.";
     } else {
@@ -461,8 +520,24 @@ async function onRetrySync(): Promise<void> {
           <span>Photos</span>
           <strong>{{ syncPhotoStatus }}</strong>
         </p>
+        <!--
+          A refused report gets its own action. "Retry sync" drains what is
+          queued, and a refusal is deliberately not queued (CLIENT-017), so
+          pressing it would report that nothing is pending — which is true of the
+          queue and reads as "your report is fine" to the person looking at it.
+          Asking again is the author's decision to make, so it is their button.
+        -->
         <button
-          v-if="hasSyncWork"
+          v-if="submissionRefused"
+          type="button"
+          class="fr-detail__retry"
+          :disabled="syncing"
+          @click="retrySubmission"
+        >
+          {{ syncing ? "Sending…" : "Send this report again" }}
+        </button>
+        <button
+          v-else-if="hasSyncWork"
           type="button"
           class="fr-detail__retry"
           :disabled="syncing"

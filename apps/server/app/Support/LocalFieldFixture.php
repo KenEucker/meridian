@@ -27,6 +27,22 @@ final class LocalFieldFixture
     public const TEAM_ID = '77777777-7777-4777-8777-777777777777';
 
     /*
+     * The Rangers Dirt team.
+     *
+     * Pinned because the client's shift fixtures put the signed-in staff member
+     * on a Dirt shift, and a Field Report filed on shift carries the team whose
+     * shift it was (technical spec 17.3). Without this row the node refused
+     * every on-shift report with "Field Report team is not active in the
+     * supplied department" — the client described a team the server had never
+     * heard of.
+     *
+     * Unlike the default teams below, this one is safe to pin: it is not any
+     * department's default team, so nothing in `departments.default_team_id`
+     * points at it.
+     */
+    public const RANGERS_DIRT_TEAM_ID = '77777777-7777-4777-8777-777777777771';
+
+    /*
      * The remaining departments the client's department switcher offers
      * (`apps/client/src/department-teams/fixtureDepartmentAccess.ts`).
      *

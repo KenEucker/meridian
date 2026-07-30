@@ -63,11 +63,6 @@ export interface OfflineAttendanceOperationDependencies {
   readonly now?: () => Date;
 }
 
-export interface AttendanceSyncAcceptance {
-  readonly operationUuid: string;
-  readonly serverReceivedAt: string;
-}
-
 export class OfflineAttendanceOperationError extends Error {
   constructor(message: string) {
     super(message);
@@ -202,28 +197,5 @@ export function createOfflineAttendanceOperation(
     serverReceivedAt: null,
     syncStatus: ATTENDANCE_PENDING_SYNC,
     createdAt: deviceCreatedAt,
-  });
-}
-
-export function applyAttendanceSyncAcceptance(
-  operation: OfflineAttendanceOperation,
-  acceptance: AttendanceSyncAcceptance,
-): OfflineAttendanceOperation {
-  if (acceptance.operationUuid !== operation.operationUuid) {
-    throw new OfflineAttendanceOperationError(
-      "Attendance acceptance UUID does not match the queued operation.",
-    );
-  }
-
-  if (acceptance.serverReceivedAt.trim().length === 0) {
-    throw new OfflineAttendanceOperationError(
-      "Attendance acceptance requires a server received timestamp.",
-    );
-  }
-
-  return Object.freeze({
-    ...operation,
-    serverReceivedAt: acceptance.serverReceivedAt,
-    syncStatus: ATTENDANCE_ACCEPTED,
   });
 }

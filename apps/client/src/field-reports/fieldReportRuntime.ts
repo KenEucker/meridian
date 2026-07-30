@@ -1,10 +1,15 @@
-// Shared Field Report runtime for author surfaces (M9.4 / M9.8).
+// Shared Field Report runtime for author surfaces (M9.4 / M9.8 / M16.10).
 //
-// Wires the M9.2 pending outbox and the M9.4 author catalog so submit, list,
-// and detail share one device state. Catalog contents are hydrated from and
-// written to a temporary localStorage seam so refresh keeps author submissions
-// visible. Pending Field Report photos use durable encrypted storage (M9.8).
-// PowerSync transport remains a later Alpha 1 sync task.
+// Holds the M9.4 author catalog so submit, list, and detail share one device
+// state. Catalog contents are hydrated from and written to a temporary
+// localStorage seam so refresh keeps author submissions visible. Pending Field
+// Report photos use durable encrypted storage (M9.8). PowerSync transport
+// remains a later Alpha 1 sync task.
+//
+// Since M16.10 the catalog is display state and nothing more: what is still owed
+// to the node lives in the shared command outbox, which each report's device
+// UUID keys (technical spec 11A.5). The catalog's `sync_status` says how a report
+// should read on screen; the outbox says what is still to be sent.
 
 import { ref } from "vue";
 
@@ -18,9 +23,10 @@ import {
   clearPendingFieldReportPhotos,
   hydratePendingFieldReportPhotos,
 } from "@/field-reports/pendingFieldReportPhotos";
-import { PendingFieldReportQueue } from "@/field-reports/pendingFieldReportQueue";
+import { fieldReportCommandPayload } from "@/field-reports/submitFieldReportCommand";
+import { commandOutbox } from "@/outbox/commandOutboxRuntime";
+import { queueCommand } from "@/outbox/submitCommand";
 
-export const pendingFieldReportQueue = new PendingFieldReportQueue();
 export const authorFieldReportCatalog = new AuthorFieldReportCatalog();
 
 /**
@@ -32,15 +38,51 @@ export const fieldReportCatalogRevision = ref(0);
 /** Vue dependency for pending photo upload state on detail surfaces. */
 export const fieldReportPhotoRevision = ref(0);
 
+/**
+ * Make sure every report the catalog shows as pending has a command to send it
+ * (M16.10).
+ *
+ * The catalog and the outbox are two durable stores, and a report that says
+ * "Queued locally" while nothing is queued is the worst way for them to
+ * disagree: the author is told their work is waiting to sync, and it will wait
+ * forever. It is silent, and the only copy of what they wrote is on this device.
+ *
+ * Two ways to arrive there, one of them certain:
+ *
+ *  - Reports written before the outbox existed. The queue this replaced was
+ *    rebuilt from the catalog on every hydrate, so it never needed its own
+ *    durable copy and never had one. Anything already pending when a device
+ *    updates has a catalog entry and no command.
+ *  - The two stores drifting later — one write landing and the other not,
+ *    storage evicted, a partial clear.
+ *
+ * So reconciliation runs on every install rather than as a one-off migration.
+ * It only ever adds: a report whose command is already held is skipped by key,
+ * which means an accepted command is not re-sent and — the case that matters —
+ * a rejected one is not quietly resurrected behind the user's back.
+ */
+function reconcilePendingCommands(reports: readonly OfflineFieldReport[]): void {
+  for (const report of reports) {
+    if (
+      report.syncStatus !== FIELD_REPORT_PENDING_SYNC ||
+      commandOutbox.has(report.id)
+    ) {
+      continue;
+    }
+
+    queueCommand({
+      commandType: "submit-field-report",
+      idempotencyKey: report.id,
+      payload: fieldReportCommandPayload(report),
+      eventId: report.eventId,
+      detail: report.temporaryLocalNumber,
+    });
+  }
+}
+
 function installReports(reports: readonly OfflineFieldReport[]): void {
   authorFieldReportCatalog.replaceAll(reports);
-
-  pendingFieldReportQueue.clear();
-  for (const report of reports) {
-    if (report.syncStatus === FIELD_REPORT_PENDING_SYNC) {
-      pendingFieldReportQueue.enqueue(report);
-    }
-  }
+  reconcilePendingCommands(reports);
 }
 
 function hydrateFromLocalStore(): void {
@@ -101,7 +143,6 @@ export function discardFieldReportsOutsideEvent(eventId: string | null): void {
 
 /** Reset runtime state between tests. */
 export async function resetFieldReportRuntime(): Promise<void> {
-  pendingFieldReportQueue.clear();
   authorFieldReportCatalog.clear();
   fieldReportLocalStore.clear();
   await clearPendingFieldReportPhotos();

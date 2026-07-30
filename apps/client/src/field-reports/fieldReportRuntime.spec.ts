@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   authorFieldReportCatalog,
   discardFieldReportsOutsideEvent,
-  pendingFieldReportQueue,
   persistFieldReportRuntime,
   reloadFieldReportRuntimeFromLocalStore,
   resetFieldReportRuntime,
@@ -15,6 +14,11 @@ import {
   type CreateOfflineFieldReportInput,
   type OfflineFieldReport,
 } from "@/field-reports/offlineFieldReport";
+import {
+  commandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
+import { queueCommand } from "@/outbox/submitCommand";
 
 /*
  * What a context switch does to the author's Field Report catalog (M16.7;
@@ -59,6 +63,79 @@ function install(reports: readonly OfflineFieldReport[]): void {
 
 afterEach(async () => {
   await resetFieldReportRuntime();
+  resetCommandOutbox();
+});
+
+describe("reconciling the catalog against the command outbox", () => {
+  it("queues a command for a pending report that has none", () => {
+    // The queue this replaced was rebuilt from the catalog on every hydrate and
+    // never had a durable copy of its own, so every report already pending when
+    // a device updates arrives with a catalog entry and no command. Without
+    // this, the report reads "Queued locally" forever and nothing ever sends it
+    // — silent, and this device is the only copy of what the author wrote.
+    install([
+      report(
+        "cccccccc-1111-2222-3333-444455556666",
+        {},
+        FIELD_REPORT_PENDING_SYNC,
+      ),
+    ]);
+    resetCommandOutbox();
+
+    reloadFieldReportRuntimeFromLocalStore();
+
+    const command = commandOutbox.get("cccccccc-1111-2222-3333-444455556666");
+    expect(command?.commandType).toBe("submit-field-report");
+    expect(command?.status).toBe("queued");
+    expect(command?.payload).toMatchObject({
+      id: "cccccccc-1111-2222-3333-444455556666",
+      event_id: "event-previous",
+    });
+  });
+
+  it("queues nothing for a report the node has already accepted", () => {
+    install([report("aaaaaaaa-1111-2222-3333-444455556666")]);
+    resetCommandOutbox();
+
+    reloadFieldReportRuntimeFromLocalStore();
+
+    expect(commandOutbox.size).toBe(0);
+  });
+
+  it("does not resurrect a command the node refused", () => {
+    // A rejection is the user's to deal with (CLIENT-017). Re-queueing it behind
+    // their back would send work the node has already said no to, and would hide
+    // the refusal they were supposed to see.
+    install([
+      report(
+        "cccccccc-1111-2222-3333-444455556666",
+        {},
+        FIELD_REPORT_PENDING_SYNC,
+      ),
+    ]);
+    queueCommand({
+      commandType: "submit-field-report",
+      idempotencyKey: "cccccccc-1111-2222-3333-444455556666",
+      payload: { id: "cccccccc-1111-2222-3333-444455556666" },
+      eventId: "event-previous",
+    });
+    commandOutbox.markSending(
+      "cccccccc-1111-2222-3333-444455556666",
+      "2027-06-01T12:00:00.000Z",
+    );
+    commandOutbox.markRejected(
+      "cccccccc-1111-2222-3333-444455556666",
+      "2027-06-01T12:00:01.000Z",
+      "That event has ended.",
+    );
+
+    reloadFieldReportRuntimeFromLocalStore();
+
+    expect(commandOutbox.get("cccccccc-1111-2222-3333-444455556666")?.status).toBe(
+      "rejected",
+    );
+    expect(commandOutbox.size).toBe(1);
+  });
 });
 
 describe("discarding Field Reports on a context switch", () => {
@@ -87,6 +164,12 @@ describe("discarding Field Reports on a context switch", () => {
         FIELD_REPORT_PENDING_SYNC,
       ),
     ]);
+    queueCommand({
+      commandType: "submit-field-report",
+      idempotencyKey: "cccccccc-1111-2222-3333-444455556666",
+      payload: { id: "cccccccc-1111-2222-3333-444455556666" },
+      eventId: "event-previous",
+    });
 
     discardFieldReportsOutsideEvent("event-next");
 
@@ -94,7 +177,7 @@ describe("discarding Field Reports on a context switch", () => {
       ["cccccccc-1111-2222-3333-444455556666"],
     );
     expect(
-      pendingFieldReportQueue.pending().map((entry) => entry.id),
+      commandOutbox.unsent().map((command) => command.idempotencyKey),
     ).toEqual(["cccccccc-1111-2222-3333-444455556666"]);
   });
 

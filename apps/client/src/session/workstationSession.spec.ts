@@ -4,16 +4,19 @@ import { configureMeridianApi } from "@/api/meridianApi";
 import {
   authorFieldReportCatalog,
   discardFieldReportsOutsideEvent,
-  pendingFieldReportQueue,
   persistFieldReportRuntime,
   resetFieldReportRuntime,
 } from "@/field-reports/fieldReportRuntime";
+import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import {
   createOfflineFieldReport,
   FIELD_REPORT_ACCEPTED,
-  FIELD_REPORT_PENDING_SYNC,
   type OfflineFieldReport,
 } from "@/field-reports/offlineFieldReport";
+import {
+  commandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
 import { clearClientSession, clientSessionState } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSession";
 import { readCachedSession } from "@/session/sessionCache";
@@ -174,6 +177,22 @@ function fieldReport(
   };
 }
 
+/** Submit a Field Report the way a surface does: catalog entry plus command. */
+function queueFieldReport(id: string): void {
+  submitFieldReport(
+    {
+      eventId: EVENT_ID,
+      submittedByUserId: "user-1",
+      staffId: "staff-1",
+      originDeviceId: "device-1",
+      originNodeId: "node-1",
+      title: "Radio handed back at Gate A",
+      body: "Radio handed back at Gate A.",
+    },
+    { generateId: () => id, now: () => new Date("2027-06-01T12:01:00.000Z") },
+  );
+}
+
 /** Every value this device has written anywhere it survives a restart. */
 function storedValues(): string[] {
   const values: string[] = [];
@@ -222,6 +241,7 @@ afterEach(async () => {
   resetWorkstationSession();
   clearClientSession();
   await resetFieldReportRuntime();
+  resetCommandOutbox();
   configureMeridianApi(null);
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -463,14 +483,14 @@ describe("ending a session", () => {
     expect(clientSessionState.document).toBeNull();
   });
 
-  it("leaves queued operations in the queue", async () => {
+  it("leaves queued commands in the outbox", async () => {
     // Technical spec 13.3: "active session data is wiped ... Saved local queued
     // operations remain in the local queue and sync when available." A check-in
     // recorded and queued at a workstation is the only copy of work somebody did.
+    // Since M16.10 that queue is the shared command outbox, which is deliberately
+    // outside the context reset registry the wipe runs.
     await signIn();
-    authorFieldReportCatalog.recordSubmitted(
-      fieldReport("aaaaaaaa-1111-2222-3333-444455556666", FIELD_REPORT_PENDING_SYNC),
-    );
+    queueFieldReport("aaaaaaaa-1111-2222-3333-444455556666");
     authorFieldReportCatalog.recordSubmitted(
       fieldReport("bbbbbbbb-1111-2222-3333-444455556666", FIELD_REPORT_ACCEPTED),
     );
@@ -478,7 +498,7 @@ describe("ending a session", () => {
 
     await endWorkstationSession("signed_out");
 
-    expect(pendingFieldReportQueue.pending().map((entry) => entry.id)).toEqual([
+    expect(commandOutbox.unsent().map((command) => command.idempotencyKey)).toEqual([
       "aaaaaaaa-1111-2222-3333-444455556666",
     ]);
     // The accepted report is the node's record and comes back with the catalog.
@@ -488,16 +508,13 @@ describe("ending a session", () => {
     ]);
   });
 
-  it("leaves queued operations in the queue on a timeout too", async () => {
+  it("leaves queued commands in the outbox on a timeout too", async () => {
     await signIn();
-    authorFieldReportCatalog.recordSubmitted(
-      fieldReport("cccccccc-1111-2222-3333-444455556666", FIELD_REPORT_PENDING_SYNC),
-    );
-    persistFieldReportRuntime();
+    queueFieldReport("cccccccc-1111-2222-3333-444455556666");
 
     evaluateWorkstationSession(new Date("2027-06-01T12:05:00+00:00"));
 
-    expect(pendingFieldReportQueue.pending().map((entry) => entry.id)).toEqual([
+    expect(commandOutbox.unsent().map((command) => command.idempotencyKey)).toEqual([
       "cccccccc-1111-2222-3333-444455556666",
     ]);
   });

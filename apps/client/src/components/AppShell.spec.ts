@@ -28,14 +28,9 @@ import {
   selectedSessionDepartment,
 } from "@/session/sessionAccess";
 import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
-import { syncAttendanceOutbox } from "@/shift-board/syncAttendanceOutbox";
 
 vi.mock("@/field-reports/syncFieldReportOutbox", () => ({
   syncFieldReportOutbox: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/shift-board/syncAttendanceOutbox", () => ({
-  syncAttendanceOutbox: vi.fn(async () => undefined),
 }));
 
 const routerLinkStub = {
@@ -195,7 +190,10 @@ describe("AppShell offline/sync display", () => {
     expect(wrapper.find(".session-permissions").exists()).toBe(false);
   });
 
-  it("drains Field Report and attendance outboxes when online", () => {
+  it("drains the command outbox when online", () => {
+    // One drain for every command the device holds (M16.10; technical spec
+    // 11A.5). Field Report photo uploads ride along behind it, which is why the
+    // shell asks for that pass rather than for the queue directly.
     setDeviceOnLine(true);
 
     mount(AppShell, {
@@ -203,7 +201,6 @@ describe("AppShell offline/sync display", () => {
     });
 
     expect(syncFieldReportOutbox).toHaveBeenCalledOnce();
-    expect(syncAttendanceOutbox).toHaveBeenCalledOnce();
   });
 });
 

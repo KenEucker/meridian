@@ -1,26 +1,44 @@
-// Drain local Field Report text + photo outboxes to the server (M9.8).
+// Bring this device's Field Report work up to date (M9.8; M16.10).
 //
-// Text acceptance must succeed before photo upload (technical spec 18.2).
+// Two different things have to happen in order, and only one of them is a
+// command. The text is a `submit-field-report` command and drains with every
+// other command through the shared outbox (technical spec 11A.5). The photos are
+// binary uploads against a report the server already has, so they can only go
+// once the text has been accepted (technical spec 18.2).
+//
+// This module is what the Field Report surfaces call when they want both halves
+// done and want to be told about their own work. The drain it starts is the
+// whole queue's, not the Field Reports' — there is one queue — and the counts it
+// reports are filtered back down to Field Report commands, because a "Retry
+// sync" button on a Field Report should not report on somebody's check-ins.
 
-import { meridianApiConfig } from "@/api/meridianApi";
 import {
   authorFieldReportCatalog,
   bumpFieldReportCatalogRevision,
   bumpFieldReportPhotoRevision,
-  pendingFieldReportQueue,
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { FIELD_REPORT_ACCEPTED } from "@/field-reports/offlineFieldReport";
 import { pendingFieldReportPhotoReportIds } from "@/field-reports/pendingFieldReportPhotos";
-import { submitFieldReportCommand } from "@/field-reports/submitFieldReportCommand";
-import { applyLocalFieldReportAcceptance } from "@/field-reports/submitFieldReport";
 import { syncPendingFieldReportPhotos } from "@/field-reports/syncFieldReportPhotos";
 import { uploadFieldReportPhoto } from "@/field-reports/uploadFieldReportPhoto";
+import { commandOutbox } from "@/outbox/commandOutboxRuntime";
+import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
 
 export interface SyncFieldReportOutboxResult {
   readonly textAttempted: number;
   readonly textAccepted: number;
   readonly textFailed: number;
+  /**
+   * Field Report commands still owed to the node once the pass is over.
+   *
+   * Read from the queue rather than derived from the counts, because a pass can
+   * legitimately attempt nothing and still leave work outstanding — a drain
+   * already in flight when this one was asked for, most obviously. A surface
+   * that reports "nothing pending" while the queue holds the author's report is
+   * telling them their work is gone.
+   */
+  readonly textPending: number;
   readonly photosAttempted: number;
   readonly photosUploaded: number;
   readonly photosFailed: number;
@@ -28,25 +46,12 @@ export interface SyncFieldReportOutboxResult {
   readonly lastError: string | null;
 }
 
-let syncInFlight: Promise<SyncFieldReportOutboxResult> | null = null;
-
 export async function syncFieldReportOutbox(): Promise<SyncFieldReportOutboxResult> {
-  if (syncInFlight) {
-    return syncInFlight;
-  }
-
-  syncInFlight = runSync().finally(() => {
-    syncInFlight = null;
-  });
-
-  return syncInFlight;
-}
-
-async function runSync(): Promise<SyncFieldReportOutboxResult> {
   const empty: SyncFieldReportOutboxResult = {
     textAttempted: 0,
     textAccepted: 0,
     textFailed: 0,
+    textPending: 0,
     photosAttempted: 0,
     photosUploaded: 0,
     photosFailed: 0,
@@ -54,45 +59,34 @@ async function runSync(): Promise<SyncFieldReportOutboxResult> {
     lastError: null,
   };
 
-  // Without a configured local API token, keep queues local-only (tests and
-  // browsers that have not enabled MERIDIAN local Field command auth).
-  if (!meridianApiConfig().bearerToken) {
-    return {
-      ...empty,
-      blockedReason: "Local Field API token is not configured.",
-    };
+  const commands = await syncCommandOutbox();
+  const textPending = commandOutbox.unsent("submit-field-report").length;
+
+  if (commands.blockedReason !== null) {
+    return { ...empty, textPending, blockedReason: commands.blockedReason };
   }
 
+  const text = commands.results.filter(
+    (result) => result.commandType === "submit-field-report",
+  );
+  const textAttempted = text.length;
+  const textAccepted = text.filter(
+    (result) => result.outcome === "accepted",
+  ).length;
+  let lastError = text.filter((result) => result.error !== null).at(-1)?.error ?? null;
+
   const session = resolveFieldSession();
+
   if (!session) {
     return {
       ...empty,
+      textAttempted,
+      textAccepted,
+      textFailed: textAttempted - textAccepted,
+      textPending,
       blockedReason: "Field session is unavailable.",
+      lastError,
     };
-  }
-
-  let textAttempted = 0;
-  let textAccepted = 0;
-  let textFailed = 0;
-  let lastError: string | null = null;
-
-  for (const report of pendingFieldReportQueue.pending()) {
-    textAttempted += 1;
-    try {
-      const acceptance = await submitFieldReportCommand(report);
-      if (!acceptance.fraNumber || !acceptance.serverReceivedAt) {
-        throw new Error("Server acceptance did not return FRA/server timestamps.");
-      }
-      applyLocalFieldReportAcceptance(report.id, {
-        fraNumber: acceptance.fraNumber,
-        serverReceivedAt: acceptance.serverReceivedAt,
-      });
-      textAccepted += 1;
-    } catch (error) {
-      textFailed += 1;
-      lastError =
-        error instanceof Error ? error.message : "Field Report text sync failed.";
-    }
   }
 
   let photosAttempted = 0;
@@ -129,7 +123,8 @@ async function runSync(): Promise<SyncFieldReportOutboxResult> {
   return {
     textAttempted,
     textAccepted,
-    textFailed,
+    textFailed: textAttempted - textAccepted,
+    textPending,
     photosAttempted,
     photosUploaded,
     photosFailed,

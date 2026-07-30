@@ -12,17 +12,31 @@
 // Identity and operational context come from different places, and keeping
 // them apart is the point of this module. Who you are — user, staff record,
 // device, node, event — is installed once and does not change while you work.
-// Where you are working does change, and a Field Report has to record where
-// you actually were when you filed it:
+// Where you are working may or may not be knowable, and a Field Report records
+// it only when it is:
 //
 //   - On shift, that is the team whose shift you are checked into, and that
 //     team's department. The department switcher does not override it; you
 //     cannot work a Rangers shift and file the report against Gate.
-//   - Off shift, there is no team, so the report takes the department you have
-//     selected and records the team as off-shift.
+//   - Off shift, there is no department and no team. A report filed on your own
+//     behalf is yours and the event's, and nothing else's.
 //
-// A session therefore declares whether it follows that operational context,
-// and `resolveFieldSession` composes it with identity on read.
+// The second rule is the one worth being explicit about, because it used to say
+// something else. Off shift, the report took whichever department was selected
+// in the shell switcher — which is navigation state, "the screens I am looking
+// at", not a fact about where anybody was standing. That stamped a department
+// onto an immutable record on the strength of what the author happened to be
+// reading, and none of the governing documents ask for it: FR-003 records author,
+// title, and text; FR-010 says Field Reports may exist independently; technical
+// spec 17.3 lists "department/team context *if available*"; and data/API 10.15
+// makes both columns nullable. The server has always accepted a report with
+// neither, and every one of its acceptance tests files one that way.
+//
+// So context is attached when it is a verified fact and omitted when it is not.
+// "Off-shift" survives as a label the create screen shows, not as an attribution.
+//
+// A session declares whether it follows operational context, and
+// `resolveFieldSession` composes it with identity on read.
 //
 // Resolving on read is also what makes the create screen live. The author
 // surfaces resolve the session inside a `computed`, so switching department
@@ -34,7 +48,6 @@
 // department (FR-004; technical spec 17.6), so switching department does not
 // hide reports filed from a different one.
 
-import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
   OFF_SHIFT_TEAM_LABEL,
   resolveCurrentFieldShift,
@@ -115,9 +128,12 @@ export function resolveInstalledFieldSession(): FieldSessionContext | null {
  *
  * The shift wins when there is one, department included: a team belongs to
  * exactly one department, so a report attributed to a team under some other
- * department would not describe anything that happened. Off shift there is no
- * team to name, and the report says so rather than borrowing the department's
- * default team, which nobody was working.
+ * department would not describe anything that happened.
+ *
+ * Off shift there is nothing to attribute the report to, and the honest record
+ * of that is an absent department and an absent team rather than a plausible
+ * one. `OFF_SHIFT_TEAM_LABEL` is carried as a label so the create screen can say
+ * which case this is; it names no team and the report claims none.
  */
 function withOperationalContext(
   session: FieldSessionContext,
@@ -134,16 +150,10 @@ function withOperationalContext(
     };
   }
 
-  const department = selectedFixtureDepartment.value;
-
-  if (department === undefined) {
-    return session;
-  }
-
   return {
     ...session,
-    departmentId: department.departmentId,
-    departmentLabel: department.departmentLabel,
+    departmentId: null,
+    departmentLabel: null,
     teamId: null,
     teamLabel: OFF_SHIFT_TEAM_LABEL,
   };
@@ -154,9 +164,8 @@ function withOperationalContext(
  * so author surfaces and command upload QA share server-seeded UUIDs
  * (`php artisan meridian:seed-local-field-fixture`).
  *
- * The fixture pins identity only. Department and team follow the current
- * shift, and the shell's department switcher when there is no shift, which is
- * how real auth will behave.
+ * The fixture pins identity only. Department and team follow the current shift
+ * and are absent when there is none, which is how real auth will behave.
  */
 export function installDevelopmentFieldSession(): FieldSessionContext {
   installFieldSession(
