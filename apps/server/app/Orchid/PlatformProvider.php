@@ -185,6 +185,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.api-tokens')
                 ->permission('platform.api-tokens'),
 
+            // Login codes for trusted shared workstations (AUTH-026, AUTH-028).
+            // Filed beside API Tokens because both administer credentials that
+            // reach this node, and a technician preparing an event or recovering
+            // a stranded staff member is doing infrastructure work rather than
+            // people administration.
+            Menu::make(__('Workstation Login Codes'))
+                ->icon('bs.123')
+                ->route('platform.shared-workstation-login-codes')
+                ->permission('platform.shared-workstation-login-codes'),
+
             // System configuration and diagnostics (technical spec 22A). Two
             // deliberately separate pages: configuration answers "what is this
             // node running on and where did each value come from", diagnostics
@@ -264,6 +274,11 @@ class PlatformProvider extends OrchidServiceProvider
                 // token ends a person's access from a device, so it stays a God
                 // Mode capability alongside the rest of node administration.
                 ->addPermission('platform.api-tokens', __('API tokens'))
+                // Generating a login code for another user is an assisted-recovery
+                // and event-preparation power (AUTH-026, AUTH-028), so it stays a
+                // God Mode capability. A user generating their own code needs no
+                // capability at all — holding a session is the authority.
+                ->addPermission('platform.shared-workstation-login-codes', __('Workstation login codes'))
                 // System configuration and diagnostics capabilities are
                 // granular (SYS-024 through SYS-027): viewing configuration,
                 // changing it, changing secrets, viewing diagnostics,

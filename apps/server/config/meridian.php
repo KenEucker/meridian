@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Auth\SharedWorkstationLoginCodeThrottle;
 use App\Support\ApiTokenExpiry;
 use App\Support\RootPackageLicense;
 use App\Support\RootPackageVersion;
@@ -249,6 +250,51 @@ return [
                 'desktop' => env('MERIDIAN_API_HANDOFF_RETURN_DESKTOP', 'org.meridian.kiosk://auth/handoff'),
             ],
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shared Workstation Login Codes
+    |--------------------------------------------------------------------------
+    |
+    | Rate limits for the human-typable codes that sign a known user in to a
+    | trusted shared workstation (AUTH-029; technical spec 13.2; data/API 12.4).
+    | The six-week validity of a code is a specification constant and lives on
+    | the model rather than here.
+    |
+    | Generation is limited per user and per node. The per-user limit is keyed to
+    | the user a code is *for*, which is what bounds how many live codes one
+    | person can have and what a stolen session runs into; the per-node limit
+    | bounds the whole install and is set well above it so God mode's documented
+    | event-preparation path — one operator generating codes for a roster — stays
+    | inside it.
+    |
+    | Code entry is limited per workstation, because guessing happens at the
+    | kiosk keyboard. `failed_entry_audit_threshold` is how many wrong codes a
+    | workstation must produce in one window before the failures are audited
+    | (technical spec 13.2, "failed login-code attempts are audited after a
+    | threshold"): below it, a mistyped character at a busy kiosk is not an
+    | event worth recording.
+    |
+    */
+
+    'shared_workstation_login_codes' => [
+        'generation_per_user_per_hour' => (int) env(
+            'MERIDIAN_WORKSTATION_LOGIN_CODE_PER_USER_PER_HOUR',
+            SharedWorkstationLoginCodeThrottle::DEFAULT_GENERATION_PER_USER,
+        ),
+        'generation_per_node_per_hour' => (int) env(
+            'MERIDIAN_WORKSTATION_LOGIN_CODE_PER_NODE_PER_HOUR',
+            SharedWorkstationLoginCodeThrottle::DEFAULT_GENERATION_PER_NODE,
+        ),
+        'entry_attempts_per_workstation_per_minute' => (int) env(
+            'MERIDIAN_WORKSTATION_LOGIN_CODE_ENTRY_ATTEMPTS_PER_MINUTE',
+            SharedWorkstationLoginCodeThrottle::DEFAULT_ENTRY_ATTEMPTS_PER_WORKSTATION,
+        ),
+        'failed_entry_audit_threshold' => (int) env(
+            'MERIDIAN_WORKSTATION_LOGIN_CODE_FAILED_ENTRY_AUDIT_THRESHOLD',
+            SharedWorkstationLoginCodeThrottle::DEFAULT_FAILED_ENTRY_AUDIT_THRESHOLD,
+        ),
     ],
 
     /*

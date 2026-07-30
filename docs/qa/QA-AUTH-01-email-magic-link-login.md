@@ -6,11 +6,13 @@ Verify that Meridian central authentication supports a verified-email magic-link
 
 ## Requirements covered
 
-- `AUTH-018`, `AUTH-019`, `AUTH-021`, `AUTH-022`, `AUTH-023`, `AUTH-024`, `AUTH-025`
+- `AUTH-018`, `AUTH-019`, `AUTH-021`, `AUTH-022`, `AUTH-023`, `AUTH-024`, `AUTH-025`, `AUTH-026`, `AUTH-027`, `AUTH-028`, `AUTH-029`
 - Technical spec: Section 11.1 Authentication providers
 - Technical spec: Section 11.4 API tokens
+- Technical spec: Section 13.2 Shared workstation login
 - Data/API spec: Section 10.3 Users and Authentication
 - Data/API spec: Section 5.4 API authentication
+- Data/API spec: Section 12.4 `shared_workstation_login_codes`
 - Data/API spec: Section 12.5 API tokens
 - UI Implementation Contract: Section 12.1 (`auth.login`, `auth.magic-link-sent`)
 - UI Implementation Contract: Section 12.9 (`orchid.api-tokens`)
@@ -108,6 +110,48 @@ python -c "import uuid; print(uuid.uuid4())"
     php apps/server/artisan tinker --execute="App\Models\AuditEvent::query()->whereIn('action', ['api_token.issued','api_token.revoked','api_token.expired'])->get(['action','entity_id','actor_device_id','reason'])->each(fn (\$e) => print_r(\$e->toArray()));"
     ```
 
+### Shared workstation login codes
+
+A shared workstation is signed in to with a typed code rather than with a token, and a code can be generated two ways: by God Mode for any known user, and by a user for themselves from a device where they already hold a session. The second is the path that works when the node has no internet — which is the point of it. The kiosk session a code establishes arrives with M16.9; these steps cover generating, listing, and revoking codes.
+
+Create a trusted shared workstation pinned to an event, since a code is scoped to one:
+
+```bash
+php apps/server/artisan tinker --execute="\$event = App\Models\Event::query()->firstOrFail(); \$w = App\Models\SharedWorkstation::query()->create(['device_id' => App\Models\Device::query()->create(['device_label' => 'QA kiosk', 'platform' => 'electron', 'first_seen_at' => now()])->id, 'organization_id' => \$event->organization_id, 'event_id' => \$event->id, 'name' => 'qa-kiosk-1', 'trusted' => true, 'context_pinned_at' => now()]); echo \$w->id.PHP_EOL;"
+```
+
+27. Sign in to the console as a God Mode user and open **Workstation Login Codes** under Infrastructure.
+28. Generate a code for a user on `qa-kiosk-1`. Confirm the code appears once, in a highlighted block naming the user, the workstation, and the expiry roughly six weeks out.
+29. Reload the page and confirm the code is gone from it, and that the list shows the code by user, workstation, event, generator, and status — with no code value in any column.
+30. Confirm the workstation select offers only trusted workstations. Revoke the workstation's trust in the database (`update shared_workstations set trusted = false`), reload, and confirm it is no longer offered; restore it afterwards.
+31. Generate a code for yourself from a device that already holds a session, with no mail and no central node involved. Obtain a bearer token through steps 9–15 first, then:
+
+    ```bash
+    curl -i -X POST http://127.0.0.1:8000/api/auth/shared-workstation-login-code -H "Content-Type: application/json" -H "Accept: application/json" -H "Authorization: Bearer PASTE-TOKEN" -d '{"shared_workstation_id":"PASTE-WORKSTATION-UUID"}'
+    ```
+
+32. Confirm the response is `201 Created` and carries `code`, `expires_at`, the calling user, the workstation, and the event resolved from the workstation's pinned context. Confirm nothing was mailed — the mail log has no new message.
+33. Try to generate a code for somebody else and confirm it is refused:
+
+    ```bash
+    curl -i -X POST http://127.0.0.1:8000/api/auth/shared-workstation-login-code -H "Content-Type: application/json" -H "Accept: application/json" -H "Authorization: Bearer PASTE-TOKEN" -d '{"shared_workstation_id":"PASTE-WORKSTATION-UUID","user_id":"PASTE-ANOTHER-USER-UUID"}'
+    ```
+
+34. Confirm the response is `403` with `"reason":"self_service_scope"` and that no code was created for that user.
+35. Set `MERIDIAN_WORKSTATION_LOGIN_CODE_PER_USER_PER_HOUR=2` in `apps/server/.env`, run `php artisan config:clear`, and repeat step 31 three times. Confirm the third is refused with `429`, `"reason":"login_code_rate_limited"`, and a `Retry-After` header. Restore the setting afterwards.
+36. In the console, revoke one of the codes and confirm its status becomes Revoked and the revoke action disappears.
+37. Inspect the audit trail and confirm generation and revocation are recorded with the authority they were generated under and with no code value:
+
+    ```bash
+    php apps/server/artisan tinker --execute="App\Models\AuditEvent::query()->where('action', 'like', 'shared_workstation_login_code.%')->get(['action','entity_id','actor_user_id','actor_device_id','reason'])->each(fn (\$e) => print_r(\$e->toArray()));"
+    ```
+
+38. Confirm the stored codes are hashes only:
+
+    ```bash
+    php apps/server/artisan tinker --execute="App\Models\SharedWorkstationLoginCode::query()->get(['id','user_id','generated_by_user_id','code_hash','expires_at','used_at','revoked_at'])->each(fn (\$c) => print_r(\$c->toArray()));"
+    ```
+
 ## Expected results
 
 - `/login` is reachable without authentication.
@@ -127,6 +171,14 @@ python -c "import uuid; print(uuid.uuid4())"
 - `DELETE /api/auth/session` succeeds once, and the same token is refused on its next request.
 - A browser session does not authenticate an API route; only a bearer token does.
 - With a one-minute lifetime configured, a token that was working stops authenticating once the minute has passed.
+- A God Mode operator can generate a shared-workstation login code for any known user, and the code is shown once and never again.
+- A signed-in user can generate a code for themselves with no internet, no central node, and no mail, and cannot generate one for anybody else — `403` and `self_service_scope`.
+- A generated code is scoped to one user, one event taken from the workstation's pinned context, and one trusted shared workstation, and expires six weeks out.
+- Only trusted shared workstations whose pinned event this node holds are offered for generation.
+- Generation is rate limited per user and per node, and a refusal names `login_code_rate_limited` with a `Retry-After` header.
+- The console lists codes by user, workstation, event, generator, and status, shows no code value in any column, and offers no export or print of codes.
+- Generation and revocation appear in `audit_events` as `shared_workstation_login_code.generated` and `shared_workstation_login_code.revoked`, naming the code by identifier and the authority in the reason, with no code value anywhere.
+- `shared_workstation_login_codes.code_hash` holds a keyed hash; no column holds a readable code.
 - The raw login code and the raw bearer token appear only in the mail body and the HTTP response respectively. Neither appears in `storage/logs/laravel.log` from Meridian's own logging, and neither is stored in readable form — `api_login_codes.code_hash` and `personal_access_tokens.token` hold hashes.
 
 ## Evidence to capture
@@ -139,6 +191,9 @@ python -c "import uuid; print(uuid.uuid4())"
 - A `select id, email, code_hash, used_at, attempts from api_login_codes` row and a `select id, name, device_id, expires_at, revoked_at from personal_access_tokens` row showing that neither credential is stored in readable form and that every token names a device.
 - Screenshot of the God Mode **API Tokens** screen showing tokens by user and device with no token value on the page.
 - The audit output from step 26.
+- Screenshot of the **Workstation Login Codes** screen immediately after generating a code, showing the code block, and a second screenshot after reload showing it gone.
+- The `201`, `403`, and `429` responses from steps 31–35, with the code value redacted.
+- The audit output from step 37 and the stored-code output from step 38.
 
 ## Failure notes
 
@@ -152,3 +207,6 @@ python -c "import uuid; print(uuid.uuid4())"
 - Meridian accepts a base64 Ed25519 public key or a PEM RSA public key as `public_key`, the same key formats a device signs node operations with. Anything else is refused rather than stored.
 - Tokens issued before device binding existed do not survive the M16.2 migration. On an install upgraded from an earlier build, every client signs in again once.
 - Google and Discord login from a client application arrives with M16.3.
+- If code generation is refused with `"reason":"workstation_context_unpinned"`, the workstation's `event_id` does not resolve to an event on this node. Pin it to an event that exists here.
+- If it is refused with `"reason":"workstation_untrusted"`, the workstation is untrusted, revoked, or its device is revoked. A code that could not be entered is not issued.
+- Typing a code into a workstation and the kiosk session it establishes — the 5-minute inactivity timeout, explicit end before switching users, and the lock on Electron restart — arrive with M16.9. Entry is exercised by automated tests until then.

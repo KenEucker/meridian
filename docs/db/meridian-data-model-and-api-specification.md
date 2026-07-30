@@ -552,6 +552,28 @@ Rules:
 - a handoff establishes no browser session; the credential belongs to the client application that started it
 - state values and exchange codes are stored only as keyed hashes
 
+#### Shared workstation login codes
+
+A shared-workstation login code is not an API credential and issues no token (12.4, 12.5). One endpoint exists because generating a code is something a signed-in client does for its own user:
+
+```text
+POST /api/auth/shared-workstation-login-code   generate a code for the calling user
+```
+
+The request carries the trusted shared workstation the code will be typed at, and nothing else. The response carries the code, once, along with the workstation, the event resolved from that workstation's pinned Kiosk context, and the code's expiry.
+
+Rules:
+
+- the endpoint requires a bearer token, because holding a session on the calling device is the whole authority for the request (AUTH-026)
+- the code is for whoever holds that session; the endpoint accepts no user field, and a request naming another user is refused with `self_service_scope` (AUTH-028)
+- it requires only reachability of the node that will accept the code — no internet, no central node, no mail, no other out-of-band channel (AUTH-027)
+- the event comes from the workstation's pinned context, never from the request, so a code cannot be scoped to an event the workstation does not serve
+- an untrusted, revoked, or unpinned workstation is refused rather than issued a code that could not be entered
+- generation is rate limited per user and per node (AUTH-029)
+- the code appears in this response and nowhere else: it is stored only as a keyed hash, is not logged or audited, and cannot be printed or exported
+
+God mode generating a code for another user is a console screen rather than an endpoint, because it is operator tooling. Entering a code is the shared-workstation session in 12.3 and technical spec 13.3.
+
 ### 5.5 Session resolution
 
 ```text
