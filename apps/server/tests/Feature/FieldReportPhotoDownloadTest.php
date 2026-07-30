@@ -52,10 +52,10 @@ class FieldReportPhotoDownloadTest extends TestCase
         $icOperator = $this->userWithEventRole('ic_operator', $report->event);
 
         $downloadUrl = app(FieldReportPhotoSignedUrlService::class)
-            ->downloadUrl($icLead, $attachment);
+            ->downloadUrl($icLead, $attachment)
+            ->url;
 
-        $this->actingAs($icLead)
-            ->get($downloadUrl)
+        $this->get($downloadUrl)
             ->assertOk()
             ->assertHeader('content-disposition', 'attachment; filename="'.$attachment->filename.'"')
             ->assertHeader('content-type', $attachment->mime_type);
@@ -71,15 +71,14 @@ class FieldReportPhotoDownloadTest extends TestCase
         $icViewer = $this->userWithEventRole('ic_viewer', $report->event);
 
         $previewUrl = app(FieldReportPhotoSignedUrlService::class)
-            ->previewUrl($icViewer, $attachment);
+            ->previewUrl($icViewer, $attachment)
+            ->url;
 
-        $this->actingAs($icViewer)
-            ->get($previewUrl)
+        $this->get($previewUrl)
             ->assertOk()
             ->assertHeader('content-disposition', 'inline; filename="'.$attachment->filename.'"');
 
-        $this->actingAs($icViewer)
-            ->get(route('field-report-photos.preview', ['attachment' => $attachment->id]))
+        $this->get(route('field-report-photos.preview', ['attachment' => $attachment->id]))
             ->assertForbidden();
     }
 
@@ -96,8 +95,7 @@ class FieldReportPhotoDownloadTest extends TestCase
             absolute: false,
         );
 
-        $this->actingAs($icLead)
-            ->get($expired)
+        $this->get($expired)
             ->assertForbidden();
     }
 

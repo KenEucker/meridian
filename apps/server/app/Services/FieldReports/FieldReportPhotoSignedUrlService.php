@@ -5,16 +5,23 @@ namespace App\Services\FieldReports;
 use App\Models\Attachment;
 use App\Models\FieldReport;
 use App\Models\User;
-use Illuminate\Support\Facades\URL;
+use App\Services\Downloads\ShortLivedDownloadUrl;
+use App\Services\Downloads\ShortLivedDownloadUrlService;
 use RuntimeException;
 
 /**
  * Short-lived signed URLs for Field Report photo preview/download
  * (technical spec 18.6; data/API 10.17).
+ *
+ * The general mechanism lives in `ShortLivedDownloadUrlService` (technical spec
+ * 11A.6). What stays here is the part that is about Field Report photos: which
+ * policy decides preview and which decides download.
  */
 final class FieldReportPhotoSignedUrlService
 {
-    public function previewUrl(User $user, Attachment $attachment): string
+    public function __construct(private readonly ShortLivedDownloadUrlService $downloadUrls) {}
+
+    public function previewUrl(User $user, Attachment $attachment): ShortLivedDownloadUrl
     {
         $report = $this->fieldReport($attachment);
 
@@ -22,10 +29,12 @@ final class FieldReportPhotoSignedUrlService
             throw new RuntimeException('Not authorized to preview this Field Report photo.');
         }
 
-        return $this->temporaryUrl('field-report-photos.preview', $attachment);
+        return $this->downloadUrls->issue($user, 'field-report-photos.preview', [
+            'attachment' => $attachment->getKey(),
+        ]);
     }
 
-    public function downloadUrl(User $user, Attachment $attachment): string
+    public function downloadUrl(User $user, Attachment $attachment): ShortLivedDownloadUrl
     {
         $report = $this->fieldReport($attachment);
 
@@ -33,21 +42,9 @@ final class FieldReportPhotoSignedUrlService
             throw new RuntimeException('Not authorized to download this Field Report photo.');
         }
 
-        return $this->temporaryUrl('field-report-photos.download', $attachment);
-    }
-
-    private function temporaryUrl(string $routeName, Attachment $attachment): string
-    {
-        $minutes = (int) config('meridian.field_report_photos.signed_url_expires_minutes', 5);
-
-        $relativeSignedUrl = URL::temporarySignedRoute(
-            $routeName,
-            now()->addMinutes($minutes),
-            ['attachment' => $attachment->getKey()],
-            absolute: false,
-        );
-
-        return URL::to($relativeSignedUrl);
+        return $this->downloadUrls->issue($user, 'field-report-photos.download', [
+            'attachment' => $attachment->getKey(),
+        ]);
     }
 
     private function fieldReport(Attachment $attachment): FieldReport

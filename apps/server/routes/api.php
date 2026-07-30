@@ -503,6 +503,32 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::get('/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'download'])
         ->name('api.events.incidents.pdf');
 
+    /*
+     * Short-lived scoped download URLs (CLIENT-019, CLIENT-020; technical spec
+     * 11A.6; data/API 5.7).
+     *
+     * A bearer token cannot ride along on a plain browser navigation, so a
+     * client asks one of these for a URL and then navigates to it. Each issues
+     * a URL for exactly the resource named in its own path, under the same
+     * authorization the direct request for that resource applies; the file
+     * itself is served by the matching signed route in `routes/web.php`.
+     *
+     * The Field Report photo pair established this shape and keeps its paths.
+     */
+    Route::post('/events/{event}/exports/credential-eligibility/download-url', [ReportingExportController::class, 'issueCredentialEligibilityDownloadUrl'])
+        ->name('api.events.exports.credential-eligibility.download-url');
+
+    Route::post('/events/{event}/incidents/{incident}/pdf/download-url', [IncidentPdfController::class, 'issueDownloadUrl'])
+        ->name('api.events.incidents.pdf.download-url');
+
+    Route::post('/policy-documents/{policyDocument}/export/{format}/download-url', [DocumentExportController::class, 'issuePolicyDownloadUrl'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.policy-documents.export.download-url');
+
+    Route::post('/procedure-documents/{procedureDocument}/export/{format}/download-url', [DocumentExportController::class, 'issueProcedureDownloadUrl'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('api.procedure-documents.export.download-url');
+
     Route::post('/field-report-photos/{attachment}/preview-url', [FieldReportPhotoController::class, 'issuePreviewUrl'])
         ->name('api.field-report-photos.preview-url');
 

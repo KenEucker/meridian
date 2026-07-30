@@ -9,7 +9,10 @@ use App\Http\Controllers\Branding\BrandingAssetController;
 use App\Http\Controllers\Branding\BrandingManifestController;
 use App\Http\Controllers\Branding\BrandingStylesheetController;
 use App\Http\Controllers\ClientAppController;
+use App\Http\Controllers\Documents\DocumentExportController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
+use App\Http\Controllers\Incidents\IncidentPdfController;
+use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -89,14 +92,40 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('logout', [LogoutController::class, 'create'])->name('logout');
     Route::post('logout', [LogoutController::class, 'destroy'])->name('logout.destroy');
+});
 
-    // Short-lived signed Field Report photo URLs (technical spec 18.6). Signature
-    // expiry is enforced by signed:relative; authorization is re-checked on use.
+/*
+ * The far end of a short-lived scoped download URL (CLIENT-019, CLIENT-020;
+ * technical spec 11A.6; data/API 5.7).
+ *
+ * These are navigations, not API calls: a browser follows them with no session
+ * cookie and no bearer token, because being unable to attach a bearer token to
+ * a navigation is the reason the pattern exists. The signature is the
+ * credential. It covers the route and its parameters, so a URL issued for one
+ * resource cannot be edited into a URL for another, and it carries the user it
+ * was issued to, so each of these serves that person's file under that person's
+ * authorization rather than whoever happens to be holding the link.
+ *
+ * `signed:relative` enforces both the signature and the expiry.
+ */
+Route::middleware('signed:relative')->group(function (): void {
+    Route::get('downloads/events/{event}/exports/credential-eligibility', [ReportingExportController::class, 'signedCredentialEligibility'])
+        ->name('downloads.exports.credential-eligibility');
+
+    Route::get('downloads/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'signedDownload'])
+        ->name('downloads.incidents.pdf');
+
+    Route::get('downloads/policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'signedPolicy'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('downloads.policy-documents.export');
+
+    Route::get('downloads/procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'signedProcedure'])
+        ->whereIn('format', ['markdown', 'pdf'])
+        ->name('downloads.procedure-documents.export');
+
     Route::get('field-report-photos/{attachment}/preview', [FieldReportPhotoController::class, 'preview'])
-        ->middleware('signed:relative')
         ->name('field-report-photos.preview');
     Route::get('field-report-photos/{attachment}/download', [FieldReportPhotoController::class, 'download'])
-        ->middleware('signed:relative')
         ->name('field-report-photos.download');
 });
 
