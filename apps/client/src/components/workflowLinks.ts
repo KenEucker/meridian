@@ -51,6 +51,10 @@ import {
   sessionLedTeams,
   type SessionDepartmentAccess,
 } from "@/session/sessionAccess";
+import {
+  sessionOrganizationId,
+  sessionSwitchingAvailable,
+} from "@/session/sessionContext";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -378,6 +382,46 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         links: staffLinks.value,
       },
     ];
+
+    /*
+     * The context screens (M16.7; CLIENT-012). Contract rule 4.4 puts
+     * organization and event switching on Home or a dedicated surface, and this
+     * is the Home half of that: the dedicated surfaces are linked from here as
+     * well as from the user menu.
+     *
+     * Absent entirely when switching is unavailable, which is the same rule the
+     * shell applies — a locked node, an offline client, and a user with one
+     * association each have nothing to switch to, and a Home tile leading to a
+     * screen that only explains itself is a tile that wastes a click.
+     */
+    if (sessionSwitchingAvailable.value) {
+      const contextLinks: WorkflowLink[] = [
+        {
+          label: "Organization",
+          pageLabel: "Switch organization",
+          description: "The organizations you hold an association with.",
+          to: { name: "organizations.index" },
+        },
+      ];
+
+      if (sessionOrganizationId.value !== null) {
+        contextLinks.push({
+          label: "Event",
+          pageLabel: "Switch event",
+          description: "The events you hold an association with here.",
+          to: {
+            name: "organizations.events.index",
+            params: { organizationId: sessionOrganizationId.value },
+          },
+        });
+      }
+
+      sections.push({
+        title: "Context",
+        description: "The organization and event this device is working in.",
+        links: contextLinks,
+      });
+    }
 
     const workflowDirectory = [
       ...workflowLinks.value,

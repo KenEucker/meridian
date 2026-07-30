@@ -2,6 +2,7 @@ import {
   departmentHasCapability,
   selectedSessionDepartment,
 } from "@/session/sessionAccess";
+import { sessionOrganizationId } from "@/session/sessionContext";
 import {
   CAPABILITY_DEPARTMENT_BRANDING_MANAGE,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
@@ -20,17 +21,14 @@ import {
  * the organization profile, department leads and department administration own
  * their own department's. A team lead holds neither and is refused by the view
  * and by the server alike.
- */
-
-/**
- * The organization the client is operating in.
  *
- * Still the seeded local organization: resolving the branding organization from
- * the session context is part of the organization and event switcher (M16.7).
- * Shared with the server fixture seeded by
- * `php artisan meridian:seed-local-field-fixture`.
+ * `organizationId` comes from the session's resolved context (M16.7;
+ * CLIENT-011), which is what makes these surfaces edit the branding of the
+ * organization the client is actually working in rather than of a fixed one. A
+ * client that has resolved no context passes an empty id and the views render
+ * with nothing to load, which is the same state they show before a session
+ * resolves.
  */
-export const FIXTURE_ORGANIZATION_ID = "88888888-8888-4888-8888-888888888888";
 
 export interface OrganizationBrandingRouteProps {
   readonly organizationId: string;
@@ -46,7 +44,7 @@ export interface DepartmentBrandingRouteProps {
 
 export function organizationBrandingRouteProps(): OrganizationBrandingRouteProps {
   return {
-    organizationId: FIXTURE_ORGANIZATION_ID,
+    organizationId: sessionOrganizationId.value ?? "",
     canManage: departmentHasCapability(
       selectedSessionDepartment.value,
       CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
@@ -58,7 +56,7 @@ export function departmentBrandingRouteProps(): DepartmentBrandingRouteProps {
   const department = selectedSessionDepartment.value;
 
   return {
-    organizationId: FIXTURE_ORGANIZATION_ID,
+    organizationId: sessionOrganizationId.value ?? "",
     departmentId: department?.departmentId ?? "",
     departmentName: department?.departmentLabel ?? "",
     canManage: departmentHasCapability(

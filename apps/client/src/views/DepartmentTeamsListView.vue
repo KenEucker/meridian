@@ -7,12 +7,11 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import BrandMark from "@/branding/BrandMark.vue";
 import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
+import { reloadSessionBranding } from "@/branding/brandingContext";
 import {
   findDepartmentBranding,
   findTeamBranding,
-  loadBrandingProfile,
 } from "@/branding/brandingProfile";
-import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import DocumentLibrarySection from "@/components/sections/DocumentLibrarySection.vue";
@@ -128,7 +127,7 @@ async function onDepartmentLogoChanged(url: string | null): Promise<void> {
 
   // Re-resolve so the shell header, the department badge, and every other
   // surface holding this mark pick it up without a reload.
-  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+  await reloadSessionBranding();
 }
 
 watch(

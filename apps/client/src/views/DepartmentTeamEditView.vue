@@ -4,11 +4,8 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
-import {
-  findTeamBranding,
-  loadBrandingProfile,
-} from "@/branding/brandingProfile";
-import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
+import { reloadSessionBranding } from "@/branding/brandingContext";
+import { findTeamBranding } from "@/branding/brandingProfile";
 import {
   archiveDepartmentTeam,
   canAdministerDepartment,
@@ -102,7 +99,7 @@ async function onLogoChanged(url: string | null): Promise<void> {
 
   // Re-resolve so the team overview, rosters, and team pickers holding this
   // mark pick it up without a reload.
-  await loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+  await reloadSessionBranding();
 }
 
 const teamsIndexRoute = computed(() => ({

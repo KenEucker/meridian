@@ -1,11 +1,12 @@
 import { createApp } from "vue";
 
 import App from "@/App.vue";
-import { loadBrandingProfile } from "@/branding/brandingProfile";
-import { FIXTURE_ORGANIZATION_ID } from "@/branding/brandingRouteProps";
+import { followSessionBranding } from "@/branding/brandingContext";
+import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { router } from "@/router";
 import { loadClientSession } from "@/session/clientSession";
+import { registerSessionContextReset } from "@/session/sessionContext";
 import { installLocalFieldSessionFromEnv } from "@/session/localFieldSession";
 import "@meridian/ui-tokens/tokens.css";
 import "@/assets/base.css";
@@ -22,11 +23,23 @@ installDevelopmentFieldSessionFromEnv();
  * until the network answers. Blocking the mount on a network call would mean a
  * blank screen on a bad connection, which is the wrong trade for chrome.
  *
- * The organization id comes from the development fixture until auth and
- * organization selection own that context, exactly as the rest of the client
- * still does.
+ * Which organization that is comes from the session's context and nowhere else
+ * (M16.7, CLIENT-011). Following it as a watch rather than resolving it once
+ * means the same rule covers booting from the durable cache, the node's answer
+ * replacing it, and a context switch (CLIENT-014).
  */
-void loadBrandingProfile(FIXTURE_ORGANIZATION_ID);
+followSessionBranding();
+
+/*
+ * What a context switch drops (M16.7, CLIENT-014).
+ *
+ * Registered here rather than inside each feature so the list of what does not
+ * survive a switch is readable in one place, and eager rather than on first use
+ * so a switch cannot miss a registration that had not been imported yet.
+ */
+registerSessionContextReset((context) => {
+  discardFieldReportsOutsideEvent(context.eventId);
+});
 
 /*
  * Establish the session the same way, and for the same reason (CLIENT-007,

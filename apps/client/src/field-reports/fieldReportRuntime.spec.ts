@@ -1,0 +1,109 @@
+import { afterEach, describe, expect, it } from "vitest";
+
+import {
+  authorFieldReportCatalog,
+  discardFieldReportsOutsideEvent,
+  pendingFieldReportQueue,
+  persistFieldReportRuntime,
+  reloadFieldReportRuntimeFromLocalStore,
+  resetFieldReportRuntime,
+} from "@/field-reports/fieldReportRuntime";
+import {
+  createOfflineFieldReport,
+  FIELD_REPORT_ACCEPTED,
+  FIELD_REPORT_PENDING_SYNC,
+  type CreateOfflineFieldReportInput,
+  type OfflineFieldReport,
+} from "@/field-reports/offlineFieldReport";
+
+/*
+ * What a context switch does to the author's Field Report catalog (M16.7;
+ * CLIENT-014).
+ *
+ * The catalog is device-held and event-scoped, so it is one of the places the
+ * previous context is still on screen after a switch. What it must not do is
+ * throw away unsent work to satisfy a display rule.
+ */
+
+const BASE_INPUT: CreateOfflineFieldReportInput = {
+  eventId: "event-previous",
+  submittedByUserId: "user-1",
+  staffId: "staff-1",
+  originDeviceId: "device-1",
+  originNodeId: "node-1",
+  title: "Medical assist near Gate A",
+  body: "Observed a medical assist near Gate A.",
+};
+
+function report(
+  id: string,
+  overrides: Partial<CreateOfflineFieldReportInput> = {},
+  syncStatus: OfflineFieldReport["syncStatus"] = FIELD_REPORT_ACCEPTED,
+): OfflineFieldReport {
+  return {
+    ...createOfflineFieldReport(
+      { ...BASE_INPUT, ...overrides },
+      { generateId: () => id, now: () => new Date("2027-06-01T12:00:00.000Z") },
+    ),
+    syncStatus,
+  };
+}
+
+function install(reports: readonly OfflineFieldReport[]): void {
+  for (const entry of reports) {
+    authorFieldReportCatalog.recordSubmitted(entry);
+  }
+
+  persistFieldReportRuntime();
+}
+
+afterEach(async () => {
+  await resetFieldReportRuntime();
+});
+
+describe("discarding Field Reports on a context switch", () => {
+  it("drops the previous event's accepted reports and keeps the new event's", () => {
+    install([
+      report("aaaaaaaa-1111-2222-3333-444455556666"),
+      report("bbbbbbbb-1111-2222-3333-444455556666", { eventId: "event-next" }),
+    ]);
+
+    discardFieldReportsOutsideEvent("event-next");
+
+    expect(
+      authorFieldReportCatalog.snapshot().map((entry) => entry.eventId),
+    ).toEqual(["event-next"]);
+  });
+
+  it("keeps unsent work whatever event it belongs to", () => {
+    // Discarding it would destroy something a user typed, which is the one
+    // outcome the outbox exists to prevent (technical spec 11A.5). It stays
+    // queued, so the sync that drains the outbox still has it.
+    install([
+      report("aaaaaaaa-1111-2222-3333-444455556666"),
+      report(
+        "cccccccc-1111-2222-3333-444455556666",
+        {},
+        FIELD_REPORT_PENDING_SYNC,
+      ),
+    ]);
+
+    discardFieldReportsOutsideEvent("event-next");
+
+    expect(authorFieldReportCatalog.snapshot().map((entry) => entry.id)).toEqual(
+      ["cccccccc-1111-2222-3333-444455556666"],
+    );
+    expect(
+      pendingFieldReportQueue.pending().map((entry) => entry.id),
+    ).toEqual(["cccccccc-1111-2222-3333-444455556666"]);
+  });
+
+  it("does not leave the dropped reports on disk to come back on the next boot", () => {
+    install([report("aaaaaaaa-1111-2222-3333-444455556666")]);
+
+    discardFieldReportsOutsideEvent("event-next");
+    reloadFieldReportRuntimeFromLocalStore();
+
+    expect(authorFieldReportCatalog.snapshot()).toEqual([]);
+  });
+});

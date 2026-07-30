@@ -13,6 +13,7 @@ import {
 import AboutView from "@/views/AboutView.vue";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DocumentEditView from "@/views/DocumentEditView.vue";
+import EventContextView from "@/views/EventContextView.vue";
 import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import FieldReportCreateView from "@/views/FieldReportCreateView.vue";
 import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
@@ -32,6 +33,7 @@ import LogisticsDeskView from "@/views/LogisticsDeskView.vue";
 import MeView from "@/views/MeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
+import OrganizationContextView from "@/views/OrganizationContextView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
@@ -140,6 +142,22 @@ export const routes: RouteRecordRaw[] = [
     path: "/",
     name: "home",
     component: HomeView,
+  },
+  /*
+   * The two context-switching surfaces (UI contract 12.2; M16.7). Both are
+   * always routable and both refuse for themselves: a client that may not
+   * switch is told why rather than being sent to a not-found page, which is the
+   * difference between a control that is absent and a screen that is missing.
+   */
+  {
+    path: "/organizations",
+    name: "organizations.index",
+    component: OrganizationContextView,
+  },
+  {
+    path: "/organizations/:organizationId/events",
+    name: "organizations.events.index",
+    component: EventContextView,
   },
   {
     path: "/readiness",

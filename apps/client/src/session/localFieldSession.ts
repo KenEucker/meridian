@@ -50,7 +50,10 @@ import type {
   SessionRole,
 } from "@/session/sessionDocument";
 
-const ORGANIZATION_ID = "88888888-8888-4888-8888-888888888888";
+/** Shared with the server fixture `meridian:seed-local-field-fixture` seeds. */
+export const LOCAL_FIELD_ORGANIZATION_ID = "88888888-8888-4888-8888-888888888888";
+
+const ORGANIZATION_ID = LOCAL_FIELD_ORGANIZATION_ID;
 
 const DEPARTMENT_TRAININGS_MANAGE = "department.trainings.manage";
 
@@ -295,6 +298,65 @@ export function localFieldSessionDocument(
     },
     refreshed_at: new Date(0).toISOString(),
     ...overrides,
+  };
+}
+
+/** A second association, so a context switcher has somewhere to go (M16.7). */
+export const LOCAL_FIELD_OTHER_ORGANIZATION_ID = "org-cascadia-collective";
+export const LOCAL_FIELD_OTHER_EVENT_ID = "event-cascadia-thaw-2027";
+
+/**
+ * The same session as resolved by a node with no event lock (M16.7).
+ *
+ * The seeded node is locked to one event, which is the right shape for the
+ * development fixture — it stands for an on-site node — and the wrong shape for
+ * exercising a switcher, which by definition only exists where a node is not
+ * locked. These overrides give the same user two organizations, two events, and
+ * switching offered.
+ *
+ * The seeded organization stays first and stays the context, so departments,
+ * teams, and roles all still resolve against the organization they belong to and
+ * only the context questions change.
+ */
+export function switchableLocalFieldContext(): Pick<
+  SessionDocument,
+  "organizations" | "events" | "context"
+> {
+  const seeded = localFieldSessionDocument();
+
+  return {
+    organizations: [
+      ...seeded.organizations,
+      {
+        id: LOCAL_FIELD_OTHER_ORGANIZATION_ID,
+        name: "Cascadia Collective",
+        slug: "cascadia-collective",
+        status: "approved",
+        archived_at: null,
+      },
+    ],
+    events: [
+      ...seeded.events.map((event) => ({ ...event, is_node_locked: false })),
+      {
+        id: LOCAL_FIELD_OTHER_EVENT_ID,
+        organization_id: LOCAL_FIELD_OTHER_ORGANIZATION_ID,
+        name: "Cascadia Thaw 2027",
+        slug: "cascadia-thaw-2027",
+        status: "published",
+        timezone: "UTC",
+        starts_at: "2027-03-12T16:00:00+00:00",
+        ends_at: "2027-03-15T16:00:00+00:00",
+        active_event_window_starts_at: null,
+        active_event_window_ends_at: null,
+        is_node_locked: false,
+      },
+    ],
+    context: {
+      ...seeded.context,
+      node_locked: false,
+      node_locked_event_id: null,
+      switching_available: true,
+    },
   };
 }
 
