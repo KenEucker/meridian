@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Console;
 
-use App\Services\Console\OperatorDocumentation;
+use App\Services\Console\TechnicianDocumentation;
 use Illuminate\Http\Request;
 use Orchid\Screen\Action;
 use Orchid\Screen\Screen;
@@ -24,7 +24,7 @@ class DocumentationScreen extends Screen
     /**
      * @return array<string, mixed>
      */
-    public function query(Request $request, OperatorDocumentation $documentation): iterable
+    public function query(Request $request, TechnicianDocumentation $documentation): iterable
     {
         $filter = (string) $request->query('filter', '');
         $index = $documentation->index($filter);
@@ -57,7 +57,7 @@ class DocumentationScreen extends Screen
 
     public function description(): ?string
     {
-        return 'Meridian operator documentation packaged with this deployment.';
+        return 'Meridian technician documentation packaged with this deployment.';
     }
 
     /**

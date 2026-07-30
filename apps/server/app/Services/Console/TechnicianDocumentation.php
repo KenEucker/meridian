@@ -7,11 +7,11 @@ namespace App\Services\Console;
 use Illuminate\Support\Str;
 
 /**
- * The operator documentation packaged with this deployment (GOD-012 through
+ * The technician documentation packaged with this deployment (GOD-012 through
  * GOD-017; technical spec 22.6).
  *
  * Documentation is read from a packaged directory, never from the network and
- * never from `docs/` at large. The packaging step copies `docs/operator/` and
+ * never from `docs/` at large. The packaging step copies `docs/technician/` and
  * nothing else, so the specification, QA scripts, development plan,
  * traceability matrix, and issue documents are not present to be served — the
  * boundary is enforced by what ships, not by a filter that could be widened by
@@ -21,15 +21,15 @@ use Illuminate\Support\Str;
  * not a document. Nothing here takes a path from the caller, so no request can
  * walk out of the packaged directory.
  */
-final class OperatorDocumentation
+final class TechnicianDocumentation
 {
     public function directory(): string
     {
-        $configured = config('meridian.operator_docs.path');
+        $configured = config('meridian.technician_docs.path');
 
         return is_string($configured) && $configured !== ''
             ? $configured
-            : resource_path('operator-docs');
+            : resource_path('technician-docs');
     }
 
     public function isPackaged(): bool
@@ -56,7 +56,7 @@ final class OperatorDocumentation
     /**
      * Whether the packaged documentation was built from the running version
      * (GOD-017). A mismatch is not an error — a deployment can legitimately run
-     * documentation from the release it shipped with — but an operator reading
+     * documentation from the release it shipped with — but a technician reading
      * a procedure deserves to know.
      */
     public function matchesBuild(): bool
@@ -136,7 +136,7 @@ final class OperatorDocumentation
 
     /**
      * Filtering matches the document title and every heading inside it
-     * (GOD-016), because an operator looking for "pairing token" is looking for
+     * (GOD-016), because a technician looking for "pairing token" is looking for
      * a section, not a file name.
      *
      * @param  array{slug: string, title: string, headings: list<string>}  $document

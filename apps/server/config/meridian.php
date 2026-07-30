@@ -69,22 +69,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Operator Documentation
+    | Technician Documentation
     |--------------------------------------------------------------------------
     |
-    | The God Mode Documentation page renders operator documentation packaged
+    | The God Mode Documentation page renders technician documentation packaged
     | with the deployment and never fetches it from a network service
-    | (GOD-012, GOD-014). `corepack pnpm run docs:package` copies docs/operator/
+    | (GOD-012, GOD-014). `corepack pnpm run docs:package` copies docs/technician/
     | here along with a manifest recording the Meridian version it was packaged
     | from, which the page shows beside the running build version (GOD-017).
     |
-    | Only docs/operator/ is packaged, so specification, QA, planning, and issue
+    | Only docs/technician/ is packaged, so specification, QA, planning, and issue
     | documents are not present to be served (GOD-015).
     |
     */
 
-    'operator_docs' => [
-        'path' => env('MERIDIAN_OPERATOR_DOCS_PATH', resource_path('operator-docs')),
+    'technician_docs' => [
+        'path' => env('MERIDIAN_TECHNICIAN_DOCS_PATH', resource_path('technician-docs')),
     ],
 
     /*

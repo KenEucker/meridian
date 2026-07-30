@@ -1,13 +1,13 @@
 {{--
-    Operator documentation, served from content packaged with this deployment
-    (GOD-014). No request here reaches the network, and only `docs/operator/`
+    Technician documentation, served from content packaged with this deployment
+    (GOD-014). No request here reaches the network, and only `docs/technician/`
     is packaged, so specification, QA, planning, and issue documents are not
     reachable from this page (GOD-015).
 --}}
 <div class="bg-white rounded shadow-sm p-4">
     @if (! $packaged)
         <div class="alert alert-warning mb-0" role="status">
-            <strong>No operator documentation is packaged with this build.</strong>
+            <strong>No technician documentation is packaged with this build.</strong>
             Run <code>corepack pnpm run docs:package</code> before packaging the deployment.
         </div>
     @else
@@ -64,7 +64,7 @@
 
             <div class="col-md-8">
                 @if ($selected)
-                    <article class="meridian-operator-doc">
+                    <article class="meridian-technician-doc">
                         {!! $selected['html'] !!}
                     </article>
                 @else

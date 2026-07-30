@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 /**
- * Package the operator documentation tree with the server deployment.
+ * Package the technician documentation tree with the server deployment.
  *
  * The God Mode Documentation page renders documentation packaged with the
  * deployment and must not need network access (GOD-014). The repository tree at
- * `docs/operator/` is the source; this copies it into the server's resources so
+ * `docs/technician/` is the source; this copies it into the server's resources so
  * a shipped server carries its own documentation.
  *
- * Only `docs/operator/` is copied. The requirements document, technical
+ * Only `docs/technician/` is copied. The requirements document, technical
  * specification, data/API specification, UI documentation, QA scripts,
  * architecture decision records, development plan, traceability matrix, and
  * issue documents are deliberately not packaged and are therefore not reachable
  * from the console (GOD-015).
  *
  * The manifest records the Meridian version the documentation was packaged
- * from, which the page shows beside the running build version so an operator
+ * from, which the page shows beside the running build version so a technician
  * can tell whether the two match (GOD-017). It carries no timestamp: the output
  * is committed, and a regenerated-at field would make every run a diff.
  *
- * Usage: node scripts/release/package-operator-docs.mjs [--check]
+ * Usage: node scripts/release/package-technician-docs.mjs [--check]
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,8 +26,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const sourceDirectory = join(repositoryRoot, 'docs', 'operator');
-const targetDirectory = join(repositoryRoot, 'apps', 'server', 'resources', 'operator-docs');
+const sourceDirectory = join(repositoryRoot, 'docs', 'technician');
+const targetDirectory = join(repositoryRoot, 'apps', 'server', 'resources', 'technician-docs');
 const indexFile = 'README.md';
 const checkOnly = process.argv.includes('--check');
 
@@ -59,8 +59,8 @@ function headingsFor(markdown) {
 }
 
 /**
- * Reading order comes from the index document's own links, so the table an
- * operator reads and the order the console lists are the same thing. Anything
+ * Reading order comes from the index document's own links, so the table a
+ * technician reads and the order the console lists are the same thing. Anything
  * the index does not link to follows, alphabetically, rather than going missing.
  */
 function orderedFiles(files) {
@@ -86,13 +86,13 @@ function orderedFiles(files) {
 
 function build() {
   if (!existsSync(sourceDirectory)) {
-    throw new Error(`Operator documentation source not found at ${sourceDirectory}.`);
+    throw new Error(`Technician documentation source not found at ${sourceDirectory}.`);
   }
 
   const files = readdirSync(sourceDirectory).filter((file) => /\.md$/i.test(file));
 
   if (!files.includes(indexFile)) {
-    throw new Error(`docs/operator/${indexFile} is required as the documentation index.`);
+    throw new Error(`docs/technician/${indexFile} is required as the documentation index.`);
   }
 
   const documents = [];
@@ -124,19 +124,19 @@ if (checkOnly) {
   const problems = [];
 
   if (!existsSync(manifestPath) || readFileSync(manifestPath, 'utf8') !== manifestJson) {
-    problems.push('apps/server/resources/operator-docs/manifest.json is out of date.');
+    problems.push('apps/server/resources/technician-docs/manifest.json is out of date.');
   }
 
   for (const [file, markdown] of contents) {
     const packaged = join(targetDirectory, file);
 
     if (!existsSync(packaged) || readFileSync(packaged, 'utf8') !== markdown) {
-      problems.push(`apps/server/resources/operator-docs/${file} is out of date.`);
+      problems.push(`apps/server/resources/technician-docs/${file} is out of date.`);
     }
   }
 
   if (problems.length > 0) {
-    console.error('Packaged operator documentation is stale:');
+    console.error('Packaged technician documentation is stale:');
     for (const problem of problems) {
       console.error(`- ${problem}`);
     }
@@ -144,7 +144,7 @@ if (checkOnly) {
     process.exit(1);
   }
 
-  console.log('Packaged operator documentation is current.');
+  console.log('Packaged technician documentation is current.');
   process.exit(0);
 }
 
@@ -158,5 +158,5 @@ for (const [file, markdown] of contents) {
 writeFileSync(manifestPath, manifestJson, 'utf8');
 
 console.log(
-  `Packaged ${manifest.documents.length} operator document(s) at version ${manifest.version} into apps/server/resources/operator-docs.`,
+  `Packaged ${manifest.documents.length} technician document(s) at version ${manifest.version} into apps/server/resources/technician-docs.`,
 );

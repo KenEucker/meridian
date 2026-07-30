@@ -54,7 +54,7 @@ let currentMeridianVersion = "unknown";
 /**
  * The node this wrapper reads health and branding from.
  *
- * Resolved per call rather than cached at startup, so an operator who writes
+ * Resolved per call rather than cached at startup, so a technician who writes
  * the settings file while the app is running sees it take effect on the next
  * health refresh instead of after a restart. Electron's userData path is only
  * available once the app is ready, so this is a function rather than a

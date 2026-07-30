@@ -15,7 +15,7 @@ shows which:
 | Runtime/default | The value compiled into the build | Nothing |
 
 Precedence is **database first, then file, then default**. This surprises people
-who expect the environment file to be authoritative. It is not: an operator
+who expect the environment file to be authoritative. It is not: a technician
 sitting at the console during an event must be able to change a value without
 editing a file and restarting the server, so the database override wins.
 
