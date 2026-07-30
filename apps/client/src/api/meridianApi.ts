@@ -39,6 +39,28 @@ export function configureMeridianApi(config: MeridianApiConfig | null): void {
   configOverride = config;
 }
 
+/**
+ * Headers carrying a credential this client holds that is not a bearer token.
+ *
+ * A shared-workstation session is exactly that: AUTH-030 forbids a code entry
+ * from issuing a personal device token, so the Kiosk authenticates with a session
+ * key in its own header and there is no token for `bearerToken` to hold.
+ *
+ * A registration hook rather than an import, because the module that owns the
+ * credential calls this one to send its requests. Registering the source keeps
+ * the dependency pointing one way.
+ */
+export type MeridianCredentialSource = () => Readonly<Record<string, string>>;
+
+let credentialSource: MeridianCredentialSource | null = null;
+
+/** Register the non-bearer credential every request should carry. */
+export function registerMeridianCredentialSource(
+  source: MeridianCredentialSource | null,
+): void {
+  credentialSource = source;
+}
+
 export function meridianApiConfig(): MeridianApiConfig {
   return configOverride ?? readConfig();
 }
@@ -67,6 +89,14 @@ export async function meridianFetch(
 
   if (config.bearerToken) {
     headers.set("Authorization", `Bearer ${config.bearerToken}`);
+  }
+
+  // A header the caller set explicitly wins, so a request can be made
+  // deliberately unauthenticated or under a different credential.
+  for (const [name, value] of Object.entries(credentialSource?.() ?? {})) {
+    if (!headers.has(name)) {
+      headers.set(name, value);
+    }
   }
 
   return fetch(`${config.baseUrl}${path}`, {

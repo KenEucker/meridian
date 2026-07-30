@@ -52,6 +52,18 @@ return [
             'driver' => 'sanctum',
             'provider' => 'users',
         ],
+
+        // Meridian Kiosk on a trusted shared workstation, authenticating with
+        // the session a login code established rather than with a bearer token
+        // (AUTH-030; technical spec 13.3). A separate guard because it is a
+        // separate credential: bound to the workstation instead of to somebody's
+        // device, carrying no trusted-device status, and expiring five minutes
+        // after the last thing its user did. The driver is registered in
+        // App\Providers\AppServiceProvider.
+        'workstation' => [
+            'driver' => 'workstation',
+            'provider' => 'users',
+        ],
     ],
 
     /*

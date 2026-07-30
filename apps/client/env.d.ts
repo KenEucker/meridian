@@ -8,6 +8,8 @@ interface MeridianRuntimeConfig {
   readonly apiBaseUrl?: string;
   readonly deploymentTarget?: "server" | "mobile" | "desktop";
   readonly uiMode?: "admin" | "field" | "kiosk";
+  /** The trusted shared workstation this machine is, when it is one (M16.9). */
+  readonly sharedWorkstationId?: string;
 }
 
 interface Window {

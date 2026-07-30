@@ -343,13 +343,28 @@ export async function switchSessionContext(
  * about the new event.
  */
 function discardPreviousContext(): void {
-  resetSelectedSessionDepartment();
-
   const context = clientSessionState.document?.context ?? null;
-  const change: SessionContextChange = {
+
+  runContextResets({
     organizationId: context?.organization_id ?? null,
     eventId: context?.event_id ?? null,
-  };
+  });
+}
+
+/**
+ * Drop every context-scoped cache because the client now holds no context at all.
+ *
+ * What a shared-workstation session end wipes (M16.9; technical spec 13.3). It
+ * runs the same registry a switch runs, so a feature that registered what does
+ * not survive a switch does not also have to remember to register what does not
+ * survive a sign-out.
+ */
+export function discardSessionContextData(): void {
+  runContextResets({ organizationId: null, eventId: null });
+}
+
+function runContextResets(change: SessionContextChange): void {
+  resetSelectedSessionDepartment();
 
   for (const reset of contextResets) {
     reset(change);

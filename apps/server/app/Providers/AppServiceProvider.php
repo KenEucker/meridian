@@ -13,9 +13,12 @@ use App\Models\Organization;
 use App\Models\OrchidAttachment;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
+use App\Models\User;
 use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
 use App\Services\Auth\ApiTokenAuthentication;
+use App\Services\Auth\SharedWorkstationSessionKey;
+use App\Services\Auth\SharedWorkstationSessionService;
 use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Diagnostics\Checks;
@@ -23,6 +26,8 @@ use App\Services\Diagnostics\DiagnosticRunner;
 use App\Services\Node\NodeOperationApplierRegistry;
 use App\Services\SystemConfig\ApplySystemConfigOverrides;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
@@ -113,6 +118,24 @@ class AppServiceProvider extends ServiceProvider
                 ->make(ApiTokenAuthentication::class)
                 ->accepts($accessToken, $isValid)
         );
+
+        // Meridian Kiosk presents the session a login code established, in its
+        // own header, and resolves to the active user (AUTH-030; technical spec
+        // 13.3). Registered as a guard driver rather than as middleware so a
+        // route can accept it alongside `sanctum` and `$request->user()` answers
+        // the same way either way — the permission checks behind a route do not
+        // need to know which kind of credential got the caller there.
+        //
+        // Resolution slides the inactivity window, so the five-minute timeout is
+        // enforced by the node on every request rather than by a countdown in a
+        // renderer that a Kiosk in a stranger's hands could be persuaded to skip.
+        Auth::viaRequest('workstation', function (Request $request): ?User {
+            $key = trim((string) $request->header(SharedWorkstationSessionKey::HEADER));
+
+            return $key === ''
+                ? null
+                : $this->app->make(SharedWorkstationSessionService::class)->resolveUser($key);
+        });
 
         // During an active event window the on-site primary node is
         // authoritative for event-scoped records, so every local write path on a

@@ -207,7 +207,19 @@ export function bootClientSessionFromCache(now: Date = new Date()): boolean {
  * reconnect refresh from silently moving a device to a different event.
  */
 export async function refreshClientSession(
-  options: { readonly eventId?: string | null; readonly now?: Date } = {},
+  options: {
+    readonly eventId?: string | null;
+    readonly now?: Date;
+    /**
+     * Whether the answer may be kept for the next boot. Default yes.
+     *
+     * A shared workstation says no (M16.9). Its session must lock the moment the
+     * application restarts (technical spec 13.3), and a document on disk is
+     * exactly how the user who was signed in five minutes ago comes back on the
+     * screen for whoever restarts the machine.
+     */
+    readonly persist?: boolean;
+  } = {},
 ): Promise<SessionRefreshOutcome> {
   const now = options.now ?? new Date();
   const eventId =
@@ -232,7 +244,11 @@ export async function refreshClientSession(
     // (CLIENT-010). The durable copy is replaced in the same step so a restart
     // cannot resurrect the authority this answer just took away.
     install(payload, "network", now);
-    writeCachedSession(payload, now.toISOString());
+
+    if (options.persist ?? true) {
+      writeCachedSession(payload, now.toISOString());
+    }
+
     state.refreshFailedAt = null;
 
     return "refreshed";
