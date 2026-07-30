@@ -347,6 +347,54 @@ export async function refreshClientSessionOnReconnect(
 }
 
 /**
+ * The shortest gap between two attention-driven refreshes.
+ *
+ * A person switching between applications generates focus events in bursts, and
+ * a request per burst is a request per glance.
+ */
+const FOCUS_REFRESH_INTERVAL_MS = 60_000;
+
+let lastFocusRefreshAt: number | null = null;
+
+/**
+ * Refresh when somebody comes back to the application (AUTH-023, CLIENT-010).
+ *
+ * Revocation is evaluated on the node at request time, which makes a revoked
+ * token stop working immediately — but only tells a client that is making
+ * requests. An application left open makes none, so an operator who revokes a
+ * token would see nothing change on the device until its next reload. Returning
+ * to the screen is the moment that matters: it is when somebody is about to act
+ * on what it says, and it is cheap to check.
+ *
+ * Rate limited, and skipped entirely for a client holding no session — there is
+ * nothing to reduce, and a signed-out client must not be given a reason to call
+ * `/api/me` every time a window is focused.
+ */
+export async function refreshClientSessionOnFocus(
+  now: Date = new Date(),
+): Promise<SessionRefreshOutcome> {
+  if (state.document === null || state.refreshing) {
+    return "skipped";
+  }
+
+  const elapsed =
+    lastFocusRefreshAt === null ? Infinity : now.getTime() - lastFocusRefreshAt;
+
+  if (elapsed < FOCUS_REFRESH_INTERVAL_MS) {
+    return "skipped";
+  }
+
+  lastFocusRefreshAt = now.getTime();
+
+  return refreshClientSession({ now });
+}
+
+/** Reset the focus rate limit between tests. */
+export function resetFocusRefreshThrottle(): void {
+  lastFocusRefreshAt = null;
+}
+
+/**
  * Install a document without touching the network or the cache.
  *
  * The seam the specs establish a session through, and the one the local

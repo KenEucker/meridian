@@ -4,7 +4,7 @@ import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
-import { router } from "@/router";
+import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
 // Importing this adopts the token this device already holds and registers it as
 // the credential every request carries (M16.11).
 import { signedIn } from "@/session/apiLogin";
@@ -65,11 +65,31 @@ registerSessionContextReset((context) => {
 // somebody was signed out, or nobody was ever signed in (M16.11).
 const bootedSignedIn = signedIn.value;
 
+/*
+ * A client that loses its session goes to sign in, wherever it was standing
+ * (M16.11; AUTH-023). Installed before the first resolution so a refusal that
+ * lands during boot is covered too.
+ */
+redirectWhenSignedOut();
+
 void loadClientSession().then((outcome) => {
   if (outcome !== "refreshed") {
     installLocalFieldSessionFromEnv({
       credentialRefused: outcome === "unauthenticated" && bootedSignedIn,
     });
+  }
+
+  /*
+   * Now that the client knows what it holds, send it to sign in if it holds
+   * nothing (M16.11).
+   *
+   * Here rather than in the route guard because the first navigation happens
+   * while this resolution is still in flight: at that moment "holds nothing" says
+   * how far the boot has got, not what the client has. `replace` rather than
+   * `push`, so the surface nobody could see is not in the back history.
+   */
+  if (requiresSignIn(router.currentRoute.value.name)) {
+    void router.replace({ name: "login" });
   }
 });
 

@@ -1,5 +1,14 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import { watch } from "vue";
+import {
+  createRouter,
+  createWebHistory,
+  type Router,
+  type RouteRecordRaw,
+} from "vue-router";
 
+import { holdsMeridianCredential } from "@/api/meridianApi";
+import { meridianAppConfig } from "@/app/appConfig";
+import { clientSessionState } from "@/session/clientSession";
 import {
   departmentBrandingRouteProps,
   organizationBrandingRouteProps,
@@ -515,7 +524,90 @@ export const routes: RouteRecordRaw[] = [
   },
 ];
 
+/**
+ * Routes a client with nothing may still reach.
+ *
+ * The sign-in pair, because they are how a client stops having nothing. The
+ * Kiosk surfaces, because a shared workstation holds a session key rather than a
+ * token and signs in by typed code on its own screen (AUTH-030) — sending it to
+ * the personal sign-in screen would be sending it somewhere it cannot use. And
+ * not-found, which is not a surface anybody was denied.
+ */
+const PUBLIC_ROUTE_NAMES: readonly string[] = [
+  "login",
+  "auth.code.entry",
+  "not-found",
+];
+
+function isPublicRoute(name: unknown): boolean {
+  return (
+    typeof name === "string" &&
+    (PUBLIC_ROUTE_NAMES.includes(name) || name.startsWith("kiosk."))
+  );
+}
+
+/**
+ * Send a client that holds nothing to sign in (M16.11; AUTH-018).
+ *
+ * Not a security boundary — the node authenticates every request and refuses one
+ * carrying no credential regardless of what the client rendered (technical spec
+ * 11A.2). It is about not leaving somebody on a screen that can only be empty:
+ * a device whose token was revoked, or one that has never signed in, has no
+ * capabilities and would render a shell with nothing in it.
+ *
+ * Both conditions are required. A client holding a cached session but no live
+ * credential is an offline device mid-event, and bouncing it to a login screen
+ * it cannot complete is precisely the failure the cache exists to prevent
+ * (CLIENT-007).
+ *
+ * A client still resolving its first session is not sent anywhere. At the first
+ * navigation the node has not answered yet, and "holds nothing" is not yet a
+ * fact about the client — it is a fact about how far the boot has got. Whoever
+ * started that resolution decides once it settles.
+ */
+export function requiresSignIn(name: unknown): boolean {
+  if (
+    isPublicRoute(name) ||
+    meridianAppConfig.uiMode === "kiosk" ||
+    clientSessionState.refreshing
+  ) {
+    return false;
+  }
+
+  return !holdsMeridianCredential() && clientSessionState.document === null;
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes,
 });
+
+router.beforeEach((to) =>
+  requiresSignIn(to.name) ? { name: "login" } : true,
+);
+
+/**
+ * Move a client to sign in the moment it stops holding a session (AUTH-023).
+ *
+ * The route guard only runs on a navigation, and losing a credential is not one:
+ * a device whose token is revoked while somebody is looking at a surface would
+ * sign out in the shell and leave them standing on a screen whose contents they
+ * are no longer entitled to. This watches the session itself, so the answer
+ * arrives with the refusal rather than with the next click.
+ *
+ * `replace`, not `push`: the surface nobody may see should not be the place the
+ * back button returns to.
+ *
+ * Returns the watch stopper, which the specs use; the application installs this
+ * once and never stops it.
+ */
+export function redirectWhenSignedOut(target: Router = router): () => void {
+  return watch(
+    () => clientSessionState.document,
+    (document) => {
+      if (document === null && requiresSignIn(target.currentRoute.value.name)) {
+        void target.replace({ name: "login" });
+      }
+    },
+  );
+}

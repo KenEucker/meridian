@@ -847,6 +847,8 @@ Every operational endpoint accepts a bearer token or a shared-workstation sessio
 
 A client holds its token durably, so an application that was signed in yesterday is signed in when it is reopened without coverage today. It disposes of the token when the person signs out, and drops it when the node refuses it — a revoked token or a revoked device arrives as a refused session refresh, and a client that kept the credential would go on presenting one the node has already withdrawn.
 
+A client re-resolves its session when somebody returns to it, rate limited, in addition to at startup and on regaining connectivity. Revocation is evaluated at request time, and an application nobody is touching makes no requests — so without this an operator who revokes a token changes nothing on the device until its next restart. A client that loses its session moves to its sign-in surface rather than leaving somebody standing on a screen whose contents they no longer hold. Neither is an enforcement boundary: the node refuses the credential either way.
+
 ---
 
 # 11A. Client Session and API Binding

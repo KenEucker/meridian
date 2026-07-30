@@ -7,7 +7,9 @@ import {
   clientSessionState,
   loadClientSession,
   refreshClientSession,
+  refreshClientSessionOnFocus,
   refreshClientSessionOnReconnect,
+  resetFocusRefreshThrottle,
   sessionAccessGranted,
   sessionCapabilities,
   sessionHasCapability,
@@ -256,5 +258,68 @@ describe("client session", () => {
       await refreshClientSessionOnReconnect("online", "offline_usable"),
     ).toBe("skipped");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /*
+   * Coming back to the application (AUTH-023).
+   *
+   * A revoked token stops working on its next request, and an application
+   * nobody is touching makes none. Returning to the screen is the moment worth
+   * asking, because it is the moment somebody is about to act on what it says.
+   */
+  describe("on regaining attention", () => {
+    beforeEach(() => {
+      resetFocusRefreshThrottle();
+    });
+
+    it("re-resolves the session for a client that holds one", async () => {
+      const fetchMock = respondWith(fixtureSessionDocument());
+
+      writeCachedSession(fixtureSessionDocument());
+      bootClientSessionFromCache(insideWindow);
+      vi.stubGlobal("fetch", fetchMock);
+
+      expect(await refreshClientSessionOnFocus(insideWindow)).toBe("refreshed");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("signs out a client whose credential has been revoked", async () => {
+      writeCachedSession(fixtureSessionDocument());
+      bootClientSessionFromCache(insideWindow);
+      vi.stubGlobal("fetch", refuse(401));
+
+      expect(await refreshClientSessionOnFocus(insideWindow)).toBe(
+        "unauthenticated",
+      );
+      expect(clientSessionState.document).toBeNull();
+      expect(readCachedSession()).toBeNull();
+    });
+
+    it("asks at most once a minute, however often somebody switches windows", async () => {
+      const fetchMock = respondWith(fixtureSessionDocument());
+
+      writeCachedSession(fixtureSessionDocument());
+      bootClientSessionFromCache(insideWindow);
+      vi.stubGlobal("fetch", fetchMock);
+
+      await refreshClientSessionOnFocus(insideWindow);
+
+      const aMomentLater = new Date(insideWindow.getTime() + 30_000);
+      const aMinuteLater = new Date(insideWindow.getTime() + 61_000);
+
+      expect(await refreshClientSessionOnFocus(aMomentLater)).toBe("skipped");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      expect(await refreshClientSessionOnFocus(aMinuteLater)).toBe("refreshed");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not call the node for a client with no session", async () => {
+      const fetchMock = respondWith(fixtureSessionDocument());
+      vi.stubGlobal("fetch", fetchMock);
+
+      expect(await refreshClientSessionOnFocus(insideWindow)).toBe("skipped");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 });

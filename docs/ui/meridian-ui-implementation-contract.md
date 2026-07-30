@@ -1198,6 +1198,8 @@ In a client application, `auth.magic-link-sent` is a state of `auth.code-entry` 
 
 Signing out is offered in the shell's user menu on personal devices, and never on a Kiosk: a shared workstation ends a session from its session bar, holds no personal token to dispose of, and must not become a switcher for somebody's own account (technical spec 13.3).
 
+A client holding neither a credential nor a session is sent to `auth.login`, including when it loses them while a surface is open. A client working from a cached session is not: it is an offline device mid-event, and a sign-in screen is the one thing it cannot complete. Kiosk surfaces are exempt — a shared workstation signs in by typed code on `kiosk.workstation-login`.
+
 ### 12.2 Home and Context Screens
 
 | Screen ID | Route name | Purpose | Access |
