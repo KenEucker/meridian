@@ -142,6 +142,39 @@ export async function meridianFetch(
   });
 }
 
+/**
+ * What to show someone when a request did not succeed.
+ *
+ * A refusal reaches the client in one of three shapes and only one of them is
+ * worth printing verbatim. Field validation carries `errors` — a map of field
+ * name to messages — and the accompanying `message` collapses that into "The
+ * name field is required. (and 1 more error)", which hides the rest. A domain
+ * refusal carries `message` alone and it is already the sentence to show. A
+ * transport failure carries no body at all, and its `Failed to fetch` says
+ * nothing to a person, so the caller's own words stand in.
+ */
+export function meridianErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof MeridianApiError)) {
+    return fallback;
+  }
+
+  const body = error.body as
+    | { message?: unknown; errors?: Record<string, unknown> }
+    | null;
+
+  const fieldMessages = Object.values(body?.errors ?? {})
+    .flatMap((messages) => (Array.isArray(messages) ? messages : [messages]))
+    .filter((message): message is string => typeof message === "string");
+
+  if (fieldMessages.length > 0) {
+    return fieldMessages.join(" ");
+  }
+
+  return typeof body?.message === "string" && body.message !== ""
+    ? body.message
+    : fallback;
+}
+
 export async function meridianJson<T>(
   path: string,
   init: RequestInit = {},

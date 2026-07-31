@@ -3,21 +3,22 @@ import ControlBar from "@/components/ControlBar.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   archiveOrganizerDepartment,
-  canManageOrganizerDepartments,
   listOrganizerDepartments,
-  resolveOrganizerDepartmentSession,
   restoreOrganizerDepartment,
   type OrganizerDepartment,
+  type OrganizerDepartmentStatus,
 } from "@/organizer-departments/departmentAdminModel";
+import { organizerDepartmentAdminSession } from "@/session/organizerAdminSession";
 
-const session = computed(() => resolveOrganizerDepartmentSession());
-const canManage = computed(() => canManageOrganizerDepartments(session.value));
+const session = organizerDepartmentAdminSession;
+const canManage = computed(() => session.value !== null);
 const route = useRoute();
 const router = useRouter();
 
-const statusFilter = computed(() => {
+const statusFilter = computed<OrganizerDepartmentStatus>(() => {
   const value = route.query.status;
   if (value === "active" || value === "archived") {
     return value;
@@ -26,15 +27,59 @@ const statusFilter = computed(() => {
   return "all";
 });
 
-const departments = computed(() =>
-  listOrganizerDepartments(session.value, statusFilter.value),
-);
+const departments = ref<readonly OrganizerDepartment[]>([]);
+const loading = ref(false);
+const loadError = ref<string | null>(null);
 const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
-watch(statusFilter, () => {
+/**
+ * Read the list the node holds.
+ *
+ * The status filter is a query parameter on the request rather than a predicate
+ * over a local copy, so what "Archived" shows is what the server considers
+ * archived. Reloaded after every write for the same reason: the row an organizer
+ * just acted on is re-read rather than patched in place.
+ */
+async function loadDepartments(): Promise<void> {
+  const current = session.value;
+
+  if (current === null) {
+    departments.value = [];
+
+    return;
+  }
+
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    departments.value = await listOrganizerDepartments(
+      current.organizationId,
+      statusFilter.value,
+    );
+  } catch (error) {
+    departments.value = [];
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load departments. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
+
+/*
+ * Keyed on the organization rather than on the session object, which is rebuilt
+ * whenever the session re-resolves. A context switch changes the organization
+ * and reloads; a periodic re-resolution of the same one does not (CLIENT-014).
+ */
+watch([() => session.value?.organizationId ?? null, statusFilter], () => {
   actionError.value = null;
+  void loadDepartments();
 });
+
+void loadDepartments();
 
 function onStatusChange(event: Event): void {
   const target = event.target as HTMLSelectElement;
@@ -51,10 +96,13 @@ async function archiveDepartment(department: OrganizerDepartment): Promise<void>
   busyId.value = department.id;
 
   try {
-    archiveOrganizerDepartment(session.value, department.id);
+    await archiveOrganizerDepartment(department.id);
+    await loadDepartments();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to archive department.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to archive department.",
+    );
   } finally {
     busyId.value = null;
   }
@@ -65,10 +113,13 @@ async function restoreDepartment(department: OrganizerDepartment): Promise<void>
   busyId.value = department.id;
 
   try {
-    restoreOrganizerDepartment(session.value, department.id);
+    await restoreOrganizerDepartment(department.id);
+    await loadDepartments();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to restore department.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to restore department.",
+    );
   } finally {
     busyId.value = null;
   }
@@ -119,6 +170,10 @@ function formatArchived(department: OrganizerDepartment): string {
         </label>
       </ControlBar>
 
+      <p v-if="loadError" class="org-dept__error" role="alert">
+        {{ loadError }}
+      </p>
+
       <p v-if="actionError" class="org-dept__error" role="alert">
         {{ actionError }}
       </p>
@@ -134,7 +189,10 @@ function formatArchived(department: OrganizerDepartment): string {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="departments.length === 0">
+            <tr v-if="loading && departments.length === 0">
+              <td colspan="4">Loading departments…</td>
+            </tr>
+            <tr v-else-if="departments.length === 0 && loadError === null">
               <td colspan="4">No departments match this filter.</td>
             </tr>
             <tr v-for="department in departments" :key="department.id">

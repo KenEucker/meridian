@@ -65,10 +65,6 @@ import ReadinessView from "@/views/ReadinessView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 import {
-  installDevelopmentOrganizerDepartmentSession,
-  resolveOrganizerDepartmentSession,
-} from "@/organizer-departments/departmentAdminModel";
-import {
   installDevelopmentDepartmentSelfAdminSession,
   resolveDepartmentSelfAdminSession,
 } from "@/department-teams/teamAdminModel";
@@ -92,17 +88,6 @@ function ensureFieldSession(): void {
 function ensureIncidentSession(): void {
   if (!resolveIncidentSession()) {
     installDevelopmentIncidentSession();
-  }
-}
-
-/**
- * Development organizer session until auth and organization selection own the
- * real organizer context. Screen components still fail closed when the
- * installed role lacks organizer authority (M11.12).
- */
-function ensureOrganizerDepartmentSession(): void {
-  if (!resolveOrganizerDepartmentSession()) {
-    installDevelopmentOrganizerDepartmentSession();
   }
 }
 
@@ -445,50 +430,42 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/staff",
     name: "organizer.staff.index",
     component: OrganizerStaffView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/departments",
     name: "organizer.departments.index",
     component: OrganizerDepartmentListView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/departments/create",
     name: "organizer.departments.create",
     component: OrganizerDepartmentEditView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/departments/:departmentId/edit",
     name: "organizer.departments.edit",
     component: OrganizerDepartmentEditView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/branding",
     name: "organizer.branding",
     component: OrganizationBrandingView,
     props: organizationBrandingRouteProps,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/documents",
     name: "organizer.documents.index",
     component: DocumentLibraryView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/documents/:artifactKind/create",
     name: "organizer.documents.create",
     component: DocumentEditView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   {
     path: "/organizer/documents/:artifactKind/:artifactId/edit",
     name: "organizer.documents.edit",
     component: DocumentEditView,
-    beforeEnter: ensureOrganizerDepartmentSession,
   },
   /*
    * Kiosk surfaces (UI contract 12.8; M16.9). Three of the six exist: the two a
