@@ -6,31 +6,31 @@ import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
 import { reloadSessionBranding } from "@/branding/brandingContext";
 import { findDepartmentBranding } from "@/branding/brandingProfile";
+import { meridianErrorMessage, MeridianApiError } from "@/api/meridianApi";
 import {
   archiveOrganizerDepartment,
-  canManageOrganizerDepartments,
   createOrganizerDepartment,
   getOrganizerDepartment,
-  resolveOrganizerDepartmentSession,
   restoreOrganizerDepartment,
   updateOrganizerDepartment,
+  type OrganizerDepartment,
 } from "@/organizer-departments/departmentAdminModel";
+import { organizerDepartmentAdminSession } from "@/session/organizerAdminSession";
 
 const route = useRoute();
 const router = useRouter();
-const session = computed(() => resolveOrganizerDepartmentSession());
-const canManage = computed(() => canManageOrganizerDepartments(session.value));
+const session = organizerDepartmentAdminSession;
+const canManage = computed(() => session.value !== null);
 
 const departmentId = computed(() =>
   typeof route.params.departmentId === "string" ? route.params.departmentId : "",
 );
 const isCreate = computed(() => route.name === "organizer.departments.create");
 
-const existing = computed(() =>
-  isCreate.value
-    ? null
-    : getOrganizerDepartment(session.value, departmentId.value),
-);
+const existing = ref<OrganizerDepartment | null>(null);
+const loading = ref(false);
+const loadError = ref<string | null>(null);
+const notFound = ref(false);
 
 const draft = reactive({
   name: "",
@@ -40,22 +40,73 @@ const draft = reactive({
 const formError = ref<string | null>(null);
 const busy = ref(false);
 
-watch(
-  existing,
-  (department) => {
-    if (department === null) {
-      draft.name = "";
-      draft.code = "";
-      draft.description = "";
-      return;
-    }
+function fillDraft(department: OrganizerDepartment | null): void {
+  draft.name = department?.name ?? "";
+  draft.code = department?.code ?? "";
+  draft.description = department?.description ?? "";
+}
 
-    draft.name = department.name;
-    draft.code = department.code;
-    draft.description = department.description ?? "";
+/**
+ * Read the department this screen is editing.
+ *
+ * The form is filled from the response rather than from a row carried over
+ * from the list, so an organizer who opens a department someone else has since
+ * renamed edits the current values and not the ones their list was showing.
+ *
+ * A 404 is kept apart from every other failure. The server answers it both for
+ * a department that does not exist and for one belonging to another
+ * organization, and either way the screen has nothing to edit; anything else is
+ * a request that may well succeed on a retry, and saying "not found" to a
+ * dropped connection would be a lie.
+ */
+async function loadDepartment(): Promise<void> {
+  const current = session.value;
+
+  existing.value = null;
+  notFound.value = false;
+  loadError.value = null;
+
+  if (current === null || isCreate.value) {
+    fillDraft(null);
+
+    return;
+  }
+
+  loading.value = true;
+
+  try {
+    const department = await getOrganizerDepartment(
+      current.organizationId,
+      departmentId.value,
+    );
+
+    existing.value = department;
+    fillDraft(department);
+  } catch (error) {
+    fillDraft(null);
+
+    if (error instanceof MeridianApiError && error.status === 404) {
+      notFound.value = true;
+    } else {
+      loadError.value = meridianErrorMessage(
+        error,
+        "Unable to load this department. Check the connection to this node and try again.",
+      );
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+watch(
+  [() => session.value?.organizationId ?? null, departmentId, isCreate],
+  () => {
+    formError.value = null;
+    void loadDepartment();
   },
-  { immediate: true },
 );
+
+void loadDepartment();
 
 const heading = computed(() =>
   isCreate.value ? "Create department" : "Edit department",
@@ -88,7 +139,9 @@ async function onLogoChanged(url: string | null): Promise<void> {
 }
 
 async function onSubmit(): Promise<void> {
-  if (!canManage.value) {
+  const current = session.value;
+
+  if (current === null) {
     return;
   }
 
@@ -97,18 +150,26 @@ async function onSubmit(): Promise<void> {
 
   try {
     if (isCreate.value) {
-      const created = createOrganizerDepartment(session.value, { ...draft });
+      const created = await createOrganizerDepartment(current.organizationId, {
+        ...draft,
+      });
+
       await router.push({
         name: "organizer.departments.edit",
         params: { departmentId: created.id },
       });
+
       return;
     }
 
-    updateOrganizerDepartment(session.value, departmentId.value, { ...draft });
+    const updated = await updateOrganizerDepartment(departmentId.value, {
+      ...draft,
+    });
+
+    existing.value = updated;
+    fillDraft(updated);
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to save department.";
+    formError.value = meridianErrorMessage(error, "Unable to save department.");
   } finally {
     busy.value = false;
   }
@@ -119,10 +180,12 @@ async function onArchive(): Promise<void> {
   busy.value = true;
 
   try {
-    archiveOrganizerDepartment(session.value, departmentId.value);
+    existing.value = await archiveOrganizerDepartment(departmentId.value);
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to archive department.";
+    formError.value = meridianErrorMessage(
+      error,
+      "Unable to archive department.",
+    );
   } finally {
     busy.value = false;
   }
@@ -133,10 +196,12 @@ async function onRestore(): Promise<void> {
   busy.value = true;
 
   try {
-    restoreOrganizerDepartment(session.value, departmentId.value);
+    existing.value = await restoreOrganizerDepartment(departmentId.value);
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to restore department.";
+    formError.value = meridianErrorMessage(
+      error,
+      "Unable to restore department.",
+    );
   } finally {
     busy.value = false;
   }
@@ -158,12 +223,16 @@ async function onRestore(): Promise<void> {
       for this organization.
     </p>
 
-    <p
-      v-else-if="!isCreate && existing === null"
-      class="org-dept-edit__restricted"
-      role="status"
-    >
+    <p v-else-if="loading" class="org-dept-edit__restricted" role="status">
+      Loading department…
+    </p>
+
+    <p v-else-if="notFound" class="org-dept-edit__restricted" role="status">
       Department not found for this organization.
+    </p>
+
+    <p v-else-if="loadError" class="org-dept-edit__error" role="alert">
+      {{ loadError }}
     </p>
 
     <form v-else class="org-dept-edit__form" @submit.prevent="onSubmit">
@@ -205,7 +274,7 @@ async function onRestore(): Promise<void> {
         A department logo can be uploaded once the department has been created.
       </p>
 
-      <p v-if="existing?.defaultTeamId" class="org-dept-edit__meta">
+      <p v-if="existing" class="org-dept-edit__meta">
         Default team is created automatically when the department is created.
         Team administration remains with later department self-administration
         work.

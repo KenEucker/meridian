@@ -1,324 +1,166 @@
-import { shallowRef } from "vue";
+// The organizer department administration surfaces' data layer (M16.14;
+// CLIENT-023, ORG-002; data/API 10.6).
+//
+// Until this task the departments an organizer saw were four objects compiled
+// into the client, mutated in a module-level ref, and reset between tests. What
+// they administered was therefore nothing: the list showed departments no server
+// had, and archiving one changed a browser tab.
+//
+// This module is now a thin translation of the endpoints in data/API 10.6. Two
+// choices in it are deliberate:
+//
+//  1. **No cache.** Every function is a request and nothing is held between
+//     them. Departments are edited from two surfaces and archived from a third
+//     view of the same list, and a module-level copy would be the thing that
+//     shows an organizer the row they just archived as still active. The views
+//     hold the result of the call they made and reload after a write.
+//  2. **No client-side authorization, and no client-side uniqueness rule.** The
+//     old model refused writes itself and duplicated the code-uniqueness check.
+//     The server owns both (CLIENT-006), it answers with the failing field, and
+//     a second copy here could only ever drift into refusing something the
+//     server would allow.
+//
+// These are connected-only surfaces. Organization administration is not in the
+// closed set of offline-writable work (data/API 7.2), so a request made with no
+// node reachable fails and says so rather than queueing.
 
-import {
-  fixtureDepartmentHasOrganizerDepartmentAccess,
-  selectedFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
+import { meridianJson } from "@/api/meridianApi";
 
-export type OrganizerDepartmentRole = "organizer" | "lead_organizer" | "staff";
-
-export interface OrganizerDepartmentSession {
-  readonly organizationId: string;
-  readonly organizationLabel: string;
-  readonly role: OrganizerDepartmentRole;
-  readonly roleLabel: string;
-}
-
+/** One department, as the administration surfaces render it. */
 export interface OrganizerDepartment {
   readonly id: string;
   readonly organizationId: string;
   readonly name: string;
   readonly code: string;
   readonly description: string | null;
-  readonly defaultTeamId: string | null;
+  /** An ISO-8601 timestamp when archived, null while active. */
   readonly archivedAt: string | null;
-  readonly createdAt: string;
-  readonly updatedAt: string;
 }
 
+/** The editable fields, as held by the create and edit forms. */
 export interface OrganizerDepartmentDraft {
   name: string;
   code: string;
   description: string;
 }
 
-const DEVELOPMENT_ORGANIZATION_ID = "11111111-1111-4111-8111-111111111111";
+/** The archived-state filter the list surface offers. */
+export type OrganizerDepartmentStatus = "all" | "active" | "archived";
 
-const DEVELOPMENT_SESSION: OrganizerDepartmentSession = {
-  organizationId: DEVELOPMENT_ORGANIZATION_ID,
-  organizationLabel: "Signal Camp (development)",
-  role: "organizer",
-  roleLabel: "Organizer",
-};
+interface DepartmentPayload {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly name: string;
+  readonly code: string;
+  readonly description: string | null;
+  readonly archived_at: string | null;
+}
 
-const INITIAL_DEPARTMENTS: OrganizerDepartment[] = [
-  {
-    id: "22222222-2222-4222-8222-222222222201",
-    organizationId: DEVELOPMENT_ORGANIZATION_ID,
-    name: "Organizer",
-    code: "ORG",
-    description: "Organization-level event administration.",
-    defaultTeamId: "77777777-7777-4777-8777-777777777760",
-    archivedAt: null,
-    createdAt: "2026-07-01T11:55:00.000Z",
-    updatedAt: "2026-07-01T11:55:00.000Z",
-  },
-  {
-    id: "66666666-6666-4666-8666-666666666666",
-    organizationId: DEVELOPMENT_ORGANIZATION_ID,
-    name: "Rangers",
-    code: "RANGERS",
-    description: "Field operations and volunteer support.",
-    defaultTeamId: "22222222-2222-4222-8222-222222222211",
-    archivedAt: null,
-    createdAt: "2026-07-01T12:00:00.000Z",
-    updatedAt: "2026-07-01T12:00:00.000Z",
-  },
-  {
-    id: "22222222-2222-4222-8222-222222222202",
-    organizationId: DEVELOPMENT_ORGANIZATION_ID,
-    name: "Gate",
-    code: "GATE",
-    description: "Entry and credentialing.",
-    defaultTeamId: "22222222-2222-4222-8222-222222222212",
-    archivedAt: null,
-    createdAt: "2026-07-01T12:05:00.000Z",
-    updatedAt: "2026-07-01T12:05:00.000Z",
-  },
-  {
-    id: "22222222-2222-4222-8222-222222222203",
-    organizationId: DEVELOPMENT_ORGANIZATION_ID,
-    name: "DPW",
-    code: "DPW",
-    description: "Build, roads, and event infrastructure.",
-    defaultTeamId: "77777777-7777-4777-8777-777777777790",
-    archivedAt: null,
-    createdAt: "2026-07-01T12:10:00.000Z",
-    updatedAt: "2026-07-01T12:10:00.000Z",
-  },
-];
-
-let session: OrganizerDepartmentSession | null = null;
-const departments = shallowRef<OrganizerDepartment[]>([...INITIAL_DEPARTMENTS]);
-
-export function installDevelopmentOrganizerDepartmentSession(
-  overrides: Partial<OrganizerDepartmentSession> = {},
-): OrganizerDepartmentSession {
-  session = {
-    ...DEVELOPMENT_SESSION,
-    ...overrides,
+function toDepartment(payload: DepartmentPayload): OrganizerDepartment {
+  return {
+    id: payload.id,
+    organizationId: payload.organization_id,
+    name: payload.name,
+    code: payload.code,
+    description: payload.description,
+    archivedAt: payload.archived_at,
   };
-
-  return session;
 }
 
-export function resolveOrganizerDepartmentSession(): OrganizerDepartmentSession | null {
-  return session;
-}
-
-export function clearOrganizerDepartmentSession(): void {
-  session = null;
-}
-
-export function canManageOrganizerDepartments(
-  current: OrganizerDepartmentSession | null,
-): boolean {
-  return (
-    current !== null &&
-    fixtureDepartmentHasOrganizerDepartmentAccess(
-      selectedFixtureDepartment.value,
-    ) &&
-    (current.role === "organizer" || current.role === "lead_organizer")
-  );
-}
-
-export function listOrganizerDepartments(
-  current: OrganizerDepartmentSession | null,
-  status: "all" | "active" | "archived" = "all",
-): OrganizerDepartment[] {
-  if (!canManageOrganizerDepartments(current) || current === null) {
-    return [];
-  }
-
-  return departments.value
-    .filter((department) => department.organizationId === current.organizationId)
-    .filter((department) => {
-      if (status === "active") {
-        return department.archivedAt === null;
-      }
-
-      if (status === "archived") {
-        return department.archivedAt !== null;
-      }
-
-      return true;
-    })
-    .slice()
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-export function getOrganizerDepartment(
-  current: OrganizerDepartmentSession | null,
-  departmentId: string,
-): OrganizerDepartment | null {
-  if (!canManageOrganizerDepartments(current) || current === null) {
-    return null;
-  }
-
-  return (
-    departments.value.find(
-      (department) =>
-        department.id === departmentId &&
-        department.organizationId === current.organizationId,
-    ) ?? null
-  );
-}
-
-export function createOrganizerDepartment(
-  current: OrganizerDepartmentSession | null,
-  draft: OrganizerDepartmentDraft,
-): OrganizerDepartment {
-  assertCanManage(current);
-  const name = draft.name.trim();
-  const code = draft.code.trim();
+/**
+ * The submitted form, trimmed.
+ *
+ * The server trims too, so this changes nothing it stores. It changes what a
+ * whitespace-only entry does: sent as typed it passes `required` and comes back
+ * as a domain refusal, which reads oddly next to a field that visibly has
+ * something in it.
+ */
+function toAttributes(draft: OrganizerDepartmentDraft): Record<string, unknown> {
   const description = draft.description.trim();
 
-  if (name === "" || code === "") {
-    throw new Error("Department name and code are required.");
-  }
-
-  assertCodeUnique(current.organizationId, code);
-
-  const now = new Date().toISOString();
-  const department: OrganizerDepartment = {
-    id: crypto.randomUUID(),
-    organizationId: current.organizationId,
-    name,
-    code,
+  return {
+    name: draft.name.trim(),
+    code: draft.code.trim(),
     description: description === "" ? null : description,
-    defaultTeamId: crypto.randomUUID(),
-    archivedAt: null,
-    createdAt: now,
-    updatedAt: now,
   };
-
-  departments.value = [...departments.value, department];
-
-  return department;
 }
 
-export function updateOrganizerDepartment(
-  current: OrganizerDepartmentSession | null,
-  departmentId: string,
-  draft: OrganizerDepartmentDraft,
-): OrganizerDepartment {
-  assertCanManage(current);
-  const existing = getOrganizerDepartment(current, departmentId);
-
-  if (existing === null) {
-    throw new Error("Department not found.");
-  }
-
-  const name = draft.name.trim();
-  const code = draft.code.trim();
-  const description = draft.description.trim();
-
-  if (name === "" || code === "") {
-    throw new Error("Department name and code are required.");
-  }
-
-  assertCodeUnique(current.organizationId, code, departmentId);
-
-  const updated: OrganizerDepartment = {
-    ...existing,
-    name,
-    code,
-    description: description === "" ? null : description,
-    updatedAt: new Date().toISOString(),
-  };
-
-  departments.value = departments.value.map((department) =>
-    department.id === departmentId ? updated : department,
-  );
-
-  return updated;
-}
-
-export function archiveOrganizerDepartment(
-  current: OrganizerDepartmentSession | null,
-  departmentId: string,
-): OrganizerDepartment {
-  assertCanManage(current);
-  const existing = getOrganizerDepartment(current, departmentId);
-
-  if (existing === null) {
-    throw new Error("Department not found.");
-  }
-
-  if (existing.archivedAt !== null) {
-    throw new Error("Department is already archived.");
-  }
-
-  const archived: OrganizerDepartment = {
-    ...existing,
-    archivedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  departments.value = departments.value.map((department) =>
-    department.id === departmentId ? archived : department,
-  );
-
-  return archived;
-}
-
-export function restoreOrganizerDepartment(
-  current: OrganizerDepartmentSession | null,
-  departmentId: string,
-): OrganizerDepartment {
-  assertCanManage(current);
-  const existing = getOrganizerDepartment(current, departmentId);
-
-  if (existing === null) {
-    throw new Error("Department not found.");
-  }
-
-  if (existing.archivedAt === null) {
-    throw new Error("Department is not archived.");
-  }
-
-  const restored: OrganizerDepartment = {
-    ...existing,
-    archivedAt: null,
-    updatedAt: new Date().toISOString(),
-  };
-
-  departments.value = departments.value.map((department) =>
-    department.id === departmentId ? restored : department,
-  );
-
-  return restored;
-}
-
-export function resetOrganizerDepartmentFixtures(): void {
-  departments.value = INITIAL_DEPARTMENTS.map((department) => ({
-    ...department,
-  }));
-}
-
-function assertCanManage(
-  current: OrganizerDepartmentSession | null,
-): asserts current is OrganizerDepartmentSession {
-  if (!canManageOrganizerDepartments(current) || current === null) {
-    throw new Error("You do not have permission to manage departments.");
-  }
-}
-
-function assertCodeUnique(
+export async function listOrganizerDepartments(
   organizationId: string,
-  code: string,
-  ignoreId?: string,
-): void {
-  const conflict = departments.value.find(
-    (department) =>
-      department.organizationId === organizationId &&
-      department.code === code &&
-      department.id !== ignoreId,
+  status: OrganizerDepartmentStatus = "all",
+): Promise<readonly OrganizerDepartment[]> {
+  const result = await meridianJson<{ departments?: DepartmentPayload[] }>(
+    `/api/organizations/${organizationId}/departments?status=${status}`,
   );
 
-  if (conflict) {
-    throw new Error(
-      "A department with this code already exists in the organization.",
-    );
-  }
+  return (result.departments ?? []).map(toDepartment);
+}
+
+export async function getOrganizerDepartment(
+  organizationId: string,
+  departmentId: string,
+): Promise<OrganizerDepartment> {
+  return toDepartment(
+    await meridianJson<DepartmentPayload>(
+      `/api/organizations/${organizationId}/departments/${departmentId}`,
+    ),
+  );
+}
+
+export async function createOrganizerDepartment(
+  organizationId: string,
+  draft: OrganizerDepartmentDraft,
+): Promise<OrganizerDepartment> {
+  return toDepartment(
+    await meridianJson<DepartmentPayload>("/api/commands/create-department", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: organizationId,
+        ...toAttributes(draft),
+      }),
+    }),
+  );
+}
+
+/**
+ * Replace a department's editable fields.
+ *
+ * The organization is not sent: the server reads it off the department, which
+ * is also what it authorizes against.
+ */
+export async function updateOrganizerDepartment(
+  departmentId: string,
+  draft: OrganizerDepartmentDraft,
+): Promise<OrganizerDepartment> {
+  return toDepartment(
+    await meridianJson<DepartmentPayload>("/api/commands/update-department", {
+      method: "POST",
+      body: JSON.stringify({
+        department_id: departmentId,
+        ...toAttributes(draft),
+      }),
+    }),
+  );
+}
+
+export async function archiveOrganizerDepartment(
+  departmentId: string,
+): Promise<OrganizerDepartment> {
+  return toDepartment(
+    await meridianJson<DepartmentPayload>("/api/commands/archive-department", {
+      method: "POST",
+      body: JSON.stringify({ department_id: departmentId }),
+    }),
+  );
+}
+
+export async function restoreOrganizerDepartment(
+  departmentId: string,
+): Promise<OrganizerDepartment> {
+  return toDepartment(
+    await meridianJson<DepartmentPayload>("/api/commands/restore-department", {
+      method: "POST",
+      body: JSON.stringify({ department_id: departmentId }),
+    }),
+  );
 }

@@ -1,21 +1,37 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import {
+  listOrganizerDepartments,
+  type OrganizerDepartment,
+} from "@/organizer-departments/departmentAdminModel";
 import {
   addOrganizerStaff,
-  canManageOrganizerStaff,
-  listLeadSelectableDepartments,
   listOrganizerStaff,
   removeOrganizerDepartmentLead,
-  resolveOrganizerStaffSession,
   selectOrganizerDepartmentLead,
   type OrganizerStaffMember,
 } from "@/organizer-staff/staffAdminModel";
+import { organizerStaffAdminSession } from "@/session/organizerAdminSession";
 
-const session = computed(() => resolveOrganizerStaffSession());
-const canManage = computed(() => canManageOrganizerStaff(session.value));
-const staff = computed(() => listOrganizerStaff(session.value));
-const departments = computed(() => listLeadSelectableDepartments(session.value));
+const session = organizerStaffAdminSession;
+const canManage = computed(() => session.value !== null);
+
+const staff = ref<readonly OrganizerStaffMember[]>([]);
+/**
+ * The departments intake and lead selection may name.
+ *
+ * The organization's active departments, read from the same endpoint the
+ * Departments screen reads. The previous list was the bundled fixture set minus
+ * whichever one carried the code `ORG`, an exclusion the server has no
+ * counterpart for: it would have hidden a real organization's department that
+ * happened to be coded that way, and it never hid the archived ones that
+ * actually cannot receive intake.
+ */
+const departments = ref<readonly OrganizerDepartment[]>([]);
+const loading = ref(false);
+const loadError = ref<string | null>(null);
 
 const draft = reactive({
   legalName: "",
@@ -32,12 +48,64 @@ const leadDraft = reactive({
 const actionError = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
 
-function submitStaff(): void {
+async function loadStaff(): Promise<void> {
+  const current = session.value;
+
+  if (current === null) {
+    staff.value = [];
+    departments.value = [];
+
+    return;
+  }
+
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    const [members, activeDepartments] = await Promise.all([
+      listOrganizerStaff(current.organizationId),
+      listOrganizerDepartments(current.organizationId, "active"),
+    ]);
+
+    staff.value = members;
+    departments.value = activeDepartments;
+  } catch (error) {
+    staff.value = [];
+    departments.value = [];
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load staff. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Keyed on the organization, not the session object: see the departments list.
+watch(
+  () => session.value?.organizationId ?? null,
+  () => {
+    void loadStaff();
+  },
+);
+
+void loadStaff();
+
+async function submitStaff(): Promise<void> {
+  const current = session.value;
+
+  if (current === null) {
+    return;
+  }
+
   actionError.value = null;
   successMessage.value = null;
 
   try {
-    const created = addOrganizerStaff(session.value, { ...draft });
+    const created = await addOrganizerStaff(current.organizationId, {
+      ...draft,
+    });
+
     leadDraft.staffId = created.id;
     draft.legalName = "";
     draft.preferredName = "";
@@ -46,60 +114,72 @@ function submitStaff(): void {
     draft.departmentId = "";
     draft.invite = true;
     successMessage.value = `${created.displayName} added to staff.`;
+    await loadStaff();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to add staff.";
+    actionError.value = meridianErrorMessage(error, "Unable to add staff.");
   }
 }
 
-function submitLead(): void {
+async function submitLead(): Promise<void> {
   actionError.value = null;
   successMessage.value = null;
 
   try {
-    const updated = selectOrganizerDepartmentLead(
-      session.value,
+    const updated = await selectOrganizerDepartmentLead(
       leadDraft.staffId,
       leadDraft.departmentId,
     );
     const department = departments.value.find(
       (candidate) => candidate.id === leadDraft.departmentId,
     );
+
     successMessage.value = `${updated.displayName} selected as ${department?.name ?? "department"} lead.`;
+    await loadStaff();
   } catch (error) {
-    actionError.value =
-      error instanceof Error
-        ? error.message
-        : "Unable to select department lead.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to select department lead.",
+    );
   }
 }
 
-function removeLead(member: OrganizerStaffMember, departmentId: string): void {
+async function removeLead(
+  member: OrganizerStaffMember,
+  departmentId: string,
+): Promise<void> {
   actionError.value = null;
   successMessage.value = null;
 
   try {
-    removeOrganizerDepartmentLead(session.value, member.id, departmentId);
+    await removeOrganizerDepartmentLead(member.id, departmentId);
     successMessage.value = `${member.displayName} removed from lead selection.`;
+    await loadStaff();
   } catch (error) {
-    actionError.value =
-      error instanceof Error
-        ? error.message
-        : "Unable to remove department lead.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to remove department lead.",
+    );
   }
 }
 
+/**
+ * The departments a staff member belongs to, and where they lead.
+ *
+ * Named from the membership rather than looked up in `departments`, because a
+ * member may hold a membership in a department that has since been archived and
+ * the selectable list deliberately excludes those.
+ */
 function departmentLabels(member: OrganizerStaffMember): string {
   if (member.departments.length === 0) {
     return "No department assignment";
   }
 
   return member.departments
-    .map((department) =>
-      department.isLead
-        ? `${department.departmentName} lead`
-        : department.departmentName,
-    )
+    .map((department) => {
+      const name = department.departmentName ?? "Unnamed department";
+
+      return department.isLead ? `${name} lead` : name;
+    })
     .join(", ");
 }
 </script>
@@ -122,6 +202,9 @@ function departmentLabels(member: OrganizerStaffMember): string {
     </p>
 
     <template v-else>
+      <p v-if="loadError" class="org-staff__error" role="alert">
+        {{ loadError }}
+      </p>
       <p v-if="actionError" class="org-staff__error" role="alert">
         {{ actionError }}
       </p>
@@ -210,6 +293,12 @@ function departmentLabels(member: OrganizerStaffMember): string {
             </tr>
           </thead>
           <tbody>
+            <tr v-if="loading && staff.length === 0">
+              <td colspan="5">Loading staff…</td>
+            </tr>
+            <tr v-else-if="staff.length === 0 && loadError === null">
+              <td colspan="5">No staff in this organization yet.</td>
+            </tr>
             <tr v-for="member in staff" :key="member.id">
               <td>
                 <strong>{{ member.displayName }}</strong>
