@@ -16,8 +16,7 @@ import {
 import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
-  resetDepartmentSelfAdminFixtures,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { resolveEventInfo } from "@/event-info/eventInfoModel";
 import { routes } from "@/router";
@@ -57,7 +56,6 @@ async function mountAt(component: unknown, path: string) {
 
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDepartmentSelfAdminFixtures();
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
 });

@@ -3,7 +3,7 @@ import ControlBar from "@/components/ControlBar.vue";
 import { computed, reactive, ref } from "vue";
 
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
-import { resolveDepartmentSelfAdminSession } from "@/department-teams/teamAdminModel";
+import { resolveDepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
 import {
   archiveEquipmentItem,
   canManageEquipmentInventory,

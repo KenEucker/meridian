@@ -10,8 +10,7 @@ import {
 import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
-  resetDepartmentSelfAdminFixtures,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import {
   listDepartmentEquipment,
@@ -60,7 +59,6 @@ function inputByLabel(wrapper: ReturnType<typeof mount>, label: string) {
 
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDepartmentSelfAdminFixtures();
   resetEquipmentInventoryFixtures();
   resetSelectedFixtureDepartment();
 });

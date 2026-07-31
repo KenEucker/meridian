@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
+import { configureMeridianApi } from "@/api/meridianApi";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import {
   FIXTURE_RANGERS_DEPARTMENT_ID,
@@ -11,8 +12,7 @@ import {
 import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
-  resetDepartmentSelfAdminFixtures,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import {
   installDevelopmentIncidentSession,
@@ -41,12 +41,68 @@ function departmentPath(suffix: string): string {
   return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${FIXTURE_RANGERS_DEPARTMENT_ID}/${suffix}`;
 }
 
+/**
+ * A node that answers the Admin surface's one read (M16.15).
+ *
+ * This file is about where controls sit on a page, not about what the page
+ * asked for, so the answer is the smallest one that fills every panel: a
+ * department, an administering caller, and one team.
+ */
+function stubTeamAdminNode(): void {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            department: {
+              id: FIXTURE_RANGERS_DEPARTMENT_ID,
+              organization_id: "11111111-1111-4111-8111-111111111111",
+              name: "Rangers",
+              code: "RANGERS",
+              description: null,
+              default_team_id: null,
+              archived_at: null,
+            },
+            access: {
+              can_administer: true,
+              can_view_led_teams: false,
+              led_team_ids: [],
+            },
+            teams: [
+              {
+                id: "77777777-7777-4777-8777-777777777771",
+                department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+                name: "Dirt",
+                code: "DIRT",
+                description: null,
+                is_default: false,
+                archived_at: null,
+                created_at: "2026-07-01T00:00:00+00:00",
+                updated_at: "2026-07-01T00:00:00+00:00",
+              },
+            ],
+            team_staff: [],
+            department_staff: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    ),
+  );
+}
+
 afterEach(() => {
   clearDepartmentSelfAdminSession();
   clearIncidentSession();
-  resetDepartmentSelfAdminFixtures();
+  configureMeridianApi(null);
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
+  vi.unstubAllGlobals();
 });
 
 describe("workflow control bands", () => {
@@ -113,6 +169,7 @@ describe("workflow control bands", () => {
   it("puts department filter toolbars on the shared band", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubTeamAdminNode();
 
     const admin = await mountAt(DepartmentTeamsListView, departmentPath("admin"));
     expect(admin.find(".control-bar").exists()).toBe(true);
@@ -156,6 +213,7 @@ describe("workflow page regions", () => {
   it("pairs the Admin setup panels", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubTeamAdminNode();
 
     const wrapper = await mountAt(DepartmentTeamsListView, departmentPath("admin"));
     const grid = wrapper.get(".content-grid--region");

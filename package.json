@@ -39,6 +39,7 @@
     "server:migrate:status": "php apps/server/artisan migrate:status",
     "server:migrate:seed": "php apps/server/artisan migrate:fresh --seed",
     "server:migrate:seedall": "corepack pnpm run server:migrate:seed && corepack pnpm run server:user",
+    "server:mailtail": "grep -A 2 \"Enter this code\" apps/server/storage/logs/laravel.log | tail -1",
     "db:env": "php -r \"file_exists('deploy/docker/.env') || copy('deploy/docker/.env.example', 'deploy/docker/.env');\"",
     "db:config": "docker compose --env-file deploy/docker/.env -f deploy/docker/compose.yaml config",
     "db:up": "docker compose --env-file deploy/docker/.env -f deploy/docker/compose.yaml up -d --wait",

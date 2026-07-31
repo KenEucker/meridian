@@ -67,7 +67,7 @@ import { selectSessionDepartment } from "@/session/sessionAccess";
 import {
   installDevelopmentDepartmentSelfAdminSession,
   resolveDepartmentSelfAdminSession,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 
 /**
  * Until auth and event selection land, author Field Report surfaces install a

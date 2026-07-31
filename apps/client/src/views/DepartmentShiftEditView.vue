@@ -4,7 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import {
   resolveDepartmentSelfAdminSession,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import {
   canManageShiftsForTeam,
   canViewShiftAdmin,

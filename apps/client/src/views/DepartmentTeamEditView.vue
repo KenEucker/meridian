@@ -6,29 +6,40 @@ import { BRANDING_SLOTS } from "@/branding/brandingAdminModel";
 import BrandingLogoField from "@/branding/BrandingLogoField.vue";
 import { reloadSessionBranding } from "@/branding/brandingContext";
 import { findTeamBranding } from "@/branding/brandingProfile";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   archiveDepartmentTeam,
-  canAdministerDepartment,
   createDepartmentTeam,
   getDepartmentTeam,
-  resolveDepartmentSelfAdminSession,
   restoreDepartmentTeam,
   suggestTeamCodeFromName,
   updateDepartmentTeam,
+  type DepartmentTeamDetail,
 } from "@/department-teams/teamAdminModel";
 
 const route = useRoute();
 const router = useRouter();
-const session = computed(() => resolveDepartmentSelfAdminSession());
-const canAdminister = computed(() => canAdministerDepartment(session.value));
 
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
 const teamId = computed(() =>
   typeof route.params.teamId === "string" ? route.params.teamId : "",
 );
 const isCreate = computed(() => route.name === "events.departments.teams.create");
 
-const existing = computed(() =>
-  isCreate.value ? null : getDepartmentTeam(session.value, teamId.value),
+/**
+ * The team as the node holds it, with the node's answer about this caller
+ * (M16.15).
+ *
+ * A create has nothing to read, so the form opens empty and the command decides
+ * whether this caller may add a team to this department. On an edit the read
+ * answers first, and its refusal — not this client's own guess at a role — is
+ * what the page shows instead of the form.
+ */
+const detail = ref<DepartmentTeamDetail | null>(null);
+const loadError = ref<string | null>(null);
+const existing = computed(() => detail.value?.team ?? null);
+const canAdminister = computed(
+  () => isCreate.value || (detail.value?.access.canAdminister ?? false),
 );
 
 const draft = reactive({
@@ -39,6 +50,32 @@ const draft = reactive({
 const codeTouched = ref(false);
 const formError = ref<string | null>(null);
 const busy = ref(false);
+
+async function loadTeam(): Promise<void> {
+  loadError.value = null;
+
+  if (isCreate.value || departmentId.value === "" || teamId.value === "") {
+    detail.value = null;
+
+    return;
+  }
+
+  try {
+    detail.value = await getDepartmentTeam(departmentId.value, teamId.value);
+  } catch (error) {
+    detail.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this team. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch([departmentId, teamId, isCreate], () => {
+  void loadTeam();
+});
+
+void loadTeam();
 
 watch(
   existing,
@@ -104,38 +141,29 @@ async function onLogoChanged(url: string | null): Promise<void> {
 
 const teamsIndexRoute = computed(() => ({
   name: "events.departments.teams.index",
-  params: {
-    eventId: session.value?.eventId,
-    departmentId: session.value?.departmentId,
-  },
+  params: { eventId: route.params.eventId, departmentId: departmentId.value },
 }));
 
 async function onSubmit(): Promise<void> {
-  if (!canAdminister.value) {
-    return;
-  }
-
   formError.value = null;
   busy.value = true;
 
   try {
     if (isCreate.value) {
-      const created = createDepartmentTeam(session.value, { ...draft });
+      const created = await createDepartmentTeam(departmentId.value, {
+        ...draft,
+      });
       await router.push({
         name: "events.departments.teams.edit",
-        params: {
-          eventId: session.value?.eventId,
-          departmentId: session.value?.departmentId,
-          teamId: created.id,
-        },
+        params: { ...route.params, teamId: created.id },
       });
       return;
     }
 
-    updateDepartmentTeam(session.value, teamId.value, { ...draft });
+    await updateDepartmentTeam(teamId.value, { ...draft });
+    await loadTeam();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to save team.";
+    formError.value = meridianErrorMessage(error, "Unable to save team.");
   } finally {
     busy.value = false;
   }
@@ -146,10 +174,10 @@ async function onArchive(): Promise<void> {
   busy.value = true;
 
   try {
-    archiveDepartmentTeam(session.value, teamId.value);
+    await archiveDepartmentTeam(teamId.value);
+    await loadTeam();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to archive team.";
+    formError.value = meridianErrorMessage(error, "Unable to archive team.");
   } finally {
     busy.value = false;
   }
@@ -160,10 +188,10 @@ async function onRestore(): Promise<void> {
   busy.value = true;
 
   try {
-    restoreDepartmentTeam(session.value, teamId.value);
+    await restoreDepartmentTeam(teamId.value);
+    await loadTeam();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to restore team.";
+    formError.value = meridianErrorMessage(error, "Unable to restore team.");
   } finally {
     busy.value = false;
   }
@@ -176,13 +204,13 @@ async function onRestore(): Promise<void> {
     <h1 id="dept-team-edit-heading" class="dept-team-edit__heading">
       {{ heading }}
     </h1>
-    <p v-if="session" class="dept-team-edit__lede">
-      {{ session.departmentLabel }} / {{ session.roleLabel }}
-    </p>
-
-    <p v-if="!canAdminister" class="dept-team-edit__restricted" role="status">
-      Department team administration requires department lead or department
-      administration authority for this department.
+    <!--
+      Both refusals this page can meet — no authority over the department, and
+      no such team in it — are already sentences the node writes, so they are
+      shown as written rather than restated here (CLIENT-006).
+    -->
+    <p v-if="loadError" class="dept-team-edit__restricted" role="alert">
+      {{ loadError }}
     </p>
 
     <p
@@ -190,10 +218,19 @@ async function onRestore(): Promise<void> {
       class="dept-team-edit__restricted"
       role="status"
     >
-      Team not found for this department.
+      Loading team…
     </p>
 
-    <template v-else-if="canAdminister">
+    <p
+      v-else-if="!canAdminister"
+      class="dept-team-edit__restricted"
+      role="status"
+    >
+      You lead this team but do not administer this department, so its details
+      are not editable here.
+    </p>
+
+    <template v-else>
       <p v-if="formError" class="dept-team-edit__error" role="alert">
         {{ formError }}
       </p>

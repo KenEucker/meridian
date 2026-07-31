@@ -19,8 +19,7 @@ import {
 import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
-  resetDepartmentSelfAdminFixtures,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -55,7 +54,6 @@ beforeEach(() => {
 
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDepartmentSelfAdminFixtures();
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
   clearClientSession();

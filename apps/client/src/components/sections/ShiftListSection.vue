@@ -10,7 +10,7 @@ import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
   canAdministerDepartment,
   resolveDepartmentSelfAdminSession,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import {
   cancelShift,
   canViewMemberShifts,
