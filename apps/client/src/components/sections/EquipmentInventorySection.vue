@@ -3,58 +3,85 @@ import ControlBar from "@/components/ControlBar.vue";
 import { computed, reactive, ref } from "vue";
 
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
-import { resolveDepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   archiveEquipmentItem,
-  canManageEquipmentInventory,
   createEquipmentItem,
-  equipmentStateLabel,
-  importEquipmentInventoryCsv,
-  listDepartmentEquipment,
-  listEquipmentEventOptions,
-  MAINTAINABLE_EQUIPMENT_STATES,
+  importEquipmentInventory,
   restoreEquipmentItem,
   updateEquipmentItem,
   type EquipmentImportResult,
+  type EquipmentInventory,
   type EquipmentItemDraft,
-  type EquipmentStatusFilter,
-  type MaintainableEquipmentState,
   type ProductEquipmentItem,
 } from "@/equipment/equipmentInventoryModel";
 
 /**
- * Equipment inventory setup featureset (M11.18; EQUIP-001 through EQUIP-005,
- * EQUIP-007; UI contract 12.4 `department.equipment`).
+ * Equipment inventory setup featureset (M11.18; bound to the node in M16.17;
+ * EQUIP-001 through EQUIP-005, EQUIP-007; UI contract 12.4
+ * `department.equipment`).
  *
  * Builds the department inventory that the Logistics Window checks out and
  * checks back in. It never performs checkout itself: items that are currently
- * out are shown as read-only state with a pointer back to Logistics.
+ * out are shown as read-only state, naming who holds them, with a pointer back
+ * to Logistics.
+ *
+ * The page above reads the department's equipment for its own heading and hands
+ * the response down, so one read is behind everything shown here. Every write
+ * goes to its command and then asks the page to re-read, rather than patching a
+ * row in place: what the node stored is what the table shows next.
  */
 const props = withDefaults(
   defineProps<{
     variant?: "page" | "section";
+    inventory: EquipmentInventory | null;
   }>(),
   {
     variant: "page",
   },
 );
 
-const session = computed(() => resolveDepartmentSelfAdminSession());
-const canManage = computed(() => canManageEquipmentInventory(session.value));
+const emit = defineEmits<{ reload: [] }>();
+
+/*
+ * Authority is the node's answer, carried on the response, rather than a
+ * capability the client interpreted for itself. The commands behind these forms
+ * enforce that same answer, so a form offered past it could only be refused
+ * (CLIENT-006).
+ */
+const canManage = computed(() => props.inventory?.access.canManage ?? false);
+const eventOptions = computed(() => props.inventory?.events ?? []);
+const maintainableStates = computed(
+  () => props.inventory?.maintainableStates ?? [],
+);
+
+type EquipmentStatusFilter = "all" | "active" | "archived";
 
 const statusFilter = ref<EquipmentStatusFilter>("active");
-const refreshKey = ref(0);
 
-const items = computed(() => {
-  void refreshKey.value;
+/**
+ * The filter is a view of the one response, not a second request.
+ *
+ * `archived_at` is on every item the node sent, so what the filter hides is the
+ * same record the node just described and the two cannot disagree.
+ */
+const items = computed<readonly ProductEquipmentItem[]>(() =>
+  (props.inventory?.equipment ?? []).filter((item) => {
+    if (statusFilter.value === "active") {
+      return item.archivedAt === null;
+    }
 
-  return listDepartmentEquipment(session.value, statusFilter.value);
-});
+    if (statusFilter.value === "archived") {
+      return item.archivedAt !== null;
+    }
 
-const eventOptions = computed(() => listEquipmentEventOptions(session.value));
+    return true;
+  }),
+);
 
 const actionError = ref<string | null>(null);
 const actionNotice = ref<string | null>(null);
+const busy = ref(false);
 
 const editingId = ref<string | null>(null);
 const draft = reactive<EquipmentItemDraft>(emptyDraft());
@@ -66,8 +93,6 @@ const importResult = ref<EquipmentImportResult | null>(null);
 const description =
   "Create the department equipment the Logistics Window checks out and checks in.";
 
-defineExpose({ canManage, items, description });
-
 function emptyDraft(): EquipmentItemDraft {
   return {
     name: "",
@@ -78,31 +103,56 @@ function emptyDraft(): EquipmentItemDraft {
   };
 }
 
+/*
+ * The item being edited is looked up in the whole response rather than in the
+ * filtered rows, so the form survives a filter change while it is open.
+ */
 const editingItem = computed(() =>
   editingId.value === null
     ? null
-    : (items.value.find((item) => item.id === editingId.value) ?? null),
+    : ((props.inventory?.equipment ?? []).find(
+        (item) => item.id === editingId.value,
+      ) ?? null),
 );
 
 /** An item that is out edits its details only; Logistics owns its state. */
-const stateLocked = computed(() => editingItem.value?.hasOpenCheckout === true);
+const stateLocked = computed(() => editingItem.value?.openCheckout != null);
 
 function resetDraft(): void {
   editingId.value = null;
   Object.assign(draft, emptyDraft());
 }
 
-function run(action: () => void, notice: string): void {
+/**
+ * Send one command, then ask the page to re-read.
+ *
+ * A refusal is shown as the node worded it — a duplicate asset tag, a state
+ * change on an item that is out — and nothing on the page moves. The fallback
+ * is only for a request that never reached a node at all; inventory setup is
+ * not offline-writable work (data/API 7.2), so it is reported rather than
+ * queued.
+ */
+async function run(
+  action: () => Promise<void>,
+  notice: string,
+  fallback: string,
+): Promise<boolean> {
   actionError.value = null;
   actionNotice.value = null;
+  busy.value = true;
 
   try {
-    action();
+    await action();
+    emit("reload");
     actionNotice.value = notice;
-    refreshKey.value++;
+
+    return true;
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to update equipment.";
+    actionError.value = meridianErrorMessage(error, fallback);
+
+    return false;
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -115,74 +165,101 @@ function onEdit(item: ProductEquipmentItem): void {
     assetTag: item.assetTag ?? "",
     serialNumber: item.serialNumber ?? "",
     eventId: item.eventId,
-    // Checked out and Returned are Logistics states and cannot be chosen here.
-    // A checked-out item leaves its state alone so details stay editable.
-    status: item.hasOpenCheckout ? null : maintainableStatus(item),
+    // Checked out and Returned are Logistics states and are never among the
+    // states the node offers here. A checked-out item sends no state at all,
+    // which is what keeps its details editable while it is out.
+    status: item.openCheckout != null ? null : maintainableStatus(item),
   });
 }
 
-function maintainableStatus(
-  item: ProductEquipmentItem,
-): MaintainableEquipmentState {
+/** The state to preselect: the item's own, when setup may still set it. */
+function maintainableStatus(item: ProductEquipmentItem): string | null {
   return (
-    MAINTAINABLE_EQUIPMENT_STATES.find((state) => state === item.status) ??
-    "available"
+    maintainableStates.value.find((state) => state.value === item.status)
+      ?.value ??
+    maintainableStates.value[0]?.value ??
+    null
   );
 }
 
-function onSubmit(): void {
-  const editing = editingId.value;
+async function onSubmit(): Promise<void> {
+  const inventory = props.inventory;
 
-  if (editing === null) {
-    const name = draft.name.trim();
-    run(
-      () => createEquipmentItem(session.value, { ...draft }),
-      `${name} added to the inventory as Available.`,
-    );
-  } else {
-    const name = draft.name.trim();
-    run(
-      () => updateEquipmentItem(session.value, editing, { ...draft }),
-      `${name} updated.`,
-    );
+  if (inventory === null) {
+    return;
   }
 
-  if (actionError.value === null) {
+  const editing = editingId.value;
+  const name = draft.name.trim();
+
+  const saved =
+    editing === null
+      ? await run(
+          () => createEquipmentItem(inventory.departmentId, { ...draft }),
+          `${name} added to the inventory as Available.`,
+          "Unable to add equipment. Check the connection to this node and try again.",
+        )
+      : await run(
+          () => updateEquipmentItem(editing, { ...draft }),
+          `${name} updated.`,
+          "Unable to save equipment. Check the connection to this node and try again.",
+        );
+
+  if (saved) {
     resetDraft();
   }
 }
 
-function onArchive(item: ProductEquipmentItem): void {
-  run(
-    () => archiveEquipmentItem(session.value, item.id),
+async function onArchive(item: ProductEquipmentItem): Promise<void> {
+  await run(
+    () => archiveEquipmentItem(item.id),
     `${item.name} archived. Its checkout history is preserved.`,
+    "Unable to archive equipment. Check the connection to this node and try again.",
   );
 }
 
-function onRestore(item: ProductEquipmentItem): void {
-  run(
-    () => restoreEquipmentItem(session.value, item.id),
+async function onRestore(item: ProductEquipmentItem): Promise<void> {
+  await run(
+    () => restoreEquipmentItem(item.id),
     `${item.name} restored to the active inventory.`,
+    "Unable to restore equipment. Check the connection to this node and try again.",
   );
 }
 
-function onImport(): void {
+/**
+ * Hand the spreadsheet to the node and report what it made of each row.
+ *
+ * The per-row results are kept even though the table re-reads, because they say
+ * why a row was skipped and the inventory itself cannot.
+ */
+async function onImport(): Promise<void> {
+  const inventory = props.inventory;
+
+  if (inventory === null) {
+    return;
+  }
+
   actionError.value = null;
   actionNotice.value = null;
   importResult.value = null;
+  busy.value = true;
 
   try {
-    const result = importEquipmentInventoryCsv(
-      session.value,
-      importCsv.value,
+    const result = await importEquipmentInventory(
+      inventory.departmentId,
       importEventId.value,
+      importCsv.value,
     );
+    emit("reload");
     importResult.value = result;
     actionNotice.value = `Imported ${result.imported} item(s); skipped ${result.skipped}.`;
-    refreshKey.value++;
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to import inventory.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to import inventory. Check the connection to this node and try again.",
+    );
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -196,6 +273,26 @@ function eventLabel(item: ProductEquipmentItem): string {
     "Event"
   );
 }
+
+/**
+ * Who is holding an item that is out.
+ *
+ * The refusals on that row — no state change, no archive — are answered by
+ * naming the person to ask, which a locked row on its own cannot do.
+ */
+function checkoutHolder(item: ProductEquipmentItem): string {
+  const checkout = item.openCheckout;
+
+  if (checkout === null) {
+    return "";
+  }
+
+  const holder = checkout.staffName ?? "a staff member";
+
+  return checkout.shiftTitle === null
+    ? `Out with ${holder}. Return it in Logistics to change this.`
+    : `Out with ${holder} for ${checkout.shiftTitle}. Return it in Logistics to change this.`;
+}
 </script>
 
 <template>
@@ -205,7 +302,11 @@ function eventLabel(item: ProductEquipmentItem): string {
     heading-id="equipment-section-heading"
     :description="description"
   >
-    <p v-if="!canManage" class="equipment__restricted" role="status">
+    <p v-if="props.inventory === null" class="equipment__restricted" role="status">
+      Loading this department's equipment from the node.
+    </p>
+
+    <p v-else-if="!canManage" class="equipment__restricted" role="status">
       Equipment inventory is available to department logistics and department
       administration for this department.
     </p>
@@ -260,14 +361,14 @@ function eventLabel(item: ProductEquipmentItem): string {
             :disabled="stateLocked"
           >
             <option v-if="stateLocked" :value="null">
-              {{ equipmentStateLabel(editingItem!.status) }}
+              {{ editingItem!.statusLabel }}
             </option>
             <option
-              v-for="state in MAINTAINABLE_EQUIPMENT_STATES"
-              :key="state"
-              :value="state"
+              v-for="state in maintainableStates"
+              :key="state.value"
+              :value="state.value"
             >
-              {{ equipmentStateLabel(state) }}
+              {{ state.label }}
             </option>
           </select>
         </label>
@@ -282,7 +383,7 @@ function eventLabel(item: ProductEquipmentItem): string {
         </p>
 
         <div class="equipment__form-actions">
-          <button type="submit">
+          <button type="submit" :disabled="busy">
             {{ editingId === null ? "Add equipment" : "Save equipment" }}
           </button>
           <button v-if="editingId !== null" type="button" @click="resetDraft">
@@ -330,9 +431,9 @@ function eventLabel(item: ProductEquipmentItem): string {
               <td>{{ item.serialNumber ?? "—" }}</td>
               <td>{{ eventLabel(item) }}</td>
               <td>
-                {{ equipmentStateLabel(item.status) }}
-                <p v-if="item.hasOpenCheckout" class="equipment__muted">
-                  Return it in Logistics to change this.
+                {{ item.statusLabel }}
+                <p v-if="item.openCheckout" class="equipment__muted">
+                  {{ checkoutHolder(item) }}
                 </p>
               </td>
               <td class="equipment__actions">
@@ -344,8 +445,9 @@ function eventLabel(item: ProductEquipmentItem): string {
                   Edit
                 </button>
                 <button
-                  v-if="item.archivedAt === null && !item.hasOpenCheckout"
+                  v-if="item.archivedAt === null && !item.openCheckout"
                   type="button"
+                  :disabled="busy"
                   @click="onArchive(item)"
                 >
                   Archive
@@ -353,6 +455,7 @@ function eventLabel(item: ProductEquipmentItem): string {
                 <button
                   v-if="item.archivedAt !== null"
                   type="button"
+                  :disabled="busy"
                   @click="onRestore(item)"
                 >
                   Restore
@@ -401,7 +504,7 @@ function eventLabel(item: ProductEquipmentItem): string {
         </label>
 
         <div class="equipment__form-actions">
-          <button type="submit">Import inventory</button>
+          <button type="submit" :disabled="busy">Import inventory</button>
         </div>
 
         <table v-if="importResult" class="equipment__table">

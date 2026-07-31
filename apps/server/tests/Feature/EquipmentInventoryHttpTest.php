@@ -9,6 +9,7 @@ use App\Models\EquipmentItem;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\PermissionRole;
+use App\Models\Shift;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
@@ -19,8 +20,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Product-path equipment inventory setup and CSV import (M11.18; EQUIP-001
- * through EQUIP-005, EQUIP-007; UI contract 12.4 `department.equipment`).
+ * Product-path equipment inventory setup and CSV import (M11.18; bound to the
+ * client in M16.17; EQUIP-001 through EQUIP-005, EQUIP-007; UI contract 12.4
+ * `department.equipment`).
  */
 class EquipmentInventoryHttpTest extends TestCase
 {
@@ -65,8 +67,18 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'equipment')
             ->assertJsonPath('equipment.0.name', 'Radio 12')
-            ->assertJsonPath('equipment.0.has_open_checkout', false)
-            ->assertJsonPath('access.can_manage', true);
+            ->assertJsonPath('equipment.0.open_checkout', null)
+            ->assertJsonPath('access.can_manage', true)
+            // The client renders its state column and its state field from
+            // these, so UI contract 9.6's labels have one source (M16.17).
+            ->assertJsonPath('equipment.0.status_label', 'Available')
+            ->assertJsonPath('maintainable_statuses', [
+                EquipmentItem::STATUS_AVAILABLE,
+                EquipmentItem::STATUS_MISSING,
+                EquipmentItem::STATUS_DAMAGED,
+            ])
+            ->assertJsonPath('department.name', $department->name)
+            ->assertJsonPath('events.0.id', (string) $event->id);
     }
 
     public function test_department_lead_maintains_inventory_and_archive_preserves_the_record(): void
@@ -146,10 +158,18 @@ class EquipmentInventoryHttpTest extends TestCase
             'status' => EquipmentItem::STATUS_CHECKED_OUT,
         ]);
 
+        $holder = Staff::factory()->create(['preferred_name' => 'Vera']);
+        $shift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'title' => 'Dirt patrol (Friday night)',
+        ]);
+
         EquipmentCheckout::factory()->create([
             'equipment_item_id' => $item->id,
             'event_id' => $event->id,
-            'staff_id' => Staff::factory()->create()->id,
+            'staff_id' => $holder->id,
+            'shift_id' => $shift->id,
             'checked_out_by_user_id' => $logistics->id,
             'returned_at' => null,
         ]);
@@ -186,10 +206,48 @@ class EquipmentInventoryHttpTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', EquipmentItem::STATUS_CHECKED_OUT);
 
+        // The read carries the checkout itself, not a flag. The refusals above
+        // are answered on screen by naming who to ask for the item back
+        // (M16.17); a bare boolean leaves a maintainer with a locked row and
+        // nowhere to go.
         $this->actingAsClient($logistics)
             ->getJson("/api/departments/{$department->id}/equipment")
             ->assertOk()
-            ->assertJsonPath('equipment.0.has_open_checkout', true);
+            ->assertJsonPath('equipment.0.status_label', 'Checked out')
+            ->assertJsonPath('equipment.0.open_checkout.staff_id', (string) $holder->id)
+            ->assertJsonPath('equipment.0.open_checkout.staff_name', 'Vera')
+            ->assertJsonPath('equipment.0.open_checkout.shift_id', (string) $shift->id)
+            ->assertJsonPath('equipment.0.open_checkout.shift_title', 'Dirt patrol (Friday night)')
+            ->assertJsonPath('equipment.0.open_checkout.checked_out_at', fn ($value) => $value !== null);
+    }
+
+    public function test_a_returned_item_carries_no_open_checkout(): void
+    {
+        [$department, $logistics] = $this->departmentWithRole('department_logistics');
+        $event = Event::factory()->for($department->organization)->create();
+
+        $item = EquipmentItem::factory()->create([
+            'organization_id' => $department->organization_id,
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'name' => 'Radio 21',
+            'status' => EquipmentItem::STATUS_RETURNED,
+        ]);
+
+        EquipmentCheckout::factory()->returned()->create([
+            'equipment_item_id' => $item->id,
+            'event_id' => $event->id,
+            'staff_id' => Staff::factory()->create()->id,
+            'checked_out_by_user_id' => $logistics->id,
+        ]);
+
+        // A closed checkout is history. Leaving it on the item would lock a row
+        // the maintainer is free to edit and archive.
+        $this->actingAsClient($logistics)
+            ->getJson("/api/departments/{$department->id}/equipment")
+            ->assertOk()
+            ->assertJsonPath('equipment.0.open_checkout', null)
+            ->assertJsonPath('equipment.0.status_label', 'Returned');
     }
 
     public function test_asset_tags_stay_unique_within_the_department(): void
