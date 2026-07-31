@@ -1,67 +1,119 @@
-import { shallowRef } from "vue";
+// The department equipment inventory surface's data layer (M16.17;
+// CLIENT-023, EQUIP-001 through EQUIP-005, EQUIP-007; data/API 10.13).
+//
+// Until this task this module was the inventory. Six items were compiled into
+// the client, a `shallowRef` held them, and the rules the server enforces in
+// `EquipmentInventoryService` were written out a second time in the browser:
+// asset-tag uniqueness, "new equipment starts Available", the refusal to change
+// state or archive while an item is out, and a CSV parser. Authority was read
+// off a fixture department's capability flags. None of it reached a node, so an
+// item it accepted was not inventory and a duplicate tag it refused was not the
+// node's refusal — and the second copy of each rule could only drift from the
+// first.
+//
+// This module is now a translation of the endpoints in data/API 10.13. Four
+// choices in it are deliberate:
+//
+//  1. **One read per surface.** `GET /api/departments/{id}/equipment` answers
+//     with the department, the caller's authority over it, the events the
+//     inventory may be scoped to, the states setup may set, and every item with
+//     its state label and its open checkout. The page renders off that one
+//     response.
+//  2. **Authority comes from the response.** `access.can_manage` is the node's
+//     own answer and it is the same answer the commands enforce. The old
+//     `canManageEquipmentInventory` predicate over fixture capability flags is
+//     gone; all it could do was disagree with the server (CLIENT-006).
+//  3. **No cache and no client-side rules.** Nothing is held between calls and
+//     every write is followed by a re-read. Asset-tag uniqueness, the
+//     maintainable state set, the checked-out lock, and CSV parsing are the
+//     server's to decide, and its refusals are shown as it worded them.
+//  4. **States are strings the node labels.** The client no longer carries the
+//     five-state union or a label table for it. `status_label` on each item and
+//     the maintainable state list on the response say what to render, so
+//     UI contract 9.6's canonical labels have one source (EQUIP-005).
+//
+// This is a connected-only surface. Inventory setup is not in the closed set of
+// offline-writable work (data/API 7.2), so a request made with no node
+// reachable fails and says so rather than queueing.
 
-import {
-  FIXTURE_DPW_DEPARTMENT_ID,
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  fixtureDepartmentById,
-  selectedFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
-import type { DepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
-import { canAdministerDepartment } from "@/department-teams/fixtureDepartmentSession";
-import type { EquipmentState } from "@/department-ops/types";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import { meridianJson } from "@/api/meridianApi";
 
 /**
- * Product equipment inventory setup model (M11.18; EQUIP-001 through
- * EQUIP-005, EQUIP-007).
+ * The checkout holding an item, when Logistics has one open.
  *
- * Mirrors the server rules in `EquipmentInventoryService` so the shared client
- * behaves the same before the product surfaces move off development fixtures:
- * - inventory is department-scoped. Department-to-department allotments are
- *   excluded from MVP by EQUIP-006 and are not modeled;
- * - new equipment always starts Available; Logistics owns checkout state;
- * - Checked out and Returned can never be set from inventory setup, and no
- *   state change or archive is allowed while an item is checked out;
- * - asset tags are unique within the department, which is what makes a
- *   re-imported CSV skip rows instead of duplicating equipment;
- * - equipment is archived, never deleted.
+ * Setup cannot change the state of an item that is out, or archive it, and the
+ * person who can hand it back is the one holding it — so the row names them
+ * rather than reporting only that it is locked. `shiftId` tells a
+ * shift-assigned checkout from an event-assigned one (EQUIP-009).
  */
+export interface EquipmentOpenCheckout {
+  readonly id: string;
+  readonly staffId: string;
+  readonly staffName: string | null;
+  readonly checkedOutAt: string | null;
+  readonly shiftId: string | null;
+  readonly shiftTitle: string | null;
+}
+
 export interface ProductEquipmentItem {
   readonly id: string;
-  readonly departmentId: string;
+  readonly departmentId: string | null;
   readonly eventId: string | null;
   readonly name: string;
   readonly assetTag: string | null;
   readonly serialNumber: string | null;
-  readonly status: EquipmentState;
-  /** True while Logistics holds an open checkout for this item. */
-  readonly hasOpenCheckout: boolean;
+  readonly status: string;
+  /** The canonical label for `status`, as the node names it (UI contract 9.6). */
+  readonly statusLabel: string;
+  readonly openCheckout: EquipmentOpenCheckout | null;
   readonly archivedAt: string | null;
-  readonly updatedAt: string;
+  readonly updatedAt: string | null;
 }
 
+/** One state inventory setup may set, with the label to show for it. */
+export interface EquipmentStateOption {
+  readonly value: string;
+  readonly label: string;
+}
+
+/** An event in this department's organization the inventory may be scoped to. */
+export interface EquipmentEventOption {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * The whole `department.equipment` surface in one response.
+ *
+ * `maintainableStates` is the Available/Missing/Damaged subset of EQUIP-005;
+ * Checked out and Returned are produced by the Logistics commands and are
+ * therefore never offered here. That subset is the node's answer, not a list
+ * the client keeps.
+ */
+export interface EquipmentInventory {
+  readonly departmentId: string;
+  readonly departmentName: string;
+  readonly access: { readonly canManage: boolean };
+  readonly events: readonly EquipmentEventOption[];
+  readonly maintainableStates: readonly EquipmentStateOption[];
+  readonly equipment: readonly ProductEquipmentItem[];
+}
+
+/** The equipment form, as edited. */
 export interface EquipmentItemDraft {
   name: string;
   assetTag: string;
   serialNumber: string;
   eventId: string | null;
   /** `null` leaves the current state alone, matching the optional server field. */
-  status: MaintainableEquipmentState | null;
+  status: string | null;
 }
-
-export type MaintainableEquipmentState = Extract<
-  EquipmentState,
-  "available" | "missing" | "damaged"
->;
-
-export type EquipmentStatusFilter = "all" | "active" | "archived";
 
 export interface EquipmentImportRowResult {
   readonly line: number;
   readonly name: string;
   readonly assetTag: string | null;
-  readonly status: "imported" | "skipped";
+  readonly status: string;
   readonly reason: string | null;
 }
 
@@ -71,464 +123,225 @@ export interface EquipmentImportResult {
   readonly rows: readonly EquipmentImportRowResult[];
 }
 
-/** States a maintainer may set from inventory setup (EQUIP-005 subset). */
-export const MAINTAINABLE_EQUIPMENT_STATES: readonly MaintainableEquipmentState[] =
-  ["available", "missing", "damaged"];
+interface OpenCheckoutPayload {
+  readonly id: string;
+  readonly staff_id: string;
+  readonly staff_name: string | null;
+  readonly checked_out_at: string | null;
+  readonly shift_id: string | null;
+  readonly shift_title: string | null;
+}
 
-const EQUIPMENT_STATE_LABELS: Record<EquipmentState, string> = {
-  available: "Available",
-  checked_out: "Checked out",
-  returned: "Returned",
-  missing: "Missing",
-  damaged: "Damaged",
-};
+interface EquipmentItemPayload {
+  readonly id: string;
+  readonly department_id: string | null;
+  readonly event_id: string | null;
+  readonly name: string;
+  readonly asset_tag: string | null;
+  readonly serial_number: string | null;
+  readonly status: string;
+  readonly status_label?: string;
+  readonly open_checkout?: OpenCheckoutPayload | null;
+  readonly archived_at: string | null;
+  readonly updated_at?: string | null;
+}
 
-const FIXTURE_TIMESTAMP = "2026-07-01T12:00:00.000Z";
+interface EquipmentIndexPayload {
+  readonly department?: { readonly id: string; readonly name: string };
+  readonly access?: { readonly can_manage?: boolean };
+  readonly events?: { readonly id: string; readonly name: string }[];
+  readonly maintainable_statuses?: string[];
+  readonly status_labels?: Record<string, string>;
+  readonly equipment?: EquipmentItemPayload[];
+}
 
-const INITIAL_EQUIPMENT: ProductEquipmentItem[] = [
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000001",
-    departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    eventId: LOCAL_FIELD_FIXTURE.eventId,
-    name: "Radio 12",
-    assetTag: "RAD-012",
-    serialNumber: "SN-0012",
-    status: "checked_out",
-    hasOpenCheckout: true,
-    archivedAt: null,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000002",
-    departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    eventId: LOCAL_FIELD_FIXTURE.eventId,
-    name: "Radio 13",
-    assetTag: "RAD-013",
-    serialNumber: "SN-0013",
-    status: "available",
-    hasOpenCheckout: false,
-    archivedAt: null,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000003",
-    departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    eventId: LOCAL_FIELD_FIXTURE.eventId,
-    name: "Radio 14",
-    assetTag: "RAD-014",
-    serialNumber: null,
-    status: "damaged",
-    hasOpenCheckout: false,
-    archivedAt: null,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000004",
-    departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    eventId: null,
-    name: "Retired Vest",
-    assetTag: "VEST-001",
-    serialNumber: null,
-    status: "available",
-    hasOpenCheckout: false,
-    archivedAt: FIXTURE_TIMESTAMP,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000005",
-    departmentId: FIXTURE_DPW_DEPARTMENT_ID,
-    eventId: LOCAL_FIELD_FIXTURE.eventId,
-    name: "Bike Repair Stand",
-    assetTag: "DPW-001",
-    serialNumber: null,
-    status: "available",
-    hasOpenCheckout: false,
-    archivedAt: null,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-  {
-    id: "eeeeeee1-0000-4000-8000-000000000006",
-    departmentId: FIXTURE_GATE_DEPARTMENT_ID,
-    eventId: LOCAL_FIELD_FIXTURE.eventId,
-    name: "Gate Scanner",
-    assetTag: "GATE-001",
-    serialNumber: null,
-    status: "available",
-    hasOpenCheckout: false,
-    archivedAt: null,
-    updatedAt: FIXTURE_TIMESTAMP,
-  },
-];
+interface EquipmentImportPayload {
+  readonly imported?: number;
+  readonly skipped?: number;
+  readonly rows?: {
+    readonly line: number;
+    readonly name: string;
+    readonly asset_tag: string | null;
+    readonly status: string;
+    readonly reason: string | null;
+  }[];
+}
 
-const equipment = shallowRef<ProductEquipmentItem[]>(
-  INITIAL_EQUIPMENT.map((item) => ({ ...item })),
-);
-
-export function equipmentStateLabel(status: EquipmentState): string {
-  return EQUIPMENT_STATE_LABELS[status];
+function toItem(
+  payload: EquipmentItemPayload,
+  statusLabels: Record<string, string>,
+): ProductEquipmentItem {
+  return {
+    id: payload.id,
+    departmentId: payload.department_id,
+    eventId: payload.event_id,
+    name: payload.name,
+    assetTag: payload.asset_tag,
+    serialNumber: payload.serial_number,
+    status: payload.status,
+    statusLabel:
+      payload.status_label ?? statusLabels[payload.status] ?? payload.status,
+    openCheckout: payload.open_checkout
+      ? {
+          id: payload.open_checkout.id,
+          staffId: payload.open_checkout.staff_id,
+          staffName: payload.open_checkout.staff_name,
+          checkedOutAt: payload.open_checkout.checked_out_at,
+          shiftId: payload.open_checkout.shift_id,
+          shiftTitle: payload.open_checkout.shift_title,
+        }
+      : null,
+    archivedAt: payload.archived_at,
+    updatedAt: payload.updated_at ?? null,
+  };
 }
 
 /**
- * Inventory setup is "department logistics/administration as permitted"
- * (UI contract 12.4 `department.equipment`): the department logistics
- * capability, or department administer authority.
+ * The submitted form, trimmed.
+ *
+ * The server trims too, so this changes nothing it stores. It changes what a
+ * whitespace-only entry does: sent as typed it passes `required` and comes back
+ * as a domain refusal, which reads oddly next to a field that visibly has
+ * something in it.
  */
-export function canManageEquipmentInventory(
-  session: DepartmentSelfAdminSession | null,
-): boolean {
-  if (session === null) {
-    return false;
-  }
-
-  if (canAdministerDepartment(session)) {
-    return true;
-  }
-
-  const department = fixtureDepartmentById(session.departmentId);
-
-  return department?.capabilities.hasLogistics === true;
-}
-
-export function listDepartmentEquipment(
-  session: DepartmentSelfAdminSession | null,
-  status: EquipmentStatusFilter = "all",
-): ProductEquipmentItem[] {
-  if (session === null || !canManageEquipmentInventory(session)) {
-    return [];
-  }
-
-  return equipment.value
-    .filter((item) => item.departmentId === session.departmentId)
-    .filter((item) => {
-      if (status === "active") {
-        return item.archivedAt === null;
-      }
-
-      if (status === "archived") {
-        return item.archivedAt !== null;
-      }
-
-      return true;
-    })
-    .slice()
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-export function getEquipmentItem(
-  session: DepartmentSelfAdminSession | null,
-  equipmentItemId: string,
-): ProductEquipmentItem | null {
-  if (session === null || !canManageEquipmentInventory(session)) {
-    return null;
-  }
-
-  return (
-    equipment.value.find(
-      (item) =>
-        item.id === equipmentItemId &&
-        item.departmentId === session.departmentId,
-    ) ?? null
-  );
-}
-
-/** Events the department may scope equipment to. */
-export function listEquipmentEventOptions(
-  session: DepartmentSelfAdminSession | null,
-): { id: string; name: string }[] {
-  if (session === null) {
-    return [];
-  }
-
-  const department =
-    fixtureDepartmentById(session.departmentId) ??
-    selectedFixtureDepartment.value;
-
-  return [{ id: department.eventId, name: department.eventLabel }];
-}
-
-export function createEquipmentItem(
-  session: DepartmentSelfAdminSession | null,
-  draft: EquipmentItemDraft,
-): ProductEquipmentItem {
-  const current = requireManager(session);
-  const normalized = normalizeDraft(current, draft, null);
-
-  const item: ProductEquipmentItem = {
-    id: crypto.randomUUID(),
-    departmentId: current.departmentId,
-    eventId: normalized.eventId,
-    name: normalized.name,
-    assetTag: normalized.assetTag,
-    serialNumber: normalized.serialNumber,
-    // New inventory always starts Available (EQUIP-005).
-    status: "available",
-    hasOpenCheckout: false,
-    archivedAt: null,
-    updatedAt: new Date().toISOString(),
+function toAttributes(draft: EquipmentItemDraft): Record<string, unknown> {
+  return {
+    name: draft.name.trim(),
+    asset_tag: emptyToNull(draft.assetTag),
+    serial_number: emptyToNull(draft.serialNumber),
+    event_id: draft.eventId,
   };
-
-  equipment.value = [...equipment.value, item];
-
-  return item;
 }
 
-export function updateEquipmentItem(
-  session: DepartmentSelfAdminSession | null,
-  equipmentItemId: string,
-  draft: EquipmentItemDraft,
-): ProductEquipmentItem {
-  const current = requireManager(session);
-  const existing = requireItem(current, equipmentItemId);
+function emptyToNull(value: string): string | null {
+  const trimmed = value.trim();
 
-  if (existing.archivedAt !== null) {
-    throw new Error("Restore this equipment before editing it.");
-  }
+  return trimmed === "" ? null : trimmed;
+}
 
-  const normalized = normalizeDraft(current, draft, existing.id);
-  const status = draft.status ?? existing.status;
-
-  // Checkout state belongs to the Logistics workflow. A name-only edit is
-  // still allowed while an item is out, exactly as the server allows.
-  if (status !== existing.status && existing.hasOpenCheckout) {
-    throw new Error(
-      "This equipment is checked out. Return it from the Logistics Window to change its state.",
-    );
-  }
-
-  const updated: ProductEquipmentItem = {
-    ...existing,
-    name: normalized.name,
-    assetTag: normalized.assetTag,
-    serialNumber: normalized.serialNumber,
-    eventId: normalized.eventId,
-    status,
-    updatedAt: new Date().toISOString(),
-  };
-
-  equipment.value = equipment.value.map((item) =>
-    item.id === equipmentItemId ? updated : item,
+/**
+ * Read the whole equipment surface for one department.
+ *
+ * Archived equipment arrives with the rest and is marked, so the page's Active
+ * filter is a view of this one response rather than a second request. What the
+ * filter hides is the same record the node just described.
+ */
+export async function getDepartmentEquipment(
+  departmentId: string,
+): Promise<EquipmentInventory> {
+  const result = await meridianJson<EquipmentIndexPayload>(
+    `/api/departments/${departmentId}/equipment`,
   );
 
-  return updated;
+  const statusLabels = result.status_labels ?? {};
+
+  return {
+    departmentId: result.department?.id ?? departmentId,
+    departmentName: result.department?.name ?? "",
+    access: { canManage: result.access?.can_manage ?? false },
+    events: result.events ?? [],
+    maintainableStates: (result.maintainable_statuses ?? []).map((status) => ({
+      value: status,
+      label: statusLabels[status] ?? status,
+    })),
+    equipment: (result.equipment ?? []).map((item) =>
+      toItem(item, statusLabels),
+    ),
+  };
 }
 
-export function archiveEquipmentItem(
-  session: DepartmentSelfAdminSession | null,
-  equipmentItemId: string,
-): ProductEquipmentItem {
-  const current = requireManager(session);
-  const existing = requireItem(current, equipmentItemId);
-
-  if (existing.archivedAt !== null) {
-    throw new Error("This equipment is already archived.");
-  }
-
-  if (existing.hasOpenCheckout) {
-    throw new Error(
-      "This equipment is checked out. Return it from the Logistics Window before archiving it.",
-    );
-  }
-
-  return replace(equipmentItemId, {
-    ...existing,
-    archivedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  });
-}
-
-export function restoreEquipmentItem(
-  session: DepartmentSelfAdminSession | null,
-  equipmentItemId: string,
-): ProductEquipmentItem {
-  const current = requireManager(session);
-  const existing = requireItem(current, equipmentItemId);
-
-  if (existing.archivedAt === null) {
-    throw new Error("This equipment is not archived.");
-  }
-
-  return replace(equipmentItemId, {
-    ...existing,
-    archivedAt: null,
-    updatedAt: new Date().toISOString(),
+/**
+ * Add one item to the department's inventory.
+ *
+ * No state is sent. New equipment is always created Available (EQUIP-005), and
+ * that is the server's rule rather than a default this form fills in.
+ */
+export async function createEquipmentItem(
+  departmentId: string,
+  draft: EquipmentItemDraft,
+): Promise<void> {
+  await meridianJson("/api/commands/create-equipment-item", {
+    method: "POST",
+    body: JSON.stringify({
+      department_id: departmentId,
+      ...toAttributes(draft),
+    }),
   });
 }
 
 /**
- * Bulk inventory import entry point (EQUIP-001). Expects a `name` header
- * column with optional `asset_tag` and `serial_number` columns; other columns
- * are ignored and each row is processed independently. Event scope comes from
- * the form, not the file.
+ * Save an item's details, and its state when the form offered one.
+ *
+ * `status` is left out for an item Logistics holds, which is what lets a
+ * name-only edit through while the checkout is open; sending the state back
+ * would be refused.
  */
-export function importEquipmentInventoryCsv(
-  session: DepartmentSelfAdminSession | null,
-  csvText: string,
+export async function updateEquipmentItem(
+  equipmentItemId: string,
+  draft: EquipmentItemDraft,
+): Promise<void> {
+  await meridianJson("/api/commands/update-equipment-item", {
+    method: "POST",
+    body: JSON.stringify({
+      equipment_item_id: equipmentItemId,
+      ...toAttributes(draft),
+      ...(draft.status === null ? {} : { status: draft.status }),
+    }),
+  });
+}
+
+export async function archiveEquipmentItem(
+  equipmentItemId: string,
+): Promise<void> {
+  await meridianJson("/api/commands/archive-equipment-item", {
+    method: "POST",
+    body: JSON.stringify({ equipment_item_id: equipmentItemId }),
+  });
+}
+
+export async function restoreEquipmentItem(
+  equipmentItemId: string,
+): Promise<void> {
+  await meridianJson("/api/commands/restore-equipment-item", {
+    method: "POST",
+    body: JSON.stringify({ equipment_item_id: equipmentItemId }),
+  });
+}
+
+/**
+ * Hand an inventory spreadsheet to the node (EQUIP-001).
+ *
+ * The CSV is sent as typed. Which column is the name, which row named nothing,
+ * and which asset tag was already taken are the server's findings, and its
+ * per-row results are what the screen reports. Event scope comes from the form
+ * rather than from the file.
+ */
+export async function importEquipmentInventory(
+  departmentId: string,
   eventId: string | null,
-): EquipmentImportResult {
-  const current = requireManager(session);
-
-  const lines = csvText.split(/\r\n|\r|\n/).map((line) => line.trim());
-
-  if (lines.length === 0 || lines[0] === "") {
-    throw new Error("The CSV is empty.");
-  }
-
-  const header = lines[0]!
-    .split(",")
-    .map((column) => column.trim().toLowerCase());
-  const nameIndex = header.indexOf("name");
-
-  if (nameIndex === -1) {
-    throw new Error('The CSV must include a "name" header column.');
-  }
-
-  const assetTagIndex = header.indexOf("asset_tag");
-  const serialNumberIndex = header.indexOf("serial_number");
-  const rows: EquipmentImportRowResult[] = [];
-  let imported = 0;
-
-  for (let index = 1; index < lines.length; index++) {
-    const line = lines[index]!;
-    if (line === "") {
-      continue;
-    }
-
-    const lineNumber = index + 1;
-    const columns = line.split(",").map((column) => column.trim());
-    const name = columns[nameIndex] ?? "";
-    const assetTag =
-      assetTagIndex === -1 ? "" : (columns[assetTagIndex] ?? "");
-
-    if (name === "") {
-      rows.push({
-        line: lineNumber,
-        name,
-        assetTag: assetTag === "" ? null : assetTag,
-        status: "skipped",
-        reason: "Missing name.",
-      });
-      continue;
-    }
-
-    try {
-      createEquipmentItem(current, {
-        name,
-        assetTag,
-        serialNumber:
-          serialNumberIndex === -1 ? "" : (columns[serialNumberIndex] ?? ""),
-        eventId,
-        status: null,
-      });
-    } catch (error) {
-      rows.push({
-        line: lineNumber,
-        name,
-        assetTag: assetTag === "" ? null : assetTag,
-        status: "skipped",
-        reason:
-          error instanceof Error ? error.message : "Unable to import this row.",
-      });
-      continue;
-    }
-
-    imported++;
-    rows.push({
-      line: lineNumber,
-      name,
-      assetTag: assetTag === "" ? null : assetTag,
-      status: "imported",
-      reason: null,
-    });
-  }
-
-  return { imported, skipped: rows.length - imported, rows };
-}
-
-export function resetEquipmentInventoryFixtures(): void {
-  equipment.value = INITIAL_EQUIPMENT.map((item) => ({ ...item }));
-}
-
-function replace(
-  equipmentItemId: string,
-  next: ProductEquipmentItem,
-): ProductEquipmentItem {
-  equipment.value = equipment.value.map((item) =>
-    item.id === equipmentItemId ? next : item,
-  );
-
-  return next;
-}
-
-function requireManager(
-  session: DepartmentSelfAdminSession | null,
-): DepartmentSelfAdminSession {
-  if (session === null || !canManageEquipmentInventory(session)) {
-    throw new Error(
-      "You do not have permission to manage equipment inventory for this department.",
-    );
-  }
-
-  return session;
-}
-
-function requireItem(
-  session: DepartmentSelfAdminSession,
-  equipmentItemId: string,
-): ProductEquipmentItem {
-  const item = getEquipmentItem(session, equipmentItemId);
-
-  if (item === null) {
-    throw new Error("Equipment not found.");
-  }
-
-  return item;
-}
-
-function normalizeDraft(
-  session: DepartmentSelfAdminSession,
-  draft: EquipmentItemDraft,
-  ignoreItemId: string | null,
-): {
-  name: string;
-  assetTag: string | null;
-  serialNumber: string | null;
-  eventId: string | null;
-} {
-  const name = draft.name.trim();
-
-  if (name === "") {
-    throw new Error("Equipment name is required.");
-  }
-
-  const assetTag = draft.assetTag.trim();
-  const serialNumber = draft.serialNumber.trim();
-
-  if (assetTag !== "") {
-    const taken = equipment.value.some(
-      (item) =>
-        item.departmentId === session.departmentId &&
-        item.assetTag === assetTag &&
-        item.id !== ignoreItemId,
-    );
-
-    if (taken) {
-      throw new Error(
-        `Asset tag "${assetTag}" already exists in this department.`,
-      );
-    }
-  }
-
-  const eventOptions = listEquipmentEventOptions(session).map(
-    (option) => option.id,
+  csv: string,
+): Promise<EquipmentImportResult> {
+  const result = await meridianJson<EquipmentImportPayload>(
+    "/api/commands/import-equipment-inventory",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        department_id: departmentId,
+        event_id: eventId,
+        csv,
+      }),
+    },
   );
 
   return {
-    name,
-    assetTag: assetTag === "" ? null : assetTag,
-    serialNumber: serialNumber === "" ? null : serialNumber,
-    eventId:
-      draft.eventId !== null && eventOptions.includes(draft.eventId)
-        ? draft.eventId
-        : null,
+    imported: result.imported ?? 0,
+    skipped: result.skipped ?? 0,
+    rows: (result.rows ?? []).map((row) => ({
+      line: row.line,
+      name: row.name,
+      assetTag: row.asset_tag,
+      status: row.status,
+      reason: row.reason,
+    })),
   };
 }

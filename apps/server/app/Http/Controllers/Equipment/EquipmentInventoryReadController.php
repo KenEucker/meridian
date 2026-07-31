@@ -7,15 +7,23 @@ use App\Models\Department;
 use App\Models\EquipmentCheckout;
 use App\Models\EquipmentItem;
 use App\Models\Event;
+use App\Models\Staff;
 use App\Services\Equipment\EquipmentInventoryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Department equipment inventory reads (M11.18; UI contract 12.4
- * `department.equipment`). The list shows the inventory a maintainer is about
- * to hand to Logistics, including which items are currently checked out so
- * setup and operations do not fight over the same record.
+ * `department.equipment`; bound to the client in M16.17).
+ *
+ * The list shows the inventory a maintainer is about to hand to Logistics,
+ * including which items are currently checked out so setup and operations do
+ * not fight over the same record.
+ *
+ * An item that is out carries the checkout itself rather than a flag. The
+ * refusals a maintainer meets on that item — no state change, no archive —
+ * are answered by "Radio 12 has been out with Vera since Friday", which names
+ * who to ask; a bare boolean leaves them with a locked row and nowhere to go.
  */
 final class EquipmentInventoryReadController extends Controller
 {
@@ -52,7 +60,7 @@ final class EquipmentInventoryReadController extends Controller
         }
 
         $items = $query->get();
-        $openCheckoutItemIds = $this->openCheckoutItemIds($items->pluck('id')->all());
+        $openCheckouts = $this->openCheckouts($items->pluck('id')->all());
 
         return response()->json([
             'department' => [
@@ -75,7 +83,7 @@ final class EquipmentInventoryReadController extends Controller
             'equipment' => $items
                 ->map(fn (EquipmentItem $item): array => $this->payload(
                     $item,
-                    in_array((string) $item->id, $openCheckoutItemIds, true),
+                    $openCheckouts[(string) $item->id] ?? null,
                 ))
                 ->values()
                 ->all(),
@@ -83,28 +91,33 @@ final class EquipmentInventoryReadController extends Controller
     }
 
     /**
+     * The open checkout for each of these items, keyed by item.
+     *
+     * An item has at most one, because `EquipmentCheckoutService` refuses a
+     * second while the first is open.
+     *
      * @param  list<mixed>  $itemIds
-     * @return list<string>
+     * @return array<string, EquipmentCheckout>
      */
-    private function openCheckoutItemIds(array $itemIds): array
+    private function openCheckouts(array $itemIds): array
     {
         if ($itemIds === []) {
             return [];
         }
 
         return EquipmentCheckout::query()
+            ->with(['staff', 'shift'])
             ->whereIn('equipment_item_id', $itemIds)
             ->whereNull('returned_at')
-            ->pluck('equipment_item_id')
-            ->map(fn ($id): string => (string) $id)
-            ->values()
+            ->get()
+            ->keyBy(fn (EquipmentCheckout $checkout): string => (string) $checkout->equipment_item_id)
             ->all();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function payload(EquipmentItem $item, bool $hasOpenCheckout): array
+    private function payload(EquipmentItem $item, ?EquipmentCheckout $openCheckout): array
     {
         return [
             'id' => (string) $item->id,
@@ -116,11 +129,34 @@ final class EquipmentInventoryReadController extends Controller
             'serial_number' => $item->serial_number,
             'status' => $item->status,
             'status_label' => EquipmentItem::statusLabel($item->status),
-            'has_open_checkout' => $hasOpenCheckout,
+            'open_checkout' => $openCheckout === null
+                ? null
+                : [
+                    'id' => (string) $openCheckout->id,
+                    'staff_id' => (string) $openCheckout->staff_id,
+                    'staff_name' => $this->staffDisplayName($openCheckout->staff),
+                    'checked_out_at' => $openCheckout->checked_out_at?->toIso8601String(),
+                    // Shift-assigned and event-assigned checkouts are told
+                    // apart by the shift, not by how long they have been open
+                    // (EQUIP-009).
+                    'shift_id' => $openCheckout->shift_id !== null ? (string) $openCheckout->shift_id : null,
+                    'shift_title' => $openCheckout->shift?->title,
+                ],
             'archived_at' => $item->archived_at?->toIso8601String(),
             'created_at' => $item->created_at?->toIso8601String(),
             'updated_at' => $item->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function staffDisplayName(?Staff $staff): ?string
+    {
+        if ($staff === null) {
+            return null;
+        }
+
+        return $staff->preferred_name !== null && $staff->preferred_name !== ''
+            ? $staff->preferred_name
+            : $staff->legal_name;
     }
 
     /**
