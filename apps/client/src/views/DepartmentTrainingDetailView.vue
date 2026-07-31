@@ -1,136 +1,165 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { selectedSessionDepartment } from "@/session/sessionAccess";
 import {
-  activeSignupsFor,
-  canAccessTrainings,
-  canManageTrainings,
   cancelTrainingSignup,
   deliveryLabel,
   expirationLabel,
   getTraining,
-  hasCurrentCompletion,
-  prerequisiteNames,
-  resolveTrainingSession,
   scheduleLabel,
   signUpForTraining,
-  takesSignups,
-  unlockedShiftsFor,
-  viewerStatus,
+  type ProductTrainingDetail,
 } from "@/trainings/trainingAdminModel";
 
 const route = useRoute();
-const session = computed(() =>
-  resolveTrainingSession(
-    typeof route.params.departmentId === "string"
-      ? route.params.departmentId
-      : null,
-  ),
-);
-const refreshKey = ref(0);
-const training = computed(() => {
-  void refreshKey.value;
-  return typeof route.params.trainingId === "string"
-    ? getTraining(session.value, route.params.trainingId)
-    : null;
-});
-const canAccess = computed(() => canAccessTrainings(session.value));
-const canManage = computed(() => canManageTrainings(session.value));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
+const trainingId = computed(() => String(route.params.trainingId ?? ""));
+
+/**
+ * The one read this page renders from (M16.16).
+ *
+ * Every fact on it — the schedule, the prerequisite list with what the reader
+ * has already completed, the shifts completion unlocks, and where the reader
+ * stands — arrives on this response, and it is read again after each signup
+ * change rather than adjusted in place.
+ */
+const training = ref<ProductTrainingDetail | null>(null);
+const loadError = ref<string | null>(null);
 const actionError = ref<string | null>(null);
 const actionNotice = ref<string | null>(null);
+const busy = ref(false);
 
-const routeParams = computed(() => ({
-  eventId: session.value.eventId,
-  departmentId: session.value.department.departmentId,
-}));
-
-const status = computed(() => {
-  void refreshKey.value;
-  return training.value === null
-    ? { signedUp: false, completed: false }
-    : viewerStatus(session.value, training.value);
-});
-
-const signupSummary = computed(() => {
-  if (training.value === null || !takesSignups(training.value)) {
-    return null;
-  }
-
-  const count = activeSignupsFor(training.value).length;
-  return training.value.capacity === null
-    ? `${count} signed up`
-    : `${count} of ${training.value.capacity} spots taken`;
-});
-
-const teamLabel = computed(() => {
-  if (training.value === null || training.value.teamId === null) {
-    return null;
-  }
-
-  return (
-    session.value.department.teams.find(
-      (team) => team.teamId === training.value?.teamId,
-    )?.teamLabel ?? null
-  );
-});
-
-const prerequisiteStates = computed(() => {
-  void refreshKey.value;
-  if (training.value === null) {
-    return [];
-  }
-
-  return training.value.prerequisiteIds.map((prerequisiteId, index) => ({
-    id: prerequisiteId,
-    name: prerequisiteNames(training.value!)[index] ?? "Unknown training",
-    complete: hasCurrentCompletion(prerequisiteId, session.value.viewerStaffId),
-  }));
-});
-
-const unlockedShifts = computed(() =>
-  training.value === null ? [] : unlockedShiftsFor(training.value),
+/*
+ * Authority is the node's answer, carried on the response, rather than a role
+ * the client interpreted for itself (CLIENT-006).
+ */
+const canManage = computed(() => training.value?.viewer.canManage ?? false);
+const isSignedUp = computed(() => training.value?.viewer.isSignedUp ?? false);
+const hasCompletion = computed(
+  () => (training.value?.viewer.completion ?? null) !== null,
 );
 
-function run(action: () => void, notice: string): void {
-  actionError.value = null;
-  actionNotice.value = null;
+const departmentLabel = computed(
+  () => selectedSessionDepartment.value?.departmentLabel ?? "Department",
+);
+
+const routeParams = computed(() => ({
+  eventId: String(route.params.eventId ?? ""),
+  departmentId: departmentId.value,
+}));
+
+const takesSignups = computed(
+  () => training.value?.requiresScheduledAttendance ?? false,
+);
+
+const signupSummary = computed(() => {
+  if (training.value === null || !takesSignups.value) {
+    return null;
+  }
+
+  return training.value.capacity === null
+    ? `${training.value.activeSignupCount} signed up`
+    : `${training.value.activeSignupCount} of ${training.value.capacity} spots taken`;
+});
+
+const prerequisites = computed(() => training.value?.prerequisites ?? []);
+const unlockedShifts = computed(() => training.value?.unlockedShifts ?? []);
+
+async function loadTraining(): Promise<void> {
+  if (departmentId.value === "" || trainingId.value === "") {
+    training.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
 
   try {
-    action();
-    actionNotice.value = notice;
-    refreshKey.value++;
+    training.value = await getTraining(departmentId.value, trainingId.value);
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to update signup.";
+    training.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this training. Check the connection to this node and try again.",
+    );
   }
 }
 
-function onSignUp(): void {
-  if (training.value === null) {
-    return;
-  }
+watch([departmentId, trainingId], () => {
+  actionError.value = null;
+  actionNotice.value = null;
+  void loadTraining();
+});
 
-  const name = training.value.name;
-  run(() => signUpForTraining(session.value, training.value!.id), `Signed up for ${name}.`);
+void loadTraining();
+
+/**
+ * Run one signup command and then take the page's state from the node again.
+ *
+ * Capacity, prerequisite completion, and whether the training takes signups at
+ * all are the node's to decide, so a refusal is shown as it worded it and
+ * nothing on the page moves.
+ */
+async function run(
+  action: () => Promise<void>,
+  notice: string,
+  fallback: string,
+): Promise<void> {
+  actionError.value = null;
+  actionNotice.value = null;
+  busy.value = true;
+
+  try {
+    await action();
+    actionNotice.value = notice;
+    await loadTraining();
+  } catch (error) {
+    actionError.value = meridianErrorMessage(error, fallback);
+  } finally {
+    busy.value = false;
+  }
 }
 
-function onCancelSignup(): void {
-  if (training.value === null) {
+async function onSignUp(): Promise<void> {
+  const current = training.value;
+
+  if (current === null) {
     return;
   }
 
-  const name = training.value.name;
-  run(
-    () => cancelTrainingSignup(session.value, training.value!.id),
-    `Signup cancelled for ${name}.`,
+  await run(
+    () => signUpForTraining(current.id),
+    `Signed up for ${current.name}.`,
+    "Unable to sign up for this training.",
   );
 }
 
-function formatTimestamp(value: string): string {
+async function onCancelSignup(): Promise<void> {
+  const current = training.value;
+
+  if (current === null) {
+    return;
+  }
+
+  await run(
+    () => cancelTrainingSignup(current.id),
+    `Signup cancelled for ${current.name}.`,
+    "Unable to cancel this signup.",
+  );
+}
+
+function formatTimestamp(value: string | null): string {
+  if (value === null) {
+    return "Not scheduled";
+  }
+
   const date = new Date(value);
+
   return Number.isNaN(date.getTime())
     ? value
     : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -141,7 +170,7 @@ function formatTimestamp(value: string): string {
   <DeptOpsShell
     heading-id="training-detail-heading"
     :title="training?.name ?? 'Training'"
-    :eyebrow="session.department.departmentLabel"
+    :eyebrow="departmentLabel"
     :lede="training?.description ?? 'Training information page.'"
   >
     <template #nav>
@@ -164,29 +193,42 @@ function formatTimestamp(value: string): string {
         Edit training
       </WorkflowActionButton>
       <WorkflowActionButton
-        v-if="training !== null && takesSignups(training) && !status.signedUp && training.archivedAt === null"
+        v-if="
+          training !== null &&
+          takesSignups &&
+          !isSignedUp &&
+          training.archivedAt === null
+        "
+        :disabled="busy"
         @click="onSignUp"
       >
         Sign up
       </WorkflowActionButton>
       <WorkflowActionButton
-        v-if="training !== null && status.signedUp"
+        v-if="training !== null && isSignedUp"
         variant="secondary"
+        :disabled="busy"
         @click="onCancelSignup"
       >
         Cancel signup
       </WorkflowActionButton>
     </template>
 
-    <p v-if="!canAccess" class="training-detail__restricted" role="status">
-      Trainings are available only to department members, trainers, and leads.
+    <!--
+      A refusal is the node's own sentence. A training in another department, one
+      that does not exist, and one this caller may not see are all answered by
+      the endpoint, and saying what it answered keeps one account of who may read
+      this page (CLIENT-006).
+    -->
+    <p v-if="loadError" class="training-detail__error" role="alert">
+      {{ loadError }}
     </p>
     <p
       v-else-if="training === null"
       class="training-detail__restricted"
       role="status"
     >
-      Training not found.
+      Loading training…
     </p>
 
     <template v-else>
@@ -197,10 +239,10 @@ function formatTimestamp(value: string): string {
         {{ actionNotice }}
       </p>
 
-      <p v-if="status.completed" class="training-detail__notice" role="status">
+      <p v-if="hasCompletion" class="training-detail__notice" role="status">
         You have a current completion for this training.
       </p>
-      <p v-else-if="status.signedUp" class="training-detail__notice" role="status">
+      <p v-else-if="isSignedUp" class="training-detail__notice" role="status">
         You are signed up for this training.
       </p>
 
@@ -234,19 +276,19 @@ function formatTimestamp(value: string): string {
             <dt>Expiration</dt>
             <dd>{{ expirationLabel(training) }}</dd>
           </div>
-          <div v-if="teamLabel">
+          <div v-if="training.teamName">
             <dt>Team</dt>
-            <dd>For members of {{ teamLabel }}</dd>
+            <dd>For members of {{ training.teamName }}</dd>
           </div>
           <div v-if="signupSummary">
             <dt>Signups</dt>
             <dd>{{ signupSummary }}</dd>
           </div>
         </dl>
-        <p v-if="takesSignups(training)" class="training-detail__muted">
+        <p v-if="takesSignups" class="training-detail__muted">
           This session is listed as a shift signup for
-          {{ teamLabel ?? session.department.departmentLabel }} and works like
-          signing up for any other shift.
+          {{ training.teamName ?? departmentLabel }} and works like signing up
+          for any other shift.
         </p>
         <p v-else-if="training.delivery === 'online'" class="training-detail__muted">
           No signup is needed for this online training. Visit the training page
@@ -259,13 +301,17 @@ function formatTimestamp(value: string): string {
         aria-labelledby="training-before-heading"
       >
         <h2 id="training-before-heading">Before you start</h2>
-        <p v-if="prerequisiteStates.length === 0" class="training-detail__muted">
+        <p v-if="prerequisites.length === 0" class="training-detail__muted">
           This training has no prerequisites.
         </p>
         <ul v-else class="training-detail__list">
-          <li v-for="prerequisite in prerequisiteStates" :key="prerequisite.id">
+          <li v-for="prerequisite in prerequisites" :key="prerequisite.id">
             {{ prerequisite.name }} —
-            {{ prerequisite.complete ? "you have completed this" : "not completed yet" }}
+            {{
+              prerequisite.viewerCompleted
+                ? "you have completed this"
+                : "not completed yet"
+            }}
           </li>
         </ul>
       </section>
@@ -282,8 +328,8 @@ function formatTimestamp(value: string): string {
         <template v-if="unlockedShifts.length > 0">
           <h3>Shifts this training unlocks</h3>
           <ul class="training-detail__list">
-            <li v-for="shift in unlockedShifts" :key="shift.shiftTitle">
-              {{ shift.shiftTitle }} — {{ formatTimestamp(shift.startsAt) }}
+            <li v-for="shift in unlockedShifts" :key="shift.id">
+              {{ shift.title }} — {{ formatTimestamp(shift.startsAt) }}
             </li>
           </ul>
         </template>

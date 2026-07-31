@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
+import { configureMeridianApi } from "@/api/meridianApi";
 import {
   COMBINED_NAVIGATION_MAX_ITEMS,
   useCombinedNavigation,
@@ -47,9 +48,77 @@ function departmentPath(departmentId: string, suffix: string): string {
   return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${departmentId}/${suffix}`;
 }
 
+/**
+ * Answer the department trainings read as the node would (M16.16).
+ *
+ * The training surfaces are bound to their endpoints, so which shell they render
+ * is decided by the `access` block on the response rather than by a role the
+ * client held. These tests are about the shell and the grid, so they only need
+ * the node to answer with one training and a stated authority.
+ */
+function stubTrainingNode(canManage: boolean): void {
+  const body = {
+    department_id: FIXTURE_GATE_DEPARTMENT_ID,
+    organization_id: "11111111-1111-4111-8111-111111111111",
+    access: { can_manage: canManage, can_record_completions: canManage },
+    teams: [],
+    department_staff: [],
+    trainings: [
+      {
+        id: "99999999-9999-4999-8999-999999999901",
+        organization_id: "11111111-1111-4111-8111-111111111111",
+        department_id: FIXTURE_GATE_DEPARTMENT_ID,
+        team_id: null,
+        team_name: null,
+        event_id: null,
+        event_name: null,
+        name: "Gate Shift Briefing",
+        description: null,
+        expires_after_days: null,
+        delivery: "in_person",
+        online_url: null,
+        requires_scheduled_attendance: true,
+        scheduled_start_at: "2026-08-20T17:00:00+00:00",
+        scheduled_end_at: "2026-08-20T18:00:00+00:00",
+        location: "Gate Shade",
+        capacity: 12,
+        time_commitment: null,
+        after_training: null,
+        provisions: null,
+        archived_at: null,
+        active_signup_count: 0,
+        linked_shift: null,
+        unlocked_shifts: [],
+        prerequisites: [],
+        viewer: {
+          can_manage: canManage,
+          can_record_completions: canManage,
+          is_signed_up: false,
+          completion: null,
+        },
+      },
+    ],
+  };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+}
+
 // Navigation follows the session response (M16.6).
 beforeEach(() => {
   installLocalFieldSession();
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
 });
 
 afterEach(() => {
@@ -57,6 +126,8 @@ afterEach(() => {
   resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
   clearClientSession();
+  configureMeridianApi(null);
+  vi.unstubAllGlobals();
 });
 
 describe("staff page template", () => {
@@ -108,6 +179,7 @@ describe("staff page template", () => {
   it("gives a member the training card list and a manager the training table", async () => {
     selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubTrainingNode(false);
     const member = await mountAt(
       DepartmentTrainingListView,
       departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "trainings"),
@@ -120,6 +192,7 @@ describe("staff page template", () => {
     clearDepartmentSelfAdminSession();
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubTrainingNode(true);
     const manager = await mountAt(
       DepartmentTrainingListView,
       departmentPath(FIXTURE_RANGERS_DEPARTMENT_ID, "trainings"),
@@ -167,6 +240,7 @@ describe("staff page template", () => {
       "content-grid--tile",
     );
 
+    stubTrainingNode(false);
     const trainings = await mountAt(
       DepartmentTrainingListView,
       departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "trainings"),

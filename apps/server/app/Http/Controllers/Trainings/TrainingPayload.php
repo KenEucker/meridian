@@ -92,6 +92,11 @@ final class TrainingPayload
                 ->map(fn (Training $prerequisite): array => [
                     'id' => (string) $prerequisite->id,
                     'name' => $prerequisite->name,
+                    // The training page lists what to do before starting, so it
+                    // has to say which of those are already done (TRAIN-010) —
+                    // and an incomplete one is what signup is refused on
+                    // (TRAIN-004).
+                    'viewer_completed' => self::hasCurrentCompletion($prerequisite, $viewerStaffIds),
                 ])
                 ->values()
                 ->all(),
@@ -199,6 +204,25 @@ final class TrainingPayload
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Whether any of the caller's staff profiles holds an unexpired completion
+     * of this training.
+     *
+     * @param  list<string>  $staffIds
+     */
+    private static function hasCurrentCompletion(Training $training, array $staffIds): bool
+    {
+        if ($staffIds === []) {
+            return false;
+        }
+
+        return TrainingCompletion::query()
+            ->where('training_id', $training->id)
+            ->whereIn('staff_id', $staffIds)
+            ->get()
+            ->contains(fn (TrainingCompletion $completion): bool => ! $completion->isExpiredAt());
     }
 
     private static function staffDisplayName(?Staff $staff): ?string

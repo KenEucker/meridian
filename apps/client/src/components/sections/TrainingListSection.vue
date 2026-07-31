@@ -1,69 +1,90 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import StaffCardList from "@/components/StaffCardList.vue";
 import StaffListCard from "@/components/StaffListCard.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
-  activeSignupsFor,
   archiveTraining,
-  canAccessTrainings,
-  canManageTrainings,
   cancelTrainingSignup,
   deliveryLabel,
   expirationLabel,
+  getDepartmentTrainings,
   prerequisiteNames,
-  resolveTrainingSession,
   restoreTraining,
   scheduleLabel,
   signUpForTraining,
-  takesSignups,
-  viewerStatus,
-  visibleTrainings,
   type ProductTraining,
+  type TrainingWorkspace,
 } from "@/trainings/trainingAdminModel";
 
 /**
- * Training schedule, signup, and completion featureset (M11.16, M11.17).
+ * Training schedule, signup, and completion featureset (M11.16, M11.17; bound
+ * to the node in M16.16).
  *
  * Rendered as its own page at `department.trainings` and embedded as a
  * featureset in the Planning workflow hub.
+ *
+ * The page above it already reads the department's trainings for its heading
+ * cards, so it hands that response down through `workspace` and re-reads on
+ * `reload`; embedded on its own the section makes the read itself. Either way
+ * one read is behind what is shown rather than two that could disagree.
  */
 const props = withDefaults(
   defineProps<{
     variant?: "page" | "section";
     departmentId?: string | null;
+    workspace?: TrainingWorkspace | null;
   }>(),
   {
     variant: "page",
     departmentId: null,
+    workspace: undefined,
   },
 );
 
+const emit = defineEmits<{ reload: [] }>();
+
 const route = useRoute();
-const session = computed(() =>
-  resolveTrainingSession(
+const departmentId = computed(
+  () =>
     props.departmentId ??
-      (typeof route.params.departmentId === "string"
-        ? route.params.departmentId
-        : null),
-  ),
+    (typeof route.params.departmentId === "string"
+      ? route.params.departmentId
+      : ""),
 );
-const refreshKey = ref(0);
-const trainings = computed(() => {
-  void refreshKey.value;
-  return visibleTrainings(session.value);
-});
-const canAccess = computed(() => canAccessTrainings(session.value));
-const canManage = computed(() => canManageTrainings(session.value));
+
+/** Whether this section is responsible for its own read. */
+const ownsRead = computed(() => props.workspace === undefined);
+
+const ownWorkspace = ref<TrainingWorkspace | null>(null);
+const workspace = computed<TrainingWorkspace | null>(() =>
+  ownsRead.value ? ownWorkspace.value : (props.workspace ?? null),
+);
+
+const loadError = ref<string | null>(null);
 const actionError = ref<string | null>(null);
 const actionNotice = ref<string | null>(null);
+const busyId = ref<string | null>(null);
+
+/*
+ * Authority is the node's answer, carried on the response, rather than a role
+ * the client interpreted for itself. The commands behind these actions enforce
+ * that same answer, so an action offered past it could only be refused
+ * (CLIENT-006).
+ */
+const canAccess = computed(() => workspace.value !== null);
+const canManage = computed(() => workspace.value?.access.canManage ?? false);
+const trainings = computed<readonly ProductTraining[]>(
+  () => workspace.value?.trainings ?? [],
+);
 
 const routeParams = computed(() => ({
-  eventId: session.value.eventId,
-  departmentId: session.value.department.departmentId,
+  eventId: String(route.params.eventId ?? ""),
+  departmentId: departmentId.value,
 }));
 
 const createRoute = computed(() => ({
@@ -71,28 +92,56 @@ const createRoute = computed(() => ({
   params: routeParams.value,
 }));
 
+async function loadOwnWorkspace(): Promise<void> {
+  if (!ownsRead.value) {
+    return;
+  }
+
+  if (departmentId.value === "") {
+    ownWorkspace.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    ownWorkspace.value = await getDepartmentTrainings(departmentId.value);
+  } catch (error) {
+    ownWorkspace.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load trainings. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch(departmentId, () => {
+  actionError.value = null;
+  actionNotice.value = null;
+  void loadOwnWorkspace();
+});
+
+void loadOwnWorkspace();
+
 defineExpose({ canAccess, canManage, trainings });
 
 function signupSummary(training: ProductTraining): string {
-  if (!takesSignups(training)) {
+  if (!training.requiresScheduledAttendance) {
     return "Not required";
   }
 
-  const count = activeSignupsFor(training).length;
   return training.capacity === null
-    ? `${count} signed up`
-    : `${count} of ${training.capacity} signed up`;
+    ? `${training.activeSignupCount} signed up`
+    : `${training.activeSignupCount} of ${training.capacity} signed up`;
 }
 
 function statusLabel(training: ProductTraining): string {
-  void refreshKey.value;
-  const status = viewerStatus(session.value, training);
-
-  if (status.completed) {
+  if (training.viewer.completion !== null) {
     return "Completed";
   }
 
-  if (status.signedUp) {
+  if (training.viewer.isSignedUp) {
     return "Signed up";
   }
 
@@ -105,53 +154,76 @@ function statusLabel(training: ProductTraining): string {
  */
 function cardStatus(training: ProductTraining): string {
   const label = statusLabel(training);
+
   return label === "—" ? "" : label;
 }
 
-function isSignedUp(training: ProductTraining): boolean {
-  void refreshKey.value;
-  return viewerStatus(session.value, training).signedUp;
-}
-
-function run(action: () => void, notice: string): void {
+/**
+ * Run one command and then take the surface's state from the node again.
+ *
+ * Nothing is patched in place: a signup that moves a capacity count, an archive
+ * that changes which actions a row offers, and a refusal that changes nothing
+ * at all are all read back rather than guessed at.
+ */
+async function run(
+  training: ProductTraining,
+  action: () => Promise<void>,
+  notice: string,
+  fallback: string,
+): Promise<void> {
   actionError.value = null;
   actionNotice.value = null;
+  busyId.value = training.id;
 
   try {
-    action();
+    await action();
     actionNotice.value = notice;
-    refreshKey.value++;
+
+    if (ownsRead.value) {
+      await loadOwnWorkspace();
+    } else {
+      emit("reload");
+    }
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to update training.";
+    actionError.value = meridianErrorMessage(error, fallback);
+  } finally {
+    busyId.value = null;
   }
 }
 
-function onSignUp(training: ProductTraining): void {
-  run(
-    () => signUpForTraining(session.value, training.id),
+async function onSignUp(training: ProductTraining): Promise<void> {
+  await run(
+    training,
+    () => signUpForTraining(training.id),
     `Signed up for ${training.name}.`,
+    "Unable to sign up for this training.",
   );
 }
 
-function onCancelSignup(training: ProductTraining): void {
-  run(
-    () => cancelTrainingSignup(session.value, training.id),
+async function onCancelSignup(training: ProductTraining): Promise<void> {
+  await run(
+    training,
+    () => cancelTrainingSignup(training.id),
     `Signup cancelled for ${training.name}.`,
+    "Unable to cancel this signup.",
   );
 }
 
-function onArchive(training: ProductTraining): void {
-  run(
-    () => archiveTraining(session.value, training.id),
+async function onArchive(training: ProductTraining): Promise<void> {
+  await run(
+    training,
+    () => archiveTraining(training.id),
     `${training.name} archived.`,
+    "Unable to archive this training.",
   );
 }
 
-function onRestore(training: ProductTraining): void {
-  run(
-    () => restoreTraining(session.value, training.id),
+async function onRestore(training: ProductTraining): Promise<void> {
+  await run(
+    training,
+    () => restoreTraining(training.id),
     `${training.name} restored.`,
+    "Unable to restore this training.",
   );
 }
 </script>
@@ -169,8 +241,19 @@ function onRestore(training: ProductTraining): void {
       </WorkflowActionButton>
     </template>
 
-    <p v-if="!canAccess" class="trainings__restricted" role="status">
-      Trainings are available only to department members, trainers, and leads.
+    <!--
+      A refusal is the node's own sentence, not a second copy of its rules. The
+      403 this endpoint answers with when the caller may not view the
+      department's trainings already says so, and saying it here keeps one
+      account of who may see this page (CLIENT-006). An unreachable node reads
+      the same way rather than as a department with nothing in it.
+    -->
+    <p v-if="loadError" class="trainings__restricted" role="alert">
+      {{ loadError }}
+    </p>
+
+    <p v-else-if="!canAccess" class="trainings__restricted" role="status">
+      Loading trainings…
     </p>
 
     <!--
@@ -223,18 +306,20 @@ function onRestore(training: ProductTraining): void {
             </RouterLink>
             <button
               v-if="
-                takesSignups(training) &&
+                training.requiresScheduledAttendance &&
                 training.archivedAt === null &&
-                !isSignedUp(training)
+                !training.viewer.isSignedUp
               "
               type="button"
+              :disabled="busyId === training.id"
               @click="onSignUp(training)"
             >
               Sign up
             </button>
             <button
-              v-if="isSignedUp(training)"
+              v-if="training.viewer.isSignedUp"
               type="button"
+              :disabled="busyId === training.id"
               @click="onCancelSignup(training)"
             >
               Cancel signup
@@ -305,7 +390,6 @@ function onRestore(training: ProductTraining): void {
                   Details
                 </RouterLink>
                 <RouterLink
-                  v-if="canManage"
                   :to="{
                     name: 'events.departments.trainings.edit',
                     params: { ...routeParams, trainingId: training.id },
@@ -315,32 +399,36 @@ function onRestore(training: ProductTraining): void {
                 </RouterLink>
                 <button
                   v-if="
-                    takesSignups(training) &&
+                    training.requiresScheduledAttendance &&
                     training.archivedAt === null &&
-                    !isSignedUp(training)
+                    !training.viewer.isSignedUp
                   "
                   type="button"
+                  :disabled="busyId === training.id"
                   @click="onSignUp(training)"
                 >
                   Sign up
                 </button>
                 <button
-                  v-if="isSignedUp(training)"
+                  v-if="training.viewer.isSignedUp"
                   type="button"
+                  :disabled="busyId === training.id"
                   @click="onCancelSignup(training)"
                 >
                   Cancel signup
                 </button>
                 <button
-                  v-if="canManage && training.archivedAt === null"
+                  v-if="training.archivedAt === null"
                   type="button"
+                  :disabled="busyId === training.id"
                   @click="onArchive(training)"
                 >
                   Archive
                 </button>
                 <button
-                  v-if="canManage && training.archivedAt !== null"
+                  v-if="training.archivedAt !== null"
                   type="button"
+                  :disabled="busyId === training.id"
                   @click="onRestore(training)"
                 >
                   Restore
