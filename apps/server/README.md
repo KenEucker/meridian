@@ -125,19 +125,16 @@ php artisan serve
 `php artisan db:seed` (or `migrate:fresh --seed`) loads the permission catalog and
 the development scenario from development process section 13.3:
 
-- Organization: **Idaho Burners**
-- Event: **Idaho Decompression 2026**
+- Organization: **Idaho Burners** (`idaho-burners`)
+- Event: **Idaho Decompression 2026** (`idaho-decompression-2026`,
+  `America/Boise`)
 - Departments: Organizers, Rangers, Gate, DPW
-- Named teams: Command, Dirt, Operator, Logistics
-- Personas: Vera Staff, Sam Shiftlead, Dana Departmentlead, Olive Organizer,
-  Ingrid ICLead, Omar ICOperator, Ivy ICViewer, Gwen Godmode, Debbie DNS,
-  Pat Prospective, and Ira Ineligible
+- Named teams: Rangers Dirt, Rangers Command, Rangers IC Operators, Rangers IC
+  Viewers, Gate Operator, DPW Logistics — plus a `Default` team created for any
+  department a persona joins without a named team (Organizers and Gate)
 
-Each persona has a linked user and staff record at
-`{persona}@idaho-burners.test` (for example `vera.staff@idaho-burners.test`)
-with the development password `password`. Gwen Godmode is seeded without a
-`god_mode` grant because node-scoped direct user roles remain deferred to a
-later task.
+Persona sign-in accounts are listed under
+[Development sign-in accounts](#development-sign-in-accounts) below.
 
 In local development (`APP_ENV=local`), product routes served by Laravel load
 the shared Vue Vite dev server from `MERIDIAN_CLIENT_DEV_SERVER_URL`
@@ -154,6 +151,42 @@ admin UI is styled after a fresh checkout. `php artisan migrate` runs the
 default Laravel migrations plus the published Orchid migrations against
 PostgreSQL and should report each migration as `DONE`. `php artisan serve`
 exposes the server at the printed local URL.
+
+## Development sign-in accounts
+
+Every seeded persona has a linked user and staff record, and all of them share
+the password `password`. Seeding matches on email (`updateOrCreate`), so
+re-running it does not duplicate these accounts or reset a password you changed.
+
+| Email | Persona | Department / team | Roles granted |
+|---|---|---|---|
+| `vera.staff@idaho-burners.test` | Vera Staff | Rangers / Dirt | none — plain staff |
+| `sam.shiftlead@idaho-burners.test` | Sam Shiftlead | Rangers / Dirt | `shift_lead`, `department_logistics`, `department_operations`, `department_administration`, `department_planning` |
+| `dana.departmentlead@idaho-burners.test` | Dana Departmentlead | Rangers / Dirt | `department_lead` |
+| `olive.organizer@idaho-burners.test` | Olive Organizer | Organizers / Default | `organizer` |
+| `ingrid.iclead@idaho-burners.test` | Ingrid ICLead | Rangers / Command | `ic_lead` (event-scoped) |
+| `omar.icoperator@idaho-burners.test` | Omar ICOperator | Rangers / IC Operators | `ic_operator` (event-scoped) |
+| `ivy.icviewer@idaho-burners.test` | Ivy ICViewer | Rangers / IC Viewers | `ic_viewer` (event-scoped) |
+| `gwen.godmode@idaho-burners.test` | Gwen Godmode | none | none — see below |
+| `debbie.dns@idaho-burners.test` | Debbie DNS | none | none — organization status `do_not_staff` |
+| `pat.prospective@idaho-burners.test` | Pat Prospective | none | none — organization status `prospective` |
+| `ira.ineligible@idaho-burners.test` | Ira Ineligible | Gate / Default | none — department status `ineligible` |
+
+Sam carries every department capability at once, so one sign-in reaches all of
+the department administration surfaces. The last three personas exist to
+exercise refusals rather than access: Debbie is barred from staffing, Pat has
+not been accepted into the organization, and Ira's department membership is
+ineligible. Signing in as any of them and finding a surface open is a finding.
+
+Gwen Godmode is seeded without a `god_mode` grant because node-scoped direct
+user roles remain deferred to a later task. Today she signs in as an ordinary
+active staff member with no department, so she is not yet a way to reach God
+Mode; use Orchid for that.
+
+`database/seeders/Support/DevelopmentScenarioCatalog.php` is the source of truth
+for this table. `DevelopmentScenarioSeedTest` asserts the shared password along
+with the grant and status cases above, so a change to the seeder that this
+table no longer describes will fail there first.
 
 ## Orchid admin
 
