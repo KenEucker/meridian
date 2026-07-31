@@ -15,35 +15,53 @@ import {
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import DocumentLibrarySection from "@/components/sections/DocumentLibrarySection.vue";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   archiveDepartmentTeam,
   assignStaffToTeam,
-  canAccessDepartmentAdmin,
-  canAdministerDepartment,
-  canLeadDepartmentTeam,
-  getCurrentDepartment,
-  getAdministeredDepartment,
-  listAssignableStaff,
-  listAssignableTeams,
-  listDepartmentTeams,
-  listManagedTeamStaff,
-  listTeamLeadTeams,
+  getDepartmentTeamAdminWorkspace,
   removeStaffFromTeam,
   removeTeamLead,
-  resolveDepartmentSelfAdminSession,
   restoreDepartmentTeam,
   selectTeamLead,
   updateDepartmentDetails,
   type DepartmentTeam,
+  type DepartmentTeamAdminWorkspace,
   type DepartmentTeamStaffMember,
 } from "@/department-teams/teamAdminModel";
 
-const session = computed(() => resolveDepartmentSelfAdminSession());
-const canAdminister = computed(() => canAdministerDepartment(session.value));
-const canLeadTeam = computed(() => canLeadDepartmentTeam(session.value));
-const canAccessAdmin = computed(() => canAccessDepartmentAdmin(session.value));
 const route = useRoute();
 const router = useRouter();
+
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
+
+/**
+ * The one read this surface renders from (M16.15).
+ *
+ * Four panels — department details, the teams a lead leads, team staff, and the
+ * teams table — are four views of one response rather than four requests that
+ * could disagree about which teams exist. It is re-read after every write, so a
+ * row is never patched in place.
+ */
+const workspace = ref<DepartmentTeamAdminWorkspace | null>(null);
+const loadError = ref<string | null>(null);
+const detailsError = ref<string | null>(null);
+const detailsBusy = ref(false);
+const actionError = ref<string | null>(null);
+const staffError = ref<string | null>(null);
+const busyId = ref<string | null>(null);
+
+/*
+ * Authority is the node's answer, carried on the response, rather than a role
+ * the client interpreted for itself. The commands behind these panels enforce
+ * that same answer, so a panel shown past it could only be refused (CLIENT-006).
+ */
+const canAdminister = computed(
+  () => workspace.value?.access.canAdminister ?? false,
+);
+const canLeadTeam = computed(
+  () => workspace.value?.access.canViewLedTeams ?? false,
+);
 
 const statusFilter = computed(() => {
   const value = route.query.status;
@@ -54,16 +72,10 @@ const statusFilter = computed(() => {
   return "all";
 });
 
-const department = computed(() => getCurrentDepartment(session.value));
+const department = computed(() => workspace.value?.department ?? null);
 const adminLede = computed(() => {
-  const current = session.value;
-
-  if (!current) {
+  if (workspace.value === null) {
     return "";
-  }
-
-  if (!canAccessAdmin.value) {
-    return "Admin access is not available for your current department role.";
   }
 
   return canAdminister.value
@@ -71,33 +83,80 @@ const adminLede = computed(() => {
     : "Team details and staff lists scoped to teams you lead.";
 });
 const administeredDepartment = computed(() =>
-  getAdministeredDepartment(session.value),
+  canAdminister.value ? department.value : null,
+);
+const allTeams = computed<readonly DepartmentTeam[]>(
+  () => workspace.value?.teams ?? [],
 );
 const teams = computed(() =>
-  listDepartmentTeams(session.value, statusFilter.value),
+  allTeams.value.filter((team) => {
+    if (statusFilter.value === "active") {
+      return team.archivedAt === null;
+    }
+
+    if (statusFilter.value === "archived") {
+      return team.archivedAt !== null;
+    }
+
+    return true;
+  }),
 );
-const leadTeams = computed(() => listTeamLeadTeams(session.value));
-const managedStaff = computed<DepartmentTeamStaffMember[]>(() =>
-  listManagedTeamStaff(session.value),
+const leadTeams = computed(() => {
+  const ledTeamIds = new Set(workspace.value?.access.ledTeamIds ?? []);
+
+  return allTeams.value.filter((team) => ledTeamIds.has(team.id));
+});
+const managedStaff = computed<readonly DepartmentTeamStaffMember[]>(
+  () => workspace.value?.teamStaff ?? [],
 );
-const assignableTeams = computed(() => listAssignableTeams(session.value));
-const assignableStaff = computed(() => listAssignableStaff(session.value));
+/*
+ * An archived team takes no new assignments, so it is not offered one. What is
+ * left is already narrowed by the node to the teams this caller manages.
+ */
+const assignableTeams = computed(() =>
+  allTeams.value.filter((team) => team.archivedAt === null),
+);
+const assignableStaff = computed(() => workspace.value?.departmentStaff ?? []);
+
+async function loadWorkspace(): Promise<void> {
+  if (departmentId.value === "") {
+    workspace.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    workspace.value = await getDepartmentTeamAdminWorkspace(departmentId.value);
+  } catch (error) {
+    workspace.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load department administration. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch(departmentId, () => {
+  actionError.value = null;
+  staffError.value = null;
+  void loadWorkspace();
+});
+
+void loadWorkspace();
 
 const detailsDraft = reactive({
   name: "",
   code: "",
   description: "",
 });
-const detailsError = ref<string | null>(null);
-const detailsBusy = ref(false);
 /**
  * Department details open read-only, like the team details panel beside them.
  * Editing organization-visible identity fields is a deliberate act, not
  * something to land in mid-form by opening the Admin page.
  */
 const detailsEditing = ref(false);
-const actionError = ref<string | null>(null);
-const busyId = ref<string | null>(null);
 
 /**
  * The department's logo, editable from department details as well as from the
@@ -110,7 +169,7 @@ const busyId = ref<string | null>(null);
  * behavior and two doors to it.
  */
 const departmentBranding = computed(() =>
-  findDepartmentBranding(session.value?.departmentId ?? ""),
+  findDepartmentBranding(departmentId.value),
 );
 const departmentLogoUrl = ref<string | null>(null);
 
@@ -158,30 +217,24 @@ function onStatusChange(event: Event): void {
 
   void router.replace({
     name: "events.departments.teams.index",
-    params: {
-      eventId: session.value?.eventId,
-      departmentId: session.value?.departmentId,
-    },
+    params: route.params,
     query: next === "all" ? {} : { status: next },
   });
 }
 
 async function onSaveDetails(): Promise<void> {
-  if (!canAdminister.value) {
-    return;
-  }
-
   detailsError.value = null;
   detailsBusy.value = true;
 
   try {
-    updateDepartmentDetails(session.value, { ...detailsDraft });
+    await updateDepartmentDetails(departmentId.value, { ...detailsDraft });
+    await loadWorkspace();
     detailsEditing.value = false;
   } catch (error) {
-    detailsError.value =
-      error instanceof Error
-        ? error.message
-        : "Unable to save department details.";
+    detailsError.value = meridianErrorMessage(
+      error,
+      "Unable to save department details.",
+    );
   } finally {
     detailsBusy.value = false;
   }
@@ -212,10 +265,10 @@ async function archiveTeam(team: DepartmentTeam): Promise<void> {
   busyId.value = team.id;
 
   try {
-    archiveDepartmentTeam(session.value, team.id);
+    await archiveDepartmentTeam(team.id);
+    await loadWorkspace();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to archive team.";
+    actionError.value = meridianErrorMessage(error, "Unable to archive team.");
   } finally {
     busyId.value = null;
   }
@@ -226,55 +279,65 @@ async function restoreTeam(team: DepartmentTeam): Promise<void> {
   busyId.value = team.id;
 
   try {
-    restoreDepartmentTeam(session.value, team.id);
+    await restoreDepartmentTeam(team.id);
+    await loadWorkspace();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to restore team.";
+    actionError.value = meridianErrorMessage(error, "Unable to restore team.");
   } finally {
     busyId.value = null;
   }
 }
 
-const staffError = ref<string | null>(null);
 const assignDraft = reactive({
   staffId: "",
   teamId: "",
 });
 
-function runStaffAction(action: () => void, fallback: string): void {
+/**
+ * Run one team staff command and re-read.
+ *
+ * Every one of these changes who is on a team and in what role, which is what
+ * three of the four panels are showing, so all four are re-read rather than the
+ * acted-on row being adjusted in place.
+ */
+async function runStaffAction(
+  action: () => Promise<void>,
+  fallback: string,
+): Promise<void> {
   staffError.value = null;
 
   try {
-    action();
+    await action();
+    await loadWorkspace();
   } catch (error) {
-    staffError.value = error instanceof Error ? error.message : fallback;
+    staffError.value = meridianErrorMessage(error, fallback);
   }
 }
 
-function onAssignStaff(): void {
-  runStaffAction(() => {
-    assignStaffToTeam(session.value, assignDraft.teamId, assignDraft.staffId);
+async function onAssignStaff(): Promise<void> {
+  await runStaffAction(async () => {
+    await assignStaffToTeam(assignDraft.teamId, assignDraft.staffId);
     assignDraft.staffId = "";
   }, "Unable to assign staff to the team.");
 }
 
-function onRemoveStaff(member: DepartmentTeamStaffMember): void {
-  runStaffAction(
-    () => removeStaffFromTeam(session.value, member.teamId, member.staffId),
+async function onRemoveStaff(member: DepartmentTeamStaffMember): Promise<void> {
+  await runStaffAction(
+    () => removeStaffFromTeam(member.teamId, member.staffId),
     "Unable to remove staff from the team.",
   );
 }
 
-function onSelectLead(member: DepartmentTeamStaffMember): void {
-  runStaffAction(
-    () => selectTeamLead(session.value, member.teamId, member.staffId),
+async function onSelectLead(member: DepartmentTeamStaffMember): Promise<void> {
+  await runStaffAction(
+    () => selectTeamLead(member.teamId, member.staffId),
     "Unable to designate the team lead.",
   );
 }
 
-function onRemoveLead(member: DepartmentTeamStaffMember): void {
-  runStaffAction(
-    () => removeTeamLead(session.value, member.teamId, member.staffId),
+async function onRemoveLead(member: DepartmentTeamStaffMember): Promise<void> {
+  await runStaffAction(
+    () => removeTeamLead(member.teamId, member.staffId),
     "Unable to remove the team lead designation.",
   );
 }
@@ -304,21 +367,14 @@ function formatDefault(team: DepartmentTeam): string {
 function teamEditRoute(teamId: string) {
   return {
     name: "events.departments.teams.edit",
-    params: {
-      eventId: session.value?.eventId,
-      departmentId: session.value?.departmentId,
-      teamId,
-    },
+    params: { ...route.params, teamId },
   };
 }
 
 function teamCreateRoute() {
   return {
     name: "events.departments.teams.create",
-    params: {
-      eventId: session.value?.eventId,
-      departmentId: session.value?.departmentId,
-    },
+    params: route.params,
   };
 }
 </script>
@@ -328,7 +384,7 @@ function teamCreateRoute() {
     class="dept-teams"
     heading-id="dept-teams-heading"
     title="Admin"
-    :eyebrow="department?.name ?? session?.departmentLabel ?? 'Department'"
+    :eyebrow="department?.name ?? 'Department'"
     :lede="adminLede"
   >
     <template #nav>
@@ -346,9 +402,22 @@ function teamCreateRoute() {
       </div>
     </template>
 
-    <p v-if="!canAccessAdmin" class="dept-teams__restricted" role="status">
-      Admin access requires department lead or team lead authority for the
-      selected department.
+    <!--
+      A refusal is the node's own sentence, not a second copy of its rules. The
+      403 this endpoint answers with when the caller administers no part of the
+      department already says so, and saying it here keeps one account of who
+      may see this page (CLIENT-006).
+    -->
+    <p v-if="loadError" class="dept-teams__error" role="alert">
+      {{ loadError }}
+    </p>
+
+    <p
+      v-else-if="workspace === null"
+      class="dept-teams__restricted"
+      role="status"
+    >
+      Loading department administration…
     </p>
 
     <template v-else>
@@ -437,7 +506,7 @@ function teamCreateRoute() {
                 label="Department logo"
                 description="Shown in the application header beside the department name, on department badges, and on department-scoped surfaces. Saved as soon as you choose a file."
                 :slot="BRANDING_SLOTS.departmentLogo"
-                :department-id="session?.departmentId"
+                :department-id="departmentId"
                 :url="departmentLogoUrl"
                 :lettermark="
                   departmentBranding?.lettermark ??

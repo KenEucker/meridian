@@ -16,7 +16,7 @@ import {
   resolveDepartmentSelfAdminSession,
   type DepartmentSelfAdminSession,
   type DepartmentTeam,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 
 /**
  * Team Overview: the team-lead handoff Staff Me routes to (M11.20).

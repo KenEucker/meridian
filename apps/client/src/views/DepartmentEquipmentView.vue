@@ -7,7 +7,7 @@ import EquipmentInventorySection from "@/components/sections/EquipmentInventoryS
 import {
   getCurrentDepartment,
   resolveDepartmentSelfAdminSession,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { canManageEquipmentInventory } from "@/equipment/equipmentInventoryModel";
 
 /**

@@ -16,7 +16,7 @@ import {
   listTeamLeadTeams,
   type DepartmentSelfAdminSession,
   type DepartmentTeam,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 
 /**

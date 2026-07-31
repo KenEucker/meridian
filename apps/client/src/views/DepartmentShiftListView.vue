@@ -9,7 +9,7 @@ import {
   canAdministerDepartment,
   getCurrentDepartment,
   resolveDepartmentSelfAdminSession,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import {
   canViewMemberShifts,
   canViewShiftAdmin,

@@ -5,8 +5,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
-  resetDepartmentSelfAdminFixtures,
-} from "@/department-teams/teamAdminModel";
+} from "@/department-teams/fixtureDepartmentSession";
 import {
   FIXTURE_DPW_DEPARTMENT_ID,
   FIXTURE_GATE_DEPARTMENT_ID,
@@ -39,7 +38,6 @@ function shiftsCreatePath(): string {
 
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDepartmentSelfAdminFixtures();
   resetShiftAdminFixtures();
   resetSelectedFixtureDepartment();
 });

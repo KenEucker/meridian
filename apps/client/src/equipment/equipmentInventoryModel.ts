@@ -7,8 +7,8 @@ import {
   fixtureDepartmentById,
   selectedFixtureDepartment,
 } from "@/department-teams/fixtureDepartmentAccess";
-import type { DepartmentSelfAdminSession } from "@/department-teams/teamAdminModel";
-import { canAdministerDepartment } from "@/department-teams/teamAdminModel";
+import type { DepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
+import { canAdministerDepartment } from "@/department-teams/fixtureDepartmentSession";
 import type { EquipmentState } from "@/department-ops/types";
 import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 
