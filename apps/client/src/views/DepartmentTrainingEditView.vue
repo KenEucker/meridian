@@ -3,99 +3,156 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { selectedSessionDepartment } from "@/session/sessionAccess";
 import {
-  activeSignupsFor,
-  canManageTrainings,
-  canRecordCompletions,
   cancelTrainingSignup,
-  completionsFor,
-  departmentStaff,
+  getDepartmentTrainings,
   getTraining,
-  hasCurrentCompletion,
-  importTrainingCompletionsCsv,
-  prerequisiteOptions,
+  importTrainingCompletions,
   recordTrainingCompletion,
-  resolveTrainingSession,
   saveTraining,
   signUpForTraining,
-  staffDisplayName,
+  type ProductTrainingDetail,
   type TrainingDraft,
   type TrainingImportResult,
+  type TrainingStaffOption,
+  type TrainingWorkspace,
 } from "@/trainings/trainingAdminModel";
 
 const route = useRoute();
 const router = useRouter();
 
-const session = computed(() =>
-  resolveTrainingSession(
-    typeof route.params.departmentId === "string"
-      ? route.params.departmentId
-      : null,
-  ),
-);
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
 const trainingId = computed(() =>
   typeof route.params.trainingId === "string" ? route.params.trainingId : null,
 );
 const isCreate = computed(() => trainingId.value === null);
-const canManage = computed(() => canManageTrainings(session.value));
-const refreshKey = ref(0);
-const training = computed(() => {
-  void refreshKey.value;
-  return trainingId.value === null
-    ? null
-    : getTraining(session.value, trainingId.value);
-});
+
+/**
+ * The two reads this page renders from (M16.16).
+ *
+ * The department read carries the authority to be here, the teams the scope
+ * field offers, the department roster the staff fields offer, and the trainings
+ * that may be prerequisites. The training read carries the record being edited
+ * along with its roster and completion history. Both are read again after every
+ * write rather than adjusted in place, so a table never shows a row the node did
+ * not answer with.
+ */
+const workspace = ref<TrainingWorkspace | null>(null);
+const training = ref<ProductTrainingDetail | null>(null);
+const loadError = ref<string | null>(null);
+const formError = ref<string | null>(null);
+const formNotice = ref<string | null>(null);
+const busy = ref(false);
+
+/*
+ * Authority is the node's answer on the response, not a role the client read
+ * for itself (CLIENT-006). Recording completions is decided per training,
+ * because a team lead is an authorized trainer for their own team's trainings
+ * without managing the department's (TRAIN-005).
+ */
+const canManage = computed(() => workspace.value?.access.canManage ?? false);
 const canRecord = computed(
-  () =>
-    training.value !== null && canRecordCompletions(session.value, training.value),
+  () => training.value?.viewer.canRecordCompletions ?? false,
+);
+const loaded = computed(
+  () => workspace.value !== null && (isCreate.value || training.value !== null),
+);
+
+const departmentLabel = computed(
+  () => selectedSessionDepartment.value?.departmentLabel ?? "Department",
+);
+
+const teams = computed(() => workspace.value?.teams ?? []);
+const staff = computed<readonly TrainingStaffOption[]>(
+  () => workspace.value?.departmentStaff ?? [],
+);
+const roster = computed(() => training.value?.roster ?? []);
+const completions = computed(() => training.value?.completions ?? []);
+
+/*
+ * Any other unarchived training in the department may be a prerequisite. Whether
+ * a particular choice would make a cycle, or reach outside the department, is
+ * the node's rule to enforce (TRAIN-004); this list only stops the training from
+ * offering itself.
+ */
+const prereqOptions = computed(() =>
+  (workspace.value?.trainings ?? []).filter(
+    (candidate) =>
+      candidate.id !== trainingId.value && candidate.archivedAt === null,
+  ),
 );
 
 const draft = ref<TrainingDraft>(emptyDraft());
-const formError = ref<string | null>(null);
-const formNotice = ref<string | null>(null);
 
 const completionStaffId = ref("");
 const completionDate = ref("");
+const rosterAddStaffId = ref("");
 const importCsv = ref("");
 const importResult = ref<TrainingImportResult | null>(null);
 
-const staff = computed(() => departmentStaff(session.value));
-const prereqOptions = computed(() =>
-  prerequisiteOptions(session.value, trainingId.value),
+/**
+ * Whether this training collects signups.
+ *
+ * The node decides that from the delivery and schedule together, so the roster
+ * panel follows its answer rather than re-deriving it from the start time.
+ */
+const takesSignups = computed(
+  () => training.value?.requiresScheduledAttendance ?? false,
 );
-const roster = computed(() => {
-  void refreshKey.value;
-  return training.value === null ? [] : activeSignupsFor(training.value);
-});
-const completions = computed(() => {
-  void refreshKey.value;
-  return training.value === null ? [] : completionsFor(training.value);
+
+async function loadWorkspace(): Promise<void> {
+  if (departmentId.value === "") {
+    workspace.value = null;
+    return;
+  }
+
+  try {
+    workspace.value = await getDepartmentTrainings(departmentId.value);
+  } catch (error) {
+    workspace.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load trainings. Check the connection to this node and try again.",
+    );
+  }
+}
+
+async function loadTraining(): Promise<void> {
+  const id = trainingId.value;
+  if (id === null || departmentId.value === "") {
+    training.value = null;
+    return;
+  }
+
+  try {
+    training.value = await getTraining(departmentId.value, id);
+    draft.value = toDraft(training.value);
+  } catch (error) {
+    training.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this training. Check the connection to this node and try again.",
+    );
+  }
+}
+
+async function load(): Promise<void> {
+  loadError.value = null;
+  await Promise.all([loadWorkspace(), loadTraining()]);
+}
+
+watch([departmentId, trainingId], () => {
+  formError.value = null;
+  formNotice.value = null;
+  importResult.value = null;
+  draft.value = emptyDraft();
+  void load();
 });
 
-watch(
-  training,
-  (value) => {
-    if (value !== null) {
-      draft.value = {
-        name: value.name,
-        description: value.description ?? "",
-        teamId: value.teamId,
-        expiresAfterDays: value.expiresAfterDays,
-        delivery: value.delivery,
-        onlineUrl: value.onlineUrl ?? "",
-        scheduledStartAt: value.scheduledStartAt,
-        scheduledEndAt: value.scheduledEndAt,
-        location: value.location ?? "",
-        capacity: value.capacity,
-        timeCommitment: value.timeCommitment ?? "",
-        afterTraining: value.afterTraining ?? "",
-        provisions: value.provisions ?? "",
-        prerequisiteIds: [...value.prerequisiteIds],
-      };
-    }
-  },
-  { immediate: true },
-);
+void load();
 
 function emptyDraft(): TrainingDraft {
   return {
@@ -113,6 +170,25 @@ function emptyDraft(): TrainingDraft {
     afterTraining: "",
     provisions: "",
     prerequisiteIds: [],
+  };
+}
+
+function toDraft(value: ProductTrainingDetail): TrainingDraft {
+  return {
+    name: value.name,
+    description: value.description ?? "",
+    teamId: value.teamId,
+    expiresAfterDays: value.expiresAfterDays,
+    delivery: value.delivery,
+    onlineUrl: value.onlineUrl ?? "",
+    scheduledStartAt: value.scheduledStartAt,
+    scheduledEndAt: value.scheduledEndAt,
+    location: value.location ?? "",
+    capacity: value.capacity,
+    timeCommitment: value.timeCommitment ?? "",
+    afterTraining: value.afterTraining ?? "",
+    provisions: value.provisions ?? "",
+    prerequisiteIds: value.prerequisites.map((prerequisite) => prerequisite.id),
   };
 }
 
@@ -164,42 +240,68 @@ function togglePrerequisite(prerequisiteId: string, checked: boolean): void {
   draft.value.prerequisiteIds = [...current];
 }
 
-function onSubmit(): void {
+/**
+ * Run one write, then read the node again.
+ *
+ * A refusal is reported in the node's words and nothing on the page moves, so a
+ * rejected change is never shown as though it had been accepted.
+ */
+async function run(
+  action: () => Promise<void>,
+  notice: string,
+  fallback: string,
+): Promise<void> {
   formError.value = null;
   formNotice.value = null;
+  busy.value = true;
 
   try {
-    const saved = saveTraining(session.value, trainingId.value, draft.value);
-    formNotice.value = `${saved.name} saved.`;
-    refreshKey.value++;
-
-    if (isCreate.value) {
-      void router.push({
-        name: "events.departments.trainings.edit",
-        params: {
-          eventId: session.value.eventId,
-          departmentId: session.value.department.departmentId,
-          trainingId: saved.id,
-        },
-      });
-    }
+    await action();
+    formNotice.value = notice;
+    await load();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to save training.";
+    formError.value = meridianErrorMessage(error, fallback);
+  } finally {
+    busy.value = false;
   }
 }
 
-function run(action: () => void, notice: string): void {
+async function onSubmit(): Promise<void> {
   formError.value = null;
   formNotice.value = null;
+  busy.value = true;
 
   try {
-    action();
-    formNotice.value = notice;
-    refreshKey.value++;
+    const saved = await saveTraining(
+      departmentId.value,
+      trainingId.value,
+      draft.value,
+    );
+
+    if (isCreate.value) {
+      /*
+       * A created training becomes the edit route's subject, and the route watch
+       * reads it. The notice is set after the navigation so that read does not
+       * clear it on the way past.
+       */
+      await router.push({
+        name: "events.departments.trainings.edit",
+        params: {
+          eventId: eventId.value,
+          departmentId: departmentId.value,
+          trainingId: saved.id,
+        },
+      });
+      formNotice.value = `${saved.name} saved.`;
+      return;
+    }
+
+    formNotice.value = `${saved.name} saved.`;
+    await load();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to update training.";
+    formError.value = meridianErrorMessage(error, "Unable to save training.");
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -209,16 +311,13 @@ function onRecordCompletion(): void {
     return;
   }
 
+  const id = training.value.id;
   const staffId = completionStaffId.value;
-  run(
-    () =>
-      recordTrainingCompletion(
-        session.value,
-        training.value!.id,
-        staffId,
-        completionDate.value === "" ? undefined : completionDate.value,
-      ),
-    `Completion recorded for ${staffDisplayName(session.value, staffId)}.`,
+  const completedAt = completionDate.value;
+  void run(
+    () => recordTrainingCompletion(id, staffId, completedAt),
+    `Completion recorded for ${staffLabel(staffId)}.`,
+    "Unable to record this completion.",
   );
 }
 
@@ -227,9 +326,11 @@ function onRecordRosterCompletion(staffId: string): void {
     return;
   }
 
-  run(
-    () => recordTrainingCompletion(session.value, training.value!.id, staffId),
-    `Completion recorded for ${staffDisplayName(session.value, staffId)}.`,
+  const id = training.value.id;
+  void run(
+    () => recordTrainingCompletion(id, staffId),
+    `Completion recorded for ${staffLabel(staffId)}.`,
+    "Unable to record this completion.",
   );
 }
 
@@ -238,9 +339,11 @@ function onAddToRoster(staffId: string): void {
     return;
   }
 
-  run(
-    () => signUpForTraining(session.value, training.value!.id, staffId),
-    `${staffDisplayName(session.value, staffId)} added to the roster.`,
+  const id = training.value.id;
+  void run(
+    () => signUpForTraining(id, staffId),
+    `${staffLabel(staffId)} added to the roster.`,
+    "Unable to add this staff member to the roster.",
   );
 }
 
@@ -249,13 +352,15 @@ function onRemoveFromRoster(staffId: string): void {
     return;
   }
 
-  run(
-    () => cancelTrainingSignup(session.value, training.value!.id, staffId),
-    `${staffDisplayName(session.value, staffId)} removed from the roster.`,
+  const id = training.value.id;
+  void run(
+    () => cancelTrainingSignup(id, staffId),
+    `${staffLabel(staffId)} removed from the roster.`,
+    "Unable to remove this staff member from the roster.",
   );
 }
 
-function onImport(): void {
+async function onImport(): Promise<void> {
   if (training.value === null) {
     return;
   }
@@ -263,27 +368,36 @@ function onImport(): void {
   formError.value = null;
   formNotice.value = null;
   importResult.value = null;
+  busy.value = true;
 
   try {
-    importResult.value = importTrainingCompletionsCsv(
-      session.value,
+    const result = await importTrainingCompletions(
       training.value.id,
       importCsv.value,
     );
-    formNotice.value = `Imported ${importResult.value.imported} completion(s); skipped ${importResult.value.skipped}.`;
-    refreshKey.value++;
+    importResult.value = result;
+    formNotice.value = `Imported ${result.imported} completion(s); skipped ${result.skipped}.`;
+    await load();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to import completions.";
+    formError.value = meridianErrorMessage(
+      error,
+      "Unable to import completions.",
+    );
+  } finally {
+    busy.value = false;
   }
 }
 
-function isComplete(staffId: string): boolean {
-  void refreshKey.value;
-  return training.value !== null && hasCurrentCompletion(training.value.id, staffId);
+/**
+ * How a staff member is named in a notice.
+ *
+ * Roster and completion rows carry their own display name from the node; this
+ * covers the select fields, where only an id has been chosen so far.
+ */
+function staffLabel(staffId: string): string {
+  const member = staff.value.find((candidate) => candidate.staffId === staffId);
+  return member?.displayName ?? member?.email ?? "This staff member";
 }
-
-const rosterAddStaffId = ref("");
 
 function formatTimestamp(value: string | null): string {
   if (value === null) {
@@ -301,7 +415,7 @@ function formatTimestamp(value: string | null): string {
   <DeptOpsShell
     heading-id="training-edit-heading"
     :title="isCreate ? 'New training' : (training?.name ?? 'Training')"
-    :eyebrow="session.department.departmentLabel"
+    :eyebrow="departmentLabel"
     :lede="
       isCreate
         ? 'Create a department training with prerequisites and expiration.'
@@ -312,25 +426,25 @@ function formatTimestamp(value: string | null): string {
       <RouterLink
         :to="{
           name: 'events.departments.trainings.index',
-          params: {
-            eventId: session.eventId,
-            departmentId: session.department.departmentId,
-          },
+          params: { eventId, departmentId },
         }"
       >
         Back to Trainings
       </RouterLink>
     </template>
 
-    <p v-if="!canManage && isCreate" class="training-edit__restricted" role="status">
-      Only department leads and organizers may create trainings.
+    <p v-if="loadError" class="training-edit__error" role="alert">
+      {{ loadError }}
+    </p>
+    <p v-else-if="!loaded" class="training-edit__muted" role="status">
+      Loading training…
     </p>
     <p
-      v-else-if="!isCreate && training === null"
+      v-else-if="!canManage && isCreate"
       class="training-edit__restricted"
       role="status"
     >
-      Training not found.
+      Only department leads and organizers may create trainings.
     </p>
 
     <template v-else>
@@ -339,6 +453,10 @@ function formatTimestamp(value: string | null): string {
       </p>
       <p v-if="formNotice" class="training-edit__notice" role="status">
         {{ formNotice }}
+      </p>
+
+      <p v-if="!canManage" class="training-edit__restricted" role="status">
+        This training's details are not editable without department authority.
       </p>
 
       <form
@@ -361,12 +479,8 @@ function formatTimestamp(value: string | null): string {
           Team scope
           <select v-model="draft.teamId">
             <option :value="null">Whole department</option>
-            <option
-              v-for="team in session.department.teams"
-              :key="team.teamId"
-              :value="team.teamId"
-            >
-              {{ team.teamLabel }}
+            <option v-for="team in teams" :key="team.id" :value="team.id">
+              {{ team.name }}{{ team.archivedAt === null ? "" : " (archived)" }}
             </option>
           </select>
         </label>
@@ -470,7 +584,7 @@ function formatTimestamp(value: string | null): string {
           </label>
         </fieldset>
 
-        <button class="training-edit__submit" type="submit">
+        <button class="training-edit__submit" type="submit" :disabled="busy">
           {{ isCreate ? "Create training" : "Save training" }}
         </button>
       </form>
@@ -478,7 +592,7 @@ function formatTimestamp(value: string | null): string {
       <template v-if="!isCreate && training !== null && canRecord">
         <section class="training-edit__section" aria-labelledby="roster-heading">
           <h2 id="roster-heading">Roster</h2>
-          <p v-if="training.scheduledStartAt === null" class="training-edit__muted">
+          <p v-if="!takesSignups" class="training-edit__muted">
             This training has no scheduled session, so there is no signup roster.
             Record completions directly below.
           </p>
@@ -497,14 +611,22 @@ function formatTimestamp(value: string | null): string {
                   <td colspan="4">No signups yet.</td>
                 </tr>
                 <tr v-for="signup in roster" :key="signup.staffId">
-                  <td>{{ staffDisplayName(session, signup.staffId) }}</td>
+                  <td>{{ signup.displayName ?? signup.email ?? "Staff" }}</td>
                   <td>{{ formatTimestamp(signup.signedUpAt) }}</td>
-                  <td>{{ isComplete(signup.staffId) ? "Yes" : "No" }}</td>
+                  <td>{{ signup.completed ? "Yes" : "No" }}</td>
                   <td class="training-edit__actions">
-                    <button type="button" @click="onRecordRosterCompletion(signup.staffId)">
+                    <button
+                      type="button"
+                      :disabled="busy"
+                      @click="onRecordRosterCompletion(signup.staffId)"
+                    >
                       Record completion
                     </button>
-                    <button type="button" @click="onRemoveFromRoster(signup.staffId)">
+                    <button
+                      type="button"
+                      :disabled="busy"
+                      @click="onRemoveFromRoster(signup.staffId)"
+                    >
                       Remove
                     </button>
                   </td>
@@ -522,11 +644,15 @@ function formatTimestamp(value: string | null): string {
                     :key="member.staffId"
                     :value="member.staffId"
                   >
-                    {{ member.displayName }}
+                    {{ member.displayName ?? member.email }}
                   </option>
                 </select>
               </label>
-              <button type="button" @click="onAddToRoster(rosterAddStaffId)">
+              <button
+                type="button"
+                :disabled="busy"
+                @click="onAddToRoster(rosterAddStaffId)"
+              >
                 Add to roster
               </button>
             </div>
@@ -549,7 +675,7 @@ function formatTimestamp(value: string | null): string {
                   :key="member.staffId"
                   :value="member.staffId"
                 >
-                  {{ member.displayName }}
+                  {{ member.displayName ?? member.email }}
                 </option>
               </select>
             </label>
@@ -557,7 +683,7 @@ function formatTimestamp(value: string | null): string {
               Completion date (blank for today)
               <input v-model="completionDate" type="date" />
             </label>
-            <button type="button" @click="onRecordCompletion">
+            <button type="button" :disabled="busy" @click="onRecordCompletion">
               Record completion
             </button>
           </div>
@@ -576,10 +702,19 @@ function formatTimestamp(value: string | null): string {
                 <td colspan="4">No completions recorded yet.</td>
               </tr>
               <tr v-for="completion in completions" :key="completion.id">
-                <td>{{ staffDisplayName(session, completion.staffId) }}</td>
+                <td>
+                  {{ completion.displayName ?? completion.email ?? "Staff" }}
+                </td>
                 <td>{{ formatTimestamp(completion.completedAt) }}</td>
-                <td>{{ completion.expiresAt === null ? "Does not expire" : formatTimestamp(completion.expiresAt) }}</td>
-                <td>{{ completion.recordedByLabel }}</td>
+                <td>
+                  {{
+                    completion.expiresAt === null
+                      ? "Does not expire"
+                      : formatTimestamp(completion.expiresAt)
+                  }}
+                  <span v-if="completion.expired"> (expired)</span>
+                </td>
+                <td>{{ completion.recordedBy ?? "—" }}</td>
               </tr>
             </tbody>
           </table>
@@ -601,7 +736,9 @@ function formatTimestamp(value: string | null): string {
             aria-label="Completion CSV"
             placeholder="email,completed_at&#10;vera@signalcamp.dev,2026-07-01"
           ></textarea>
-          <button type="button" @click="onImport">Import completions</button>
+          <button type="button" :disabled="busy" @click="onImport">
+            Import completions
+          </button>
 
           <table v-if="importResult" class="training-edit__table">
             <caption>

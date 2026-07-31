@@ -569,6 +569,204 @@ class TrainingAdminHttpTest extends TestCase
     }
 
     /**
+     * The trainings read states the caller's authority and carries only the
+     * option lists that authority entitles them to (M16.16, CLIENT-006).
+     *
+     * The surface decides what to offer from this response rather than from a
+     * role it interpreted for itself, so the response has to answer for the page
+     * as a whole — a department with no trainings yet still has to know whether
+     * it may offer to create one.
+     */
+    public function test_training_list_states_the_readers_authority_and_option_lists(): void
+    {
+        [$department, $lead] = $this->departmentWithRole('department_lead');
+        $defaultTeam = $department->teams()->where('is_default', true)->firstOrFail();
+        $archivedTeam = Team::factory()->for($department)->archived()->create(['name' => 'Retired Patrol']);
+        $memberUser = $this->staffUserInTeam($defaultTeam);
+        $memberStaff = $memberUser->staffProfiles()->firstOrFail();
+
+        Training::factory()
+            ->for($department->organization)
+            ->create(['department_id' => $department->id, 'name' => 'Active Training']);
+
+        $managerRead = $this->actingAsClient($lead)
+            ->getJson("/api/departments/{$department->id}/trainings")
+            ->assertOk()
+            ->assertJsonPath('access.can_manage', true)
+            ->assertJsonPath('access.can_record_completions', true)
+            ->json();
+
+        $teamIds = array_column($managerRead['teams'], 'id');
+        $this->assertContains((string) $defaultTeam->id, $teamIds);
+
+        // An archived team is offered and marked, because a training already
+        // scoped to one has to keep saying so.
+        $this->assertContains((string) $archivedTeam->id, $teamIds);
+        $archivedOption = collect($managerRead['teams'])->firstWhere('id', (string) $archivedTeam->id);
+        $this->assertNotNull($archivedOption['archived_at']);
+
+        $this->assertContains(
+            (string) $memberStaff->id,
+            array_column($managerRead['department_staff'], 'staff_id'),
+        );
+
+        /*
+         * An ordinary member's read states no authority over the surface and
+         * carries neither the team scope options nor the department roster, so a
+         * member who reaches an edit URL has nothing to fill a form with.
+         */
+        $this->actingAsClient($memberUser)
+            ->getJson("/api/departments/{$department->id}/trainings")
+            ->assertOk()
+            ->assertJsonPath('access.can_manage', false)
+            ->assertJsonPath('access.can_record_completions', false)
+            ->assertJsonCount(0, 'teams')
+            ->assertJsonCount(0, 'department_staff');
+
+        /*
+         * A team lead is an authorized trainer for their own team's trainings
+         * without managing the department's (TRAIN-005). Their read states the
+         * recording authority and carries the roster that needs, but not the team
+         * scope options, which are a manager's field.
+         */
+        $teamLeadUser = $this->staffUserInTeam($defaultTeam, 'shift_lead');
+        Training::factory()
+            ->for($department->organization)
+            ->create([
+                'department_id' => $department->id,
+                'team_id' => $defaultTeam->id,
+                'name' => 'Team Radio Drill',
+            ]);
+
+        $trainerRead = $this->actingAsClient($teamLeadUser)
+            ->getJson("/api/departments/{$department->id}/trainings")
+            ->assertOk()
+            ->assertJsonPath('access.can_manage', false)
+            ->assertJsonPath('access.can_record_completions', true)
+            ->assertJsonCount(0, 'teams')
+            ->json();
+
+        $this->assertNotSame([], $trainerRead['department_staff']);
+    }
+
+    /**
+     * The prerequisite list says which prerequisites this reader has behind them
+     * (TRAIN-010).
+     *
+     * "Before you start" is only useful if it distinguishes what is left to do
+     * from what is done, and an incomplete prerequisite is exactly what signup is
+     * refused on (TRAIN-004).
+     */
+    public function test_prerequisite_list_says_which_prerequisites_the_reader_has_completed(): void
+    {
+        [$department, $lead] = $this->departmentWithRole('department_lead');
+        $defaultTeam = $department->teams()->where('is_default', true)->firstOrFail();
+        $memberUser = $this->staffUserInTeam($defaultTeam);
+        $memberStaff = $memberUser->staffProfiles()->firstOrFail();
+
+        $orientation = Training::factory()
+            ->for($department->organization)
+            ->create(['department_id' => $department->id, 'name' => 'Orientation']);
+
+        $advanced = Training::factory()
+            ->for($department->organization)
+            ->create([
+                'department_id' => $department->id,
+                'name' => 'Advanced Session',
+                'scheduled_start_at' => now()->addDays(3),
+            ]);
+
+        $this->actingAsClient($lead)
+            ->postJson('/api/commands/add-training-prerequisite', [
+                'training_id' => $advanced->id,
+                'prerequisite_training_id' => $orientation->id,
+            ])
+            ->assertOk();
+
+        $this->actingAsClient($memberUser)
+            ->getJson("/api/departments/{$department->id}/trainings/{$advanced->id}")
+            ->assertOk()
+            ->assertJsonPath('prerequisites.0.name', 'Orientation')
+            ->assertJsonPath('prerequisites.0.viewer_completed', false);
+
+        $this->actingAsClient($lead)
+            ->postJson('/api/commands/record-training-completion', [
+                'training_id' => $orientation->id,
+                'staff_id' => $memberStaff->id,
+            ])
+            ->assertCreated();
+
+        $this->actingAsClient($memberUser)
+            ->getJson("/api/departments/{$department->id}/trainings/{$advanced->id}")
+            ->assertOk()
+            ->assertJsonPath('prerequisites.0.viewer_completed', true);
+
+        // The list read answers the same way, so a card can say what a detail
+        // page would without a second request.
+        $this->actingAsClient($memberUser)
+            ->getJson("/api/departments/{$department->id}/trainings")
+            ->assertOk()
+            ->assertJsonPath('trainings.0.name', 'Advanced Session')
+            ->assertJsonPath('trainings.0.prerequisites.0.viewer_completed', true);
+
+        // The prerequisite is the reader's own history, not the training's: the
+        // lead who recorded it has not completed anything.
+        $this->actingAsClient($lead)
+            ->getJson("/api/departments/{$department->id}/trainings/{$advanced->id}")
+            ->assertOk()
+            ->assertJsonPath('prerequisites.0.viewer_completed', false);
+    }
+
+    /**
+     * A training this caller may not read is refused in the node's own words
+     * (M16.16).
+     *
+     * The surface prints what the endpoint answered rather than inventing a
+     * sentence for a bare status code, so the refusal has to carry one.
+     */
+    public function test_training_read_outside_the_readers_reach_is_a_stated_refusal(): void
+    {
+        [$department, $lead] = $this->departmentWithRole('department_lead');
+        $defaultTeam = $department->teams()->where('is_default', true)->firstOrFail();
+        $memberUser = $this->staffUserInTeam($defaultTeam);
+
+        [$otherDepartment, $otherLead] = $this->departmentWithRole('department_lead');
+        $foreign = Training::factory()
+            ->for($otherDepartment->organization)
+            ->create(['department_id' => $otherDepartment->id, 'name' => 'Another Department Training']);
+
+        $this->actingAsClient($lead)
+            ->getJson("/api/departments/{$department->id}/trainings/{$foreign->id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Training not found for this department.');
+
+        $archived = Training::factory()
+            ->for($department->organization)
+            ->archived()
+            ->create(['department_id' => $department->id, 'name' => 'Retired Training']);
+
+        // An archived training is the manager's to read and nobody else's, and a
+        // member is told the same thing as for a training that never existed.
+        $this->actingAsClient($lead)
+            ->getJson("/api/departments/{$department->id}/trainings/{$archived->id}")
+            ->assertOk()
+            ->assertJsonPath('archived_at', fn ($value) => $value !== null);
+
+        $this->actingAsClient($memberUser)
+            ->getJson("/api/departments/{$department->id}/trainings/{$archived->id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Training not found for this department.');
+
+        $this->actingAsClient($otherLead)
+            ->getJson("/api/departments/{$department->id}/trainings/{$archived->id}")
+            ->assertForbidden()
+            ->assertJsonPath(
+                'message',
+                'You do not have permission to view trainings for this department.',
+            );
+    }
+
+    /**
      * @return array{Organization, User}
      */
     private function organizationWithRole(string $roleCode): array
