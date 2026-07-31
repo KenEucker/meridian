@@ -1,7 +1,8 @@
 # PowerSync Deployment
 
-This directory contains the self-hosted PowerSync service baseline from M8.1
-and the initial authorized device cache projections from M8.2.
+This directory contains the self-hosted PowerSync service baseline from M8.1,
+the authorized device cache projections from M8.2, and the permission scoping
+those projections are held to from M16.13.
 It connects PowerSync to Meridian's canonical PostgreSQL database, dedicated
 PostgreSQL bucket storage, and a JWKS endpoint used to validate client tokens.
 
@@ -99,6 +100,38 @@ The PowerSync container reports healthy only after
 `/probes/liveness` succeeds. The API is available at
 `http://127.0.0.1:8080` by default.
 
+## Permission-scoped replication
+
+Offline data replicated to a device is limited to what the device's user is
+permitted to read (CLIENT-021; technical spec 9.5, 11A.7; data/API 7.3). The
+cache lists in technical spec 9.3 say what a role *should* receive; this is the
+boundary on what it *may* receive, and the projections below are held to it.
+
+Scope comes from the caller's effective roles, resolved the way
+`App\Services\Permissions\EffectiveRoleResolver` resolves them for the API:
+
+- the grant must be active — a revoked grant scopes nothing;
+- the user must hold an active, unarchived membership in the granted team;
+- an event-scoped grant reaches only that event's records;
+- a `shift_lead` grant reaches only members designated `membership_role = 'lead'`
+  in the granted team (TEAM-009). The grant is held by the team and exercised by
+  its designated leads, so bare membership of a granted team replicates nothing
+  the member could not already read.
+
+Every one of those conditions is evaluated against the database on each
+evaluation rather than carried in the client's token. That is what makes
+CLIENT-022 hold: revoking a grant, removing a lead designation, or archiving a
+membership changes what subsequently replicates, without waiting for the device
+to sign in again or for a token to expire.
+
+`Tests\Feature\PowerSyncPermissionScopedReplicationTest` proves this by running
+the streams in `sync-config.yaml` against a database — including a demoted lead
+who stops receiving the roster they previously held — so a change to the rules
+that widened a scope would fail a test rather than reach a device. It executes
+the rules through the test database's SQL driver, so it proves *scope*, not
+dialect validity; validate the dialect against a running service as described
+above.
+
 ## M8.2 projection boundaries
 
 - Every stream is automatically scoped from the signed JWT `sub` claim through
@@ -108,8 +141,8 @@ The PowerSync container reports healthy only after
   memberships, assigned shifts, basic event data, visible published
   policy/procedure content and referenced fragments, and their acknowledgment
   state.
-- Shift leads additionally receive safe roster fields and assignments for
-  teams/shifts covered by an active `shift_lead` team grant.
+- Designated team leads additionally receive safe roster fields and assignments
+  for teams/shifts covered by an active `shift_lead` team grant.
 - Department leads additionally receive safe department roster/schedule fields
   and documents/fragments they may maintain through an active
   `department_lead` team grant.
@@ -123,7 +156,10 @@ The PowerSync container reports healthy only after
 - No client SDK, local SQLite schema, upload queue, or offline mutation path is
   installed.
 - No readiness UI or event-mode fail-closed behavior is enabled.
-- No PowerSync client JWT or JWKS endpoint is implemented.
+- No PowerSync client JWT or JWKS endpoint is implemented. The scoping above is
+  written against the signed subject PowerSync would supply; until a node issues
+  that credential and a client holds the SDK, no device replicates anything, and
+  the boundary is enforced by the rules and their tests rather than in the field.
 - Field Report/form, attendance, readiness, incident-cache, and map projections
   remain deferred until their canonical tables and owning tasks exist.
 
