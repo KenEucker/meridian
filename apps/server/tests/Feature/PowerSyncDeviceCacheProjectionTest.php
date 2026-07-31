@@ -76,11 +76,16 @@ class PowerSyncDeviceCacheProjectionTest extends TestCase
         $this->assertStringContainsString("SELECT id FROM permission_roles WHERE code = 'shift_lead'", $shiftLead);
         $this->assertStringContainsString("SELECT id FROM permission_roles WHERE code = 'department_lead'", $departmentLead);
 
+        // A shift-lead grant is held by the team and exercised by its designated
+        // leads (TEAM-009), so the shift-lead scope narrows to the designation
+        // rather than to bare membership (M16.13). Every query in the stream
+        // reads that narrowed scope.
+        $this->assertStringContainsString("AND membership_role = 'lead'", $shiftLead);
+        $this->assertStringNotContainsString('team_grants.team_id IN current_team_ids', $shiftLead);
+        $this->assertStringContainsString('team_grants.team_id IN shift_lead_team_ids', $shiftLead);
+        $this->assertStringContainsString('team_grants.team_id IN current_team_ids', $departmentLead);
+
         foreach ([$shiftLead, $departmentLead] as $leadStream) {
-            $this->assertStringContainsString(
-                'team_grants.team_id IN current_team_ids',
-                $leadStream,
-            );
             $this->assertStringContainsString(
                 'team_grants.revoked_at IS NULL',
                 $leadStream,

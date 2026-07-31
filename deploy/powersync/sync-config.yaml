@@ -1,8 +1,19 @@
-# M8.2 initial authorized device cache projections.
+# Authorized device cache projections (M8.2), scoped by the caller's effective
+# roles (M16.13; CLIENT-021, CLIENT-022; technical spec 9.5, 11A.7;
+# data/API 7.3).
 #
 # Every authorization scope originates from the signed JWT subject. Client
 # subscription parameters are intentionally not used, so a client cannot ask
 # PowerSync for another user's, team's, or department's records.
+#
+# A role-scoped stream reproduces the rule the server's EffectiveRoleResolver
+# applies, because a device may not hold what its user could not retrieve
+# through the API. Every condition that resolver places on a grant — active team
+# membership, an unrevoked grant, the grant's event scope, and, for
+# `shift_lead`, the TEAM-009 lead designation — is repeated here. The scope is
+# read from the database on every evaluation rather than carried in the token,
+# so withdrawing a grant, a lead designation, or a membership changes what
+# subsequently replicates without waiting for the device to sign in again.
 #
 # PowerSync sync-rules dialect constraints that shape this file:
 #   * Parameter (with) queries must be self-contained: they may reference
@@ -216,16 +227,21 @@ streams:
   shift_lead_cache:
     auto_subscribe: true
     with:
-      # Teams the active user holds an active shift-lead grant on. Self-contained:
-      # the current-team scope is re-derived from staff_user rather than
-      # referencing the current_team_ids CTE, which is not permitted inside a
-      # parameter query.
+      # Teams the active user holds an active shift-lead grant on, as a
+      # designated lead. A shift-lead grant is held by the team but exercised by
+      # the members designated `membership_role = 'lead'` (TEAM-009), which is
+      # the rule EffectiveRoleResolver applies: without it, every member of a
+      # granted team would replicate the roster their lead reads.
+      # Self-contained: the current-team scope is re-derived from staff_user
+      # rather than referencing the current_team_ids CTE, which is not permitted
+      # inside a parameter query.
       shift_lead_team_ids: |
         SELECT team_id
         FROM team_grants
         WHERE team_id IN (
           SELECT team_id FROM team_memberships
           WHERE staff_id IN (SELECT staff_id FROM staff_user WHERE user_id = auth.user_id())
+            AND membership_role = 'lead'
             AND archived_at IS NULL
         )
           AND revoked_at IS NULL
@@ -234,8 +250,9 @@ streams:
           )
 
     queries:
-      # Shifts for granted teams, honouring each grant's event scope. Event-scoped
-      # correlation requires a JOIN, which is only permitted in data queries.
+      # Shifts for led teams, honouring each grant's event scope. Event-scoped
+      # correlation requires a JOIN, which is only permitted in data queries, so
+      # the designation-aware team scope arrives as shift_lead_team_ids.
       - |
         SELECT shifts.id, shifts.event_id, shifts.department_id, shifts.eligible_team_id,
                shifts.title, shifts.department_name_snapshot, shifts.team_name_snapshot,
@@ -245,7 +262,7 @@ streams:
         FROM shifts
         INNER JOIN team_grants
           ON team_grants.team_id = shifts.eligible_team_id
-        WHERE team_grants.team_id IN current_team_ids
+        WHERE team_grants.team_id IN shift_lead_team_ids
           AND team_grants.revoked_at IS NULL
           AND team_grants.permission_role_id IN (
             SELECT id FROM permission_roles WHERE code = 'shift_lead'
@@ -264,7 +281,7 @@ streams:
         INNER JOIN team_grants
           ON team_grants.team_id = shifts.eligible_team_id
         WHERE shift_assignments.removed_at IS NULL
-          AND team_grants.team_id IN current_team_ids
+          AND team_grants.team_id IN shift_lead_team_ids
           AND team_grants.revoked_at IS NULL
           AND team_grants.permission_role_id IN (
             SELECT id FROM permission_roles WHERE code = 'shift_lead'
@@ -297,7 +314,7 @@ streams:
           INNER JOIN team_grants
             ON team_grants.team_id = shifts.eligible_team_id
           WHERE shift_assignments.removed_at IS NULL
-            AND team_grants.team_id IN current_team_ids
+            AND team_grants.team_id IN shift_lead_team_ids
             AND team_grants.revoked_at IS NULL
             AND team_grants.permission_role_id IN (
               SELECT id FROM permission_roles WHERE code = 'shift_lead'
