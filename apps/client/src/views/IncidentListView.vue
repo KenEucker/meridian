@@ -1208,7 +1208,7 @@ async function onSearchSubmit(): Promise<void> {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   padding: var(--m-space-2) var(--m-space-3);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
 }

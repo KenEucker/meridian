@@ -468,7 +468,7 @@ const currentEventTargetLabel = computed(() => {
 
 .me__event strong,
 .me__schedule-list strong {
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .me__event span,

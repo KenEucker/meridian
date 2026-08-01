@@ -249,7 +249,7 @@ function onTeamChange(event: Event): void {
 .team-overview__panel h2 {
   margin: 0;
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .team-overview__panel p {

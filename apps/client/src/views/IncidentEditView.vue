@@ -1884,7 +1884,7 @@ async function onPrintPdf(): Promise<void> {
   border: 1px solid var(--m-action-secondary-bg);
   border-radius: var(--m-radius-sm);
   padding: 0 var(--m-space-2);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   cursor: pointer;
   font: inherit;
   font-size: var(--m-text-sm);
@@ -2015,13 +2015,13 @@ async function onPrintPdf(): Promise<void> {
 
 .ims-edit__chip--tag {
   border: 1px solid var(--m-border-strong);
-  background: var(--m-status-neutral-bg, var(--m-surface-primary));
+  background: var(--m-surface-base);
   color: var(--m-text-secondary);
 }
 
 .ims-edit__chip--name-reference {
   border: 1px solid var(--m-action-secondary-bg);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   color: var(--m-action-secondary-bg);
 }
 
@@ -2133,7 +2133,7 @@ async function onPrintPdf(): Promise<void> {
 
 .ims-edit__type-chip {
   border-color: var(--m-action-secondary-bg);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   color: var(--m-action-secondary-bg);
 }
 
@@ -2144,7 +2144,7 @@ async function onPrintPdf(): Promise<void> {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   padding: 0 var(--m-space-2);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
   color: var(--m-action-secondary-bg);
   font-size: var(--m-text-sm);
   font-weight: 800;
@@ -2227,7 +2227,7 @@ async function onPrintPdf(): Promise<void> {
   overflow: hidden;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
 }
 
 .ims-edit__field--summary {
@@ -2389,7 +2389,7 @@ async function onPrintPdf(): Promise<void> {
   overflow: hidden;
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
 }
 
 .ims-edit__add-row span {
@@ -2500,7 +2500,7 @@ async function onPrintPdf(): Promise<void> {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   padding: 0 var(--m-space-3);
-  background: var(--m-surface);
+  background: var(--m-surface-base);
   color: var(--m-text-primary);
   font: inherit;
   font-weight: 800;
@@ -2597,7 +2597,7 @@ async function onPrintPdf(): Promise<void> {
 .ims-edit__note-form textarea {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
-  background: var(--m-surface-primary);
+  background: var(--m-surface-base);
 }
 
 .ims-edit__note-form button {
