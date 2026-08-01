@@ -2,60 +2,112 @@
 import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { selectedSessionDepartment } from "@/session/sessionAccess";
 import {
-  resolveDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
-import {
-  canManageShiftsForTeam,
-  canViewShiftAdmin,
   createShift,
+  getDepartmentShifts,
   getShift,
-  listSchedulableTeams,
-  listTrainingOptions,
-  listWaiverOptions,
-  shiftHasStarted,
+  shiftTeamOptions,
   updateShift,
+  type ProductShift,
   type ShiftDraft,
+  type ShiftWorkspace,
 } from "@/shift-admin/shiftAdminModel";
 
+/**
+ * `department.shift-create` and `department.shift-edit` (M11.17; bound to the
+ * node in M16.18; UI contract 12.4).
+ *
+ * Two reads fill this page. The department read carries the authority to be
+ * here, the teams the eligible-team field may offer, and the trainings and
+ * waivers a shift may require. The shift read carries the record being edited,
+ * including the node's own answer on whether it has started — which is what
+ * locks the schedule and the team, so the lock and the clock behind it stay on
+ * the same side (SHIFT-002, SHIFT-004; TEAM-007).
+ *
+ * Every rule the form used to enforce for itself now belongs to the node, and
+ * its refusals are shown as it worded them.
+ */
 const route = useRoute();
 const router = useRouter();
-const session = computed(() => resolveDepartmentSelfAdminSession());
-const canView = computed(() => canViewShiftAdmin(session.value));
 
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
 const shiftId = computed(() =>
-  typeof route.params.shiftId === "string" ? route.params.shiftId : "",
+  typeof route.params.shiftId === "string" ? route.params.shiftId : null,
 );
-const isCreate = computed(
-  () => route.name === "events.departments.shifts.create",
-);
+const isCreate = computed(() => shiftId.value === null);
 
-const existing = computed(() =>
-  isCreate.value ? null : getShift(session.value, shiftId.value),
+const workspace = ref<ShiftWorkspace | null>(null);
+const existing = ref<ProductShift | null>(null);
+const loadError = ref<string | null>(null);
+const formError = ref<string | null>(null);
+const formNotice = ref<string | null>(null);
+const busy = ref(false);
+
+/*
+ * Authority is the node's answer on the response, not a role the client read for
+ * itself (CLIENT-006). A member reaches this endpoint and is answered with
+ * `can_manage: false`; the commands would refuse them, so the form is not shown.
+ */
+const canManage = computed(() => workspace.value?.access.canManage ?? false);
+const loaded = computed(
+  () => workspace.value !== null && (isCreate.value || existing.value !== null),
 );
-const started = computed(
-  () => existing.value !== null && shiftHasStarted(existing.value),
-);
+const started = computed(() => existing.value?.hasStarted ?? false);
 const isCancelled = computed(() => existing.value?.cancelledAt != null);
 
-const teams = computed(() => listSchedulableTeams(session.value));
-const trainingOptions = computed(() => listTrainingOptions(session.value));
-const waiverOptions = computed(() => listWaiverOptions(session.value));
+const teams = computed(() =>
+  shiftTeamOptions(workspace.value?.teams ?? [], existing.value),
+);
+const trainingOptions = computed(() => workspace.value?.trainingOptions ?? []);
+const waiverOptions = computed(() => workspace.value?.waiverOptions ?? []);
 
-const draft = reactive<ShiftDraft>({
-  eligibleTeamId: "",
-  title: "",
+const departmentLabel = computed(
+  () =>
+    workspace.value?.departmentName ||
+    selectedSessionDepartment.value?.departmentLabel ||
+    "Department",
+);
+
+const heading = computed(() => (isCreate.value ? "Create shift" : "Edit shift"));
+
+const shiftsIndexRoute = computed(() => ({
+  name: "events.departments.shifts.index",
+  params: { eventId: eventId.value, departmentId: departmentId.value },
+}));
+
+const draft = reactive<ShiftDraft>(emptyDraft());
+
+/**
+ * The schedule fields as `datetime-local` inputs hold them.
+ *
+ * The control speaks local wall-clock time and the node speaks ISO instants, so
+ * the two are kept apart rather than round-tripped through one string.
+ */
+const schedule = reactive({
   startsAt: "",
   endsAt: "",
-  capacity: null,
-  signupOpensAt: null,
-  signupClosesAt: null,
-  scheduleLockAt: null,
-  requiredTrainingIds: [],
-  requiredWaiverIds: [],
+  signupOpensAt: "",
+  signupClosesAt: "",
+  scheduleLockAt: "",
 });
-const formError = ref<string | null>(null);
-const busy = ref(false);
+
+function emptyDraft(): ShiftDraft {
+  return {
+    eligibleTeamId: "",
+    title: "",
+    startsAt: "",
+    endsAt: "",
+    capacity: null,
+    signupOpensAt: null,
+    signupClosesAt: null,
+    scheduleLockAt: null,
+    requiredTrainingIds: [],
+    requiredWaiverIds: [],
+  };
+}
 
 function toLocalInput(iso: string | null): string {
   if (iso === null || iso === "") {
@@ -63,6 +115,11 @@ function toLocalInput(iso: string | null): string {
   }
 
   const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
   const pad = (value: number): string => String(value).padStart(2, "0");
 
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -73,109 +130,149 @@ function fromLocalInput(value: string): string | null {
     return null;
   }
 
-  return new Date(value).toISOString();
+  const parsed = new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-const schedule = reactive({
-  startsAt: "",
-  endsAt: "",
-  signupOpensAt: "",
-  signupClosesAt: "",
-  scheduleLockAt: "",
-});
+function applyShift(shift: ProductShift | null): void {
+  if (shift === null) {
+    Object.assign(draft, emptyDraft(), {
+      eligibleTeamId: workspace.value?.teams[0]?.id ?? "",
+    });
+    schedule.startsAt = "";
+    schedule.endsAt = "";
+    schedule.signupOpensAt = "";
+    schedule.signupClosesAt = "";
+    schedule.scheduleLockAt = "";
 
-watch(
-  existing,
-  (shift) => {
-    if (shift === null) {
-      draft.eligibleTeamId = teams.value[0]?.id ?? "";
-      draft.title = "";
-      draft.capacity = null;
-      draft.requiredTrainingIds = [];
-      draft.requiredWaiverIds = [];
-      schedule.startsAt = "";
-      schedule.endsAt = "";
-      schedule.signupOpensAt = "";
-      schedule.signupClosesAt = "";
-      schedule.scheduleLockAt = "";
-      return;
-    }
+    return;
+  }
 
-    draft.eligibleTeamId = shift.eligibleTeamId;
-    draft.title = shift.title;
-    draft.capacity = shift.capacity;
-    draft.requiredTrainingIds = [...shift.requiredTrainingIds];
-    draft.requiredWaiverIds = [...shift.requiredWaiverIds];
-    schedule.startsAt = toLocalInput(shift.startsAt);
-    schedule.endsAt = toLocalInput(shift.endsAt);
-    schedule.signupOpensAt = toLocalInput(shift.signupOpensAt);
-    schedule.signupClosesAt = toLocalInput(shift.signupClosesAt);
-    schedule.scheduleLockAt = toLocalInput(shift.scheduleLockAt);
-  },
-  { immediate: true },
-);
+  Object.assign(draft, {
+    eligibleTeamId: shift.eligibleTeamId,
+    title: shift.title,
+    startsAt: shift.startsAt ?? "",
+    endsAt: shift.endsAt ?? "",
+    capacity: shift.capacity,
+    signupOpensAt: shift.signupOpensAt,
+    signupClosesAt: shift.signupClosesAt,
+    scheduleLockAt: shift.scheduleLockAt,
+    requiredTrainingIds: [...shift.requiredTrainingIds],
+    requiredWaiverIds: [...shift.requiredWaiverIds],
+  });
+  schedule.startsAt = toLocalInput(shift.startsAt);
+  schedule.endsAt = toLocalInput(shift.endsAt);
+  schedule.signupOpensAt = toLocalInput(shift.signupOpensAt);
+  schedule.signupClosesAt = toLocalInput(shift.signupClosesAt);
+  schedule.scheduleLockAt = toLocalInput(shift.scheduleLockAt);
+}
 
-const heading = computed(() =>
-  isCreate.value ? "Create shift" : "Edit shift",
-);
+async function loadWorkspace(): Promise<void> {
+  if (departmentId.value === "") {
+    workspace.value = null;
 
-const shiftsIndexRoute = computed(() => ({
-  name: "events.departments.shifts.index",
-  params: {
-    eventId: session.value?.eventId,
-    departmentId: session.value?.departmentId,
-  },
-}));
-
-const canManageSelectedTeam = computed(() =>
-  draft.eligibleTeamId === ""
-    ? teams.value.length > 0
-    : canManageShiftsForTeam(session.value, draft.eligibleTeamId),
-);
-
-async function onSubmit(): Promise<void> {
-  formError.value = null;
-  busy.value = true;
+    return;
+  }
 
   try {
-    const payload: ShiftDraft = {
-      ...draft,
-      capacity:
-        typeof draft.capacity === "number" && !Number.isNaN(draft.capacity)
-          ? draft.capacity
-          : null,
-      requiredTrainingIds: [...draft.requiredTrainingIds],
-      requiredWaiverIds: [...draft.requiredWaiverIds],
-      startsAt:
-        started.value && existing.value
-          ? existing.value.startsAt
-          : (fromLocalInput(schedule.startsAt) ?? ""),
-      endsAt:
-        started.value && existing.value
-          ? existing.value.endsAt
-          : (fromLocalInput(schedule.endsAt) ?? ""),
-      signupOpensAt: fromLocalInput(schedule.signupOpensAt),
-      signupClosesAt: fromLocalInput(schedule.signupClosesAt),
-      scheduleLockAt: fromLocalInput(schedule.scheduleLockAt),
-    };
+    workspace.value = await getDepartmentShifts(departmentId.value);
+  } catch (error) {
+    workspace.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load shifts. Check the connection to this node and try again.",
+    );
+  }
+}
 
-    if (isCreate.value) {
-      const created = createShift(session.value, payload);
+async function loadShift(): Promise<void> {
+  const id = shiftId.value;
+
+  if (id === null || departmentId.value === "") {
+    existing.value = null;
+
+    return;
+  }
+
+  try {
+    existing.value = await getShift(departmentId.value, id);
+  } catch (error) {
+    existing.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this shift. Check the connection to this node and try again.",
+    );
+  }
+}
+
+async function load(): Promise<void> {
+  loadError.value = null;
+  await Promise.all([loadWorkspace(), loadShift()]);
+  applyShift(existing.value);
+}
+
+watch([departmentId, shiftId], () => {
+  formError.value = null;
+  formNotice.value = null;
+  void load();
+});
+
+void load();
+
+/**
+ * Submit the form as one command, then read the result back.
+ *
+ * A started shift sends the schedule and team it already has: those inputs are
+ * disabled, and the node compares what arrives against what it holds, so sending
+ * the current values is how an unchanged field is expressed.
+ */
+async function onSubmit(): Promise<void> {
+  formError.value = null;
+  formNotice.value = null;
+  busy.value = true;
+
+  const lockedStart = started.value ? existing.value?.startsAt : null;
+  const lockedEnd = started.value ? existing.value?.endsAt : null;
+
+  const payload: ShiftDraft = {
+    ...draft,
+    requiredTrainingIds: [...draft.requiredTrainingIds],
+    requiredWaiverIds: [...draft.requiredWaiverIds],
+    startsAt: lockedStart ?? fromLocalInput(schedule.startsAt) ?? "",
+    endsAt: lockedEnd ?? fromLocalInput(schedule.endsAt) ?? "",
+    signupOpensAt: fromLocalInput(schedule.signupOpensAt),
+    signupClosesAt: fromLocalInput(schedule.signupClosesAt),
+    scheduleLockAt: fromLocalInput(schedule.scheduleLockAt),
+  };
+
+  const id = shiftId.value;
+
+  try {
+    if (isCreate.value || id === null) {
+      const createdId = await createShift(
+        departmentId.value,
+        eventId.value,
+        payload,
+      );
+
       await router.push({
         name: "events.departments.shifts.edit",
         params: {
-          eventId: session.value?.eventId,
-          departmentId: session.value?.departmentId,
-          shiftId: created.id,
+          eventId: eventId.value,
+          departmentId: departmentId.value,
+          shiftId: createdId,
         },
       });
+
       return;
     }
 
-    updateShift(session.value, shiftId.value, payload);
+    await updateShift(id, payload);
+    formNotice.value = "Shift saved.";
+    await load();
   } catch (error) {
-    formError.value =
-      error instanceof Error ? error.message : "Unable to save shift.";
+    formError.value = meridianErrorMessage(error, "Unable to save shift.");
   } finally {
     busy.value = false;
   }
@@ -186,27 +283,30 @@ async function onSubmit(): Promise<void> {
   <section class="shift-edit" aria-labelledby="shift-edit-heading">
     <p class="shift-edit__eyebrow">Shift administration</p>
     <h1 id="shift-edit-heading" class="shift-edit__heading">{{ heading }}</h1>
-    <p v-if="session" class="shift-edit__lede">
-      {{ session.departmentLabel }} / {{ session.roleLabel }}
+    <p class="shift-edit__lede">{{ departmentLabel }}</p>
+
+    <!--
+      A refusal is the node's own sentence: a shift in another department, or one
+      whose team this caller does not manage, is refused by the read, and an
+      unreachable node is stated rather than shown as a shift that is not there.
+    -->
+    <p v-if="loadError" class="shift-edit__restricted" role="alert">
+      {{ loadError }}
     </p>
 
-    <p v-if="!canView" class="shift-edit__restricted" role="status">
-      Shift administration requires department lead or team lead authority for
-      this department.
+    <p v-else-if="!loaded" class="shift-edit__restricted" role="status">
+      Loading shift…
     </p>
 
-    <p
-      v-else-if="!isCreate && existing === null"
-      class="shift-edit__restricted"
-      role="status"
-    >
-      Shift not found for your managed teams.
+    <p v-else-if="!canManage" class="shift-edit__restricted" role="status">
+      Creating and maintaining shifts requires department lead or team lead
+      authority for this department.
     </p>
 
     <template v-else>
       <p v-if="started" class="shift-edit__hint" role="status">
-        This shift has started: scheduled times and the eligible team are
-        locked to preserve worked history.
+        This shift has started: scheduled times and the eligible team are locked
+        to preserve worked history.
       </p>
       <p v-if="isCancelled" class="shift-edit__hint" role="status">
         This shift is cancelled. Restore it from the shift list before editing.
@@ -214,6 +314,9 @@ async function onSubmit(): Promise<void> {
 
       <p v-if="formError" class="shift-edit__error" role="alert">
         {{ formError }}
+      </p>
+      <p v-if="formNotice" class="shift-edit__notice" role="status">
+        {{ formNotice }}
       </p>
 
       <form class="shift-edit__form" @submit.prevent="onSubmit">
@@ -307,12 +410,7 @@ async function onSubmit(): Promise<void> {
         </fieldset>
 
         <div class="shift-edit__actions">
-          <button
-            type="submit"
-            :disabled="busy || isCancelled || !canManageSelectedTeam"
-          >
-            Save
-          </button>
+          <button type="submit" :disabled="busy || isCancelled">Save</button>
           <RouterLink :to="shiftsIndexRoute">Back to shifts</RouterLink>
         </div>
       </form>
@@ -349,7 +447,8 @@ async function onSubmit(): Promise<void> {
 }
 
 .shift-edit__restricted,
-.shift-edit__error {
+.shift-edit__error,
+.shift-edit__notice {
   margin: 0;
   padding: var(--m-space-3);
   border-radius: var(--m-radius-sm);

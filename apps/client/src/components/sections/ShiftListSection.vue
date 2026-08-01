@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import StaffCardList from "@/components/StaffCardList.vue";
@@ -7,79 +7,101 @@ import StaffListCard from "@/components/StaffListCard.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import ControlBar from "@/components/ControlBar.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
-import {
-  canAdministerDepartment,
-  resolveDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   cancelShift,
-  canViewMemberShifts,
-  canViewShiftAdmin,
-  listDepartmentShifts,
-  listMemberShifts,
-  listSchedulableTeams,
-  memberTeamLabels,
+  getDepartmentShifts,
   restoreShift,
-  shiftHasStarted,
+  shiftCapacityLabel,
+  shiftStatusLabel,
+  shiftTeamLabel,
+  shiftWindowLabel,
   type ProductShift,
   type ShiftStatusFilter,
+  type ShiftWorkspace,
 } from "@/shift-admin/shiftAdminModel";
 
 /**
- * Shift create/maintain featureset (M11.17; SHIFT-001 through SHIFT-010).
+ * Shift create/maintain featureset (M11.17; bound to the node in M16.18;
+ * SHIFT-001 through SHIFT-010).
  *
  * Rendered as its own page at `department.shifts` and embedded as a featureset
- * in the Planning workflow hub. Department administer authority manages every
- * department shift, designated team leads manage shifts for teams they lead,
- * and plain members get a read-only list of shifts their teams are eligible for.
+ * in the Planning workflow hub.
+ *
+ * The page above it already reads the department's shifts for its shell and
+ * heading, so it hands that response down through `workspace` and re-reads on
+ * `reload`; embedded on its own the section makes the read itself. Either way
+ * one read is behind what is shown rather than two that could disagree about
+ * which shifts exist.
+ *
+ * Who sees what is the node's answer, carried on that response. Department
+ * administer authority manages every department shift, a designated team lead
+ * manages the shifts of teams they lead, and a member reads the shifts their
+ * teams are eligible for and manages none — and the read already narrowed the
+ * list accordingly, so nothing here re-derives it.
  */
 const props = withDefaults(
   defineProps<{
     variant?: "page" | "section";
+    departmentId?: string | null;
+    workspace?: ShiftWorkspace | null;
   }>(),
   {
     variant: "page",
+    departmentId: null,
+    workspace: undefined,
   },
 );
 
-const session = computed(() => resolveDepartmentSelfAdminSession());
-const canManage = computed(() => canViewShiftAdmin(session.value));
-const canViewAsMember = computed(() => canViewMemberShifts(session.value));
-const canView = computed(() => canManage.value || canViewAsMember.value);
-const canAdminister = computed(() => canAdministerDepartment(session.value));
+const emit = defineEmits<{ reload: [] }>();
+
 const route = useRoute();
 const router = useRouter();
 
-const statusFilter = computed<ShiftStatusFilter>(() => {
-  const value = route.query.status;
-  if (value === "active" || value === "cancelled") {
-    return value;
-  }
-
-  return "all";
-});
-
-const refresh = ref(0);
-const shifts = computed(() => {
-  void refresh.value;
-
-  return canManage.value
-    ? listDepartmentShifts(session.value, statusFilter.value)
-    : listMemberShifts(session.value);
-});
-const teams = computed(() => listSchedulableTeams(session.value));
-const teamNameById = computed(() =>
-  canManage.value
-    ? new Map(teams.value.map((team) => [team.id, team.name]))
-    : memberTeamLabels(session.value),
+const departmentId = computed(
+  () =>
+    props.departmentId ??
+    (typeof route.params.departmentId === "string"
+      ? route.params.departmentId
+      : ""),
 );
 
+/** Whether this section is responsible for its own read. */
+const ownsRead = computed(() => props.workspace === undefined);
+
+const ownWorkspace = ref<ShiftWorkspace | null>(null);
+const workspace = computed<ShiftWorkspace | null>(() =>
+  ownsRead.value ? ownWorkspace.value : (props.workspace ?? null),
+);
+
+const loadError = ref<string | null>(null);
 const actionError = ref<string | null>(null);
 const busyId = ref<string | null>(null);
 
+const statusFilter = computed<ShiftStatusFilter>(() => {
+  const value = route.query.status;
+
+  return value === "active" || value === "cancelled" ? value : "all";
+});
+
+/*
+ * Authority is the node's answer on the response rather than a role the client
+ * interpreted for itself. The commands behind these actions enforce the same
+ * answer, so an action offered past it could only be refused (CLIENT-006).
+ */
+const canAccess = computed(() => workspace.value !== null);
+const canManage = computed(() => workspace.value?.access.canManage ?? false);
+const canAdminister = computed(
+  () => workspace.value?.access.canAdminister ?? false,
+);
+const shifts = computed<readonly ProductShift[]>(
+  () => workspace.value?.shifts ?? [],
+);
+const teams = computed(() => workspace.value?.teams ?? []);
+
 const description = computed(() => {
-  if (!canView.value) {
-    return "Shifts are not available for your current department role.";
+  if (!canAccess.value) {
+    return "Department shift schedule.";
   }
 
   if (!canManage.value) {
@@ -91,11 +113,68 @@ const description = computed(() => {
     : "Create and maintain shifts for teams you lead.";
 });
 
-defineExpose({ canView, canManage, description });
+const routeParams = computed(() => ({
+  eventId: String(route.params.eventId ?? ""),
+  departmentId: departmentId.value,
+}));
 
+const shiftCreateRoute = computed(() => ({
+  name: "events.departments.shifts.create",
+  params: routeParams.value,
+}));
+
+function shiftEditRoute(shiftId: string) {
+  return {
+    name: "events.departments.shifts.edit",
+    params: { ...routeParams.value, shiftId },
+  };
+}
+
+async function loadOwnWorkspace(): Promise<void> {
+  if (!ownsRead.value) {
+    return;
+  }
+
+  if (departmentId.value === "") {
+    ownWorkspace.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    ownWorkspace.value = await getDepartmentShifts(
+      departmentId.value,
+      statusFilter.value,
+    );
+  } catch (error) {
+    ownWorkspace.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load shifts. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch([departmentId, statusFilter], () => {
+  actionError.value = null;
+  void loadOwnWorkspace();
+});
+
+void loadOwnWorkspace();
+
+defineExpose({ canAccess, canManage, description });
+
+/**
+ * Move the status filter into the URL.
+ *
+ * The filter is the read's, not the rendered list's: the page or this section
+ * watches the query and asks the node again, so the table is always the answer
+ * to the filter that is showing.
+ */
 function onStatusChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-  const next = target.value;
+  const next = (event.target as HTMLSelectElement).value;
 
   void router.replace({
     ...route,
@@ -103,81 +182,43 @@ function onStatusChange(event: Event): void {
   });
 }
 
-function shiftStatus(shift: ProductShift): string {
-  if (shift.cancelledAt !== null) {
-    return "Cancelled";
-  }
-
-  return shiftHasStarted(shift) ? "Started" : "Scheduled";
-}
-
-function teamName(shift: ProductShift): string {
-  return teamNameById.value.get(shift.eligibleTeamId) ?? "Unknown team";
-}
-
-function formatWindow(shift: ProductShift): string {
-  const start = new Date(shift.startsAt);
-  const end = new Date(shift.endsAt);
-
-  return `${start.toLocaleString()} - ${end.toLocaleString()}`;
-}
-
-function formatCapacity(shift: ProductShift): string {
-  if (shift.capacity === null) {
-    return `${shift.activeAssignmentCount} assigned / no cap`;
-  }
-
-  return `${shift.activeAssignmentCount} assigned / ${shift.capacity} cap`;
-}
-
-function onCancel(shift: ProductShift): void {
+/**
+ * Run one command and then take the surface's state from the node again.
+ *
+ * Nothing is patched in place: a cancellation that changes which actions a row
+ * offers, and a refusal that changes nothing at all, are both read back rather
+ * than guessed at.
+ */
+async function run(
+  shift: ProductShift,
+  action: () => Promise<void>,
+  fallback: string,
+): Promise<void> {
   actionError.value = null;
   busyId.value = shift.id;
 
   try {
-    cancelShift(session.value, shift.id);
-    refresh.value += 1;
+    await action();
+
+    if (ownsRead.value) {
+      await loadOwnWorkspace();
+    } else {
+      emit("reload");
+    }
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to cancel shift.";
+    actionError.value = meridianErrorMessage(error, fallback);
   } finally {
     busyId.value = null;
   }
 }
 
-function onRestore(shift: ProductShift): void {
-  actionError.value = null;
-  busyId.value = shift.id;
-
-  try {
-    restoreShift(session.value, shift.id);
-    refresh.value += 1;
-  } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to restore shift.";
-  } finally {
-    busyId.value = null;
-  }
+async function onCancel(shift: ProductShift): Promise<void> {
+  await run(shift, () => cancelShift(shift.id), "Unable to cancel shift.");
 }
 
-function shiftEditRoute(shiftId: string) {
-  return {
-    name: "events.departments.shifts.edit",
-    params: {
-      eventId: session.value?.eventId,
-      departmentId: session.value?.departmentId,
-      shiftId,
-    },
-  };
+async function onRestore(shift: ProductShift): Promise<void> {
+  await run(shift, () => restoreShift(shift.id), "Unable to restore shift.");
 }
-
-const shiftCreateRoute = computed(() => ({
-  name: "events.departments.shifts.create",
-  params: {
-    eventId: session.value?.eventId,
-    departmentId: session.value?.departmentId,
-  },
-}));
 </script>
 
 <template>
@@ -193,9 +234,19 @@ const shiftCreateRoute = computed(() => ({
       </WorkflowActionButton>
     </template>
 
-    <p v-if="!canView" class="dept-shifts__restricted" role="status">
-      Shifts require department membership, or department lead or team lead
-      authority for the selected department.
+    <!--
+      A refusal is the node's own sentence, not a second copy of its rules. The
+      403 this endpoint answers with when the caller holds neither lead
+      authority nor team membership already says so, and saying it here keeps
+      one account of who may see this page (CLIENT-006). An unreachable node
+      reads the same way rather than as a department with no shifts in it.
+    -->
+    <p v-if="loadError" class="dept-shifts__restricted" role="alert">
+      {{ loadError }}
+    </p>
+
+    <p v-else-if="!canAccess" class="dept-shifts__restricted" role="status">
+      Loading shifts…
     </p>
 
     <!--
@@ -213,11 +264,11 @@ const shiftCreateRoute = computed(() => ({
         v-for="shift in shifts"
         :key="shift.id"
         :title="shift.title"
-        :eyebrow="teamName(shift)"
-        :status="shiftStatus(shift)"
+        :eyebrow="shiftTeamLabel(shift)"
+        :status="shiftStatusLabel(shift)"
         :meta="[
-          { label: 'When', value: formatWindow(shift) },
-          { label: 'Capacity', value: formatCapacity(shift) },
+          { label: 'When', value: shiftWindowLabel(shift) },
+          { label: 'Capacity', value: shiftCapacityLabel(shift) },
         ]"
       />
     </StaffCardList>
@@ -260,33 +311,42 @@ const shiftCreateRoute = computed(() => ({
             </tr>
             <tr v-for="shift in shifts" :key="shift.id">
               <td>
-                <RouterLink :to="shiftEditRoute(shift.id)">
+                <RouterLink v-if="shift.canManage" :to="shiftEditRoute(shift.id)">
                   {{ shift.title }}
                 </RouterLink>
+                <span v-else>{{ shift.title }}</span>
               </td>
-              <td>{{ teamName(shift) }}</td>
-              <td>{{ formatWindow(shift) }}</td>
-              <td>{{ formatCapacity(shift) }}</td>
-              <td>{{ shiftStatus(shift) }}</td>
+              <td>{{ shiftTeamLabel(shift) }}</td>
+              <td>{{ shiftWindowLabel(shift) }}</td>
+              <td>{{ shiftCapacityLabel(shift) }}</td>
+              <td>{{ shiftStatusLabel(shift) }}</td>
+              <!--
+                Cancel is offered only before the start the node reported, and
+                restore only on a shift it reported cancelled. Both refusals
+                exist on the server either way; not offering them keeps the row
+                from proposing work that can only come back as an error.
+              -->
               <td class="dept-shifts__actions">
-                <RouterLink :to="shiftEditRoute(shift.id)">Edit</RouterLink>
-                <button
-                  v-if="shift.cancelledAt === null && !shiftHasStarted(shift)"
-                  type="button"
-                  class="dept-shifts__cancel"
-                  :disabled="busyId === shift.id"
-                  @click="onCancel(shift)"
-                >
-                  Cancel shift
-                </button>
-                <button
-                  v-else-if="shift.cancelledAt !== null"
-                  type="button"
-                  :disabled="busyId === shift.id"
-                  @click="onRestore(shift)"
-                >
-                  Restore
-                </button>
+                <template v-if="shift.canManage">
+                  <RouterLink :to="shiftEditRoute(shift.id)">Edit</RouterLink>
+                  <button
+                    v-if="shift.cancelledAt === null && !shift.hasStarted"
+                    type="button"
+                    class="dept-shifts__cancel"
+                    :disabled="busyId === shift.id"
+                    @click="onCancel(shift)"
+                  >
+                    Cancel shift
+                  </button>
+                  <button
+                    v-else-if="shift.cancelledAt !== null && !shift.hasStarted"
+                    type="button"
+                    :disabled="busyId === shift.id"
+                    @click="onRestore(shift)"
+                  >
+                    Restore
+                  </button>
+                </template>
               </td>
             </tr>
           </tbody>

@@ -327,13 +327,23 @@ class ShiftAdminHttpTest extends TestCase
             'ends_at' => Carbon::now()->addWeek()->addHours(6),
         ]);
 
-        // Index is scoped to led-team shifts.
+        // Index is scoped to led-team shifts, and the eligible-team options it
+        // offers are scoped the same way: the form cannot propose a team the
+        // command would refuse (M16.18).
         $this->actingAsClient($teamLead)
             ->getJson("/api/departments/{$department->id}/shifts")
             ->assertOk()
             ->assertJsonPath('access.can_administer', false)
-            ->assertJsonFragment(['id' => $ledShift->id])
-            ->assertJsonMissing(['id' => $peerShift->id]);
+            ->assertJsonPath('access.can_manage', true)
+            ->assertJsonPath('shifts.0.id', $ledShift->id)
+            ->assertJsonPath('shifts.0.can_manage', true)
+            ->assertJsonMissing(['id' => $peerShift->id])
+            ->assertJsonPath('teams', [[
+                'id' => (string) $ledTeam->id,
+                'name' => 'Dirt',
+                'code' => 'DIRT',
+                'is_default' => false,
+            ]]);
 
         // Team lead can create shifts for the led team.
         $startsAt = Carbon::now()->addWeeks(2);
@@ -386,14 +396,24 @@ class ShiftAdminHttpTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_staff_without_authority_cannot_view_or_manage_shifts(): void
+    /**
+     * A department member reads the shifts their teams are eligible for and
+     * manages none of them (M16.18; SHIFT-004).
+     *
+     * This is the Staff menu's Shifts entry. It is a schedule, not an
+     * administration surface: no option lists come back, every row says the
+     * caller may not manage it, cancelled shifts are left out because nobody is
+     * expected at them, and the commands refuse as they always have.
+     */
+    public function test_department_member_reads_their_team_shifts_read_only(): void
     {
         [$department, , $event] = $this->departmentWithLead();
-        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $team = Team::factory()->for($department)->create(['name' => 'Dirt', 'code' => 'DIRT']);
+        $peerTeam = Team::factory()->for($department)->create(['code' => 'OPERATORS']);
 
         $staff = Staff::factory()->create();
-        $plainUser = User::factory()->create();
-        $plainUser->staffProfiles()->attach($staff->id);
+        $member = User::factory()->create();
+        $member->staffProfiles()->attach($staff->id);
         $membership = DepartmentMembership::factory()->for($department)->for($staff)->create();
         TeamMembership::factory()->create([
             'team_id' => $team->id,
@@ -401,9 +421,83 @@ class ShiftAdminHttpTest extends TestCase
             'department_membership_id' => $membership->id,
         ]);
 
+        $eligibleShift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Eligible Shift',
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+        $cancelledShift = Shift::factory()->cancelled()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+        $peerShift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $peerTeam->id,
+            'starts_at' => Carbon::now()->addWeek(),
+            'ends_at' => Carbon::now()->addWeek()->addHours(6),
+        ]);
+
+        $this->actingAsClient($member)
+            ->getJson("/api/departments/{$department->id}/shifts")
+            ->assertOk()
+            ->assertJsonPath('access.can_manage', false)
+            ->assertJsonPath('access.can_administer', false)
+            ->assertJsonPath('teams', [])
+            ->assertJsonPath('training_options', [])
+            ->assertJsonPath('waiver_options', [])
+            ->assertJsonCount(1, 'shifts')
+            ->assertJsonPath('shifts.0.id', $eligibleShift->id)
+            ->assertJsonPath('shifts.0.eligible_team_name', 'Dirt')
+            ->assertJsonPath('shifts.0.can_manage', false)
+            ->assertJsonMissing(['id' => $cancelledShift->id])
+            ->assertJsonMissing(['id' => $peerShift->id]);
+
+        // A member's shift detail is still refused: nothing here is theirs to
+        // manage, and the edit surface it feeds is not theirs to open.
+        $this->actingAsClient($member)
+            ->getJson("/api/departments/{$department->id}/shifts/{$eligibleShift->id}")
+            ->assertForbidden();
+
+        $startsAt = Carbon::now()->addWeek();
+        $this->actingAsClient($member)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $team->id,
+                'title' => 'Denied',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+            ])
+            ->assertForbidden();
+
+        $this->actingAsClient($member)
+            ->postJson('/api/commands/cancel-shift', ['shift_id' => $eligibleShift->id])
+            ->assertForbidden();
+    }
+
+    public function test_staff_outside_the_department_cannot_view_or_manage_shifts(): void
+    {
+        [$department, , $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+
+        // Staff in the organization, but with no team membership in this
+        // department: no shift here is theirs to be at.
+        $staff = Staff::factory()->create();
+        $plainUser = User::factory()->create();
+        $plainUser->staffProfiles()->attach($staff->id);
+        DepartmentMembership::factory()->for($department)->for($staff)->create();
+
         $this->actingAsClient($plainUser)
             ->getJson("/api/departments/{$department->id}/shifts")
-            ->assertForbidden();
+            ->assertForbidden()
+            ->assertJsonPath('message', 'You do not have permission to view shifts for this department.');
 
         $startsAt = Carbon::now()->addWeek();
         $this->actingAsClient($plainUser)
