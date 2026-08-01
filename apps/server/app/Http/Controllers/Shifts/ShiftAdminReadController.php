@@ -14,9 +14,20 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Department shift administration reads (M11.17; UI contract 12.4
- * `department.shifts`). Department administer authority sees every department
- * shift; designated team leads see shifts for the teams they lead.
+ * Department shift reads (M11.17; bound to the client in M16.18; UI contract
+ * 12.4 `department.shifts`).
+ *
+ * One response fills the whole surface: the department, the caller's authority
+ * over it, the option lists its forms need, and the shifts themselves with the
+ * node's own answer on each one — whether it has started, and whether this
+ * caller may manage it.
+ *
+ * Three callers reach it and each gets a different answer. Department administer
+ * authority sees and manages every department shift. A designated team lead sees
+ * and manages shifts for the teams they lead. A department member with team
+ * membership reads the shifts their teams are eligible for (SHIFT-004) and
+ * manages none of them, which is what the Staff menu's Shifts entry opens; their
+ * response carries no option lists, because they have no form to fill.
  */
 final class ShiftAdminReadController extends Controller
 {
@@ -28,9 +39,14 @@ final class ShiftAdminReadController extends Controller
         $user = $request->user();
         abort_unless($user !== null, 401);
 
-        if (! $access->canViewDepartmentShifts($user, $department)) {
+        $canAdminister = $access->canAdministerDepartment($user, $department);
+        $manageableTeamIds = $access->manageableTeamIds($user, $department);
+        $canManage = $canAdminister || $manageableTeamIds !== [];
+        $memberTeamIds = $canManage ? [] : $access->memberTeamIds($user, $department);
+
+        if (! $canManage && $memberTeamIds === []) {
             return response()->json([
-                'message' => 'You do not have permission to view shift administration for this department.',
+                'message' => 'You do not have permission to view shifts for this department.',
             ], 403);
         }
 
@@ -41,26 +57,35 @@ final class ShiftAdminReadController extends Controller
             ], 422);
         }
 
-        $canAdminister = $access->canAdministerDepartment($user, $department);
-        $manageableTeamIds = $access->manageableTeamIds($user, $department);
-
         $query = Shift::query()
             ->where('department_id', $department->id)
             ->with(['eligibleTeam', 'event'])
             ->withCount('activeAssignments')
             ->orderBy('starts_at');
 
-        if (! $canAdminister) {
-            $query->whereIn('eligible_team_id', $manageableTeamIds);
+        if ($canManage) {
+            if (! $canAdminister) {
+                $query->whereIn('eligible_team_id', $manageableTeamIds);
+            }
+
+            if ($status === 'active') {
+                $query->active();
+            } elseif ($status === 'cancelled') {
+                $query->whereNotNull('cancelled_at');
+            }
+        } else {
+            /*
+             * A member's list is their own schedule, so the status filter does
+             * not apply to it: a cancelled shift is not work anybody is expected
+             * at, and it is nothing they could restore.
+             */
+            $query->whereIn('eligible_team_id', $memberTeamIds)->active();
         }
 
-        if ($status === 'active') {
-            $query->active();
-        } elseif ($status === 'cancelled') {
-            $query->whereNotNull('cancelled_at');
-        }
-
-        $shifts = $query->get()->map(fn (Shift $shift): array => $this->payload($shift));
+        $shifts = $query->get()->map(fn (Shift $shift): array => $this->payload(
+            $shift,
+            $canAdminister || in_array((string) $shift->eligible_team_id, $manageableTeamIds, true),
+        ));
 
         return response()->json([
             'department_id' => (string) $department->id,
@@ -73,12 +98,22 @@ final class ShiftAdminReadController extends Controller
             ],
             'access' => [
                 'can_administer' => $canAdminister,
+                'can_manage' => $canManage,
                 'manageable_team_ids' => $manageableTeamIds,
             ],
-            'teams' => $this->teamOptions($department),
-            'events' => $this->eventOptions($department),
-            'training_options' => $this->trainingOptions($department),
-            'waiver_options' => $this->waiverOptions($department),
+            /*
+             * Option lists for the create/edit form, on the terms the caller
+             * holds them. `teams` is what the eligible-team field may offer —
+             * active teams this caller may schedule for — rather than every team
+             * in the department, so which teams a lead may use stays the node's
+             * answer instead of a rule the client keeps a second copy of.
+             */
+            'teams' => $canManage
+                ? $this->teamOptions($department, $canAdminister, $manageableTeamIds)
+                : [],
+            'events' => $canManage ? $this->eventOptions($department) : [],
+            'training_options' => $canManage ? $this->trainingOptions($department) : [],
+            'waiver_options' => $canManage ? $this->waiverOptions($department) : [],
             'shifts' => $shifts->values()->all(),
         ]);
     }
@@ -105,9 +140,12 @@ final class ShiftAdminReadController extends Controller
         $shift->loadMissing(['eligibleTeam', 'event'])->loadCount('activeAssignments');
 
         return response()->json([
-            ...$this->payload($shift),
+            // Reaching this line is the manage answer: the guard above is the
+            // same one every shift command enforces.
+            ...$this->payload($shift, true),
             'access' => [
                 'can_administer' => $access->canAdministerDepartment($user, $department),
+                'can_manage' => true,
             ],
         ]);
     }
@@ -115,7 +153,7 @@ final class ShiftAdminReadController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function payload(Shift $shift): array
+    private function payload(Shift $shift, bool $canManage): array
     {
         return [
             'id' => (string) $shift->id,
@@ -134,6 +172,12 @@ final class ShiftAdminReadController extends Controller
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'has_started' => $shift->starts_at !== null && now()->greaterThanOrEqualTo($shift->starts_at),
+            /*
+             * Whether this caller may edit, cancel, or restore this shift. The
+             * same answer the commands enforce, decided once here rather than
+             * re-derived on screen from the team list (CLIENT-006).
+             */
+            'can_manage' => $canManage,
             'required_training_ids' => $shift->trainingRequirements()
                 ->pluck('training_id')
                 ->map(fn ($id): string => (string) $id)
@@ -150,21 +194,36 @@ final class ShiftAdminReadController extends Controller
     }
 
     /**
+     * The teams a shift may be assigned to by this caller.
+     *
+     * Archived teams are left out: they cannot be chosen for a new or moved
+     * shift (`ShiftAdminService::eligibleTeam`), and a shift that already sits
+     * on one keeps saying so through its own `eligible_team_name`.
+     *
+     * @param  list<string>  $manageableTeamIds
      * @return list<array<string, mixed>>
      */
-    private function teamOptions(Department $department): array
-    {
-        return Team::query()
+    private function teamOptions(
+        Department $department,
+        bool $canAdminister,
+        array $manageableTeamIds,
+    ): array {
+        $query = Team::query()
             ->where('department_id', $department->id)
+            ->active()
             ->orderByDesc('is_default')
-            ->orderBy('name')
-            ->get()
+            ->orderBy('name');
+
+        if (! $canAdminister) {
+            $query->whereIn('id', $manageableTeamIds);
+        }
+
+        return $query->get()
             ->map(fn (Team $team): array => [
                 'id' => (string) $team->id,
                 'name' => $team->name,
                 'code' => $team->code,
                 'is_default' => (bool) $team->is_default,
-                'archived_at' => $team->archived_at?->toIso8601String(),
             ])
             ->values()
             ->all();

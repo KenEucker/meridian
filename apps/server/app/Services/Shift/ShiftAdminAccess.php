@@ -14,17 +14,12 @@ use App\Services\Departments\DepartmentSelfAdminAccess;
  *
  * Department leads and department administration manage every shift in their
  * department; designated team leads manage shifts whose eligible team is a team
- * they lead.
+ * they lead. Membership of a team is not authority over its shifts, but it is
+ * standing to read them (M16.18), which `memberTeamIds` answers.
  */
 class ShiftAdminAccess
 {
     public function __construct(private readonly DepartmentSelfAdminAccess $selfAdmin) {}
-
-    public function canViewDepartmentShifts(User $user, Department $department): bool
-    {
-        return $this->selfAdmin->canAdministerDepartment($user, $department)
-            || $this->selfAdmin->ledTeamIds($user, $department) !== [];
-    }
 
     public function canAdministerDepartment(User $user, Department $department): bool
     {
@@ -69,5 +64,43 @@ class ShiftAdminAccess
         }
 
         return $this->canManageShiftForTeam($user, $shift->department, $shift->eligibleTeam);
+    }
+
+    /**
+     * Teams in the department the user belongs to, led or not (M16.18).
+     *
+     * Eligibility for a shift is team membership (SHIFT-004), so these are the
+     * teams whose shifts a member is expected at. They carry no authority — a
+     * member reads their schedule and manages none of it — which is why this is
+     * separate from `manageableTeamIds`.
+     *
+     * @return list<string>
+     */
+    public function memberTeamIds(User $user, Department $department): array
+    {
+        $departmentTeamIds = Team::query()
+            ->where('department_id', $department->id)
+            ->pluck('id')
+            ->map(fn ($id): string => (string) $id)
+            ->all();
+
+        if ($departmentTeamIds === []) {
+            return [];
+        }
+
+        $teamIds = [];
+
+        foreach ($user->staffProfiles()->get() as $staff) {
+            $memberships = $staff->teamMemberships()
+                ->active()
+                ->whereIn('team_id', $departmentTeamIds)
+                ->get();
+
+            foreach ($memberships as $membership) {
+                $teamIds[] = (string) $membership->team_id;
+            }
+        }
+
+        return array_values(array_unique($teamIds));
     }
 }

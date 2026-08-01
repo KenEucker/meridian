@@ -112,6 +112,75 @@ function stubTrainingNode(canManage: boolean): void {
   );
 }
 
+/**
+ * Answer the department shifts read as the node would (M16.18).
+ *
+ * Same shape of decision as the trainings stub above: the shift surfaces are
+ * bound to their endpoint, so which shell they render follows the `access` block
+ * on the response rather than a role the client held. One shift is enough for
+ * the card list and the table both.
+ */
+function stubShiftNode(departmentId: string, canManage: boolean): void {
+  const teamId = "77777777-7777-4777-8777-777777777771";
+  const body = {
+    department_id: departmentId,
+    department: {
+      id: departmentId,
+      organization_id: "11111111-1111-4111-8111-111111111111",
+      name: "Gate",
+      code: "GATE",
+      archived_at: null,
+    },
+    access: {
+      can_administer: canManage,
+      can_manage: canManage,
+      manageable_team_ids: canManage ? [teamId] : [],
+    },
+    teams: canManage
+      ? [{ id: teamId, name: "Credentials", code: "CRED", is_default: false }]
+      : [],
+    events: [],
+    training_options: [],
+    waiver_options: [],
+    shifts: [
+      {
+        id: "55555555-5555-4555-8555-555555555551",
+        event_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        event_name: "Signal Camp 2026",
+        department_id: departmentId,
+        eligible_team_id: teamId,
+        eligible_team_name: "Credentials",
+        title: "Credential Check",
+        starts_at: "2027-07-01T15:00:00+00:00",
+        ends_at: "2027-07-01T21:00:00+00:00",
+        capacity: 3,
+        active_assignment_count: 1,
+        signup_opens_at: null,
+        signup_closes_at: null,
+        schedule_lock_at: null,
+        cancelled_at: null,
+        has_started: false,
+        can_manage: canManage,
+        required_training_ids: [],
+        required_waiver_ids: [],
+        created_at: "2026-07-01T12:00:00+00:00",
+        updated_at: "2026-07-01T12:00:00+00:00",
+      },
+    ],
+  };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+}
+
 // Navigation follows the session response (M16.6).
 beforeEach(() => {
   installLocalFieldSession();
@@ -153,6 +222,7 @@ describe("staff page template", () => {
   it("gives a member the shift card list and a lead the shift table", async () => {
     selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubShiftNode(FIXTURE_GATE_DEPARTMENT_ID, false);
     const member = await mountAt(
       DepartmentShiftListView,
       departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "shifts"),
@@ -165,6 +235,7 @@ describe("staff page template", () => {
     clearDepartmentSelfAdminSession();
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubShiftNode(FIXTURE_RANGERS_DEPARTMENT_ID, true);
     const lead = await mountAt(
       DepartmentShiftListView,
       departmentPath(FIXTURE_RANGERS_DEPARTMENT_ID, "shifts"),
@@ -232,6 +303,7 @@ describe("staff page template", () => {
       "content-grid--wide",
     );
 
+    stubShiftNode(FIXTURE_GATE_DEPARTMENT_ID, false);
     const shifts = await mountAt(
       DepartmentShiftListView,
       departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "shifts"),
