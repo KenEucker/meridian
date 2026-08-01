@@ -515,6 +515,89 @@ describe("the document authoring form", () => {
     );
   });
 
+  it("suggests a slug from the scope and the title while creating", async () => {
+    stubNode(() => ({ body: libraryPayload() }));
+
+    const wrapper = await mountAt(DocumentEditView, {
+      name: "events.departments.documents.create",
+      params: {
+        eventId: EVENT_ID,
+        departmentId: DEPARTMENT_ID,
+        artifactKind: "policy",
+      },
+    });
+
+    const [title, slug] = wrapper.findAll("input");
+
+    await title!.setValue("Arrival & Departure Policy");
+
+    // The scope's own name leads, without the "Organization: " kind the label
+    // carries, and the result is a slug the node's own expression accepts.
+    expect((slug!.element as HTMLInputElement).value).toBe(
+      "idaho-burners-arrival-departure-policy",
+    );
+
+    await wrapper.findAll("select")[0]!.setValue(`department:${DEPARTMENT_ID}`);
+    expect((slug!.element as HTMLInputElement).value).toBe(
+      "rangers-arrival-departure-policy",
+    );
+  });
+
+  it("stops suggesting once the slug is typed into", async () => {
+    // A field that keeps overwriting what was typed into it is worse than one
+    // that never filled itself in.
+    stubNode(() => ({ body: libraryPayload() }));
+
+    const wrapper = await mountAt(DocumentEditView, {
+      name: "events.departments.documents.create",
+      params: {
+        eventId: EVENT_ID,
+        departmentId: DEPARTMENT_ID,
+        artifactKind: "policy",
+      },
+    });
+
+    const [title, slug] = wrapper.findAll("input");
+
+    await title!.setValue("Arrival Policy");
+    await slug!.setValue("the-one-we-print-on-the-lanyard");
+    await title!.setValue("Arrival And Departure Policy");
+
+    expect((slug!.element as HTMLInputElement).value).toBe(
+      "the-one-we-print-on-the-lanyard",
+    );
+  });
+
+  it("leaves an existing document's slug alone when its title is corrected", async () => {
+    // The slug is part of how a document is addressed, and a typo fix in the
+    // title is not a decision to re-address it.
+    const saved = documentPayload({
+      title: "Arrival Policy",
+      slug: "arrival-policy",
+    });
+
+    stubNode((call) =>
+      call.url.includes("/api/policy-documents/")
+        ? { body: saved }
+        : { body: libraryPayload() },
+    );
+
+    const wrapper = await mountAt(DocumentEditView, {
+      name: "events.departments.documents.edit",
+      params: {
+        eventId: EVENT_ID,
+        departmentId: DEPARTMENT_ID,
+        artifactKind: "policy",
+        artifactId: saved.id,
+      },
+    });
+
+    const [title, slug] = wrapper.findAll("input");
+    await title!.setValue("Arrivals Policy");
+
+    expect((slug!.element as HTMLInputElement).value).toBe("arrival-policy");
+  });
+
   it("creates a policy through its command and opens the saved document", async () => {
     const created = documentPayload({
       state: "draft",

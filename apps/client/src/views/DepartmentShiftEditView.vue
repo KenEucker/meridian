@@ -3,7 +3,10 @@ import { computed, reactive, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
-import { selectedSessionDepartment } from "@/session/sessionAccess";
+import {
+  selectedSessionDepartment,
+  sessionEventWindow,
+} from "@/session/sessionAccess";
 import {
   createShift,
   getDepartmentShifts,
@@ -135,16 +138,38 @@ function fromLocalInput(value: string): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+/**
+ * What a brand-new shift's schedule starts out as.
+ *
+ * Every one of these five fields was blank, and every one of them was being
+ * typed to the same handful of values: a shift covers some part of the event,
+ * signups open now because the schedule is being built now, and both the signup
+ * close and the schedule cutoff land on the event starting because that is when
+ * the roster stops being something anybody may still change (SHIFT-002).
+ *
+ * Defaults, not rules. The node decides what it will accept and every field is
+ * still editable; what this removes is the typing, not the choice. And they are
+ * offered only where they can be known — an event with no recorded window leaves
+ * the schedule blank rather than inventing one, because a shift defaulted to a
+ * window nobody set is worse than an empty field.
+ */
+function defaultSchedule(): void {
+  const window = sessionEventWindow.value;
+
+  schedule.startsAt = toLocalInput(window?.startsAt ?? null);
+  schedule.endsAt = toLocalInput(window?.endsAt ?? null);
+  // Now, because a schedule being built is a schedule people may sign up for.
+  schedule.signupOpensAt = toLocalInput(new Date().toISOString());
+  schedule.signupClosesAt = toLocalInput(window?.startsAt ?? null);
+  schedule.scheduleLockAt = toLocalInput(window?.startsAt ?? null);
+}
+
 function applyShift(shift: ProductShift | null): void {
   if (shift === null) {
     Object.assign(draft, emptyDraft(), {
       eligibleTeamId: workspace.value?.teams[0]?.id ?? "",
     });
-    schedule.startsAt = "";
-    schedule.endsAt = "";
-    schedule.signupOpensAt = "";
-    schedule.signupClosesAt = "";
-    schedule.scheduleLockAt = "";
+    defaultSchedule();
 
     return;
   }

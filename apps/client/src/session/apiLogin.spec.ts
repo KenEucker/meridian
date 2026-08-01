@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { configureMeridianApi, meridianApiConfig } from "@/api/meridianApi";
+import { commandOutbox, resetCommandOutbox } from "@/outbox/commandOutboxRuntime";
 import {
   adoptHeldApiToken,
   apiLoginState,
@@ -168,6 +169,7 @@ afterEach(() => {
   configureDeviceIdentity(null);
   clearApiToken();
   clearClientSession();
+  resetCommandOutbox();
   resetApiLoginForTests();
 });
 
@@ -309,6 +311,41 @@ describe("signing out", () => {
 
     expect(apiBearerToken()).toBeNull();
     expect(apiLoginState.status).toBe("signed_out");
+  });
+
+  /*
+   * A refusal belongs to the person it refused. It was outliving them: sign out,
+   * sign in as somebody else, and the node's sentence about the previous user's
+   * Field Report was still on the new user's screen.
+   */
+  it("drops the node's verdicts and keeps this device's unsent work", async () => {
+    await signIn();
+
+    commandOutbox.enqueue({
+      idempotencyKey: "11111111-1111-4111-8111-111111111111",
+      commandType: "submit-field-report",
+      payload: {},
+      queuedAt: "2027-07-04T16:00:00.000Z",
+    });
+    commandOutbox.enqueue({
+      idempotencyKey: "22222222-2222-4222-8222-222222222222",
+      commandType: "submit-field-report",
+      payload: {},
+      queuedAt: "2027-07-04T16:00:01.000Z",
+    });
+    commandOutbox.markSending("22222222-2222-4222-8222-222222222222", "2027-07-04T16:00:02.000Z");
+    commandOutbox.markRejected(
+      "22222222-2222-4222-8222-222222222222",
+      "2027-07-04T16:00:03.000Z",
+      "Field Report event does not exist.",
+    );
+
+    await signOut();
+
+    expect(commandOutbox.byStatus("rejected")).toHaveLength(0);
+    expect(
+      commandOutbox.byStatus("queued").map((command) => command.idempotencyKey),
+    ).toEqual(["11111111-1111-4111-8111-111111111111"]);
   });
 });
 

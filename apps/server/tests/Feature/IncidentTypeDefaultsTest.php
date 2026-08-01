@@ -79,9 +79,13 @@ class IncidentTypeDefaultsTest extends TestCase
         $organization = Organization::factory()->create();
 
         // Archiving a type is a decision; re-creating it would quietly undo it.
+        // The name has to be one of the defaults, or the provisioner never tries
+        // to create it and this asserts nothing.
+        $this->assertContains('Vehicle', IncidentTypeDefaults::names());
+
         IncidentType::factory()->create([
             'organization_id' => $organization->id,
-            'name' => 'Weather',
+            'name' => 'Vehicle',
             'archived_at' => Carbon::parse('2027-07-01T00:00:00Z'),
         ]);
 
@@ -91,13 +95,13 @@ class IncidentTypeDefaultsTest extends TestCase
             1,
             IncidentType::query()
                 ->where('organization_id', $organization->id)
-                ->where('name', 'Weather')
+                ->where('name', 'Vehicle')
                 ->count(),
         );
         $this->assertNotNull(
             IncidentType::query()
                 ->where('organization_id', $organization->id)
-                ->where('name', 'Weather')
+                ->where('name', 'Vehicle')
                 ->value('archived_at'),
         );
     }

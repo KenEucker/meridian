@@ -22,8 +22,12 @@ import { createRouter, createWebHistory } from "vue-router";
 import { configureMeridianApi } from "@/api/meridianApi";
 import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { clearDepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
+import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  installLocalFieldSession,
+  LOCAL_FIELD_ORGANIZATION_ID,
+} from "@/session/localFieldSession";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 import { routes } from "@/router";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
@@ -213,6 +217,14 @@ function trainingsPayload(): Record<string, unknown> {
 
 function buildRouter() {
   return createRouter({ history: createWebHistory(), routes });
+}
+
+/** An ISO instant as the `datetime-local` control holds it. */
+function localInput(iso: string): string {
+  const date = new Date(iso);
+  const pad = (value: number): string => String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /*
@@ -581,6 +593,71 @@ describe("shift create and edit", () => {
       "events.departments.shifts.edit",
     );
     expect(router.currentRoute.value.params.shiftId).toBe(PEER_SHIFT_ID);
+  });
+
+  /*
+   * Five fields that were blank and were being typed to the same values every
+   * time. The window is the operational one, which is what setup and teardown
+   * happen inside, and the two roster deadlines land where the roster stops
+   * being changeable: the event starting.
+   */
+  it("opens a new shift on the event window with signups already open", async () => {
+    clearClientSession();
+    installLocalFieldSession({
+      events: [
+        {
+          // The event the session's context resolved to, which is the one a
+          // window is read off.
+          id: LOCAL_FIELD_FIXTURE.eventId,
+          organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+          name: "Local Field Event",
+          slug: "local-field-event",
+          status: "published",
+          timezone: "UTC",
+          starts_at: "2027-07-01T00:00:00.000Z",
+          ends_at: "2027-07-08T00:00:00.000Z",
+          active_event_window_starts_at: "2027-06-28T00:00:00.000Z",
+          active_event_window_ends_at: "2027-07-11T00:00:00.000Z",
+          is_node_locked: true,
+        },
+      ],
+    });
+    selectSessionDepartment(DEPARTMENT_ID);
+    stubNode(() => ({ body: workspacePayload() }));
+
+    const { wrapper } = await mountShiftCreate();
+
+    const [startsAt, endsAt, signupOpensAt, signupClosesAt, scheduleLockAt] =
+      wrapper
+        .findAll('input[type="datetime-local"]')
+        .map((input) => (input.element as HTMLInputElement).value);
+
+    // The active window wins over the published dates: authority is handed over
+    // on it, and a shift covering teardown is inside it and outside them.
+    expect(localInput("2027-06-28T00:00:00.000Z")).toBe(startsAt);
+    expect(localInput("2027-07-11T00:00:00.000Z")).toBe(endsAt);
+    expect(signupOpensAt).not.toBe("");
+    expect(localInput("2027-06-28T00:00:00.000Z")).toBe(signupClosesAt);
+    expect(localInput("2027-06-28T00:00:00.000Z")).toBe(scheduleLockAt);
+  });
+
+  it("leaves the schedule blank for an event with no recorded window", async () => {
+    // A default nobody set is worse than an empty field: it would put a made-up
+    // window on a record the node is about to be asked to accept.
+    stubNode(() => ({ body: workspacePayload() }));
+
+    const { wrapper } = await mountShiftCreate();
+
+    const values = wrapper
+      .findAll('input[type="datetime-local"]')
+      .map((input) => (input.element as HTMLInputElement).value);
+
+    expect([values[0], values[1], values[3], values[4]]).toEqual([
+      "",
+      "",
+      "",
+      "",
+    ]);
   });
 
   it("quotes the node's refusal of a backwards schedule", async () => {

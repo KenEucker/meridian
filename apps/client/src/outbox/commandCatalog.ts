@@ -14,13 +14,15 @@
 // captured when it can never send, which is the outcome CLIENT-018 exists to
 // prevent.
 //
-// The connected-only entries below are the four families technical spec 11A.5
-// names by hand. Each carries the reason the refusal states, so a person who
+// The connected-only entries below start with the four families technical spec
+// 11A.5 names by hand and now include the rest of the department operations
+// desk (M16.21). Each carries the reason the refusal states, so a person who
 // issues one where it cannot be sent is told what happened in words about their
-// work rather than a generic failure. They were registered before the surfaces
-// that issue them existed, so the rule was under test before there was a screen
-// that could break it; the IMS surfaces bound in M16.20 issue theirs through
-// `sendConnectedCommand` and are refused from here.
+// work rather than a generic failure. The first of them were registered before
+// the surfaces that issue them existed, so the rule was under test before there
+// was a screen that could break it; the IMS surfaces bound in M16.20 and the
+// Logistics Window bound in M16.21 issue theirs through `sendConnectedCommand`
+// and are refused from here.
 
 /** Every command this client can submit today. */
 export type MeridianCommandType =
@@ -29,6 +31,14 @@ export type MeridianCommandType =
   | "check-in-staff"
   | "check-out-staff"
   | "mark-no-show"
+  // The rest of the department operations desk (M16.21). Attendance is the only
+  // part of it data/API 7.2 lists as an offline write.
+  | "mark-staff-on-site"
+  | "mark-staff-off-site"
+  | "add-staff-to-shift"
+  | "set-current-deployment"
+  | "checkout-equipment"
+  | "return-equipment"
   // Connected-only families named by technical spec 11A.5.
   | "create-incident"
   | "update-incident"
@@ -129,6 +139,56 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "mark-no-show",
       "/api/commands/mark-no-show",
       "No-show",
+    ),
+    /*
+     * The Logistics Window's other writes (M16.21).
+     *
+     * Attendance is offline-writable and everything around it is not, which
+     * looks inconsistent until you read what each one turns on. Check-in,
+     * check-out, and no-show are recorded against a shift the device already
+     * holds, and data/API 7.2 lists exactly those. Presence is refused on the
+     * strength of every shift and every equipment checkout in the department,
+     * an unscheduled addition weighs trainings, waivers, and organization
+     * status, and equipment handoff turns on whether an item is still where the
+     * node last saw it. None of those are questions a device can answer for
+     * itself, so each is sent now or refused now rather than queued against an
+     * answer that may already be wrong.
+     */
+    "mark-staff-on-site": connectedOnly(
+      "mark-staff-on-site",
+      "/api/commands/mark-staff-on-site",
+      "On-site",
+      "Marking someone on-site needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "mark-staff-off-site": connectedOnly(
+      "mark-staff-off-site",
+      "/api/commands/mark-staff-off-site",
+      "Off-site",
+      "Marking someone off-site needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "add-staff-to-shift": connectedOnly(
+      "add-staff-to-shift",
+      "/api/commands/add-staff-to-shift",
+      "Shift addition",
+      "Adding someone to a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "set-current-deployment": connectedOnly(
+      "set-current-deployment",
+      "/api/commands/set-current-deployment",
+      "Deployment",
+      "Moving someone between deployments needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "checkout-equipment": connectedOnly(
+      "checkout-equipment",
+      "/api/commands/checkout-equipment",
+      "Equipment handoff",
+      "Handing out equipment needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "return-equipment": connectedOnly(
+      "return-equipment",
+      "/api/commands/return-equipment",
+      "Equipment return",
+      "Taking equipment back needs a connection to the node. It cannot be held on this device for later.",
     ),
     "create-incident": connectedOnly(
       "create-incident",

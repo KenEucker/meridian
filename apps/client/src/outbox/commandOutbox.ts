@@ -299,6 +299,34 @@ export class CommandOutbox {
     return excess;
   }
 
+  /**
+   * Drop every command the node has already decided on, keeping unsent work.
+   *
+   * What a session ending runs (M16.22). A settled command is a verdict about
+   * somebody's work — a rejection carries the node's sentence about a Field
+   * Report that person filed — and the next person to sign in on this device has
+   * no business reading it, cannot act on it, and would reasonably read a
+   * refusal on their screen as a refusal of something they did.
+   *
+   * Queued and sending commands stay, and that difference is the whole rule.
+   * They are unsent work this device holds the only copy of, and technical spec
+   * 13.3 requires them to survive a session ending; they carry no verdict for
+   * anyone to misread, and they drain to the node the same way whoever is signed
+   * in next.
+   */
+  dropSettled(): number {
+    let dropped = 0;
+
+    for (const command of this.all()) {
+      if (SETTLED.includes(command.status)) {
+        this.commands.delete(command.idempotencyKey);
+        dropped += 1;
+      }
+    }
+
+    return dropped;
+  }
+
   /** Install a set of commands, replacing whatever is held. */
   replaceAll(commands: readonly OutboxCommand[]): void {
     this.commands.clear();

@@ -313,8 +313,7 @@ GET /api/events/{event}/info
 GET /api/events/{event}/teams
 GET /api/events/{event}/shifts
 GET /api/events/{event}/departments/{department}/overview
-GET /api/events/{event}/departments/{department}/logistics/search
-GET /api/events/{event}/departments/{department}/logistics/staff/{staff}
+GET /api/events/{event}/departments/{department}/logistics
 GET /api/events/{event}/departments/{department}/operations
 GET /api/events/{event}/departments/{department}/planning
 GET /api/events/{event}/field-reports
@@ -336,13 +335,39 @@ Department operations read models are purpose-built and separate:
 
 - Overview returns selected-shift exceptions, summary counts, checked-in staff,
   assignments, and compact equipment/deployment summaries for department leads.
-- Logistics search returns department-scoped staff, equipment, and shift hits
-  suitable for offline cache.
-- Logistics staff detail returns one staff operational workspace payload.
-- Operations Center returns a capability-composed module manifest plus authorized
-  module payloads only.
+- Logistics returns the department-scoped index the desk works from: staff,
+  equipment, and shifts to search across, and one operational workspace per
+  department member.
+- Operations Center returns the deployment options and the staff on shift who may
+  be moved between them; its other modules are composed from capabilities the
+  actor already holds and read their own endpoints.
 - Planning returns identity-free plan-versus-actual aggregate rows and must not
   include staff identities, signup lists, or team-member lists.
+
+Every one of the four carries the same `access` block — the presence,
+attendance, equipment, deployment, planning, and administration answers the
+matching commands enforce — so a surface offers only what the node would accept
+and the node decides again regardless (CLIENT-006).
+
+The Logistics read is one request rather than a search endpoint plus a
+per-staff-member detail endpoint, which is what this section described before
+M16.21. A desk that looks somebody up by asking the node has no search when the
+node is unreachable, and SLB-021 requires department-scoped offline search
+across staff, equipment, and shifts. One read of the whole department index is
+what a device can hold and search; splitting it would have made the requirement
+unimplementable at the surface it belongs to. The index is bounded by the desk's
+own horizon: shifts whose window falls between twelve hours before and
+thirty-six hours after the read, which covers an overnight handover without
+handing a desk every shift of a ten-day event.
+
+Each shift card in a workspace carries the node's answer on the four things the
+desk may do with it — check in, check out, mark no-show, add to the shift — and
+each workspace carries whether that person may go off-site and, when they may
+not, the sentence `DepartmentPresenceService` refuses with (SLB-017, SLB-018).
+`can_add_to_shift` is deliberately the loose side of the question: it weighs
+presence, an existing assignment, whether the shift has started, and eligible-team
+membership, while `UnscheduledShiftAdditionService` additionally weighs
+trainings, waivers, and organization status and refuses in its own words.
 
 Event Info (`GET /api/events/{event}/info`) returns the staff-facing event
 information surface: event context plus one entry per Event Info section, in the
@@ -447,6 +472,9 @@ POST /api/commands/remove-staff-from-shift
 POST /api/commands/check-in-staff
 POST /api/commands/check-out-staff
 POST /api/commands/mark-no-show
+POST /api/commands/mark-staff-on-site
+POST /api/commands/mark-staff-off-site
+POST /api/commands/add-staff-to-shift
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
 POST /api/commands/return-equipment
@@ -520,6 +548,33 @@ Team lead designation commands (`select-team-lead`, `remove-team-lead`) are depa
 Team staff assignment commands (`assign-staff-to-team`, `remove-staff-from-team`) are open to department `department.administer` authority and to designated leads of the target team. Removal archives the membership (`archived_at`) rather than deleting it, cannot remove the department default-team membership, and cannot leave a department membership without at least one active team membership.
 
 Equipment inventory setup commands (`create-equipment-item`, `update-equipment-item`, `archive-equipment-item`, `restore-equipment-item`, `import-equipment-inventory`) build the department inventory that the Logistics checkout/check-in commands consume. They are department-scoped and event-independent, authorized by `department.equipment.manage` (`department_logistics`) or `department.administer` (`department_lead`, `department_administration`) on a team in the target department. Equipment without a department stays Orchid/God Mode repair tooling, and no command accepts a department other than the one that owns the item, so department-to-department allotments remain excluded by EQUIP-006. New equipment is always created `available`; inventory setup may set only `available`, `missing`, or `damaged`, because `checked_out` and `returned` are produced by `checkout-equipment`/`return-equipment`. State changes and archiving are refused while an item has an open checkout. Asset tags are unique among equipment in a department, which lets a re-run of the same import skip rows instead of duplicating equipment. Archiving is a soft transition on `archived_at` that preserves checkout history. `import-equipment-inventory` accepts spreadsheet CSV text with a required `name` header column plus optional `asset_tag` and `serial_number` columns, takes event scope from the request rather than the file, processes each row independently, and returns per-row imported/skipped results with reasons.
+
+Department presence commands (`mark-staff-on-site`, `mark-staff-off-site`) are
+scoped to one event, department, and staff member (SLB-015) and authorized by
+`department.presence.manage` (`department_logistics`). Only an active department
+member may be marked on-site, and going off-site is refused while that person is
+checked into a department shift or still holding department equipment that has
+not been returned or marked missing or damaged (SLB-017, SLB-018). Marking
+somebody into the state they are already in is accepted and records no state
+change, so a desk that presses the button twice does not produce two audit
+entries.
+
+The unscheduled shift addition command (`add-staff-to-shift`) is the Logistics
+Window's "add to shift" (SLB-008). It is authorized by the same attendance
+authority as check-in, requires the shift to have started and not be cancelled,
+and requires the staff member to be on-site, an active department member, an
+eligible-team member, clear of do-not-staff, and to meet the shift's training
+and waiver requirements. Overlapping assignments are accepted with a warning
+rather than refused (technical spec 20.5), and the warnings travel back with the
+acceptance so the desk can show them.
+
+Attendance commands (`check-in-staff`, `check-out-staff`, `mark-no-show`) accept
+`origin_node_id` as an optional field. A client replaying an operation that
+originated elsewhere names that node; a client posting its own work omits it and
+the node that receives the command records itself as the origin, because nothing
+publishes a node id to a browser and provenance is better recorded than guessed.
+`origin_device_id` stays required: the device that captured the work is the
+device that knows which one it is.
 
 Incident list preset commands (`save-incident-list-preset`, `delete-incident-list-preset`) manage one user's saved incident list selections for one event. They reuse the `incidents.view` gate rather than adding a capability: if a user may read the event's incident list, they may name their own way of reading it. Presets are always addressed by owner, so an IC user can neither overwrite nor delete another's, and a preset never grants access to an incident the applying user could not already see. Saving an existing name overwrites that preset; paging position is never stored. Presets are personal view state rather than operational records, so they are not audited.
 

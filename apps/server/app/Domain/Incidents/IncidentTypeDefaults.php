@@ -47,6 +47,7 @@ final class IncidentTypeDefaults
             'Sexual Violence',
             'Vehicle',
             'Camp Dispute',
+            'Other',
         ];
     }
 }

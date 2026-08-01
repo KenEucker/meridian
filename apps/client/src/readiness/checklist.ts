@@ -16,11 +16,13 @@
 //   device signing available
 //
 // This module turns the readiness signals that exist today into that checklist.
-// Only `encryption active` (M8.3) and `device signing available` (M8.4) have
-// real capability probes; the remaining items depend on authentication, device
-// trust, event selection, local cache, and sync work owned by later Alpha 1
-// milestones. Rather than invent behavior, those items are reported honestly as
-// `pending` until their signal is wired in by the owning task.
+// Encryption (M8.3), device signing (M8.4), and the node this device works
+// against each have a real probe, and since M16.5 the session document answers
+// two more: `logged in` and `event selected` are facts about the session the
+// client holds, not features waiting to be built. The remaining items — device
+// trust, local cache, and last sync — still depend on work owned by later
+// Alpha 1 milestones, and rather than invent behavior they are reported
+// honestly as `pending` until their signal is wired in by the owning task.
 
 import { nodeConnection, type NodeConnection } from "@/app/nodeConnection";
 import {
@@ -31,6 +33,7 @@ import {
   checkLocalEncryptionReadiness,
   type LocalEncryptionReadiness,
 } from "@/readiness/localEncryption";
+import { clientSessionState } from "@/session/clientSession";
 
 /**
  * Stable identifiers for the technical spec section 14 readiness items, in the
@@ -74,13 +77,44 @@ export interface ReadinessSummary {
 }
 
 /**
- * Readiness signals available today. Only local encryption (M8.3) and device
- * signing (M8.4) are wired; the remaining items resolve to `pending`.
+ * What the client's session says, reduced to the two checklist items it
+ * answers.
+ *
+ * Reduced rather than passed whole because readiness has no business reasoning
+ * about a session document. It asks two questions — is somebody signed in, and
+ * is an event in effect — and everything that decides those answers is settled
+ * before it gets here.
+ */
+export interface ReadinessSessionSignal {
+  /** Whether the client holds permissions it may act on right now. */
+  readonly signedIn: boolean;
+  /** Who they belong to, when a document is held. */
+  readonly userName: string | null;
+  /** True when they came from the durable copy rather than from the node. */
+  readonly cached: boolean;
+  /**
+   * Why a held session is refused, when one is. A device holding an expired
+   * document is not signed in for readiness purposes, and saying which of the
+   * two is the case is the difference between "sign in" and "reconnect".
+   */
+  readonly refusedDetail: string | null;
+  /** The event the session resolved at, or null when none is in effect. */
+  readonly eventId: string | null;
+  readonly eventLabel: string | null;
+  /** Whether the node this session came from is locked to that event. */
+  readonly nodeLocked: boolean;
+}
+
+/**
+ * Readiness signals available today. Local encryption (M8.3), device signing
+ * (M8.4), the node connection, and the session (M16.5) are wired; the remaining
+ * items resolve to `pending`.
  */
 export interface ReadinessChecklistInputs {
   readonly localEncryption: LocalEncryptionReadiness;
   readonly deviceSigning: DeviceSigningReadiness;
   readonly node: NodeConnection;
+  readonly session: ReadinessSessionSignal;
 }
 
 const READINESS_ITEM_ORDER: readonly ReadinessItemKey[] = [
@@ -113,12 +147,74 @@ const PENDING_DETAIL = "Not available yet in this build.";
 
 /** Items that resolve to `pending` until their owning milestone wires them up. */
 const PENDING_ITEMS: readonly ReadinessItemKey[] = [
-  "loggedIn",
   "deviceTrusted",
-  "eventSelected",
   "localCacheComplete",
   "lastSyncCompleted",
 ];
+
+/**
+ * `logged in` is whether this device holds permissions it may act on.
+ *
+ * Three states rather than two, because a device that signed in last week and
+ * whose event window has since closed is neither signed in nor signed out, and
+ * telling those apart is the difference between "sign in" and "reconnect". A
+ * cached session is ready: working from the last answer the node gave, inside
+ * the event window, is the normal state of a device on site, and marking it
+ * short of ready would be the nagging section 14 rules out.
+ */
+function loggedInItem(session: ReadinessSessionSignal): ReadinessChecklistItem {
+  if (session.refusedDetail !== null) {
+    return toItem("loggedIn", "not-ready", session.refusedDetail);
+  }
+
+  if (!session.signedIn) {
+    return toItem(
+      "loggedIn",
+      "not-ready",
+      "No session on this device. Sign in to prepare it.",
+    );
+  }
+
+  const who = session.userName ?? "this device's user";
+
+  return toItem(
+    "loggedIn",
+    "ready",
+    session.cached
+      ? `Signed in as ${who}, from the permissions this device last received.`
+      : `Signed in as ${who}.`,
+  );
+}
+
+/**
+ * `event selected` is whether an event is in effect, however it got there.
+ *
+ * On a locked node nobody selected anything — the node answers for its event
+ * and there is nothing to pick between (technical spec 11A.3) — and the item is
+ * ready all the same. The checklist asks whether the device knows which event
+ * it is working, not whether a human chose it from a list.
+ */
+function eventSelectedItem(
+  session: ReadinessSessionSignal,
+): ReadinessChecklistItem {
+  if (session.eventId === null) {
+    return toItem(
+      "eventSelected",
+      "not-ready",
+      session.signedIn
+        ? "No event is in effect on this device."
+        : "Sign in to resolve the event this device works.",
+    );
+  }
+
+  const label = session.eventLabel ?? "The event this node answers for";
+
+  return toItem(
+    "eventSelected",
+    "ready",
+    session.nodeLocked ? `${label}. This node is locked to it.` : label,
+  );
+}
 
 /**
  * `trusted server known` is about knowing which node this device works
@@ -183,6 +279,12 @@ export function buildReadinessChecklist(
     if (key === "trustedServerKnown") {
       return nodeItem(inputs.node);
     }
+    if (key === "loggedIn") {
+      return loggedInItem(inputs.session);
+    }
+    if (key === "eventSelected") {
+      return eventSelectedItem(inputs.session);
+    }
     if (PENDING_ITEMS.includes(key)) {
       return toItem(key, "pending", PENDING_DETAIL);
     }
@@ -230,6 +332,66 @@ export interface ReadinessProbeScope {
 }
 
 /**
+ * Reduce the session this client holds to the two items readiness asks about.
+ *
+ * Read out of `clientSessionState` rather than through `sessionContext`, because
+ * both readings agree on the answer and this one keeps the readiness screen from
+ * depending on the context module's switcher machinery. The event is taken only
+ * while access is granted: a document whose event window has closed still names
+ * an event, and reporting it as selected would be a green check against a
+ * context the client will not act on.
+ */
+export function resolveReadinessSessionSignal(): ReadinessSessionSignal {
+  const document = clientSessionState.document;
+  const status = clientSessionState.status;
+  const granted = status === "live" || status === "cached";
+
+  if (document === null) {
+    return {
+      signedIn: false,
+      userName: null,
+      cached: false,
+      refusedDetail: null,
+      eventId: null,
+      eventLabel: null,
+      nodeLocked: false,
+    };
+  }
+
+  const eventId = granted ? document.context.event_id : null;
+  const event =
+    eventId === null
+      ? null
+      : (document.events.find((candidate) => candidate.id === eventId) ?? null);
+
+  return {
+    signedIn: granted,
+    userName: document.user.name,
+    cached: status === "cached",
+    refusedDetail: granted ? null : describeRefusedSession(),
+    eventId,
+    eventLabel: event?.name ?? null,
+    nodeLocked: document.context.node_locked,
+  };
+}
+
+/**
+ * Why a held session is not being acted on, in the same words the permissions
+ * notice uses. Two surfaces saying the same state differently is two states as
+ * far as anyone reading them is concerned.
+ */
+function describeRefusedSession(): string {
+  switch (clientSessionState.refreshReason) {
+    case "event_window_ended":
+      return "The event this device cached its permissions for has ended. Reconnect to the node to continue.";
+    case "no_event_context":
+      return "This device holds no event context. Reconnect to the node to continue.";
+    default:
+      return "This device cannot confirm the event its permissions were cached for. Reconnect to the node to continue.";
+  }
+}
+
+/**
  * Probe the current client scope and build the readiness checklist in one call.
  * Defaults to the real platform (`globalThis`) while tests inject a scope.
  */
@@ -240,5 +402,6 @@ export function resolveReadinessChecklist(
     localEncryption: checkLocalEncryptionReadiness(scope),
     deviceSigning: checkDeviceSigningReadiness(scope),
     node: nodeConnection.value,
+    session: resolveReadinessSessionSignal(),
   });
 }

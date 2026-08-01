@@ -1,3 +1,4 @@
+import type { StatusPillTone } from "@/components/StatusPill.vue";
 import type {
   DepartmentPresenceState,
   EquipmentState,
@@ -56,6 +57,64 @@ export function lifecycleLabel(lifecycle: ShiftLifecycle): string {
       return "Completed";
     case "cancelled":
       return "Cancelled";
+  }
+}
+
+/*
+ * What each state costs whoever is reading it.
+ *
+ * The tones are a scale of consequence, not a restatement of the vocabulary, so
+ * they are decided here beside the words rather than inside a template. Two of
+ * them are worth saying out loud because the obvious mapping is wrong:
+ *
+ *   - Off-site is not a problem. Somebody who went off-site did so through this
+ *     desk, with the checks that go with it, and painting it as a warning would
+ *     teach an operator to ignore the color on the states where it matters.
+ *   - No-show and missing are, and are the only two states on these three scales
+ *     that somebody has to do something about.
+ */
+export function presenceTone(state: DepartmentPresenceState): StatusPillTone {
+  return state === "on_site" ? "positive" : "neutral";
+}
+
+export function attendanceTone(state: ShiftAttendanceState): StatusPillTone {
+  switch (state) {
+    case "checked_in":
+      return "positive";
+    case "no_show":
+      return "critical";
+    case "excused":
+    case "corrected":
+      return "caution";
+    case "checked_out":
+    case "scheduled":
+      return "neutral";
+  }
+}
+
+export function equipmentTone(state: EquipmentState): StatusPillTone {
+  switch (state) {
+    case "checked_out":
+      return "info";
+    case "missing":
+    case "damaged":
+      return "critical";
+    case "available":
+    case "returned":
+      return "neutral";
+  }
+}
+
+export function lifecycleTone(lifecycle: ShiftLifecycle): StatusPillTone {
+  switch (lifecycle) {
+    case "active":
+      return "positive";
+    case "cancelled":
+      return "critical";
+    case "upcoming":
+      return "info";
+    case "completed":
+      return "neutral";
   }
 }
 

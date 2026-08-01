@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Downloads\ShortLivedDownloadUrlService;
 use App\Services\FieldReports\FieldReportPhotoSignedUrlService;
 use App\Services\FieldReports\FieldReportPhotoUploadService;
+use App\Services\Node\NodeSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,6 +25,8 @@ use Throwable;
  */
 class FieldReportPhotoController extends Controller
 {
+    public function __construct(private readonly NodeSetupService $nodes) {}
+
     public function upload(
         Request $request,
         FieldReportPhotoUploadService $uploads,
@@ -35,12 +38,24 @@ class FieldReportPhotoController extends Controller
             'id' => ['required', 'uuid'],
             'field_report_id' => ['required', 'uuid'],
             'origin_device_id' => ['required', 'uuid'],
-            'origin_node_id' => ['required', 'uuid'],
+            // Optional for the same reason the text command's is (M16.21): the
+            // browser uploading the photo cannot learn a node id, and the node
+            // receiving the upload is the one it originated at.
+            'origin_node_id' => ['nullable', 'uuid'],
             'checksum_sha256' => ['required', 'string', 'size:64'],
             'declared_mime_type' => ['nullable', 'string', 'max:128'],
             'device_uploaded_at' => ['nullable', 'date'],
             'bytes_base64' => ['required', 'string'],
         ]);
+
+        $originNodeId = $validated['origin_node_id']
+            ?? $this->nodes->activeNode()?->getKey();
+
+        if ($originNodeId === null) {
+            return response()->json([
+                'message' => 'This node is not configured, so a Field Report photo cannot record where it came from.',
+            ], 422);
+        }
 
         $report = FieldReport::query()->findOrFail($validated['field_report_id']);
         abort_unless($user->can('uploadPhoto', $report), 403);
@@ -58,7 +73,7 @@ class FieldReportPhotoController extends Controller
                 'field_report_id' => $validated['field_report_id'],
                 'uploaded_by_user_id' => (string) $user->getKey(),
                 'origin_device_id' => $validated['origin_device_id'],
-                'origin_node_id' => $validated['origin_node_id'],
+                'origin_node_id' => (string) $originNodeId,
                 'bytes' => $bytes,
                 'checksum_sha256' => strtolower($validated['checksum_sha256']),
                 'declared_mime_type' => $validated['declared_mime_type'] ?? null,
