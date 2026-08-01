@@ -28,6 +28,7 @@
 import { computed, reactive, readonly } from "vue";
 
 import { MeridianApiError, meridianJson } from "@/api/meridianApi";
+import { discardSettledCommands } from "@/outbox/commandOutboxRuntime";
 import {
   clearApiToken,
   heldApiToken,
@@ -271,6 +272,17 @@ export async function signOut(): Promise<void> {
   clearApiToken();
   clearClientSession();
   discardSessionContextData();
+  /*
+   * The verdicts go with the person, the unsent work stays with the device.
+   *
+   * A rejected command is the node's sentence about something the person who
+   * just signed out did — "Refused by the node: Field Report event does not
+   * exist" — and it was outliving them: sign out, sign in as somebody else, and
+   * the same refusal was still on screen, attached to nothing the new user had
+   * done and impossible for them to act on. Queued work survives, because it is
+   * unsent and this device is the only copy of it (technical spec 13.3).
+   */
+  discardSettledCommands();
   signedOutState(null);
 }
 

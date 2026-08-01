@@ -33,6 +33,7 @@ import {
   meridianJson,
   registerMeridianCredentialSource,
 } from "@/api/meridianApi";
+import { discardSettledCommands } from "@/outbox/commandOutboxRuntime";
 import { clearClientSession, refreshClientSession } from "@/session/clientSession";
 import { discardSessionContextData } from "@/session/sessionContext";
 
@@ -413,12 +414,18 @@ export async function endWorkstationSession(
  * is what keeps queued Field Reports: that registry's Field Report reset keeps
  * anything still pending sync whatever context it belongs to, because unsent work
  * is not context-scoped data (technical spec 13.3; kiosk guide 4.4).
+ *
+ * Settled commands are the exception, and go for the reason the queued ones
+ * stay. A rejection is the node's verdict on what the person who was standing
+ * here did, and a shared workstation is precisely the machine where the next
+ * person to stand at it is somebody else.
  */
 function wipe(reason: WorkstationSessionEndReason): void {
   lock(reason);
 
   clearClientSession();
   discardSessionContextData();
+  discardSettledCommands();
 }
 
 function lock(reason: WorkstationSessionEndReason | null): void {

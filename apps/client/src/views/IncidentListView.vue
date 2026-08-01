@@ -17,8 +17,8 @@ import {
   INCIDENT_LIST_PAGE_SIZES,
   INCIDENT_LIST_PRESET_NAME_MAX_LENGTH,
   incidentAccess,
+  incidentListOpenModePreference,
   incidentSessionContext,
-  resolveIncidentListOpenMode,
   saveIncidentListPreset,
   setIncidentListOpenMode,
   statusLabel,
@@ -88,7 +88,7 @@ const presets = ref<readonly IncidentListPreset[]>([]);
 const presetNameDraft = ref("");
 const presetError = ref("");
 const presetBusy = ref(false);
-const listOpenMode = ref<IncidentListOpenMode>(resolveIncidentListOpenMode());
+const listOpenMode = incidentListOpenModePreference;
 
 /** The table's columns, and the sort key each one asks the node for. */
 const columns: readonly { key: string; label: string }[] = Object.freeze([
@@ -453,7 +453,6 @@ function onListOpenModeChange(event: Event): void {
   const target = event.target as HTMLSelectElement;
   const mode: IncidentListOpenMode = target.value === "edit" ? "edit" : "view";
 
-  listOpenMode.value = mode;
   setIncidentListOpenMode(mode);
 }
 
@@ -577,6 +576,31 @@ async function onSearchSubmit(): Promise<void> {
             Clear
           </RouterLink>
         </form>
+
+        <!--
+          Not a filter, and not behind the filter panel's disclosure. It changes
+          what every row in the table does when it is clicked, which an operator
+          who wants to go straight to the form has to be able to find without
+          opening something first — and a control nobody finds is a control that
+          does not exist. Offered only where the edit route is, because sending
+          a reader who holds no `incidents.update` to it would land them on a
+          refusal.
+        -->
+        <ControlField
+          v-if="canEdit"
+          label="Clicking an incident"
+          control-id="ims-list-open-mode"
+          width="md"
+        >
+          <select
+            id="ims-list-open-mode"
+            :value="listOpenMode"
+            @change="onListOpenModeChange"
+          >
+            <option value="view">Opens it</option>
+            <option value="edit">Edits it</option>
+          </select>
+        </ControlField>
       </ControlBar>
 
       <p v-if="loadError" class="ims-list__load-error" role="alert">
@@ -682,16 +706,6 @@ async function onSearchSubmit(): Promise<void> {
             </select>
           </label>
 
-          <label v-if="canEdit" for="ims-list-open-mode"><span>Open as</span>
-            <select
-              id="ims-list-open-mode"
-              :value="listOpenMode"
-              @change="onListOpenModeChange"
-            >
-              <option value="view">View</option>
-              <option value="edit">Edit</option>
-            </select>
-          </label>
         </form>
 
         <form

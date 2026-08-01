@@ -95,7 +95,7 @@ function isOfflineFieldReport(value: unknown): value is OfflineFieldReport {
     typeof report.body === "string" &&
     typeof report.deviceSubmittedAt === "string" &&
     typeof report.originDeviceId === "string" &&
-    typeof report.originNodeId === "string" &&
+    (report.originNodeId === null || typeof report.originNodeId === "string") &&
     typeof report.createdAt === "string" &&
     isSyncStatus(report.syncStatus) &&
     (report.fraNumber === null || typeof report.fraNumber === "string") &&

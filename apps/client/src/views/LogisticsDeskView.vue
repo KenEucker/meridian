@@ -1,165 +1,170 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, ref, watch } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import EntitySearch from "@/components/department-ops/EntitySearch.vue";
+import StatusPill from "@/components/StatusPill.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
-import {
-  LOCAL_DEPARTMENT_OVERVIEW,
-  LOCAL_LOGISTICS_DESK,
-} from "@/department-ops/fixtures";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   attendanceStateLabel,
+  attendanceTone,
   equipmentStateLabel,
+  equipmentTone,
   formatTimestamp,
   lifecycleLabel,
+  lifecycleTone,
   presenceStateLabel,
+  presenceTone,
 } from "@/department-ops/labels";
 import {
   CURRENT_SHIFT_WINDOW_MINUTES,
-  addLogisticsStaffToShift,
-  checkInLogisticsStaff,
-  checkOutLogisticsEquipment,
-  checkOutLogisticsStaff,
+  addStaffToShift,
+  checkoutEquipment,
   currentLogisticsShifts,
+  getLogisticsDesk,
   logisticsShiftSections,
   logisticsStaffOnShift,
-  markLogisticsStaffOffSite,
-  markLogisticsStaffOnSite,
-  returnLogisticsEquipment,
+  logisticsStaffStates,
+  logisticsStatePills,
+  queueCheckIn,
+  queueCheckOut,
+  queueMarkNoShow,
+  returnEquipment,
   searchLogisticsDesk,
-  selectLogisticsHit,
-  selectLogisticsStaff,
-  selectedLogisticsWorkspace,
-} from "@/department-ops/logistics";
-import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
-import type {
-  EquipmentReturnCondition,
-  LogisticsSearchHit,
-  LogisticsStaffWorkspace,
-  ShiftOption,
-} from "@/department-ops/types";
+  setDepartmentPresence,
+  type DepartmentOpsShift,
+  type LogisticsDeskRead,
+  type LogisticsSearchHit,
+} from "@/department-ops/departmentOpsReadModel";
+import type { EquipmentReturnCondition } from "@/department-ops/types";
 
-const desk = ref(LOCAL_LOGISTICS_DESK);
+/**
+ * The Logistics Window (SLB-003 through SLB-008, SLB-011, SLB-012, SLB-016
+ * through SLB-018, SLB-021; bound to the node in M16.21).
+ *
+ * The desk reads its whole department index in one request and writes through
+ * the node from then on. Everything this page used to decide for itself — who
+ * may go off-site, what a check-in does to a shift card, which equipment moves
+ * to whose hands, which shift somebody may be added to — arrives decided, and
+ * every write is followed by a re-read, because a command answers with the
+ * record it changed and not with what that change did to the rest of the screen.
+ *
+ * Attendance is queued and the rest is not. Check-in, check-out, and no-show are
+ * Alpha 1 offline writes (data/API 7.2) and go into the command outbox, so a
+ * desk with no node keeps working; presence, shift additions, and equipment
+ * handoff are refused where they stand rather than held (CLIENT-018).
+ */
+const route = useRoute();
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
+
+const desk = ref<LogisticsDeskRead | null>(null);
+const loadError = ref<string | null>(null);
+const selectedStaffId = ref<string | null>(null);
+const selectedShiftContextId = ref<string | null>(null);
 const query = ref("");
 const hits = ref<readonly LogisticsSearchHit[]>([]);
 const status = ref<string | null>(null);
-const dialog = ref<"check-in" | "check-out" | "equipment-checkout" | null>(
-  null,
-);
+const dialog = ref<
+  "check-in" | "check-out" | "equipment-checkout" | null
+>(null);
 const dialogShiftId = ref("");
 const dialogTimestamp = ref(new Date().toISOString().slice(0, 16));
+const dialogStartTimestamp = ref("");
 const selectedEquipmentIds = ref<string[]>([]);
 const equipmentReturnConditions = ref<Record<string, EquipmentReturnCondition>>(
   {},
 );
 
-const workspace = computed(() => selectedLogisticsWorkspace(desk.value));
-const currentShifts = computed(() => currentLogisticsShifts(desk.value));
-const staffOnShift = computed(() => logisticsStaffOnShift(desk.value));
+const context = computed(() => desk.value?.context ?? null);
+const access = computed(() => desk.value?.access ?? null);
+const timeZone = computed(() => desk.value?.context.timeZone ?? "UTC");
+const departmentLabel = computed(
+  () => desk.value?.context.departmentLabel ?? "Department",
+);
+const workspace = computed(() =>
+  selectedStaffId.value === null
+    ? null
+    : (desk.value?.staffWorkspaces[selectedStaffId.value] ?? null),
+);
+const currentShifts = computed(() =>
+  desk.value === null ? [] : currentLogisticsShifts(desk.value),
+);
+/**
+ * The open workspace's states, minus presence.
+ *
+ * Presence has its own pill in the header and is stated whichever way it went,
+ * so it is dropped from this list rather than rendered twice.
+ */
+const workspacePills = computed(() => {
+  if (desk.value === null || selectedStaffId.value === null) {
+    return [];
+  }
+
+  return logisticsStatePills(
+    logisticsStaffStates(desk.value, selectedStaffId.value),
+  ).filter((pill) => pill.key !== "onSite");
+});
+const staffOnShift = computed(() =>
+  desk.value === null ? [] : logisticsStaffOnShift(desk.value),
+);
 const logisticsSummary = computed(() => ({
-  onSite: desk.value.searchableStaff.filter(
+  onSite: (desk.value?.searchableStaff ?? []).filter(
     (staff) => staff.presenceState === "on_site",
   ).length,
-  offSite: desk.value.searchableStaff.filter(
+  offSite: (desk.value?.searchableStaff ?? []).filter(
     (staff) => staff.presenceState === "off_site",
   ).length,
-  equipmentOut: desk.value.searchableEquipment.filter(
+  equipmentOut: (desk.value?.searchableEquipment ?? []).filter(
     (item) => item.status === "checked_out",
   ).length,
   currentShifts: currentShifts.value.length,
 }));
-const searchContext = computed(() => desk.value.selectedSearchContext);
-const searchContextStaff = computed(() => {
-  const context = searchContext.value;
-  if (!context) {
-    return [];
-  }
-
-  return context.relatedStaffIds
-    .map((staffId) => desk.value.staffWorkspaces[staffId])
-    .filter((staff): staff is LogisticsStaffWorkspace => staff !== undefined);
-});
-const selectedShift = computed(() => {
-  const context = searchContext.value;
-  if (context?.kind !== "shift") {
-    return null;
-  }
-
-  return (
-    desk.value.searchableShifts.find((shift) => shift.shiftId === context.id) ??
-    null
-  );
-});
+const selectedShift = computed(
+  () =>
+    desk.value?.searchableShifts.find(
+      (shift) => shift.shiftId === selectedShiftContextId.value,
+    ) ?? null,
+);
+/**
+ * Who the selected shift is worth showing beside it.
+ *
+ * Every workspace holding a card for that shift with an assignment on it —
+ * derived from the read rather than fetched again, so this list and the
+ * workspace an operator opens from it are the same answer.
+ */
 const selectedShiftStaff = computed(() => {
   const shift = selectedShift.value;
 
-  if (!shift) {
+  if (shift === null || desk.value === null) {
     return [];
   }
 
-  const scheduled = new Map<
-    string,
-    {
-      readonly staffId: string;
-      readonly displayName: string;
-      readonly teamLabel: string;
-      readonly attendanceLabel: string;
-      readonly shiftTitle: string;
-      readonly startsAt: string;
-      readonly endsAt: string;
-      readonly canOpen: boolean;
-    }
-  >();
+  return Object.values(desk.value.staffWorkspaces)
+    .flatMap((member) => {
+      const card = member.shiftCards.find(
+        (candidate) =>
+          candidate.shiftId === shift.shiftId &&
+          candidate.attendanceState !== null,
+      );
 
-  for (const workspace of Object.values(desk.value.staffWorkspaces)) {
-    for (const card of workspace.shiftCards) {
-      if (
-        card.attendanceState === null ||
-        !shiftsOverlap(card, shift)
-      ) {
-        continue;
-      }
-
-      scheduled.set(workspace.staffId, {
-        staffId: workspace.staffId,
-        displayName: workspace.displayName,
-        teamLabel: workspace.teamLabel,
-        attendanceLabel: attendanceStateLabel(card.attendanceState),
-        shiftTitle: card.title,
-        startsAt: card.startsAt,
-        endsAt: card.endsAt,
-        canOpen: true,
-      });
-    }
-  }
-
-  if (shift.shiftId === LOCAL_DEPARTMENT_OVERVIEW.selectedShiftId) {
-    for (const assignment of LOCAL_DEPARTMENT_OVERVIEW.assignments) {
-      if (scheduled.has(assignment.staffId)) {
-        continue;
-      }
-
-      scheduled.set(assignment.staffId, {
-        staffId: assignment.staffId,
-        displayName: assignment.displayName,
-        teamLabel: assignment.teamLabel,
-        attendanceLabel: attendanceStateLabel(assignment.attendanceState),
-        shiftTitle: shift.title,
-        startsAt: shift.startsAt,
-        endsAt: shift.endsAt,
-        canOpen: assignment.staffId in desk.value.staffWorkspaces,
-      });
-    }
-  }
-
-  return [...scheduled.values()].sort((left, right) => {
-    const startsAt = left.startsAt.localeCompare(right.startsAt);
-    return startsAt === 0
-      ? left.displayName.localeCompare(right.displayName)
-      : startsAt;
-  });
+      return card === undefined
+        ? []
+        : [
+            {
+              staffId: member.staffId,
+              displayName: member.displayName,
+              teamLabel: member.teamLabel,
+              attendanceLabel: attendanceStateLabel(card.attendanceState!),
+              shiftTitle: card.title,
+              startsAt: card.startsAt,
+              endsAt: card.endsAt,
+            },
+          ];
+    })
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
 });
 const shiftSections = computed(() =>
   workspace.value ? logisticsShiftSections(workspace.value) : null,
@@ -169,56 +174,95 @@ const shiftSectionGroups = computed(() => [
     id: "active",
     headingId: "active-shifts-heading",
     title: "Active shift",
-    emptyMessage: "No active shift in the local workspace cache.",
+    emptyMessage: "No active shift for this staff member.",
     cards: shiftSections.value?.active ?? [],
   },
   {
     id: "upcoming",
     headingId: "upcoming-shifts-heading",
     title: "Upcoming shifts",
-    emptyMessage: "No upcoming shifts in the local workspace cache.",
+    emptyMessage: "No upcoming shifts for this staff member.",
     cards: shiftSections.value?.upcoming ?? [],
   },
   {
     id: "outgoing",
     headingId: "outgoing-shifts-heading",
     title: "Outgoing shifts",
-    emptyMessage: "No outgoing shift in the local workspace cache.",
+    emptyMessage: "No outgoing shift for this staff member.",
     cards: shiftSections.value?.outgoing ?? [],
   },
 ]);
-const canManageLogisticsCatalog = computed(() => {
-  const department = selectedFixtureDepartment.value;
 
-  return (
-    department.isDepartmentLead ||
-    department.teams.some(
-      (team) =>
-        team.isTeamLead &&
-        /logistics/i.test(`${team.teamLabel} ${team.teamCode}`),
-    )
-  );
-});
+/**
+ * Read the desk.
+ *
+ * A failed read clears it rather than leaving the last index on screen: a
+ * department whose roster could not be read must not look like an empty one.
+ * The open workspace survives a re-read when that staff member is still in the
+ * response, so a write does not close the person the operator is serving.
+ */
+async function loadDesk(): Promise<void> {
+  if (eventId.value === "" || departmentId.value === "") {
+    desk.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    const read = await getLogisticsDesk(eventId.value, departmentId.value);
+
+    desk.value = read;
+
+    if (
+      selectedStaffId.value !== null &&
+      read.staffWorkspaces[selectedStaffId.value] === undefined
+    ) {
+      selectedStaffId.value = null;
+    }
+  } catch (error) {
+    desk.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this department's logistics desk. Check the connection to this node and try again.",
+    );
+  }
+}
 
 function onSearch(value: string): void {
   query.value = value;
-  hits.value = searchLogisticsDesk(desk.value, value);
+  hits.value = desk.value === null ? [] : searchLogisticsDesk(desk.value, value);
 }
 
 function onSelect(hit: LogisticsSearchHit): void {
   status.value = null;
   dialog.value = null;
-  desk.value = selectLogisticsHit(desk.value, hit);
-  if (hit.kind === "equipment" && workspace.value) {
-    status.value = `Opened workspace for holder of ${hit.label}.`;
-  } else if (hit.kind === "shift") {
-    status.value = `${hit.label} selected from the department shift cache.`;
+
+  if (hit.kind === "staff") {
+    selectedStaffId.value = hit.id;
+    selectedShiftContextId.value = null;
+  } else if (hit.kind === "equipment") {
+    const holder = desk.value?.searchableEquipment.find(
+      (item) => item.equipmentItemId === hit.id,
+    )?.holderStaffId;
+
+    selectedStaffId.value = holder ?? null;
+    selectedShiftContextId.value = null;
+    status.value =
+      holder === null || holder === undefined
+        ? `${hit.label} is not checked out to anyone.`
+        : `Opened workspace for holder of ${hit.label}.`;
+  } else {
+    selectedShiftContextId.value = hit.id;
+    status.value = `${hit.label} selected.`;
   }
+
   query.value = "";
   hits.value = [];
 }
 
-function onSelectCurrentShift(shift: ShiftOption): void {
+function onSelectCurrentShift(shift: DepartmentOpsShift): void {
   onSelect({
     id: shift.shiftId,
     kind: "shift",
@@ -227,51 +271,102 @@ function onSelectCurrentShift(shift: ShiftOption): void {
   });
 }
 
-function shiftsOverlap(
-  left: Pick<ShiftOption, "startsAt" | "endsAt">,
-  right: Pick<ShiftOption, "startsAt" | "endsAt">,
-): boolean {
-  const leftStartsAt = Date.parse(left.startsAt);
-  const leftEndsAt = Date.parse(left.endsAt);
-  const rightStartsAt = Date.parse(right.startsAt);
-  const rightEndsAt = Date.parse(right.endsAt);
-
-  if (
-    Number.isNaN(leftStartsAt) ||
-    Number.isNaN(leftEndsAt) ||
-    Number.isNaN(rightStartsAt) ||
-    Number.isNaN(rightEndsAt)
-  ) {
-    return false;
-  }
-
-  return leftStartsAt < rightEndsAt && leftEndsAt > rightStartsAt;
-}
-
 function openStaff(staffId: string): void {
-  desk.value = selectLogisticsStaff(desk.value, staffId);
+  selectedStaffId.value = staffId;
   status.value = null;
 }
 
-function markOnSite(): void {
-  if (!workspace.value) return;
+/**
+ * What is happening right now, in the operator's words.
+ *
+ * A command here is a command plus a re-read of the whole desk, which is two
+ * round trips on a field network — long enough that "Mark on-site" looked like
+ * it had done nothing, and long enough for somebody to press it again. The
+ * workspace says it is working instead: the panel stays legible and on screen,
+ * its controls stop accepting presses, and the line above it names the command
+ * in flight rather than showing a spinner over the data somebody is reading.
+ */
+const pendingWork = ref<string | null>(null);
+const busy = computed(() => pendingWork.value !== null);
+
+/**
+ * Run a write and read the desk again.
+ *
+ * Every command on this page changes more than the record it names — a check-in
+ * closes an off-site option and moves someone onto the on-shift roster, an
+ * equipment return may reopen it — and none of that comes back in the response.
+ * The refusal shown is the node's own sentence, including the one the outbox
+ * produces for a connected-only command issued with no node in reach.
+ *
+ * One at a time, deliberately. The re-read is what every one of these commands
+ * ends with, and two of them in flight would land in whichever order the network
+ * settled on, leaving the screen showing the answer to the earlier one.
+ */
+async function run(
+  work: () => Promise<void>,
+  success: string,
+  pending = "Working",
+): Promise<void> {
+  if (busy.value) {
+    return;
+  }
+
+  pendingWork.value = pending;
+  status.value = null;
+
   try {
-    desk.value = markLogisticsStaffOnSite(desk.value, workspace.value.staffId);
-    status.value = `${workspace.value.displayName} marked on-site.`;
+    await work();
+    await loadDesk();
+    status.value = success;
   } catch (error) {
-    status.value = error instanceof Error ? error.message : "Unable to mark on-site.";
+    status.value = meridianErrorMessage(
+      error,
+      error instanceof Error ? error.message : "Unable to complete that.",
+    );
+  } finally {
+    pendingWork.value = null;
   }
 }
 
+function markOnSite(): void {
+  const member = workspace.value;
+
+  if (member === null || context.value === null) return;
+
+  void run(
+    () => setDepartmentPresence(context.value!, member.staffId, "on_site"),
+    `${member.displayName} marked on-site.`,
+    `Marking ${member.displayName} on-site`,
+  );
+}
+
 function markOffSite(): void {
-  if (!workspace.value) return;
-  try {
-    desk.value = markLogisticsStaffOffSite(desk.value, workspace.value.staffId);
-    status.value = `${workspace.value.displayName} marked off-site.`;
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "Unable to mark off-site.";
-  }
+  const member = workspace.value;
+
+  if (member === null || context.value === null) return;
+
+  void run(
+    () => setDepartmentPresence(context.value!, member.staffId, "off_site"),
+    `${member.displayName} marked off-site.`,
+    `Marking ${member.displayName} off-site`,
+  );
+}
+
+function markNoShow(shiftId: string): void {
+  const member = workspace.value;
+
+  if (member === null || context.value === null) return;
+
+  void run(
+    async () =>
+      queueMarkNoShow({
+        context: context.value!,
+        shiftId,
+        staffId: member.staffId,
+      }),
+    `${member.displayName} marked as a no-show.`,
+    `Marking ${member.displayName} as a no-show`,
+  );
 }
 
 /**
@@ -297,6 +392,7 @@ function openDialog(
   dialog.value = kind;
   dialogShiftId.value = shiftId;
   dialogTimestamp.value = new Date().toISOString().slice(0, 16);
+  dialogStartTimestamp.value = "";
   selectedEquipmentIds.value = [];
   equipmentReturnConditions.value =
     kind === "check-out" && workspace.value
@@ -308,50 +404,100 @@ function openDialog(
       : {};
 }
 
+/**
+ * Confirm the open dialog.
+ *
+ * Check-in and check-out are queued attendance operations; the equipment beside
+ * them is a separate connected-only command per item, issued after the
+ * attendance so a refused handoff does not cost the check-in. The dialog's
+ * timestamp is the recorded time: `device_created_at` for a check-in, the actual
+ * end time for a check-out (SLB-006).
+ */
 function confirmDialog(): void {
-  if (!workspace.value || !dialog.value) return;
+  const member = workspace.value;
+  const kind = dialog.value;
 
-  try {
-    if (dialog.value === "check-in") {
-      desk.value = checkInLogisticsStaff(
-        desk.value,
-        workspace.value.staffId,
-        dialogShiftId.value,
-        new Date(dialogTimestamp.value).toISOString(),
-        selectedEquipmentIds.value,
-      );
-      status.value = `${workspace.value.displayName} checked in.`;
-    } else if (dialog.value === "check-out") {
-      let updatedDesk = checkOutLogisticsStaff(
-        desk.value,
-        workspace.value.staffId,
-        dialogShiftId.value,
-      );
+  if (member === null || kind === null || context.value === null) return;
+
+  const occurredAt = new Date(dialogTimestamp.value).toISOString();
+  const shiftId = dialogShiftId.value;
+
+  void run(async () => {
+    if (kind === "check-in") {
+      queueCheckIn({
+        context: context.value!,
+        shiftId,
+        staffId: member.staffId,
+        occurredAt,
+      });
+
+      for (const equipmentItemId of selectedEquipmentIds.value) {
+        await checkoutEquipment(
+          context.value!,
+          member.staffId,
+          equipmentItemId,
+          shiftId === "" ? null : shiftId,
+        );
+      }
+    } else if (kind === "check-out") {
+      queueCheckOut({
+        context: context.value!,
+        shiftId,
+        staffId: member.staffId,
+        occurredAt,
+        startedAt:
+          dialogStartTimestamp.value === ""
+            ? null
+            : new Date(dialogStartTimestamp.value).toISOString(),
+      });
+
       for (const [checkoutId, condition] of Object.entries(
         equipmentReturnConditions.value,
       )) {
-        updatedDesk = returnLogisticsEquipment(
-          updatedDesk,
-          workspace.value.staffId,
-          checkoutId,
-          condition,
+        await returnEquipment(context.value!, checkoutId, condition);
+      }
+    } else {
+      for (const equipmentItemId of selectedEquipmentIds.value) {
+        await checkoutEquipment(
+          context.value!,
+          member.staffId,
+          equipmentItemId,
+          null,
         );
       }
-      desk.value = updatedDesk;
-      status.value = `${workspace.value.displayName} checked out.`;
-    } else {
-      desk.value = checkOutLogisticsEquipment(
-        desk.value,
-        workspace.value.staffId,
-        new Date(dialogTimestamp.value).toISOString(),
-        selectedEquipmentIds.value,
-      );
-      status.value = `${workspace.value.displayName} equipment checked out.`;
     }
+
     dialog.value = null;
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "Unable to complete attendance.";
+  },
+  dialogSuccessMessage(kind, member.displayName),
+  dialogPendingMessage(kind, member.displayName));
+}
+
+function dialogSuccessMessage(
+  kind: "check-in" | "check-out" | "equipment-checkout",
+  displayName: string,
+): string {
+  switch (kind) {
+    case "check-in":
+      return `${displayName} checked in.`;
+    case "check-out":
+      return `${displayName} checked out.`;
+    case "equipment-checkout":
+      return `${displayName} equipment checked out.`;
+  }
+}
+
+function dialogPendingMessage(
+  kind: "check-in" | "check-out" | "equipment-checkout",
+  displayName: string,
+): string {
+  switch (kind) {
+    case "check-in":
+      return `Checking ${displayName} in`;
+    case "check-out":
+      return `Checking ${displayName} out`;
+    case "equipment-checkout":
+      return `Checking out equipment to ${displayName}`;
   }
 }
 
@@ -363,41 +509,40 @@ function returnItem(
   checkoutId: string,
   condition: EquipmentReturnCondition,
 ): void {
-  if (!workspace.value) return;
-  try {
-    desk.value = returnLogisticsEquipment(
-      desk.value,
-      workspace.value.staffId,
-      checkoutId,
-      condition,
-    );
-    status.value = `Equipment marked ${equipmentStateLabel(condition)}.`;
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "Unable to update equipment.";
-  }
+  if (context.value === null) return;
+
+  void run(
+    () => returnEquipment(context.value!, checkoutId, condition),
+    `Equipment marked ${equipmentStateLabel(condition)}.`,
+    `Marking equipment ${equipmentStateLabel(condition).toLowerCase()}`,
+  );
 }
 
 function addToShift(shiftId: string): void {
-  if (!workspace.value) return;
-  try {
-    desk.value = addLogisticsStaffToShift(
-      desk.value,
-      workspace.value.staffId,
+  const member = workspace.value;
+
+  if (member === null || context.value === null) return;
+
+  void run(async () => {
+    const warnings = await addStaffToShift(
+      context.value!,
+      member.staffId,
       shiftId,
-      `local-assignment-${workspace.value.staffId}-${shiftId}`,
     );
-    status.value = `${workspace.value.displayName} added to the shift.`;
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "Unable to add staff to shift.";
-  }
+
+    // Overlapping assignments are warned about rather than refused (technical
+    // spec 20.5), so the node's warning is what the desk shows.
+    if (warnings.length > 0) {
+      overlapWarnings.value = warnings;
+    } else {
+      overlapWarnings.value = [];
+    }
+  },
+  `${member.displayName} added to the shift.`,
+  `Adding ${member.displayName} to the shift`);
 }
 
-function onAddStaff(): void {
-  status.value =
-    "Add Staff is available to Logistics leads; the create workflow is scaffolded.";
-}
+const overlapWarnings = ref<readonly string[]>([]);
 
 /**
  * Equipment inventory setup lives on its own `department.equipment` page
@@ -407,16 +552,24 @@ function onAddStaff(): void {
 const equipmentInventoryRoute = computed(() => ({
   name: "events.departments.equipment.index",
   params: {
-    eventId: desk.value.context.eventId,
-    departmentId: desk.value.context.departmentId,
+    eventId: eventId.value,
+    departmentId: departmentId.value,
   },
 }));
+
+watch([eventId, departmentId], () => {
+  selectedStaffId.value = null;
+  selectedShiftContextId.value = null;
+  void loadDesk();
+});
+
+void loadDesk();
 </script>
 
 <template>
   <DeptOpsShell
     title="Logistics Window"
-    :eyebrow="desk.context.departmentLabel"
+    :eyebrow="departmentLabel"
     lede="Staff-first service station for presence, attendance, and equipment handoff."
   >
     <template #nav>
@@ -424,13 +577,21 @@ const equipmentInventoryRoute = computed(() => ({
     </template>
 
     <template #actions>
-      <div v-if="canManageLogisticsCatalog" class="logistics__heading-actions">
-        <WorkflowActionButton @click="onAddStaff">Add Staff</WorkflowActionButton>
+      <div v-if="access?.canManageEquipment" class="logistics__heading-actions">
         <WorkflowActionButton :to="equipmentInventoryRoute">
           Manage Equipment
         </WorkflowActionButton>
       </div>
     </template>
+
+    <!--
+      A refusal is the node's own sentence, and an unreachable node is stated
+      rather than shown as a department with nobody in it.
+    -->
+    <p v-if="loadError" class="logistics__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadDesk">Try again</button>
+    </p>
 
     <section
       class="logistics__current-shifts"
@@ -459,8 +620,8 @@ const equipmentInventoryRoute = computed(() => ({
             <span class="logistics__current-shift-title">{{ shift.title }}</span>
             <span class="logistics__current-shift-meta">
               {{ shift.teamLabel }} /
-              {{ formatTimestamp(shift.startsAt, desk.context.timeZone) }} -
-              {{ formatTimestamp(shift.endsAt, desk.context.timeZone) }}
+              {{ formatTimestamp(shift.startsAt, timeZone) }} -
+              {{ formatTimestamp(shift.endsAt, timeZone) }}
             </span>
           </button>
         </li>
@@ -527,8 +688,8 @@ const equipmentInventoryRoute = computed(() => ({
             <strong>{{ member.displayName }}</strong>
             <span>{{ member.teamLabel }} - {{ member.shiftTitle }}</span>
             <span>
-              {{ formatTimestamp(member.startsAt, desk.context.timeZone) }} -
-              {{ formatTimestamp(member.endsAt, desk.context.timeZone) }}
+              {{ formatTimestamp(member.startsAt, timeZone) }} -
+              {{ formatTimestamp(member.endsAt, timeZone) }}
               <template v-if="member.openEquipmentCount > 0">
                 / {{ member.openEquipmentCount }} equipment out
               </template>
@@ -559,7 +720,7 @@ const equipmentInventoryRoute = computed(() => ({
     </section>
 
     <!--
-      The cache notice sits beside the search rather than under it. It qualifies
+      The scope notice sits beside the search rather than under it. It qualifies
       what the search can find, so it should be readable while someone is typing
       into the box, not after they have scrolled past it.
     -->
@@ -571,58 +732,42 @@ const equipmentInventoryRoute = computed(() => ({
         @select="onSelect"
       />
 
-      <section class="logistics__cache" aria-labelledby="search-cache-heading">
-        <h2 id="search-cache-heading">Offline search cache</h2>
+      <section
+        v-if="desk"
+        class="logistics__cache"
+        aria-labelledby="search-scope-heading"
+      >
+        <h2 id="search-scope-heading">Search scope</h2>
+        <p>{{ desk.context.eventLabel }} / {{ desk.context.departmentLabel }}</p>
         <p>
-          {{ desk.searchCache.scopeLabel }} /
-          {{
-            desk.searchCache.state === "offline_usable"
-              ? "Offline usable"
-              : desk.searchCache.state
-          }}
+          Department staff, equipment, and shifts, read
+          {{ formatTimestamp(desk.context.asOf, timeZone) }}.
         </p>
-        <p>{{ desk.searchCache.note }}</p>
       </section>
     </div>
 
     <section
-      v-if="searchContext"
+      v-if="selectedShift"
       class="logistics__search-context"
       aria-labelledby="search-context-heading"
     >
-      <h2 id="search-context-heading">{{ searchContext.label }}</h2>
-      <p>{{ searchContext.detail }}</p>
-      <p v-if="searchContext.emptyReason" role="status">
-        {{ searchContext.emptyReason }}
+      <h2 id="search-context-heading">{{ selectedShift.title }}</h2>
+      <p>
+        {{ selectedShift.teamLabel }} /
+        {{ lifecycleLabel(selectedShift.lifecycle) }}
       </p>
-      <div
-        v-if="searchContext.kind !== 'shift' && searchContextStaff.length > 0"
-        class="logistics__actions"
-      >
-        <button
-          v-for="staff in searchContextStaff"
-          :key="staff.staffId"
-          type="button"
-          @click="openStaff(staff.staffId)"
-        >
-          Open {{ staff.displayName }}
-        </button>
-      </div>
       <section
-        v-if="selectedShift"
         class="logistics__shift-drilldown"
         aria-labelledby="selected-shift-staff-heading"
       >
         <h3 id="selected-shift-staff-heading">Scheduled staff</h3>
-        <p>
-          Staff scheduled in or overlapping the selected shift window.
-        </p>
+        <p>Staff holding an assignment on this shift.</p>
         <p
           v-if="selectedShiftStaff.length === 0"
           class="logistics__note"
           role="status"
         >
-          No scheduled staff overlap this shift in the local cache.
+          Nobody is assigned to this shift.
         </p>
         <ul v-else class="logistics__scheduled-staff">
           <li v-for="member in selectedShiftStaff" :key="member.staffId">
@@ -634,21 +779,14 @@ const equipmentInventoryRoute = computed(() => ({
               </span>
               <span>
                 {{ member.shiftTitle }} -
-                {{ formatTimestamp(member.startsAt, desk.context.timeZone) }}
+                {{ formatTimestamp(member.startsAt, timeZone) }}
                 to
-                {{ formatTimestamp(member.endsAt, desk.context.timeZone) }}
+                {{ formatTimestamp(member.endsAt, timeZone) }}
               </span>
             </div>
-            <button
-              v-if="member.canOpen"
-              type="button"
-              @click="openStaff(member.staffId)"
-            >
+            <button type="button" @click="openStaff(member.staffId)">
               Open {{ member.displayName }}
             </button>
-            <span v-else class="logistics__unavailable-workspace">
-              Workspace pending
-            </span>
           </li>
         </ul>
       </section>
@@ -656,13 +794,35 @@ const equipmentInventoryRoute = computed(() => ({
 
     <p v-if="status" class="logistics__status" role="status">{{ status }}</p>
 
+    <!--
+      Overlapping assignments are allowed and warned about rather than refused
+      (technical spec 20.5), so the node's warning is shown beside the addition
+      that produced it.
+    -->
+    <ul v-if="overlapWarnings.length > 0" class="logistics__warnings" role="status">
+      <li v-for="warning in overlapWarnings" :key="warning">{{ warning }}</li>
+    </ul>
+
     <p v-if="!workspace" class="logistics__empty" role="status">
       Search for a staff member to open their operational workspace.
     </p>
 
+    <!--
+      The one panel on this page an operator is actually working in, and it used
+      to look like every other block on it: the same border, the same surface,
+      no way to find it after a glance back at the roster. It now carries its own
+      outline and accent edge, so "who am I looking at" is answered by the shape
+      of the page rather than by re-reading it.
+
+      `aria-busy` while a command is in flight, and the panel stays on screen
+      throughout. Nothing is hidden behind an overlay — an operator mid-check-in
+      still needs to read the shift times they are checking somebody in for.
+    -->
     <section
       v-else
       class="logistics__workspace"
+      :class="{ 'logistics__workspace--busy': busy }"
+      :aria-busy="busy"
       aria-labelledby="staff-workspace-heading"
     >
       <header class="logistics__staff-header">
@@ -673,23 +833,53 @@ const equipmentInventoryRoute = computed(() => ({
             <template v-if="workspace.handle"> / @{{ workspace.handle }}</template>
           </p>
         </div>
-        <p>
-          Presence:
-          <strong>{{ presenceStateLabel(workspace.presenceState) }}</strong>
-        </p>
+        <!--
+          Presence is stated outright rather than by omission, because the header
+          is the one place "off-site" is the answer somebody came for. The rest
+          are shown only when true: four grey pills saying nothing is how a
+          reader learns to stop looking at them.
+        -->
+        <div class="logistics__staff-states">
+          <StatusPill
+            :label="presenceStateLabel(workspace.presenceState)"
+            :tone="presenceTone(workspace.presenceState)"
+            sr-prefix="Presence"
+          />
+          <StatusPill
+            v-for="pill in workspacePills"
+            :key="pill.key"
+            :label="pill.label"
+            :tone="pill.tone"
+          />
+        </div>
       </header>
+
+      <!--
+        Named rather than a bare spinner. "Working" tells somebody the screen is
+        alive; "Marking Dana Ranger on-site" tells them which of the four buttons
+        they just pressed is the one still running.
+      -->
+      <p
+        v-if="pendingWork"
+        class="logistics__pending"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="logistics__pending-spinner" aria-hidden="true" />
+        {{ pendingWork }}…
+      </p>
 
       <div class="logistics__actions">
         <button
           type="button"
-          :disabled="workspace.presenceState === 'on_site'"
+          :disabled="busy || workspace.presenceState === 'on_site'"
           @click="markOnSite"
         >
           Mark on-site
         </button>
         <button
           type="button"
-          :disabled="!workspace.canGoOffSite"
+          :disabled="busy || !workspace.canGoOffSite"
           @click="markOffSite"
         >
           Mark off-site
@@ -722,23 +912,49 @@ const equipmentInventoryRoute = computed(() => ({
             >
               <div>
                 <strong>{{ card.title }}</strong>
-                <span>
-                  {{ lifecycleLabel(card.lifecycle) }} /
-                  {{
-                    card.attendanceState
-                      ? attendanceStateLabel(card.attendanceState)
-                      : "Not assigned"
-                  }}
+                <span class="logistics__card-pills">
+                  <StatusPill
+                    :label="lifecycleLabel(card.lifecycle)"
+                    :tone="lifecycleTone(card.lifecycle)"
+                    sr-prefix="Shift"
+                  />
+                  <StatusPill
+                    :label="
+                      card.attendanceState
+                        ? attendanceStateLabel(card.attendanceState)
+                        : 'Not assigned'
+                    "
+                    :tone="
+                      card.attendanceState
+                        ? attendanceTone(card.attendanceState)
+                        : 'neutral'
+                    "
+                    sr-prefix="Attendance"
+                  />
                 </span>
                 <span>
-                  {{ formatTimestamp(card.startsAt, desk.context.timeZone) }} -
-                  {{ formatTimestamp(card.endsAt, desk.context.timeZone) }}
+                  {{ formatTimestamp(card.startsAt, timeZone) }} -
+                  {{ formatTimestamp(card.endsAt, timeZone) }}
+                </span>
+                <!--
+                  Why there is no "Add to shift" button on this card. The card
+                  used to be absent entirely in these cases, so an operator who
+                  had just created a shift and marked somebody on-site went
+                  looking for a button that was not there and had nothing to read.
+                -->
+                <span
+                  v-if="card.addToShiftBlockedReason"
+                  class="logistics__card-blocked"
+                  role="status"
+                >
+                  {{ card.addToShiftBlockedReason }}
                 </span>
               </div>
               <div class="logistics__actions">
                 <button
                   v-if="card.canCheckIn"
                   type="button"
+                  :disabled="busy"
                   @click="openDialog('check-in', card.shiftId)"
                 >
                   Check in
@@ -746,13 +962,23 @@ const equipmentInventoryRoute = computed(() => ({
                 <button
                   v-if="card.canCheckOut"
                   type="button"
+                  :disabled="busy"
                   @click="openDialog('check-out', card.shiftId)"
                 >
                   Check out
                 </button>
                 <button
+                  v-if="card.canMarkNoShow"
+                  type="button"
+                  :disabled="busy"
+                  @click="markNoShow(card.shiftId)"
+                >
+                  Mark no-show
+                </button>
+                <button
                   v-if="card.canAddToShift"
                   type="button"
+                  :disabled="busy"
                   @click="addToShift(card.shiftId)"
                 >
                   Add to shift
@@ -769,7 +995,11 @@ const equipmentInventoryRoute = computed(() => ({
           v-if="workspace.availableEquipment.length > 0"
           class="logistics__actions"
         >
-          <button type="button" @click="openDialog('equipment-checkout')">
+          <button
+            type="button"
+            :disabled="busy"
+            @click="openDialog('equipment-checkout')"
+          >
             Check out equipment
           </button>
         </div>
@@ -783,23 +1013,32 @@ const equipmentInventoryRoute = computed(() => ({
           >
             <div>
               <strong>{{ item.name }}</strong>
-              <span>{{ equipmentStateLabel(item.status) }}</span>
+              <span class="logistics__card-pills">
+                <StatusPill
+                  :label="equipmentStateLabel(item.status)"
+                  :tone="equipmentTone(item.status)"
+                  sr-prefix="Equipment"
+                />
+              </span>
             </div>
             <div class="logistics__actions">
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'returned')"
               >
                 Returned
               </button>
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'missing')"
               >
                 Missing
               </button>
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'damaged')"
               >
                 Damaged
@@ -809,10 +1048,15 @@ const equipmentInventoryRoute = computed(() => ({
         </ul>
       </section>
 
+      <!--
+        Provisions is an extension point the workspace keeps a place for. The
+        note is the client's own words rather than a field on the read, because
+        the node has nothing to say about a domain that is not specified yet.
+      -->
       <section aria-labelledby="provisions-heading">
         <h3 id="provisions-heading">Provisions</h3>
         <p class="logistics__note" role="status">
-          {{ workspace.provisionsExtensionNote }}
+          Provisions will appear here once that domain is specified.
         </p>
       </section>
 
@@ -827,7 +1071,7 @@ const equipmentInventoryRoute = computed(() => ({
             :key="signup.signupId"
           >
             {{ signup.shiftTitle }} /
-            {{ formatTimestamp(signup.startsAt, desk.context.timeZone) }}
+            {{ formatTimestamp(signup.startsAt, timeZone) }}
           </li>
         </ul>
       </section>
@@ -856,8 +1100,19 @@ const equipmentInventoryRoute = computed(() => ({
           }}
         </h2>
         <label>
-          <span>Timestamp</span>
+          <span>{{ dialog === "check-out" ? "Actual end" : "Timestamp" }}</span>
           <input v-model="dialogTimestamp" type="datetime-local" />
+        </label>
+        <!--
+          Both actual times are editable on check-out (SLB-006). The end defaults
+          to now, which is the ordinary case; the start is left empty unless
+          somebody is correcting it, because an empty start means "leave the
+          recorded check-in alone" to `AttendanceCheckOutService` and a
+          pre-filled one would silently overwrite it.
+        -->
+        <label v-if="dialog === 'check-out'">
+          <span>Actual start (leave empty to keep the recorded check-in)</span>
+          <input v-model="dialogStartTimestamp" type="datetime-local" />
         </label>
         <fieldset
           v-if="
@@ -927,6 +1182,29 @@ const equipmentInventoryRoute = computed(() => ({
 .logistics__note {
   margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.logistics__warnings {
+  margin: 0 0 var(--m-space-4);
+  padding: var(--m-space-3) var(--m-space-3) var(--m-space-3) var(--m-space-5);
+  border: 1px solid
+    color-mix(in srgb, var(--m-status-warning) 55%, var(--m-border-default));
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+}
+
+.logistics__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-5);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .logistics__toolbar {
@@ -1013,9 +1291,96 @@ const equipmentInventoryRoute = computed(() => ({
   font-size: var(--m-text-sm);
 }
 
+/*
+ * The staff workspace is the page's subject, and it is drawn like it.
+ *
+ * An outlined container with an accent edge, rather than another block of the
+ * same surface as everything above it. The desk's other sections are reference —
+ * counts, current shifts, who is on shift — and this is the one an operator acts
+ * in, so it is the one that has to be findable in a glance from across a table
+ * in daylight.
+ */
 .logistics__workspace {
   display: grid;
   gap: var(--m-space-5);
+  padding: var(--m-space-4);
+  border: 2px solid
+    color-mix(in srgb, var(--m-action-primary-bg) 45%, var(--m-border-default));
+  border-left-width: 6px;
+  border-left-color: var(--m-action-primary-bg);
+  border-radius: 12px;
+  background: var(--m-surface-base);
+  box-shadow: var(--m-shadow-sm);
+}
+
+/*
+ * Busy dims the controls and leaves the data alone.
+ *
+ * An operator waiting on a check-in is usually still reading the shift they are
+ * checking somebody in for, so nothing goes behind an overlay and nothing is
+ * removed. The panel loses a little contrast and stops taking presses; the named
+ * line above says which command it is waiting on.
+ */
+.logistics__workspace--busy .logistics__actions button {
+  opacity: 0.45;
+}
+
+.logistics__workspace--busy {
+  border-left-color: var(--m-status-warning);
+}
+
+.logistics__pending {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  margin: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid
+    color-mix(in srgb, var(--m-status-warning) 55%, var(--m-border-default));
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--m-status-warning) 14%,
+    var(--m-surface-raised)
+  );
+  color: var(--m-text-secondary);
+  font-weight: 800;
+}
+
+.logistics__pending-spinner {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid
+    color-mix(in srgb, var(--m-status-warning) 35%, transparent);
+  border-top-color: var(--m-status-warning);
+  border-radius: var(--m-radius-pill);
+  animation: logistics-spin 900ms linear infinite;
+}
+
+/* A spinner that never stops is a distraction nobody asked for. */
+@media (prefers-reduced-motion: reduce) {
+  .logistics__pending-spinner {
+    animation: none;
+  }
+}
+
+@keyframes logistics-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logistics__card-pills,
+.logistics__staff-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.logistics__card-blocked {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .logistics__watch-grid,
@@ -1215,8 +1580,11 @@ const equipmentInventoryRoute = computed(() => ({
 }
 
 .logistics__staff-header {
-  display: grid;
-  gap: var(--m-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
   padding: var(--m-space-4);
   border: 1px solid var(--m-border-default);
   border-radius: 8px;

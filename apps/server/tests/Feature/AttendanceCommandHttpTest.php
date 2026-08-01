@@ -156,6 +156,34 @@ class AttendanceCommandHttpTest extends TestCase
         $this->assertSame(1, AuditEvent::query()->where('action', 'attendance.marked_no_show')->count());
     }
 
+    /**
+     * A client that names no origin node gets this node (M16.21).
+     *
+     * The web client has no way to learn a node id — nothing publishes one — so
+     * a check-in issued from the Logistics Window sends the device it was
+     * written on and stops there. The node that received the command is the node
+     * it originated at, and provenance records that rather than nothing.
+     */
+    public function test_check_in_defaults_its_origin_node_to_this_install(): void
+    {
+        [$shift, $staff, , $shiftLead, $device] = $this->scheduledScenario();
+        $local = Node::factory()->create(['is_local' => true]);
+
+        $this->actingAsClient($shiftLead)
+            ->postJson('/api/commands/check-in-staff', [
+                'operation_uuid' => (string) Str::uuid(),
+                'shift_id' => $shift->id,
+                'staff_id' => $staff->id,
+                'device_created_at' => '2026-07-01T08:03:00Z',
+                'origin_device_id' => $device->id,
+            ])
+            ->assertCreated();
+
+        $operation = AttendanceOperation::query()->firstOrFail();
+        $this->assertSame((string) $local->id, (string) $operation->origin_node_id);
+        $this->assertSame((string) $device->id, (string) $operation->origin_device_id);
+    }
+
     public function test_attendance_commands_require_authentication(): void
     {
         $this->postJson('/api/commands/check-in-staff', [

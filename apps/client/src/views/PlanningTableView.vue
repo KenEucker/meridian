@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import ContentGrid from "@/components/ContentGrid.vue";
 import ControlBar from "@/components/ControlBar.vue";
-import { computed, ref, type CSSProperties } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, ref, watch, type CSSProperties } from "vue";
+import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
@@ -10,54 +10,107 @@ import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import ShiftListSection from "@/components/sections/ShiftListSection.vue";
 import TrainingListSection from "@/components/sections/TrainingListSection.vue";
-import {
-  LOCAL_DEPARTMENT_OVERVIEW,
-  LOCAL_LOGISTICS_DESK,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
-import {
-  attendanceStateLabel,
-  formatTimestamp,
-  lifecycleLabel,
-} from "@/department-ops/labels";
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { formatTimestamp, lifecycleLabel } from "@/department-ops/labels";
 import {
   assertNoStaffIdentities,
   capacityLabel,
   dateKeyForTimestamp,
-  filterPlanningRows,
+  getPlanningTable,
   planningSummary,
   signedVarianceLabel,
-} from "@/department-ops/planning";
+  type PlanningTableRead,
+} from "@/department-ops/departmentOpsReadModel";
 
-assertNoStaffIdentities(LOCAL_PLANNING_TABLE);
+/**
+ * The Planning Table (SLB-019, SLB-020; bound to the node in M16.21).
+ *
+ * Every aggregate on this page is the node's arithmetic now: capacity against
+ * assignments, planned hours against recorded hours, and the variance between
+ * them. The client used to compute all of it over a fixture, which meant the
+ * numbers a lead planned against were arithmetic on data no shift had produced.
+ *
+ * The team and date filters go to the node rather than narrowing rows already
+ * here, so the counts on screen are that view's counts (SLB-020).
+ *
+ * The shift drill-down that used to list who was scheduled is gone. It named
+ * individual staff on a surface SLB-019 says must not expose individual
+ * identities, signup lists, or team-member lists — it read them out of the
+ * fixture's workspaces, and the read that replaced that fixture deliberately
+ * carries none. What a selected shift shows now is its own aggregates.
+ */
+const route = useRoute();
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
 
-const table = LOCAL_PLANNING_TABLE;
-const selectedTeamId = ref(table.selectedFilters.teamId ?? "");
-const selectedDate = ref(table.selectedFilters.date ?? "");
-const activeFilters = computed(() => ({
-  teamId: selectedTeamId.value === "" ? null : selectedTeamId.value,
-  date: selectedDate.value === "" ? null : selectedDate.value,
-}));
-const filteredTable = computed(() => ({
-  ...table,
-  selectedFilters: activeFilters.value,
-}));
-const visibleRows = computed(() => filterPlanningRows(table, activeFilters.value));
-const selectedShiftId = ref(
-  table.rows.find((row) => row.lifecycle === "active")?.shiftId ??
-    table.rows[0]?.shiftId ??
-    "",
+const table = ref<PlanningTableRead | null>(null);
+const loadError = ref<string | null>(null);
+const selectedTeamId = ref("");
+const selectedDate = ref("");
+const selectedShiftId = ref("");
+
+const departmentLabel = computed(
+  () => table.value?.context.departmentLabel ?? "Department",
 );
-const summary = computed(() => planningSummary(filteredTable.value));
+const timeZone = computed(() => table.value?.context.timeZone ?? "UTC");
+const availableTeams = computed(() => table.value?.teams ?? []);
+const visibleRows = computed(() => table.value?.rows ?? []);
+const summary = computed(() => planningSummary(visibleRows.value));
 const availableDates = computed(() =>
   Array.from(
     new Set(
-      table.rows.map((row) =>
-        dateKeyForTimestamp(row.startsAt, table.context.timeZone),
+      visibleRows.value.map((row) =>
+        dateKeyForTimestamp(row.startsAt, timeZone.value),
       ),
     ),
   ),
 );
+
+/**
+ * Read the aggregates for the current filters.
+ *
+ * `assertNoStaffIdentities` runs on what came back rather than on a constant:
+ * this is a surface a name must never reach, and the check belongs where the
+ * data enters the page.
+ */
+async function loadPlanning(): Promise<void> {
+  if (eventId.value === "" || departmentId.value === "") {
+    table.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    const read = await getPlanningTable(eventId.value, departmentId.value, {
+      teamId: selectedTeamId.value === "" ? null : selectedTeamId.value,
+      date: selectedDate.value === "" ? null : selectedDate.value,
+    });
+
+    assertNoStaffIdentities(read.rows);
+    table.value = read;
+
+    if (!read.rows.some((row) => row.shiftId === selectedShiftId.value)) {
+      selectedShiftId.value =
+        read.rows.find((row) => row.lifecycle === "active")?.shiftId ??
+        read.rows[0]?.shiftId ??
+        "";
+    }
+  } catch (error) {
+    table.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load the planning table. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch([eventId, departmentId, selectedTeamId, selectedDate], () => {
+  void loadPlanning();
+});
+
+void loadPlanning();
 const selectedShift = computed(
   () =>
     visibleRows.value.find((row) => row.shiftId === selectedShiftId.value) ??
@@ -99,7 +152,7 @@ const timelineMarkers = computed(() => {
 });
 const nowMarkerStyle = computed(() => {
   const window = chartWindow.value;
-  const asOf = Date.parse(table.context.asOf);
+  const asOf = Date.parse(table.value?.context.asOf ?? "");
 
   if (
     !window ||
@@ -114,56 +167,46 @@ const nowMarkerStyle = computed(() => {
     "--marker-left": `${(((asOf - window.startsAt) / window.duration) * 100).toFixed(3)}%`,
   } as CSSProperties;
 });
-const scheduledStaff = computed(() => {
+/**
+ * What the selected shift's bar is worth reading about, without naming anybody.
+ *
+ * Counts and hours, which is exactly what SLB-019 leaves on this surface. A lead
+ * who needs to know who is on the shift opens the Department Overview, where
+ * naming people is the point.
+ */
+const selectedShiftFigures = computed(() => {
   const shift = selectedShift.value;
 
   if (!shift) {
     return [];
   }
 
-  const staff = Object.values(LOCAL_LOGISTICS_DESK.staffWorkspaces).flatMap(
-    (workspace) => {
-      const card = workspace.shiftCards.find(
-        (candidate) => candidate.shiftId === shift.shiftId,
-      );
-
-      if (!card || card.attendanceState === null) {
-        return [];
-      }
-
-      return [
-        {
-          staffId: workspace.staffId,
-          displayName: workspace.displayName,
-          teamLabel: workspace.teamLabel,
-          attendanceLabel: attendanceStateLabel(card.attendanceState),
-          startsAt: card.startsAt,
-          endsAt: card.endsAt,
-        },
-      ];
+  return [
+    { id: "capacity", label: "Capacity", value: capacityLabel(shift.capacity) },
+    {
+      id: "assigned",
+      label: "Signed up / assigned",
+      value: String(shift.signedUpOrAssignedCount),
     },
-  );
-
-  if (shift.shiftId === LOCAL_DEPARTMENT_OVERVIEW.selectedShiftId) {
-    for (const assignment of LOCAL_DEPARTMENT_OVERVIEW.assignments) {
-      if (staff.some((member) => member.staffId === assignment.staffId)) {
-        continue;
-      }
-
-      staff.push({
-        staffId: assignment.staffId,
-        displayName: assignment.displayName,
-        teamLabel: assignment.teamLabel,
-        attendanceLabel: attendanceStateLabel(assignment.attendanceState),
-        startsAt: shift.startsAt,
-        endsAt: shift.endsAt,
-      });
-    }
-  }
-
-  return staff.sort((left, right) =>
-    left.displayName.localeCompare(right.displayName),
-  );
+    { id: "checked-in", label: "Checked in", value: String(shift.checkedInCount) },
+    { id: "no-show", label: "No-show", value: String(shift.noShowCount) },
+    {
+      id: "unscheduled",
+      label: "Unscheduled additions",
+      value: String(shift.unscheduledCount),
+    },
+    {
+      id: "planned",
+      label: "Planned hours",
+      value: String(shift.plannedHours),
+    },
+    { id: "actual", label: "Actual hours", value: String(shift.actualHours) },
+    {
+      id: "variance",
+      label: "Variance",
+      value: signedVarianceLabel(shift.varianceHours),
+    },
+  ];
 });
 
 function selectShift(shiftId: string): void {
@@ -212,7 +255,7 @@ function formatTimelineMarker(timestamp: number): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: table.context.timeZone,
+    timeZone: timeZone.value,
   }).format(new Date(timestamp));
 }
 </script>
@@ -220,7 +263,7 @@ function formatTimelineMarker(timestamp: number): string {
 <template>
   <DeptOpsShell
     title="Planning Table"
-    :eyebrow="table.context.departmentLabel"
+    :eyebrow="departmentLabel"
     lede="Identity-free comparison of what was planned and how the department is tracking."
   >
     <template #nav>
@@ -262,9 +305,16 @@ function formatTimelineMarker(timestamp: number): string {
       </WorkflowHeadingCardGrid>
     </template>
 
+    <p v-if="loadError" class="planning__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadPlanning">Try again</button>
+    </p>
+
     <div class="planning__boardbar" aria-label="Board controls">
       <span>{{ summary.shiftCount }} shift windows</span>
-      <span>{{ table.syncState === "offline" ? "offline cache" : table.syncState }}</span>
+      <span v-if="table">
+        Read {{ formatTimestamp(table.context.asOf, timeZone) }}
+      </span>
       <div>
         <button type="button" disabled>Collapse all</button>
       </div>
@@ -277,7 +327,7 @@ function formatTimelineMarker(timestamp: number): string {
           <select v-model="selectedTeamId">
             <option value="">All teams</option>
             <option
-              v-for="team in table.availableTeams"
+              v-for="team in availableTeams"
               :key="team.teamId"
               :value="team.teamId"
             >
@@ -370,9 +420,9 @@ function formatTimelineMarker(timestamp: number): string {
             <h2 id="planning-shift-detail-heading">Shift detail</h2>
             <p v-if="selectedShift">
               {{ selectedShift.title }} /
-              {{ formatTimestamp(selectedShift.startsAt, table.context.timeZone) }}
+              {{ formatTimestamp(selectedShift.startsAt, timeZone) }}
               to
-              {{ formatTimestamp(selectedShift.endsAt, table.context.timeZone) }}
+              {{ formatTimestamp(selectedShift.endsAt, timeZone) }}
             </p>
           </div>
           <span v-if="selectedShift">{{
@@ -380,21 +430,19 @@ function formatTimelineMarker(timestamp: number): string {
           }}</span>
         </header>
 
-        <ul v-if="scheduledStaff.length > 0" class="planning__staff-list">
-          <li v-for="member in scheduledStaff" :key="member.staffId">
-            <span>
-              <strong>{{ member.displayName }}</strong>
-              <small>{{ member.teamLabel }} / {{ member.attendanceLabel }}</small>
-            </span>
-            <span>
-              {{ formatTimestamp(member.startsAt, table.context.timeZone) }}
-              to
-              {{ formatTimestamp(member.endsAt, table.context.timeZone) }}
-            </span>
-          </li>
-        </ul>
+        <!--
+          Counts, not people. SLB-019 keeps individual identities, signup lists,
+          and team-member lists off this surface, and the read behind it carries
+          none to put here.
+        -->
+        <dl v-if="selectedShift" class="planning__figures">
+          <div v-for="figure in selectedShiftFigures" :key="figure.id">
+            <dt>{{ figure.label }}</dt>
+            <dd>{{ figure.value }}</dd>
+          </div>
+        </dl>
         <p v-else class="planning__empty" role="status">
-          No scheduled staff are available for this shift in the local fixture.
+          Select a shift window to read its coverage.
         </p>
       </section>
     </ContentGrid>
@@ -431,9 +479,9 @@ function formatTimelineMarker(timestamp: number): string {
                 <span>{{ row.title }}</span>
                 <span class="planning__meta">
                   {{ row.teamLabel }} ·
-                  {{ formatTimestamp(row.startsAt, table.context.timeZone) }}
+                  {{ formatTimestamp(row.startsAt, timeZone) }}
                   to
-                  {{ formatTimestamp(row.endsAt, table.context.timeZone) }}
+                  {{ formatTimestamp(row.endsAt, timeZone) }}
                 </span>
               </th>
               <td>{{ lifecycleLabel(row.lifecycle) }}</td>
@@ -456,8 +504,8 @@ function formatTimelineMarker(timestamp: number): string {
         No aggregate rows match the current department filters.
       </p>
       <p class="planning__note" role="status">
-        Aggregate rows remain identity-free; selected shift detail uses the
-        local schedule fixture.
+        Aggregate rows remain identity-free. Who is on a shift is the Department
+        Overview's answer, not this one.
       </p>
     </section>
 
@@ -793,18 +841,14 @@ function formatTimelineMarker(timestamp: number): string {
   );
 }
 
-.planning__staff-list {
+.planning__figures {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: var(--m-space-2);
   margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
-.planning__staff-list li {
-  display: grid;
-  gap: var(--m-space-2);
-  align-items: center;
+.planning__figures div {
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);
   border-radius: 8px;
@@ -812,20 +856,32 @@ function formatTimelineMarker(timestamp: number): string {
   box-shadow: var(--m-shadow-sm);
 }
 
-.planning__staff-list li > span:first-child {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.planning__staff-list strong,
-.planning__staff-list small {
-  display: block;
-}
-
-.planning__staff-list small,
-.planning__staff-list li > span:last-child {
+.planning__figures dt {
+  margin: 0 0 var(--m-space-1);
   color: var(--m-text-muted);
-  font-size: var(--m-text-sm);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.planning__figures dd {
+  margin: 0;
+  color: var(--m-text-primary);
+  font-size: var(--m-text-lg);
+  font-weight: 900;
+}
+
+.planning__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-5);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .planning__table-section {
@@ -917,10 +973,6 @@ h2 {
 @media (min-width: 48rem) {
   .planning__filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .planning__staff-list li {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 

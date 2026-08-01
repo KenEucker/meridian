@@ -1473,12 +1473,18 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
+/*
+ * Every row in this menu acts when it is clicked — Sign in, Sign out, the
+ * context links — so every row says so under the pointer. The button rows
+ * inherited no cursor at all and read as text beside the anchors that did.
+ */
 .app-shell__user-menu a,
 .app-shell__user-menu button {
   display: flex;
   align-items: center;
   width: 100%;
   min-height: 2.25rem;
+  cursor: pointer;
   padding: 0 var(--m-space-2);
   border-radius: 6px;
   background: transparent;
@@ -1488,6 +1494,7 @@ onBeforeUnmount(() => {
 
 .app-shell__user-menu button[aria-disabled="true"] {
   opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .app-shell__department-switch,

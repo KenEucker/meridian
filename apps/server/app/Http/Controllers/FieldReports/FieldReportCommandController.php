@@ -5,6 +5,7 @@ namespace App\Http\Controllers\FieldReports;
 use App\Exceptions\FieldReportAcceptanceException;
 use App\Http\Controllers\Controller;
 use App\Services\FieldReports\FieldReportAcceptanceService;
+use App\Services\Node\NodeSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,6 +17,8 @@ use Illuminate\Http\Request;
  */
 class FieldReportCommandController extends Controller
 {
+    public function __construct(private readonly NodeSetupService $nodes) {}
+
     public function submit(
         Request $request,
         FieldReportAcceptanceService $acceptance,
@@ -34,16 +37,33 @@ class FieldReportCommandController extends Controller
             'body' => ['required', 'string'],
             'device_submitted_at' => ['required', 'date'],
             'origin_device_id' => ['required', 'uuid'],
-            'origin_node_id' => ['required', 'uuid'],
+            /*
+             * Optional, on the same reasoning as the attendance commands
+             * (M16.21). A browser has no way to learn a node id — nothing
+             * publishes one, deliberately — so the node that received the
+             * command records itself as the origin. A caller replaying a report
+             * that originated somewhere else still names that node, which is why
+             * the field survives rather than being dropped.
+             */
+            'origin_node_id' => ['nullable', 'uuid'],
         ]);
 
         if ((string) $validated['staff_id'] === '') {
             return response()->json(['message' => 'staff_id is required.'], 422);
         }
 
+        $originNodeId = $this->originNodeId($validated);
+
+        if ($originNodeId === null) {
+            return response()->json([
+                'message' => 'This node is not configured, so a Field Report cannot record where it came from.',
+            ], 422);
+        }
+
         try {
             $report = $acceptance->accept([
                 ...$validated,
+                'origin_node_id' => $originNodeId,
                 'submitted_by_user_id' => (string) $user->getKey(),
             ]);
         } catch (FieldReportAcceptanceException $exception) {
@@ -63,5 +83,24 @@ class FieldReportCommandController extends Controller
             'server_received_at' => optional($report->server_received_at)?->toIso8601String(),
             'device_submitted_at' => optional($report->device_submitted_at)?->toIso8601String(),
         ], 201);
+    }
+
+    /**
+     * The node this Field Report originated at.
+     *
+     * Named by the caller when it is replaying one from somewhere else;
+     * otherwise this install's own node, because a report posted to this node
+     * originated here. Null when neither answers, which the caller is told about
+     * rather than having a guess recorded as provenance.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function originNodeId(array $validated): ?string
+    {
+        if (isset($validated['origin_node_id'])) {
+            return (string) $validated['origin_node_id'];
+        }
+
+        return $this->nodes->activeNode()?->getKey();
     }
 }

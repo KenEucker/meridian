@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import StatusPill from "@/components/StatusPill.vue";
 import type { LogisticsSearchHit } from "@/department-ops/types";
 
 const props = defineProps<{
@@ -70,8 +71,27 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
           <h3 class="entity-search__group-title">{{ kindLabel[kind] }}</h3>
           <ul>
             <li v-for="hit in grouped[kind]" :key="`${hit.kind}-${hit.id}`">
+              <!--
+                The name and the states share the top line, and the states drop
+                under it when the row runs out of room rather than squeezing the
+                name. A result an operator cannot read the name of is not a
+                result.
+              -->
               <button type="button" @click="emit('select', hit)">
-                <span class="entity-search__label">{{ hit.label }}</span>
+                <span class="entity-search__line">
+                  <span class="entity-search__label">{{ hit.label }}</span>
+                  <span
+                    v-if="hit.pills && hit.pills.length > 0"
+                    class="entity-search__pills"
+                  >
+                    <StatusPill
+                      v-for="pill in hit.pills"
+                      :key="pill.key"
+                      :label="pill.label"
+                      :tone="pill.tone"
+                    />
+                  </span>
+                </span>
                 <span class="entity-search__detail">{{ hit.detail }}</span>
               </button>
             </li>
@@ -181,8 +201,28 @@ const kindLabel: Record<LogisticsSearchHit["kind"], string> = {
   outline-offset: 2px;
 }
 
+.entity-search__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-2);
+  min-width: 0;
+}
+
 .entity-search__label {
   font-weight: 700;
+}
+
+/*
+ * "When space allows" is the wrap, not a media query. The pills sit beside the
+ * name on a row wide enough for both and move to their own line when they are
+ * not, so the same markup reads on a desk monitor and on a phone in a tent.
+ */
+.entity-search__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-1);
+  margin-left: auto;
 }
 
 .entity-search__detail {

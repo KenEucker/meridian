@@ -132,11 +132,21 @@ describe("createOfflineFieldReport", () => {
     ["submittedByUserId"],
     ["staffId"],
     ["originDeviceId"],
-    ["originNodeId"],
   ] as const)("rejects a missing %s", (field) => {
     expect(() =>
       createWith({ [field]: "   " } as Partial<CreateOfflineFieldReportInput>),
     ).toThrow(OfflineFieldReportError);
+  });
+
+  /*
+   * The one identifier a browser cannot supply (M16.22). Nothing publishes a
+   * node id, so a device that files a report from a browser knows none, and the
+   * node that accepts the command records itself as the origin.
+   */
+  it("accepts a report from a device that knows no origin node", () => {
+    const report = createWith({ originNodeId: null });
+
+    expect(report.originNodeId).toBeNull();
   });
 
   it("rejects empty body text", () => {

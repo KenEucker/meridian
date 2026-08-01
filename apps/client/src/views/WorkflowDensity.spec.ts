@@ -170,6 +170,59 @@ function stubIncidentListNode(): void {
   );
 }
 
+/**
+ * A node that answers the Department Overview read (M16.21).
+ *
+ * This file is about where sections sit on a page, so the answer is the
+ * smallest one that renders all four of them: a context, an authority, and one
+ * shift with nobody on it.
+ */
+function stubDepartmentOverviewNode(): void {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            context: {
+              event_id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+              event_label: "Idaho Decompression",
+              department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+              department_label: "Rangers",
+              time_zone: "America/Los_Angeles",
+              as_of: "2027-07-04T18:00:00+00:00",
+            },
+            access: { can_manage_attendance: true },
+            shifts: [
+              {
+                shift_id: "99999999-9999-4999-8999-999999999999",
+                title: "Ranger Dirt Day Shift",
+                team_id: "77777777-7777-4777-8777-777777777771",
+                team_label: "Dirt",
+                starts_at: "2027-07-04T16:00:00+00:00",
+                ends_at: "2027-07-04T22:00:00+00:00",
+                lifecycle: "active",
+                capacity: 4,
+              },
+            ],
+            selected_shift_id: "99999999-9999-4999-8999-999999999999",
+            exceptions: [],
+            assignments: [],
+            equipment_out: [],
+            deployments: [],
+            on_site_count: 0,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    ),
+  );
+}
+
 /** The signed-in IC session the incident list renders under. */
 function installIncidentSession(): void {
   installLocalFieldSession();
@@ -241,10 +294,11 @@ describe("workflow control bands", () => {
     }
     expect(filters.findAll(".control-field")).toHaveLength(0);
 
-    // Search keeps its inline sizing hint.
+    // Search keeps its inline sizing hint, and so does the open-mode control
+    // that sits beside it on the always-visible band rather than in the panel.
     expect(
       wrapper.findAll(".control-field").map((f) => f.attributes("data-width")),
-    ).toEqual(["grow"]);
+    ).toEqual(["grow", "md"]);
   });
 
   it("puts department filter toolbars on the shared band", async () => {
@@ -263,6 +317,8 @@ describe("workflow control bands", () => {
 describe("workflow page regions", () => {
   it("pairs Overview sections while keeping the documented content order", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    stubDepartmentOverviewNode();
+
     const wrapper = await mountAt(
       DepartmentOverviewView,
       departmentPath("overview"),

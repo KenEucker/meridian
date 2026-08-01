@@ -15,6 +15,7 @@ use App\Services\Attendance\AttendanceCheckOutResult;
 use App\Services\Attendance\AttendanceCheckOutService;
 use App\Services\Attendance\AttendanceMarkNoShowException;
 use App\Services\Attendance\AttendanceMarkNoShowService;
+use App\Services\Node\NodeSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,6 +29,8 @@ use Illuminate\Support\Carbon;
  */
 class AttendanceCommandController extends Controller
 {
+    public function __construct(private readonly NodeSetupService $nodes) {}
+
     public function checkIn(
         Request $request,
         AttendanceCheckInService $checkIn,
@@ -144,7 +147,15 @@ class AttendanceCommandController extends Controller
             'staff_id' => ['required', 'uuid', 'exists:staff,id'],
             'device_created_at' => ['required', 'date'],
             'origin_device_id' => ['required', 'uuid', 'exists:devices,id'],
-            'origin_node_id' => ['required', 'uuid', 'exists:nodes,id'],
+            /*
+             * Optional since M16.21. The origin node of a command a client posts
+             * here is the node that received it, and a browser has no way to
+             * learn a node id — nothing publishes one, deliberately. A caller
+             * replaying an operation that originated somewhere else still names
+             * that node, which is why the field survives rather than being
+             * dropped.
+             */
+            'origin_node_id' => ['nullable', 'uuid', 'exists:nodes,id'],
         ];
     }
 
@@ -173,11 +184,26 @@ class AttendanceCommandController extends Controller
     }
 
     /**
+     * The node this operation originated at.
+     *
+     * Named by the caller when it is replaying one from somewhere else;
+     * otherwise this install's own node, because a command posted to this node
+     * originated here. An install with no node configured cannot record
+     * provenance at all, and says so rather than recording a guess.
+     *
      * @param  array<string, mixed>  $validated
      */
     private function originNode(array $validated): Node
     {
-        return Node::query()->findOrFail((string) $validated['origin_node_id']);
+        if (isset($validated['origin_node_id'])) {
+            return Node::query()->findOrFail((string) $validated['origin_node_id']);
+        }
+
+        $node = $this->nodes->activeNode();
+
+        abort_if($node === null, 422, 'This node is not configured, so an attendance operation cannot record where it came from.');
+
+        return $node;
     }
 
     /**

@@ -23,6 +23,12 @@ import {
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
 import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import { clearClientSession } from "@/session/clientSession";
+import { deviceId } from "@/session/deviceIdentity";
+import {
+  installLocalFieldSession,
+  LOCAL_FIELD_ORGANIZATION_ID,
+} from "@/session/localFieldSession";
 
 const explicitSession: FieldSessionContext = {
   eventId: "event-existing",
@@ -44,8 +50,10 @@ function offShift(): void {
 
 afterEach(() => {
   clearFieldSession();
+  clearClientSession();
   resetFieldShiftResolver();
   resetSelectedFixtureDepartment();
+  window.localStorage.clear();
 });
 
 describe("installDevelopmentFieldSessionFromEnv", () => {
@@ -203,6 +211,83 @@ describe("resolveFieldSession identity", () => {
     // real auth and tests use to state a department deliberately.
     installFieldSession(explicitSession);
     selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+
+    expect(resolveFieldSession()).toBe(explicitSession);
+  });
+});
+
+describe("resolveFieldSession from the client's own session (M16.22)", () => {
+  it("takes the event, user, staff, and device from the session document", () => {
+    offShift();
+    installLocalFieldSession();
+
+    // The identity is the node's answer; the device is this device. The origin
+    // node is absent because a browser cannot learn one — the node that accepts
+    // the command records itself as the origin.
+    expect(resolveFieldSession()).toMatchObject({
+      eventId: LOCAL_FIELD_FIXTURE.eventId,
+      eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
+      submittedByUserId: LOCAL_FIELD_FIXTURE.submittedByUserId,
+      staffId: LOCAL_FIELD_FIXTURE.staffId,
+      originDeviceId: deviceId(),
+      originNodeId: null,
+    });
+  });
+
+  it("is unavailable for a login that speaks for no staff record", () => {
+    installLocalFieldSession({
+      user: {
+        id: "user-organizer",
+        name: "No Staff",
+        email: "no-staff@example.test",
+        staff_ids: [],
+      },
+    });
+
+    expect(resolveFieldSession()).toBeNull();
+  });
+
+  it("is unavailable while the session holds no event", () => {
+    installLocalFieldSession({
+      context: {
+        organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+        event_id: null,
+        department_id: null,
+        node_locked: false,
+        node_locked_event_id: null,
+        switching_available: false,
+      },
+    });
+
+    expect(resolveFieldSession()).toBeNull();
+  });
+
+  it("drops the development fixture once the node answers for somebody else", () => {
+    // The failure this replaced: a developer boots on the fixture, signs in for
+    // real, and files a Field Report against the fixture's event — which the
+    // node refuses, because that event is not there.
+    offShift();
+    installDevelopmentFieldSession();
+    installLocalFieldSession({
+      user: {
+        id: "user-real",
+        name: "Real Operator",
+        email: "real@example.test",
+        staff_ids: ["staff-real"],
+      },
+    });
+
+    expect(resolveFieldSession()).toMatchObject({
+      submittedByUserId: "user-real",
+      staffId: "staff-real",
+      originDeviceId: deviceId(),
+      originNodeId: null,
+    });
+  });
+
+  it("keeps a deliberately pinned session whoever the node answers for", () => {
+    installFieldSession(explicitSession);
+    installLocalFieldSession();
 
     expect(resolveFieldSession()).toBe(explicitSession);
   });

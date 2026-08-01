@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
 use App\Http\Controllers\Auth\SharedWorkstationSessionController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
+use App\Http\Controllers\DepartmentOps\DepartmentOperationsReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
@@ -28,10 +29,12 @@ use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
+use App\Http\Controllers\Presence\DepartmentPresenceCommandController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Session\SessionController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
+use App\Http\Controllers\Shifts\ShiftAssignmentCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
 use App\Http\Controllers\Teams\TeamCommandController;
@@ -217,6 +220,15 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
         ->name('api.commands.set-current-deployment');
+
+    Route::post('/commands/mark-staff-on-site', [DepartmentPresenceCommandController::class, 'markOnSite'])
+        ->name('api.commands.mark-staff-on-site');
+
+    Route::post('/commands/mark-staff-off-site', [DepartmentPresenceCommandController::class, 'markOffSite'])
+        ->name('api.commands.mark-staff-off-site');
+
+    Route::post('/commands/add-staff-to-shift', [ShiftAssignmentCommandController::class, 'addUnscheduledStaff'])
+        ->name('api.commands.add-staff-to-shift');
 
     Route::post('/commands/checkout-equipment', [EquipmentCommandController::class, 'checkout'])
         ->name('api.commands.checkout-equipment');
@@ -477,6 +489,27 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/info', [EventInfoReadController::class, 'show'])
         ->name('api.events.info');
+
+    /*
+     * The department operations surfaces (SLB-001 through SLB-022; technical
+     * spec 20.5; UI contract 12.4).
+     *
+     * Event and department both sit in the path because that is the scope these
+     * surfaces work in: presence is per event, department, and staff member, and
+     * a shift belongs to exactly one department. One read per surface, each
+     * carrying the same authority block the commands enforce.
+     */
+    Route::get('/events/{event}/departments/{department}/overview', [DepartmentOperationsReadController::class, 'overview'])
+        ->name('api.events.departments.overview');
+
+    Route::get('/events/{event}/departments/{department}/logistics', [DepartmentOperationsReadController::class, 'logistics'])
+        ->name('api.events.departments.logistics');
+
+    Route::get('/events/{event}/departments/{department}/operations', [DepartmentOperationsReadController::class, 'operations'])
+        ->name('api.events.departments.operations');
+
+    Route::get('/events/{event}/departments/{department}/planning', [DepartmentOperationsReadController::class, 'planning'])
+        ->name('api.events.departments.planning');
 
     // Reporting exports (REPORT-001 through REPORT-005). Scope comes from the
     // caller's own authority; `department_id` may only narrow it.

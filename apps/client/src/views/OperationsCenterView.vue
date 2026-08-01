@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
-import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
-import { LOCAL_OPERATIONS_CENTER } from "@/department-ops/fixtures";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
-  assignOperationsDeployment,
-  availableOperationsModules,
-  composeOperationsModules,
-  deploymentName,
-} from "@/department-ops/operations";
+  deploymentLabel,
+  getOperationsCenter,
+  setCurrentDeployment,
+  type OperationsCenterRead,
+} from "@/department-ops/departmentOpsReadModel";
 import {
   getEventFieldReports,
   getEventIncidents,
@@ -19,40 +18,95 @@ import {
 } from "@/ims/incidentReadModel";
 
 /**
- * The Operations Center's IMS modules (SLB-013, SLB-014; M10.10), counting the
- * node's incidents since M16.20.
+ * The Operations Center (SLB-009, SLB-010, SLB-013, SLB-014, SLB-022; bound to
+ * the node in M16.21).
  *
- * These numbers used to be computed over the IMS fixture. Each is now asked of
- * the incident list read, one narrow request per number, and each count is the
- * `pagination.total` for the same filter the card links to -- so the number on
- * the card and the list behind it are the same answer to the same question
- * rather than two counts that can disagree.
+ * The deployment module is the one this surface owns, and it now reads the
+ * department's deployments and the staff on shift from the node and writes
+ * through `set-current-deployment`. Its module list is composed from the same
+ * `access` block the commands enforce, in place of a fixture's capability flags
+ * — the shell grants nothing, which is the whole of SLB-022.
  *
- * The "current shift" cards are gone. They matched creation times against a
- * shift table compiled into the client; an incident carries no shift, and the
- * rest of this surface stays fixture-driven until M16.21 binds it.
+ * The IMS and Field Report counts were bound in M16.20 and are unchanged: one
+ * narrow read per number, each the node's total for the filter its card links
+ * to.
  */
 
-const center = ref(LOCAL_OPERATIONS_CENTER);
-const selectedAssignmentId = ref(
-  center.value.deploymentRows[0]?.assignmentId ?? "",
-);
-const selectedDeploymentId = ref(
-  center.value.deploymentOptions[0]?.deploymentId ?? "",
-);
+const route = useRoute();
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
+
+const center = ref<OperationsCenterRead | null>(null);
+const loadError = ref<string | null>(null);
+const selectedAssignmentId = ref("");
+const selectedDeploymentId = ref("");
 const status = ref<string | null>(null);
 
-const modules = computed(() =>
-  composeOperationsModules(
-    center.value.capabilities,
-    center.value.modules.find((module) => module.id === "equipment")?.available
-      ? 1
-      : 0,
-  ),
+const departmentLabel = computed(
+  () => center.value?.context.departmentLabel ?? "Department",
 );
+const rows = computed(() => center.value?.rows ?? []);
+const deployments = computed(() => center.value?.deployments ?? []);
+
+/**
+ * The modules this actor already holds the capability for (SLB-022).
+ *
+ * Deployments follow `can_assign_deployments`; incidents and Field Reports
+ * follow the IMS reads' own access answer, which is event-scoped rather than
+ * department-scoped (SLB-014); equipment follows the department's equipment
+ * grant. Maintenance stays an extension point until that domain is specified.
+ */
+const modules = computed(() => {
+  const access = center.value?.access;
+
+  return [
+    {
+      id: "deployments",
+      title: "Deployments",
+      available: access?.canAssignDeployments ?? false,
+      unavailableReason: "Deployments require Department Operations capability.",
+      summary: "Current deployment/location assignments for staff on shift.",
+    },
+    {
+      id: "field_reports",
+      title: "Field Reports",
+      available: incidentAccess.value.canViewFieldReports,
+      unavailableReason:
+        "Field Report shortcuts require existing Field Report permission.",
+      summary:
+        "Field Report shortcuts available from the actor's existing permission.",
+    },
+    {
+      id: "incidents",
+      title: "Incidents",
+      available: incidentAccess.value.canView,
+      unavailableReason:
+        "Incident overview requires event-scoped Incident Command capability.",
+      summary: "Incident overview for the event IC department.",
+    },
+    {
+      id: "equipment",
+      title: "Equipment",
+      available: access?.canManageEquipment ?? false,
+      unavailableReason:
+        "Equipment overview requires equipment visibility capability.",
+      summary: `${center.value?.equipmentOutCount ?? 0} item${
+        center.value?.equipmentOutCount === 1 ? "" : "s"
+      } currently checked out in this department.`,
+    },
+    {
+      id: "maintenance",
+      title: "Maintenance",
+      available: false,
+      unavailableReason:
+        "Maintenance tickets are an extension point until that domain is specified.",
+      summary: "No maintenance module yet.",
+    },
+  ];
+});
 
 const availableModules = computed(() =>
-  availableOperationsModules({ ...center.value, modules: modules.value }),
+  modules.value.filter((module) => module.available),
 );
 const incidentCounts = ref({ total: 0, active: 0, critical: 0 });
 const fieldReportCounts = ref({ total: 0, linked: 0, unlinked: 0 });
@@ -180,50 +234,102 @@ async function loadImsCounts(): Promise<void> {
   }
 }
 
-function moveDeployment(): void {
+/**
+ * Read the deployment module.
+ *
+ * A failed read clears the page rather than leaving the last roster on screen,
+ * and the two selects fall back to the first row and the first deployment so the
+ * form is usable the moment the response lands.
+ */
+async function loadOperations(): Promise<void> {
+  if (eventId.value === "" || departmentId.value === "") {
+    center.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
   try {
-    const before = center.value.deploymentRows.find(
-      (row) => row.assignmentId === selectedAssignmentId.value,
-    );
-    center.value = assignOperationsDeployment(
-      center.value,
-      selectedAssignmentId.value,
-      selectedDeploymentId.value,
-    );
-    const after = center.value.deploymentRows.find(
-      (row) => row.assignmentId === selectedAssignmentId.value,
-    );
-    status.value = `${before?.displayName ?? "Staff"} moved to ${deploymentName(
-      center.value,
-      after?.currentDeploymentId ?? null,
-    )}.`;
+    const read = await getOperationsCenter(eventId.value, departmentId.value);
+
+    center.value = read;
+
+    if (!read.rows.some((row) => row.assignmentId === selectedAssignmentId.value)) {
+      selectedAssignmentId.value = read.rows[0]?.assignmentId ?? "";
+    }
+
+    if (
+      !read.deployments.some(
+        (option) => option.deploymentId === selectedDeploymentId.value,
+      )
+    ) {
+      selectedDeploymentId.value = read.deployments[0]?.deploymentId ?? "";
+    }
   } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "Unable to move deployment.";
+    center.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this department's operations. Check the connection to this node and try again.",
+    );
   }
 }
 
-function addDeployment(): void {
-  status.value =
-    "Add Deployment is scaffolded for the Operations Center workflow.";
+/**
+ * Move somebody to a deployment, then read the roster again.
+ *
+ * The command answers with the assignment it wrote and not with what the rest of
+ * the table now says, so the table asks. Connected-only: moving a deployment is
+ * refused where it stands rather than queued (CLIENT-018).
+ */
+async function moveDeployment(): Promise<void> {
+  const context = center.value?.context;
+  const row = rows.value.find(
+    (candidate) => candidate.assignmentId === selectedAssignmentId.value,
+  );
+
+  if (context === undefined || row === undefined) {
+    return;
+  }
+
+  try {
+    await setCurrentDeployment(
+      context,
+      row.shiftId,
+      row.staffId,
+      selectedDeploymentId.value,
+    );
+    await loadOperations();
+    status.value = `${row.displayName} moved to ${deploymentLabel(
+      deployments.value,
+      selectedDeploymentId.value,
+    )}.`;
+  } catch (error) {
+    status.value = meridianErrorMessage(error, "Unable to move deployment.");
+  }
 }
+
+watch([eventId, departmentId], () => {
+  void loadOperations();
+});
+
+void loadOperations();
 </script>
 
 <template>
   <DeptOpsShell
     title="Operations Center"
-    :eyebrow="center.context.departmentLabel"
+    :eyebrow="departmentLabel"
     lede="High-level operational picture composed from capabilities you already hold."
   >
     <template #nav>
       <RouterLink :to="{ name: 'home' }">Back To Home</RouterLink>
     </template>
 
-    <template #actions>
-      <WorkflowActionButton @click="addDeployment">
-        Add Deployment
-      </WorkflowActionButton>
-    </template>
+    <p v-if="loadError" class="ops__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadOperations">Try again</button>
+    </p>
 
     <section
       v-if="availableModules.some((module) => module.id === 'deployments')"
@@ -231,17 +337,25 @@ function addDeployment(): void {
       class="ops__section"
     >
       <h2 id="deployments-heading">Deployments</h2>
-      <form class="ops__form" aria-label="Move current deployment" @submit.prevent="moveDeployment">
+      <p v-if="rows.length === 0" role="status">
+        No staff are on a running shift in this department right now.
+      </p>
+      <form
+        v-else
+        class="ops__form"
+        aria-label="Move current deployment"
+        @submit.prevent="moveDeployment"
+      >
         <label>
           <span>Staff on shift</span>
           <select v-model="selectedAssignmentId">
             <option
-              v-for="row in center.deploymentRows"
+              v-for="row in rows"
               :key="row.assignmentId"
               :value="row.assignmentId"
             >
               {{ row.displayName }} /
-              {{ deploymentName(center, row.currentDeploymentId) }}
+              {{ deploymentLabel(deployments, row.currentDeploymentId) }}
             </option>
           </select>
         </label>
@@ -249,7 +363,7 @@ function addDeployment(): void {
           <span>Deployment</span>
           <select v-model="selectedDeploymentId">
             <option
-              v-for="option in center.deploymentOptions"
+              v-for="option in deployments"
               :key="option.deploymentId"
               :value="option.deploymentId"
             >
@@ -257,11 +371,13 @@ function addDeployment(): void {
             </option>
           </select>
         </label>
-        <button type="submit">Move deployment</button>
+        <button type="submit" :disabled="deployments.length === 0">
+          Move deployment
+        </button>
       </form>
       <p v-if="status" class="ops__status" role="status">{{ status }}</p>
 
-      <div class="ops__table-frame">
+      <div v-if="rows.length > 0" class="ops__table-frame">
         <table>
           <thead>
             <tr>
@@ -271,13 +387,12 @@ function addDeployment(): void {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="row in center.deploymentRows"
-              :key="row.assignmentId"
-            >
+            <tr v-for="row in rows" :key="row.assignmentId">
               <th scope="row">{{ row.displayName }}</th>
               <td>{{ row.shiftTitle }}</td>
-              <td>{{ deploymentName(center, row.currentDeploymentId) }}</td>
+              <td>
+                {{ deploymentLabel(deployments, row.currentDeploymentId) }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -374,6 +489,19 @@ function addDeployment(): void {
 <style scoped>
 .ops__section {
   margin: 0 0 var(--m-space-5);
+}
+
+.ops__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-5);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .ops__section h2 {
