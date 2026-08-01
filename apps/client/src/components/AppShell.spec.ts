@@ -154,10 +154,11 @@ describe("AppShell offline/sync display", () => {
     ).toBe("degraded");
   });
 
-  it("keeps cached-permission state separate from connectivity state", () => {
-    // Contract 19A.2: a device can be online with stale permissions or offline
-    // with fresh ones, so the two indicators are two elements.
-    setDeviceOnLine(true);
+  it("carries no permission state, cached or otherwise", () => {
+    // Cached-permission state lives on Settings and nowhere else (contract
+    // 19A.2). Asserted against a *cached* session because that is exactly the
+    // case the shell used to render a banner for, so a regression here would
+    // put it back on every screen.
     installClientSession(
       fixtureSessionDocument(),
       "cache",
@@ -168,19 +169,15 @@ describe("AppShell offline/sync display", () => {
       global: { stubs: routerLinkStub },
     });
 
+    expect(wrapper.find(".session-permissions").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Permissions are cached");
+    // The connectivity indicator is a different question and stays: a device
+    // can be online with stale permissions or offline with fresh ones, and only
+    // the permission half moved.
     expect(wrapper.find(".offline-banner").exists()).toBe(false);
-    expect(
-      wrapper.get(".session-permissions").attributes("data-session-status"),
-    ).toBe("cached");
-    expect(wrapper.get(".session-permissions").text()).toContain(
-      "Permissions are cached",
-    );
-    expect(wrapper.get(".session-permissions").text()).toContain(
-      "Last refreshed",
-    );
   });
 
-  it("says nothing about permissions when the session is current", () => {
+  it("says nothing about permissions when the session is current either", () => {
     installClientSession(
       fixtureSessionDocument(),
       "network",

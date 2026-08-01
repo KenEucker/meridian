@@ -49,7 +49,6 @@ import {
   sessionSwitchingUnavailableReason,
 } from "@/session/sessionContext";
 import { describeSwitchUnavailable } from "@/session/sessionContextCopy";
-import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 
 type ThemeChoice = "light" | "dark";
 const meridianMarkUrl = "/assets/brand/meridian-mark.png";
@@ -987,11 +986,13 @@ onBeforeUnmount(() => {
     </header>
     <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
     <!--
-      Cached-permission state sits beside connectivity state, not inside it. A
-      device can be online with stale permissions or offline with fresh ones, and
-      merging the two indicators loses the distinction (contract 19A.2).
+      Cached-permission state is not here. It lives on Settings, next to the
+      other facts about this device's standing with its node, and the shell says
+      nothing about it (contract 19A.2). It is still not the OfflineBanner above
+      and the two are still not merged: a device can be online with stale
+      permissions or offline with fresh ones, and that distinction survives the
+      move.
     -->
-    <SessionPermissionsNotice class="app-shell__session-notice" />
     <!--
       Held and refused commands, in the shell rather than on the surface that
       issued them: a person who queued a check-in and moved on is the one
@@ -1646,7 +1647,6 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__offline-banner,
-.app-shell__session-notice,
 .app-shell__outbox-notice {
   width: var(--m-app-content-max);
   margin: var(--m-space-3) auto 0;

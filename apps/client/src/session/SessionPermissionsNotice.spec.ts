@@ -37,6 +37,47 @@ describe("session permissions notice", () => {
     expect(wrapper.find(".session-permissions").exists()).toBe(false);
   });
 
+  it("reports current permissions when asked to show them", () => {
+    // The Settings placement. A page somebody opened to ask this question
+    // should answer it, including when the answer is that nothing is wrong.
+    installClientSession(fixtureSessionDocument(), "network", insideWindow);
+
+    const wrapper = mount(SessionPermissionsNotice, {
+      props: { showWhenCurrent: true },
+    });
+    const notice = wrapper.get(".session-permissions");
+
+    expect(notice.attributes("data-session-status")).toBe("live");
+    expect(notice.classes()).toContain("session-permissions--ok");
+    expect(notice.text()).toContain("Permissions are current");
+    expect(notice.text()).toContain("Last refreshed Sep 11");
+    // The control is offered in every state it renders, so somebody who wants
+    // a fresh answer does not have to wait for staleness to ask for one.
+    expect(wrapper.get("button").text()).toBe("Refresh permissions");
+  });
+
+  it("still says nothing with no session, even when asked to show current", () => {
+    // Holding no session is a sign-in state, not a permission state, in either
+    // placement.
+    const wrapper = mount(SessionPermissionsNotice, {
+      props: { showWhenCurrent: true },
+    });
+
+    expect(wrapper.find(".session-permissions").exists()).toBe(false);
+  });
+
+  it("shows a stale session in the Settings placement too", () => {
+    installClientSession(fixtureSessionDocument(), "cache", insideWindow);
+
+    const wrapper = mount(SessionPermissionsNotice, {
+      props: { showWhenCurrent: true },
+    });
+
+    expect(wrapper.get(".session-permissions").text()).toContain(
+      "Permissions are cached",
+    );
+  });
+
   it("says permissions are cached and when they were last refreshed", () => {
     installClientSession(
       fixtureSessionDocument(),

@@ -11,8 +11,12 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import { routes } from "@/router";
-import { clearClientSession } from "@/session/clientSession";
+import {
+  clearClientSession,
+  installClientSession,
+} from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
+import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 import AboutView from "@/views/AboutView.vue";
 
 const mounted: VueWrapper[] = [];
@@ -88,6 +92,58 @@ describe("the readiness link on Settings", () => {
     // on the colour to carry it.
     expect(count.attributes("data-complete")).toBe("false");
     expect(count.text()).toContain("ready");
+  });
+});
+
+/*
+ * Cached-permission state on Settings (CLIENT-009; contract 19A.2).
+ *
+ * It used to sit in the app shell, on every screen. It now lives here and only
+ * here, so this is where the states have to be readable — including the state
+ * where nothing is wrong, because a section that renders nothing whenever the
+ * answer is "fine" reads as broken at the moment it is working.
+ */
+describe("cached-permission state on Settings", () => {
+  it("reports current permissions and offers a refresh", async () => {
+    installClientSession(
+      fixtureSessionDocument(),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const notice = wrapper.get(".about__permissions .session-permissions");
+
+    expect(wrapper.text()).toContain("Permissions");
+    expect(notice.attributes("data-session-status")).toBe("live");
+    expect(notice.text()).toContain("Permissions are current");
+    expect(notice.text()).toContain("Last refreshed");
+    expect(notice.get("button").text()).toBe("Refresh permissions");
+  });
+
+  it("reports a cached session as cached", async () => {
+    installClientSession(
+      fixtureSessionDocument(),
+      "cache",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const notice = wrapper.get(".about__permissions .session-permissions");
+
+    expect(notice.attributes("data-session-status")).toBe("cached");
+    expect(notice.text()).toContain("Permissions are cached");
+  });
+
+  it("says there is nothing to report when the device holds no session", async () => {
+    const wrapper = await mountSettings();
+
+    expect(wrapper.find(".about__permissions .session-permissions").exists()).toBe(
+      false,
+    );
+    expect(wrapper.get(".about__permissions-empty").text()).toContain(
+      "This device holds no session",
+    );
   });
 });
 
