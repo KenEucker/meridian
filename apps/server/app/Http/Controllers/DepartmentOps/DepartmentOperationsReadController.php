@@ -185,7 +185,11 @@ final class DepartmentOperationsReadController extends Controller
         $openEquipment = $this->openCheckoutsForStaff($event, $department, $staffIds);
         $availableEquipment = $this->availableEquipment($department);
         $signups = $this->futureSignups($event, $department, $staffIds, $now);
-        $eligibleTeamMembers = $this->eligibleTeamMembers($shifts, $staffIds);
+        $eligibleTeamMembers = $this->eligibleTeamMembers(
+            $shifts,
+            $staffIds,
+            $this->departmentMembershipIds($department, $staffIds),
+        );
 
         $workspaces = [];
 
@@ -827,6 +831,16 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         if (! $eligible) {
+            // An archived team is not "they are not a member of it" — they may
+            // well still be, and an operator told to put them on the team would
+            // be sent after a team that no longer takes anybody.
+            if ($shift->eligibleTeam?->isArchived() === true) {
+                return sprintf(
+                    'The %s team has been archived, so this shift takes no additions.',
+                    $shift->eligibleTeam->name,
+                );
+            }
+
             $team = $shift->eligibleTeam?->name ?? $shift->team_name_snapshot;
 
             return $team === null
@@ -841,16 +855,24 @@ final class DepartmentOperationsReadController extends Controller
      * Which of these staff members belong to each shift's eligible team.
      *
      * Keyed `staffId:teamId` so a card can answer without a query of its own.
+     * `onEligibleShiftTeam` is the rule `UnscheduledShiftAdditionService`
+     * refuses by, asked here in bulk rather than restated: the desk weighing a
+     * looser version of it is how an archived team kept offering **Add to
+     * shift** for an addition the node would not take.
      *
      * @param  Collection<int, Shift>  $shifts
      * @param  list<string>  $staffIds
+     * @param  list<string>  $departmentMembershipIds
      * @return array<string, bool>
      */
-    private function eligibleTeamMembers(Collection $shifts, array $staffIds): array
-    {
+    private function eligibleTeamMembers(
+        Collection $shifts,
+        array $staffIds,
+        array $departmentMembershipIds,
+    ): array {
         $teamIds = $shifts->pluck('eligible_team_id')->filter()->unique()->values()->all();
 
-        if ($teamIds === [] || $staffIds === []) {
+        if ($teamIds === [] || $staffIds === [] || $departmentMembershipIds === []) {
             return [];
         }
 
@@ -858,7 +880,7 @@ final class DepartmentOperationsReadController extends Controller
 
         foreach (
             TeamMembership::query()
-                ->active()
+                ->onEligibleShiftTeam($departmentMembershipIds)
                 ->whereIn('team_id', $teamIds)
                 ->whereIn('staff_id', $staffIds)
                 ->get() as $membership
@@ -867,6 +889,32 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         return $members;
+    }
+
+    /**
+     * The active department memberships these staff members stand on.
+     *
+     * The command resolves exactly one of these per staff member and decides
+     * team eligibility against it, so the desk collects the same rows rather
+     * than accepting any team membership the person happens to hold.
+     *
+     * @param  list<string>  $staffIds
+     * @return list<string>
+     */
+    private function departmentMembershipIds(Department $department, array $staffIds): array
+    {
+        if ($staffIds === []) {
+            return [];
+        }
+
+        return DepartmentMembership::query()
+            ->active()
+            ->where('department_id', $department->id)
+            ->whereIn('staff_id', $staffIds)
+            ->pluck('id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ->values()
+            ->all();
     }
 
     /**

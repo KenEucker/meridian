@@ -135,6 +135,7 @@ function card(overrides: Record<string, unknown>) {
     can_check_out: false,
     can_mark_no_show: false,
     can_add_to_shift: false,
+    add_to_shift_blocked_reason: null,
     ...overrides,
   };
 }
@@ -272,7 +273,26 @@ function logisticsPayload() {
         off_site_blocked_reason: ariHoldsEquipment
           ? "Staff must return or resolve checked-out department equipment before being marked off-site."
           : null,
-        shift_cards: [card({ can_add_to_shift: true })],
+        /*
+         * What the node hands an on-site staff member: the shift it will take
+         * them onto, and the one it will not, with the reason it will not. The
+         * second card is on screen precisely so it can say why it offers
+         * nothing (SLB-008).
+         */
+        shift_cards: [
+          card({ can_add_to_shift: true }),
+          card({
+            shift_id: SWING_SHIFT_ID,
+            title: "Ranger Dirt Swing Shift",
+            team_id: COMMAND_TEAM_ID,
+            team_label: "Command",
+            starts_at: "2027-07-04T22:00:00+00:00",
+            ends_at: "2027-07-05T04:00:00+00:00",
+            lifecycle: "upcoming",
+            add_to_shift_blocked_reason:
+              "This shift is for the Command team, and they are not a member of it.",
+          }),
+        ],
         open_equipment: ariHoldsEquipment
           ? [
               {
@@ -972,6 +992,58 @@ describe("department operations surfaces", () => {
       shift_id: DAY_SHIFT_ID,
       staff_id: ARI_STAFF_ID,
     });
+  });
+
+  /*
+   * The addition is offered where the node offered it and explained where it
+   * did not (M18.3; SLB-008). One workspace, two cards: the desk draws a button
+   * on the one it was given and prints the node's sentence on the other. It
+   * never draws a button it then disables, because a disabled control with no
+   * words beside it tells an operator nothing they can act on.
+   */
+  it("offers the addition only where the node offered it, and says why not", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+
+    const cards = wrapper.get(".logistics__workspace").findAll(".logistics__cards li");
+    const offered = cards.find((entry) =>
+      entry.text().includes("Ranger Dirt Day Shift"),
+    )!;
+    const refused = cards.find((entry) =>
+      entry.text().includes("Ranger Dirt Swing Shift"),
+    )!;
+
+    expect(offered.findAll("button").map((button) => button.text())).toContain(
+      "Add to shift",
+    );
+    expect(offered.find(".logistics__card-blocked").exists()).toBe(false);
+
+    expect(
+      refused.findAll("button").map((button) => button.text()),
+    ).not.toContain("Add to shift");
+    expect(refused.get(".logistics__card-blocked").text()).toBe(
+      "This shift is for the Command team, and they are not a member of it.",
+    );
+  });
+
+  /*
+   * On-site presence comes first (requirements 5.8). An off-site staff member
+   * gets no unassigned cards from the node at all, so the desk offers no
+   * addition anywhere in their workspace — the presence pill and "Mark on-site"
+   * are the work to do first, and they are what is on screen.
+   */
+  it("offers an off-site staff member no shift addition at all", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Vera Staff");
+
+    const panel = wrapper.get(".logistics__workspace");
+    expect(panel.text()).toContain("Presence: Off-site");
+    expect(panel.findAll("button").map((button) => button.text())).not.toContain(
+      "Add to shift",
+    );
+    expect(commands).toHaveLength(0);
   });
 
   it("moves a deployment through the node from the Operations Center", async () => {
