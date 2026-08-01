@@ -76,7 +76,7 @@ function documentPayload(
     title: "Getting To Signal Camp",
     slug: "getting-to-signal-camp",
     scope_type: "organization",
-    scope_label: "Organization: Idaho Burners",
+    scope_label: "Organization: Northwood Collective",
     version: "1.00",
     rendered_html:
       "<p>Take the north access road to Gate 1. The last fuel stop is 40 miles out.</p>",
@@ -322,7 +322,7 @@ describe("event info document resolution", () => {
     expect(wrapper.text()).toContain("Take the north access road to Gate 1.");
     expect(wrapper.text()).toContain("Ranger Packing List");
     // Scope, type, and version are the node's words rather than a client lookup.
-    expect(wrapper.text()).toContain("Organization: Idaho Burners");
+    expect(wrapper.text()).toContain("Organization: Northwood Collective");
     expect(wrapper.text()).toContain("2 visible to you");
     expect(wrapper.text()).not.toContain("Placeholder:");
   });

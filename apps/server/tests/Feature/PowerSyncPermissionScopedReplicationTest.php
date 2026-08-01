@@ -75,10 +75,10 @@ class PowerSyncPermissionScopedReplicationTest extends TestCase
 
         $this->rules = PowerSyncRules::shipped();
 
-        $this->organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $this->organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         $this->rangers = Department::factory()->for($this->organization)->create(['name' => 'Rangers']);
         $this->dirt = Team::factory()->for($this->rangers)->create(['name' => 'Dirt']);
-        $this->event = Event::factory()->for($this->organization)->create(['name' => 'Idaho Decompression 2026']);
+        $this->event = Event::factory()->for($this->organization)->create(['name' => 'Emberfall 2026']);
 
         EventDepartmentAssignment::factory()->create([
             'event_id' => $this->event->id,

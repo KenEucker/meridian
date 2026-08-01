@@ -20,12 +20,12 @@ class EventOrchidTest extends TestCase
     public function test_orchid_event_list_displays_events(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
 
         Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
             'timezone' => 'America/Denver',
         ]);
 
@@ -33,9 +33,9 @@ class EventOrchidTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Events');
-        $response->assertSee('Idaho Decompression 2026');
-        $response->assertSee('idaho-decompression-2026');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Emberfall 2026');
+        $response->assertSee('emberfall-2026');
+        $response->assertSee('Northwood Collective');
         $response->assertSee('America/Denver');
     }
 
@@ -87,8 +87,8 @@ class EventOrchidTest extends TestCase
             ->method('save', [
                 'event' => [
                     'organization_id' => $organization->id,
-                    'name' => 'Idaho Decompression 2026',
-                    'slug' => 'idaho-decompression-2026',
+                    'name' => 'Emberfall 2026',
+                    'slug' => 'emberfall-2026',
                     'timezone' => 'America/Denver',
                     'starts_at' => '2026-10-01 09:00:00',
                     'ends_at' => '2026-10-04 18:00:00',
@@ -101,12 +101,12 @@ class EventOrchidTest extends TestCase
 
         $this->assertDatabaseHas('events', [
             'organization_id' => $organization->id,
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
             'timezone' => 'America/Denver',
         ]);
 
-        $event = Event::query()->where('slug', 'idaho-decompression-2026')->firstOrFail();
+        $event = Event::query()->where('slug', 'emberfall-2026')->firstOrFail();
 
         $this->assertSame('2026-10-01 09:00:00', $event->starts_at->toDateTimeString());
         $this->assertSame('2026-10-04 18:00:00', $event->ends_at->toDateTimeString());
@@ -208,8 +208,8 @@ class EventOrchidTest extends TestCase
     {
         $organization = Organization::factory()->create();
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
             'timezone' => 'America/Denver',
         ]);
         $department = Department::factory()->for($organization)->create();
@@ -226,8 +226,8 @@ class EventOrchidTest extends TestCase
             ->method('save', [
                 'event' => [
                     'organization_id' => $organization->id,
-                    'name' => 'Idaho Decompression 2026',
-                    'slug' => 'idaho-decompression-2026',
+                    'name' => 'Emberfall 2026',
+                    'slug' => 'emberfall-2026',
                     'timezone' => 'America/Denver',
                     'ic_department_id' => $department->id,
                 ],

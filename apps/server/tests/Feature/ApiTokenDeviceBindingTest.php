@@ -14,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -54,7 +55,7 @@ class ApiTokenDeviceBindingTest extends TestCase
     /**
      * @param  array<string, mixed>|null  $device
      */
-    private function verify(string $email, string $code, ?array $device): \Illuminate\Testing\TestResponse
+    private function verify(string $email, string $code, ?array $device): TestResponse
     {
         $payload = [
             'email' => $email,

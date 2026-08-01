@@ -65,17 +65,17 @@ rows, unauthorized actors are refused, and each successful export is audited.
 ## Personas
 
 - Department Logistics operator: seeded Sam Shiftlead
-  (`sam.shiftlead@idaho-burners.test`) or another actor with Department
+  (`sam.shiftlead@northwood-collective.test`) or another actor with Department
   Logistics permission for Rangers / Dirt.
 - Department lead reviewer: seeded Dana Departmentlead
-  (`dana.departmentlead@idaho-burners.test`), permitted to review and correct
+  (`dana.departmentlead@northwood-collective.test`), permitted to review and correct
   department attendance/hours where authorized.
-- Staff subject: seeded Vera Staff (`vera.staff@idaho-burners.test`), active in
+- Staff subject: seeded Vera Staff (`vera.staff@northwood-collective.test`), active in
   Rangers / Dirt and assigned or assignable to Ranger Dirt shifts.
 - Unauthorized/default staff comparison actor: Vera Staff when confirming that
   default staff do not self check-in/out or see Logistics controls.
 - Organizer exporter (section H): seeded Olive Organizer
-  (`olive.organizer@idaho-burners.test`).
+  (`olive.organizer@northwood-collective.test`).
 - Human reviewer observing the UI and retaining command/test evidence.
 
 ## Setup data
@@ -112,7 +112,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
    `/events/:eventId/departments/:departmentId/logistics`.
 8. Clear site data first if an earlier local attendance/offline run is present,
    signing in again afterwards.
-9. Confirm the seeded event/department context is Idaho Decompression 2026 /
+9. Confirm the seeded event/department context is Emberfall 2026 /
    Rangers, and that the desk names the same event and department under **Search
    scope** with the time it read them. Since M16.21 the desk reads its staff,
    equipment, and shifts from the node rather than from data bundled into the
@@ -208,7 +208,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
     Missing, or marked Damaged.
 18. From `apps/server`, inspect the resulting hours:
     ```bash
-    php artisan tinker --execute='$staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); App\Models\HoursWorked::query()->with(["event", "department", "shift", "attendanceRecord"])->where("staff_id", $staff->id)->latest("created_at")->limit(5)->get()->each(fn ($hours) => print(json_encode(["hours_worked_id" => $hours->id, "event" => $hours->event?->slug, "department" => $hours->department?->code, "shift" => $hours->shift?->title, "attendance_record_id" => $hours->attendance_record_id, "actual_started_at" => (string) $hours->actual_started_at, "actual_ended_at" => (string) $hours->actual_ended_at, "minutes_worked" => $hours->minutes_worked, "status" => $hours->status, "frozen_at" => (string) $hours->frozen_at], JSON_PRETTY_PRINT).PHP_EOL));'
+    php artisan tinker --execute='$staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); App\Models\HoursWorked::query()->with(["event", "department", "shift", "attendanceRecord"])->where("staff_id", $staff->id)->latest("created_at")->limit(5)->get()->each(fn ($hours) => print(json_encode(["hours_worked_id" => $hours->id, "event" => $hours->event?->slug, "department" => $hours->department?->code, "shift" => $hours->shift?->title, "attendance_record_id" => $hours->attendance_record_id, "actual_started_at" => (string) $hours->actual_started_at, "actual_ended_at" => (string) $hours->actual_ended_at, "minutes_worked" => $hours->minutes_worked, "status" => $hours->status, "frozen_at" => (string) $hours->frozen_at], JSON_PRETTY_PRINT).PHP_EOL));'
     ```
 19. Confirm the latest row belongs to the event, department, selected shift, and
     Vera; includes actual start/end; has computed minutes; and is separate from
@@ -344,7 +344,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
 37. As an authorized attendance manager, correct the actual start/end while the
     record is unfrozen:
     ```bash
-    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $result = app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:15:00"), Illuminate\Support\Carbon::parse("2026-07-01 12:45:00")); print(json_encode(["hours_worked_id" => $result->hoursWorked->id, "operation_type" => $result->operation->operation_type, "minutes_worked" => $result->hoursWorked->minutes_worked, "corrected_by_user_id" => $result->hoursWorked->corrected_by_user_id, "corrected_at" => (string) $result->record->corrected_at], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $result = app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:15:00"), Illuminate\Support\Carbon::parse("2026-07-01 12:45:00")); print(json_encode(["hours_worked_id" => $result->hoursWorked->id, "operation_type" => $result->operation->operation_type, "minutes_worked" => $result->hoursWorked->minutes_worked, "corrected_by_user_id" => $result->hoursWorked->corrected_by_user_id, "corrected_at" => (string) $result->record->corrected_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 38. Confirm the correction updates actual times/minutes, records the correcting
     actor, creates a `correct` attendance operation, and leaves the UI showing
@@ -356,11 +356,11 @@ rows, unauthorized actors are refused, and each successful export is audited.
 40. Confirm before/after values include the prior and corrected minutes/times.
 41. Freeze the latest hours record:
     ```bash
-    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $frozen = app(App\Services\Attendance\HoursCorrectionService::class)->freezeHours($hours, $actor, Illuminate\Support\Carbon::parse("2026-07-08 00:00:00")); print(json_encode(["hours_worked_id" => $frozen->id, "frozen_at" => (string) $frozen->frozen_at], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $frozen = app(App\Services\Attendance\HoursCorrectionService::class)->freezeHours($hours, $actor, Illuminate\Support\Carbon::parse("2026-07-08 00:00:00")); print(json_encode(["hours_worked_id" => $frozen->id, "frozen_at" => (string) $frozen->frozen_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 42. Attempt another correction:
     ```bash
-    php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
+    php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
     ```
 43. Confirm the denial names the moment the grace period closed rather than
     stating that one exists — `The correction grace period closed on 7 Jul 2026
@@ -397,7 +397,7 @@ froze, so run it after those sections rather than on a freshly seeded database.
 
 48. From `apps/server`, export as Dana Departmentlead and save the file:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentFilter(), "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentFilter(), "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
     ```
 49. Confirm `event_wide` is false, `department_ids` contains only the Rangers id,
     the filename carries `rangers`, and every exported row belongs to Rangers.
@@ -412,7 +412,7 @@ froze, so run it after those sections rather than on a freshly seeded database.
     matching the freeze from step 41 (HOURS-008).
 53. Confirm rows come from recorded hours alone:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); $recorded = App\Models\HoursWorked::query()->where("event_id", $event->id)->whereIn("department_id", $scope->departmentFilter())->count(); print(json_encode(["recorded_hours_rows" => $recorded, "exported_rows" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); $recorded = App\Models\HoursWorked::query()->where("event_id", $event->id)->whereIn("department_id", $scope->departmentFilter())->count(); print(json_encode(["recorded_hours_rows" => $recorded, "exported_rows" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 54. Confirm the two counts match, and that the no-show staff member from section
     D and any staff member still checked in have no row in the file. Hours
@@ -420,21 +420,21 @@ froze, so run it after those sections rather than on a freshly seeded database.
     on a shift is the shift roster export's answer, not this one.
 55. Export as Olive Organizer and save the file:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
     ```
 56. Confirm `event_wide` is true and the organizer file contains at least every
     row the Rangers file contained (REPORT-006).
 57. Confirm the file carries no contact or identity fields it has no business
     carrying:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $csv = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => $staff->phone !== null && str_contains($csv, (string) $staff->phone), "emergency_name_present" => $staff->emergency_contact_name !== null && str_contains($csv, (string) $staff->emergency_contact_name), "emergency_columns_present" => str_contains($csv, "emergency_contact"), "date_of_birth_present" => $staff->date_of_birth !== null && str_contains($csv, $staff->date_of_birth->format("Y-m-d"))], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $csv = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => $staff->phone !== null && str_contains($csv, (string) $staff->phone), "emergency_name_present" => $staff->emergency_contact_name !== null && str_contains($csv, (string) $staff->emergency_contact_name), "emergency_columns_present" => str_contains($csv, "emergency_contact"), "date_of_birth_present" => $staff->date_of_birth !== null && str_contains($csv, $staff->date_of_birth->format("Y-m-d"))], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 58. Confirm all four values are false (REPORT-010). A timesheet needs none of
     those fields to be a timesheet.
 59. Confirm a department lead cannot reach another department, and that
     unauthorized actors resolve no export scope at all:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $gate = App\Models\Department::query()->where("code", "GATE")->firstOrFail(); $access = app(App\Services\Reporting\ReportingExportAccess::class); $permission = App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT; $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); print(json_encode(["dana_includes_gate" => $access->resolve($dana, $event, $permission)->includesDepartment((string) $gate->id)]).PHP_EOL); foreach (["vera.staff@idaho-burners.test", "sam.shiftlead@idaho-burners.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event, $permission) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $gate = App\Models\Department::query()->where("code", "GATE")->firstOrFail(); $access = app(App\Services\Reporting\ReportingExportAccess::class); $permission = App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT; $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); print(json_encode(["dana_includes_gate" => $access->resolve($dana, $event, $permission)->includesDepartment((string) $gate->id)]).PHP_EOL); foreach (["vera.staff@northwood-collective.test", "sam.shiftlead@northwood-collective.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event, $permission) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
     ```
 60. Confirm `dana_includes_gate` is false and both personas are `denied`. Having
     worked the hours is not authority to export them, and the Department

@@ -25,14 +25,14 @@ class OrganizationEditLayout extends Rows
                 ->required()
                 ->set('data-meridian-slug-target', 'organization[slug]')
                 ->title(__('Name'))
-                ->placeholder(__('Idaho Burners')),
+                ->placeholder(__('Northwood Collective')),
 
             Input::make('organization.slug')
                 ->type('text')
                 ->max(255)
                 ->required()
                 ->title(__('Slug'))
-                ->placeholder(__('idaho-burners'))
+                ->placeholder(__('northwood-collective'))
                 ->help(__('Stable URL-safe organization identifier.')),
 
             Select::make('organization.default_ic_department_id')

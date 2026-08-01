@@ -6,6 +6,7 @@ use App\Domain\Incidents\IncidentTypeDefaults;
 use App\Models\IncidentType;
 use App\Models\Organization;
 use App\Services\Incidents\IncidentTypeProvisioner;
+use Database\Seeders\IncidentTypeDefaultsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -124,7 +125,7 @@ class IncidentTypeDefaultsTest extends TestCase
         $organization = Organization::factory()->create();
         $other = Organization::factory()->create();
 
-        $this->seed(\Database\Seeders\IncidentTypeDefaultsSeeder::class);
+        $this->seed(IncidentTypeDefaultsSeeder::class);
 
         foreach ([$organization, $other] as $target) {
             $this->assertSame(

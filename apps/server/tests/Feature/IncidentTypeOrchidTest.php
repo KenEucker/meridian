@@ -24,7 +24,7 @@ class IncidentTypeOrchidTest extends TestCase
 
     public function test_orchid_incident_type_list_shows_types_with_their_use(): void
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         $event = Event::factory()->for($organization)->create();
         $type = IncidentType::factory()->create([
             'organization_id' => $organization->id,
@@ -47,7 +47,7 @@ class IncidentTypeOrchidTest extends TestCase
         $response->assertOk();
         $response->assertSee('Incident types');
         $response->assertSee('Medical');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Northwood Collective');
         $response->assertSee('Retired category');
         $response->assertSee('Archived');
     }

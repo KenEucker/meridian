@@ -35,8 +35,8 @@ Verify that an elevated Orchid user can view, create, and edit Meridian organiza
 
 ## Setup data
 
-- Use an organization name such as `Idaho Burners QA`.
-- Use a slug such as `idaho-burners-qa`.
+- Use an organization name such as `Northwood Collective QA`.
+- Use a slug such as `northwood-collective-qa`.
 - Optional status threshold values: active-to-inactive `2`, prospective-to-inactive `1`.
 - Optional calendar start: month `10`, day `3`.
 - Create or reuse an active department in the organization, such as `Rangers QA`.
@@ -52,7 +52,7 @@ Verify that an elevated Orchid user can view, create, and edit Meridian organiza
 5. Enter the setup data values.
 6. Save the organization.
 7. Open the saved organization detail screen from the list.
-8. Change the organization name to `Idaho Burners QA Updated`.
+8. Change the organization name to `Northwood Collective QA Updated`.
 9. Save the organization.
 10. Select `Rangers QA` as the default Incident Command department and save.
 11. Reopen the organization detail screen and confirm `Rangers QA` remains selected.

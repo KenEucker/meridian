@@ -1,4 +1,4 @@
 organization_slug,department_code,name,code,description
-idaho-burners,RANGERS,Dirt,DIRT,"Field rangers walking the city"
-idaho-burners,RANGERS,Command,COMMAND,
-idaho-burners,GATE,Greeters,GREETERS,"Gate greeters, perimeter"
+northwood-collective,RANGERS,Dirt,DIRT,"Field rangers walking the city"
+northwood-collective,RANGERS,Command,COMMAND,
+northwood-collective,GATE,Greeters,GREETERS,"Gate greeters, perimeter"

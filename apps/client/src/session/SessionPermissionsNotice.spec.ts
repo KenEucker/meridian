@@ -100,7 +100,7 @@ describe("session permissions notice", () => {
   it("renders the refresh time on the event's own clock", () => {
     installClientSession(
       fixtureSessionDocument({
-        events: [fixtureSessionEvent({ timezone: "America/Boise" })],
+        events: [fixtureSessionEvent({ timezone: "America/Los_Angeles" })],
       }),
       "cache",
       insideWindow,

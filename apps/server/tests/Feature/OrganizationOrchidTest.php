@@ -18,8 +18,8 @@ class OrganizationOrchidTest extends TestCase
     public function test_orchid_organization_list_displays_organizations(): void
     {
         Organization::factory()->create([
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
             'calendar_year_start_month' => 10,
             'calendar_year_start_day' => 3,
         ]);
@@ -28,8 +28,8 @@ class OrganizationOrchidTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Organizations');
-        $response->assertSee('Idaho Burners');
-        $response->assertSee('idaho-burners');
+        $response->assertSee('Northwood Collective');
+        $response->assertSee('northwood-collective');
         $response->assertSee('10/03');
     }
 
@@ -74,8 +74,8 @@ class OrganizationOrchidTest extends TestCase
             ->withoutFollowingRedirects()
             ->method('save', [
                 'organization' => [
-                    'name' => 'Idaho Burners',
-                    'slug' => 'idaho-burners',
+                    'name' => 'Northwood Collective',
+                    'slug' => 'northwood-collective',
                     'active_inactive_threshold_years' => 2,
                     'prospective_inactive_threshold_years' => 1,
                     'calendar_year_start_month' => 10,
@@ -86,8 +86,8 @@ class OrganizationOrchidTest extends TestCase
         $response->assertRedirect(route('platform.organizations'));
 
         $this->assertDatabaseHas('organizations', [
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
             'active_inactive_threshold_years' => 2,
             'prospective_inactive_threshold_years' => 1,
             'calendar_year_start_month' => 10,
@@ -98,7 +98,7 @@ class OrganizationOrchidTest extends TestCase
     public function test_orchid_organization_save_validates_unique_slug(): void
     {
         Organization::factory()->create([
-            'slug' => 'idaho-burners',
+            'slug' => 'northwood-collective',
         ]);
 
         $response = $this->screen('platform.organizations.create')
@@ -107,7 +107,7 @@ class OrganizationOrchidTest extends TestCase
             ->method('save', [
                 'organization' => [
                     'name' => 'Duplicate Organization',
-                    'slug' => 'idaho-burners',
+                    'slug' => 'northwood-collective',
                 ],
             ]);
 
@@ -117,8 +117,8 @@ class OrganizationOrchidTest extends TestCase
     public function test_orchid_organization_save_configures_default_ic_department_with_audit(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
         ]);
         $department = Department::factory()->for($organization)->create([
             'name' => 'Rangers',
@@ -131,8 +131,8 @@ class OrganizationOrchidTest extends TestCase
             ->withoutFollowingRedirects()
             ->method('save', [
                 'organization' => [
-                    'name' => 'Idaho Burners',
-                    'slug' => 'idaho-burners',
+                    'name' => 'Northwood Collective',
+                    'slug' => 'northwood-collective',
                     'default_ic_department_id' => $department->id,
                 ],
             ]);

@@ -17,6 +17,7 @@ use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Application\EventApplicationService;
+use App\Services\Membership\DepartmentMembershipService;
 use App\Services\Membership\TeamAssignmentAccess;
 use App\Services\Membership\TeamAssignmentException;
 use App\Services\Membership\TeamMembershipService;
@@ -257,7 +258,7 @@ class StaffTeamAssignmentTest extends TestCase
         $extraTeam = Team::factory()->for($department)->create(['code' => 'OPERATORS', 'name' => 'Gate Operators']);
         $staff = Staff::factory()->create();
 
-        (new \App\Services\Membership\DepartmentMembershipService)->assignStaffWithDefaultTeam(
+        (new DepartmentMembershipService)->assignStaffWithDefaultTeam(
             $staff,
             $department,
         );

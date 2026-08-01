@@ -528,7 +528,7 @@ class DepartmentOperationsReadHttpTest extends TestCase
 
         $organization = Organization::factory()->create();
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2027',
+            'name' => 'Emberfall 2027',
             'timezone' => 'America/Los_Angeles',
         ]);
         $department = Department::factory()->for($organization)->create(['name' => 'Rangers']);

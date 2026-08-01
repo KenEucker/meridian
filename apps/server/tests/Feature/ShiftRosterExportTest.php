@@ -51,7 +51,7 @@ class ShiftRosterExportTest extends TestCase
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="shift-roster-idaho-decompression-2026-20260621-192030.csv"',
+            'attachment; filename="shift-roster-emberfall-2026-20260621-192030.csv"',
         );
 
         $expected = (string) file_get_contents(base_path('tests/Fixtures/shift-roster-export-sample.csv'));
@@ -106,7 +106,7 @@ class ShiftRosterExportTest extends TestCase
         $this->assertSame('Dirt', $vera['team']);
         $this->assertSame(ShiftAssignment::STATUS_SIGNED_UP, $vera['assignment_status']);
         $this->assertSame(ShiftRosterExportService::SOURCE_SELF_SIGNUP, $vera['assignment_source']);
-        $this->assertSame('vera@idaho-burners.test', $vera['staff_email']);
+        $this->assertSame('vera@northwood-collective.test', $vera['staff_email']);
 
         $alma = $rows[1];
         $this->assertSame(ShiftAssignment::STATUS_ASSIGNED, $alma['assignment_status']);
@@ -170,7 +170,7 @@ class ShiftRosterExportTest extends TestCase
         $response->assertOk();
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="shift-roster-idaho-decompression-2026-rangers-20260621-192030.csv"',
+            'attachment; filename="shift-roster-emberfall-2026-rangers-20260621-192030.csv"',
         );
 
         // REPORT-007: only Rangers shifts, including the unstaffed one. Gate
@@ -265,10 +265,10 @@ class ShiftRosterExportTest extends TestCase
      */
     private function scenario(): array
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners', 'slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
         ]);
 
         [$rangers, $rangersTeam] = $this->department($organization, 'Rangers', 'RANGERS', 'Dirt');
@@ -347,7 +347,7 @@ class ShiftRosterExportTest extends TestCase
             'legal_name' => $legalName,
             'preferred_name' => $preferredName,
             'handle' => $handle,
-            'email' => $handle.'@idaho-burners.test',
+            'email' => $handle.'@northwood-collective.test',
             'phone' => '+1-208-555-0100',
             'emergency_contact_name' => $legalName.' Contact',
             'emergency_contact_phone' => '+1-208-555-0199',

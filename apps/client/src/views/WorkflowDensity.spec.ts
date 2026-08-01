@@ -191,7 +191,7 @@ function stubDepartmentOverviewNode(): void {
           JSON.stringify({
             context: {
               event_id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
-              event_label: "Idaho Decompression",
+              event_label: "Emberfall",
               department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
               department_label: "Rangers",
               time_zone: "America/Los_Angeles",

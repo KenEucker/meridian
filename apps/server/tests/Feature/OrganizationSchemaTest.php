@@ -31,13 +31,13 @@ class OrganizationSchemaTest extends TestCase
     public function test_organization_slug_is_unique(): void
     {
         Organization::factory()->create([
-            'slug' => 'idaho-burners',
+            'slug' => 'northwood-collective',
         ]);
 
         $this->expectException(QueryException::class);
 
         Organization::factory()->create([
-            'slug' => 'idaho-burners',
+            'slug' => 'northwood-collective',
         ]);
     }
 

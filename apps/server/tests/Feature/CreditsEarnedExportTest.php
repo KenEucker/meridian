@@ -67,7 +67,7 @@ class CreditsEarnedExportTest extends TestCase
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="credits-earned-idaho-decompression-2026-20260715-170000.csv"',
+            'attachment; filename="credits-earned-emberfall-2026-20260715-170000.csv"',
         );
 
         $expected = (string) file_get_contents(base_path('tests/Fixtures/credits-earned-export-sample.csv'));
@@ -123,7 +123,7 @@ class CreditsEarnedExportTest extends TestCase
         $this->assertSame('Rangers Dirt Day', $vera['shift_title']);
         $this->assertSame('Rangers', $vera['department']);
         $this->assertSame('Dirt', $vera['team']);
-        $this->assertSame('vera@idaho-burners.test', $vera['staff_email']);
+        $this->assertSame('vera@northwood-collective.test', $vera['staff_email']);
     }
 
     /**
@@ -243,7 +243,7 @@ class CreditsEarnedExportTest extends TestCase
         $response->assertOk();
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="credits-earned-idaho-decompression-2026-rangers-20260715-170000.csv"',
+            'attachment; filename="credits-earned-emberfall-2026-rangers-20260715-170000.csv"',
         );
 
         // REPORT-007: Gate's credits belong to Gate's lead.
@@ -374,10 +374,10 @@ class CreditsEarnedExportTest extends TestCase
      */
     private function scenario(bool $configureCreditPolicies = true): array
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners', 'slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
         ]);
 
         [$rangers, $rangersTeam] = $this->department($organization, 'Rangers', 'RANGERS', 'Dirt');
@@ -449,8 +449,8 @@ class CreditsEarnedExportTest extends TestCase
 
         // The same department worked and was credited for a different event.
         $priorEvent = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2025',
-            'slug' => 'idaho-decompression-2025',
+            'name' => 'Emberfall 2025',
+            'slug' => 'emberfall-2025',
         ]);
         $priorStaff = $this->staff($organization, 'Perry Prior', 'Perry', 'pprior', [$rangers]);
         $priorShift = $this->shift($priorEvent, $rangers, $rangersTeam, 'Rangers Dirt Day', '2025-06-19 19:00:00');
@@ -496,7 +496,7 @@ class CreditsEarnedExportTest extends TestCase
             'legal_name' => $legalName,
             'preferred_name' => $preferredName,
             'handle' => $handle,
-            'email' => $handle.'@idaho-burners.test',
+            'email' => $handle.'@northwood-collective.test',
             'phone' => '+1-208-555-0100',
             'emergency_contact_name' => $legalName.' Contact',
             'emergency_contact_phone' => '+1-208-555-0199',

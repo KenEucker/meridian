@@ -15,6 +15,8 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\Incidents\IncidentTypeAdminException;
+use App\Services\Incidents\IncidentTypeAdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -195,10 +197,10 @@ class IncidentTypeAdminHttpTest extends TestCase
             IncidentType::query()->where('organization_id', $organization->id)->count(),
         );
 
-        $this->expectException(\App\Services\Incidents\IncidentTypeAdminException::class);
+        $this->expectException(IncidentTypeAdminException::class);
         $this->expectExceptionMessage('Incident type name is required.');
 
-        app(\App\Services\Incidents\IncidentTypeAdminService::class)
+        app(IncidentTypeAdminService::class)
             ->create($organization, '   ', $organizer);
     }
 

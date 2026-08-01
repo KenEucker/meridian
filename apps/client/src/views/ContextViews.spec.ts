@@ -113,7 +113,7 @@ describe("context.organizations", () => {
     const items = wrapper.findAll(".context-organizations__item");
 
     expect(items).toHaveLength(2);
-    expect(items[0]!.text()).toContain("Idaho Burners");
+    expect(items[0]!.text()).toContain("Northwood Collective");
     expect(items[0]!.attributes("data-current")).toBe("true");
     expect(items[1]!.text()).toContain("Cascadia Collective");
     expect(items[1]!.attributes("data-current")).toBe("false");
@@ -147,7 +147,7 @@ describe("context.events", () => {
 
     const { wrapper } = await mountEventContext(LOCAL_FIELD_ORGANIZATION_ID);
 
-    expect(wrapper.text()).toContain("Idaho Burners");
+    expect(wrapper.text()).toContain("Northwood Collective");
     const items = wrapper.findAll(".context-events__item");
     expect(items).toHaveLength(1);
     expect(items[0]!.attributes("data-current")).toBe("true");

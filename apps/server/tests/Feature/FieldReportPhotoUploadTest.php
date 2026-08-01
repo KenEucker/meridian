@@ -15,6 +15,7 @@ use App\Services\FieldReports\FieldReportAcceptanceService;
 use App\Services\FieldReports\FieldReportPhotoUploadService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -174,9 +175,9 @@ class FieldReportPhotoUploadTest extends TestCase
 
     public function test_attachments_table_has_documented_columns_and_orchid_table_is_renamed(): void
     {
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('attachments'));
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('orchid_attachments'));
-        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasColumn('orchid_attachments', 'checksum'));
+        $this->assertTrue(Schema::hasTable('attachments'));
+        $this->assertTrue(Schema::hasTable('orchid_attachments'));
+        $this->assertFalse(Schema::hasColumn('orchid_attachments', 'checksum'));
 
         foreach ([
             'id',
@@ -197,7 +198,7 @@ class FieldReportPhotoUploadTest extends TestCase
             'deleted_at',
         ] as $column) {
             $this->assertTrue(
-                \Illuminate\Support\Facades\Schema::hasColumn('attachments', $column),
+                Schema::hasColumn('attachments', $column),
                 "attachments should have a {$column} column.",
             );
         }

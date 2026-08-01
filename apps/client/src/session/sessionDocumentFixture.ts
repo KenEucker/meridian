@@ -16,7 +16,7 @@ import type {
 } from "@/session/sessionDocument";
 
 export const FIXTURE_EVENT_ID = "event-decompression-2026";
-export const FIXTURE_ORGANIZATION = "org-idaho-burners";
+export const FIXTURE_ORGANIZATION = "org-northwood-collective";
 
 /** An event whose active window is open around the fixture's reference time. */
 export function fixtureSessionEvent(
@@ -25,8 +25,8 @@ export function fixtureSessionEvent(
   return {
     id: FIXTURE_EVENT_ID,
     organization_id: FIXTURE_ORGANIZATION,
-    name: "Idaho Decompression 2026",
-    slug: "idaho-decompression-2026",
+    name: "Emberfall 2026",
+    slug: "emberfall-2026",
     status: "published",
     timezone: "UTC",
     starts_at: "2026-09-10T16:00:00+00:00",
@@ -69,8 +69,8 @@ export function fixtureSessionDocument(
     organizations: [
       {
         id: FIXTURE_ORGANIZATION,
-        name: "Idaho Burners",
-        slug: "idaho-burners",
+        name: "Northwood Collective",
+        slug: "northwood-collective",
         status: "approved",
         archived_at: null,
       },

@@ -34,8 +34,8 @@ class TeamImportTest extends TestCase
         parent::setUp();
 
         $this->organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
         ]);
 
         $this->rangers = Department::factory()->create([
@@ -111,7 +111,7 @@ class TeamImportTest extends TestCase
 
         $result = $service->import(
             "Organization Slug,Department Code,Name,Code,Description\n"
-            ."idaho-burners,rangers,Dirt Rangers,dirt,Field rangers walking the city\n",
+            ."northwood-collective,rangers,Dirt Rangers,dirt,Field rangers walking the city\n",
             $actor,
         );
 
@@ -148,10 +148,10 @@ class TeamImportTest extends TestCase
 
         $csv = "organization_slug,department_code,name,code\n"
             ."no-such-org,RANGERS,Dirt,DIRT\n"
-            ."idaho-burners,NOPE,Dirt,DIRT\n"
-            ."idaho-burners,RANGERS,,DIRT\n"
-            ."idaho-burners,RANGERS,Dirt,DIRT\n"
-            ."idaho-burners,RANGERS,Dirt Again,dirt\n";
+            ."northwood-collective,NOPE,Dirt,DIRT\n"
+            ."northwood-collective,RANGERS,,DIRT\n"
+            ."northwood-collective,RANGERS,Dirt,DIRT\n"
+            ."northwood-collective,RANGERS,Dirt Again,dirt\n";
 
         $result = $this->service()->import($csv, $actor);
 
@@ -165,7 +165,7 @@ class TeamImportTest extends TestCase
 
         $this->assertSame([
             'No department "RANGERS" in organization "no-such-org".',
-            'No department "NOPE" in organization "idaho-burners".',
+            'No department "NOPE" in organization "northwood-collective".',
             'Missing team name or code.',
             null,
             'Duplicate of row 5 in this file.',
@@ -184,7 +184,7 @@ class TeamImportTest extends TestCase
         $actor = User::factory()->create();
 
         $result = $this->service()->import(
-            "organization_slug,department_code,name,code\nidaho-burners,DPW,Build,BUILD\n",
+            "organization_slug,department_code,name,code\nnorthwood-collective,DPW,Build,BUILD\n",
             $actor,
         );
 
@@ -220,11 +220,11 @@ class TeamImportTest extends TestCase
         $service = $this->service();
 
         $service->import(
-            "organization_slug,department_code,name,code\nidaho-burners,RANGERS,Dirt,DIRT\n",
+            "organization_slug,department_code,name,code\nnorthwood-collective,RANGERS,Dirt,DIRT\n",
             $actor,
         );
         $service->import(
-            "organization_slug,department_code,name,code\nidaho-burners,RANGERS,Dirt Rangers,DIRT\n",
+            "organization_slug,department_code,name,code\nnorthwood-collective,RANGERS,Dirt Rangers,DIRT\n",
             $actor,
         );
 
@@ -250,7 +250,7 @@ class TeamImportTest extends TestCase
         $this->expectExceptionMessage('The CSV file must include a "code" header column.');
 
         $this->service()->import(
-            "organization_slug,department_code,name\nidaho-burners,RANGERS,Dirt\n",
+            "organization_slug,department_code,name\nnorthwood-collective,RANGERS,Dirt\n",
             $actor,
         );
     }

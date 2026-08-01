@@ -22,28 +22,28 @@ class EventApplicationSubmissionTest extends TestCase
 
     public function test_public_application_form_is_reachable_for_an_event(): void
     {
-        $event = Event::factory()->create(['name' => 'Idaho Decompression 2026']);
+        $event = Event::factory()->create(['name' => 'Emberfall 2026']);
 
         $response = $this->get(route('public.events.apply', $event->applyRouteParameters()));
 
         $response->assertOk();
-        $response->assertSee('Idaho Decompression 2026');
+        $response->assertSee('Emberfall 2026');
         $response->assertSee('Submit application');
     }
 
     public function test_apply_route_is_scoped_by_organization_and_event_slug(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
-        $event = Event::factory()->for($organization)->create(['slug' => 'idaho-decompression-2026']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
+        $event = Event::factory()->for($organization)->create(['slug' => 'emberfall-2026']);
 
         $this->assertSame(
-            '/idaho-burners/idaho-decompression-2026/apply',
+            '/northwood-collective/emberfall-2026/apply',
             parse_url(route('public.events.apply', $event->applyRouteParameters()), PHP_URL_PATH),
         );
 
-        $this->get('/idaho-burners/idaho-decompression-2026/apply')->assertOk();
-        $this->get('/idaho-decompression-2026/apply')->assertNotFound();
-        $this->get('/events/idaho-decompression-2026/apply')->assertNotFound();
+        $this->get('/northwood-collective/emberfall-2026/apply')->assertOk();
+        $this->get('/emberfall-2026/apply')->assertNotFound();
+        $this->get('/events/emberfall-2026/apply')->assertNotFound();
     }
 
     public function test_same_event_slug_resolves_to_the_correct_organization(): void
@@ -429,11 +429,11 @@ class EventApplicationSubmissionTest extends TestCase
 
     public function test_event_slug_under_wrong_organization_returns_not_found(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $otherOrganization = Organization::factory()->create(['slug' => 'other-org']);
-        Event::factory()->for($organization)->create(['slug' => 'idaho-decompression-2026']);
+        Event::factory()->for($organization)->create(['slug' => 'emberfall-2026']);
 
-        $this->get('/other-org/idaho-decompression-2026/apply')->assertNotFound();
-        $this->get('/idaho-burners/idaho-decompression-2026/apply')->assertOk();
+        $this->get('/other-org/emberfall-2026/apply')->assertNotFound();
+        $this->get('/northwood-collective/emberfall-2026/apply')->assertOk();
     }
 }

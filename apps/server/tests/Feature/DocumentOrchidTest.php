@@ -24,7 +24,7 @@ class DocumentOrchidTest extends TestCase
 
     public function test_policy_list_separates_policy_documents_from_procedures(): void
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
 
         PolicyDocument::factory()->for($organization)->create([
             'title' => 'Volunteer Conduct Policy',
@@ -42,7 +42,7 @@ class DocumentOrchidTest extends TestCase
         $response->assertSee('Policy Documents');
         $response->assertSee('Volunteer Conduct Policy');
         $response->assertDontSee('Radio Checkout Procedure');
-        $response->assertSee('Organization: Idaho Burners');
+        $response->assertSee('Organization: Northwood Collective');
         $response->assertSee('Draft');
         $response->assertSee('1.00');
     }

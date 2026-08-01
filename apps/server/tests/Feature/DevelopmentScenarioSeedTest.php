@@ -6,6 +6,7 @@ use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
 use App\Models\Organization;
+use App\Models\Shift;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
@@ -50,8 +51,15 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->assertSame(DevelopmentScenarioCatalog::EVENT_NAME, $event->name);
         $this->assertSame($organization->default_ic_department_id, $event->ic_department_id);
 
+        // The `*_LEADS` and `IC_COMMAND` teams are where authority lives. A
+        // team grant applies to every member of the team, so parking the
+        // department roles on Dirt made every Dirt member a department lead —
+        // including the persona this catalog calls regular staff.
         $this->assertSame(
-            ['COMMAND', 'DIRT', 'IC_OPERATOR', 'IC_VIEWER', 'LOGISTICS', 'OPERATOR'],
+            [
+                'COMMAND', 'DIRT', 'DPW_LEADS', 'GATE_LEADS', 'IC_COMMAND', 'IC_OPERATOR',
+                'IC_VIEWER', 'LOGISTICS', 'OPERATOR', 'RANGER_LEADS', 'RANGER_SHIFT_LEADS',
+            ],
             Team::query()
                 ->whereHas('department', fn ($query) => $query->where('organization_id', $organization->id))
                 ->where('is_default', false)
@@ -66,8 +74,11 @@ class DevelopmentScenarioSeedTest extends TestCase
             ->where('event_id', $event->id)
             ->count());
 
-        $this->assertCount(11, User::query()->where('email', 'like', '%@idaho-burners.test')->get());
-        $this->assertCount(11, Staff::query()->where('email', 'like', '%@idaho-burners.test')->get());
+        // Eleven personas carry authority, one per documented role. The rest
+        // are the bodies the operational scenario needs in order to have
+        // somebody standing in each of the desk's states at the same time.
+        $this->assertCount(17, User::query()->where('email', 'like', '%@northwood-collective.test')->get());
+        $this->assertCount(17, Staff::query()->where('email', 'like', '%@northwood-collective.test')->get());
     }
 
     public function test_seeded_personas_have_expected_statuses_memberships_and_permission_grants(): void
@@ -81,17 +92,17 @@ class DevelopmentScenarioSeedTest extends TestCase
             ->where('slug', DevelopmentScenarioCatalog::EVENT_SLUG)
             ->firstOrFail();
 
-        $this->assertOrganizationStatus('debbie.dns@idaho-burners.test', StaffOrganizationStatus::STATUS_DO_NOT_STAFF);
-        $this->assertOrganizationStatus('pat.prospective@idaho-burners.test', StaffOrganizationStatus::STATUS_PROSPECTIVE);
+        $this->assertOrganizationStatus('debbie.dns@northwood-collective.test', StaffOrganizationStatus::STATUS_DO_NOT_STAFF);
+        $this->assertOrganizationStatus('pat.prospective@northwood-collective.test', StaffOrganizationStatus::STATUS_PROSPECTIVE);
 
-        $ira = Staff::query()->where('email', 'ira.ineligible@idaho-burners.test')->firstOrFail();
+        $ira = Staff::query()->where('email', 'ira.ineligible@northwood-collective.test')->firstOrFail();
         $iraMembership = $ira->departmentMemberships()
             ->whereHas('department', fn ($query) => $query->where('organization_id', $organization->id))
             ->firstOrFail();
         $this->assertSame('ineligible', $iraMembership->status);
 
-        $dirtTeam = Team::query()
-            ->where('code', 'DIRT')
+        $shiftLeadTeam = Team::query()
+            ->where('code', 'RANGER_SHIFT_LEADS')
             ->whereHas('department', fn ($query) => $query
                 ->where('organization_id', $organization->id)
                 ->where('code', 'RANGERS'))
@@ -100,7 +111,7 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->assertTrue(
             TeamGrant::query()
                 ->active()
-                ->where('team_id', $dirtTeam->id)
+                ->where('team_id', $shiftLeadTeam->id)
                 ->whereHas('permissionRole', fn ($query) => $query->where('code', 'shift_lead'))
                 ->exists(),
         );
@@ -109,19 +120,38 @@ class DevelopmentScenarioSeedTest extends TestCase
             $this->assertTrue(
                 TeamGrant::query()
                     ->active()
-                    ->where('team_id', $dirtTeam->id)
+                    ->where('team_id', $shiftLeadTeam->id)
                     ->whereHas('permissionRole', fn ($query) => $query->where('code', $roleCode))
                     ->exists(),
-                "Rangers Dirt should have {$roleCode}.",
+                "Ranger Shift Leads should have {$roleCode}.",
             );
         }
 
         $commandTeam = Team::query()
-            ->where('code', 'COMMAND')
+            ->where('code', 'IC_COMMAND')
             ->whereHas('department', fn ($query) => $query
                 ->where('organization_id', $organization->id)
                 ->where('code', 'RANGERS'))
             ->firstOrFail();
+
+        $dirtTeam = Team::query()
+            ->where('code', 'DIRT')
+            ->whereHas('department', fn ($query) => $query
+                ->where('organization_id', $organization->id)
+                ->where('code', 'RANGERS'))
+            ->firstOrFail();
+
+        $this->assertFalse(
+            TeamGrant::query()->active()->where('team_id', $dirtTeam->id)->exists(),
+            'The crew team carries no grants, or the ordinary-staff personas are not ordinary.',
+        );
+
+        $vera = Staff::query()->where('email', 'vera.staff@northwood-collective.test')->firstOrFail();
+        $this->assertSame(
+            [],
+            (new EffectiveRoleResolver)->resolveForStaff($vera)->pluck('roleCode')->all(),
+            'Vera Staff is the permission floor and must hold no roles at all.',
+        );
 
         $defaultTeam = Team::query()
             ->where('code', 'DEFAULT')
@@ -164,17 +194,17 @@ class DevelopmentScenarioSeedTest extends TestCase
                 ->exists(),
         );
 
-        $sam = Staff::query()->where('email', 'sam.shiftlead@idaho-burners.test')->firstOrFail();
+        $sam = Staff::query()->where('email', 'sam.shiftlead@northwood-collective.test')->firstOrFail();
         $roles = (new EffectiveRoleResolver)->resolveForStaff($sam);
         $this->assertContains('shift_lead', $roles->pluck('roleCode')->all());
         $this->assertContains('department_logistics', $roles->pluck('roleCode')->all());
         $this->assertContains('department_operations', $roles->pluck('roleCode')->all());
 
-        $ingrid = Staff::query()->where('email', 'ingrid.iclead@idaho-burners.test')->firstOrFail();
+        $ingrid = Staff::query()->where('email', 'ingrid.iclead@northwood-collective.test')->firstOrFail();
         $icRoles = (new EffectiveRoleResolver)->resolveForStaff($ingrid, $event);
         $this->assertSame('ic_lead', $icRoles->sole()->roleCode);
 
-        $omar = Staff::query()->where('email', 'omar.icoperator@idaho-burners.test')->firstOrFail();
+        $omar = Staff::query()->where('email', 'omar.icoperator@northwood-collective.test')->firstOrFail();
         $this->assertSame(
             'ic_operator',
             (new EffectiveRoleResolver)->resolveForStaff($omar, $event)->sole()->roleCode,
@@ -185,18 +215,38 @@ class DevelopmentScenarioSeedTest extends TestCase
     {
         $this->seedScenario();
 
-        $vera = User::query()->where('email', 'vera.staff@idaho-burners.test')->firstOrFail();
+        $vera = User::query()->where('email', 'vera.staff@northwood-collective.test')->firstOrFail();
 
         $this->assertTrue(Hash::check(DevelopmentScenarioCatalog::DEFAULT_PASSWORD, $vera->password));
     }
 
-    public function test_database_seeder_succeeds_with_model_events_disabled(): void
+    /**
+     * The whole seeder chain runs, model events and all.
+     *
+     * It used to run with `WithoutModelEvents`, and this test asserted it
+     * survived that. It no longer does and must not: the operational scenario
+     * drives the domain services, and several of them depend on `creating`
+     * hooks — a shift takes its department and team name snapshots from one and
+     * cannot be written without it. So what is under test here is the opposite
+     * of what it was: that the full chain completes with hooks live, and that
+     * the data those hooks produce is present.
+     */
+    public function test_database_seeder_runs_the_whole_scenario_with_model_events_live(): void
     {
         $this->seed(DatabaseSeeder::class);
 
         $this->assertSame(
-            11,
-            User::query()->where('email', 'like', '%@idaho-burners.test')->count(),
+            17,
+            User::query()->where('email', 'like', '%@northwood-collective.test')->count(),
+        );
+
+        // Written by the Shift model's `creating` hook rather than by any
+        // service, so a blank one here would mean the hooks were suppressed.
+        $this->assertTrue(
+            Shift::query()->whereNotNull('department_name_snapshot')->exists(),
+        );
+        $this->assertFalse(
+            Shift::query()->whereNull('team_name_snapshot')->exists(),
         );
 
         $this->assertTrue(
@@ -247,7 +297,7 @@ class DevelopmentScenarioSeedTest extends TestCase
         return [
             'departments' => Department::query()->where('organization_id', $organization->id)->count(),
             'events' => Event::query()->where('organization_id', $organization->id)->count(),
-            'personas' => User::query()->where('email', 'like', '%@idaho-burners.test')->count(),
+            'personas' => User::query()->where('email', 'like', '%@northwood-collective.test')->count(),
             'team_grants' => TeamGrant::query()
                 ->whereHas('team.department', fn ($query) => $query->where('organization_id', $organization->id))
                 ->count(),

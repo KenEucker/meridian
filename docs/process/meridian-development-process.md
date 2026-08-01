@@ -1268,35 +1268,125 @@ Examples:
 
 ### 13.3 Test data strategy
 
-Create seed scenarios that mirror real operations.
+`php artisan migrate:fresh --seed` produces the whole development scenario. It
+is a situation rather than a set of rows: the schedule is anchored to the moment
+the seed runs, so shifts line up with the current day and hour and the
+operational surfaces open onto live work instead of an empty department.
 
-Suggested seed personas:
+#### Personas
 
-| Persona | Role |
+Eleven carry authority, one per documented role. The rest are the bodies the
+operational scenario needs so that somebody is standing in each of the desk's
+states at the same time — most of the Logistics Desk's behaviour is a property
+of a person rather than of a role, and one persona cannot be checked in and not
+checked in at once.
+
+| Persona | Role in the scenario |
 |---|---|
-| Vera Staff | regular staff |
-| Sam Shiftlead | shift lead for Dirt team |
-| Dana Departmentlead | department lead for Rangers |
-| Olive Organizer | organizer |
-| Ingrid ICLead | IC department lead |
-| Omar ICOperator | IC operator |
+| Vera Staff | regular staff, holding no roles at all; checked in on the running shift |
+| Sam Shiftlead | shift lead and the department's operational grants; checked in, holding a shift-scoped radio, so off-site is blocked |
+| Dana Departmentlead | department lead for Rangers; the actor behind most seeded operations |
+| Olive Organizer | organizer; authored the document library and branding |
+| Ingrid ICLead | IC department lead; owns the seeded incident list preset |
+| Omar ICOperator | IC operator; wrote the incident notes, including the struck one |
 | Ivy ICViewer | IC viewer |
-| Gwen Godmode | God mode user |
+| Gwen Godmode | God Mode user |
 | Debbie DNS | Do Not Staff person |
-| Pat Prospective | prospective staff |
-| Ira Ineligible | department-ineligible staff |
+| Pat Prospective | prospective staff; has an undecided application and no avatar |
+| Ira Ineligible | department-ineligible staff; no avatar |
+| Nora Newstaff | on-site, on no running shift — the unscheduled-addition target |
+| Felix Fieldhand | marked no-show on the shift that just ended; missing Radio Training |
+| Quinn Quartermaster | holding a radio written off as missing; lapsed field waiver |
+| Mira Commandstaff | checked in on the Command team's shift, for the eligible-team refusal |
+| Gabe Gatekeeper | Gate department lead and logistics |
+| Dex Dpw | DPW department lead and logistics |
 
-Suggested seed domains:
+All of them sign in with the documented development password.
 
-- Organization: Idaho Burners
-- Event: Idaho Decompression 2026
-- Departments: Rangers, Gate, DPW
-- Teams: Dirt, Operator, Command, Logistics
-- Shifts: day shift, overnight shift, command shift
-- Trainings: Basic Ranger Training, Radio Training
-- Waivers: Event Waiver, Ranger Waiver
-- Credit policies: organization default, overnight multiplier
-- Equipment: radio, vest, flag
+Authority lives on its own teams — `RANGER_LEADS`, `RANGER_SHIFT_LEADS`,
+`IC_COMMAND`, `GATE_LEADS`, `DPW_LEADS` — and the people who hold it keep a
+second membership on the crew team so they can still be rostered onto the crew's
+shifts. That is not decoration. A team grant applies to every member of the
+team, so parking Sam's department roles on Dirt made every Dirt member a
+department lead, including the persona this table calls regular staff. A
+scenario whose ordinary-staff persona silently holds every capability cannot be
+used to test a permission boundary, and it is the kind of wrong that stays
+invisible until somebody trusts it.
+
+#### Two events, and why
+
+| Event | Window | What it is for |
+|---|---|---|
+| Emberfall 2026 | started two days ago, ends in three | Every operational surface. Inside its active window, so governance is frozen. |
+| Emberfall Decompression 2026 | six weeks out | Shift signup, and the planning surfaces. |
+
+An event inside its active window freezes branding, policies, procedures, and
+fragments organization-wide. That freeze is real behaviour worth being able to
+meet, so the seeded event ends up inside its window — and the seeders that write
+governance content run *before* the window opens, which is the order it happens
+in reality. To administer governance against a seeded database, close the
+window and the organization thaws:
+
+```bash
+php artisan tinker --execute='App\Models\Event::query()->update(["active_event_window_starts_at" => null, "active_event_window_ends_at" => null]);'
+```
+
+#### The running event's schedule
+
+Every window is an offset from the moment of seeding, so the scenario is the
+same shape whether it is seeded at nine in the morning or eleven at night. The
+Logistics Desk indexes twelve hours back and thirty-six forward, and the
+schedule is laid out inside that horizon on purpose.
+
+| Shift | Window | What it makes reachable |
+|---|---|---|
+| Sunrise Patrol | −10h to −4h | Frozen hours; correction refused with the closed grace period |
+| Morning Patrol | −7h to −1h | Open hours to correct; a no-show; a roster entry with no check-out |
+| Day Patrol | −2h to +4h | Check-in, check-out, no-show, unscheduled addition, deployments, coverage gap |
+| Command Day Watch | −1h to +5h | The eligible-team refusal for a Dirt member |
+| Swing Patrol | +3h to +9h | A future signup on the desk |
+| Storm Standby | +6h to +12h | Cancelled: restore, and a shift attendance must refuse |
+| Overnight Patrol | +13h to +19h | A training-gated shift Felix cannot take |
+
+Gate and DPW carry their own shifts so the department switcher has somewhere to
+go. The upcoming event's shifts produce four different signup answers: one that
+accepts, one that is full, one gated on a lapsed waiver, and one whose window
+has closed.
+
+#### What else is seeded
+
+- **Attendance and hours**: every state, plus one correction already applied so
+  the audit trail has a before and an after in it.
+- **Equipment**: available, checked out against a shift, checked out against the
+  event, written off while still out (the SLB-018 exception), damaged, archived.
+- **Trainings and waivers**: completions, a prerequisite chain, a pending signup,
+  an archived training, and one lapsed waiver.
+- **Documents**: policies and procedures in every state, at organization and
+  department scope, a fragment two documents share, Event Info sections filled,
+  and an acknowledgment requirement half satisfied.
+- **IMS**: three Field Reports, six incidents spread across status and priority,
+  a struck note, a link between two incidents, and a saved list preset.
+- **Intake**: applications in every terminal state plus two undecided,
+  recalculated credentials, and credit policies with a shift override.
+- **Images**: staff avatars, organization/department/team/event logos, and Field
+  Report photos — all generated with GD at seed time rather than committed as
+  binary assets, and deterministic per subject so a re-seed is idempotent.
+
+Two staff members are deliberately left without an avatar, one Field Report
+without a photo, and one shift without a full roster. The empty states are
+rendering paths too, and a scenario where everything is populated never shows
+them.
+
+#### Re-seeding
+
+The operational seeders are idempotent on natural keys — event slug, department
+code, shift title, asset tag — so re-running the seed against an existing
+database leaves the same scenario rather than a second overlapping copy of it.
+`migrate:fresh --seed` re-anchors the whole schedule to the new moment.
+
+`OperationalScenarioSeedTest` guards the shape rather than the counts. A seed
+that drifts still seeds without error and still looks plausible in the database;
+it just leaves whoever opens the Logistics Desk with nothing to press.
 
 ### 13.4 Human QA scenario IDs
 

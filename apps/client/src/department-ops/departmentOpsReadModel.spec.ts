@@ -28,7 +28,7 @@ import { installLocalFieldSession } from "@/session/localFieldSession";
 
 const CONTEXT: DepartmentOpsContext = {
   eventId: "11111111-1111-4111-8111-111111111111",
-  eventLabel: "Idaho Decompression",
+  eventLabel: "Emberfall",
   departmentId: "66666666-6666-4666-8666-666666666666",
   departmentLabel: "Rangers",
   timeZone: "America/Los_Angeles",

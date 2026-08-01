@@ -415,10 +415,10 @@ class ShortLivedDownloadUrlTest extends TestCase
      */
     private function exportScenario(): array
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners', 'slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
             'minimum_staff_age' => null,
         ]);
 
@@ -484,7 +484,7 @@ class ShortLivedDownloadUrlTest extends TestCase
         $staff = Staff::factory()->create([
             'legal_name' => $legalName,
             'handle' => $handle,
-            'email' => $handle.'@idaho-burners.test',
+            'email' => $handle.'@northwood-collective.test',
         ]);
 
         StaffOrganizationStatus::query()->create([

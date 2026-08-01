@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Department;
 use App\Models\Organization;
 use App\Models\Staff;
-use App\Models\Team;
 use App\Models\Waiver;
 use App\Models\WaiverCompletion;
 use Illuminate\Foundation\Testing\RefreshDatabase;

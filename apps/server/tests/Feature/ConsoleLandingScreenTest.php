@@ -167,7 +167,7 @@ class ConsoleLandingScreenTest extends TestCase
 
     public function test_an_organization_without_departments_reports_only_that_gap(): void
     {
-        Organization::factory()->create(['name' => 'Idaho Burners']);
+        Organization::factory()->create(['name' => 'Northwood Collective']);
 
         $items = app(OrganizationalDataGapCheck::class)->items();
 
@@ -175,12 +175,12 @@ class ConsoleLandingScreenTest extends TestCase
             [OrganizationalDataGapCheck::NO_DEPARTMENTS],
             $this->itemKeys($items),
         );
-        $this->assertStringContainsString('Idaho Burners', $items[0]->label);
+        $this->assertStringContainsString('Northwood Collective', $items[0]->label);
     }
 
     public function test_missing_organizers_ic_and_lead_organizer_are_each_reported(): void
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         Department::factory()->for($organization)->create(['name' => 'Rangers']);
 
         $keys = $this->itemKeys(app(OrganizationalDataGapCheck::class)->items());
@@ -211,7 +211,7 @@ class ConsoleLandingScreenTest extends TestCase
     {
         $organization = Organization::factory()->create();
         Department::factory()->for($organization)->create();
-        $event = Event::factory()->for($organization)->create(['name' => 'Idaho Decompression 2026']);
+        $event = Event::factory()->for($organization)->create(['name' => 'Emberfall 2026']);
 
         $keys = $this->itemKeys(app(OrganizationalDataGapCheck::class)->items());
 

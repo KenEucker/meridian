@@ -26,7 +26,7 @@ class TeamImportLayout extends Rows
             TextArea::make('csv')
                 ->rows(10)
                 ->title(__('Or paste CSV'))
-                ->placeholder("organization_slug,department_code,name,code,description\nidaho-burners,RANGERS,Dirt,DIRT,Field rangers")
+                ->placeholder("organization_slug,department_code,name,code,description\nnorthwood-collective,RANGERS,Dirt,DIRT,Field rangers")
                 ->help(__('Required columns: organization_slug, department_code, name, code. Optional: description. Rows match existing teams by department and team code, so the same file can be imported again after corrections.')),
         ];
     }

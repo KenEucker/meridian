@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\Membership\DepartmentMembershipService;
 use App\Services\Permissions\TeamGrantService;
 use Database\Seeders\Support\DevelopmentScenarioCatalog;
+use Database\Seeders\Support\ScenarioClock;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -31,7 +32,9 @@ class DevelopmentScenarioSeeder extends Seeder
             $organization = $this->seedOrganization();
             [$teamsByCode, $departmentsByCode] = $this->seedDepartmentsAndTeams($organization);
             $event = $this->seedEvent($organization, $departmentsByCode['RANGERS']);
+            $upcoming = $this->seedUpcomingEvent($organization, $departmentsByCode['RANGERS']);
             $this->seedEventDepartmentAssignments($event, $departmentsByCode);
+            $this->seedEventDepartmentAssignments($upcoming, $departmentsByCode);
             $this->seedPersonas($organization, $teamsByCode, $departmentsByCode);
             $this->seedTeamGrants($event, $teamsByCode, $departmentsByCode);
         });
@@ -119,11 +122,24 @@ class DevelopmentScenarioSeeder extends Seeder
         return [$teamsByCode, $departmentsByCode];
     }
 
+    /**
+     * The event running right now — but not yet inside its active window.
+     *
+     * Two days in and three to go, so every operational surface has a live
+     * event to open onto, and the dates move with each seed run because a fixed
+     * date is a scenario that expires.
+     *
+     * The active window is left unset here and opened by
+     * {@see OpenEventWindowSeeder} once everything else has been written. That
+     * ordering is not a workaround, it is the chronology: an organization brands
+     * itself and publishes its policies *before* it opens the gates, and both of
+     * those are frozen organization-wide the moment any event enters its active
+     * window. Seeding them against an already-active event would mean either
+     * standing the freeze down — leaving a scenario whose data could never have
+     * been produced through the product — or not seeding them at all.
+     */
     private function seedEvent(Organization $organization, Department $icDepartment): Event
     {
-        $startsAt = now()->addMonths(4)->setTime(9, 0);
-        $endsAt = $startsAt->copy()->addDays(4)->setTime(18, 0);
-
         return Event::query()->updateOrCreate(
             [
                 'organization_id' => $organization->id,
@@ -131,6 +147,38 @@ class DevelopmentScenarioSeeder extends Seeder
             ],
             [
                 'name' => DevelopmentScenarioCatalog::EVENT_NAME,
+                'starts_at' => ScenarioClock::daysAgo(2)->setTime(9, 0),
+                'ends_at' => ScenarioClock::daysFromNow(3)->setTime(18, 0),
+                'timezone' => DevelopmentScenarioCatalog::EVENT_TIMEZONE,
+                'status' => null,
+                'ic_department_id' => $icDepartment->id,
+                'active_event_window_starts_at' => null,
+                'active_event_window_ends_at' => null,
+            ],
+        );
+    }
+
+    /**
+     * The event still ahead.
+     *
+     * Six weeks out and outside its active window, which is what makes it the
+     * event branding, policy publication, and organization configuration are
+     * administered against — the running event freezes all three. It is also
+     * where shift signup is exercised, because a signup window is only open on
+     * a schedule nobody has started working.
+     */
+    private function seedUpcomingEvent(Organization $organization, Department $icDepartment): Event
+    {
+        $startsAt = ScenarioClock::daysFromNow(42)->setTime(9, 0);
+        $endsAt = $startsAt->copy()->addDays(3)->setTime(18, 0);
+
+        return Event::query()->updateOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'slug' => DevelopmentScenarioCatalog::UPCOMING_EVENT_SLUG,
+            ],
+            [
+                'name' => DevelopmentScenarioCatalog::UPCOMING_EVENT_NAME,
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
                 'timezone' => DevelopmentScenarioCatalog::EVENT_TIMEZONE,
@@ -191,6 +239,17 @@ class DevelopmentScenarioSeeder extends Seeder
             $department = $team->department()->firstOrFail();
             $departmentStatus = $persona['department_status'] ?? 'active';
 
+            /*
+             * A lead sits on two teams: the one carrying their grants and the
+             * crew team they actually work with. Both are needed — a grant is
+             * team-wide, so authority has to live somewhere the crew is not, and
+             * a shift is eligible to exactly one team, so a lead who is not on
+             * the crew team cannot be rostered onto the crew's shifts.
+             */
+            $crewTeam = isset($persona['crew_team_code']) && $persona['crew_team_code'] !== null
+                ? $teamsByCode[$persona['crew_team_code']] ?? null
+                : null;
+
             $existingMembership = $staff->departmentMemberships()
                 ->where('department_id', $department->id)
                 ->whereNull('archived_at')
@@ -200,7 +259,7 @@ class DevelopmentScenarioSeeder extends Seeder
                 $membershipService->createWithTeams(
                     $staff,
                     $department,
-                    [$team],
+                    array_values(array_filter([$team, $crewTeam])),
                     $departmentStatus,
                     $departmentStatus === 'ineligible'
                         ? 'Department eligibility review pending.'
@@ -215,15 +274,17 @@ class DevelopmentScenarioSeeder extends Seeder
                         : null,
                 ])->save();
 
-                $existingMembership->teamMemberships()
-                    ->where('team_id', $team->id)
-                    ->whereNull('archived_at')
-                    ->first()
-                    ?? $existingMembership->teamMemberships()->create([
-                        'team_id' => $team->id,
-                        'staff_id' => $staff->id,
-                        'membership_role' => 'member',
-                    ]);
+                foreach (array_filter([$team, $crewTeam]) as $membershipTeam) {
+                    $existingMembership->teamMemberships()
+                        ->where('team_id', $membershipTeam->id)
+                        ->whereNull('archived_at')
+                        ->first()
+                        ?? $existingMembership->teamMemberships()->create([
+                            'team_id' => $membershipTeam->id,
+                            'staff_id' => $staff->id,
+                            'membership_role' => 'member',
+                        ]);
+                }
             }
 
             // shift_lead applies only to designated lead memberships (M11.17).

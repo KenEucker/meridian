@@ -83,9 +83,9 @@ or spreadsheet incident exports (INC-016).
   (Incident Command Lead) for Local Field Event / Rangers.
 - Automated IC personas (server + client Vitest): `ic_viewer`, `ic_operator`,
   and `ic_lead`, including seeded Development Scenario identities Ingrid
-  ICLead (`ingrid.iclead@idaho-burners.test`), Omar ICOperator
-  (`omar.icoperator@idaho-burners.test`), and Ivy ICViewer
-  (`ivy.icviewer@idaho-burners.test`) where those suites create their own
+  ICLead (`ingrid.iclead@northwood-collective.test`), Omar ICOperator
+  (`omar.icoperator@northwood-collective.test`), and Ivy ICViewer
+  (`ivy.icviewer@northwood-collective.test`) where those suites create their own
   grants.
 - Automated denial personas: organizer-only, non-IC department lead, wrong-
   event IC grant, revoked IC grant, unauthenticated, and normal staff.

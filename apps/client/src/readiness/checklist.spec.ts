@@ -102,7 +102,7 @@ function liveSession(
     cached: false,
     refusedDetail: null,
     eventId: "event-1",
-    eventLabel: "Idaho Burn 2027",
+    eventLabel: "Emberfall Backcountry 2027",
     nodeLocked: false,
     ...overrides,
   };
@@ -270,7 +270,7 @@ describe("event selected", () => {
     const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
 
     expect(byKey.eventSelected.status).toBe("ready");
-    expect(byKey.eventSelected.detail).toBe("Idaho Burn 2027");
+    expect(byKey.eventSelected.detail).toBe("Emberfall Backcountry 2027");
   });
 
   it("is ready on a locked node, where nobody selected anything", () => {
@@ -281,7 +281,7 @@ describe("event selected", () => {
 
     expect(byKey.eventSelected.status).toBe("ready");
     expect(byKey.eventSelected.detail).toBe(
-      "Idaho Burn 2027. This node is locked to it.",
+      "Emberfall Backcountry 2027. This node is locked to it.",
     );
   });
 

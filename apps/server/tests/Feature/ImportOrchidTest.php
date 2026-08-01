@@ -94,7 +94,7 @@ class ImportOrchidTest extends TestCase
 
     public function test_an_uploaded_file_imports_teams(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         Department::factory()->create([
             'organization_id' => $organization->id,
             'code' => 'RANGERS',
@@ -104,7 +104,7 @@ class ImportOrchidTest extends TestCase
 
         $file = UploadedFile::fake()->createWithContent(
             'teams.csv',
-            "organization_slug,department_code,name,code\nidaho-burners,RANGERS,Dirt,DIRT\n",
+            "organization_slug,department_code,name,code\nnorthwood-collective,RANGERS,Dirt,DIRT\n",
         );
 
         $this->actingAs($user)
@@ -116,10 +116,10 @@ class ImportOrchidTest extends TestCase
 
     public function test_pasted_csv_imports_shifts_and_reports_each_row(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'slug' => 'idaho-decompression-2026',
-            'timezone' => 'America/Boise',
+            'slug' => 'emberfall-2026',
+            'timezone' => 'America/Los_Angeles',
         ]);
         $department = Department::factory()->for($organization)->create(['code' => 'RANGERS']);
         Team::factory()->for($department)->create(['code' => 'DIRT']);
@@ -129,8 +129,8 @@ class ImportOrchidTest extends TestCase
         $this->actingAs($user)
             ->post(route('platform.imports.shifts', ['method' => 'import']), [
                 'csv' => "organization_slug,event_slug,department_code,team_code,title,starts_at,ends_at\n"
-                    ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2030-08-28 09:00,2030-08-28 17:00\n"
-                    ."idaho-burners,idaho-decompression-2026,RANGERS,NOPE,Ghost Shift,2030-08-28 09:00,2030-08-28 17:00\n",
+                    ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2030-08-28 09:00,2030-08-28 17:00\n"
+                    ."northwood-collective,emberfall-2026,RANGERS,NOPE,Ghost Shift,2030-08-28 09:00,2030-08-28 17:00\n",
             ])
             ->assertRedirect(route('platform.imports.shifts'));
 

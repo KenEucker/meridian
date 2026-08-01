@@ -48,14 +48,14 @@ class ShiftImportTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-01 12:00:00'));
 
         $this->organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
         ]);
 
         $this->event = Event::factory()->for($this->organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
-            'timezone' => 'America/Boise',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
+            'timezone' => 'America/Los_Angeles',
         ]);
 
         $this->rangers = Department::factory()->for($this->organization)->create([
@@ -89,11 +89,11 @@ class ShiftImportTest extends TestCase
         $this->assertSame((string) $this->dirt->id, (string) $day->eligible_team_id);
         $this->assertSame(6, $day->capacity);
 
-        // 09:00 in America/Boise is 15:00 UTC in August; a spreadsheet carries
-        // the times the shift is worked, not UTC.
-        $this->assertSame('2026-08-28T15:00:00+00:00', $day->starts_at->toIso8601String());
-        $this->assertSame('2026-08-28T23:00:00+00:00', $day->ends_at->toIso8601String());
-        $this->assertSame('2026-08-01T15:00:00+00:00', $day->signup_opens_at?->toIso8601String());
+        // 09:00 in America/Los_Angeles is 16:00 UTC in August; a spreadsheet
+        // carries the times the shift is worked, not UTC.
+        $this->assertSame('2026-08-28T16:00:00+00:00', $day->starts_at->toIso8601String());
+        $this->assertSame('2026-08-29T00:00:00+00:00', $day->ends_at->toIso8601String());
+        $this->assertSame('2026-08-01T16:00:00+00:00', $day->signup_opens_at?->toIso8601String());
 
         $this->assertNull($this->shift('Gate Opening')->capacity);
         $this->assertNull($this->shift('Dirt Patrol Night')->signup_opens_at);
@@ -104,7 +104,7 @@ class ShiftImportTest extends TestCase
         $actor = User::factory()->create();
 
         $this->service()->import(
-            $this->header()."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Offset Shift,2026-08-28T09:00:00Z,2026-08-28T17:00:00Z\n",
+            $this->header()."northwood-collective,emberfall-2026,RANGERS,DIRT,Offset Shift,2026-08-28T09:00:00Z,2026-08-28T17:00:00Z\n",
             $actor,
         );
 
@@ -135,7 +135,7 @@ class ShiftImportTest extends TestCase
 
         $result = $service->import(
             "Organization Slug,Event Slug,Department Code,Team Code,Title,Starts At,Ends At,Capacity\n"
-            ."idaho-burners,idaho-decompression-2026,rangers,dirt,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 21:00,8\n",
+            ."northwood-collective,emberfall-2026,rangers,dirt,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 21:00,8\n",
             $actor,
         );
 
@@ -143,11 +143,11 @@ class ShiftImportTest extends TestCase
         $this->assertSame(3, Shift::query()->count());
 
         $day = $this->shift('Dirt Patrol Day');
-        $this->assertSame('2026-08-29T03:00:00+00:00', $day->ends_at->toIso8601String());
+        $this->assertSame('2026-08-29T04:00:00+00:00', $day->ends_at->toIso8601String());
         $this->assertSame(8, $day->capacity);
 
         // A column the file leaves out keeps what the shift already carries.
-        $this->assertSame('2026-08-01T15:00:00+00:00', $day->signup_opens_at?->toIso8601String());
+        $this->assertSame('2026-08-01T16:00:00+00:00', $day->signup_opens_at?->toIso8601String());
     }
 
     public function test_a_present_but_empty_optional_column_clears_the_value(): void
@@ -159,7 +159,7 @@ class ShiftImportTest extends TestCase
 
         $service->import(
             $this->header('capacity,signup_opens_at')
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,,\n",
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,,\n",
             $actor,
         );
 
@@ -181,7 +181,7 @@ class ShiftImportTest extends TestCase
         $service->import($this->fixture('shifts-import-sample.csv'), $actor);
 
         $result = $service->import(
-            $this->header()."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Daylight,2026-08-28 09:00,2026-08-28 17:00\n",
+            $this->header()."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Daylight,2026-08-28 09:00,2026-08-28 17:00\n",
             $actor,
         );
 
@@ -211,7 +211,7 @@ class ShiftImportTest extends TestCase
 
         $result = $service->import(
             $this->header('capacity')
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,9\n",
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,9\n",
             $actor,
         );
 
@@ -228,16 +228,16 @@ class ShiftImportTest extends TestCase
         $actor = User::factory()->create();
 
         $csv = $this->header('capacity')
-            ."no-such-org,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
-            ."idaho-burners,no-such-event,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
-            ."idaho-burners,idaho-decompression-2026,NOPE,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,GREETERS,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,,2026-08-28 09:00,2026-08-28 17:00,\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,not a date,2026-08-28 17:00,\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Backwards,2026-08-28 09:00,2026-08-28 08:00,\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,none\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,6\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,dirt patrol day,2026-08-28 09:00,2026-08-28 17:00,6\n";
+            ."no-such-org,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
+            ."northwood-collective,no-such-event,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
+            ."northwood-collective,emberfall-2026,NOPE,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
+            ."northwood-collective,emberfall-2026,RANGERS,GREETERS,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,,2026-08-28 09:00,2026-08-28 17:00,\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,not a date,2026-08-28 17:00,\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Backwards,2026-08-28 09:00,2026-08-28 08:00,\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,none\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,6\n"
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,dirt patrol day,2026-08-28 09:00,2026-08-28 17:00,6\n";
 
         $result = $this->service()->import($csv, $actor);
 
@@ -248,8 +248,8 @@ class ShiftImportTest extends TestCase
 
         $this->assertSame([
             'No organization "no-such-org".',
-            'No event "no-such-event" in organization "idaho-burners".',
-            'No department "NOPE" in organization "idaho-burners".',
+            'No event "no-such-event" in organization "northwood-collective".',
+            'No department "NOPE" in organization "northwood-collective".',
             'No team "GREETERS" in department "RANGERS".',
             'Missing shift title.',
             'Start and end must both be readable dates and times.',
@@ -272,7 +272,7 @@ class ShiftImportTest extends TestCase
 
         $result = $service->import(
             $this->header('capacity')
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,10\n",
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,10\n",
             $actor,
         );
 
@@ -310,11 +310,11 @@ class ShiftImportTest extends TestCase
         $service = $this->service();
 
         $service->import(
-            $this->header()."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00\n",
+            $this->header()."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00\n",
             $actor,
         );
         $service->import(
-            $this->header()."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 18:00\n",
+            $this->header()."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 18:00\n",
             $actor,
         );
 
@@ -342,7 +342,7 @@ class ShiftImportTest extends TestCase
 
         $this->service()->import(
             "organization_slug,event_slug,department_code,team_code,title,starts_at\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00\n",
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00\n",
             $actor,
         );
     }

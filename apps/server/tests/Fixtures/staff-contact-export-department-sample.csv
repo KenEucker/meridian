@@ -1,6 +1,6 @@
 event_name,department,department_code,teams,staff_legal_name,staff_preferred_name,staff_handle,staff_email,staff_phone,department_membership_status,organization_status,emergency_contact_name,emergency_contact_phone
-"Idaho Decompression 2026",Rangers,RANGERS,Dirt,"Alma Assigned",Alma,alma,alma@idaho-burners.test,+1-208-555-0101,active,active,"Alma Assigned Contact",+1-208-555-0199
-"Idaho Decompression 2026",Rangers,RANGERS,"Dirt; Rangers Leads","Dana Departmentlead",Dana,dana,dana@idaho-burners.test,+1-208-555-0101,active,active,"Dana Departmentlead Contact",+1-208-555-0199
-"Idaho Decompression 2026",Rangers,RANGERS,Dirt,"Ida Inactive",Ida,ida,ida@idaho-burners.test,+1-208-555-0101,inactive,inactive,"Ida Inactive Contact",+1-208-555-0199
-"Idaho Decompression 2026",Rangers,RANGERS,Dirt,"Perry Plain",Perry,perry,perry@idaho-burners.test,+1-208-555-0101,active,active,"Perry Plain Contact",+1-208-555-0199
-"Idaho Decompression 2026",Rangers,RANGERS,Dirt,"Vera Staff",Vera,vera,vera@idaho-burners.test,+1-208-555-0101,active,active,"Vera Staff Contact",+1-208-555-0199
+"Emberfall 2026",Rangers,RANGERS,Dirt,"Alma Assigned",Alma,alma,alma@northwood-collective.test,+1-208-555-0101,active,active,"Alma Assigned Contact",+1-208-555-0199
+"Emberfall 2026",Rangers,RANGERS,"Dirt; Rangers Leads","Dana Departmentlead",Dana,dana,dana@northwood-collective.test,+1-208-555-0101,active,active,"Dana Departmentlead Contact",+1-208-555-0199
+"Emberfall 2026",Rangers,RANGERS,Dirt,"Ida Inactive",Ida,ida,ida@northwood-collective.test,+1-208-555-0101,inactive,inactive,"Ida Inactive Contact",+1-208-555-0199
+"Emberfall 2026",Rangers,RANGERS,Dirt,"Perry Plain",Perry,perry,perry@northwood-collective.test,+1-208-555-0101,active,active,"Perry Plain Contact",+1-208-555-0199
+"Emberfall 2026",Rangers,RANGERS,Dirt,"Vera Staff",Vera,vera,vera@northwood-collective.test,+1-208-555-0101,active,active,"Vera Staff Contact",+1-208-555-0199

@@ -248,7 +248,7 @@ An organization produces events and manages staff.
 
 Example:
 
-- Idaho Burners
+- Northwood Collective
 
 Organizations own or configure:
 
@@ -276,7 +276,7 @@ An event is a specific occurrence produced by an organization.
 
 Example:
 
-- Idaho Decompression 2026
+- Emberfall 2026
 
 Events may contain:
 

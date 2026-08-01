@@ -251,7 +251,7 @@ function stubDocumentLibraryNode(): void {
         organization_id: "88888888-8888-4888-8888-888888888888",
         scope_type: "organization",
         scope_id: "88888888-8888-4888-8888-888888888888",
-        scope_label: "Organization: Idaho Burners",
+        scope_label: "Organization: Northwood Collective",
         title: "Volunteer Conduct",
         slug: "volunteer-conduct",
         event_info_section: null,
