@@ -104,6 +104,11 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.equipment')
                 ->permission('platform.equipment'),
 
+            Menu::make(__('Incident Types'))
+                ->icon('bs.tags')
+                ->route('platform.incident-types')
+                ->permission('platform.incident-types'),
+
             Menu::make(__('Policy Documents'))
                 ->icon('bs.file-earmark-text')
                 ->route('platform.policy-documents')
@@ -255,6 +260,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.shifts', __('Shifts'))
                 ->addPermission('platform.staff', __('Staff'))
                 ->addPermission('platform.equipment', __('Equipment'))
+                ->addPermission('platform.incident-types', __('Incident types'))
                 ->addPermission('platform.policy-documents', __('Policy documents'))
                 ->addPermission('platform.procedure-documents', __('Procedure documents'))
                 ->addPermission('platform.document-fragments', __('Document fragments')),

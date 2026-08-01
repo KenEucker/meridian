@@ -29,6 +29,7 @@ final class IncidentCreationService
     public function __construct(
         private readonly AuditService $audit,
         private readonly IncidentTimelineService $timeline,
+        private readonly IncidentTypeResolver $incidentTypes,
     ) {}
 
     /**
@@ -285,26 +286,15 @@ final class IncidentCreationService
     private function syncIncidentTypes(Incident $incident, Event $event, mixed $typeNames, CarbonImmutable $now): void
     {
         $names = $this->stringList($typeNames, 'Incident type names are invalid.', 100);
-        $typeIds = [];
+        $resolved = $this->incidentTypes->resolve($event, $names, $now);
 
-        foreach ($names as $name) {
-            $type = IncidentType::query()
-                ->where('organization_id', $event->organization_id)
-                ->whereRaw('lower(name) = ?', [mb_strtolower($name)])
-                ->first();
-
-            if ($type === null) {
-                $type = IncidentType::query()->create([
-                    'organization_id' => $event->organization_id,
-                    'name' => $name,
-                    'created_at' => $now,
-                ]);
-            }
-
-            $typeIds[$type->id] = ['id' => (string) Str::uuid(), 'created_at' => $now];
+        // An unrecognized name used to create the type. Incident types are the
+        // organization's to configure (M18.14A), so now it is a refusal.
+        if ($resolved['unknown'] !== []) {
+            throw IncidentCreationException::invalid($this->incidentTypes->refusalFor($resolved['unknown']));
         }
 
-        $incident->incidentTypes()->sync($typeIds);
+        $incident->incidentTypes()->sync($resolved['pivot']);
     }
 
     /**
