@@ -823,6 +823,60 @@ describe("incident editing", () => {
     ).toEqual(["Routine", "Important", "Serious", "Critical"]);
   });
 
+  it("adds an incident type by name when the organization has none yet", async () => {
+    installSession();
+    // A fresh organization has named no incident types. The command creates one
+    // on first use, so an empty suggestion list is a normal state rather than a
+    // dead end.
+    const list = listPayload();
+    (list.assignable as Record<string, unknown>).types = [];
+
+    const calls = stubStandardNode({ list });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await flushPromises();
+
+    // The panel opens and says how to get out of the empty state.
+    expect(wrapper.get("[aria-label='Incident type matches']").text()).toContain(
+      "Type a name to add an incident type.",
+    );
+
+    await wrapper.get("#ims-edit-type-add").setValue("Weather");
+    await flushPromises();
+
+    const addNew = wrapper
+      .findAll("[aria-label='Incident type matches'] button")
+      .find((button) => button.text().includes("Weather"));
+
+    expect(addNew).toBeDefined();
+    await addNew?.trigger("click");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident").at(0)?.body).toMatchObject({
+      incident_type_names: ["Medical", "Weather"],
+    });
+  });
+
+  it("offers a type the node suggested rather than a duplicate of it", async () => {
+    installSession();
+    stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await wrapper.get("#ims-edit-type-add").setValue("Radio");
+    await flushPromises();
+
+    const options = wrapper
+      .findAll("[aria-label='Incident type matches'] button")
+      .map((button) => button.text());
+
+    // The node already suggests Radio, so there is nothing to add by name.
+    expect(options).toEqual(["Radio"]);
+  });
+
   it("shows the node's refusal when an edit is refused", async () => {
     installSession();
     stubNode((call) => {

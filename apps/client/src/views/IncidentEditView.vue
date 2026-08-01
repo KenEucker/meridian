@@ -206,6 +206,34 @@ const availableIncidentTypeOptions = computed(() =>
     incidentTypeAddQuery.value,
   ),
 );
+
+/**
+ * The typed name, when it is a type this incident does not already have and
+ * the node did not already suggest.
+ *
+ * Incident types come into existence by being named: `syncIncidentTypes`
+ * matches an existing one case-insensitively and creates the type when there is
+ * none, so an organization with no types yet is a normal state rather than a
+ * dead end. Offering the typed name is what makes that reachable — without it
+ * the picker shows an empty panel and the only way through is an Enter key
+ * nothing on screen mentions.
+ */
+const newIncidentTypeOption = computed(() => {
+  const typed = incidentTypeAddQuery.value.trim();
+
+  if (typed === "") {
+    return null;
+  }
+
+  const known = [
+    ...form.incidentTypeNames,
+    ...availableIncidentTypeOptions.value,
+  ];
+
+  return known.some((name) => name.toLowerCase() === typed.toLowerCase())
+    ? null
+    : typed;
+});
 const availableResponderOptions = computed(() =>
   filteredAddOptions(
     (assignable.value?.responders ?? []).filter(
@@ -1330,8 +1358,13 @@ async function onPrintPdf(): Promise<void> {
                 @keydown.escape.prevent="closeAddPopups"
               />
             </label>
+            <!--
+              Open means open. The panel used to render only when the node had
+              a suggestion, so an organization that has named no types yet got
+              an Add box that visibly did nothing.
+            -->
             <div
-              v-if="incidentTypeAddOpen && availableIncidentTypeOptions.length > 0"
+              v-if="incidentTypeAddOpen"
               class="ims-edit__add-results"
               aria-label="Incident type matches"
             >
@@ -1344,6 +1377,21 @@ async function onPrintPdf(): Promise<void> {
               >
                 {{ typeName }}
               </button>
+              <button
+                v-if="newIncidentTypeOption"
+                type="button"
+                class="ims-edit__add-new"
+                :disabled="isOfflineBlocked"
+                @click="addIncidentType(newIncidentTypeOption)"
+              >
+                Add &ldquo;{{ newIncidentTypeOption }}&rdquo;
+              </button>
+              <p
+                v-else-if="availableIncidentTypeOptions.length === 0"
+                class="ims-edit__add-hint"
+              >
+                Type a name to add an incident type.
+              </p>
             </div>
           </section>
         </div>
@@ -2372,6 +2420,18 @@ async function onPrintPdf(): Promise<void> {
 
 .ims-edit__add-results button:last-child {
   border-bottom: 0;
+}
+
+/* The typed name reads as the new thing it is, not as another match. */
+.ims-edit__add-new {
+  font-style: italic;
+}
+
+.ims-edit__add-hint {
+  margin: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .ims-edit__form textarea,

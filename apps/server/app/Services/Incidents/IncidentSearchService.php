@@ -142,7 +142,12 @@ final class IncidentSearchService
      * a type the organization uses but this event has not needed yet is a
      * legitimate choice. The command still accepts a name that is on neither
      * list and creates the type, so this is a suggestion list rather than a
-     * vocabulary.
+     * vocabulary — an organization with no types yet is a normal state, and the
+     * first incident to name one brings it into existence.
+     *
+     * Archived types are excluded. They stay on the incidents that already
+     * carry them, and a filter still finds them through {@see typeOptions};
+     * what they stop being is something to put on an incident next.
      *
      * @return list<string>
      */
@@ -154,6 +159,7 @@ final class IncidentSearchService
 
         return IncidentType::query()
             ->where('organization_id', $event->organization_id)
+            ->whereNull('archived_at')
             ->orderBy('name')
             ->pluck('name')
             ->map(fn ($name): string => (string) $name)

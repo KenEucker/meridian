@@ -388,6 +388,13 @@ class IncidentSearchHttpTest extends TestCase
             'organization_id' => $otherEvent->organization_id,
             'name' => 'Other organization type',
         ]);
+        // Retired from use: still valid on the incidents that carry it, but not
+        // something to put on an incident next.
+        IncidentType::factory()->create([
+            'organization_id' => $event->organization_id,
+            'name' => 'Archived type',
+            'archived_at' => Carbon::parse('2027-07-01T00:00:00Z'),
+        ]);
 
         $responder = Staff::factory()->create(['preferred_name' => 'Vera']);
         DepartmentMembership::factory()
@@ -406,7 +413,8 @@ class IncidentSearchHttpTest extends TestCase
             ->assertJsonPath('assignable.statuses', Incident::statuses())
             ->assertJsonPath('assignable.priorities', Incident::priorityLabels())
             // In use for this event, and known to the organization but not yet
-            // used here. The other organization's type is neither.
+            // used here. The other organization's type is neither, and the
+            // archived one is no longer assignable.
             ->assertJsonPath('assignable.types', ['Medical', 'Weather']);
 
         $responderIds = array_column($response->json('assignable.responders'), 'staff_id');

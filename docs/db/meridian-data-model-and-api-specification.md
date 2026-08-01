@@ -406,10 +406,12 @@ The response also carries the caller's saved filter presets (see 10.16A).
 Alongside `filter_options`, which says what a reader may narrow this list by, the
 response carries an `assignable` block saying what an authoring form may put on
 an incident: `statuses` and `priorities` are the canonical vocabularies the
-create and update commands accept, `types` is every incident type the
-organization has (wider than the in-use `filter_options.types`, and the commands
-still accept a new name), and `responders` is the event's configured Incident
-Command department roster. The two blocks differ deliberately: `active` and `all`
+create and update commands accept, `types` is every unarchived incident type the
+organization has (wider than the in-use `filter_options.types`), and
+`responders` is the event's configured Incident Command department roster. An
+organization that has named no types yet is a normal state: the create and
+update commands match a type name case-insensitively and create the type when
+there is none, so `types` is a suggestion list rather than a vocabulary. The two blocks differ deliberately: `active` and `all`
 are ways of asking a question rather than states an incident can be in, and a
 type or responder not yet on any incident is still a legitimate thing to add.
 
