@@ -668,9 +668,16 @@ onBeforeUnmount(() => {
                 focusable="false"
                 viewBox="0 0 24 24"
               >
+                <!--
+                  Filled, not outlined. The four-step connection scale is
+                  carried by this icon's color, and a 2px outline gives that
+                  color almost no area to be read from at 16px — the status was
+                  technically applied and practically invisible. A solid
+                  silhouette makes the same token legible at a glance.
+                -->
                 <path
                   d="M20 21a8 8 0 0 0-16 0"
-                  fill="none"
+                  fill="currentColor"
                   stroke="currentColor"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -680,7 +687,7 @@ onBeforeUnmount(() => {
                   cx="12"
                   cy="7"
                   r="4"
-                  fill="none"
+                  fill="currentColor"
                   stroke="currentColor"
                   stroke-width="2"
                 />

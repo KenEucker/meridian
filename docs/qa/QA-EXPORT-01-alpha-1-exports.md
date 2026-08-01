@@ -24,8 +24,12 @@ point is required for this script: reporting surfaces (`REPORT-014`) are their
 own requirement and remain deferred, so the checks below use the documented
 domain services and the HTTP download endpoints. The short-lived download URL
 half of `REPORT-015` now exists for credential eligibility (M16.12) and is
-verified with the rest of that pattern rather than here; the export entry points
-that use it arrive with M16.22.
+verified with the rest of that pattern rather than here. M16.22 added the one
+entry point that uses it — `organizer.credentials` in the client, reached from
+Credentials on the home directory's Organization pages — which runs the
+credential eligibility export and nothing else; a reviewer who wants to see that
+path end to end has it in `QA-CRED-01` section G, and the remaining four exports
+still have no surface until M18.26.
 
 ## Requirements covered
 

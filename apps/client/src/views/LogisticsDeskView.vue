@@ -1506,7 +1506,7 @@ void loadDesk();
 .logistics__cache h2,
 .logistics__search-context h2 {
   margin: 0;
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .logistics__cache p,
@@ -1526,7 +1526,7 @@ void loadDesk();
 .logistics__shift-drilldown h3 {
   margin: 0;
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .logistics__scheduled-staff {
@@ -1599,7 +1599,7 @@ void loadDesk();
 }
 
 .logistics__workspace h4 {
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .logistics__staff-header p {

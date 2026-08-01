@@ -186,8 +186,30 @@
   }
 }
 
+/*
+ * Forcing a theme must also tell the browser which one it forced.
+ *
+ * `color-scheme` is what paints the parts of a control the page does not: the
+ * option list a `<select>` opens, date and time pickers, scrollbars, and the
+ * default canvas. It resolves from the OS preference on its own, so a client
+ * that overrides the theme — which every Meridian client does, since the shell
+ * writes `data-theme` on first paint and defaults to dark — used to get UA
+ * chrome from one theme and token values from the other. On an OS set to light
+ * that meant a white option list carrying dark-theme near-white text: the
+ * control looked right and its open menu was unreadable.
+ *
+ * Declared beside the values rather than in a client stylesheet because it is
+ * part of what choosing a theme means, and the Orchid surface serves this file
+ * too.
+ */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
 /* Explicit dark theme opt-in (kiosk/user override, independent of OS). */
 [data-theme="dark"] {
+  color-scheme: dark;
+
   --m-surface-app: #151a1f;
   --m-surface-base: #1b222a;
   --m-surface-raised: #232c35;

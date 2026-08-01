@@ -42,6 +42,8 @@ export const CAPABILITY_INCIDENTS_LINK_FIELD_REPORT =
   "incidents.link_field_report";
 export const CAPABILITY_INCIDENTS_PRINT = "incidents.print";
 export const CAPABILITY_FIELD_REPORTS_VIEW_EVENT = "field_reports.view_event";
+export const CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT =
+  "reports.credential_eligibility.export";
 
 /**
  * Role codes, for the two surfaces the catalog registers no capability for.

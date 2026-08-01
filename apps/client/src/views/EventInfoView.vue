@@ -386,7 +386,7 @@ void loadEventInfo();
 .event-info__section h2 {
   margin: 0;
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .event-info__document {
@@ -410,7 +410,7 @@ void loadEventInfo();
 .event-info__document-body :deep(h2) {
   margin: 0 0 var(--m-space-2);
   font-family: var(--m-font-heading);
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
 }
 
 .event-info__document-body :deep(p) {

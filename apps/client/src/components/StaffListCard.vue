@@ -94,7 +94,7 @@ a.staff-card__main:focus-visible {
 }
 
 .staff-card__title {
-  font-size: var(--m-text-base);
+  font-size: var(--m-text-md);
   font-weight: 800;
 }
 

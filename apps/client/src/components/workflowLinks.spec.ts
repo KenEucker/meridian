@@ -166,6 +166,7 @@ describe("navigation without a permitting capability", () => {
       "Departments",
       "Staff",
       "Field Reports",
+      "Credentials",
     ]) {
       expect(labels).not.toContain(surface);
     }
@@ -211,6 +212,11 @@ describe("navigation without a permitting capability", () => {
     ["organization.staff.manage", "Staff", "Organization pages"],
     ["organization.branding.manage", "Branding", "Organization pages"],
     ["policies.view_published", "Documents", "Organization pages"],
+    [
+      "reports.credential_eligibility.export",
+      "Credentials",
+      "Organization pages",
+    ],
   ])("lists %s in the home directory only for a holder of its capability", (
     capability,
     label,
