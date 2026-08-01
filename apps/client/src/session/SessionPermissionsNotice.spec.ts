@@ -108,8 +108,11 @@ describe("session permissions notice", () => {
 
     const wrapper = mount(SessionPermissionsNotice);
 
+    // Pacific, so the same instant reads an hour earlier than it would on
+    // Mountain time and names its own zone. The point of the assertion is that
+    // the notice uses the event's clock rather than the device's.
     expect(wrapper.get(".session-permissions").text()).toContain(
-      "Last refreshed Sep 11, 12:30 PM MDT",
+      "Last refreshed Sep 11, 11:30 AM PDT",
     );
   });
 
