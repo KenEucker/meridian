@@ -615,7 +615,7 @@ describe("AppShell menu behavior", () => {
     });
 
     // The Rangers department lead holds every department capability the seeded
-    // session carries, and still lands under the combine threshold at nine
+    // session carries, and still lands under the combine threshold at ten
     // items.
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
@@ -625,6 +625,7 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "Shifts",
       "My Field Reports",
       "Overview",
       "Planning",
@@ -660,9 +661,9 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "Shifts",
       "My Field Reports",
       "Documents",
-      "Shifts",
       "Trainings",
     ]);
   });
@@ -695,9 +696,9 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "Shifts",
       "My Field Reports",
       "Documents",
-      "Shifts",
       "Trainings",
       "Team",
     ]);

@@ -312,6 +312,7 @@ GET /api/events/{event}/departments
 GET /api/events/{event}/info
 GET /api/events/{event}/teams
 GET /api/events/{event}/shifts
+GET /api/events/{event}/shift-board
 GET /api/events/{event}/departments/{department}/overview
 GET /api/events/{event}/departments/{department}/logistics
 GET /api/events/{event}/departments/{department}/operations
@@ -475,6 +476,8 @@ POST /api/commands/mark-no-show
 POST /api/commands/mark-staff-on-site
 POST /api/commands/mark-staff-off-site
 POST /api/commands/add-staff-to-shift
+POST /api/commands/sign-up-for-shift
+POST /api/commands/withdraw-from-shift
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
 POST /api/commands/return-equipment
@@ -579,6 +582,36 @@ device that knows which one it is.
 Incident list preset commands (`save-incident-list-preset`, `delete-incident-list-preset`) manage one user's saved incident list selections for one event. They reuse the `incidents.view` gate rather than adding a capability: if a user may read the event's incident list, they may name their own way of reading it. Presets are always addressed by owner, so an IC user can neither overwrite nor delete another's, and a preset never grants access to an incident the applying user could not already see. Saving an existing name overwrites that preset; paging position is never stored. Presets are personal view state rather than operational records, so they are not audited.
 
 The department shift read (`GET /api/departments/{department}/shifts`) answers three kinds of caller and shapes its response to each. Department `department.administer` authority reads every department shift; a designated team lead reads shifts for the teams they lead; and a department member with active team membership reads the active shifts their teams are eligible for, read-only. The response carries `access.can_manage` for the surface as a whole and `can_manage` on each shift, which are the same answers the commands enforce, along with `has_started` so the started-shift locks are the node's reading of the clock rather than the client's. Its option lists — `teams`, `events`, `training_options`, `waiver_options` — are for the create/edit form and are therefore absent from a member's response; `teams` carries the active teams the caller may schedule for rather than every team in the department. The `?status=` filter (`all`, `active`, `cancelled`) applies to callers who may manage shifts; a member's read is always the active ones. The shift detail read (`GET /api/departments/{department}/shifts/{shift}`) stays manage-scoped, because it exists for the edit surface.
+
+The staff shift board read (`GET /api/events/{event}/shift-board`) is the staff
+signup surface's one read (SHIFT-018). It is event-scoped in the path and
+self-scoped in its answer: who the board is about is the caller's own staff
+profiles, never anything the request names. It returns every shift in the event
+belonging to a department the caller holds an active membership in, resolved per
+department, because a login speaking for two staff records may reach one
+department through one of them and the other through the other. Each shift
+carries `signed_up`, `can_sign_up`, `can_withdraw`, `schedule_locked`, and — when
+the shift will not take the caller — `unavailable_reason_code` and
+`unavailable_reason`. Those two come from the same evaluation `sign-up-for-shift`
+performs, so a shift the board offers is one the command accepts and a refusal
+reads the same on both. Being signed up is read from the assignment rather than
+from the evaluation, so somebody already on a shift still sees that they are on
+it after the cutoff closes. Cancelled shifts stay on the board with cancellation
+as their reason. Overlap advisories (SHIFT-014) are carried on the shifts that
+are still offered.
+
+Staff shift self-service commands (`sign-up-for-shift`, `withdraw-from-shift`)
+act on the caller's own staff profile and are authorized by that link rather than
+by a role: `ShiftSignupService` and `ShiftRemovalService` refuse a staff profile
+the user does not hold. `shift_id` is required and `staff_id` is optional, taken
+as the caller's profile that is an active member of the shift's department when
+omitted. Signup enforces the requirements 3.12 eligibility set and answers 422
+with the service's sentence and a stable `reason_code`; overlap travels with the
+acceptance as a warning rather than refusing it. Withdrawal is refused once the
+schedule locks, which is where staff self-service ends and lead removal
+(`remove-staff-from-shift`) continues. Both are connected-only: they are not in
+the 7.2 offline-writable set, because eligibility and capacity are answers a
+device cannot hold.
 
 Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 

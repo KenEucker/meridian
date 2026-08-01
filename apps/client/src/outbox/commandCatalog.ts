@@ -36,6 +36,9 @@ export type MeridianCommandType =
   | "mark-staff-on-site"
   | "mark-staff-off-site"
   | "add-staff-to-shift"
+  // Staff self-service on their own schedule (M18.2).
+  | "sign-up-for-shift"
+  | "withdraw-from-shift"
   | "set-current-deployment"
   | "checkout-equipment"
   | "return-equipment"
@@ -171,6 +174,30 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/add-staff-to-shift",
       "Shift addition",
       "Adding someone to a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The shift board's two writes (M18.2; SHIFT-011, SHIFT-013).
+     *
+     * Connected-only for the same reason the unscheduled addition above is.
+     * Whether a shift will take somebody turns on trainings, waivers, department
+     * status, and a capacity that other people are filling while this device is
+     * away; a signup queued against yesterday's board is a shift somebody
+     * believes they hold and nobody has them down for. Withdrawal is here too,
+     * because the cutoff it is measured against is the node's clock, and a
+     * withdrawal delivered after the schedule locks is a shift somebody stopped
+     * planning to work and is still on the roster for.
+     */
+    "sign-up-for-shift": connectedOnly(
+      "sign-up-for-shift",
+      "/api/commands/sign-up-for-shift",
+      "Shift signup",
+      "Signing up for a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "withdraw-from-shift": connectedOnly(
+      "withdraw-from-shift",
+      "/api/commands/withdraw-from-shift",
+      "Shift withdrawal",
+      "Withdrawing from a shift needs a connection to the node. It cannot be held on this device for later.",
     ),
     "set-current-deployment": connectedOnly(
       "set-current-deployment",

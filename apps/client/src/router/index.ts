@@ -60,6 +60,7 @@ import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 import {
@@ -341,6 +342,20 @@ export const routes: RouteRecordRaw[] = [
     name: "staff.me",
     component: MeView,
     beforeEnter: ensureFieldSession,
+  },
+  /*
+   * The staff shift board (M18.2; SHIFT-018; UI contract 12.3 `staff.shifts`).
+   *
+   * Not department-scoped in its path, unlike the department shift list it sits
+   * beside. A staff member may work more than one department at an event and
+   * signs up across all of them from one screen; the event is the session's, and
+   * which departments are on the board is the node's answer from the caller's
+   * own memberships.
+   */
+  {
+    path: "/staff/shifts",
+    name: "staff.shifts.index",
+    component: StaffShiftBoardView,
   },
   {
     path: "/staff/field-reports",

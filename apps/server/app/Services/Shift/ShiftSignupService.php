@@ -16,9 +16,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Self-signup command for planned shift coverage (SHIFT-011; requirements 3.12).
+ * Self-signup for planned shift coverage (SHIFT-011; requirements 3.12).
  *
- * Lead removal, API/OpenAPI, and UI are delivered by later M7 tasks.
+ * Exposed as the `sign-up-for-shift` command in M18.2. Everything a shift board
+ * says about a shift it will not accept comes from {@see evaluateSignup}, which
+ * runs these same rules without acting on them, so the reason shown on screen is
+ * the reason the command would refuse with.
  */
 class ShiftSignupService
 {
@@ -47,19 +50,7 @@ class ShiftSignupService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $this->assertShiftAcceptsSignup($shift, $moment);
-            $this->assertStaffEligibleForSignup($shift, $staff, $moment);
-            $this->eligibility->assertCapacityForSelfSignup($shift);
-
-            $existingAssignment = ShiftAssignment::query()
-                ->where('shift_id', $shift->id)
-                ->where('staff_id', $staff->id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($existingAssignment !== null && $existingAssignment->removed_at === null) {
-                throw ShiftSignupException::alreadySignedUp();
-            }
+            $this->assertSignupPermitted($shift, $staff, $moment, lockExistingAssignment: true);
 
             $warnings = $this->overlaps->warningsFor($staff, $shift);
 
@@ -89,6 +80,64 @@ class ShiftSignupService
                 warnings: $warnings,
             );
         });
+    }
+
+    /**
+     * Ask whether this staff member could sign up for this shift, without
+     * signing them up (SHIFT-018).
+     *
+     * The staff-to-user link is checked first for the same reason `signUp`
+     * checks it first: a shift board built for somebody else's staff profile is
+     * answering the wrong question, and no eligibility reason below it would be
+     * about the person reading the screen.
+     */
+    public function evaluateSignup(
+        Shift $shift,
+        Staff $staff,
+        User $user,
+        ?Carbon $moment = null,
+    ): ShiftSignupVerdict {
+        try {
+            if (! $user->staffProfiles()->whereKey($staff->getKey())->exists()) {
+                throw ShiftSignupException::staffNotLinkedToUser();
+            }
+
+            $this->assertSignupPermitted($shift, $staff, $moment ?? Carbon::now());
+        } catch (ShiftSignupException $exception) {
+            return ShiftSignupVerdict::denied($exception);
+        }
+
+        return ShiftSignupVerdict::eligible();
+    }
+
+    /**
+     * Every condition self-signup turns on, in the order they are asked.
+     *
+     * The order is the message somebody gets: a shift that is both cancelled and
+     * full is refused as cancelled, because that is the fact that makes the rest
+     * of it moot.
+     *
+     * @throws ShiftSignupException
+     */
+    private function assertSignupPermitted(
+        Shift $shift,
+        Staff $staff,
+        Carbon $moment,
+        bool $lockExistingAssignment = false,
+    ): void {
+        $this->assertShiftAcceptsSignup($shift, $moment);
+        $this->assertStaffEligibleForSignup($shift, $staff, $moment);
+        $this->eligibility->assertCapacityForSelfSignup($shift);
+
+        $existingAssignment = ShiftAssignment::query()
+            ->where('shift_id', $shift->id)
+            ->where('staff_id', $staff->id)
+            ->when($lockExistingAssignment, fn ($query) => $query->lockForUpdate())
+            ->first();
+
+        if ($existingAssignment !== null && $existingAssignment->removed_at === null) {
+            throw ShiftSignupException::alreadySignedUp();
+        }
     }
 
     /**

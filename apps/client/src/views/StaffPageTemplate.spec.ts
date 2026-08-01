@@ -442,8 +442,8 @@ describe("staff page template", () => {
 describe("combined staff and workflow navigation", () => {
   it("combines the menus exactly while the list stays under the threshold", () => {
     // No fixture role reaches the threshold today: the fullest, a Rangers
-    // department lead, is nine items against a limit of ten. The split path is
-    // therefore asserted as a rule rather than driven through a fixture, so
+    // department lead, is ten items against a limit of eleven. The split path
+    // is therefore asserted as a rule rather than driven through a fixture, so
     // raising or lowering the limit keeps this honest.
     for (const departmentId of [
       FIXTURE_GATE_DEPARTMENT_ID,
