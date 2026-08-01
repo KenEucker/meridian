@@ -35,18 +35,19 @@ final class IncidentTypeDefaults
     public static function names(): array
     {
         return [
-            'Conflict',
+            'Non-Consensual Violence',
             'Fire',
             'Law Enforcement',
-            'Logistics',
+            'Domestic Violence',
             'Medical',
             'Mental Health',
-            'Missing Person',
-            'Other',
-            'Radio',
-            'Safety',
+            'Found Child',
+            'Missing Child',
+            'Elder Abuse',
+            'Sexual Violence',
             'Vehicle',
-            'Weather',
+            'Camp Dispute',
+            'Other',
         ];
     }
 }
