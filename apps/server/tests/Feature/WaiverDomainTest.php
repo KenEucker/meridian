@@ -9,6 +9,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Models\Waiver;
 use App\Models\WaiverCompletion;
+use App\Services\Documents\DocumentScopeValidator;
 use App\Services\Waiver\WaiverScopeException;
 use App\Services\Waiver\WaiverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,7 +22,7 @@ class WaiverDomainTest extends TestCase
 
     private function waiverService(): WaiverService
     {
-        return new WaiverService(app(\App\Services\Documents\DocumentScopeValidator::class));
+        return new WaiverService(app(DocumentScopeValidator::class));
     }
 
     public function test_create_waiver_at_organization_scope(): void

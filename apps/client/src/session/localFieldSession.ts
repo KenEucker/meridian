@@ -233,8 +233,8 @@ export function localFieldSessionDocument(
     organizations: [
       {
         id: ORGANIZATION_ID,
-        name: "Idaho Burners",
-        slug: "idaho-burners",
+        name: "Northwood Collective",
+        slug: "northwood-collective",
         status: "approved",
         archived_at: null,
       },

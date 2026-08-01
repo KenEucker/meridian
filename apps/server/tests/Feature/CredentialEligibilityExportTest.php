@@ -53,7 +53,7 @@ class CredentialEligibilityExportTest extends TestCase
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="credential-eligibility-idaho-decompression-2026-20260621-192030.csv"',
+            'attachment; filename="credential-eligibility-emberfall-2026-20260621-192030.csv"',
         );
 
         $contents = $response->getContent();
@@ -167,7 +167,7 @@ class CredentialEligibilityExportTest extends TestCase
         $response->assertOk();
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="credential-eligibility-idaho-decompression-2026-rangers-20260621-192030.csv"',
+            'attachment; filename="credential-eligibility-emberfall-2026-rangers-20260621-192030.csv"',
         );
 
         $rows = $this->rows($response->getContent());
@@ -266,10 +266,10 @@ class CredentialEligibilityExportTest extends TestCase
      */
     private function scenario(): array
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners', 'slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
             'minimum_staff_age' => null,
         ]);
 
@@ -356,7 +356,7 @@ class CredentialEligibilityExportTest extends TestCase
             'legal_name' => $legalName,
             'preferred_name' => $preferredName,
             'handle' => $handle,
-            'email' => $handle.'@idaho-burners.test',
+            'email' => $handle.'@northwood-collective.test',
             'phone' => '+1-208-555-0100',
             'emergency_contact_name' => $legalName.' Contact',
             'emergency_contact_phone' => '+1-208-555-0199',

@@ -85,19 +85,19 @@ navigation proves nothing about session wiring. Every section below assumes it i
 Seeded by `php artisan migrate:fresh --seed`; every account signs in by emailed
 login code, so no password is needed for the client.
 
-- Olive Organizer (`olive.organizer@idaho-burners.test`): `organizer`. Reaches
+- Olive Organizer (`olive.organizer@northwood-collective.test`): `organizer`. Reaches
   the organization surfaces and the credential eligibility export event-wide.
-- Dana Departmentlead (`dana.departmentlead@idaho-burners.test`):
+- Dana Departmentlead (`dana.departmentlead@northwood-collective.test`):
   `department_lead` on Rangers / Dirt. Reaches Rangers and exports Rangers only.
-- Sam Shiftlead (`sam.shiftlead@idaho-burners.test`): every department
+- Sam Shiftlead (`sam.shiftlead@northwood-collective.test`): every department
   capability at once — the persona that reaches all of the department
   administration and logistics surfaces from one sign-in.
-- Vera Staff (`vera.staff@idaho-burners.test`): plain staff, no roles. The
+- Vera Staff (`vera.staff@northwood-collective.test`): plain staff, no roles. The
   persona whose shell must be nearly empty.
-- Ingrid ICLead (`ingrid.iclead@idaho-burners.test`) and Ivy ICViewer
-  (`ivy.icviewer@idaho-burners.test`): incident authority, event-scoped. Used
+- Ingrid ICLead (`ingrid.iclead@northwood-collective.test`) and Ivy ICViewer
+  (`ivy.icviewer@northwood-collective.test`): incident authority, event-scoped. Used
   for the IMS surfaces and the incident PDF download.
-- Ira Ineligible (`ira.ineligible@idaho-burners.test`): Gate membership with
+- Ira Ineligible (`ira.ineligible@northwood-collective.test`): Gate membership with
   status `ineligible`. Signs in and reaches nothing; a surface that opens for
   Ira is a finding.
 
@@ -107,8 +107,8 @@ capabilities rather than from authentication.
 
 ## Setup data
 
-- Organization `Idaho Burners` (`idaho-burners`); event `Idaho Decompression 2026`
-  (`idaho-decompression-2026`, `America/Boise`); departments Organizers, Rangers,
+- Organization `Northwood Collective` (`northwood-collective`); event `Emberfall 2026`
+  (`emberfall-2026`, `America/Los_Angeles`); departments Organizers, Rangers,
   Gate, DPW.
 - `apps/client/.env.meridian-admin.local` and `.env.meridian-field.local` with
   `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=false`. Both files are ignored and
@@ -123,7 +123,7 @@ capabilities rather than from authentication.
 - A second event for section F. The seeded scenario has one, so create it:
 
   ```bash
-  php apps/server/artisan tinker --execute='$organization = App\Models\Organization::query()->where("slug", "idaho-burners")->firstOrFail(); $event = App\Models\Event::factory()->create(["organization_id" => $organization->id, "name" => "QA CLIENT Second Event", "slug" => "qa-client-second-event", "timezone" => "America/Boise"]); print(json_encode(["event_id" => (string) $event->id], JSON_PRETTY_PRINT).PHP_EOL);'
+  php apps/server/artisan tinker --execute='$organization = App\Models\Organization::query()->where("slug", "northwood-collective")->firstOrFail(); $event = App\Models\Event::factory()->create(["organization_id" => $organization->id, "name" => "QA CLIENT Second Event", "slug" => "qa-client-second-event", "timezone" => "America/Los_Angeles"]); print(json_encode(["event_id" => (string) $event->id], JSON_PRETTY_PRINT).PHP_EOL);'
   ```
 
   Then assign Rangers to it and confirm Dana resolves an association with both
@@ -213,7 +213,7 @@ capabilities rather than from authentication.
 23. End the event window and reload again:
 
     ```bash
-    php apps/server/artisan tinker --execute='App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail()->forceFill(["active_event_window_ends_at" => now()->subHour()])->save();'
+    php apps/server/artisan tinker --execute='App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail()->forceFill(["active_event_window_ends_at" => now()->subHour()])->save();'
     ```
 
 24. Take the browser offline, reload, and record what the client does with the
@@ -253,7 +253,7 @@ capabilities rather than from authentication.
     `SessionResolver` reads — and reload:
 
     ```bash
-    php apps/server/artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $node = App\Models\Node::query()->active()->local()->latest("id")->firstOrFail(); $node->forceFill(["event_id" => $event->id])->save(); print(json_encode(["node" => (string) $node->getKey(), "event_id" => (string) $node->event_id], JSON_PRETTY_PRINT).PHP_EOL);'
+    php apps/server/artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $node = App\Models\Node::query()->active()->local()->latest("id")->firstOrFail(); $node->forceFill(["event_id" => $event->id])->save(); print(json_encode(["node" => (string) $node->getKey(), "event_id" => (string) $node->event_id], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 
     A fresh seed may hold no local node yet, in which case run the node

@@ -403,7 +403,7 @@ class CreditCalculationTest extends TestCase
     private function scenario(bool $withDefaultPolicy = true, string $multiplier = '1.500'): array
     {
         $organization = Organization::factory()->create(['name' => 'Signal Camp']);
-        $event = Event::factory()->for($organization)->create(['name' => 'Idaho Decompression 2026']);
+        $event = Event::factory()->for($organization)->create(['name' => 'Emberfall 2026']);
         $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
 
         $defaultPolicy = null;

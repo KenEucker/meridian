@@ -28,9 +28,12 @@
 //  3. **Attendance queues; the rest does not.** Check-in, check-out, and
 //     no-show are Alpha 1 offline writes (data/API 7.2) and go through the
 //     command outbox with the device-generated operation UUID as their
-//     idempotency key. Presence, unscheduled additions, deployments, and
-//     equipment handoff are connected-only and are refused where they stand
-//     (CLIENT-018).
+//     idempotency key. Presence, unscheduled additions, deployments, equipment
+//     handoff, and hours correction are connected-only and are refused where
+//     they stand (CLIENT-018). Correction is the one of those that writes an
+//     attendance operation like its queued siblings and still cannot be held:
+//     the grace period it is measured against is the node's, and it closes
+//     whether or not a device is reachable.
 //  4. **Nothing is derived here that the node already decided.** Shift
 //     lifecycle, whether a card offers check-in, whether someone may leave
 //     site, and every planning aggregate arrive computed. What is left in this
@@ -169,6 +172,28 @@ export interface LogisticsShiftCard {
    * created found nothing on screen at all — no card, no button, no reason.
    */
   readonly addToShiftBlockedReason: string | null;
+  /**
+   * The hours record a correction would edit, or null until check-out creates
+   * one (SLB-031).
+   *
+   * The recorded times come with it so the dialog opens on what is on file
+   * rather than on an empty form: a correction is somebody reading 08:00 and
+   * typing 08:15, and a blank field would make them go and find 08:00 first.
+   */
+  readonly hoursWorkedId: string | null;
+  readonly actualStartedAt: string | null;
+  readonly actualEndedAt: string | null;
+  readonly minutesWorked: number | null;
+  readonly canCorrectHours: boolean;
+  /**
+   * Why these hours cannot be corrected, or null when they can.
+   *
+   * Two sentences reach here: the frozen one, which is
+   * `HoursCorrectionService`'s own and names the date the grace period closed
+   * (HOURS-008), and the one for a finished shift nobody was ever checked out
+   * of, which names the check-out rather than the correction.
+   */
+  readonly correctHoursBlockedReason: string | null;
 }
 
 export interface LogisticsEquipmentItem {
@@ -472,6 +497,12 @@ interface WorkspacePayload {
     readonly can_mark_no_show: boolean;
     readonly can_add_to_shift: boolean;
     readonly add_to_shift_blocked_reason?: string | null;
+    readonly hours_worked_id?: string | null;
+    readonly actual_started_at?: string | null;
+    readonly actual_ended_at?: string | null;
+    readonly minutes_worked?: number | null;
+    readonly can_correct_hours?: boolean;
+    readonly correct_hours_blocked_reason?: string | null;
   }[];
   readonly open_equipment?: EquipmentPayload[];
   readonly available_equipment?: EquipmentPayload[];
@@ -563,6 +594,12 @@ export async function getLogisticsDesk(
         canMarkNoShow: card.can_mark_no_show,
         canAddToShift: card.can_add_to_shift,
         addToShiftBlockedReason: card.add_to_shift_blocked_reason ?? null,
+        hoursWorkedId: card.hours_worked_id ?? null,
+        actualStartedAt: card.actual_started_at ?? null,
+        actualEndedAt: card.actual_ended_at ?? null,
+        minutesWorked: card.minutes_worked ?? null,
+        canCorrectHours: card.can_correct_hours ?? false,
+        correctHoursBlockedReason: card.correct_hours_blocked_reason ?? null,
       })),
       openEquipment: (workspace.open_equipment ?? []).map(toEquipment),
       availableEquipment: (workspace.available_equipment ?? []).map(toEquipment),
@@ -839,6 +876,65 @@ export async function addStaffToShift(
     ?.warnings;
 
   return (warnings ?? []).map((warning) => warning.message);
+}
+
+/**
+ * Correct the recorded actual start and end on an hours record (SLB-007,
+ * SLB-031, SLB-032; HOURS-007).
+ *
+ * Connected-only, unlike the check-out that created the record. The refusal a
+ * closed grace period produces is the node's, and it names the date that period
+ * closed on, which is the whole reason this cannot be queued: a correction held
+ * on a device is one that may be delivered after the window shut, and the
+ * operator would have been told it was captured.
+ *
+ * The operation UUID is generated here rather than derived from the record, so
+ * two corrections to the same hours are two operations in the append-only
+ * history (SLB-032). Re-sending the same one is still idempotent on the node.
+ */
+export async function correctHours(
+  context: DepartmentOpsContext,
+  hoursWorkedId: string,
+  actualStartedAt: string,
+  actualEndedAt: string,
+): Promise<void> {
+  const operationUuid = correctionOperationUuid();
+
+  await sendConnectedCommand({
+    commandType: "correct-hours",
+    idempotencyKey: operationUuid,
+    payload: {
+      operation_uuid: operationUuid,
+      hours_worked_id: hoursWorkedId,
+      actual_started_at: actualStartedAt,
+      actual_ended_at: actualEndedAt,
+      device_created_at: new Date().toISOString(),
+      origin_device_id: deviceId(),
+    },
+    eventId: context.eventId,
+    detail: hoursWorkedId,
+  });
+}
+
+/**
+ * A UUID for one correction operation.
+ *
+ * The node validates the shape, so a platform with no UUID generator is told
+ * here rather than being refused a field it cannot fill. Every device that can
+ * hold a signing key has `crypto.randomUUID`, so this is the honest failure of
+ * something already broken rather than a case worth working around.
+ */
+function correctionOperationUuid(): string {
+  const cryptoScope = (globalThis as { crypto?: { randomUUID?: () => string } })
+    .crypto;
+
+  if (typeof cryptoScope?.randomUUID !== "function") {
+    throw new Error(
+      "This device cannot generate the operation identifier an hours correction needs.",
+    );
+  }
+
+  return cryptoScope.randomUUID();
 }
 
 /** Hand equipment to a staff member (SLB-012). */

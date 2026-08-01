@@ -79,7 +79,7 @@ class OrchidScopeFilterTest extends TestCase
 
     public function test_department_list_narrows_to_the_selected_organization(): void
     {
-        $mine = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $mine = Organization::factory()->create(['name' => 'Northwood Collective']);
         $other = Organization::factory()->create(['name' => 'Other Org']);
         Department::factory()->for($mine)->create(['name' => 'Rangers']);
         Department::factory()->for($other)->create(['name' => 'Foreign Gate']);

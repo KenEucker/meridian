@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Node;
 use App\Models\User;
+use App\Services\Diagnostics\Checks\NodeSyncCheck;
 use App\Services\Diagnostics\DiagnosticCategory;
 use App\Services\Diagnostics\DiagnosticCheck;
 use App\Services\Diagnostics\DiagnosticResult;
 use App\Services\Diagnostics\DiagnosticRunner;
 use App\Services\Diagnostics\DiagnosticStatus;
+use App\Services\Node\NodeOperationRecorder;
 use App\Services\PowerSync\PowerSyncHealthClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -187,15 +190,15 @@ class SystemDiagnosticsTest extends TestCase
         // Queue an operation so the node looks like an offline on-site node
         // holding a backlog for central.
         $user = User::factory()->create();
-        app(\App\Services\Node\NodeOperationRecorder::class)->record(
+        app(NodeOperationRecorder::class)->record(
             operationType: 'test.noop',
             entityType: 'test',
-            entityId: (string) \Illuminate\Support\Str::uuid(),
+            entityId: (string) Str::uuid(),
             actorUser: $user,
             originNode: $node,
         );
 
-        $check = app(\App\Services\Diagnostics\Checks\NodeSyncCheck::class);
+        $check = app(NodeSyncCheck::class);
         $result = $check->run();
 
         $this->assertSame(DiagnosticStatus::HEALTHY, $result->status);

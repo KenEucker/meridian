@@ -8,6 +8,7 @@ use App\Models\Department;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Branding\BrandingAssetService;
 use App\Services\Branding\BrandingPalette;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -70,18 +71,18 @@ class BrandingOrchidTest extends TestCase
 
     public function test_an_admin_can_set_the_palette_and_display_name_from_orchid(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $this->actingAs($this->admin())
             ->post(
                 route('platform.organizations.edit', ['organization' => $organization, 'method' => 'save']),
-                $this->organizationPayload($organization, ['display_name' => 'Idaho Burners Collective']),
+                $this->organizationPayload($organization, ['display_name' => 'Northwood Arts Collective']),
             )
             ->assertRedirect(route('platform.organizations'));
 
         $organization->refresh();
 
-        $this->assertSame('Idaho Burners Collective', $organization->branding_display_name);
+        $this->assertSame('Northwood Arts Collective', $organization->branding_display_name);
         $this->assertSame('#123a5c', $organization->branding_palette_json['primary']);
         $this->assertSame(
             AuditEvent::SOURCE_ORCHID,
@@ -91,7 +92,7 @@ class BrandingOrchidTest extends TestCase
 
     public function test_orchid_gets_no_exemption_from_the_contrast_validator(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $payload = $this->organizationPayload($organization);
         $payload['branding']['palette']['muted_foreground'] = '#c9cdd1';
@@ -114,7 +115,7 @@ class BrandingOrchidTest extends TestCase
 
     public function test_orchid_gets_no_exemption_from_the_active_event_freeze(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         Event::factory()->for($organization)->create([
             'active_event_window_starts_at' => now()->subDay(),
@@ -136,7 +137,7 @@ class BrandingOrchidTest extends TestCase
     {
         Storage::fake('attachments');
 
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $payload = $this->organizationPayload($organization);
         $payload['branding']['full_lockup'] = UploadedFile::fake()->image('lockup.png', 320, 120);
@@ -180,7 +181,7 @@ class BrandingOrchidTest extends TestCase
          */
         Storage::fake('attachments');
 
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $payload = $this->organizationPayload($organization);
         $payload['branding']['full_lockup'] = new UploadedFile(
@@ -214,7 +215,7 @@ class BrandingOrchidTest extends TestCase
     {
         Storage::fake('attachments');
 
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $payload = $this->organizationPayload($organization);
         $payload['branding']['compact_mark'] = UploadedFile::fake()->createWithContent(
@@ -389,7 +390,7 @@ class BrandingOrchidTest extends TestCase
             ->assertSee('DPW', false)
             ->assertSee('No asset stored', false);
 
-        $attachment = app(\App\Services\Branding\BrandingAssetService::class)->put(
+        $attachment = app(BrandingAssetService::class)->put(
             $department,
             Attachment::BRANDING_SLOT_DEPARTMENT_LOGO,
             $this->pngBytes(),
@@ -413,7 +414,7 @@ class BrandingOrchidTest extends TestCase
             ->assertOk()
             ->assertSee('DHC', false);
 
-        $attachment = app(\App\Services\Branding\BrandingAssetService::class)->put(
+        $attachment = app(BrandingAssetService::class)->put(
             $organization,
             Attachment::BRANDING_SLOT_COMPACT_MARK,
             $this->pngBytes(),
@@ -433,7 +434,7 @@ class BrandingOrchidTest extends TestCase
         // The palette inputs always post something. An operator who saved the
         // screen without touching a colour has not asked to replace Meridian's
         // identity, so `is_branded` must stay false.
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
 
         $payload = $this->organizationPayload($organization);
         $payload['branding']['palette'] = BrandingPalette::meridianDefault()->toArray();

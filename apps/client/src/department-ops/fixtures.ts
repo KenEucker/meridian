@@ -187,7 +187,7 @@ export const LOCAL_LOGISTICS_DESK: LogisticsDeskModel = {
   selectedSearchContext: null,
   searchCache: {
     state: "offline_usable",
-    scopeLabel: "Idaho Decompression 2026 / Rangers",
+    scopeLabel: "Emberfall 2026 / Rangers",
     indexedAt: "2027-07-04T17:59:00.000Z",
     includes: ["staff", "equipment", "shift"],
     note: "Department-scoped cache available for staff, equipment, and shift lookup while offline.",

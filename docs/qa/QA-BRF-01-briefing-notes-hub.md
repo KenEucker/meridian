@@ -35,8 +35,8 @@ Verify the Milestone 15 Briefing Alpha slice: leads/IC create immutable Notes vi
 
 ## Setup data
 
-- Organization: `Idaho Burners` (`idaho-burners`).
-- Event: `Idaho Decompression 2026` (or current seeded event).
+- Organization: `Northwood Collective` (`northwood-collective`).
+- Event: `Emberfall 2026` (or current seeded event).
 - Note title (optional): `QA Radio Net`
 - Note body Markdown: `Command radio net opens at **10:00**.`
 - Reference summary Markdown: `Radio net opens at 10:00 (clarified for all departments).`

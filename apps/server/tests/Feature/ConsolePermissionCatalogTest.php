@@ -8,6 +8,7 @@ use App\Models\PermissionRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -106,7 +107,7 @@ class ConsolePermissionCatalogTest extends TestCase
             ->firstOrFail();
 
         DB::table('role_permissions')->insert([
-            'id' => (string) \Illuminate\Support\Str::orderedUuid(),
+            'id' => (string) Str::orderedUuid(),
             'permission_role_id' => $role->id,
             'permission_id' => $permission->id,
             'created_at' => now(),

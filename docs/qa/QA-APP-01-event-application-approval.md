@@ -48,15 +48,15 @@ This script complements `QA-APPLY-01-public-event-application.md`. Use the publi
 
 ## Setup data
 
-- Organization: `Idaho Burners` with slug `idaho-burners`.
-- Event: `Idaho Decompression 2026` with slug `idaho-decompression-2026`.
+- Organization: `Northwood Collective` with slug `northwood-collective`.
+- Event: `Emberfall 2026` with slug `emberfall-2026`.
 - Department: `Rangers` with code `RANGERS`, assigned to the event through `event_department_assignments`.
 - Operational team: `Dirt` with code `DIRT`, a non-default team in Rangers.
 - Organizer reviewer: grant the seeded Olive Organizer user the required Orchid permissions before testing:
   ```bash
-  php artisan tinker --execute='$user = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $user->forceFill(["permissions" => array_merge($user->permissions ?? [], ["platform.index" => true, "platform.applications" => true])])->save();'
+  php artisan tinker --execute='$user = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $user->forceFill(["permissions" => array_merge($user->permissions ?? [], ["platform.index" => true, "platform.applications" => true])])->save();'
   ```
-- Department lead assigner: `dana.departmentlead@idaho-burners.test`.
+- Department lead assigner: `dana.departmentlead@northwood-collective.test`.
 - Use unique applicant emails for each scenario, such as:
   - `qa.app.preteam@example.test`
   - `qa.app.defaultteam@example.test`
@@ -66,7 +66,7 @@ This script complements `QA-APPLY-01-public-event-application.md`. Use the publi
 
 ### A. Submit and approve an event application
 
-1. Open `/idaho-burners/idaho-decompression-2026/apply` as the public applicant.
+1. Open `/northwood-collective/emberfall-2026/apply` as the public applicant.
 2. Confirm the form is event-specific and shows the event context, legal name field, email field, and optional non-binding **Department interest** when participating departments exist.
 3. Confirm there is no team selection, team interest, assignment, or membership control on the application form.
 4. Submit the form using legal name `QA Before Team` and email `qa.app.preteam@example.test`. Select `Rangers` as a department interest if the control is visible.
@@ -93,7 +93,7 @@ This script complements `QA-APPLY-01-public-event-application.md`. Use the publi
 
 17. Assign the approved applicant to the event-participating Rangers department using the domain service:
     ```bash
-    php artisan tinker --execute='$email = "qa.app.preteam@example.test"; $application = App\Models\EventApplication::query()->where("applicant_email", $email)->latest("submitted_at")->firstOrFail(); $department = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $assigner = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $membership = app(App\Services\Application\EventApplicationService::class)->assignToDepartment($application, $department, $assigner)->load(["department", "teamMemberships.team"]); print(json_encode(["department_membership_id" => $membership->id, "department" => $membership->department?->name, "status" => $membership->status, "teams" => $membership->teamMemberships->map(fn ($tm) => ["team" => $tm->team?->name, "is_default" => (bool) $tm->team?->is_default])->values()], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$email = "qa.app.preteam@example.test"; $application = App\Models\EventApplication::query()->where("applicant_email", $email)->latest("submitted_at")->firstOrFail(); $department = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $assigner = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $membership = app(App\Services\Application\EventApplicationService::class)->assignToDepartment($application, $department, $assigner)->load(["department", "teamMemberships.team"]); print(json_encode(["department_membership_id" => $membership->id, "department" => $membership->department?->name, "status" => $membership->status, "teams" => $membership->teamMemberships->map(fn ($tm) => ["team" => $tm->team?->name, "is_default" => (bool) $tm->team?->is_default])->values()], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 18. Confirm the output shows one active department membership for Rangers.
 19. Confirm the only team membership created by department assignment is the department default team.
@@ -124,7 +124,7 @@ This script complements `QA-APPLY-01-public-event-application.md`. Use the publi
 32. Assign the approved applicant to Rangers using the command from step 17, changing the email to `qa.app.afterteam@example.test`.
 33. Assign the staff member to the non-default `Dirt` team as the department lead:
     ```bash
-    php artisan tinker --execute='$email = "qa.app.afterteam@example.test"; $application = App\Models\EventApplication::query()->where("applicant_email", $email)->latest("submitted_at")->firstOrFail(); $staff = App\Models\Staff::query()->findOrFail($application->staff_id); $team = App\Models\Team::query()->where("code", "DIRT")->firstOrFail(); $assigner = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $membership = app(App\Services\Membership\TeamMembershipService::class)->assignStaffToTeam($staff, $team, $assigner)->load("team"); print(json_encode(["team_membership_id" => $membership->id, "team" => $membership->team?->name, "membership_role" => $membership->membership_role, "archived_at" => $membership->archived_at], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$email = "qa.app.afterteam@example.test"; $application = App\Models\EventApplication::query()->where("applicant_email", $email)->latest("submitted_at")->firstOrFail(); $staff = App\Models\Staff::query()->findOrFail($application->staff_id); $team = App\Models\Team::query()->where("code", "DIRT")->firstOrFail(); $assigner = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $membership = app(App\Services\Membership\TeamMembershipService::class)->assignStaffToTeam($staff, $team, $assigner)->load("team"); print(json_encode(["team_membership_id" => $membership->id, "team" => $membership->team?->name, "membership_role" => $membership->membership_role, "archived_at" => $membership->archived_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 34. Confirm the output shows the `Dirt` team membership with role `member` and no `archived_at`.
 35. Confirm the staff member now has both the default structural team and the non-default operational team in Rangers:

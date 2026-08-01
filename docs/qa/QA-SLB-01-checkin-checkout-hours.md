@@ -7,7 +7,9 @@ Logistics can mark assigned department staff on-site, check them into a selected
 shift, check them out with actual start/end times, create canonical hours, and
 review the resulting attendance/hour records. The script also verifies no-show,
 offline queued attendance writes, authorized hours correction before freeze, and
-freeze blocking after the correction grace period.
+freeze blocking after the correction grace period. Since M18.4 the correction is
+performed from the Logistics Desk staff workspace as well as from the domain, so
+section F now walks both.
 
 This script covers the Alpha 1 human QA gate for check-in/check-out/hours. It
 does not add or require staff self-service check-in, credit calculation,
@@ -31,6 +33,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - `SLB-008`
 - `SLB-015` through `SLB-018`
 - `SLB-019`
+- `SLB-031`
+- `SLB-032`
 - `CLIENT-015`, `CLIENT-018`, `CLIENT-023`
 - `HOURS-001` through `HOURS-008`
 - `REPORT-004`
@@ -42,7 +46,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - Data/API spec sections 7.2 and 10.10
 - UI Implementation Contract sections 12.5 and 16.2
 - Kiosk and Field Hardware UX Guide section 5
-- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, and M16.21
+- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, M16.21, M18.3, and
+  M18.4
 
 ## Environment
 
@@ -60,17 +65,17 @@ rows, unauthorized actors are refused, and each successful export is audited.
 ## Personas
 
 - Department Logistics operator: seeded Sam Shiftlead
-  (`sam.shiftlead@idaho-burners.test`) or another actor with Department
+  (`sam.shiftlead@northwood-collective.test`) or another actor with Department
   Logistics permission for Rangers / Dirt.
 - Department lead reviewer: seeded Dana Departmentlead
-  (`dana.departmentlead@idaho-burners.test`), permitted to review and correct
+  (`dana.departmentlead@northwood-collective.test`), permitted to review and correct
   department attendance/hours where authorized.
-- Staff subject: seeded Vera Staff (`vera.staff@idaho-burners.test`), active in
+- Staff subject: seeded Vera Staff (`vera.staff@northwood-collective.test`), active in
   Rangers / Dirt and assigned or assignable to Ranger Dirt shifts.
 - Unauthorized/default staff comparison actor: Vera Staff when confirming that
   default staff do not self check-in/out or see Logistics controls.
 - Organizer exporter (section H): seeded Olive Organizer
-  (`olive.organizer@idaho-burners.test`).
+  (`olive.organizer@northwood-collective.test`).
 - Human reviewer observing the UI and retaining command/test evidence.
 
 ## Setup data
@@ -107,7 +112,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
    `/events/:eventId/departments/:departmentId/logistics`.
 8. Clear site data first if an earlier local attendance/offline run is present,
    signing in again afterwards.
-9. Confirm the seeded event/department context is Idaho Decompression 2026 /
+9. Confirm the seeded event/department context is Emberfall 2026 /
    Rangers, and that the desk names the same event and department under **Search
    scope** with the time it read them. Since M16.21 the desk reads its staff,
    equipment, and shifts from the node rather than from data bundled into the
@@ -203,7 +208,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
     Missing, or marked Damaged.
 18. From `apps/server`, inspect the resulting hours:
     ```bash
-    php artisan tinker --execute='$staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); App\Models\HoursWorked::query()->with(["event", "department", "shift", "attendanceRecord"])->where("staff_id", $staff->id)->latest("created_at")->limit(5)->get()->each(fn ($hours) => print(json_encode(["hours_worked_id" => $hours->id, "event" => $hours->event?->slug, "department" => $hours->department?->code, "shift" => $hours->shift?->title, "attendance_record_id" => $hours->attendance_record_id, "actual_started_at" => (string) $hours->actual_started_at, "actual_ended_at" => (string) $hours->actual_ended_at, "minutes_worked" => $hours->minutes_worked, "status" => $hours->status, "frozen_at" => (string) $hours->frozen_at], JSON_PRETTY_PRINT).PHP_EOL));'
+    php artisan tinker --execute='$staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); App\Models\HoursWorked::query()->with(["event", "department", "shift", "attendanceRecord"])->where("staff_id", $staff->id)->latest("created_at")->limit(5)->get()->each(fn ($hours) => print(json_encode(["hours_worked_id" => $hours->id, "event" => $hours->event?->slug, "department" => $hours->department?->code, "shift" => $hours->shift?->title, "attendance_record_id" => $hours->attendance_record_id, "actual_started_at" => (string) $hours->actual_started_at, "actual_ended_at" => (string) $hours->actual_ended_at, "minutes_worked" => $hours->minutes_worked, "status" => $hours->status, "frozen_at" => (string) $hours->frozen_at], JSON_PRETTY_PRINT).PHP_EOL));'
     ```
 19. Confirm the latest row belongs to the event, department, selected shift, and
     Vera; includes actual start/end; has computed minutes; and is separate from
@@ -303,11 +308,43 @@ rows, unauthorized actors are refused, and each successful export is audited.
 
 ### F. Hours correction and freeze
 
+#### F1. Correction from the Logistics Desk (M18.4, SLB-031, SLB-032)
+
+35a. As Dana Department Lead or another authorized attendance manager, open the
+     Logistics Desk, search for the staff member you checked out in section C,
+     and open their workspace. Confirm the card for that shift now sits under
+     **Outgoing shifts** and reads its recorded hours — actual start, actual
+     end, and minutes — beside the shift window.
+35b. Press **Correct hours** on that card. Confirm the dialog is titled "Correct
+     hours", states that the previous values stay in attendance history, and
+     opens with **both** actual times already filled with the recorded ones
+     rather than blank or set to now.
+35c. Without touching either field, note the two times the dialog shows and
+     confirm they read as the same wall-clock times the card does. A dialog
+     pre-filled in UTC and re-read as local would silently move the number the
+     operator came to correct.
+35d. Change only the actual start — move it fifteen minutes earlier — and
+     confirm. Confirm the desk re-reads, the card's recorded hours and minutes
+     change accordingly, and the actual end is exactly what it was before.
+35e. Confirm the correction went to the node rather than into the outbox:
+     ```bash
+     php artisan tinker --execute='App\Models\AttendanceOperation::query()->where("operation_type", "correct")->latest("created_at")->limit(3)->get(["operation_uuid", "operation_type", "staff_id", "shift_id", "source_context", "origin_device_id", "created_by_user_id"])->each(fn ($operation) => print($operation->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+     ```
+35f. Confirm the check-out operation for that shift and staff member is still
+     present alongside the correction. A correction appends to attendance
+     history; it does not rewrite it (SLB-032).
+35g. Set the browser network condition to Offline and press **Correct hours**
+     again. Confirm it is refused where it stands with "Correcting hours needs a
+     connection to the node," that nothing is queued for it, and that the
+     recorded hours are unchanged. Restore the connection before continuing.
+
+#### F2. Correction and freeze from the domain
+
 36. Identify the latest `hours_worked_id` from section C.
 37. As an authorized attendance manager, correct the actual start/end while the
     record is unfrozen:
     ```bash
-    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $result = app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:15:00"), Illuminate\Support\Carbon::parse("2026-07-01 12:45:00")); print(json_encode(["hours_worked_id" => $result->hoursWorked->id, "operation_type" => $result->operation->operation_type, "minutes_worked" => $result->hoursWorked->minutes_worked, "corrected_by_user_id" => $result->hoursWorked->corrected_by_user_id, "corrected_at" => (string) $result->record->corrected_at], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $result = app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:15:00"), Illuminate\Support\Carbon::parse("2026-07-01 12:45:00")); print(json_encode(["hours_worked_id" => $result->hoursWorked->id, "operation_type" => $result->operation->operation_type, "minutes_worked" => $result->hoursWorked->minutes_worked, "corrected_by_user_id" => $result->hoursWorked->corrected_by_user_id, "corrected_at" => (string) $result->record->corrected_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 38. Confirm the correction updates actual times/minutes, records the correcting
     actor, creates a `correct` attendance operation, and leaves the UI showing
@@ -319,14 +356,25 @@ rows, unauthorized actors are refused, and each successful export is audited.
 40. Confirm before/after values include the prior and corrected minutes/times.
 41. Freeze the latest hours record:
     ```bash
-    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $frozen = app(App\Services\Attendance\HoursCorrectionService::class)->freezeHours($hours, $actor, Illuminate\Support\Carbon::parse("2026-07-08 00:00:00")); print(json_encode(["hours_worked_id" => $frozen->id, "frozen_at" => (string) $frozen->frozen_at], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $frozen = app(App\Services\Attendance\HoursCorrectionService::class)->freezeHours($hours, $actor, Illuminate\Support\Carbon::parse("2026-07-08 00:00:00")); print(json_encode(["hours_worked_id" => $frozen->id, "frozen_at" => (string) $frozen->frozen_at], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 42. Attempt another correction:
     ```bash
-    php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
+    php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
     ```
-43. Confirm the denial message is `Hours are frozen after the correction grace
-    period.` and the frozen hours values are unchanged.
+43. Confirm the denial names the moment the grace period closed rather than
+    stating that one exists — `The correction grace period closed on 7 Jul 2026
+    17:00 PDT, so these hours are frozen and can no longer be corrected.`, with
+    the date and zone matching the `frozen_at` you set in step 41 read in the
+    event's time zone — and that the frozen hours values are unchanged.
+43a. Reload the Logistics Desk and open that staff member's workspace. Confirm
+     the card for the frozen shift no longer offers **Correct hours** and prints
+     the same sentence the command refused with, word for word. The desk and the
+     node have to say one thing; a button here would be one the node refuses.
+43b. Find a staff member assigned to a shift that has ended and was never
+     checked out. Confirm their card offers no correction and reads "This shift
+     has no recorded hours yet. Check this staff member out to create them.",
+     which names the action that is actually available.
 
 ### G. Role and non-goal checks
 
@@ -349,7 +397,7 @@ froze, so run it after those sections rather than on a freshly seeded database.
 
 48. From `apps/server`, export as Dana Departmentlead and save the file:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentFilter(), "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $rangers = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "department_ids" => $scope->departmentFilter(), "rangers_id" => (string) $rangers->id, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
     ```
 49. Confirm `event_wide` is false, `department_ids` contains only the Rangers id,
     the filename carries `rangers`, and every exported row belongs to Rangers.
@@ -364,7 +412,7 @@ froze, so run it after those sections rather than on a freshly seeded database.
     matching the freeze from step 41 (HOURS-008).
 53. Confirm rows come from recorded hours alone:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); $recorded = App\Models\HoursWorked::query()->where("event_id", $event->id)->whereIn("department_id", $scope->departmentFilter())->count(); print(json_encode(["recorded_hours_rows" => $recorded, "exported_rows" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($dana, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $dana); $recorded = App\Models\HoursWorked::query()->where("event_id", $event->id)->whereIn("department_id", $scope->departmentFilter())->count(); print(json_encode(["recorded_hours_rows" => $recorded, "exported_rows" => $export->rowCount], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 54. Confirm the two counts match, and that the no-show staff member from section
     D and any staff member still checked in have no row in the file. Hours
@@ -372,21 +420,21 @@ froze, so run it after those sections rather than on a freshly seeded database.
     on a shift is the shift roster export's answer, not this one.
 55. Export as Olive Organizer and save the file:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $export = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive); file_put_contents(storage_path("app/".$export->filename), $export->contents); print(json_encode(["event_wide" => $scope->organizationWide, "filename" => $export->filename, "row_count" => $export->rowCount, "saved_to" => storage_path("app/".$export->filename)], JSON_PRETTY_PRINT).PHP_EOL); print($export->contents);'
     ```
 56. Confirm `event_wide` is true and the organizer file contains at least every
     row the Rangers file contained (REPORT-006).
 57. Confirm the file carries no contact or identity fields it has no business
     carrying:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@idaho-burners.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $csv = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => $staff->phone !== null && str_contains($csv, (string) $staff->phone), "emergency_name_present" => $staff->emergency_contact_name !== null && str_contains($csv, (string) $staff->emergency_contact_name), "emergency_columns_present" => str_contains($csv, "emergency_contact"), "date_of_birth_present" => $staff->date_of_birth !== null && str_contains($csv, $staff->date_of_birth->format("Y-m-d"))], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $olive = App\Models\User::query()->where("email", "olive.organizer@northwood-collective.test")->firstOrFail(); $scope = app(App\Services\Reporting\ReportingExportAccess::class)->resolve($olive, $event, App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT); $csv = app(App\Services\Reporting\HoursWorkedExportService::class)->export($event, $scope, $olive)->contents; print(json_encode(["phone_present" => $staff->phone !== null && str_contains($csv, (string) $staff->phone), "emergency_name_present" => $staff->emergency_contact_name !== null && str_contains($csv, (string) $staff->emergency_contact_name), "emergency_columns_present" => str_contains($csv, "emergency_contact"), "date_of_birth_present" => $staff->date_of_birth !== null && str_contains($csv, $staff->date_of_birth->format("Y-m-d"))], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 58. Confirm all four values are false (REPORT-010). A timesheet needs none of
     those fields to be a timesheet.
 59. Confirm a department lead cannot reach another department, and that
     unauthorized actors resolve no export scope at all:
     ```bash
-    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "idaho-decompression-2026")->firstOrFail(); $gate = App\Models\Department::query()->where("code", "GATE")->firstOrFail(); $access = app(App\Services\Reporting\ReportingExportAccess::class); $permission = App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT; $dana = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); print(json_encode(["dana_includes_gate" => $access->resolve($dana, $event, $permission)->includesDepartment((string) $gate->id)]).PHP_EOL); foreach (["vera.staff@idaho-burners.test", "sam.shiftlead@idaho-burners.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event, $permission) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $gate = App\Models\Department::query()->where("code", "GATE")->firstOrFail(); $access = app(App\Services\Reporting\ReportingExportAccess::class); $permission = App\Domain\Permissions\PermissionCatalog::PERMISSION_REPORTS_HOURS_WORKED_EXPORT; $dana = App\Models\User::query()->where("email", "dana.departmentlead@northwood-collective.test")->firstOrFail(); print(json_encode(["dana_includes_gate" => $access->resolve($dana, $event, $permission)->includesDepartment((string) $gate->id)]).PHP_EOL); foreach (["vera.staff@northwood-collective.test", "sam.shiftlead@northwood-collective.test"] as $email) { $user = App\Models\User::query()->where("email", $email)->firstOrFail(); print(json_encode([$email => $access->resolve($user, $event, $permission) === null ? "denied" : "unexpected_scope"]).PHP_EOL); }'
     ```
 60. Confirm `dana_includes_gate` is false and both personas are `denied`. Having
     worked the hours is not authority to export them, and the Department
@@ -428,8 +476,9 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Department Logistics can mark eligible staff on-site and off-site, and add an
   on-site staff member to a started shift they were not assigned to, both through
   the node rather than in the browser.
-- Presence, shift addition, and equipment handoff are refused where they stand
-  when the node is unreachable, while check-in, check-out, and no-show queue.
+- Presence, shift addition, equipment handoff, and hours correction are refused
+  where they stand when the node is unreachable, while check-in, check-out, and
+  no-show queue.
 - The Planning Table shows aggregates only, with no staff identity anywhere on
   it.
 - Check-out creates one canonical `hours_worked` record tied to event,
@@ -441,8 +490,17 @@ froze, so run it after those sections rather than on a freshly seeded database.
   data are available, remain visible as queued/pending, and sync once with
   operation UUID/device/node provenance.
 - Authorized attendance managers can correct unfrozen hours with before/after
-  audit evidence.
-- Frozen hours reject later correction and preserve recorded values.
+  audit evidence, from the Logistics Desk staff workspace as well as from the
+  domain, and the dialog opens on the recorded times rather than on now or on
+  nothing.
+- A correction appends a `correct` attendance operation beside the check-out
+  that produced the record rather than replacing it, and the prior values remain
+  readable in attendance history and in the audit entry.
+- Correction is refused where it stands when the node is unreachable, unlike the
+  check-out that created the record.
+- Frozen hours reject later correction and preserve recorded values, and the
+  refusal names the moment the grace period closed in the event's time zone. The
+  Logistics Desk withdraws the control and prints the same sentence.
 - The hours worked export produces a CSV with the documented header and one row
   per recorded `hours_worked` record in scope, reporting the scheduled window and
   scheduled minutes beside the actual window, minutes, and decimal hours.
@@ -465,6 +523,11 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Screenshot or screen recording of Vera's Logistics workspace before check-in,
   after on-site/check-in, and after check-out.
 - Screenshot showing off-site blocked while checked in.
+- Screenshot of the Correct hours dialog opened on a completed shift, showing
+  both actual times pre-filled, and a second one of the same card after the
+  correction with the changed recorded hours.
+- Screenshot of a frozen shift card showing no correction control and the
+  sentence naming the date the grace period closed.
 - Screenshot showing off-site blocked while equipment is still out, with the
   equipment named, and a second one showing the same workspace once the item is
   returned or written off.

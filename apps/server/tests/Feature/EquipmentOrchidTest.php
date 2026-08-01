@@ -19,10 +19,10 @@ class EquipmentOrchidTest extends TestCase
     public function test_orchid_equipment_list_displays_inventory(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
+            'name' => 'Emberfall 2026',
         ]);
         $department = Department::factory()->for($organization)->create([
             'name' => 'Rangers',
@@ -44,8 +44,8 @@ class EquipmentOrchidTest extends TestCase
         $response->assertSee('Radio 12');
         $response->assertSee('RDO-12');
         $response->assertSee('Damaged');
-        $response->assertSee('Idaho Burners');
-        $response->assertSee('Idaho Decompression 2026');
+        $response->assertSee('Northwood Collective');
+        $response->assertSee('Emberfall 2026');
         $response->assertSee('Rangers');
     }
 

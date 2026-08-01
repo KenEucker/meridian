@@ -26,7 +26,7 @@ class AssignmentImportLayout extends Rows
             TextArea::make('csv')
                 ->rows(10)
                 ->title(__('Or paste CSV'))
-                ->placeholder("organization_slug,event_slug,department_code,shift_title,shift_starts_at,staff_email\nidaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,vera.staff@example.org")
+                ->placeholder("organization_slug,event_slug,department_code,shift_title,shift_starts_at,staff_email\nnorthwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,vera.staff@example.org")
                 ->help(__('Required columns: organization_slug, event_slug, department_code, shift_title, shift_starts_at, staff_email. Optional: team_code, needed only when one department runs two shifts with the same title and start. Import the shifts first. A staff member who may not work the shift is skipped with the reason; nobody is removed from a shift by an import.')),
         ];
     }

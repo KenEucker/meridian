@@ -20,6 +20,14 @@ const EVENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.eventId;
 const DEPARTMENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId;
 const DAY_SHIFT_ID = "99999999-9999-4999-8999-999999999999";
 const SWING_SHIFT_ID = "99999999-9999-4999-8999-999999999998";
+// Two shifts that have ended, one still inside the correction grace period and
+// one past it (M18.4; SLB-031).
+const NIGHT_SHIFT_ID = "99999999-9999-4999-8999-999999999997";
+const GATE_SHIFT_ID = "99999999-9999-4999-8999-999999999996";
+const OPEN_HOURS_ID = "88888888-8888-4888-8888-888888888881";
+const FROZEN_HOURS_ID = "88888888-8888-4888-8888-888888888882";
+const FROZEN_HOURS_REFUSAL =
+  "The correction grace period closed on 18 Jul 2027 00:00 PDT, so these hours are frozen and can no longer be corrected.";
 const DIRT_TEAM_ID = "77777777-7777-4777-8777-777777777771";
 const COMMAND_TEAM_ID = "77777777-7777-4777-8777-777777777772";
 const AUTHOR_STAFF_ID = "33333333-3333-4333-8333-333333333333";
@@ -136,8 +144,34 @@ function card(overrides: Record<string, unknown>) {
     can_mark_no_show: false,
     can_add_to_shift: false,
     add_to_shift_blocked_reason: null,
+    hours_worked_id: null,
+    actual_started_at: null,
+    actual_ended_at: null,
+    minutes_worked: null,
+    can_correct_hours: false,
+    correct_hours_blocked_reason: null,
     ...overrides,
   };
+}
+
+/**
+ * A shift that has ended, with the hours a check-out left behind (SLB-031).
+ *
+ * The correctable one and the frozen one differ only in what the node says
+ * about the record, which is the point: the desk's own reading of "completed"
+ * decides nothing here.
+ */
+function completedCard(overrides: Record<string, unknown>) {
+  return card({
+    lifecycle: "completed",
+    attendance_state: "checked_out",
+    starts_at: "2027-07-04T04:00:00+00:00",
+    ends_at: "2027-07-04T10:00:00+00:00",
+    actual_started_at: "2027-07-04T04:05:00+00:00",
+    actual_ended_at: "2027-07-04T10:00:00+00:00",
+    minutes_worked: 355,
+    ...overrides,
+  });
 }
 
 function equipment(id: string, name: string, assetTag: string) {
@@ -229,6 +263,21 @@ function logisticsPayload() {
             attendance_state: "checked_in",
             assignment_id: "assignment-author-day",
             can_check_out: true,
+          }),
+          completedCard({
+            shift_id: NIGHT_SHIFT_ID,
+            title: "Ranger Dirt Night Shift",
+            assignment_id: "assignment-author-night",
+            hours_worked_id: OPEN_HOURS_ID,
+            can_correct_hours: true,
+          }),
+          completedCard({
+            shift_id: GATE_SHIFT_ID,
+            title: "Ranger Dirt Gate Shift",
+            assignment_id: "assignment-author-gate",
+            hours_worked_id: FROZEN_HOURS_ID,
+            can_correct_hours: false,
+            correct_hours_blocked_reason: FROZEN_HOURS_REFUSAL,
           }),
         ],
         open_equipment: [
@@ -942,6 +991,102 @@ describe("department operations surfaces", () => {
       equipment_checkout_id: "checkout-radio-12",
       return_condition: "returned",
     });
+  });
+
+  /*
+   * The SLB-031 path end to end: search for the staff member, open their
+   * workspace, pick a shift that has ended, and edit the recorded actual times.
+   * The dialog opens on what is on file rather than on now or on nothing,
+   * because a correction is somebody reading 04:05 and typing 04:00.
+   */
+  it("corrects the hours on a completed shift from the staff workspace", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Local Field Author");
+
+    const night = wrapper
+      .get(".logistics__workspace")
+      .findAll(".logistics__cards li")
+      .find((entry) => entry.text().includes("Ranger Dirt Night Shift"))!;
+
+    expect(night.get(".logistics__card-hours").text()).toContain("355 min");
+
+    await night
+      .findAll("button")
+      .find((button) => button.text() === "Correct hours")!
+      .trigger("click");
+
+    const dialog = wrapper.get('[role="dialog"]');
+    expect(dialog.get("#attendance-dialog-heading").text()).toBe(
+      "Correct hours",
+    );
+    expect(dialog.text()).toContain(
+      "The previous values stay in attendance history.",
+    );
+
+    /*
+     * Both ends arrive filled with the recorded times, in the reader's own
+     * clock. Asserted by round trip rather than by literal, because the literal
+     * would be whatever zone the machine running the suite is in — and the round
+     * trip is the property that matters: a field the operator does not touch has
+     * to send back the moment it was filled from, not one shifted by the offset
+     * between here and Greenwich.
+     */
+    const times = dialog.findAll('input[type="datetime-local"]');
+    expect(times).toHaveLength(2);
+    expect(
+      new Date((times[0]!.element as HTMLInputElement).value).toISOString(),
+    ).toBe(new Date("2027-07-04T04:05:00+00:00").toISOString());
+    expect(
+      new Date((times[1]!.element as HTMLInputElement).value).toISOString(),
+    ).toBe(new Date("2027-07-04T10:00:00+00:00").toISOString());
+
+    await times[0]!.setValue("2027-07-03T21:00");
+    await dialog
+      .findAll("button")
+      .find((button) => button.text() === "Confirm")!
+      .trigger("click");
+    await flushPromises();
+
+    // Connected-only: a correction is weighed against a grace period the node's
+    // clock owns, so nothing about it is held on the device (CLIENT-018).
+    expect(commandOutbox.all()).toHaveLength(0);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]!.path).toBe("/api/commands/correct-hours");
+    expect(commands[0]!.body).toMatchObject({
+      hours_worked_id: OPEN_HOURS_ID,
+      actual_started_at: new Date("2027-07-03T21:00").toISOString(),
+      // Untouched, and therefore exactly what the node recorded.
+      actual_ended_at: new Date("2027-07-04T10:00:00+00:00").toISOString(),
+    });
+    expect(commands[0]!.body.operation_uuid).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+    expect(commands[0]!.body.origin_device_id).toEqual(expect.any(String));
+  });
+
+  /*
+   * HOURS-008's refusal, on the surface rather than only in the service. The
+   * card offers no control and prints the node's own sentence, which names the
+   * date the grace period closed — an operator who is an hour late and one who
+   * is a month late need different next moves, and only the date tells them
+   * which they are.
+   */
+  it("refuses a frozen record and names the closed grace period", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Local Field Author");
+
+    const gate = wrapper
+      .get(".logistics__workspace")
+      .findAll(".logistics__cards li")
+      .find((entry) => entry.text().includes("Ranger Dirt Gate Shift"))!;
+
+    expect(gate.findAll("button").map((button) => button.text())).not.toContain(
+      "Correct hours",
+    );
+    expect(gate.text()).toContain(FROZEN_HOURS_REFUSAL);
+    expect(commands).toHaveLength(0);
   });
 
   it("hands out equipment from the workspace as a connected-only command", async () => {

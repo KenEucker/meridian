@@ -28,7 +28,7 @@ import { installLocalFieldSession } from "@/session/localFieldSession";
 
 const CONTEXT: DepartmentOpsContext = {
   eventId: "11111111-1111-4111-8111-111111111111",
-  eventLabel: "Idaho Decompression",
+  eventLabel: "Emberfall",
   departmentId: "66666666-6666-4666-8666-666666666666",
   departmentLabel: "Rangers",
   timeZone: "America/Los_Angeles",
@@ -72,6 +72,12 @@ function card(
     canMarkNoShow: false,
     canAddToShift: false,
     addToShiftBlockedReason: null,
+    hoursWorkedId: null,
+    actualStartedAt: null,
+    actualEndedAt: null,
+    minutesWorked: null,
+    canCorrectHours: false,
+    correctHoursBlockedReason: null,
     ...overrides,
   };
 }
@@ -346,44 +352,23 @@ describe("logistics desk presentation", () => {
         staffWorkspaces: {
           "staff-1": workspace({
             shiftCards: [
-              {
-                shiftId: "shift-day",
-                title: "Ranger Dirt Day Shift",
-                teamId: "team-dirt",
-                teamLabel: "Dirt",
-                startsAt: "2027-07-04T16:00:00.000Z",
-                endsAt: "2027-07-04T22:00:00.000Z",
-                lifecycle: "active",
+              card({
                 attendanceState: "checked_in",
                 assignmentId: "assignment-1",
-                canCheckIn: false,
                 canCheckOut: true,
-                canMarkNoShow: false,
-                canAddToShift: false,
-                addToShiftBlockedReason: null,
-              },
+              }),
             ],
           }),
           "staff-2": workspace({
             staffId: "staff-2",
             displayName: "Sam Scheduled",
             shiftCards: [
-              {
-                shiftId: "shift-day",
-                title: "Ranger Dirt Day Shift",
-                teamId: "team-dirt",
-                teamLabel: "Dirt",
-                startsAt: "2027-07-04T16:00:00.000Z",
-                endsAt: "2027-07-04T22:00:00.000Z",
-                lifecycle: "active",
+              card({
                 attendanceState: "scheduled",
                 assignmentId: "assignment-2",
                 canCheckIn: true,
-                canCheckOut: false,
                 canMarkNoShow: true,
-                canAddToShift: false,
-                addToShiftBlockedReason: null,
-              },
+              }),
             ],
           }),
         },
@@ -398,54 +383,28 @@ describe("logistics desk presentation", () => {
     const sections = logisticsShiftSections(
       workspace({
         shiftCards: [
-          {
+          card({
             shiftId: "a",
             title: "Active",
-            teamId: "t",
-            teamLabel: "Dirt",
-            startsAt: "",
-            endsAt: "",
             lifecycle: "active",
             attendanceState: "checked_in",
             assignmentId: "1",
-            canCheckIn: false,
             canCheckOut: true,
-            canMarkNoShow: false,
-            canAddToShift: false,
-            addToShiftBlockedReason: null,
-          },
-          {
+          }),
+          card({
             shiftId: "b",
             title: "Upcoming",
-            teamId: "t",
-            teamLabel: "Dirt",
-            startsAt: "",
-            endsAt: "",
             lifecycle: "upcoming",
             attendanceState: "scheduled",
             assignmentId: "2",
-            canCheckIn: false,
-            canCheckOut: false,
-            canMarkNoShow: false,
-            canAddToShift: false,
-            addToShiftBlockedReason: null,
-          },
-          {
+          }),
+          card({
             shiftId: "c",
             title: "Outgoing",
-            teamId: "t",
-            teamLabel: "Dirt",
-            startsAt: "",
-            endsAt: "",
             lifecycle: "completed",
             attendanceState: "checked_out",
             assignmentId: "3",
-            canCheckIn: false,
-            canCheckOut: false,
-            canMarkNoShow: false,
-            canAddToShift: false,
-            addToShiftBlockedReason: null,
-          },
+          }),
         ],
       }),
     );

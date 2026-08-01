@@ -460,7 +460,7 @@ describe("AppShell context switching", () => {
     // The organization the session resolved to, named where the way out of it
     // is (contract rule 4.5: show operating context).
     expect(menu.get(".app-shell__context-switch strong").text()).toBe(
-      "Idaho Burners",
+      "Northwood Collective",
     );
   });
 

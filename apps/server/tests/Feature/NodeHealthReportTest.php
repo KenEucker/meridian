@@ -5,16 +5,17 @@ namespace Tests\Feature;
 use App\Models\Node;
 use App\Models\NodeHealthReport;
 use App\Models\User;
-use App\Services\Diagnostics\DiagnosticRunner;
+use App\Services\Node\NodeKeyPairGenerator;
+use App\Services\Node\NodeSignatureAlgorithm;
 use App\Services\NodeHealth\NodeHealthException;
 use App\Services\NodeHealth\NodeHealthReportBuilder;
 use App\Services\NodeHealth\NodeHealthReportPayload;
 use App\Services\NodeHealth\NodeHealthReportReceiver;
-use App\Services\Node\NodeKeyPairGenerator;
-use App\Services\Node\NodeSignatureAlgorithm;
 use App\Services\PowerSync\PowerSyncHealthClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -69,7 +70,7 @@ class NodeHealthReportTest extends TestCase
     {
         return NodeHealthReportPayload::create(
             sourceNodeId: (string) $this->peerNode->getKey(),
-            reportUuid: (string) \Illuminate\Support\Str::uuid(),
+            reportUuid: (string) Str::uuid(),
             overallStatus: 'warning',
             nodeName: 'test.onsite',
             nodeRole: Node::ROLE_ONSITE,
@@ -147,7 +148,7 @@ class NodeHealthReportTest extends TestCase
         $payload = $this->peerPayload();
         $unknown = NodeHealthReportPayload::fromArray(
             array_merge($payload->toArray(), [
-                'source_node_id' => (string) \Illuminate\Support\Str::uuid(),
+                'source_node_id' => (string) Str::uuid(),
                 'signature' => 'irrelevant',
             ]),
         );
@@ -212,8 +213,8 @@ class NodeHealthReportTest extends TestCase
             'central_node_url' => 'https://central.invalid',
         ]);
 
-        \Illuminate\Support\Facades\Http::fake([
-            '*' => \Illuminate\Support\Facades\Http::response(null, 500),
+        Http::fake([
+            '*' => Http::response(null, 500),
         ]);
 
         $this->artisan('meridian:health-report')->assertExitCode(0);

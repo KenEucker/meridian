@@ -28,11 +28,11 @@ class EventApplicationOrchidTest extends TestCase
     public function test_orchid_application_list_displays_applications(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
 
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
+            'name' => 'Emberfall 2026',
         ]);
 
         EventApplication::factory()->create([
@@ -49,8 +49,8 @@ class EventApplicationOrchidTest extends TestCase
         $response->assertSee('Applications');
         $response->assertSee('Jordan Reed');
         $response->assertSee('jordan@example.org');
-        $response->assertSee('Idaho Decompression 2026');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Emberfall 2026');
+        $response->assertSee('Northwood Collective');
         $response->assertSee('Submitted');
         $response->assertSee('No department preference');
     }
@@ -58,7 +58,7 @@ class EventApplicationOrchidTest extends TestCase
     public function test_orchid_application_detail_displays_review_scaffold(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
 
         $event = Event::factory()->for($organization)->create([
@@ -82,7 +82,7 @@ class EventApplicationOrchidTest extends TestCase
         $response->assertSee('Casey Reed');
         $response->assertSee('casey@example.org');
         $response->assertSee('Signal Camp 2026');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Northwood Collective');
         $response->assertSee('Submitted');
         $response->assertSee('No department preference');
         $response->assertSee('Approval occurs at the organization level');
@@ -113,7 +113,7 @@ class EventApplicationOrchidTest extends TestCase
 
     public function test_orchid_application_list_and_detail_display_department_interest(): void
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         $event = Event::factory()->for($organization)->create(['name' => 'Signal Camp 2026']);
         $gate = Department::factory()->for($organization)->create(['name' => 'Gate']);
         $rangers = Department::factory()->for($organization)->create(['name' => 'Rangers']);
@@ -255,7 +255,7 @@ class EventApplicationOrchidTest extends TestCase
 
     public function test_orchid_approve_action_approves_application_and_creates_prospective_status(): void
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         $event = Event::factory()->for($organization)->create(['name' => 'Signal Camp 2026']);
         $application = EventApplication::factory()->create([
             'event_id' => $event->id,

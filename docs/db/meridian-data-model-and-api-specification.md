@@ -383,6 +383,22 @@ carries the sentence, and the archived-team case has its own: telling an operato
 somebody "is not a member of" a team they are still on would send them after a
 team that no longer takes anybody.
 
+Hours correction is the fifth thing a card answers (SLB-031). Each card carries
+`hours_worked_id` with the recorded `actual_started_at`, `actual_ended_at`, and
+`minutes_worked` behind it, or null until a check-out has created them — which
+is what makes correction the completed shift's control rather than the running
+one's. The recorded times travel with the id because a correction is an edit to
+two numbers already on file, and a dialog that opened empty would send the
+operator to find them somewhere else first. `can_correct_hours` is true while
+the record exists and is not frozen, and `correct_hours_blocked_reason` carries
+one of two sentences: the frozen one, which is `HoursCorrectionService`'s own
+and names the date the grace period closed (HOURS-008), or — for a shift
+somebody was assigned to, that has ended, and that produced no hours — one
+naming the missing check-out, because that is what the operator actually has to
+do. A running shift with no hours yet carries neither: hours arrive at
+check-out, and a card saying so mid-shift would appear on every workspace at the
+desk.
+
 Event Info (`GET /api/events/{event}/info`) returns the staff-facing event
 information surface: event context plus one entry per Event Info section, in the
 documented order, each carrying the published documents the caller may see or an
@@ -486,6 +502,7 @@ POST /api/commands/remove-staff-from-shift
 POST /api/commands/check-in-staff
 POST /api/commands/check-out-staff
 POST /api/commands/mark-no-show
+POST /api/commands/correct-hours
 POST /api/commands/mark-staff-on-site
 POST /api/commands/mark-staff-off-site
 POST /api/commands/add-staff-to-shift
@@ -587,8 +604,33 @@ no unassigned shift cards at all (requirements 5.8). Overlapping assignments are
 rather than refused (technical spec 20.5), and the warnings travel back with the
 acceptance so the desk can show them.
 
-Attendance commands (`check-in-staff`, `check-out-staff`, `mark-no-show`) accept
-`origin_node_id` as an optional field. A client replaying an operation that
+The hours correction command (`correct-hours`) is the Logistics Desk's edit to a
+recorded actual start and end (SLB-007, SLB-031, SLB-032; HOURS-007). It
+addresses the `hours_worked` record by id rather than by shift and staff member,
+because the record is what is corrected and it is what the workspace is already
+holding, and it requires both actual times: a correction naming one end of the
+window would leave the other to be inferred, and the service recomputes minutes
+from both. It is authorized by the same attendance authority as check-out, and
+refused once `hours_worked.frozen_at` is set. The refusal names the moment the
+grace period closed, read in the event's own time zone, rather than stating that
+a grace period exists — a desk deciding whether to escalate to an organizer
+needs to know whether it is an hour late or a month late. The correction is
+appended to attendance history rather than replacing it: a `correct` attendance
+operation is written beside the check-out that produced the record, the audit
+entry carries the prior actual times and minutes as well as the new ones, and no
+earlier operation is rewritten or removed. Repeating the same `operation_uuid`
+is the same correction and applies once.
+
+`correct-hours` is the one command in the attendance family that section 7.2
+does not list as an offline write, so a client sends it connected or is refused
+where it stands. Its queued siblings are recorded against a shift the device
+already holds; whether a correction is allowed at all is measured against a
+grace period the node's clock owns and closes on its own, so one held on a
+device may be delivered into a window that has already shut, after the operator
+walked away believing the total was fixed.
+
+Attendance commands (`check-in-staff`, `check-out-staff`, `mark-no-show`,
+`correct-hours`) accept `origin_node_id` as an optional field. A client replaying an operation that
 originated elsewhere names that node; a client posting its own work omits it and
 the node that receives the command records itself as the origin, because nothing
 publishes a node id to a browser and provenance is better recorded than guessed.

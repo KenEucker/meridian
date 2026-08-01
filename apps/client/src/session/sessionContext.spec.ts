@@ -133,7 +133,7 @@ describe("session context resolution", () => {
     installLockedSession();
 
     expect(sessionOrganizationId.value).toBe(LOCAL_FIELD_ORGANIZATION_ID);
-    expect(sessionOrganizationLabel.value).toBe("Idaho Burners");
+    expect(sessionOrganizationLabel.value).toBe("Northwood Collective");
     expect(sessionNodeLock.value?.eventLabel).toBe("Local Field Event");
   });
 
@@ -174,7 +174,7 @@ describe("session context resolution", () => {
       sessionContextOrganizations.value.map(
         (organization) => organization.organizationLabel,
       ),
-    ).toEqual(["Idaho Burners", "Cascadia Collective"]);
+    ).toEqual(["Northwood Collective", "Cascadia Collective"]);
 
     const current = sessionContextOrganization(LOCAL_FIELD_ORGANIZATION_ID);
     expect(current?.isCurrent).toBe(true);

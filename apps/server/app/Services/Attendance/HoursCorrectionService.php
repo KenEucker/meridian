@@ -16,7 +16,19 @@ use Illuminate\Support\Str;
 
 /**
  * Corrects actual hours while the correction window is open and freezes records
- * once that grace period has closed (HOURS-007, HOURS-008; SLB-007).
+ * once that grace period has closed (HOURS-007, HOURS-008; SLB-007, SLB-031,
+ * SLB-032).
+ *
+ * A correction is an append to the attendance history rather than an edit of
+ * it (SLB-032). The `correct` attendance operation is written alongside the
+ * changed record, and the audit entry carries the actual times, minutes, and
+ * attendance timestamps as they stood before the change as well as after, so a
+ * corrected record shows what it was as well as what it became. Nothing here
+ * deletes or rewrites an earlier operation.
+ *
+ * Reachable from `POST /api/commands/correct-hours` since M18.4; until then it
+ * had no route, and the only correction anybody could make was through a
+ * tinker session.
  */
 class HoursCorrectionService
 {
@@ -76,7 +88,10 @@ class HoursCorrectionService
             }
 
             if ($hoursWorked->frozen_at !== null) {
-                throw HoursCorrectionException::frozenHours();
+                throw HoursCorrectionException::frozenHours(
+                    $hoursWorked->frozen_at,
+                    $hoursWorked->event?->timezone,
+                );
             }
 
             $assignmentId = $hoursWorked->attendanceRecord?->shift_assignment_id;

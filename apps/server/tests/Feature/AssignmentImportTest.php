@@ -56,14 +56,14 @@ class AssignmentImportTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-01 12:00:00'));
 
         $this->organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
-            'slug' => 'idaho-burners',
+            'name' => 'Northwood Collective',
+            'slug' => 'northwood-collective',
         ]);
 
         $this->event = Event::factory()->for($this->organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
-            'timezone' => 'America/Boise',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
+            'timezone' => 'America/Los_Angeles',
         ]);
 
         $this->rangers = Department::factory()->for($this->organization)->create([
@@ -171,7 +171,7 @@ class AssignmentImportTest extends TestCase
             .$this->dayRowValues($stranger->email)
             .$this->dayRowValues($wrongTeam->email)
             .$this->dayRowValues($blocked->email)
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Night,2026-08-28 17:00,{$untrained->email}\n",
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Night,2026-08-28 17:00,{$untrained->email}\n",
             $this->operator,
         );
 
@@ -215,7 +215,7 @@ class AssignmentImportTest extends TestCase
 
         app(ShiftImportService::class)->import(
             "organization_slug,event_slug,department_code,team_code,title,starts_at,ends_at\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Overlap,2026-08-28 12:00,2026-08-28 20:00\n",
+            ."northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Overlap,2026-08-28 12:00,2026-08-28 20:00\n",
             $this->operator,
         );
 
@@ -224,7 +224,7 @@ class AssignmentImportTest extends TestCase
 
         $result = $service->import(
             $this->header()
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Overlap,2026-08-28 12:00,{$vera->email}\n",
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Overlap,2026-08-28 12:00,{$vera->email}\n",
             $this->operator,
         );
 
@@ -243,7 +243,7 @@ class AssignmentImportTest extends TestCase
 
         app(ShiftImportService::class)->import(
             "organization_slug,event_slug,department_code,team_code,title,starts_at,ends_at\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,COMMAND,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00\n",
+            ."northwood-collective,emberfall-2026,RANGERS,COMMAND,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00\n",
             $this->operator,
         );
 
@@ -258,7 +258,7 @@ class AssignmentImportTest extends TestCase
 
         $named = $service->import(
             "organization_slug,event_slug,department_code,team_code,shift_title,shift_starts_at,staff_email\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,COMMAND,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n",
+            ."northwood-collective,emberfall-2026,RANGERS,COMMAND,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n",
             $this->operator,
         );
 
@@ -273,13 +273,13 @@ class AssignmentImportTest extends TestCase
         $vera = $this->eligibleStaff('vera.staff@example.org', $this->rangers, $this->dirt);
 
         $csv = $this->header()
-            ."idaho-burners,no-such-event,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
-            ."idaho-burners,idaho-decompression-2026,NOPE,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,No Such Shift,2026-08-28 09:00,{$vera->email}\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,not a date,{$vera->email}\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,nobody@example.org\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,VERA.STAFF@example.org\n";
+            ."northwood-collective,no-such-event,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
+            ."northwood-collective,emberfall-2026,NOPE,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
+            ."northwood-collective,emberfall-2026,RANGERS,No Such Shift,2026-08-28 09:00,{$vera->email}\n"
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,not a date,{$vera->email}\n"
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,nobody@example.org\n"
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$vera->email}\n"
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,VERA.STAFF@example.org\n";
 
         $result = $this->service()->import($csv, $this->operator);
 
@@ -289,8 +289,8 @@ class AssignmentImportTest extends TestCase
         $reasons = array_map(static fn (ImportRow $row): ?string => $row->reason, $result->rows);
 
         $this->assertSame([
-            'No event "no-such-event" in organization "idaho-burners".',
-            'No department "NOPE" in organization "idaho-burners".',
+            'No event "no-such-event" in organization "northwood-collective".',
+            'No department "NOPE" in organization "northwood-collective".',
             'No shift "No Such Shift" starting 2026-08-28 09:00 in department "RANGERS".',
             'Shift start must be a readable date and time.',
             'No staff member with email "nobody@example.org".',
@@ -355,7 +355,7 @@ class AssignmentImportTest extends TestCase
 
         $this->service()->import(
             "organization_slug,event_slug,department_code,shift_title,shift_starts_at\n"
-            ."idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00\n",
+            ."northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00\n",
             $this->operator,
         );
     }
@@ -400,7 +400,7 @@ class AssignmentImportTest extends TestCase
 
     private function dayRowValues(string $email): string
     {
-        return "idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$email}\n";
+        return "northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,{$email}\n";
     }
 
     private function shift(string $title): Shift

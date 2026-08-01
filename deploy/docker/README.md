@@ -92,7 +92,7 @@ php apps/server/artisan db:seed
 ```
 
 `db:seed` loads the permission catalog and the development scenario (Idaho
-Burners / Idaho Decompression 2026) described in `apps/server/README.md`. The
+Burners / Emberfall 2026) described in `apps/server/README.md`. The
 `powersync` publication is defined `FOR ALL TABLES`, so the tables created by
 `migrate` are included automatically without any further configuration.
 

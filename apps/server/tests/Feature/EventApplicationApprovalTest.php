@@ -30,7 +30,7 @@ class EventApplicationApprovalTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-19 10:15:00'));
 
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective']);
         $event = Event::factory()->for($organization)->create(['name' => 'Signal Camp 2026']);
         $reviewer = User::factory()->create(['name' => 'Olive Organizer']);
         $application = EventApplication::factory()->create([
@@ -87,7 +87,7 @@ class EventApplicationApprovalTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-06-19 11:30:00'));
 
         $organization = Organization::factory()->create();
-        $event = Event::factory()->for($organization)->create(['name' => 'Idaho Decompression 2026']);
+        $event = Event::factory()->for($organization)->create(['name' => 'Emberfall 2026']);
         $reviewer = User::factory()->create();
         $staff = Staff::factory()->create([
             'email' => 'existing.person@example.org',
@@ -113,7 +113,7 @@ class EventApplicationApprovalTest extends TestCase
         $this->assertSame($staff->id, $approved->staff_id);
         $this->assertSame(EventApplication::STATUS_APPROVED, $approved->status);
         $this->assertSame(StaffOrganizationStatus::STATUS_PROSPECTIVE, $status->refresh()->status);
-        $this->assertSame('Approved application for Idaho Decompression 2026.', $status->status_reason);
+        $this->assertSame('Approved application for Emberfall 2026.', $status->status_reason);
 
         $this->assertDatabaseHas('audit_events', [
             'action' => 'staff_organization_status.changed',

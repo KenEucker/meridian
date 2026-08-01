@@ -25,7 +25,7 @@ import { installLocalFieldSession } from "@/session/localFieldSession";
 
 const SESSION: FieldSessionContext = {
   eventId: "event-1",
-  eventLabel: "Idaho Decompression 2026",
+  eventLabel: "Emberfall 2026",
   submittedByUserId: "user-1",
   staffId: "staff-1",
   originDeviceId: "device-1",
@@ -87,7 +87,7 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
     expect(wrapper.get("#field-reports-heading").text()).toBe(
       "My Field Reports",
     );
-    expect(wrapper.text()).toContain("Idaho Decompression 2026");
+    expect(wrapper.text()).toContain("Emberfall 2026");
     expect(wrapper.text()).toContain(
       "You have not submitted any Field Reports yet.",
     );

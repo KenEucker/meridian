@@ -18,6 +18,7 @@ use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\Team;
 use App\Models\TeamMembership;
+use App\Services\Attendance\HoursCorrectionException;
 use App\Services\DepartmentOps\DepartmentOperationsAccess;
 use App\Services\DepartmentOps\DepartmentOperationsAuthority;
 use App\Services\Presence\DepartmentPresenceException;
@@ -154,7 +155,7 @@ final class DepartmentOperationsReadController extends Controller
 
     /**
      * The Logistics Window's department-scoped index (SLB-003 through SLB-008,
-     * SLB-011, SLB-012, SLB-016 through SLB-018, SLB-021).
+     * SLB-011, SLB-012, SLB-016 through SLB-018, SLB-021, SLB-031).
      *
      * Staff-first: the search index and one workspace per department member,
      * because the desk's whole shape is "someone is standing here, find them and
@@ -185,6 +186,7 @@ final class DepartmentOperationsReadController extends Controller
         $openEquipment = $this->openCheckoutsForStaff($event, $department, $staffIds);
         $availableEquipment = $this->availableEquipment($department);
         $signups = $this->futureSignups($event, $department, $staffIds, $now);
+        $hours = $this->hoursForShifts($event, $department, $shifts->modelKeys(), $staffIds);
         $eligibleTeamMembers = $this->eligibleTeamMembers(
             $shifts,
             $staffIds,
@@ -228,6 +230,8 @@ final class DepartmentOperationsReadController extends Controller
                     $attendance,
                     $presence[$staffId] ?? EventDepartmentPresence::STATE_OFF_SITE,
                     $eligibleTeamMembers,
+                    $hours,
+                    (string) ($event->timezone ?: config('app.timezone')),
                     $now,
                 ),
                 'open_equipment' => $held
@@ -731,10 +735,17 @@ final class DepartmentOperationsReadController extends Controller
      * `UnscheduledShiftAdditionService` additionally weighs trainings, waivers,
      * and organization status and refuses in its own words.
      *
+     * Hours correction is the fifth thing a card answers (M18.4; SLB-031). It
+     * belongs on the card rather than in a section of its own because SLB-031
+     * describes the path as selecting a completed shift in the workspace, and
+     * the recorded times a correction starts from are already this card's shift
+     * and this card's staff member.
+     *
      * @param  Collection<int, Shift>  $shifts
      * @param  Collection<string, Collection<int, ShiftAssignment>>  $assignments
      * @param  Collection<string, Collection<int, AttendanceRecord>>  $attendance
      * @param  array<string, bool>  $eligibleTeamMembers
+     * @param  array<string, HoursWorked>  $hours
      * @return list<array<string, mixed>>
      */
     private function shiftCards(
@@ -744,6 +755,8 @@ final class DepartmentOperationsReadController extends Controller
         Collection $attendance,
         string $presenceState,
         array $eligibleTeamMembers,
+        array $hours,
+        string $timeZone,
         Carbon $now,
     ): array {
         $records = $attendance->get($staffId, new Collection)
@@ -751,7 +764,7 @@ final class DepartmentOperationsReadController extends Controller
         $onSite = $presenceState === EventDepartmentPresence::STATE_ON_SITE;
 
         return $shifts
-            ->map(function (Shift $shift) use ($staffId, $assignments, $records, $onSite, $eligibleTeamMembers, $now): ?array {
+            ->map(function (Shift $shift) use ($staffId, $assignments, $records, $onSite, $eligibleTeamMembers, $hours, $timeZone, $now): ?array {
                 $shiftId = (string) $shift->id;
                 $assignment = $assignments->get($staffId.':'.$shiftId, new Collection)->first();
                 $record = $records->get($shiftId);
@@ -760,6 +773,7 @@ final class DepartmentOperationsReadController extends Controller
                 $started = $shift->starts_at !== null && $now->greaterThanOrEqualTo($shift->starts_at);
                 $ended = $shift->ends_at !== null && $now->greaterThan($shift->ends_at);
                 $eligible = $eligibleTeamMembers[$staffId.':'.(string) $shift->eligible_team_id] ?? false;
+                $hoursWorked = $hours[$staffId.':'.$shiftId] ?? null;
 
                 /*
                  * An unassigned card is on screen for somebody on-site until the
@@ -805,6 +819,26 @@ final class DepartmentOperationsReadController extends Controller
                     'add_to_shift_blocked_reason' => $assignment !== null
                         ? null
                         : $this->addToShiftBlockedReason($shift, $started, $eligible),
+                    /*
+                     * The hours a correction would edit (SLB-031). Null until a
+                     * check-out has created them, which is what makes them the
+                     * completed shift's answer rather than the running one's.
+                     * The recorded times travel with the id because the dialog
+                     * opens on what is on file — an operator corrects a start
+                     * that reads 08:00 by typing 08:15, and a blank form would
+                     * make them find 08:00 somewhere else first.
+                     */
+                    'hours_worked_id' => $hoursWorked === null ? null : (string) $hoursWorked->id,
+                    'actual_started_at' => $hoursWorked?->actual_started_at?->toIso8601String(),
+                    'actual_ended_at' => $hoursWorked?->actual_ended_at?->toIso8601String(),
+                    'minutes_worked' => $hoursWorked?->minutes_worked,
+                    'can_correct_hours' => $hoursWorked !== null && $hoursWorked->frozen_at === null,
+                    'correct_hours_blocked_reason' => $this->correctHoursBlockedReason(
+                        $hoursWorked,
+                        $assignment !== null,
+                        $ended,
+                        $timeZone,
+                    ),
                 ];
             })
             ->filter()
@@ -849,6 +883,70 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Why the hours on this card cannot be corrected, or null when they can.
+     *
+     * Two cases are worth a sentence and everything else is worth silence. A
+     * frozen record answers in `HoursCorrectionService`'s own words, so the
+     * desk and the command name the same closed grace period and the same date
+     * (HOURS-008, SLB-031). A shift somebody was assigned to, that has ended,
+     * and that produced no hours is the other: the operator came looking for a
+     * correction and what is actually missing is the check-out, so the sentence
+     * names that instead of leaving a card with no controls and no explanation.
+     *
+     * A running shift with no hours yet is neither. Hours arrive at check-out
+     * and a card saying so mid-shift would be noise on every workspace on the
+     * desk.
+     */
+    private function correctHoursBlockedReason(
+        ?HoursWorked $hoursWorked,
+        bool $assigned,
+        bool $ended,
+        string $timeZone,
+    ): ?string {
+        if ($hoursWorked !== null) {
+            return $hoursWorked->frozen_at === null
+                ? null
+                : HoursCorrectionException::frozenHours($hoursWorked->frozen_at, $timeZone)->getMessage();
+        }
+
+        return $assigned && $ended
+            ? 'This shift has no recorded hours yet. Check this staff member out to create them.'
+            : null;
+    }
+
+    /**
+     * The hours records behind these shifts, keyed `staffId:shiftId`.
+     *
+     * One per staff member and shift: `AttendanceCheckOutService` creates the
+     * record from the attendance record, which is itself unique on that pair.
+     *
+     * @param  list<mixed>  $shiftIds
+     * @param  list<string>  $staffIds
+     * @return array<string, HoursWorked>
+     */
+    private function hoursForShifts(Event $event, Department $department, array $shiftIds, array $staffIds): array
+    {
+        if ($shiftIds === [] || $staffIds === []) {
+            return [];
+        }
+
+        $hours = [];
+
+        foreach (
+            HoursWorked::query()
+                ->where('event_id', $event->id)
+                ->where('department_id', $department->id)
+                ->whereIn('shift_id', $shiftIds)
+                ->whereIn('staff_id', $staffIds)
+                ->get() as $record
+        ) {
+            $hours[(string) $record->staff_id.':'.(string) $record->shift_id] = $record;
+        }
+
+        return $hours;
     }
 
     /**

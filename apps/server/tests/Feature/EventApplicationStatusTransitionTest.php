@@ -154,7 +154,7 @@ class EventApplicationStatusTransitionTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-06-19 14:00:00'));
 
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $application = EventApplication::factory()->create([
             'event_id' => $event->id,
@@ -181,7 +181,7 @@ class EventApplicationStatusTransitionTest extends TestCase
 
     public function test_authenticated_applicant_can_withdraw_matching_application_by_email(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $user = User::factory()->create(['email' => 'Matched.Applicant@Example.org']);
         $application = EventApplication::factory()->create([
@@ -204,7 +204,7 @@ class EventApplicationStatusTransitionTest extends TestCase
 
     public function test_authenticated_applicant_can_withdraw_matching_application_by_staff_profile_email(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $user = User::factory()->create(['email' => 'login-only@example.org']);
         $staff = Staff::factory()->create(['email' => 'staff.profile@example.org']);
@@ -228,7 +228,7 @@ class EventApplicationStatusTransitionTest extends TestCase
 
     public function test_non_applicant_cannot_withdraw_application(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $application = EventApplication::factory()->create([
             'event_id' => $event->id,
@@ -250,7 +250,7 @@ class EventApplicationStatusTransitionTest extends TestCase
 
     public function test_organizer_cannot_withdraw_someone_elses_application_without_applicant_identity(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $application = EventApplication::factory()->create([
             'event_id' => $event->id,
@@ -278,7 +278,7 @@ class EventApplicationStatusTransitionTest extends TestCase
 
     public function test_submitted_confirmation_shows_withdraw_action_for_session_submitter(): void
     {
-        $organization = Organization::factory()->create(['slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create(['slug' => 'signal-camp-2026']);
         $application = EventApplication::factory()->create([
             'event_id' => $event->id,

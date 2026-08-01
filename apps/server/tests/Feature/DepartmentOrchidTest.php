@@ -17,7 +17,7 @@ class DepartmentOrchidTest extends TestCase
     public function test_orchid_department_list_displays_departments(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
 
         Department::factory()->for($organization)->create([
@@ -31,7 +31,7 @@ class DepartmentOrchidTest extends TestCase
         $response->assertSee('Departments');
         $response->assertSee('Rangers');
         $response->assertSee('RANGERS');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Northwood Collective');
     }
 
     public function test_orchid_department_detail_displays_edit_scaffold(): void

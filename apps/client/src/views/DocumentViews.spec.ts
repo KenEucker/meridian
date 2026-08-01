@@ -113,7 +113,7 @@ function documentPayload(
     organization_id: ORGANIZATION_ID,
     scope_type: "organization",
     scope_id: ORGANIZATION_ID,
-    scope_label: "Organization: Idaho Burners",
+    scope_label: "Organization: Northwood Collective",
     title: "Volunteer Conduct",
     slug: "volunteer-conduct",
     event_info_section: "requirements",
@@ -228,7 +228,7 @@ function libraryPayload(
         {
           scope_type: "organization",
           scope_id: ORGANIZATION_ID,
-          label: "Organization: Idaho Burners",
+          label: "Organization: Northwood Collective",
         },
         {
           scope_type: "department",
@@ -361,7 +361,7 @@ describe("the document library surface", () => {
     // its version, its Event Info placement, and its visibility summary.
     expect(wrapper.text()).toContain("Volunteer Conduct");
     expect(wrapper.text()).toContain("Radio Checkout");
-    expect(wrapper.text()).toContain("Organization: Idaho Burners");
+    expect(wrapper.text()).toContain("Organization: Northwood Collective");
     expect(wrapper.text()).toContain("Event requirements");
     expect(wrapper.text()).toContain("Published to staff in this organization.");
     expect(wrapper.text()).toContain("1.00");
@@ -505,7 +505,7 @@ describe("the document authoring form", () => {
 
     const selects = wrapper.findAll("select");
     expect(selects[0]!.findAll("option").map((option) => option.text())).toEqual(
-      ["Organization: Idaho Burners", "Department: Rangers"],
+      ["Organization: Northwood Collective", "Department: Rangers"],
     );
     expect(selects[1]!.findAll("option").map((option) => option.text())).toEqual(
       [
@@ -534,7 +534,7 @@ describe("the document authoring form", () => {
     // The scope's own name leads, without the "Organization: " kind the label
     // carries, and the result is a slug the node's own expression accepts.
     expect((slug!.element as HTMLInputElement).value).toBe(
-      "idaho-burners-arrival-departure-policy",
+      "northwood-collective-arrival-departure-policy",
     );
 
     await wrapper.findAll("select")[0]!.setValue(`department:${DEPARTMENT_ID}`);

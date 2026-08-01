@@ -51,7 +51,7 @@ class StaffContactExportTest extends TestCase
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="staff-contact-idaho-decompression-2026-20260621-192030.csv"',
+            'attachment; filename="staff-contact-emberfall-2026-20260621-192030.csv"',
         );
 
         $expected = (string) file_get_contents(base_path('tests/Fixtures/staff-contact-export-sample.csv'));
@@ -96,7 +96,7 @@ class StaffContactExportTest extends TestCase
         $response->assertOk();
         $response->assertHeader(
             'Content-Disposition',
-            'attachment; filename="staff-contact-idaho-decompression-2026-rangers-20260621-192030.csv"',
+            'attachment; filename="staff-contact-emberfall-2026-rangers-20260621-192030.csv"',
         );
 
         $expected = (string) file_get_contents(base_path('tests/Fixtures/staff-contact-export-department-sample.csv'));
@@ -112,7 +112,7 @@ class StaffContactExportTest extends TestCase
         $this->assertSame('Vera Staff Contact', $vera['emergency_contact_name']);
         $this->assertSame('+1-208-555-0199', $vera['emergency_contact_phone']);
         $this->assertSame('+1-208-555-0101', $vera['staff_phone']);
-        $this->assertSame('vera@idaho-burners.test', $vera['staff_email']);
+        $this->assertSame('vera@northwood-collective.test', $vera['staff_email']);
         $this->assertSame('Dirt', $vera['teams']);
         $this->assertSame('RANGERS', $vera['department_code']);
     }
@@ -310,10 +310,10 @@ class StaffContactExportTest extends TestCase
      */
     private function scenario(): array
     {
-        $organization = Organization::factory()->create(['name' => 'Idaho Burners', 'slug' => 'idaho-burners']);
+        $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
         $event = Event::factory()->for($organization)->create([
-            'name' => 'Idaho Decompression 2026',
-            'slug' => 'idaho-decompression-2026',
+            'name' => 'Emberfall 2026',
+            'slug' => 'emberfall-2026',
         ]);
 
         $rangers = $this->department($organization, 'Rangers', 'RANGERS', 'Dirt');
@@ -407,7 +407,7 @@ class StaffContactExportTest extends TestCase
             'legal_name' => $legalName,
             'preferred_name' => $preferredName,
             'handle' => $handle,
-            'email' => $handle.'@idaho-burners.test',
+            'email' => $handle.'@northwood-collective.test',
             'phone' => '+1-208-555-0101',
             'emergency_contact_name' => $legalName.' Contact',
             'emergency_contact_phone' => '+1-208-555-0199',

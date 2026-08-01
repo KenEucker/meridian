@@ -21,7 +21,7 @@ class BrandingLettermarkTest extends TestCase
             'stop words are dropped' => ['The Rangers Department', 'RD'],
             'a single word uses two letters' => ['Rangers', 'RA'],
             'a single short word is used whole' => ['Ops', 'OP'],
-            'at most three letters' => ['Idaho Burners Volunteer Operations Group', 'IBV'],
+            'at most three letters' => ['Northwood Volunteer Operations Group', 'NVO'],
             'punctuation is not a word' => ['Gate & Greeters', 'GG'],
             'hyphenated names split' => ['Search-and-Rescue', 'SR'],
             'digits count as letters' => ['Camp 7 Logistics', 'C7L'],

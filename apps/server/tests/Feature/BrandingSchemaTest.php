@@ -111,25 +111,25 @@ class BrandingSchemaTest extends TestCase
     public function test_display_name_falls_back_to_the_organization_name(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
             'branding_display_name' => null,
         ]);
 
-        $this->assertSame('Idaho Burners', $organization->brandingDisplayName());
+        $this->assertSame('Northwood Collective', $organization->brandingDisplayName());
 
-        $organization->forceFill(['branding_display_name' => 'Idaho Burners Collective'])->save();
+        $organization->forceFill(['branding_display_name' => 'Northwood Arts Collective'])->save();
 
-        $this->assertSame('Idaho Burners Collective', $organization->fresh()->brandingDisplayName());
+        $this->assertSame('Northwood Arts Collective', $organization->fresh()->brandingDisplayName());
     }
 
     public function test_blank_display_name_is_treated_as_unset(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
             'branding_display_name' => '   ',
         ]);
 
-        $this->assertSame('Idaho Burners', $organization->brandingDisplayName());
+        $this->assertSame('Northwood Collective', $organization->brandingDisplayName());
     }
 
     public function test_department_branding_columns_persist_and_report_a_profile(): void

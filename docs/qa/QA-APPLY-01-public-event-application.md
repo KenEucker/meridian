@@ -37,7 +37,7 @@ Verify that a public (or authenticated) applicant can open an event-specific app
 
 ## Setup data
 
-- At least one non-archived event exists with two or more non-archived departments assigned through `event_department_assignments` (the seeded "Idaho Decompression 2026" event under organization slug `idaho-burners` and event slug `idaho-decompression-2026` is sufficient if participating departments are configured). Note organization slug, event slug, and participating department names.
+- At least one non-archived event exists with two or more non-archived departments assigned through `event_department_assignments` (the seeded "Emberfall 2026" event under organization slug `northwood-collective` and event slug `emberfall-2026` is sufficient if participating departments are configured). Note organization slug, event slug, and participating department names.
 - One event with **no** eligible participating departments (no active `event_department_assignments`, or all assigned departments archived) to confirm the department interest field is hidden.
 - One archived event (archive an event in Orchid) to confirm the closed state.
 - One staff record in the event organization with organization status `do_not_staff` and a known email address (the seeded Debbie DNS persona is sufficient when present).

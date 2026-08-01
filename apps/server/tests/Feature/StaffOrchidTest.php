@@ -59,7 +59,7 @@ class StaffOrchidTest extends TestCase
     public function test_orchid_staff_detail_displays_edit_scaffold(): void
     {
         $organization = Organization::factory()->create([
-            'name' => 'Idaho Burners',
+            'name' => 'Northwood Collective',
         ]);
         $staff = Staff::factory()->create([
             'legal_name' => 'Alex Kim',
@@ -87,7 +87,7 @@ class StaffOrchidTest extends TestCase
         $response->assertSee('Morgan Kim');
         $response->assertSee('Profile picture');
         $response->assertSee('Organization statuses');
-        $response->assertSee('Idaho Burners');
+        $response->assertSee('Northwood Collective');
         $response->assertSee('Active');
         $response->assertSee('Ready for Alpha 1 testing.');
         $response->assertSee('Archive');

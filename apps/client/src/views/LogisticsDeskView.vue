@@ -22,6 +22,7 @@ import {
   CURRENT_SHIFT_WINDOW_MINUTES,
   addStaffToShift,
   checkoutEquipment,
+  correctHours,
   currentLogisticsShifts,
   getLogisticsDesk,
   logisticsShiftSections,
@@ -37,6 +38,7 @@ import {
   type DepartmentOpsShift,
   type LogisticsDeskRead,
   type LogisticsSearchHit,
+  type LogisticsShiftCard,
 } from "@/department-ops/departmentOpsReadModel";
 import type { EquipmentReturnCondition } from "@/department-ops/types";
 
@@ -56,6 +58,35 @@ import type { EquipmentReturnCondition } from "@/department-ops/types";
  * desk with no node keeps working; presence, shift additions, and equipment
  * handoff are refused where they stand rather than held (CLIENT-018).
  */
+/**
+ * A `datetime-local` value for a moment, in the reader's own clock.
+ *
+ * Built from local components rather than from `toISOString().slice(0, 16)`,
+ * which is the UTC wall time wearing a local label. The inputs below are read
+ * back with `new Date(value)`, which parses a bare `datetime-local` as local, so
+ * a UTC-shaped default round-trips to a moment offset by however far the desk is
+ * from Greenwich — an hours correction typed into a pre-filled field would have
+ * moved the very number it was correcting.
+ */
+function toDateTimeLocal(at: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+
+  return [
+    `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+    `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+  ].join("T");
+}
+
+function toDateTimeLocalFrom(timestamp: string | null): string {
+  if (timestamp === null || timestamp === "") {
+    return "";
+  }
+
+  const at = new Date(timestamp);
+
+  return Number.isNaN(at.getTime()) ? "" : toDateTimeLocal(at);
+}
+
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId ?? ""));
 const departmentId = computed(() => String(route.params.departmentId ?? ""));
@@ -67,11 +98,16 @@ const selectedShiftContextId = ref<string | null>(null);
 const query = ref("");
 const hits = ref<readonly LogisticsSearchHit[]>([]);
 const status = ref<string | null>(null);
-const dialog = ref<
-  "check-in" | "check-out" | "equipment-checkout" | null
->(null);
+type DeskDialog =
+  | "check-in"
+  | "check-out"
+  | "equipment-checkout"
+  | "correct-hours";
+
+const dialog = ref<DeskDialog | null>(null);
 const dialogShiftId = ref("");
-const dialogTimestamp = ref(new Date().toISOString().slice(0, 16));
+const dialogHoursWorkedId = ref("");
+const dialogTimestamp = ref(toDateTimeLocal(new Date()));
 const dialogStartTimestamp = ref("");
 const selectedEquipmentIds = ref<string[]>([]);
 const equipmentReturnConditions = ref<Record<string, EquipmentReturnCondition>>(
@@ -385,13 +421,11 @@ function openDialogForStaff(
   openDialog(kind, shiftId);
 }
 
-function openDialog(
-  kind: "check-in" | "check-out" | "equipment-checkout",
-  shiftId = "",
-): void {
+function openDialog(kind: DeskDialog, shiftId = ""): void {
   dialog.value = kind;
   dialogShiftId.value = shiftId;
-  dialogTimestamp.value = new Date().toISOString().slice(0, 16);
+  dialogHoursWorkedId.value = "";
+  dialogTimestamp.value = toDateTimeLocal(new Date());
   dialogStartTimestamp.value = "";
   selectedEquipmentIds.value = [];
   equipmentReturnConditions.value =
@@ -402,6 +436,21 @@ function openDialog(
             .map((item) => [item.checkoutId, "returned"]),
         )
       : {};
+}
+
+/**
+ * Open the correction dialog on what is on file (SLB-031).
+ *
+ * Both fields start filled with the recorded actual times rather than empty or
+ * with now. A correction is an edit to two times that already exist, and the
+ * operator making it has the staff member in front of them saying which one is
+ * wrong — the other has to survive being confirmed untouched.
+ */
+function openCorrection(card: LogisticsShiftCard): void {
+  openDialog("correct-hours", card.shiftId);
+  dialogHoursWorkedId.value = card.hoursWorkedId ?? "";
+  dialogStartTimestamp.value = toDateTimeLocalFrom(card.actualStartedAt);
+  dialogTimestamp.value = toDateTimeLocalFrom(card.actualEndedAt);
 }
 
 /**
@@ -418,6 +467,22 @@ function confirmDialog(): void {
   const kind = dialog.value;
 
   if (member === null || kind === null || context.value === null) return;
+
+  /*
+   * A correction names both ends of the window and the record it edits. The
+   * node requires all three and would refuse without them; saying so here means
+   * the operator reads it beside the fields rather than after a round trip.
+   */
+  if (
+    kind === "correct-hours" &&
+    (dialogHoursWorkedId.value === "" ||
+      dialogStartTimestamp.value === "" ||
+      dialogTimestamp.value === "")
+  ) {
+    status.value = "Enter both the actual start and the actual end to correct these hours.";
+
+    return;
+  }
 
   const occurredAt = new Date(dialogTimestamp.value).toISOString();
   const shiftId = dialogShiftId.value;
@@ -439,6 +504,13 @@ function confirmDialog(): void {
           shiftId === "" ? null : shiftId,
         );
       }
+    } else if (kind === "correct-hours") {
+      await correctHours(
+        context.value!,
+        dialogHoursWorkedId.value,
+        new Date(dialogStartTimestamp.value).toISOString(),
+        occurredAt,
+      );
     } else if (kind === "check-out") {
       queueCheckOut({
         context: context.value!,
@@ -473,10 +545,7 @@ function confirmDialog(): void {
   dialogPendingMessage(kind, member.displayName));
 }
 
-function dialogSuccessMessage(
-  kind: "check-in" | "check-out" | "equipment-checkout",
-  displayName: string,
-): string {
+function dialogSuccessMessage(kind: DeskDialog, displayName: string): string {
   switch (kind) {
     case "check-in":
       return `${displayName} checked in.`;
@@ -484,13 +553,12 @@ function dialogSuccessMessage(
       return `${displayName} checked out.`;
     case "equipment-checkout":
       return `${displayName} equipment checked out.`;
+    case "correct-hours":
+      return `Hours corrected for ${displayName}.`;
   }
 }
 
-function dialogPendingMessage(
-  kind: "check-in" | "check-out" | "equipment-checkout",
-  displayName: string,
-): string {
+function dialogPendingMessage(kind: DeskDialog, displayName: string): string {
   switch (kind) {
     case "check-in":
       return `Checking ${displayName} in`;
@@ -498,6 +566,21 @@ function dialogPendingMessage(
       return `Checking ${displayName} out`;
     case "equipment-checkout":
       return `Checking out equipment to ${displayName}`;
+    case "correct-hours":
+      return `Correcting hours for ${displayName}`;
+  }
+}
+
+function dialogHeading(kind: DeskDialog): string {
+  switch (kind) {
+    case "check-in":
+      return "Check in";
+    case "check-out":
+      return "Check out";
+    case "equipment-checkout":
+      return "Check out equipment";
+    case "correct-hours":
+      return "Correct hours";
   }
 }
 
@@ -937,6 +1020,24 @@ void loadDesk();
                   {{ formatTimestamp(card.endsAt, timeZone) }}
                 </span>
                 <!--
+                  The hours on file, once a check-out has created them. Shown
+                  beside the shift they belong to because that is what a
+                  correction is measured against: an actual start two hours
+                  after the shift began is the thing an operator is being asked
+                  to fix (SLB-031).
+                -->
+                <span
+                  v-if="card.actualStartedAt && card.actualEndedAt"
+                  class="logistics__card-hours"
+                >
+                  Recorded hours:
+                  {{ formatTimestamp(card.actualStartedAt, timeZone) }} -
+                  {{ formatTimestamp(card.actualEndedAt, timeZone) }}
+                  <template v-if="card.minutesWorked !== null">
+                    ({{ card.minutesWorked }} min)
+                  </template>
+                </span>
+                <!--
                   Why there is no "Add to shift" button on this card. The card
                   used to be absent entirely in these cases, so an operator who
                   had just created a shift and marked somebody on-site went
@@ -948,6 +1049,20 @@ void loadDesk();
                   role="status"
                 >
                   {{ card.addToShiftBlockedReason }}
+                </span>
+                <!--
+                  Why there is no "Correct hours" button. The frozen sentence is
+                  the node's own and names the date the grace period closed, so
+                  an operator can tell "an hour too late" from "a month too
+                  late" and knows whether to raise it with an organizer at all
+                  (HOURS-008, SLB-031).
+                -->
+                <span
+                  v-if="card.correctHoursBlockedReason"
+                  class="logistics__card-blocked"
+                  role="status"
+                >
+                  {{ card.correctHoursBlockedReason }}
                 </span>
               </div>
               <div class="logistics__actions">
@@ -982,6 +1097,14 @@ void loadDesk();
                   @click="addToShift(card.shiftId)"
                 >
                   Add to shift
+                </button>
+                <button
+                  v-if="card.canCorrectHours"
+                  type="button"
+                  :disabled="busy"
+                  @click="openCorrection(card)"
+                >
+                  Correct hours
                 </button>
               </div>
             </li>
@@ -1090,17 +1213,30 @@ void loadDesk();
         tabindex="-1"
         :aria-labelledby="'attendance-dialog-heading'"
       >
-        <h2 id="attendance-dialog-heading">
-          {{
-            dialog === "check-in"
-              ? "Check in"
-              : dialog === "check-out"
-                ? "Check out"
-                : "Check out equipment"
-          }}
-        </h2>
+        <h2 id="attendance-dialog-heading">{{ dialogHeading(dialog) }}</h2>
+        <!--
+          A correction is an edit to a record that already exists, so the dialog
+          says which one and what it currently holds before offering to change it
+          (SLB-031, SLB-032). The prior values are not discarded by the change —
+          they stay in attendance history and in the audit entry — and saying so
+          is what makes an operator willing to touch a recorded total.
+        -->
+        <p v-if="dialog === 'correct-hours'" class="logistics__dialog-note">
+          Editing the recorded hours for this shift. The previous values stay in
+          attendance history.
+        </p>
+        <label v-if="dialog === 'correct-hours'">
+          <span>Actual start</span>
+          <input v-model="dialogStartTimestamp" type="datetime-local" />
+        </label>
         <label>
-          <span>{{ dialog === "check-out" ? "Actual end" : "Timestamp" }}</span>
+          <span>
+            {{
+              dialog === "check-out" || dialog === "correct-hours"
+                ? "Actual end"
+                : "Timestamp"
+            }}
+          </span>
           <input v-model="dialogTimestamp" type="datetime-local" />
         </label>
         <!--
@@ -1108,7 +1244,9 @@ void loadDesk();
           to now, which is the ordinary case; the start is left empty unless
           somebody is correcting it, because an empty start means "leave the
           recorded check-in alone" to `AttendanceCheckOutService` and a
-          pre-filled one would silently overwrite it.
+          pre-filled one would silently overwrite it. The correction dialog above
+          is the opposite case and fills both: there is nothing to leave alone,
+          only two recorded times, one of which is wrong.
         -->
         <label v-if="dialog === 'check-out'">
           <span>Actual start (leave empty to keep the recorded check-in)</span>
@@ -1379,6 +1517,19 @@ void loadDesk();
 }
 
 .logistics__card-blocked {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+/* The number a correction is about, so it reads as data rather than as a note. */
+.logistics__card-hours {
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
+}
+
+.logistics__dialog-note {
+  margin: 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
 }

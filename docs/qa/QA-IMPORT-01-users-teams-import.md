@@ -51,9 +51,9 @@ Section A covers the users and teams imports (M13.7). Section B covers the shift
 
 ## Setup data
 
-- An organization with slug `idaho-burners`
+- An organization with slug `northwood-collective`
 - Departments `RANGERS` and `GATE` in that organization
-- An event with slug `idaho-decompression-2026` in that organization, in a timezone that is not UTC (the development scenario uses `America/Boise`)
+- An event with slug `emberfall-2026` in that organization, in a timezone that is not UTC (the development scenario uses `America/Los_Angeles`)
 - A users CSV such as:
 
   ```text
@@ -69,9 +69,9 @@ Section A covers the users and teams imports (M13.7). Section B covers the shift
 
   ```text
   organization_slug,department_code,name,code,description
-  idaho-burners,RANGERS,Dirt,DIRT,Field rangers walking the city
-  idaho-burners,RANGERS,Command,COMMAND,
-  idaho-burners,GATE,Greeters,GREETERS,"Gate greeters, perimeter"
+  northwood-collective,RANGERS,Dirt,DIRT,Field rangers walking the city
+  northwood-collective,RANGERS,Command,COMMAND,
+  northwood-collective,GATE,Greeters,GREETERS,"Gate greeters, perimeter"
   no-such-org,RANGERS,Ghost,GHOST,
   ```
 
@@ -79,20 +79,20 @@ Section A covers the users and teams imports (M13.7). Section B covers the shift
 
   ```text
   organization_slug,event_slug,department_code,team_code,title,starts_at,ends_at,capacity
-  idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,6
-  idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Dirt Patrol Night,2026-08-28 17:00,2026-08-29 01:00,4
-  idaho-burners,idaho-decompression-2026,GATE,GREETERS,Gate Opening,2026-08-28 06:00,2026-08-28 14:00,
-  idaho-burners,idaho-decompression-2026,RANGERS,NOPE,Ghost Shift,2026-08-28 09:00,2026-08-28 17:00,
-  idaho-burners,idaho-decompression-2026,RANGERS,DIRT,Backwards Shift,2026-08-28 17:00,2026-08-28 09:00,
+  northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Day,2026-08-28 09:00,2026-08-28 17:00,6
+  northwood-collective,emberfall-2026,RANGERS,DIRT,Dirt Patrol Night,2026-08-28 17:00,2026-08-29 01:00,4
+  northwood-collective,emberfall-2026,GATE,GREETERS,Gate Opening,2026-08-28 06:00,2026-08-28 14:00,
+  northwood-collective,emberfall-2026,RANGERS,NOPE,Ghost Shift,2026-08-28 09:00,2026-08-28 17:00,
+  northwood-collective,emberfall-2026,RANGERS,DIRT,Backwards Shift,2026-08-28 17:00,2026-08-28 09:00,
   ```
 
 - An assignments CSV such as:
 
   ```text
   organization_slug,event_slug,department_code,shift_title,shift_starts_at,staff_email
-  idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,vera.staff@idaho-burners.test
-  idaho-burners,idaho-decompression-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,ira.ineligible@idaho-burners.test
-  idaho-burners,idaho-decompression-2026,RANGERS,No Such Shift,2026-08-28 09:00,vera.staff@idaho-burners.test
+  northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,vera.staff@northwood-collective.test
+  northwood-collective,emberfall-2026,RANGERS,Dirt Patrol Day,2026-08-28 09:00,ira.ineligible@northwood-collective.test
+  northwood-collective,emberfall-2026,RANGERS,No Such Shift,2026-08-28 09:00,vera.staff@northwood-collective.test
   ```
 
 - The committed samples `apps/server/tests/Fixtures/users-import-sample.csv`, `apps/server/tests/Fixtures/teams-import-sample.csv`, `apps/server/tests/Fixtures/shifts-import-sample.csv`, and `apps/server/tests/Fixtures/assignments-import-sample.csv` may be used instead. Use dates that are still in the future when the script is run; a shift that has already started is deliberately not editable.
@@ -151,7 +151,7 @@ Run this section after section A, so the `DIRT` and `GREETERS` teams exist.
 - Step 13: each created user has a `user.imported` entry and each renamed user a `user.updated` entry with before/after values; imported teams have the ordinary `team.created` and `team.updated` entries; each run has a `users.imported` or `teams.imported` summary entry with its counts; the actor on every entry is Gwen Godmode and the source context is `orchid`. The previewed run in step 2 left no audit entries at all.
 - Step 14: the preview reports 3 created and 2 skipped, with `No team "NOPE" in department "RANGERS".` and `Shift end must be after shift start.`, and no shifts exist yet.
 - Step 15: the same three shifts are created with the same per-row outcomes, and `Gate Opening` has no capacity limit.
-- Step 16: `Dirt Patrol Day` starts at 09:00 in the event timezone — stored as 15:00 UTC for `America/Boise` in August — rather than at 09:00 UTC.
+- Step 16: `Dirt Patrol Day` starts at 09:00 in the event timezone — stored as 15:00 UTC for `America/Los_Angeles` in August — rather than at 09:00 UTC.
 - Step 17: the run reports 1 updated and 2 already up to date; `Dirt Patrol Day` shows capacity 8 and the new end time, and no second `Dirt Patrol Day` exists.
 - Step 18: every row is skipped as `Already up to date.` and nothing is written.
 - Step 19: the run reports 1 created, not 1 updated: the title is part of the row's identity, so a fourth shift now exists and the original is untouched. Delete or cancel the extra shift before continuing.

@@ -35,14 +35,14 @@ class EventEditLayout extends Rows
                 ->set('data-meridian-slug-target', 'event[slug]')
                 ->set('data-meridian-slug-year-source', 'event[starts_at]')
                 ->title(__('Name'))
-                ->placeholder(__('Idaho Decompression 2026')),
+                ->placeholder(__('Emberfall 2026')),
 
             Input::make('event.slug')
                 ->type('text')
                 ->max(255)
                 ->required()
                 ->title(__('Slug'))
-                ->placeholder(__('idaho-decompression-2026'))
+                ->placeholder(__('emberfall-2026'))
                 ->help(__('Stable URL-safe event identifier.')),
 
             Select::make('event.timezone')

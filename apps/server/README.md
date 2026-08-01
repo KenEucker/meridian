@@ -125,9 +125,9 @@ php artisan serve
 `php artisan db:seed` (or `migrate:fresh --seed`) loads the permission catalog and
 the development scenario from development process section 13.3:
 
-- Organization: **Idaho Burners** (`idaho-burners`)
-- Event: **Idaho Decompression 2026** (`idaho-decompression-2026`,
-  `America/Boise`)
+- Organization: **Northwood Collective** (`northwood-collective`)
+- Event: **Emberfall 2026** (`emberfall-2026`,
+  `America/Los_Angeles`)
 - Departments: Organizers, Rangers, Gate, DPW
 - Named teams: Rangers Dirt, Rangers Command, Rangers IC Operators, Rangers IC
   Viewers, Gate Operator, DPW Logistics — plus a `Default` team created for any
@@ -160,17 +160,17 @@ re-running it does not duplicate these accounts or reset a password you changed.
 
 | Email | Persona | Department / team | Roles granted |
 |---|---|---|---|
-| `vera.staff@idaho-burners.test` | Vera Staff | Rangers / Dirt | none — plain staff |
-| `sam.shiftlead@idaho-burners.test` | Sam Shiftlead | Rangers / Dirt | `shift_lead`, `department_logistics`, `department_operations`, `department_administration`, `department_planning` |
-| `dana.departmentlead@idaho-burners.test` | Dana Departmentlead | Rangers / Dirt | `department_lead` |
-| `olive.organizer@idaho-burners.test` | Olive Organizer | Organizers / Default | `organizer` |
-| `ingrid.iclead@idaho-burners.test` | Ingrid ICLead | Rangers / Command | `ic_lead` (event-scoped) |
-| `omar.icoperator@idaho-burners.test` | Omar ICOperator | Rangers / IC Operators | `ic_operator` (event-scoped) |
-| `ivy.icviewer@idaho-burners.test` | Ivy ICViewer | Rangers / IC Viewers | `ic_viewer` (event-scoped) |
-| `gwen.godmode@idaho-burners.test` | Gwen Godmode | none | none — see below |
-| `debbie.dns@idaho-burners.test` | Debbie DNS | none | none — organization status `do_not_staff` |
-| `pat.prospective@idaho-burners.test` | Pat Prospective | none | none — organization status `prospective` |
-| `ira.ineligible@idaho-burners.test` | Ira Ineligible | Gate / Default | none — department status `ineligible` |
+| `vera.staff@northwood-collective.test` | Vera Staff | Rangers / Dirt | none — plain staff |
+| `sam.shiftlead@northwood-collective.test` | Sam Shiftlead | Rangers / Dirt | `shift_lead`, `department_logistics`, `department_operations`, `department_administration`, `department_planning` |
+| `dana.departmentlead@northwood-collective.test` | Dana Departmentlead | Rangers / Dirt | `department_lead` |
+| `olive.organizer@northwood-collective.test` | Olive Organizer | Organizers / Default | `organizer` |
+| `ingrid.iclead@northwood-collective.test` | Ingrid ICLead | Rangers / Command | `ic_lead` (event-scoped) |
+| `omar.icoperator@northwood-collective.test` | Omar ICOperator | Rangers / IC Operators | `ic_operator` (event-scoped) |
+| `ivy.icviewer@northwood-collective.test` | Ivy ICViewer | Rangers / IC Viewers | `ic_viewer` (event-scoped) |
+| `gwen.godmode@northwood-collective.test` | Gwen Godmode | none | none — see below |
+| `debbie.dns@northwood-collective.test` | Debbie DNS | none | none — organization status `do_not_staff` |
+| `pat.prospective@northwood-collective.test` | Pat Prospective | none | none — organization status `prospective` |
+| `ira.ineligible@northwood-collective.test` | Ira Ineligible | Gate / Default | none — department status `ineligible` |
 
 Sam carries every department capability at once, so one sign-in reaches all of
 the department administration surfaces. The last three personas exist to

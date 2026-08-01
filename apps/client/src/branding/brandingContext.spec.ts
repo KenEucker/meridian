@@ -54,7 +54,7 @@ function respondWithProfiles() {
           organizationId,
           organizationId === LOCAL_FIELD_OTHER_ORGANIZATION_ID
             ? "Cascadia Collective"
-            : "Idaho Burners",
+            : "Northwood Collective",
         ),
       ),
       { status: 200, headers: { "content-type": "application/json" } },
@@ -91,7 +91,7 @@ describe("branding following the session context", () => {
     installClientSession(localFieldSessionDocument(), "network");
     stopFollowing = followSessionBranding();
     await vi.waitFor(() =>
-      expect(brandingState.profile.display_name).toBe("Idaho Burners"),
+      expect(brandingState.profile.display_name).toBe("Northwood Collective"),
     );
 
     expect(requested).toEqual([LOCAL_FIELD_ORGANIZATION_ID]);
@@ -103,7 +103,7 @@ describe("branding following the session context", () => {
     installClientSession(localFieldSessionDocument(), "network");
     stopFollowing = followSessionBranding();
     await vi.waitFor(() =>
-      expect(brandingState.profile.display_name).toBe("Idaho Burners"),
+      expect(brandingState.profile.display_name).toBe("Northwood Collective"),
     );
 
     const switchable = switchableLocalFieldContext();
@@ -156,7 +156,7 @@ describe("branding following the session context", () => {
     installClientSession(localFieldSessionDocument(), "network");
     stopFollowing = followSessionBranding();
     await vi.waitFor(() =>
-      expect(brandingState.profile.display_name).toBe("Idaho Burners"),
+      expect(brandingState.profile.display_name).toBe("Northwood Collective"),
     );
 
     clearClientSession();
