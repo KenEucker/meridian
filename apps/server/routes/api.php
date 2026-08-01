@@ -25,6 +25,7 @@ use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
+use App\Http\Controllers\Incidents\IncidentTypeAdminController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
@@ -272,6 +273,18 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/strike-incident-note', [IncidentCommandController::class, 'strikeNote'])
         ->name('api.commands.strike-incident-note');
 
+    Route::post('/commands/create-incident-type', [IncidentTypeAdminController::class, 'create'])
+        ->name('api.commands.create-incident-type');
+
+    Route::post('/commands/rename-incident-type', [IncidentTypeAdminController::class, 'rename'])
+        ->name('api.commands.rename-incident-type');
+
+    Route::post('/commands/archive-incident-type', [IncidentTypeAdminController::class, 'archive'])
+        ->name('api.commands.archive-incident-type');
+
+    Route::post('/commands/restore-incident-type', [IncidentTypeAdminController::class, 'restore'])
+        ->name('api.commands.restore-incident-type');
+
     Route::post('/commands/save-incident-list-preset', [IncidentListPresetController::class, 'save'])
         ->name('api.commands.save-incident-list-preset');
 
@@ -433,6 +446,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/staff', [OrganizerStaffReadController::class, 'index'])
         ->name('api.organizations.staff.index');
+
+    Route::get('/organizations/{organization}/incident-types', [IncidentTypeAdminController::class, 'index'])
+        ->name('api.organizations.incident-types.index');
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');

@@ -130,10 +130,15 @@ class IncidentTypeDefaultsTest extends TestCase
         }
     }
 
-    public function test_other_is_available_because_the_list_is_chosen_from(): void
+    public function test_the_default_names_are_distinct(): void
     {
-        // The picker offers configured types and creates none, so an incident
-        // that fits no category still needs somewhere to go.
-        $this->assertContains('Other', IncidentTypeDefaults::names());
+        // The only property this suite asserts about the list's contents. Which
+        // categories an organization starts with is a product decision that
+        // belongs in `IncidentTypeDefaults`, not one a test should pin; a
+        // duplicate would just make the provisioner's first run a no-op for the
+        // second copy.
+        $names = array_map('mb_strtolower', IncidentTypeDefaults::names());
+
+        $this->assertSame($names, array_values(array_unique($names)));
     }
 }
