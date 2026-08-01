@@ -280,6 +280,14 @@ describe("AppShell fixed UI mode display", () => {
         1,
       );
       expect(wrapper.find(".app-shell__user-icon").exists()).toBe(true);
+      // Filled rather than outlined. The connection scale is carried by this
+      // icon's color, and a 2px outline gave that color too little area to be
+      // read at 16px — applied, but not legible.
+      expect(
+        wrapper
+          .findAll(".app-shell__user-icon > *")
+          .map((shape) => shape.attributes("fill")),
+      ).toEqual(["currentColor", "currentColor"]);
     },
   );
 
