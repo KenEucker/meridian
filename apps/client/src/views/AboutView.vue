@@ -16,6 +16,10 @@ import {
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import { describeConnectivityState } from "@/offline/syncStatus";
+import {
+  resolveReadinessChecklist,
+  summarizeReadiness,
+} from "@/readiness/checklist";
 import { useConnectivity } from "@/offline/useConnectivity";
 import { describeCommand } from "@/outbox/commandCatalog";
 import {
@@ -51,6 +55,15 @@ const apiConfig = computed(() => meridianApiConfig());
 const healthUrl = computed(() => `${apiConfig.value.baseUrl}/api/health`);
 const connectivityDescription = computed(() =>
   describeConnectivityState(connectivity.value),
+);
+/*
+ * Resolved here rather than passed from the readiness screen, and reactively
+ * rather than once: signing in, pointing this device at a node, and switching
+ * event all move the count, and every one of those can happen while this page is
+ * open.
+ */
+const readiness = computed(() =>
+  summarizeReadiness(resolveReadinessChecklist()),
 );
 const fieldSession = computed(() => resolveFieldSession());
 const fieldSessionText = computed(() => {
@@ -329,6 +342,30 @@ watch(
       </div>
     </section>
 
+    <!--
+      Readiness has its own screen and no way in from here, which made it a page
+      you reached by knowing the URL. The count is on the link rather than behind
+      it because "5 of 8 ready" is the whole answer most of the time — the screen
+      is for the times it is not (technical spec 14).
+    -->
+    <section class="about__device" aria-labelledby="about-device-heading">
+      <h2 id="about-device-heading" class="about__subheading">This device</h2>
+      <RouterLink class="about__readiness-link" :to="{ name: 'readiness' }">
+        <span class="about__readiness-body">
+          <strong>Device readiness</strong>
+          <span>
+            Advisory, only for you, and never shown to organizers.
+          </span>
+        </span>
+        <span
+          class="about__readiness-count"
+          :data-complete="readiness.ready === readiness.total"
+        >
+          {{ readiness.ready }}/{{ readiness.total }} ready
+        </span>
+      </RouterLink>
+    </section>
+
     <section class="about__health" aria-labelledby="about-health-heading">
       <header class="about__section-header">
         <h2 id="about-health-heading" class="about__subheading">
@@ -482,8 +519,70 @@ watch(
 }
 
 .about__settings,
+.about__device,
 .about__about {
   margin-top: var(--m-space-6);
+}
+
+.about__readiness-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  margin-top: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.about__readiness-link:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.about__readiness-body {
+  display: grid;
+  gap: var(--m-space-1);
+  min-width: 0;
+}
+
+.about__readiness-body span {
+  color: var(--m-text-muted);
+}
+
+/*
+ * The count carries its own state, and says it in the number as well as in the
+ * color: everything ready reads "8/8 ready" whether or not the green lands
+ * (accessibility checklist).
+ */
+.about__readiness-count {
+  padding: 0.15rem var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-pill);
+  background: var(--m-surface-base);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.about__readiness-count[data-complete="true"] {
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-success) 55%,
+    var(--m-border-default)
+  );
+  background: color-mix(
+    in srgb,
+    var(--m-status-success) 16%,
+    var(--m-surface-base)
+  );
+  color: color-mix(in srgb, var(--m-status-success) 78%, var(--m-text-primary));
 }
 
 .about__setting-row {
