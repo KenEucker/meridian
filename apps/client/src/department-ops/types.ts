@@ -1,3 +1,5 @@
+import type { StatusPillTone } from "@/components/StatusPill.vue";
+
 export const SHIFT_ATTENDANCE_STATES = [
   "scheduled",
   "checked_in",
@@ -112,11 +114,42 @@ export interface DeploymentOption {
   readonly locationDetails: string | null;
 }
 
+/**
+ * What a Logistics operator needs to know about somebody before they say a word.
+ *
+ * Four facts, and each one changes what the desk does next. On-site and on-shift
+ * decide whether there is anything to check in, check out, or add. The two
+ * equipment facts decide what the desk is still owed and when it comes back:
+ * kit signed out with a shift returns when that shift ends, kit signed out for
+ * the event is out until the person leaves site, and it is the second kind that
+ * quietly stays out for a week.
+ */
+export interface LogisticsStaffStates {
+  readonly onSite: boolean;
+  readonly onShift: boolean;
+  readonly hasShiftEquipment: boolean;
+  readonly hasEventEquipment: boolean;
+}
+
+/** One state, ready to render. */
+export interface LogisticsStatePill {
+  readonly key: keyof LogisticsStaffStates;
+  readonly label: string;
+  readonly tone: StatusPillTone;
+}
+
 export interface LogisticsSearchHit {
   readonly id: string;
   readonly kind: "staff" | "equipment" | "shift";
   readonly label: string;
   readonly detail: string;
+  /**
+   * Quick-read states for a hit that has any, highest priority first.
+   *
+   * Optional because only staff hits carry them, and the search component
+   * renders whatever it is given rather than knowing which kinds those are.
+   */
+  readonly pills?: readonly LogisticsStatePill[];
 }
 
 export interface LogisticsSearchContext {

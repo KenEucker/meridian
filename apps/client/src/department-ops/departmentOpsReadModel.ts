@@ -46,6 +46,8 @@ import type {
   DepartmentPresenceState,
   EquipmentReturnCondition,
   EquipmentState,
+  LogisticsStaffStates,
+  LogisticsStatePill,
   ShiftAttendanceState,
   ShiftLifecycle,
 } from "@/department-ops/types";
@@ -158,6 +160,15 @@ export interface LogisticsShiftCard {
   readonly canCheckOut: boolean;
   readonly canMarkNoShow: boolean;
   readonly canAddToShift: boolean;
+  /**
+   * Why an on-site staff member cannot be added to this shift, or null when they
+   * can or already hold an assignment on it.
+   *
+   * The card used to be absent in exactly these cases, which is how an operator
+   * who marked somebody on-site and went to add them to a shift they had just
+   * created found nothing on screen at all — no card, no button, no reason.
+   */
+  readonly addToShiftBlockedReason: string | null;
 }
 
 export interface LogisticsEquipmentItem {
@@ -167,6 +178,15 @@ export interface LogisticsEquipmentItem {
   readonly assetTag: string | null;
   readonly status: EquipmentState;
   readonly checkedOutAt: string | null;
+  /**
+   * The shift this item was handed over for, or null when it was signed out for
+   * the event rather than for a shift.
+   *
+   * The distinction is what the desk is owed and when. Shift kit comes back when
+   * that shift ends; event kit is out until the person leaves site, and is the
+   * kind that quietly stays out for a week.
+   */
+  readonly shiftId: string | null;
 }
 
 export interface LogisticsFutureSignup {
@@ -451,6 +471,7 @@ interface WorkspacePayload {
     readonly can_check_out: boolean;
     readonly can_mark_no_show: boolean;
     readonly can_add_to_shift: boolean;
+    readonly add_to_shift_blocked_reason?: string | null;
   }[];
   readonly open_equipment?: EquipmentPayload[];
   readonly available_equipment?: EquipmentPayload[];
@@ -471,6 +492,7 @@ interface EquipmentPayload {
   readonly asset_tag: string | null;
   readonly status: EquipmentState;
   readonly checked_out_at: string | null;
+  readonly shift_id?: string | null;
 }
 
 function toEquipment(payload: EquipmentPayload): LogisticsEquipmentItem {
@@ -481,6 +503,7 @@ function toEquipment(payload: EquipmentPayload): LogisticsEquipmentItem {
     assetTag: payload.asset_tag,
     status: payload.status,
     checkedOutAt: payload.checked_out_at,
+    shiftId: payload.shift_id ?? null,
   };
 }
 
@@ -539,6 +562,7 @@ export async function getLogisticsDesk(
         canCheckOut: card.can_check_out,
         canMarkNoShow: card.can_mark_no_show,
         canAddToShift: card.can_add_to_shift,
+        addToShiftBlockedReason: card.add_to_shift_blocked_reason ?? null,
       })),
       openEquipment: (workspace.open_equipment ?? []).map(toEquipment),
       availableEquipment: (workspace.available_equipment ?? []).map(toEquipment),
@@ -977,12 +1001,86 @@ export function logisticsStaffOnShift(
   });
 }
 
+export type { LogisticsStaffStates, LogisticsStatePill };
+
+/**
+ * The states, in the order they earn their space.
+ *
+ * Presence first and shift second because those two are what an operator is
+ * deciding on; equipment is what they follow up with. The order is the whole
+ * mechanism behind showing fewer pills in a tight row — a truncated list keeps
+ * the front of it, so a two-pill cap in the search dropdown is always presence
+ * and shift rather than whichever two happened to be true.
+ */
+const LOGISTICS_STATE_PILLS: readonly LogisticsStatePill[] = Object.freeze([
+  { key: "onSite", label: "On-site", tone: "positive" },
+  { key: "onShift", label: "On-shift", tone: "info" },
+  { key: "hasShiftEquipment", label: "Shift kit", tone: "caution" },
+  { key: "hasEventEquipment", label: "Event kit", tone: "caution" },
+]);
+
+/**
+ * What is true of one staff member right now, from the desk read.
+ *
+ * Derived rather than fetched: every fact is already on the workspace the read
+ * carries, and asking the node a second question it has already answered is how
+ * a screen and a server start disagreeing.
+ */
+export function logisticsStaffStates(
+  desk: LogisticsDeskRead,
+  staffId: string,
+): LogisticsStaffStates {
+  const workspace = desk.staffWorkspaces[staffId] ?? null;
+
+  if (workspace === null) {
+    return {
+      onSite: false,
+      onShift: false,
+      hasShiftEquipment: false,
+      hasEventEquipment: false,
+    };
+  }
+
+  return {
+    onSite: workspace.presenceState === "on_site",
+    onShift: workspace.shiftCards.some(
+      (card) => card.attendanceState === "checked_in",
+    ),
+    hasShiftEquipment: workspace.openEquipment.some(
+      (item) => item.shiftId !== null,
+    ),
+    hasEventEquipment: workspace.openEquipment.some(
+      (item) => item.shiftId === null,
+    ),
+  };
+}
+
+/**
+ * The pills to show for those states, highest priority first.
+ *
+ * Only what is true is rendered. "Off-site" as a pill on every other row would
+ * be a wall of grey saying nothing, and the absence of an on-site pill already
+ * says it — the one place off-site is worth stating outright is the workspace
+ * header, which says it in full rather than by omission.
+ */
+export function logisticsStatePills(
+  states: LogisticsStaffStates,
+  limit = LOGISTICS_STATE_PILLS.length,
+): readonly LogisticsStatePill[] {
+  return LOGISTICS_STATE_PILLS.filter((pill) => states[pill.key]).slice(
+    0,
+    Math.max(limit, 0),
+  );
+}
+
 /** One hit from the desk's search over the department index (SLB-021). */
 export interface LogisticsSearchHit {
   readonly id: string;
   readonly kind: "staff" | "equipment" | "shift";
   readonly label: string;
   readonly detail: string;
+  /** Quick-read states, for a hit that has any. Staff hits do; the rest do not. */
+  readonly pills?: readonly LogisticsStatePill[];
 }
 
 function normalize(value: string): string {
@@ -1005,15 +1103,25 @@ export function searchLogisticsDesk(
         `${staff.displayName} ${staff.handle ?? ""} ${staff.teamLabel}`,
       ).includes(needle),
     )
-    .map(
-      (staff) =>
-        ({
-          id: staff.staffId,
-          kind: "staff",
-          label: staff.displayName,
-          detail: `${staff.teamLabel} / ${staff.presenceState === "on_site" ? "On-site" : "Off-site"}`,
-        }) satisfies LogisticsSearchHit,
-    );
+    .map((staff) => {
+      const states = logisticsStaffStates(desk, staff.staffId);
+
+      return {
+        id: staff.staffId,
+        kind: "staff",
+        // The team stays in the detail line and the presence word leaves it: it
+        // is now a pill, and printing it twice on one row is the sort of thing
+        // that makes a dense list unreadable rather than informative.
+        detail: staff.teamLabel,
+        label: staff.displayName,
+        /*
+         * Two, because this is a dropdown row over a search box and not a card.
+         * The priority order in `LOGISTICS_STATE_PILLS` is what makes a cap safe:
+         * whichever two survive are the two an operator is deciding on.
+         */
+        pills: logisticsStatePills(states, 2),
+      } satisfies LogisticsSearchHit;
+    });
 
   const equipmentHits = desk.searchableEquipment
     .filter((item) =>

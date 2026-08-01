@@ -9,12 +9,16 @@ import {
   isShiftCurrentlyGoing,
   logisticsShiftSections,
   logisticsStaffOnShift,
+  logisticsStaffStates,
+  logisticsStatePills,
   planningSummary,
   queueCheckIn,
   searchLogisticsDesk,
   setDepartmentPresence,
   type DepartmentOpsContext,
   type LogisticsDeskRead,
+  type LogisticsEquipmentItem,
+  type LogisticsShiftCard,
   type LogisticsStaffWorkspace,
   type PlanningRow,
 } from "@/department-ops/departmentOpsReadModel";
@@ -46,6 +50,43 @@ function workspace(
     openEquipment: [],
     availableEquipment: [],
     futureSignups: [],
+    ...overrides,
+  };
+}
+
+function card(
+  overrides: Partial<LogisticsShiftCard> = {},
+): LogisticsShiftCard {
+  return {
+    shiftId: "shift-day",
+    title: "Ranger Dirt Day Shift",
+    teamId: "team-dirt",
+    teamLabel: "Dirt",
+    startsAt: "2027-07-04T16:00:00.000Z",
+    endsAt: "2027-07-04T22:00:00.000Z",
+    lifecycle: "active",
+    attendanceState: null,
+    assignmentId: null,
+    canCheckIn: false,
+    canCheckOut: false,
+    canMarkNoShow: false,
+    canAddToShift: false,
+    addToShiftBlockedReason: null,
+    ...overrides,
+  };
+}
+
+function equipment(
+  overrides: Partial<LogisticsEquipmentItem> = {},
+): LogisticsEquipmentItem {
+  return {
+    checkoutId: "checkout-1",
+    equipmentItemId: "equipment-radio-12",
+    name: "Radio 12",
+    assetTag: "RDO-12",
+    status: "checked_out",
+    checkedOutAt: "2027-07-04T16:05:00.000Z",
+    shiftId: null,
     ...overrides,
   };
 }
@@ -171,6 +212,118 @@ describe("logistics desk presentation", () => {
     ]);
   });
 
+  /*
+   * The four facts an operator decides on before they say a word: is this
+   * person here, are they working, and is the desk owed anything back.
+   */
+  it("reads a staff member's states off the workspace the node already sent", () => {
+    const states = logisticsStaffStates(
+      desk({
+        staffWorkspaces: {
+          "staff-1": workspace({
+            shiftCards: [card({ attendanceState: "checked_in" })],
+            openEquipment: [
+              equipment({ checkoutId: "checkout-1", shiftId: "shift-day" }),
+              equipment({ checkoutId: "checkout-2", shiftId: null }),
+            ],
+          }),
+        },
+      }),
+      "staff-1",
+    );
+
+    expect(states).toEqual({
+      onSite: true,
+      onShift: true,
+      hasShiftEquipment: true,
+      hasEventEquipment: true,
+    });
+  });
+
+  it("tells shift kit from event kit, because they come back at different times", () => {
+    const shiftOnly = logisticsStaffStates(
+      desk({
+        staffWorkspaces: {
+          "staff-1": workspace({
+            openEquipment: [equipment({ shiftId: "shift-day" })],
+          }),
+        },
+      }),
+      "staff-1",
+    );
+
+    expect(shiftOnly.hasShiftEquipment).toBe(true);
+    expect(shiftOnly.hasEventEquipment).toBe(false);
+  });
+
+  it("renders only the states that are true, highest priority first", () => {
+    expect(
+      logisticsStatePills({
+        onSite: true,
+        onShift: false,
+        hasShiftEquipment: false,
+        hasEventEquipment: true,
+      }).map((pill) => pill.label),
+    ).toEqual(["On-site", "Event kit"]);
+
+    // A wall of grey pills saying "not this, not that" teaches a reader to stop
+    // looking at them.
+    expect(
+      logisticsStatePills({
+        onSite: false,
+        onShift: false,
+        hasShiftEquipment: false,
+        hasEventEquipment: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it("keeps presence and shift when a tight row only has space for two", () => {
+    // The priority order is what makes a cap safe: whichever two survive are the
+    // two the operator is deciding on, not whichever two happened to be true.
+    expect(
+      logisticsStatePills(
+        {
+          onSite: true,
+          onShift: true,
+          hasShiftEquipment: true,
+          hasEventEquipment: true,
+        },
+        2,
+      ).map((pill) => pill.label),
+    ).toEqual(["On-site", "On-shift"]);
+  });
+
+  it("carries a staff hit's states into the search dropdown", () => {
+    const hits = searchLogisticsDesk(
+      desk({
+        staffWorkspaces: {
+          "staff-1": workspace({
+            shiftCards: [card({ attendanceState: "checked_in" })],
+            openEquipment: [equipment({ shiftId: null })],
+          }),
+        },
+      }),
+      "vera",
+    );
+
+    const staffHit = hits.find((hit) => hit.kind === "staff")!;
+
+    // Two on the row, and the team stays in the detail line — printing presence
+    // twice on one row is what makes a dense list unreadable.
+    expect(staffHit.pills?.map((pill) => pill.label)).toEqual([
+      "On-site",
+      "On-shift",
+    ]);
+    expect(staffHit.detail).toBe("Dirt");
+  });
+
+  it("gives equipment and shift hits no pills to render", () => {
+    const hits = searchLogisticsDesk(desk(), "rdo-12");
+
+    expect(hits[0]!.pills).toBeUndefined();
+  });
+
   it("searches staff, equipment, and shifts in the node's index", () => {
     const hits = searchLogisticsDesk(desk(), "rdo-12");
 
@@ -207,6 +360,7 @@ describe("logistics desk presentation", () => {
                 canCheckOut: true,
                 canMarkNoShow: false,
                 canAddToShift: false,
+                addToShiftBlockedReason: null,
               },
             ],
           }),
@@ -228,6 +382,7 @@ describe("logistics desk presentation", () => {
                 canCheckOut: false,
                 canMarkNoShow: true,
                 canAddToShift: false,
+                addToShiftBlockedReason: null,
               },
             ],
           }),
@@ -257,6 +412,7 @@ describe("logistics desk presentation", () => {
             canCheckOut: true,
             canMarkNoShow: false,
             canAddToShift: false,
+            addToShiftBlockedReason: null,
           },
           {
             shiftId: "b",
@@ -272,6 +428,7 @@ describe("logistics desk presentation", () => {
             canCheckOut: false,
             canMarkNoShow: false,
             canAddToShift: false,
+            addToShiftBlockedReason: null,
           },
           {
             shiftId: "c",
@@ -287,6 +444,7 @@ describe("logistics desk presentation", () => {
             canCheckOut: false,
             canMarkNoShow: false,
             canAddToShift: false,
+            addToShiftBlockedReason: null,
           },
         ],
       }),

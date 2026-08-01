@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
@@ -444,6 +445,18 @@ function json(body: unknown, status = 200): Response {
  * again afterwards, which is what binding means here. What the command did to
  * the department is the server's own tests' subject.
  */
+/**
+ * A promise the next command waits on before answering.
+ *
+ * The in-flight state is the subject of one of these tests, and a stub that
+ * resolves immediately never has one to observe.
+ */
+let heldCommand: Promise<void> | null = null;
+
+function holdCommand(held: Promise<void>): void {
+  heldCommand = held;
+}
+
 function stubDepartmentOpsNode(): void {
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -460,6 +473,10 @@ function stubDepartmentOpsNode(): void {
           path: url.pathname,
           body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>,
         });
+
+        if (heldCommand !== null) {
+          await heldCommand;
+        }
 
         return json({ warnings: [] }, 201);
       }
@@ -534,6 +551,7 @@ async function openWorkspace(
 // nothing in it until one is established.
 beforeEach(() => {
   commands = [];
+  heldCommand = null;
   commandOutbox.clear();
   installLocalFieldSession();
   selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
@@ -732,6 +750,75 @@ describe("department operations surfaces", () => {
       staff_id: VERA_STAFF_ID,
     });
     expect(wrapper.text()).toContain("Vera Staff marked on-site.");
+  });
+
+  /*
+   * A command here is a write plus a re-read of the whole desk, and on a field
+   * network that is long enough for the screen to look like it did nothing.
+   */
+  it("says which command it is waiting on, and keeps the workspace readable", async () => {
+    let release: (() => void) | null = null;
+
+    // Hold the presence command open so the in-flight state can be observed.
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    holdCommand(held);
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Vera Staff");
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Mark on-site")!
+      .trigger("click");
+    await nextTick();
+
+    const panel = wrapper.get(".logistics__workspace");
+    expect(panel.attributes("aria-busy")).toBe("true");
+    expect(panel.get(".logistics__pending").text()).toContain(
+      "Marking Vera Staff on-site",
+    );
+    // Nothing is hidden: an operator waiting on a check-in still needs to read
+    // the shift they are checking somebody in for.
+    expect(panel.text()).toContain("Ranger Dirt Day Shift");
+    // And nothing takes a second press while the first is still running.
+    expect(
+      panel
+        .findAll("button")
+        .filter((button) => button.text() === "Mark off-site")
+        .every((button) => button.attributes("disabled") !== undefined),
+    ).toBe(true);
+
+    release!();
+    await flushPromises();
+
+    expect(wrapper.get(".logistics__workspace").attributes("aria-busy")).toBe(
+      "false",
+    );
+    expect(wrapper.find(".logistics__pending").exists()).toBe(false);
+  });
+
+  it("says presence, shift, and equipment state in words as well as color", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Vera Staff");
+
+    const pills = wrapper
+      .get(".logistics__workspace")
+      .findAll(".status-pill");
+
+    // The label is always rendered, so a pill read with no color at all — a
+    // bright tent, a color vision difference — says exactly as much.
+    expect(pills.length).toBeGreaterThan(0);
+    // The visually hidden prefix names what the state is *of*, so a pill read on
+    // its own is not an unattached adjective.
+    expect(pills.map((pill) => pill.text())).toContain("Presence: Off-site");
+    for (const pill of pills) {
+      expect(pill.attributes("data-tone")).toBeDefined();
+      expect(pill.text().trim()).not.toBe("");
+    }
   });
 
   it("queues a check-out through the command outbox rather than sending it", async () => {

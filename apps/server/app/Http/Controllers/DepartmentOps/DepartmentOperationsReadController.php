@@ -226,6 +226,17 @@ final class DepartmentOperationsReadController extends Controller
                         'asset_tag' => $checkout->equipmentItem?->asset_tag,
                         'status' => $checkout->equipmentItem?->status ?? EquipmentItem::STATUS_CHECKED_OUT,
                         'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
+                        /*
+                         * Which shift this was handed over for, when it was
+                         * handed over for one. Null is not missing data: a radio
+                         * signed out for the event is a different thing from one
+                         * signed out with a shift, and only the second comes back
+                         * when that shift ends. The desk needs to tell them apart
+                         * to know what it is still owed.
+                         */
+                        'shift_id' => $checkout->shift_id === null
+                            ? null
+                            : (string) $checkout->shift_id,
                     ])
                     ->values()
                     ->all(),
@@ -687,15 +698,26 @@ final class DepartmentOperationsReadController extends Controller
      * A card exists for every shift in the desk horizon, whether or not this
      * person is on it, because the desk's other job is adding an on-site staff
      * member to a shift they were never assigned to (SLB-008). What differs per
-     * card is which of the three actions it offers, and each of those is the
-     * same condition the command enforces.
+     * card is which of the actions it offers, and each of those is the same
+     * condition the command enforces.
      *
-     * `can_add_to_shift` is the one approximation, and deliberately the loose
-     * side of one: it checks presence, an existing assignment, that the shift
-     * has started, and eligible-team membership. `UnscheduledShiftAdditionService`
-     * additionally weighs trainings, waivers, and organization status, and will
-     * refuse in its own words — which is better than a desk that silently offers
-     * nothing and leaves an operator wondering.
+     * The card being *present* and the addition being *offered* are two different
+     * questions, and running them together was a bug. A card used to be dropped
+     * outright unless the person was on-site, the shift had started, and they
+     * were on its eligible team — so an operator who created a shift, marked
+     * somebody on-site, and went to add them saw no shift, no button, and no
+     * reason. There was nothing on the screen to tell them the shift was for
+     * another team, or that it had not started yet. This comment already claimed
+     * that saying so is "better than a desk that silently offers nothing and
+     * leaves an operator wondering", and the code did the opposite.
+     *
+     * So an unassigned card survives for anyone on-site while the shift has not
+     * ended, and `add_to_shift_blocked_reason` carries the sentence when the
+     * addition cannot be offered. `can_add_to_shift` stays the loose side of an
+     * approximation: it weighs presence, an existing assignment, the shift having
+     * started, and eligible-team membership, while
+     * `UnscheduledShiftAdditionService` additionally weighs trainings, waivers,
+     * and organization status and refuses in its own words.
      *
      * @param  Collection<int, Shift>  $shifts
      * @param  Collection<string, Collection<int, ShiftAssignment>>  $assignments
@@ -724,9 +746,18 @@ final class DepartmentOperationsReadController extends Controller
                 $state = $record?->current_state;
                 $lifecycle = $this->lifecycle($shift, $now);
                 $started = $shift->starts_at !== null && $now->greaterThanOrEqualTo($shift->starts_at);
+                $ended = $shift->ends_at !== null && $now->greaterThan($shift->ends_at);
                 $eligible = $eligibleTeamMembers[$staffId.':'.(string) $shift->eligible_team_id] ?? false;
 
-                if ($assignment === null && ! ($onSite && $started && $eligible)) {
+                /*
+                 * An unassigned card is on screen for somebody on-site until the
+                 * shift ends. Nobody is added to a shift that is over, and
+                 * somebody who is not on-site has no business on any of these
+                 * cards — but everything between those two is a shift an operator
+                 * standing at the desk may be about to act on, and a card that is
+                 * absent cannot say why it is not offering anything.
+                 */
+                if ($assignment === null && ! ($onSite && ! $ended)) {
                     return null;
                 }
 
@@ -759,11 +790,43 @@ final class DepartmentOperationsReadController extends Controller
                         && $started
                         && ($state === null || $state === AttendanceRecord::STATE_SCHEDULED),
                     'can_add_to_shift' => $assignment === null && $onSite && $started && $eligible,
+                    'add_to_shift_blocked_reason' => $assignment !== null
+                        ? null
+                        : $this->addToShiftBlockedReason($shift, $started, $eligible),
                 ];
             })
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Why an on-site staff member cannot be added to this shift, or null when
+     * they can.
+     *
+     * Both sentences name the thing to change rather than the rule that was
+     * broken: an operator who reads "not a member of Dirt" knows to put them on
+     * Dirt or to pick their own team's shift, where "ineligible" tells them
+     * nothing they can act on. Only the two conditions this read can see are
+     * answered here — trainings, waivers, and organization status belong to
+     * `UnscheduledShiftAdditionService`, which refuses in its own words rather
+     * than having them guessed at from a list endpoint.
+     */
+    private function addToShiftBlockedReason(Shift $shift, bool $started, bool $eligible): ?string
+    {
+        if (! $started) {
+            return 'This shift has not started yet. Staff can be added once it is running.';
+        }
+
+        if (! $eligible) {
+            $team = $shift->eligibleTeam?->name ?? $shift->team_name_snapshot;
+
+            return $team === null
+                ? 'This shift is for another team.'
+                : sprintf('This shift is for the %s team, and they are not a member of it.', $team);
+        }
+
+        return null;
     }
 
     /**

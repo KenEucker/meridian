@@ -4,14 +4,19 @@ import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import EntitySearch from "@/components/department-ops/EntitySearch.vue";
+import StatusPill from "@/components/StatusPill.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   attendanceStateLabel,
+  attendanceTone,
   equipmentStateLabel,
+  equipmentTone,
   formatTimestamp,
   lifecycleLabel,
+  lifecycleTone,
   presenceStateLabel,
+  presenceTone,
 } from "@/department-ops/labels";
 import {
   CURRENT_SHIFT_WINDOW_MINUTES,
@@ -21,6 +26,8 @@ import {
   getLogisticsDesk,
   logisticsShiftSections,
   logisticsStaffOnShift,
+  logisticsStaffStates,
+  logisticsStatePills,
   queueCheckIn,
   queueCheckOut,
   queueMarkNoShow,
@@ -85,6 +92,21 @@ const workspace = computed(() =>
 const currentShifts = computed(() =>
   desk.value === null ? [] : currentLogisticsShifts(desk.value),
 );
+/**
+ * The open workspace's states, minus presence.
+ *
+ * Presence has its own pill in the header and is stated whichever way it went,
+ * so it is dropped from this list rather than rendered twice.
+ */
+const workspacePills = computed(() => {
+  if (desk.value === null || selectedStaffId.value === null) {
+    return [];
+  }
+
+  return logisticsStatePills(
+    logisticsStaffStates(desk.value, selectedStaffId.value),
+  ).filter((pill) => pill.key !== "onSite");
+});
 const staffOnShift = computed(() =>
   desk.value === null ? [] : logisticsStaffOnShift(desk.value),
 );
@@ -255,6 +277,19 @@ function openStaff(staffId: string): void {
 }
 
 /**
+ * What is happening right now, in the operator's words.
+ *
+ * A command here is a command plus a re-read of the whole desk, which is two
+ * round trips on a field network — long enough that "Mark on-site" looked like
+ * it had done nothing, and long enough for somebody to press it again. The
+ * workspace says it is working instead: the panel stays legible and on screen,
+ * its controls stop accepting presses, and the line above it names the command
+ * in flight rather than showing a spinner over the data somebody is reading.
+ */
+const pendingWork = ref<string | null>(null);
+const busy = computed(() => pendingWork.value !== null);
+
+/**
  * Run a write and read the desk again.
  *
  * Every command on this page changes more than the record it names — a check-in
@@ -262,8 +297,23 @@ function openStaff(staffId: string): void {
  * equipment return may reopen it — and none of that comes back in the response.
  * The refusal shown is the node's own sentence, including the one the outbox
  * produces for a connected-only command issued with no node in reach.
+ *
+ * One at a time, deliberately. The re-read is what every one of these commands
+ * ends with, and two of them in flight would land in whichever order the network
+ * settled on, leaving the screen showing the answer to the earlier one.
  */
-async function run(work: () => Promise<void>, success: string): Promise<void> {
+async function run(
+  work: () => Promise<void>,
+  success: string,
+  pending = "Working",
+): Promise<void> {
+  if (busy.value) {
+    return;
+  }
+
+  pendingWork.value = pending;
+  status.value = null;
+
   try {
     await work();
     await loadDesk();
@@ -273,6 +323,8 @@ async function run(work: () => Promise<void>, success: string): Promise<void> {
       error,
       error instanceof Error ? error.message : "Unable to complete that.",
     );
+  } finally {
+    pendingWork.value = null;
   }
 }
 
@@ -284,6 +336,7 @@ function markOnSite(): void {
   void run(
     () => setDepartmentPresence(context.value!, member.staffId, "on_site"),
     `${member.displayName} marked on-site.`,
+    `Marking ${member.displayName} on-site`,
   );
 }
 
@@ -295,6 +348,7 @@ function markOffSite(): void {
   void run(
     () => setDepartmentPresence(context.value!, member.staffId, "off_site"),
     `${member.displayName} marked off-site.`,
+    `Marking ${member.displayName} off-site`,
   );
 }
 
@@ -311,6 +365,7 @@ function markNoShow(shiftId: string): void {
         staffId: member.staffId,
       }),
     `${member.displayName} marked as a no-show.`,
+    `Marking ${member.displayName} as a no-show`,
   );
 }
 
@@ -413,7 +468,9 @@ function confirmDialog(): void {
     }
 
     dialog.value = null;
-  }, dialogSuccessMessage(kind, member.displayName));
+  },
+  dialogSuccessMessage(kind, member.displayName),
+  dialogPendingMessage(kind, member.displayName));
 }
 
 function dialogSuccessMessage(
@@ -430,6 +487,20 @@ function dialogSuccessMessage(
   }
 }
 
+function dialogPendingMessage(
+  kind: "check-in" | "check-out" | "equipment-checkout",
+  displayName: string,
+): string {
+  switch (kind) {
+    case "check-in":
+      return `Checking ${displayName} in`;
+    case "check-out":
+      return `Checking ${displayName} out`;
+    case "equipment-checkout":
+      return `Checking out equipment to ${displayName}`;
+  }
+}
+
 function closeDialog(): void {
   dialog.value = null;
 }
@@ -443,6 +514,7 @@ function returnItem(
   void run(
     () => returnEquipment(context.value!, checkoutId, condition),
     `Equipment marked ${equipmentStateLabel(condition)}.`,
+    `Marking equipment ${equipmentStateLabel(condition).toLowerCase()}`,
   );
 }
 
@@ -465,7 +537,9 @@ function addToShift(shiftId: string): void {
     } else {
       overlapWarnings.value = [];
     }
-  }, `${member.displayName} added to the shift.`);
+  },
+  `${member.displayName} added to the shift.`,
+  `Adding ${member.displayName} to the shift`);
 }
 
 const overlapWarnings = ref<readonly string[]>([]);
@@ -733,9 +807,22 @@ void loadDesk();
       Search for a staff member to open their operational workspace.
     </p>
 
+    <!--
+      The one panel on this page an operator is actually working in, and it used
+      to look like every other block on it: the same border, the same surface,
+      no way to find it after a glance back at the roster. It now carries its own
+      outline and accent edge, so "who am I looking at" is answered by the shape
+      of the page rather than by re-reading it.
+
+      `aria-busy` while a command is in flight, and the panel stays on screen
+      throughout. Nothing is hidden behind an overlay — an operator mid-check-in
+      still needs to read the shift times they are checking somebody in for.
+    -->
     <section
       v-else
       class="logistics__workspace"
+      :class="{ 'logistics__workspace--busy': busy }"
+      :aria-busy="busy"
       aria-labelledby="staff-workspace-heading"
     >
       <header class="logistics__staff-header">
@@ -746,23 +833,53 @@ void loadDesk();
             <template v-if="workspace.handle"> / @{{ workspace.handle }}</template>
           </p>
         </div>
-        <p>
-          Presence:
-          <strong>{{ presenceStateLabel(workspace.presenceState) }}</strong>
-        </p>
+        <!--
+          Presence is stated outright rather than by omission, because the header
+          is the one place "off-site" is the answer somebody came for. The rest
+          are shown only when true: four grey pills saying nothing is how a
+          reader learns to stop looking at them.
+        -->
+        <div class="logistics__staff-states">
+          <StatusPill
+            :label="presenceStateLabel(workspace.presenceState)"
+            :tone="presenceTone(workspace.presenceState)"
+            sr-prefix="Presence"
+          />
+          <StatusPill
+            v-for="pill in workspacePills"
+            :key="pill.key"
+            :label="pill.label"
+            :tone="pill.tone"
+          />
+        </div>
       </header>
+
+      <!--
+        Named rather than a bare spinner. "Working" tells somebody the screen is
+        alive; "Marking Dana Ranger on-site" tells them which of the four buttons
+        they just pressed is the one still running.
+      -->
+      <p
+        v-if="pendingWork"
+        class="logistics__pending"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="logistics__pending-spinner" aria-hidden="true" />
+        {{ pendingWork }}…
+      </p>
 
       <div class="logistics__actions">
         <button
           type="button"
-          :disabled="workspace.presenceState === 'on_site'"
+          :disabled="busy || workspace.presenceState === 'on_site'"
           @click="markOnSite"
         >
           Mark on-site
         </button>
         <button
           type="button"
-          :disabled="!workspace.canGoOffSite"
+          :disabled="busy || !workspace.canGoOffSite"
           @click="markOffSite"
         >
           Mark off-site
@@ -795,23 +912,49 @@ void loadDesk();
             >
               <div>
                 <strong>{{ card.title }}</strong>
-                <span>
-                  {{ lifecycleLabel(card.lifecycle) }} /
-                  {{
-                    card.attendanceState
-                      ? attendanceStateLabel(card.attendanceState)
-                      : "Not assigned"
-                  }}
+                <span class="logistics__card-pills">
+                  <StatusPill
+                    :label="lifecycleLabel(card.lifecycle)"
+                    :tone="lifecycleTone(card.lifecycle)"
+                    sr-prefix="Shift"
+                  />
+                  <StatusPill
+                    :label="
+                      card.attendanceState
+                        ? attendanceStateLabel(card.attendanceState)
+                        : 'Not assigned'
+                    "
+                    :tone="
+                      card.attendanceState
+                        ? attendanceTone(card.attendanceState)
+                        : 'neutral'
+                    "
+                    sr-prefix="Attendance"
+                  />
                 </span>
                 <span>
                   {{ formatTimestamp(card.startsAt, timeZone) }} -
                   {{ formatTimestamp(card.endsAt, timeZone) }}
+                </span>
+                <!--
+                  Why there is no "Add to shift" button on this card. The card
+                  used to be absent entirely in these cases, so an operator who
+                  had just created a shift and marked somebody on-site went
+                  looking for a button that was not there and had nothing to read.
+                -->
+                <span
+                  v-if="card.addToShiftBlockedReason"
+                  class="logistics__card-blocked"
+                  role="status"
+                >
+                  {{ card.addToShiftBlockedReason }}
                 </span>
               </div>
               <div class="logistics__actions">
                 <button
                   v-if="card.canCheckIn"
                   type="button"
+                  :disabled="busy"
                   @click="openDialog('check-in', card.shiftId)"
                 >
                   Check in
@@ -819,6 +962,7 @@ void loadDesk();
                 <button
                   v-if="card.canCheckOut"
                   type="button"
+                  :disabled="busy"
                   @click="openDialog('check-out', card.shiftId)"
                 >
                   Check out
@@ -826,6 +970,7 @@ void loadDesk();
                 <button
                   v-if="card.canMarkNoShow"
                   type="button"
+                  :disabled="busy"
                   @click="markNoShow(card.shiftId)"
                 >
                   Mark no-show
@@ -833,6 +978,7 @@ void loadDesk();
                 <button
                   v-if="card.canAddToShift"
                   type="button"
+                  :disabled="busy"
                   @click="addToShift(card.shiftId)"
                 >
                   Add to shift
@@ -849,7 +995,11 @@ void loadDesk();
           v-if="workspace.availableEquipment.length > 0"
           class="logistics__actions"
         >
-          <button type="button" @click="openDialog('equipment-checkout')">
+          <button
+            type="button"
+            :disabled="busy"
+            @click="openDialog('equipment-checkout')"
+          >
             Check out equipment
           </button>
         </div>
@@ -863,23 +1013,32 @@ void loadDesk();
           >
             <div>
               <strong>{{ item.name }}</strong>
-              <span>{{ equipmentStateLabel(item.status) }}</span>
+              <span class="logistics__card-pills">
+                <StatusPill
+                  :label="equipmentStateLabel(item.status)"
+                  :tone="equipmentTone(item.status)"
+                  sr-prefix="Equipment"
+                />
+              </span>
             </div>
             <div class="logistics__actions">
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'returned')"
               >
                 Returned
               </button>
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'missing')"
               >
                 Missing
               </button>
               <button
                 type="button"
+                :disabled="busy"
                 @click="returnItem(item.checkoutId!, 'damaged')"
               >
                 Damaged
@@ -1132,9 +1291,96 @@ void loadDesk();
   font-size: var(--m-text-sm);
 }
 
+/*
+ * The staff workspace is the page's subject, and it is drawn like it.
+ *
+ * An outlined container with an accent edge, rather than another block of the
+ * same surface as everything above it. The desk's other sections are reference —
+ * counts, current shifts, who is on shift — and this is the one an operator acts
+ * in, so it is the one that has to be findable in a glance from across a table
+ * in daylight.
+ */
 .logistics__workspace {
   display: grid;
   gap: var(--m-space-5);
+  padding: var(--m-space-4);
+  border: 2px solid
+    color-mix(in srgb, var(--m-action-primary-bg) 45%, var(--m-border-default));
+  border-left-width: 6px;
+  border-left-color: var(--m-action-primary-bg);
+  border-radius: 12px;
+  background: var(--m-surface-base);
+  box-shadow: var(--m-shadow-sm);
+}
+
+/*
+ * Busy dims the controls and leaves the data alone.
+ *
+ * An operator waiting on a check-in is usually still reading the shift they are
+ * checking somebody in for, so nothing goes behind an overlay and nothing is
+ * removed. The panel loses a little contrast and stops taking presses; the named
+ * line above says which command it is waiting on.
+ */
+.logistics__workspace--busy .logistics__actions button {
+  opacity: 0.45;
+}
+
+.logistics__workspace--busy {
+  border-left-color: var(--m-status-warning);
+}
+
+.logistics__pending {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  margin: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid
+    color-mix(in srgb, var(--m-status-warning) 55%, var(--m-border-default));
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--m-status-warning) 14%,
+    var(--m-surface-raised)
+  );
+  color: var(--m-text-secondary);
+  font-weight: 800;
+}
+
+.logistics__pending-spinner {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid
+    color-mix(in srgb, var(--m-status-warning) 35%, transparent);
+  border-top-color: var(--m-status-warning);
+  border-radius: var(--m-radius-pill);
+  animation: logistics-spin 900ms linear infinite;
+}
+
+/* A spinner that never stops is a distraction nobody asked for. */
+@media (prefers-reduced-motion: reduce) {
+  .logistics__pending-spinner {
+    animation: none;
+  }
+}
+
+@keyframes logistics-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logistics__card-pills,
+.logistics__staff-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.logistics__card-blocked {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .logistics__watch-grid,
@@ -1334,8 +1580,11 @@ void loadDesk();
 }
 
 .logistics__staff-header {
-  display: grid;
-  gap: var(--m-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
   padding: var(--m-space-4);
   border: 1px solid var(--m-border-default);
   border-radius: 8px;

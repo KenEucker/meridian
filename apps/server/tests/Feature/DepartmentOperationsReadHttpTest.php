@@ -124,6 +124,79 @@ class DepartmentOperationsReadHttpTest extends TestCase
         $this->assertTrue($offSite['can_go_off_site']);
     }
 
+    /**
+     * The desk says why it is not offering an addition instead of showing
+     * nothing at all.
+     *
+     * This is the bug an operator hit: create a shift, mark somebody on-site, go
+     * to add them, and find no shift card, no button, and no sentence anywhere on
+     * the screen. The card was dropped whenever the addition could not be
+     * offered, which meant the two most common reasons — the shift is for another
+     * team, the shift has not started — were invisible.
+     */
+    public function test_an_on_site_member_sees_why_a_running_shift_will_not_take_them(): void
+    {
+        $scenario = $this->scenario();
+
+        // A shift running now, for a team the on-site unassigned member is not on.
+        $otherTeamShift = Shift::factory()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'eligible_team_id' => $scenario['otherTeam']->id,
+            'title' => 'Ranger Command Day Shift',
+            'starts_at' => Carbon::parse('2027-07-04 17:00:00'),
+            'ends_at' => Carbon::parse('2027-07-04 23:00:00'),
+            'capacity' => null,
+        ]);
+
+        // And one that has not started yet, on the team they are on.
+        $notStarted = Shift::factory()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'eligible_team_id' => $scenario['team']->id,
+            'title' => 'Ranger Dirt Night Shift',
+            'starts_at' => Carbon::parse('2027-07-04 22:00:00'),
+            'ends_at' => Carbon::parse('2027-07-05 04:00:00'),
+            'capacity' => null,
+        ]);
+
+        $response = $this->actingAsClient($scenario['logistics'])
+            ->getJson($this->path($scenario, 'logistics'))
+            ->assertOk();
+
+        $cards = collect(
+            $response->json('staff_workspaces.'.(string) $scenario['unassigned']->id.'.shift_cards'),
+        );
+
+        $wrongTeam = $cards->firstWhere('shift_id', (string) $otherTeamShift->id);
+        $this->assertNotNull($wrongTeam, 'The card is on screen so it can explain itself.');
+        $this->assertFalse($wrongTeam['can_add_to_shift']);
+        $this->assertSame(
+            'This shift is for the Command team, and they are not a member of it.',
+            $wrongTeam['add_to_shift_blocked_reason'],
+        );
+
+        $upcoming = $cards->firstWhere('shift_id', (string) $notStarted->id);
+        $this->assertNotNull($upcoming);
+        $this->assertFalse($upcoming['can_add_to_shift']);
+        $this->assertSame(
+            'This shift has not started yet. Staff can be added once it is running.',
+            $upcoming['add_to_shift_blocked_reason'],
+        );
+
+        // The one they can be added to says nothing, because there is nothing to
+        // explain.
+        $addable = $cards->firstWhere('shift_id', (string) $scenario['shift']->id);
+        $this->assertTrue($addable['can_add_to_shift']);
+        $this->assertNull($addable['add_to_shift_blocked_reason']);
+
+        // Off-site is still nothing at all: no presence, no cards, no additions.
+        $this->assertSame(
+            [],
+            $response->json('staff_workspaces.'.(string) $scenario['offSite']->id.'.shift_cards'),
+        );
+    }
+
     public function test_operations_lists_deployment_options_and_staff_on_shift(): void
     {
         $scenario = $this->scenario();
