@@ -365,10 +365,23 @@ Each shift card in a workspace carries the node's answer on the four things the
 desk may do with it — check in, check out, mark no-show, add to the shift — and
 each workspace carries whether that person may go off-site and, when they may
 not, the sentence `DepartmentPresenceService` refuses with (SLB-017, SLB-018).
-`can_add_to_shift` is deliberately the loose side of the question: it weighs
-presence, an existing assignment, whether the shift has started, and eligible-team
-membership, while `UnscheduledShiftAdditionService` additionally weighs
-trainings, waivers, and organization status and refuses in its own words.
+`can_add_to_shift` is the loose side of the question, but only where being loose
+costs nothing. It weighs presence, an existing assignment, whether the shift has
+started, and eligible-team membership, while `UnscheduledShiftAdditionService`
+additionally weighs trainings, waivers, and organization status and refuses in
+its own words — those three are a person's own record, and having them guessed
+at from a list endpoint would put a stale answer on screen.
+
+Eligible-team membership is not one of the three, and M18.3 stopped it being
+approximated. The read and the command both resolve it through
+`TeamMembership::onEligibleShiftTeam`: an unarchived membership, on an unarchived
+team, hanging off the department membership that puts the person in the
+department. Archiving a team leaves its memberships and its shifts alone, so a
+read that weighed only the membership went on offering an addition the command
+would refuse. Where a card cannot be added to, `add_to_shift_blocked_reason`
+carries the sentence, and the archived-team case has its own: telling an operator
+somebody "is not a member of" a team they are still on would send them after a
+team that no longer takes anybody.
 
 Event Info (`GET /api/events/{event}/info`) returns the staff-facing event
 information surface: event context plus one entry per Event Info section, in the
@@ -566,8 +579,11 @@ The unscheduled shift addition command (`add-staff-to-shift`) is the Logistics
 Window's "add to shift" (SLB-008). It is authorized by the same attendance
 authority as check-in, requires the shift to have started and not be cancelled,
 and requires the staff member to be on-site, an active department member, an
-eligible-team member, clear of do-not-staff, and to meet the shift's training
-and waiver requirements. Overlapping assignments are accepted with a warning
+eligible-team member on the terms above, clear of do-not-staff, and to meet the
+shift's training and waiver requirements. On-site presence comes first in the
+desk's order of work as well as in the command's: a staff member this department
+has not marked on-site is refused, and the Logistics read offers their workspace
+no unassigned shift cards at all (requirements 5.8). Overlapping assignments are accepted with a warning
 rather than refused (technical spec 20.5), and the warnings travel back with the
 acceptance so the desk can show them.
 
