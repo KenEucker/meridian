@@ -163,12 +163,74 @@ class HoursCorrectionTest extends TestCase
 
             $this->fail('Frozen hours should reject correction.');
         } catch (HoursCorrectionException $exception) {
-            $this->assertSame('Hours are frozen after the correction grace period.', $exception->getMessage());
+            // SLB-031 asks the refusal to state that the grace period has
+            // closed. It names the date it closed on, in the event's own zone,
+            // because "there is a grace period" is a rule and a date is
+            // something a desk can act on.
+            $this->assertSame(
+                'The correction grace period closed on 7 Jul 2026 17:00 PDT, so these hours are frozen and can no longer be corrected.',
+                $exception->getMessage(),
+            );
         }
 
         $this->assertSame(240, $hours->refresh()->minutes_worked);
         $this->assertSame(1, AuditEvent::query()->where('action', 'hours.frozen')->count());
         $this->assertSame(0, AuditEvent::query()->where('action', 'hours.corrected')->count());
+    }
+
+    /**
+     * A correction adds to the history rather than replacing it (SLB-032).
+     *
+     * The prior actual times survive in the audit entry and in the attendance
+     * operation the check-out wrote, both of which are still there after the
+     * correction has changed the record. That is what makes a corrected total
+     * reviewable: somebody reading it later can see what it was as well as what
+     * it became, and who moved it.
+     */
+    public function test_a_correction_leaves_the_prior_values_in_history(): void
+    {
+        [$hours, $shiftLead] = $this->checkedOutHoursScenario();
+        $originalStart = $hours->actual_started_at->copy();
+        $originalEnd = $hours->actual_ended_at->copy();
+
+        app(HoursCorrectionService::class)->correctHours(
+            hoursWorked: $hours,
+            actor: $shiftLead,
+            operationUuid: (string) Str::uuid(),
+            actualStartedAt: Carbon::parse('2026-07-01 08:15:00'),
+            actualEndedAt: Carbon::parse('2026-07-01 12:45:00'),
+        );
+
+        $audit = AuditEvent::query()
+            ->where('action', 'hours.corrected')
+            ->where('entity_id', $hours->id)
+            ->firstOrFail();
+
+        $this->assertSame($originalStart->toIso8601String(), $audit->before_json['actual_started_at']);
+        $this->assertSame($originalEnd->toIso8601String(), $audit->before_json['actual_ended_at']);
+        $this->assertSame(240, $audit->before_json['minutes_worked']);
+        $this->assertNull($audit->before_json['operation_uuid']);
+
+        $this->assertSame(
+            Carbon::parse('2026-07-01 08:15:00')->toIso8601String(),
+            $audit->after_json['actual_started_at'],
+        );
+        $this->assertSame(
+            Carbon::parse('2026-07-01 12:45:00')->toIso8601String(),
+            $audit->after_json['actual_ended_at'],
+        );
+
+        // The check-out operation is still there beside the correction: nothing
+        // in this path rewrites or removes an operation already accepted.
+        $this->assertSame(
+            [AttendanceOperation::TYPE_CHECK_OUT, AttendanceOperation::TYPE_CORRECT],
+            AttendanceOperation::query()
+                ->where('shift_id', $hours->shift_id)
+                ->where('staff_id', $hours->staff_id)
+                ->orderBy('created_at')
+                ->pluck('operation_type')
+                ->all(),
+        );
     }
 
     public function test_repeating_same_correction_operation_uuid_is_idempotent(): void

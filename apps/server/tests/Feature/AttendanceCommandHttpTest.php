@@ -21,6 +21,7 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\Attendance\HoursCorrectionService;
 use App\Services\Membership\DepartmentMembershipService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -184,6 +185,125 @@ class AttendanceCommandHttpTest extends TestCase
         $this->assertSame((string) $device->id, (string) $operation->origin_device_id);
     }
 
+    /**
+     * The `correct-hours` command (M18.4; SLB-007, SLB-031, SLB-032;
+     * HOURS-007).
+     *
+     * `HoursCorrectionService` has enforced all of this since M10.6 with no
+     * route able to reach it, so what is under test here is the transport: the
+     * record addressed by id, both actual times required, the recomputed
+     * minutes coming back for the desk to show, and the operation UUID making a
+     * repeat the same correction rather than a second one.
+     */
+    public function test_correct_hours_command_edits_the_recorded_times_and_is_idempotent(): void
+    {
+        [$shift, $staff, , $shiftLead, $device, $node] = $this->scheduledScenario();
+        $hours = $this->recordedHours($shift, $staff, $shiftLead, $device, $node);
+        $operationUuid = (string) Str::uuid();
+
+        $payload = [
+            'operation_uuid' => $operationUuid,
+            'hours_worked_id' => $hours->id,
+            'actual_started_at' => '2026-07-01T08:15:00Z',
+            'actual_ended_at' => '2026-07-01T12:45:00Z',
+            'device_created_at' => '2026-07-02T10:00:00Z',
+            'origin_device_id' => $device->id,
+        ];
+
+        $this->actingAsClient($shiftLead)
+            ->postJson('/api/commands/correct-hours', $payload)
+            ->assertCreated()
+            ->assertJsonPath('operation_uuid', $operationUuid)
+            ->assertJsonPath('hours_worked_id', (string) $hours->id)
+            ->assertJsonPath('minutes_worked', 270)
+            ->assertJsonPath('created_correction', true);
+
+        $this->actingAsClient($shiftLead)
+            ->postJson('/api/commands/correct-hours', $payload)
+            ->assertCreated()
+            ->assertJsonPath('operation_uuid', $operationUuid)
+            ->assertJsonPath('created_correction', false);
+
+        $hours->refresh();
+        $this->assertSame(270, $hours->minutes_worked);
+        $this->assertSame((string) $shiftLead->id, (string) $hours->corrected_by_user_id);
+
+        // One check-out and one correction: a repeat is the same operation, and
+        // the correction is appended beside the check-out rather than over it
+        // (SLB-032).
+        $this->assertSame(
+            [AttendanceOperation::TYPE_CHECK_OUT, AttendanceOperation::TYPE_CORRECT],
+            AttendanceOperation::query()->orderBy('created_at')->pluck('operation_type')->all(),
+        );
+        $this->assertSame(1, AuditEvent::query()->where('action', 'hours.corrected')->count());
+
+        $correction = AttendanceOperation::query()
+            ->where('operation_type', AttendanceOperation::TYPE_CORRECT)
+            ->firstOrFail();
+        // Typed at a desk in front of the node rather than replayed from a
+        // queue, so it is an API write where its queued siblings are sync ones.
+        $this->assertSame(AuditEvent::SOURCE_API, $correction->source_context);
+        $this->assertSame((string) $device->id, (string) $correction->origin_device_id);
+    }
+
+    /**
+     * HOURS-008 over the wire, in the words SLB-031 asks for.
+     *
+     * The desk shows the node's sentence as it arrives, so the sentence has to
+     * be one an operator can act on: it names the moment the grace period
+     * closed, in the event's own time zone, rather than stating that a grace
+     * period exists.
+     */
+    public function test_correct_hours_is_refused_once_the_record_is_frozen(): void
+    {
+        [$shift, $staff, , $shiftLead, $device, $node] = $this->scheduledScenario();
+        $hours = $this->recordedHours($shift, $staff, $shiftLead, $device, $node);
+
+        app(HoursCorrectionService::class)->freezeHours(
+            $hours,
+            $shiftLead,
+            Carbon::parse('2026-07-15 00:00:00'),
+        );
+
+        $this->actingAsClient($shiftLead)
+            ->postJson('/api/commands/correct-hours', [
+                'operation_uuid' => (string) Str::uuid(),
+                'hours_worked_id' => $hours->id,
+                'actual_started_at' => '2026-07-01T08:15:00Z',
+                'actual_ended_at' => '2026-07-01T12:45:00Z',
+                'device_created_at' => '2026-07-20T10:00:00Z',
+                'origin_device_id' => $device->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'The correction grace period closed on 14 Jul 2026 17:00 PDT, so these hours are frozen and can no longer be corrected.',
+            );
+
+        $this->assertSame(255, $hours->refresh()->minutes_worked);
+        $this->assertSame(0, AuditEvent::query()->where('action', 'hours.corrected')->count());
+    }
+
+    public function test_correct_hours_is_refused_without_attendance_authority(): void
+    {
+        [$shift, $staff, , $shiftLead, $device, $node] = $this->scheduledScenario();
+        $hours = $this->recordedHours($shift, $staff, $shiftLead, $device, $node);
+
+        $this->actingAsClient(User::factory()->create())
+            ->postJson('/api/commands/correct-hours', [
+                'operation_uuid' => (string) Str::uuid(),
+                'hours_worked_id' => $hours->id,
+                'actual_started_at' => '2026-07-01T08:15:00Z',
+                'actual_ended_at' => '2026-07-01T12:45:00Z',
+                'device_created_at' => '2026-07-02T10:00:00Z',
+                'origin_device_id' => $device->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'You are not authorized to correct hours for this shift.');
+
+        $this->assertSame(255, $hours->refresh()->minutes_worked);
+    }
+
     public function test_attendance_commands_require_authentication(): void
     {
         $this->postJson('/api/commands/check-in-staff', [
@@ -194,6 +314,45 @@ class AttendanceCommandHttpTest extends TestCase
             'origin_device_id' => (string) Str::uuid(),
             'origin_node_id' => (string) Str::uuid(),
         ])->assertUnauthorized();
+
+        $this->postJson('/api/commands/correct-hours', [
+            'operation_uuid' => (string) Str::uuid(),
+            'hours_worked_id' => (string) Str::uuid(),
+            'actual_started_at' => '2026-07-01T08:15:00Z',
+            'actual_ended_at' => '2026-07-01T12:45:00Z',
+            'device_created_at' => '2026-07-02T10:00:00Z',
+            'origin_device_id' => (string) Str::uuid(),
+        ])->assertUnauthorized();
+    }
+
+    /**
+     * The hours a correction edits, created the way the desk creates them.
+     *
+     * Through the check-out command rather than a factory, because a correction
+     * addresses a record the attendance path produced and the transport under
+     * test is the pair.
+     */
+    private function recordedHours(
+        Shift $shift,
+        Staff $staff,
+        User $shiftLead,
+        Device $device,
+        Node $node,
+    ): HoursWorked {
+        $this->actingAsClient($shiftLead)
+            ->postJson('/api/commands/check-out-staff', [
+                'operation_uuid' => (string) Str::uuid(),
+                'shift_id' => $shift->id,
+                'staff_id' => $staff->id,
+                'actual_started_at' => '2026-07-01T08:00:00Z',
+                'actual_ended_at' => '2026-07-01T12:15:00Z',
+                'device_created_at' => '2026-07-01T12:15:00Z',
+                'origin_device_id' => $device->id,
+                'origin_node_id' => $node->id,
+            ])
+            ->assertCreated();
+
+        return HoursWorked::query()->firstOrFail();
     }
 
     /**

@@ -36,6 +36,7 @@ export type MeridianCommandType =
   | "mark-staff-on-site"
   | "mark-staff-off-site"
   | "add-staff-to-shift"
+  | "correct-hours"
   // Staff self-service on their own schedule (M18.2).
   | "sign-up-for-shift"
   | "withdraw-from-shift"
@@ -174,6 +175,24 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/add-staff-to-shift",
       "Shift addition",
       "Adding someone to a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Hours correction (M18.4; SLB-007, SLB-031; HOURS-007, HOURS-008).
+     *
+     * The one attendance-family command that is not an offline write, and the
+     * reason is the grace period. Whether a correction is allowed at all is
+     * measured against a window the node's clock owns and freezes on its own
+     * (HOURS-008), so one held on a device is one that may be delivered into a
+     * closed period and refused hours after the operator walked away from the
+     * desk believing the total was fixed. Check-in and check-out queue because
+     * a device knows what it saw; nothing on a device knows whether the
+     * organization has finished with these hours.
+     */
+    "correct-hours": connectedOnly(
+      "correct-hours",
+      "/api/commands/correct-hours",
+      "Hours correction",
+      "Correcting hours needs a connection to the node. It cannot be held on this device for later.",
     ),
     /*
      * The shift board's two writes (M18.2; SHIFT-011, SHIFT-013).

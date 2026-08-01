@@ -7,7 +7,9 @@ Logistics can mark assigned department staff on-site, check them into a selected
 shift, check them out with actual start/end times, create canonical hours, and
 review the resulting attendance/hour records. The script also verifies no-show,
 offline queued attendance writes, authorized hours correction before freeze, and
-freeze blocking after the correction grace period.
+freeze blocking after the correction grace period. Since M18.4 the correction is
+performed from the Logistics Desk staff workspace as well as from the domain, so
+section F now walks both.
 
 This script covers the Alpha 1 human QA gate for check-in/check-out/hours. It
 does not add or require staff self-service check-in, credit calculation,
@@ -31,6 +33,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - `SLB-008`
 - `SLB-015` through `SLB-018`
 - `SLB-019`
+- `SLB-031`
+- `SLB-032`
 - `CLIENT-015`, `CLIENT-018`, `CLIENT-023`
 - `HOURS-001` through `HOURS-008`
 - `REPORT-004`
@@ -42,7 +46,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - Data/API spec sections 7.2 and 10.10
 - UI Implementation Contract sections 12.5 and 16.2
 - Kiosk and Field Hardware UX Guide section 5
-- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, and M16.21
+- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, M16.21, M18.3, and
+  M18.4
 
 ## Environment
 
@@ -303,6 +308,38 @@ rows, unauthorized actors are refused, and each successful export is audited.
 
 ### F. Hours correction and freeze
 
+#### F1. Correction from the Logistics Desk (M18.4, SLB-031, SLB-032)
+
+35a. As Dana Department Lead or another authorized attendance manager, open the
+     Logistics Desk, search for the staff member you checked out in section C,
+     and open their workspace. Confirm the card for that shift now sits under
+     **Outgoing shifts** and reads its recorded hours — actual start, actual
+     end, and minutes — beside the shift window.
+35b. Press **Correct hours** on that card. Confirm the dialog is titled "Correct
+     hours", states that the previous values stay in attendance history, and
+     opens with **both** actual times already filled with the recorded ones
+     rather than blank or set to now.
+35c. Without touching either field, note the two times the dialog shows and
+     confirm they read as the same wall-clock times the card does. A dialog
+     pre-filled in UTC and re-read as local would silently move the number the
+     operator came to correct.
+35d. Change only the actual start — move it fifteen minutes earlier — and
+     confirm. Confirm the desk re-reads, the card's recorded hours and minutes
+     change accordingly, and the actual end is exactly what it was before.
+35e. Confirm the correction went to the node rather than into the outbox:
+     ```bash
+     php artisan tinker --execute='App\Models\AttendanceOperation::query()->where("operation_type", "correct")->latest("created_at")->limit(3)->get(["operation_uuid", "operation_type", "staff_id", "shift_id", "source_context", "origin_device_id", "created_by_user_id"])->each(fn ($operation) => print($operation->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+     ```
+35f. Confirm the check-out operation for that shift and staff member is still
+     present alongside the correction. A correction appends to attendance
+     history; it does not rewrite it (SLB-032).
+35g. Set the browser network condition to Offline and press **Correct hours**
+     again. Confirm it is refused where it stands with "Correcting hours needs a
+     connection to the node," that nothing is queued for it, and that the
+     recorded hours are unchanged. Restore the connection before continuing.
+
+#### F2. Correction and freeze from the domain
+
 36. Identify the latest `hours_worked_id` from section C.
 37. As an authorized attendance manager, correct the actual start/end while the
     record is unfrozen:
@@ -325,8 +362,19 @@ rows, unauthorized actors are refused, and each successful export is audited.
     ```bash
     php artisan tinker --execute='try { $hours = App\Models\HoursWorked::query()->latest("created_at")->firstOrFail(); $actor = App\Models\User::query()->where("email", "dana.departmentlead@idaho-burners.test")->firstOrFail(); app(App\Services\Attendance\HoursCorrectionService::class)->correctHours($hours, $actor, (string) Illuminate\Support\Str::uuid(), Illuminate\Support\Carbon::parse("2026-07-01 08:00:00"), Illuminate\Support\Carbon::parse("2026-07-01 11:00:00")); print("UNEXPECTED_SUCCESS\n"); } catch (Throwable $e) { print($e->getMessage().PHP_EOL); }'
     ```
-43. Confirm the denial message is `Hours are frozen after the correction grace
-    period.` and the frozen hours values are unchanged.
+43. Confirm the denial names the moment the grace period closed rather than
+    stating that one exists — `The correction grace period closed on 7 Jul 2026
+    17:00 PDT, so these hours are frozen and can no longer be corrected.`, with
+    the date and zone matching the `frozen_at` you set in step 41 read in the
+    event's time zone — and that the frozen hours values are unchanged.
+43a. Reload the Logistics Desk and open that staff member's workspace. Confirm
+     the card for the frozen shift no longer offers **Correct hours** and prints
+     the same sentence the command refused with, word for word. The desk and the
+     node have to say one thing; a button here would be one the node refuses.
+43b. Find a staff member assigned to a shift that has ended and was never
+     checked out. Confirm their card offers no correction and reads "This shift
+     has no recorded hours yet. Check this staff member out to create them.",
+     which names the action that is actually available.
 
 ### G. Role and non-goal checks
 
@@ -428,8 +476,9 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Department Logistics can mark eligible staff on-site and off-site, and add an
   on-site staff member to a started shift they were not assigned to, both through
   the node rather than in the browser.
-- Presence, shift addition, and equipment handoff are refused where they stand
-  when the node is unreachable, while check-in, check-out, and no-show queue.
+- Presence, shift addition, equipment handoff, and hours correction are refused
+  where they stand when the node is unreachable, while check-in, check-out, and
+  no-show queue.
 - The Planning Table shows aggregates only, with no staff identity anywhere on
   it.
 - Check-out creates one canonical `hours_worked` record tied to event,
@@ -441,8 +490,17 @@ froze, so run it after those sections rather than on a freshly seeded database.
   data are available, remain visible as queued/pending, and sync once with
   operation UUID/device/node provenance.
 - Authorized attendance managers can correct unfrozen hours with before/after
-  audit evidence.
-- Frozen hours reject later correction and preserve recorded values.
+  audit evidence, from the Logistics Desk staff workspace as well as from the
+  domain, and the dialog opens on the recorded times rather than on now or on
+  nothing.
+- A correction appends a `correct` attendance operation beside the check-out
+  that produced the record rather than replacing it, and the prior values remain
+  readable in attendance history and in the audit entry.
+- Correction is refused where it stands when the node is unreachable, unlike the
+  check-out that created the record.
+- Frozen hours reject later correction and preserve recorded values, and the
+  refusal names the moment the grace period closed in the event's time zone. The
+  Logistics Desk withdraws the control and prints the same sentence.
 - The hours worked export produces a CSV with the documented header and one row
   per recorded `hours_worked` record in scope, reporting the scheduled window and
   scheduled minutes beside the actual window, minutes, and decimal hours.
@@ -465,6 +523,11 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Screenshot or screen recording of Vera's Logistics workspace before check-in,
   after on-site/check-in, and after check-out.
 - Screenshot showing off-site blocked while checked in.
+- Screenshot of the Correct hours dialog opened on a completed shift, showing
+  both actual times pre-filled, and a second one of the same card after the
+  correction with the changed recorded hours.
+- Screenshot of a frozen shift card showing no correction control and the
+  sentence naming the date the grace period closed.
 - Screenshot showing off-site blocked while equipment is still out, with the
   equipment named, and a second one showing the same workspace once the item is
   returned or written off.

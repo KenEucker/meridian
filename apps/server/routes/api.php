@@ -221,6 +221,16 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/mark-no-show', [AttendanceCommandController::class, 'markNoShow'])
         ->name('api.commands.mark-no-show');
 
+    /*
+     * Hours correction (M18.4; SLB-007, SLB-031, SLB-032; HOURS-007,
+     * HOURS-008). Its three neighbours above are offline writes and this one is
+     * not: a correction is weighed against a grace period the node's clock
+     * owns, so it is sent now or refused now rather than queued against a
+     * window that may have closed while the device was away.
+     */
+    Route::post('/commands/correct-hours', [AttendanceCommandController::class, 'correctHours'])
+        ->name('api.commands.correct-hours');
+
     Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
         ->name('api.commands.set-current-deployment');
 

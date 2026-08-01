@@ -299,6 +299,105 @@ class DepartmentOperationsReadHttpTest extends TestCase
     }
 
     /**
+     * The hours a correction would edit, and the refusal once they freeze
+     * (M18.4; SLB-031, HOURS-008).
+     *
+     * SLB-031 puts correction in the staff workspace, so the record has to
+     * reach the card that names the shift it belongs to — with the recorded
+     * times on it, because a correction is an edit to two numbers already on
+     * file and a dialog that opened empty would make the operator go and find
+     * them somewhere else first.
+     *
+     * Once the record freezes the desk offers nothing and prints
+     * `HoursCorrectionService`'s own sentence. The date is the one an operator
+     * can act on, and it is read in the event's zone: a period that closed at
+     * five in the afternoon locally would otherwise be reported as midnight the
+     * next day, which is a different day to somebody deciding whether they are
+     * too late.
+     */
+    public function test_the_desk_carries_correctable_hours_and_names_a_closed_grace_period(): void
+    {
+        $scenario = $this->scenario();
+        $hours = HoursWorked::query()
+            ->where('shift_id', $scenario['shift']->id)
+            ->where('staff_id', $scenario['checkedIn']->id)
+            ->firstOrFail();
+
+        $open = $this->shiftCardFor($scenario, $scenario['checkedIn'], $scenario['shift']);
+
+        $this->assertSame((string) $hours->id, $open['hours_worked_id']);
+        $this->assertSame($hours->actual_started_at->toIso8601String(), $open['actual_started_at']);
+        $this->assertSame($hours->actual_ended_at->toIso8601String(), $open['actual_ended_at']);
+        $this->assertSame(120, $open['minutes_worked']);
+        $this->assertTrue($open['can_correct_hours']);
+        $this->assertNull($open['correct_hours_blocked_reason']);
+
+        $hours->forceFill(['frozen_at' => Carbon::parse('2027-07-19 00:00:00')])->save();
+
+        $frozen = $this->shiftCardFor($scenario, $scenario['checkedIn'], $scenario['shift']);
+
+        $this->assertFalse($frozen['can_correct_hours']);
+        $this->assertSame(
+            'The correction grace period closed on 18 Jul 2027 17:00 PDT, so these hours are frozen and can no longer be corrected.',
+            $frozen['correct_hours_blocked_reason'],
+        );
+    }
+
+    /**
+     * A finished shift nobody was checked out of has nothing to correct, and
+     * says what is actually missing.
+     *
+     * The operator came to the workspace looking for hours and the answer is
+     * that the check-out never happened. Naming the check-out is the difference
+     * between a card an operator can act on and one with no controls and no
+     * explanation.
+     */
+    public function test_a_finished_shift_with_no_hours_names_the_missing_check_out(): void
+    {
+        $scenario = $this->scenario();
+
+        ShiftAssignment::factory()->create([
+            'shift_id' => $scenario['overnight']->id,
+            'staff_id' => $scenario['scheduled']->id,
+            'assignment_status' => ShiftAssignment::STATUS_ASSIGNED,
+            'assigned_by_user_id' => null,
+            'removed_at' => null,
+        ]);
+
+        $card = $this->shiftCardFor($scenario, $scenario['scheduled'], $scenario['overnight']);
+
+        $this->assertNull($card['hours_worked_id']);
+        $this->assertFalse($card['can_correct_hours']);
+        $this->assertSame(
+            'This shift has no recorded hours yet. Check this staff member out to create them.',
+            $card['correct_hours_blocked_reason'],
+        );
+
+        // A running shift is not the same case: hours arrive at check-out, and a
+        // card saying so mid-shift would be on every workspace on the desk.
+        $running = $this->shiftCardFor($scenario, $scenario['scheduled'], $scenario['shift']);
+        $this->assertNull($running['correct_hours_blocked_reason']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $scenario
+     * @return array<string, mixed>
+     */
+    private function shiftCardFor(array $scenario, Staff $staff, Shift $shift): array
+    {
+        $card = collect(
+            $this->actingAsClient($scenario['logistics'])
+                ->getJson($this->path($scenario, 'logistics'))
+                ->assertOk()
+                ->json('staff_workspaces.'.(string) $staff->id.'.shift_cards'),
+        )->firstWhere('shift_id', (string) $shift->id);
+
+        $this->assertNotNull($card, 'The card is on screen so it can explain itself.');
+
+        return $card;
+    }
+
+    /**
      * @param  array<string, mixed>  $scenario
      * @return array<string, mixed>
      */
