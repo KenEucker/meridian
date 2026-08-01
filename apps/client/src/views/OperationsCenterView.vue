@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
-import {
-  LOCAL_OPERATIONS_CENTER,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
+import { LOCAL_OPERATIONS_CENTER } from "@/department-ops/fixtures";
 import {
   assignOperationsDeployment,
   availableOperationsModules,
@@ -15,13 +12,26 @@ import {
   deploymentName,
 } from "@/department-ops/operations";
 import {
-  installDevelopmentIncidentSession,
-  listFieldReportsForSession,
-  listIncidentsForSession,
-  resolveIncidentSession,
-  type ImsFieldReportListItem,
-  type ImsIncident,
+  getEventFieldReports,
+  getEventIncidents,
+  incidentAccess,
+  incidentSessionContext,
 } from "@/ims/incidentReadModel";
+
+/**
+ * The Operations Center's IMS modules (SLB-013, SLB-014; M10.10), counting the
+ * node's incidents since M16.20.
+ *
+ * These numbers used to be computed over the IMS fixture. Each is now asked of
+ * the incident list read, one narrow request per number, and each count is the
+ * `pagination.total` for the same filter the card links to -- so the number on
+ * the card and the list behind it are the same answer to the same question
+ * rather than two counts that can disagree.
+ *
+ * The "current shift" cards are gone. They matched creation times against a
+ * shift table compiled into the client; an incident carries no shift, and the
+ * rest of this surface stays fixture-driven until M16.21 binds it.
+ */
 
 const center = ref(LOCAL_OPERATIONS_CENTER);
 const selectedAssignmentId = ref(
@@ -44,140 +54,130 @@ const modules = computed(() =>
 const availableModules = computed(() =>
   availableOperationsModules({ ...center.value, modules: modules.value }),
 );
-const incidentSession = computed(() => {
-  const current = resolveIncidentSession();
+const incidentCounts = ref({ total: 0, active: 0, critical: 0 });
+const fieldReportCounts = ref({ total: 0, linked: 0, unlinked: 0 });
 
-  if (current) {
-    return current;
-  }
+const incidentCards = computed(() => [
+  {
+    id: "event-total",
+    label: "Event total",
+    value: incidentCounts.value.total,
+    hint: "Incidents created for this event",
+    to: { name: "ims.incidents.index", query: { state: "all" } },
+  },
+  {
+    id: "active",
+    label: "Active",
+    value: incidentCounts.value.active,
+    hint: "Incidents not yet closed",
+    to: { name: "ims.incidents.index", query: { state: "active" } },
+  },
+  {
+    id: "critical",
+    label: "Critical priority",
+    value: incidentCounts.value.critical,
+    hint: "Incidents marked critical",
+    to: {
+      name: "ims.incidents.index",
+      query: { state: "all", priority: "Critical" },
+    },
+  },
+]);
+const fieldReportCards = computed(() => [
+  {
+    id: "linked",
+    label: "Linked",
+    value: fieldReportCounts.value.linked,
+    hint: "Field Reports linked to incidents",
+    to: {
+      name: "ims.field-reports.index",
+      query: { state: "all", link: "linked" },
+    },
+  },
+  {
+    id: "unlinked",
+    label: "Unlinked",
+    value: fieldReportCounts.value.unlinked,
+    hint: "Field Reports not linked to an incident",
+    to: {
+      name: "ims.field-reports.index",
+      query: { state: "all", link: "not_linked" },
+    },
+  },
+  {
+    id: "event-total",
+    label: "Event total",
+    value: fieldReportCounts.value.total,
+    hint: "Field Reports submitted for this event",
+    to: { name: "ims.field-reports.index", query: { state: "all" } },
+  },
+]);
 
-  installDevelopmentIncidentSession();
-  return resolveIncidentSession();
-});
-const incidents = computed(() => listIncidentsForSession(incidentSession.value));
-const fieldReports = computed(() =>
-  listFieldReportsForSession(incidentSession.value),
+watch(
+  () => incidentSessionContext.value?.eventId ?? null,
+  () => {
+    void loadImsCounts();
+  },
+  { immediate: true },
 );
-const incidentCards = computed(() => {
-  const rows = incidents.value;
-  const currentShiftRows = rows.filter(createdDuringCurrentShift);
 
-  return [
-    {
-      id: "event-total",
-      label: "Event total",
-      value: rows.length,
-      hint: "Incidents created for this event",
-      to: { name: "ims.incidents.index", query: { state: "all" } },
-    },
-    {
-      id: "current-shift",
-      label: "Current shift",
-      value: currentShiftRows.length,
-      hint: "Incidents created during the active shift",
-      to: {
-        name: "ims.incidents.index",
-        query: { state: "all", shift: "current" },
-      },
-    },
-    {
-      id: "active",
-      label: "Active",
-      value: rows.filter((incident) => incident.status !== "closed").length,
-      hint: "Incidents not yet closed",
-      to: { name: "ims.incidents.index", query: { state: "active" } },
-    },
-    {
-      id: "critical",
-      label: "Critical priority",
-      value: rows.filter((incident) => incident.priorityLabel === "Critical")
-        .length,
-      hint: "Incidents marked critical",
-      to: {
-        name: "ims.incidents.index",
-        query: { state: "all", priority: "Critical" },
-      },
-    },
-  ];
-});
-const fieldReportCards = computed(() => {
-  const rows = fieldReports.value;
-  const currentShiftRows = rows.filter(createdDuringCurrentShift);
+/**
+ * Count the event's incidents and Field Reports.
+ *
+ * Each incident count is one narrow read: `per_page=1` so the node returns a
+ * page of one and the count comes from `pagination.total`, which is the total
+ * for that filter rather than the size of a page. A failed read shows zero
+ * rather than a stale number, and the links still work.
+ */
+async function loadImsCounts(): Promise<void> {
+  const eventId = incidentSessionContext.value?.eventId;
 
-  return [
-    {
-      id: "current-shift",
-      label: "This shift",
-      value: currentShiftRows.length,
-      hint: "Field Reports submitted during the active shift",
-      to: {
-        name: "ims.field-reports.index",
-        query: { state: "all", shift: "current" },
-      },
-    },
-    {
-      id: "linked",
-      label: "Linked",
-      value: rows.filter((report) => report.relatedIncidents.length > 0).length,
-      hint: "Field Reports linked to incidents",
-      to: {
-        name: "ims.field-reports.index",
-        query: { state: "all", link: "linked" },
-      },
-    },
-    {
-      id: "unlinked",
-      label: "Unlinked",
-      value: rows.filter((report) => report.relatedIncidents.length === 0)
-        .length,
-      hint: "Field Reports not linked to an incident",
-      to: {
-        name: "ims.field-reports.index",
-        query: { state: "all", link: "not_linked" },
-      },
-    },
-    {
-      id: "event-total",
-      label: "Event total",
-      value: rows.length,
-      hint: "Field Reports submitted for this event",
-      to: { name: "ims.field-reports.index", query: { state: "all" } },
-    },
-  ];
-});
+  if (eventId === undefined || !incidentAccess.value.canView) {
+    incidentCounts.value = { total: 0, active: 0, critical: 0 };
+    fieldReportCounts.value = { total: 0, linked: 0, unlinked: 0 };
 
-function activeShiftWindow():
-  | { readonly startsAt: number; readonly endsAt: number }
-  | null {
-  const activeShift =
-    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
-
-  if (!activeShift) {
-    return null;
+    return;
   }
 
-  const startsAt = Date.parse(activeShift.startsAt);
-  const endsAt = Date.parse(activeShift.endsAt);
+  try {
+    const [total, active, critical] = await Promise.all([
+      getEventIncidents(eventId, { state: "all", per_page: "1" }),
+      getEventIncidents(eventId, { state: "active", per_page: "1" }),
+      getEventIncidents(eventId, {
+        state: "all",
+        priority: "Critical",
+        per_page: "1",
+      }),
+    ]);
 
-  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
-    return null;
+    incidentCounts.value = {
+      total: total.pagination.total,
+      active: active.pagination.total,
+      critical: critical.pagination.total,
+    };
+  } catch {
+    incidentCounts.value = { total: 0, active: 0, critical: 0 };
   }
 
-  return { startsAt, endsAt };
-}
+  if (!incidentAccess.value.canViewFieldReports) {
+    fieldReportCounts.value = { total: 0, linked: 0, unlinked: 0 };
 
-function createdDuringCurrentShift(
-  record: ImsIncident | ImsFieldReportListItem,
-): boolean {
-  const shiftWindow = activeShiftWindow();
-  const createdAt = Date.parse(record.createdAt);
+    return;
+  }
 
-  return (
-    shiftWindow !== null &&
-    !Number.isNaN(createdAt) &&
-    createdAt >= shiftWindow.startsAt &&
-    createdAt <= shiftWindow.endsAt
-  );
+  try {
+    const reports = await getEventFieldReports(eventId);
+
+    fieldReportCounts.value = {
+      total: reports.length,
+      linked: reports.filter((report) => report.relatedIncidents.length > 0)
+        .length,
+      unlinked: reports.filter((report) => report.relatedIncidents.length === 0)
+        .length,
+    };
+  } catch {
+    fieldReportCounts.value = { total: 0, linked: 0, unlinked: 0 };
+  }
 }
 
 function moveDeployment(): void {

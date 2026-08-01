@@ -1,1276 +1,1313 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
-import type { VueWrapper } from "@vue/test-utils";
+// The IMS surfaces against a stubbed node (M16.20; CLIENT-023, CLIENT-024,
+// CLIENT-006, CLIENT-015, CLIENT-019; INC-001 through INC-015; data/API 5.1,
+// 5.2).
+//
+// These were fixture tests. They installed a role, mounted the list over three
+// compiled-in incidents, saved a note, and asserted that the browser's own copy
+// of `IncidentTimelineService` had stored it. Nothing in them reached an
+// endpoint, so nothing in them said whether the screen and the server agreed on
+// a URL, a request body, or a response shape — and the rules they proved were
+// the client's, not the node's.
+//
+// They now stub `fetch` and answer with the payloads `IncidentReadController`,
+// `IncidentCommandController`, `IncidentListPresetController`,
+// `FieldReportReadController`, and the short-lived download URL endpoint
+// publish. Each test therefore asserts two things: what the screen asked the
+// node, and what it did with the answer. The refusals are the node's sentences,
+// quoted back.
+//
+// No server runs for any of this, which is the requirement (CLIENT-024).
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
+import { configureMeridianApi } from "@/api/meridianApi";
 import {
-  availableFieldReportOptionsForSession,
-  availableLinkedIncidentOptionsForSession,
-  blankIncidentAutosaveForm,
-  clearIncidentSession,
-  createIncidentFromAutosaveForm,
-  installIncidentSession,
-  LOCAL_IMS_EVENT_ID,
-  linkFieldReportForSession,
-  updateIncidentFromAutosaveForm,
-  type IncidentAutosaveForm,
-  type IncidentSessionContext,
-} from "@/ims/incidentReadModel";
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_FIXTURE,
+} from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
+import type { SessionDocument, SessionRole } from "@/session/sessionDocument";
 
-const IC_SESSION: IncidentSessionContext = {
-  eventId: LOCAL_IMS_EVENT_ID,
-  eventLabel: "Idaho Decompression 2026",
-  organizationLabel: "Idaho Burners",
-  icDepartmentLabel: "Rangers",
-  role: "ic_viewer",
-  roleLabel: "Incident Command Viewer",
-};
+const EVENT_ID = LOCAL_FIELD_FIXTURE.eventId;
+const RANGERS = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
+const INCIDENT_ID = "99999999-9999-4999-8999-999999999901";
+const OTHER_INCIDENT_ID = "99999999-9999-4999-8999-999999999902";
+const FIELD_REPORT_ID = "99999999-9999-4999-8999-999999999903";
+const ATTACHMENT_ID = "99999999-9999-4999-8999-999999999904";
+const NOTE_ENTRY_ID = "99999999-9999-4999-8999-999999999905";
+const PRESET_ID = "99999999-9999-4999-8999-999999999906";
 
-const NON_IC_SESSION: IncidentSessionContext = {
-  ...IC_SESSION,
-  role: "department_lead",
-  roleLabel: "Department Lead",
-};
+/** One request this client made, as the assertions read it. */
+interface NodeCall {
+  readonly url: string;
+  readonly method: string;
+  readonly body: Record<string, unknown> | null;
+}
 
-const IC_OPERATOR_SESSION: IncidentSessionContext = {
-  ...IC_SESSION,
-  role: "ic_operator",
-  roleLabel: "Incident Command Operator",
-};
+interface NodeReply {
+  readonly status?: number;
+  readonly body: unknown;
+}
 
-const IC_LEAD_SESSION: IncidentSessionContext = {
-  ...IC_SESSION,
-  role: "ic_lead",
-  roleLabel: "Incident Command Lead",
-};
+/**
+ * Answer as the node would, and record what was asked.
+ *
+ * `reply` sees the URL and the parsed body so a test can vary its answer over
+ * the run. Several of these need the read after a write to differ from the read
+ * before it, which is exactly the behavior they are there to prove.
+ */
+function stubNode(reply: (call: NodeCall) => NodeReply): NodeCall[] {
+  const calls: NodeCall[] = [];
 
-function buildRouter() {
-  return createRouter({
-    history: createWebHistory(),
-    routes,
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const call: NodeCall = {
+        url: String(input),
+        method: init?.method ?? "GET",
+        body:
+          typeof init?.body === "string"
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : null,
+      };
+
+      calls.push(call);
+
+      const answer = reply(call);
+
+      return new Response(JSON.stringify(answer.body), {
+        status: answer.status ?? 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+
+  return calls;
+}
+
+function commandCalls(calls: readonly NodeCall[], command: string): NodeCall[] {
+  return calls.filter((call) => call.url.includes(`/api/commands/${command}`));
+}
+
+function listCalls(calls: readonly NodeCall[]): NodeCall[] {
+  return calls.filter(
+    (call) => call.method === "GET" && call.url.includes("/incidents?"),
+  );
+}
+
+/** One incident, as `IncidentReadController::incidentPayload` publishes it. */
+function incidentPayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: INCIDENT_ID,
+    event_id: EVENT_ID,
+    incident_number: "INC-2027-000042",
+    status: "on_scene",
+    priority_label: "Serious",
+    started_at: "2027-07-04T20:15:00+00:00",
+    title: "Medical assist near Gate A",
+    location_name: "Gate A",
+    location_address: "North entry road",
+    location_details: "Responder staged near the shade structure. #medical",
+    camp_id: null,
+    map_location_id: null,
+    incident_type_names: ["Medical"],
+    responders: [
+      {
+        staff_id: "88888888-8888-4888-8888-888888888801",
+        display_name: "Vera Ranger",
+        relationship_label: "Responder",
+      },
+    ],
+    linked_incidents: [],
+    attached_field_reports: [],
+    attachments: [],
+    created_by_user_id: LOCAL_FIELD_FIXTURE.submittedByUserId,
+    created_by_name: "Ingrid ICLead",
+    created_at: "2027-07-04T20:18:00+00:00",
+    updated_at: "2027-07-04T20:32:00+00:00",
+    closed_at: null,
+    name_reference_chips: [{ token: "Blue-Hat", normalized_token: "blue-hat" }],
+    timeline_entries: [
+      {
+        id: "99999999-9999-4999-8999-999999999910",
+        incident_id: INCIDENT_ID,
+        actor_user_id: null,
+        actor_name: "Ingrid ICLead",
+        entry_type: "incident_opened",
+        body: "Incident INC-2027-000042 opened.",
+        previous_value: null,
+        new_value: null,
+        reason: null,
+        created_at: "2027-07-04T20:18:00+00:00",
+        stricken_at: null,
+        stricken_reason: null,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function otherIncidentPayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return incidentPayload({
+    id: OTHER_INCIDENT_ID,
+    incident_number: "INC-2027-000041",
+    title: "Radio relay check",
+    status: "monitoring",
+    priority_label: "Routine",
+    incident_type_names: ["Radio"],
+    responders: [],
+    location_details: "Monitoring signal reports. #medical",
+    created_at: "2027-07-04T19:45:00+00:00",
+    updated_at: "2027-07-04T19:56:00+00:00",
+    name_reference_chips: [],
+    timeline_entries: [],
+    ...overrides,
   });
 }
 
-function findLinkByText(wrapper: VueWrapper, text: string) {
-  return wrapper.findAll("a").find((link) => link.text() === text);
+function presetPayload(): Record<string, unknown> {
+  return {
+    id: PRESET_ID,
+    event_id: EVENT_ID,
+    name: "Critical now",
+    filters: {
+      search: "",
+      state: "all",
+      priority: "Critical",
+      type: "all",
+      responder: "all",
+      started_from: null,
+      started_to: null,
+      sort: "updated",
+      direction: "desc",
+    },
+    query: { state: "all", priority: "Critical" },
+    created_at: "2027-07-04T20:00:00+00:00",
+    updated_at: "2027-07-04T20:00:00+00:00",
+  };
+}
+
+/** The list read, as `IncidentReadController::index` publishes it. */
+function listPayload(
+  overrides: {
+    readonly incidents?: Record<string, unknown>[];
+    readonly presets?: Record<string, unknown>[];
+    readonly filters?: Record<string, unknown>;
+    readonly pagination?: Record<string, unknown>;
+  } = {},
+): Record<string, unknown> {
+  return {
+    event_id: EVENT_ID,
+    filters: {
+      search: "",
+      state: "active",
+      priority: "all",
+      type: "all",
+      responder: "all",
+      started_from: null,
+      started_to: null,
+      sort: "updated",
+      direction: "desc",
+      page: 1,
+      per_page: 25,
+      ...overrides.filters,
+    },
+    filter_options: {
+      states: [
+        "active",
+        "all",
+        "open",
+        "on_scene",
+        "monitoring",
+        "on_hold",
+        "closed",
+      ],
+      priorities: ["all", "Routine", "Important", "Serious", "Critical"],
+      sorts: ["updated", "incident", "state", "priority", "started", "location"],
+      types: ["Medical", "Radio"],
+      responders: [
+        {
+          staff_id: "88888888-8888-4888-8888-888888888801",
+          display_name: "Vera Ranger",
+        },
+      ],
+      max_per_page: 100,
+    },
+    assignable: {
+      statuses: ["open", "on_scene", "monitoring", "on_hold", "closed"],
+      priorities: ["Routine", "Important", "Serious", "Critical"],
+      types: ["Medical", "Radio", "Weather"],
+      responders: [
+        {
+          staff_id: "88888888-8888-4888-8888-888888888801",
+          display_name: "Vera Ranger",
+          detail: "Rangers",
+        },
+        {
+          staff_id: "88888888-8888-4888-8888-888888888802",
+          display_name: "Omar Operator",
+          detail: "Rangers",
+        },
+      ],
+    },
+    pagination: {
+      page: 1,
+      per_page: 25,
+      total: overrides.incidents?.length ?? 1,
+      total_pages: 1,
+      has_more: false,
+      ...overrides.pagination,
+    },
+    presets: overrides.presets ?? [],
+    incidents: overrides.incidents ?? [incidentPayload()],
+  };
+}
+
+/** The Field Report read, as `FieldReportReadController::index` publishes it. */
+function fieldReportListPayload(
+  related: Record<string, unknown>[] = [],
+): Record<string, unknown> {
+  return {
+    event_id: EVENT_ID,
+    field_reports: [
+      {
+        id: FIELD_REPORT_ID,
+        event_id: EVENT_ID,
+        display_number: "FRA-2027-000123",
+        title: "Medical observation near Gate A",
+        author_name: "Vera Ranger",
+        body: "Observed medical response near Gate A. #medical",
+        created_at: "2027-07-04T20:34:00+00:00",
+        related_incidents: related,
+      },
+    ],
+  };
+}
+
+/**
+ * A node that answers every IMS read the same way for a whole test.
+ *
+ * Commands answer with an accepted body carrying the incident id, which is
+ * enough for the surfaces that re-read afterwards; a test that cares what a
+ * command returned answers it itself.
+ */
+function stubStandardNode(
+  options: {
+    readonly incident?: Record<string, unknown>;
+    readonly list?: Record<string, unknown>;
+    readonly fieldReports?: Record<string, unknown>;
+  } = {},
+): NodeCall[] {
+  return stubNode((call) => {
+    if (call.url.includes("/field-reports")) {
+      return { body: options.fieldReports ?? fieldReportListPayload() };
+    }
+
+    if (call.method === "POST") {
+      return { body: { id: INCIDENT_ID } };
+    }
+
+    if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+      return { body: { incident: options.incident ?? incidentPayload() } };
+    }
+
+    return { body: options.list ?? listPayload() };
+  });
 }
 
 async function mountAt(path: string) {
-  const router = buildRouter();
+  const router = createRouter({ history: createWebHistory(), routes });
+
   await router.push(path);
   await router.isReady();
 
-  const wrapper = mount(App, {
-    global: {
-      plugins: [router],
-    },
-  });
+  const wrapper = mount(App, { global: { plugins: [router] } });
+
+  await flushPromises();
 
   return { wrapper, router };
 }
 
-async function addBySearch(
-  wrapper: VueWrapper,
-  inputSelector: string,
-  query: string,
-  optionText: string,
-): Promise<void> {
-  await wrapper.get(inputSelector).trigger("focus");
-  await wrapper.get(inputSelector).setValue(query);
-  await flushPromises();
+/**
+ * The signed-in session.
+ *
+ * With no argument it is the seeded IC lead, who holds every incident
+ * capability. With one it is a caller holding exactly the codes named, which is
+ * how the permission tests below narrow authority without inventing a role.
+ */
+function installSession(
+  capabilityOverrides?: readonly string[],
+): SessionDocument {
+  const document = installLocalFieldSession(
+    capabilityOverrides === undefined
+      ? {}
+      : { roles: narrowedRoles(capabilityOverrides) },
+  );
 
-  const option = wrapper
-    .findAll(".ims-edit__add-results button")
-    .find((button) => button.text() === optionText);
+  selectSessionDepartment(RANGERS);
 
-  expect(option).toBeDefined();
-  await option?.trigger("click");
-  await flushPromises();
+  return document;
 }
 
-async function showFullHistory(wrapper: VueWrapper): Promise<void> {
-  const button = wrapper
-    .findAll("button")
-    .find((candidate) => candidate.text() === "Show full history");
-
-  expect(button).toBeDefined();
-  await button?.trigger("click");
-  await flushPromises();
+function narrowedRoles(capabilities: readonly string[]): SessionRole[] {
+  return [
+    {
+      role_code: "ic_viewer",
+      role_name: "Incident Command Viewer",
+      scope_type: "event",
+      organization_id: null,
+      department_id: RANGERS,
+      team_id: null,
+      team_name: null,
+      event_id: EVENT_ID,
+      team_grant_id: null,
+      reason: null,
+      capabilities: [...capabilities],
+    },
+  ];
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  clearIncidentSession();
-  setNavigatorOnline(true);
-});
+function findButton(wrapper: VueWrapper, text: string) {
+  return wrapper.findAll("button").find((button) => button.text() === text);
+}
 
+/**
+ * Drive the device-network signal.
+ *
+ * The event matters as much as the property: `deviceConnectivity` is a module
+ * ref that only moves on `online`/`offline`, so a test that drops the network
+ * and does not put it back leaves every later test offline.
+ */
 function setNavigatorOnline(onLine: boolean): void {
   Object.defineProperty(window.navigator, "onLine", {
     configurable: true,
     value: onLine,
   });
+
+  window.dispatchEvent(new Event(onLine ? "online" : "offline"));
 }
 
-describe("IMS incident list/detail surfaces (M11.5)", () => {
-  it("registers the UI contract route names", () => {
-    const names = routes.map((route) => route.name);
+beforeEach(() => {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+  setNavigatorOnline(true);
+});
 
-    expect(names).toContain("ims.incidents.index");
-    expect(names).toContain("ims.incidents.create");
-    expect(names).toContain("ims.incidents.show");
-    expect(names).toContain("ims.incidents.edit");
-    expect(names).toContain("ims.field-reports.index");
-    expect(names).toContain("ims.field-reports.show");
-    expect(names).toContain("ims.restricted");
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  configureMeridianApi(null);
+  clearClientSession();
+  resetSelectedSessionDepartment();
+  setNavigatorOnline(true);
+});
+
+describe("the incident list", () => {
+  it("asks the node for the selection in the URL and renders the page it answered", async () => {
+    installSession();
+    const calls = stubStandardNode({
+      list: listPayload({
+        incidents: [incidentPayload(), otherIncidentPayload()],
+        filters: { state: "all", priority: "Serious", sort: "priority" },
+        pagination: { total: 7, total_pages: 1 },
+      }),
+    });
+
+    const { wrapper } = await mountAt(
+      "/ims/incidents?state=all&priority=Serious&sort=priority",
+    );
+
+    const read = listCalls(calls).at(-1);
+
+    expect(read?.url).toContain(`/api/events/${EVENT_ID}/incidents?`);
+    expect(read?.url).toContain("state=all");
+    expect(read?.url).toContain("priority=Serious");
+    expect(read?.url).toContain("sort=priority");
+
+    // The rows are the node's page, and the count is the node's total rather
+    // than the number of rows on it.
+    expect(wrapper.text()).toContain("INC-2027-000042");
+    expect(wrapper.text()).toContain("INC-2027-000041");
+    expect(wrapper.get(".ims-list__summary").text()).toContain(
+      "7 incidents match the current filters.",
+    );
   });
 
-  it("renders a restricted, scan-friendly incident list for IC roles", async () => {
-    installIncidentSession(IC_SESSION);
+  it("offers the node's filter vocabulary rather than one of its own", async () => {
+    installSession();
+    stubStandardNode();
 
     const { wrapper } = await mountAt("/ims/incidents");
 
-    expect(wrapper.get("#ims-incidents-heading").text()).toBe("Incidents");
-    expect(wrapper.text()).toContain("Idaho Burners");
-    expect(wrapper.text()).toContain("Idaho Decompression 2026");
-    expect(wrapper.text()).toContain("Rangers");
-    expect(wrapper.text()).toContain("Incident Command Viewer");
-    expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).toContain("On Scene");
-    expect(wrapper.text()).toContain("Serious");
-    expect(wrapper.text()).toContain("Medical, Safety");
-    expect(wrapper.text()).toContain("INC-2027-000041");
-    expect(wrapper.text()).toContain("Routine");
-    expect(wrapper.text()).toContain("Radio");
-    expect(wrapper.text()).not.toContain("Closed supply handoff");
-    expect(findLinkByText(wrapper, "Back To Home")?.attributes("href")).toBe(
-      "/",
-    );
+    const states = wrapper
+      .get("#ims-list-state")
+      .findAll("option")
+      .map((option) => option.attributes("value"));
+
+    expect(states).toEqual([
+      "active",
+      "all",
+      "open",
+      "on_scene",
+      "monitoring",
+      "on_hold",
+      "closed",
+    ]);
+
+    // `filter_options.sorts` does not list a types sort, so the heading is not
+    // a control that would be refused.
+    const headings = wrapper.findAll(".ims-list__table thead th");
+
     expect(
-      wrapper
-        .findAll(".ims-list__secondary-link")
-        .some((link) => link.attributes("href") === "/ims/field-reports"),
+      headings.find((heading) => heading.text() === "Types")?.find("a").exists(),
+    ).toBe(false);
+    expect(
+      headings
+        .find((heading) => heading.text() === "Priority")
+        ?.find("a")
+        .exists(),
     ).toBe(true);
-    expect(wrapper.text()).toContain("07-04-2027");
-    expect(wrapper.text()).toMatch(/07-04-2027 \d{2}:\d{2}/u);
-    expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
-      "/ims/incidents/incident-gate-medical",
-    );
-    expect(wrapper.text()).not.toContain("Create incident");
   });
 
-  it("filters incidents by state and priority and sorts by headings", async () => {
-    installIncidentSession(IC_SESSION);
+  it("shows the node's refusal instead of an empty list", async () => {
+    installSession();
+    stubNode(() => ({
+      status: 403,
+      body: {
+        message:
+          "This page requires Incident Command access for the event configured IC department.",
+      },
+    }));
 
-    const { wrapper, router } = await mountAt("/ims/incidents");
+    const { wrapper } = await mountAt("/ims/incidents");
 
-    expect(wrapper.text()).not.toContain("Closed supply handoff");
-
-    await wrapper.get("#ims-list-state").setValue("all");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.state).toBe("all");
-    expect(wrapper.text()).toContain("Closed supply handoff");
-
-    await wrapper.get("#ims-list-shift").setValue("current");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.shift).toBe("current");
-    expect(wrapper.text()).toContain("Closed supply handoff");
-
-    await wrapper.get("#ims-list-priority").setValue("Serious");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("Radio relay check");
-    expect(wrapper.text()).not.toContain("Closed supply handoff");
-
-    await router.push("/ims/incidents");
-    await flushPromises();
-
-    const incidentSort = wrapper
-      .findAll("thead a")
-      .find((link) => link.text() === "Incident");
-    expect(incidentSort).toBeDefined();
-    await incidentSort?.trigger("click");
-    await flushPromises();
-
-    expect(wrapper.findAll(".ims-list__incident-link")[0]?.text()).toContain(
-      "INC-2027-000041",
+    expect(wrapper.get(".ims-list__load-error").text()).toBe(
+      "This page requires Incident Command access for the event configured IC department.",
     );
+    expect(wrapper.text()).not.toContain("INC-2027-000042");
   });
 
-  it("filters incidents by incident type and responder", async () => {
-    installIncidentSession(IC_SESSION);
+  it("saves a list preset through its command and renders the presets it answered", async () => {
+    installSession();
+    const calls = stubNode((call) => {
+      if (call.url.includes("/api/commands/save-incident-list-preset")) {
+        return { status: 201, body: { presets: [presetPayload()] } };
+      }
 
-    const { wrapper, router } = await mountAt("/ims/incidents");
+      return { body: listPayload() };
+    });
 
-    const typeOptions = wrapper
-      .get("#ims-list-type")
-      .findAll("option")
-      .map((option) => option.text());
-    expect(typeOptions).toContain("Medical");
-    expect(typeOptions).toContain("Radio");
+    const { wrapper } = await mountAt(
+      "/ims/incidents?state=all&priority=Critical",
+    );
 
-    await wrapper.get("#ims-list-type").setValue("Medical");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.type).toBe("Medical");
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("Radio relay check");
-
-    await router.push("/ims/incidents");
-    await flushPromises();
-
-    const responderOptions = wrapper
-      .get("#ims-list-responder")
-      .findAll("option")
-      .map((option) => option.text());
-    expect(responderOptions).toContain("Vera Ranger");
-
+    await wrapper.get("#ims-list-preset-name").setValue("Critical now");
     await wrapper
-      .get("#ims-list-responder")
-      .setValue("22222222-2222-4222-8222-222222222201");
+      .get("form[aria-label='Saved incident list presets']")
+      .trigger("submit");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("Radio relay check");
-  });
+    const saved = commandCalls(calls, "save-incident-list-preset").at(0);
 
-  it("searches incident notes and attached Field Reports from the list", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-    linkFieldReportForSession(
-      IC_OPERATOR_SESSION,
-      "incident-gate-medical",
-      "field-report-radio-relay",
-    );
-
-    const { wrapper } = await mountAt("/ims/incidents?search=west-side relay");
-
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("Radio relay check");
-
-    const notes = await mountAt("/ims/incidents?search=signal reports");
-
-    expect(notes.wrapper.text()).toContain("Radio relay check");
-    expect(notes.wrapper.text()).not.toContain("Medical assist near Gate A");
-  });
-
-  it("summarizes narrowed results and offers a reset back to the default list", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper, router } = await mountAt("/ims/incidents");
-
-    expect(wrapper.text()).toContain("2 incidents match the current filters.");
-    expect(findLinkByText(wrapper, "Reset filters")).toBeUndefined();
-
-    await wrapper.get("#ims-list-priority").setValue("Serious");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("1 incident matches the current filters.");
-
-    const reset = findLinkByText(wrapper, "Reset filters");
-    expect(reset).toBeDefined();
-    await reset?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.priority).toBeUndefined();
-    expect(wrapper.text()).toContain("2 incidents match the current filters.");
-  });
-
-  it("shows no page controls while the whole result fits on one page", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper, router } = await mountAt("/ims/incidents?state=all");
-
-    expect(wrapper.text()).toContain("3 incidents match the current filters.");
-    expect(wrapper.text()).not.toContain("Page 1 of");
-    expect(wrapper.find(".ims-list__pagination").exists()).toBe(false);
-
-    await wrapper.get("#ims-list-page-size").setValue("10");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.per_page).toBe("10");
-    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(3);
-  });
-
-  it("moves between pages without losing the active filters", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    for (let index = 0; index < 12; index += 1) {
-      createIncidentFromAutosaveForm(IC_OPERATOR_SESSION, {
-        ...blankIncidentAutosaveForm(),
-        title: `Paged incident ${index}`,
-      });
-    }
-
-    const { wrapper, router } = await mountAt("/ims/incidents?per_page=10");
-
-    // Two active fixture incidents plus the twelve created above; the closed
-    // fixture incident stays excluded by the default active-state filter.
-    expect(wrapper.text()).toContain("14 incidents match the current filters.");
-    expect(wrapper.text()).toContain("Page 1 of 2");
-    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(10);
-
-    const next = findLinkByText(wrapper, "Next");
-    expect(next).toBeDefined();
-    await next?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.per_page).toBe("10");
-    expect(wrapper.text()).toContain("Page 2 of 2");
-    expect(wrapper.findAll(".ims-list__incident-link")).toHaveLength(4);
-    expect(findLinkByText(wrapper, "Next")).toBeUndefined();
-
-    const previous = findLinkByText(wrapper, "Previous");
-    expect(previous).toBeDefined();
-    await previous?.trigger("click");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Page 1 of 2");
-  });
-
-  it("returns to the first page when a filter narrows the list", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    for (let index = 0; index < 12; index += 1) {
-      createIncidentFromAutosaveForm(IC_OPERATOR_SESSION, {
-        ...blankIncidentAutosaveForm(),
-        title: `Paged incident ${index}`,
-      });
-    }
-
-    const { wrapper, router } = await mountAt("/ims/incidents?per_page=10&page=2");
-
-    expect(wrapper.text()).toContain("Page 2 of 2");
-
-    await wrapper.get("#ims-list-priority").setValue("Serious");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.page).toBeUndefined();
-    expect(wrapper.text()).toContain("1 incident matches the current filters.");
-  });
-
-  it("saves, reapplies, and deletes an incident list filter preset", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper, router } = await mountAt("/ims/incidents?priority=Serious");
-
-    expect(wrapper.text()).toContain("1 incident matches the current filters.");
-
-    await wrapper.get("#ims-list-preset-name").setValue("Serious watch");
-    await wrapper.get('form[aria-label="Saved incident list presets"]').trigger("submit");
-    await flushPromises();
-
-    const options = wrapper
-      .get("#ims-list-preset")
-      .findAll("option")
-      .map((option) => option.text());
-    expect(options).toContain("Serious watch");
-
-    await router.push("/ims/incidents");
-    await flushPromises();
-    expect(wrapper.text()).toContain("2 incidents match the current filters.");
-
-    const presetId = wrapper
-      .get("#ims-list-preset")
-      .findAll("option")
-      .find((option) => option.text() === "Serious watch")
-      ?.attributes("value");
-    expect(presetId).toBeDefined();
-
-    await wrapper.get("#ims-list-preset").setValue(presetId);
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.priority).toBe("Serious");
-    expect(wrapper.text()).toContain("1 incident matches the current filters.");
-
-    const deleteButton = wrapper
-      .findAll("button")
-      .find((button) => button.text() === "Delete preset");
-    expect(deleteButton).toBeDefined();
-    await deleteButton?.trigger("click");
-    await flushPromises();
+    expect(saved?.method).toBe("POST");
+    expect(saved?.body).toMatchObject({ event_id: EVENT_ID, name: "Critical now" });
 
     expect(
       wrapper
         .get("#ims-list-preset")
         .findAll("option")
         .map((option) => option.text()),
-    ).not.toContain("Serious watch");
+    ).toContain("Critical now");
   });
 
-  it("refuses a preset without a name and keeps the saved list unchanged", async () => {
-    installIncidentSession(IC_SESSION);
+  it("refuses to save a preset the node refuses, in the node's words", async () => {
+    installSession();
+    stubNode((call) => {
+      if (call.url.includes("/api/commands/save-incident-list-preset")) {
+        return {
+          status: 422,
+          body: {
+            message: "Preset name may not be greater than 60 characters.",
+          },
+        };
+      }
+
+      return { body: listPayload() };
+    });
 
     const { wrapper } = await mountAt("/ims/incidents");
 
-    await wrapper.get("#ims-list-preset-name").setValue("   ");
-    await wrapper.get('form[aria-label="Saved incident list presets"]').trigger("submit");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Preset name is required.");
-    expect(wrapper.text()).toContain("No saved presets");
-  });
-
-  it("does not offer saved presets to sessions without IC access", async () => {
-    installIncidentSession(NON_IC_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents");
-
-    expect(wrapper.find("#ims-list-preset").exists()).toBe(false);
-    expect(wrapper.find("#ims-list-preset-name").exists()).toBe(false);
-  });
-
-  it("renders the IC Field Reports list with cross-links, filters, and sorting", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-    linkFieldReportForSession(
-      IC_OPERATOR_SESSION,
-      "incident-gate-medical",
-      "field-report-medical-gate",
-      new Date("2027-07-04T20:50:00.000Z"),
-    );
-
-    const { wrapper, router } = await mountAt("/ims/field-reports");
-
-    expect(wrapper.get("#ims-field-reports-heading").text()).toBe(
-      "Field Reports",
-    );
-    expect(wrapper.text()).toContain("FRA-2027-000123");
-    expect(wrapper.text()).toContain("Vera Ranger");
-    expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).toContain("FRA-2027-000124");
-    expect(findLinkByText(wrapper, "Back To Home")?.attributes("href")).toBe(
-      "/",
-    );
-    expect(
-      wrapper
-        .findAll(".ims-fr-list__secondary-link")
-        .some((link) => link.attributes("href") === "/ims/incidents"),
-    ).toBe(true);
-    const medicalReportLink = wrapper
-      .findAll(".ims-fr-list__report-link")
-      .find(
-        (link) =>
-          link.attributes("href") ===
-          "/ims/field-reports/field-report-medical-gate",
-      );
-    expect(medicalReportLink).toBeDefined();
-
-    await medicalReportLink?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("ims.field-reports.show");
-    expect(wrapper.get("#ims-fr-detail-heading").text()).toBe(
-      "Medical observation near Gate A",
-    );
-    expect(wrapper.text()).toContain("Vera Ranger");
-    expect(wrapper.text()).toContain(
-      "Observed medical response near Gate A for @Blue-Hat.",
-    );
-    expect(wrapper.text()).toContain("INC-2027-000042");
-
-    await router.push("/ims/field-reports");
-    await flushPromises();
-
-    await wrapper.get("#ims-fr-list-link").setValue("linked");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.link).toBe("linked");
-    expect(wrapper.text()).toContain("FRA-2027-000123");
-    expect(wrapper.text()).not.toContain("FRA-2027-000124");
-
-    await wrapper.get("#ims-fr-list-shift").setValue("current");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.shift).toBe("current");
-
-    await wrapper.get("#ims-fr-list-link").setValue("not_linked");
-    await flushPromises();
-
-    expect(router.currentRoute.value.query.link).toBe("not_linked");
-    expect(wrapper.text()).not.toContain("FRA-2027-000123");
-    expect(wrapper.text()).toContain("FRA-2027-000124");
-
-    await wrapper.get("#ims-fr-list-link").setValue("all");
-    await flushPromises();
-
-    await wrapper.get("#ims-fr-list-priority").setValue("Serious");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("FRA-2027-000123");
-    expect(wrapper.text()).not.toContain("FRA-2027-000124");
-
-    await router.push("/ims/field-reports");
-    await flushPromises();
-
-    const authorSort = wrapper
-      .findAll("thead a")
-      .find((link) => link.text() === "Author");
-    expect(authorSort).toBeDefined();
-    await authorSort?.trigger("click");
-    await flushPromises();
-
-    expect(wrapper.findAll("tbody tr")[0]?.text()).toContain("Ingrid ICLead");
-  });
-
-  it("shows create entry points only to IC operators and leads", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents");
-
-    expect(wrapper.text()).toContain("Create incident");
-    expect(findLinkByText(wrapper, "Create incident")?.attributes("href")).toBe(
-      "/ims/incidents/create",
-    );
-  });
-
-  it("lets incident editors choose whether list rows open view or edit", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents");
-
-    expect(wrapper.find("#ims-list-open-mode").exists()).toBe(true);
-    expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
-      "/ims/incidents/incident-gate-medical",
-    );
-
-    await wrapper.get("#ims-list-open-mode").setValue("edit");
-    await flushPromises();
-
-    expect(wrapper.get(".ims-list__incident-link").attributes("href")).toBe(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    clearIncidentSession();
-    installIncidentSession(IC_SESSION);
-    const viewerMount = await mountAt("/ims/incidents");
-
-    expect(viewerMount.wrapper.find("#ims-list-open-mode").exists()).toBe(
-      false,
-    );
-    expect(
-      viewerMount.wrapper.get(".ims-list__incident-link").attributes("href"),
-    ).toBe("/ims/incidents/incident-gate-medical");
-  });
-
-  it("toggles an edited incident to view state without changing pages", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper, router } = await mountAt(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    expect(wrapper.find("#ims-edit-title").exists()).toBe(true);
-
-    const viewButton = wrapper
-      .findAll("button")
-      .find((button) => button.text() === "View incident");
-    expect(viewButton).toBeDefined();
-    await viewButton?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.fullPath).toBe(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-    expect(wrapper.find("#ims-edit-title").exists()).toBe(false);
-    expect(wrapper.text()).toContain("Current state");
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).toContain("Rangers/responders");
-
-    const editButton = wrapper
-      .findAll("button")
-      .find((button) => button.text() === "Edit incident");
-    expect(editButton).toBeDefined();
-    await editButton?.trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.fullPath).toBe(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-    expect(wrapper.find("#ims-edit-title").exists()).toBe(true);
-  });
-
-  it("installs an IC lead development session so create/edit/print can be exercised locally", async () => {
-    const { wrapper } = await mountAt("/ims/incidents");
-
-    expect(wrapper.text()).toContain("Local Field Organization");
-    expect(wrapper.text()).toContain("Local Field Event");
-    expect(wrapper.text()).toContain("Incident Command Lead");
-    expect(wrapper.text()).toContain("Create incident");
-  });
-
-  it("does not render incident rows for non-IC roles", async () => {
-    installIncidentSession(NON_IC_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents");
-
-    expect(wrapper.text()).toContain("Incident Command access required");
-    expect(wrapper.text()).toContain("Department Lead");
-    expect(wrapper.text()).not.toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("INC-2027-000042");
-  });
-
-  it("denies IC Field Report detail to non-IC roles", async () => {
-    installIncidentSession(NON_IC_SESSION);
-
-    const { wrapper } = await mountAt(
-      "/ims/field-reports/field-report-medical-gate",
-    );
-
-    expect(wrapper.text()).toContain("Incident Command access required");
-    expect(wrapper.text()).not.toContain("Medical observation near Gate A");
-    expect(wrapper.text()).not.toContain("FRA-2027-000123");
-  });
-
-  it("renders read-only incident detail for IC roles", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
-
-    expect(wrapper.get("#ims-edit-heading").text()).toBe(
-      "Medical assist near Gate A",
-    );
-    expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).toContain("On Scene");
-    expect(wrapper.text()).toContain("Serious");
-    expect(wrapper.text()).toContain("Medical");
-    expect(wrapper.text()).toContain("Safety");
-    expect(wrapper.text()).toContain("Vera Ranger");
-    expect(wrapper.text()).toContain("Linked incidents");
-    expect(wrapper.text()).toContain("INC-2027-000041");
-    expect(wrapper.text()).toContain("Radio relay check");
-    expect(wrapper.text()).toContain("Gate A");
-    expect(wrapper.text()).toContain("#medical");
-    expect(wrapper.text()).toContain("@Blue-Hat");
-    expect(wrapper.text()).toContain("@Gate_A");
-    expect(wrapper.text()).toContain("Responder staged near the shade structure.");
-    expect(wrapper.text()).toContain("Incident INC-2027-000042 opened.");
-    expect(wrapper.text()).toContain("Responder is on scene and monitoring breathing.");
-    expect(wrapper.text()).toContain("Ingrid ICLead");
-    expect(wrapper.text()).not.toContain("Add note");
-    expect(wrapper.text()).not.toContain("Save");
-    expect(wrapper.text()).not.toContain("Edit");
-    expect(wrapper.text()).not.toContain("Print PDF");
-    expect(
-      wrapper.get(".ims-edit__chip--name-reference").attributes("href"),
-    ).toBe("/ims/incidents?search=Blue-Hat");
-  });
-
-  it("shows Print PDF only for IC leads and keeps local fixture print available offline", async () => {
-    installIncidentSession(IC_LEAD_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
-
-    expect(wrapper.text()).toContain("Print PDF");
-    expect(wrapper.get(".ims-edit__print-button").attributes("disabled")).toBeUndefined();
-
-    setNavigatorOnline(false);
-    window.dispatchEvent(new Event("offline"));
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain(
-      "Incident PDF print requires a server connection.",
-    );
-    expect(wrapper.get(".ims-edit__print-button").attributes("disabled")).toBeUndefined();
-
-    clearIncidentSession();
-    installIncidentSession(IC_OPERATOR_SESSION);
-    const operatorMount = await mountAt("/ims/incidents/incident-gate-medical");
-
-    expect(operatorMount.wrapper.text()).toContain("Edit incident");
-    expect(operatorMount.wrapper.text()).not.toContain("Print PDF");
-  });
-
-  it("lets IC operators create an incident from a blank autosave form", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper, router } = await mountAt("/ims/incidents/create");
-
-    expect(wrapper.text()).toContain("Create incident");
-    expect(wrapper.text()).toContain("Not assigned yet");
-    expect(wrapper.text()).toContain("Responders");
-    expect(wrapper.text()).toContain("Linked incidents");
-    expect(wrapper.text()).toContain("Attached Field Reports");
-    expect(wrapper.text()).toContain("Timeline");
-    expect(wrapper.get("#ims-edit-linked-add").attributes("disabled")).toBe("");
-    expect(wrapper.get("#ims-edit-field-report-add").attributes("disabled")).toBe("");
-    expect(wrapper.text()).not.toContain("Rangers/responders");
-
-    await wrapper.get("#ims-edit-priority").setValue("Important");
-    await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
-    expect(wrapper.text()).toContain("INC-2027-000043");
-    expect(wrapper.text()).toContain("Create incident");
-    expect(wrapper.text()).toContain("Incident INC-2027-000043 opened.");
-    expect(wrapper.text()).not.toContain("Changed priority: Important");
-    expect(wrapper.get("#ims-edit-linked-add").attributes("disabled")).toBeUndefined();
-    expect(wrapper.get("#ims-edit-field-report-add").attributes("disabled")).toBeUndefined();
-
-    const openingTimelineEntries = wrapper.findAll(".ims-edit__timeline li");
-    expect(openingTimelineEntries[0]?.text()).toContain(
-      "Incident INC-2027-000043 opened.",
-    );
-
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain("Changed priority: Important");
-    expect(wrapper.findAll(".ims-edit__timeline li")[1]?.text()).toContain(
-      "Changed priority: Important",
-    );
-
-    await addBySearch(wrapper, "#ims-edit-type-add", "Log", "Logistics");
-    await addBySearch(wrapper, "#ims-edit-type-add", "Rad", "Radio");
-    await addBySearch(wrapper, "#ims-edit-responder-add", "Omar", "Omar Operator");
-    await wrapper.get("#ims-edit-title").setValue("  Perimeter assist  ");
-    await flushPromises();
-
-    await wrapper.get("#ims-edit-title").trigger("blur");
-    await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("ims.incidents.create");
-    expect(wrapper.text()).toContain("INC-2027-000043");
-    expect(wrapper.text()).not.toContain("Saved INC-2027-000043.");
-
-    await router.push("/ims/incidents");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Perimeter assist");
-    expect(wrapper.text()).toContain("INC-2027-000043");
-    expect(wrapper.text()).toContain("Important");
-    expect(wrapper.text()).toContain("Logistics, Radio");
-  });
-
-  it("waits for a committed field change before creating from the autosave form", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/create");
-
-    await wrapper.get("#ims-edit-location-name").setValue("Gate B");
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain("Autosave failed");
-    expect(wrapper.text()).not.toContain("Incident title is required.");
-    expect(wrapper.text()).toContain("Not assigned yet");
-
-    await wrapper.get("#ims-edit-location-name").trigger("blur");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("INC-2027-000043");
-    expect(wrapper.get<HTMLInputElement>("#ims-edit-title").element.value).toBe(
-      "",
-    );
-  });
-
-  it("shows add choices in a dismissible popup", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical/edit");
-
-    await wrapper.get("#ims-edit-type-add").trigger("focus");
-    await wrapper.get("#ims-edit-type-add").setValue("Wea");
-    await flushPromises();
-
-    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(true);
-    expect(wrapper.text()).toContain("Weather");
-
-    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    await flushPromises();
-
-    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(false);
-
-    await wrapper.get("#ims-edit-responder-add").trigger("focus");
-    await wrapper.get("#ims-edit-responder-add").setValue("Ingrid");
-    await flushPromises();
-
-    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(true);
-
-    await wrapper.get("#ims-edit-responder-add").trigger("keydown.escape");
-    await flushPromises();
-
-    expect(wrapper.find(".ims-edit__add-results").exists()).toBe(false);
-  });
-
-  it("lets IC operators autosave current fields for an existing incident", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    expect(wrapper.text()).toContain("Edit incident");
-    expect(wrapper.text()).toContain("INC-2027-000042");
-
+    await wrapper.get("#ims-list-preset-name").setValue("A name");
     await wrapper
-      .get("#ims-edit-title")
-      .setValue("Gate A medical follow-up #followup @RangerHQ");
-    await wrapper.get("#ims-edit-priority").setValue("Critical");
-    await wrapper
-      .get('button[aria-label="Remove incident type Safety"]')
-      .trigger("click");
-    await addBySearch(wrapper, "#ims-edit-type-add", "Wea", "Weather");
-    await addBySearch(wrapper, "#ims-edit-responder-add", "Ingrid", "Ingrid ICLead");
+      .get("form[aria-label='Saved incident list presets']")
+      .trigger("submit");
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain("Incident field changed");
-
-    await wrapper.get("#ims-edit-title").trigger("blur");
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain("Saved INC-2027-000042.");
-    expect(wrapper.text()).not.toContain(
-      "Changed title: Gate A medical follow-up #followup @RangerHQ",
-    );
-
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain(
-      "Changed title: Gate A medical follow-up #followup @RangerHQ",
-    );
-    expect(wrapper.text()).toContain("Changed priority: Critical");
-    expect(wrapper.text()).toContain("Changed incident types: Medical, Weather");
-    expect(wrapper.text()).toContain("Changed responders: Vera Ranger, Ingrid ICLead");
-    expect(wrapper.text().match(/Changed priority: Critical/gu)).toHaveLength(1);
-    expect(wrapper.text()).not.toContain("Incident field changed");
-    expect(wrapper.text()).not.toContain("field changed from");
-    expect(wrapper.text()).toContain("#followup");
-    expect(wrapper.text()).toContain("@RangerHQ");
-
-    const titleInput = wrapper.get<HTMLInputElement>("#ims-edit-title");
-    expect(titleInput.element.value).toBe("Gate A medical follow-up #followup @RangerHQ");
-  });
-
-  it("lets IC operators unlink and relink same-event incidents from edit", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    expect(wrapper.text()).toContain("Linked incidents");
-    expect(wrapper.text()).toContain("INC-2027-000041");
-    expect(wrapper.text()).toContain("Radio relay check");
-
-    await wrapper
-      .get('button[aria-label="Unlink incident INC-2027-000041"]')
-      .trigger("click");
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain(
-      "Unlinked related incident INC-2027-000041: Radio relay check.",
-    );
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain(
-      "Unlinked related incident INC-2027-000041: Radio relay check.",
-    );
-    expect(wrapper.text()).toContain("No linked incidents.");
-
-    await addBySearch(
-      wrapper,
-      "#ims-edit-linked-add",
-      "Radio",
-      "INC-2027-000041 - Radio relay check",
-    );
-
-    expect(wrapper.text()).toContain(
-      "Linked related incident INC-2027-000041: Radio relay check.",
-    );
-    expect(wrapper.text()).toContain("INC-2027-000041");
-    expect(wrapper.text()).not.toContain("Incidents are already linked.");
-  });
-
-  it("lets IC operators link and unlink Field Reports from edit", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper, router } = await mountAt(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    expect(wrapper.text()).toContain("Attached Field Reports");
-    expect(wrapper.text()).toContain("No attached Field Reports.");
-
-    await addBySearch(
-      wrapper,
-      "#ims-edit-field-report-add",
-      "medical",
-      "FRA-2027-000123 - Medical observation near Gate A",
-    );
-
-    expect(wrapper.text()).toContain("FRA-2027-000123");
-    expect(wrapper.text()).toContain("Medical observation near Gate A");
-    expect(wrapper.text()).toContain(
-      "Field Report: Medical observation near Gate A",
-    );
-    expect(wrapper.text()).toContain("Author: Vera Ranger");
-    expect(wrapper.text()).toContain(
-      "Observed medical response near Gate A for @Blue-Hat.",
-    );
-    expect(wrapper.text()).not.toContain("No attached Field Reports.");
-
-    await wrapper.get("#ims-edit-field-report-add").trigger("focus");
-    await wrapper.get("#ims-edit-field-report-add").setValue("medical");
-    await flushPromises();
-
-    expect(
-      wrapper
-        .findAll(".ims-edit__add-results button")
-        .some(
-          (button) =>
-            button.text() ===
-            "FRA-2027-000123 - Medical observation near Gate A",
-        ),
-    ).toBe(false);
-
-    await router.push("/ims/incidents/incident-gate-medical");
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("Attached Field Reports");
-    expect(wrapper.text()).toContain("FRA-2027-000123");
-    expect(wrapper.text()).toContain("Medical observation near Gate A");
-    expect(
-      wrapper.get(".ims-edit__view-field-report-row").attributes("href"),
-    ).toBe("/ims/field-reports/field-report-medical-gate");
-
-    await wrapper.get(".ims-edit__view-field-report-row").trigger("click");
-    await flushPromises();
-
-    expect(router.currentRoute.value.name).toBe("ims.field-reports.show");
-    expect(wrapper.get("#ims-fr-detail-heading").text()).toBe(
-      "Medical observation near Gate A",
-    );
-
-    await router.push("/ims/incidents/incident-gate-medical/edit");
-    await flushPromises();
-
-    await wrapper
-      .get('button[aria-label="Unlink Field Report FRA-2027-000123"]')
-      .trigger("click");
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain(
-      "Removed Field Report FRA-2027-000123: Medical observation near Gate A.",
-    );
-    expect(wrapper.text()).not.toContain("Field Report removed from incident.");
-    expect(wrapper.text()).toContain("No attached Field Reports.");
-
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain(
-      "Removed Field Report FRA-2027-000123: Medical observation near Gate A.",
-    );
-    expect(wrapper.text()).toContain("Field Report removed from incident.");
-    expect(wrapper.get(".ims-edit__timeline-body--stricken").text()).toContain(
-      "Field Report: Medical observation near Gate A",
+    expect(wrapper.get(".ims-list__preset-error").text()).toBe(
+      "Preset name may not be greater than 60 characters.",
     );
   });
 
-  it("hides routine history by default and can show full detail history", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-    const createdAt = new Date("2027-07-04T21:00:00.000Z");
-    const form: IncidentAutosaveForm = {
-      ...blankIncidentAutosaveForm(createdAt),
-      title: "Timeline visibility check",
-      priorityLabel: "Routine",
-    };
-    const incident = createIncidentFromAutosaveForm(
-      IC_OPERATOR_SESSION,
-      form,
-      null,
-      createdAt,
-    );
-    updateIncidentFromAutosaveForm(
-      IC_OPERATOR_SESSION,
-      incident.id,
-      {
-        ...form,
-        priorityLabel: "Serious",
-      },
-      new Date("2027-07-04T21:05:00.000Z"),
-    );
-
-    const { wrapper } = await mountAt(`/ims/incidents/${incident.id}`);
-
-    expect(wrapper.text()).toContain(`Incident ${incident.incidentNumber} opened.`);
-    expect(wrapper.text()).not.toContain("Changed priority");
-
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain("Hide full history");
-    expect(wrapper.text()).toContain("Changed priority");
-  });
-
-  it("orders linked incident candidates by shared tags first then newest created", () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const sharedTagIncident = createIncidentFromAutosaveForm(
-      IC_OPERATOR_SESSION,
-      {
-        title: "Older matching incident #medical",
-        status: "open",
-        priorityLabel: "Routine",
-        incidentTypeNames: [],
-        responderStaffIds: [],
-        startedAt: "2027-07-04T20:40",
-        locationName: "",
-        locationAddress: "",
-        locationDetails: "",
-      },
-      null,
-      new Date("2027-07-04T20:40:00.000Z"),
-    );
-    const unrelatedIncident = createIncidentFromAutosaveForm(
-      IC_OPERATOR_SESSION,
-      {
-        title: "Old unrelated incident #logistics",
-        status: "open",
-        priorityLabel: "Routine",
-        incidentTypeNames: [],
-        responderStaffIds: [],
-        startedAt: "2027-07-04T20:45",
-        locationName: "",
-        locationAddress: "",
-        locationDetails: "",
-      },
-      null,
-      new Date("2027-07-04T20:45:00.000Z"),
-    );
-    const locationOnlyIncident = createIncidentFromAutosaveForm(
-      IC_OPERATOR_SESSION,
-      {
-        title: "Newest location-only candidate",
-        status: "open",
-        priorityLabel: "Routine",
-        incidentTypeNames: [],
-        responderStaffIds: [],
-        startedAt: "2027-07-04T20:55",
-        locationName: "#medical",
-        locationAddress: "",
-        locationDetails: "",
-      },
-      null,
-      new Date("2027-07-04T20:55:00.000Z"),
-    );
-
-    const options = availableLinkedIncidentOptionsForSession(
-      IC_OPERATOR_SESSION,
-      "incident-gate-medical",
-    );
-
-    expect(options.map((incident) => incident.id).slice(0, 3)).toEqual([
-      sharedTagIncident.id,
-      locationOnlyIncident.id,
-      unrelatedIncident.id,
-    ]);
-    expect(options.map((incident) => incident.id)).not.toContain(
-      "incident-radio-check",
-    );
-  });
-
-  it("orders Field Report candidates by shared tags first then newest created", () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const options = availableFieldReportOptionsForSession(
-      IC_OPERATOR_SESSION,
-      "incident-gate-medical",
-    );
-
-    expect(options.map((report) => report.id)).toEqual([
-      "field-report-medical-gate",
-      "field-report-newer-logistics",
-      "field-report-radio-relay",
-    ]);
-  });
-
-  it("records a concise location address edit without a phantom started change", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/incident-radio-check/edit");
-
-    await wrapper.get("#ims-edit-location-address").setValue("North entry road");
-    await wrapper.get("#ims-edit-location-address").trigger("blur");
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain("Changed location address: North entry road");
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain("Changed location address: North entry road");
-    expect(wrapper.text()).not.toContain("Started field changed");
-    expect(wrapper.text()).not.toContain("Changed started:");
-  });
-
-  it("blocks incident create/edit while offline without queue language", async () => {
-    setNavigatorOnline(false);
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/create");
-
-    expect(wrapper.text()).toContain("Offline");
-    expect(wrapper.text()).toContain("Incident create/edit requires server connection.");
-    expect(wrapper.text()).toContain("Not assigned yet");
-    expect(wrapper.text()).not.toContain("queued");
-    expect(wrapper.get<HTMLInputElement>("#ims-edit-title").element.disabled).toBe(
-      true,
-    );
-  });
-
-  it("fails closed when direct edit access lacks operator or lead authority", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper } = await mountAt(
-      "/ims/incidents/incident-gate-medical/edit",
-    );
-
-    expect(wrapper.text()).toContain("IC operator or lead access required");
-    expect(wrapper.text()).not.toContain("Medical assist near Gate A");
-    expect(wrapper.find("#ims-edit-title").exists()).toBe(false);
-  });
-
-  it("filters the incident list from a Name Reference chip search", async () => {
-    installIncidentSession(IC_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents?search=Blue-Hat");
-
-    expect(wrapper.text()).toContain("Search: Blue-Hat");
-    expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("INC-2027-000041");
-    expect(wrapper.text()).not.toContain("Radio relay check");
-  });
-
-  it("searches incidents from the list page control", async () => {
-    installIncidentSession(IC_SESSION);
+  it("applies a saved preset by handing the node's own query back to the list", async () => {
+    installSession();
+    stubNode(() => ({ body: listPayload({ presets: [presetPayload()] }) }));
 
     const { wrapper, router } = await mountAt("/ims/incidents");
 
-    expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).toContain("INC-2027-000041");
-
-    await wrapper.get("#ims-list-search").setValue("#medical");
-    await wrapper.get('form[aria-label="Search incidents"]').trigger("submit");
+    await wrapper.get("#ims-list-preset").setValue(PRESET_ID);
     await flushPromises();
 
-    expect(router.currentRoute.value.query.search).toBe("#medical");
-    expect(wrapper.text()).toContain("Search: #medical");
+    expect(router.currentRoute.value.query).toEqual({
+      state: "all",
+      priority: "Critical",
+    });
+  });
+});
+
+describe("the incident detail", () => {
+  it("reads the incident and renders the node's timeline, chips, and attachments", async () => {
+    installSession();
+    stubStandardNode({
+      incident: incidentPayload({
+        attachments: [
+          {
+            id: ATTACHMENT_ID,
+            filename: "gate-a.jpg",
+            mime_type: "image/jpeg",
+            byte_size: 204800,
+            created_at: "2027-07-04T20:20:00+00:00",
+          },
+        ],
+      }),
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}`);
+
     expect(wrapper.text()).toContain("INC-2027-000042");
-    expect(wrapper.text()).not.toContain("INC-2027-000041");
+    expect(wrapper.text()).toContain("Incident INC-2027-000042 opened.");
+    // The chip is the node's `name_reference_chips` entry, not one this client
+    // re-derived from the text.
+    expect(wrapper.text()).toContain("@Blue-Hat");
   });
 
-  it("lets IC operators append a plain-text operational timeline note", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
+  it("says what the node said when it refuses the incident", async () => {
+    installSession();
+    stubNode((call) =>
+      call.url.includes(`/incidents/${INCIDENT_ID}`)
+        ? {
+            status: 403,
+            body: {
+              message:
+                "This page requires Incident Command access for the event configured IC department.",
+            },
+          }
+        : { body: listPayload() },
+    );
 
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}`);
 
-    await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
-    await wrapper.get("form.ims-edit__note-form").trigger("submit");
-
-    expect(wrapper.text()).toContain("Radio relay confirmed.");
-    expect(wrapper.text()).toContain("Incident Command Operator");
-    expect(wrapper.text()).not.toContain("Search: Radio relay confirmed.");
-    expect(wrapper.get<HTMLTextAreaElement>("#ims-note-body").element.value).toBe(
-      "",
+    expect(wrapper.text()).toContain(
+      "This page requires Incident Command access for the event configured IC department.",
     );
   });
 
-  it("lets IC operators strike operational timeline notes", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-    vi.spyOn(window, "prompt").mockReturnValue("Wrong incident note.");
+  it("appends a note through its command and re-reads the incident", async () => {
+    installSession();
+    let noted = false;
+    const calls = stubNode((call) => {
+      if (call.url.includes("/api/commands/append-incident-note")) {
+        noted = true;
 
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+        return { status: 201, body: { id: NOTE_ENTRY_ID } };
+      }
 
-    await wrapper.get("#ims-note-body").setValue("  Radio relay confirmed.  ");
+      if (call.url.includes("/field-reports")) {
+        return { body: fieldReportListPayload() };
+      }
+
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return {
+          body: {
+            incident: incidentPayload({
+              timeline_entries: noted
+                ? [
+                    {
+                      id: NOTE_ENTRY_ID,
+                      incident_id: INCIDENT_ID,
+                      actor_name: "Ingrid ICLead",
+                      entry_type: "operational_note",
+                      body: "Responder is on scene.",
+                      previous_value: null,
+                      new_value: null,
+                      reason: null,
+                      created_at: "2027-07-04T20:40:00+00:00",
+                      stricken_at: null,
+                      stricken_reason: null,
+                    },
+                  ]
+                : [],
+            }),
+          },
+        };
+      }
+
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-note-body").setValue("Responder is on scene.");
     await wrapper.get("form.ims-edit__note-form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("Radio relay confirmed.");
+    expect(commandCalls(calls, "append-incident-note").at(0)?.body).toEqual({
+      event_id: EVENT_ID,
+      incident_id: INCIDENT_ID,
+      body: "Responder is on scene.",
+    });
+    expect(wrapper.text()).toContain("Responder is on scene.");
+  });
 
-    const appendedNoteRow = wrapper
-      .findAll(".ims-edit__timeline li")
-      .find((row) => row.text().includes("Radio relay confirmed."));
-    const strikeButton = appendedNoteRow
-      ?.findAll("button")
-      .find((button) => button.text() === "Strike note");
+  it("strikes a note with the reason the node requires", async () => {
+    installSession();
+    vi.spyOn(window, "prompt").mockReturnValue("Recorded on the wrong incident.");
 
-    expect(strikeButton).toBeDefined();
-    await strikeButton?.trigger("click");
+    const calls = stubStandardNode({
+      incident: incidentPayload({
+        timeline_entries: [
+          {
+            id: NOTE_ENTRY_ID,
+            incident_id: INCIDENT_ID,
+            actor_name: "Ingrid ICLead",
+            entry_type: "operational_note",
+            body: "Responder is on scene.",
+            previous_value: null,
+            new_value: null,
+            reason: null,
+            created_at: "2027-07-04T20:40:00+00:00",
+            stricken_at: null,
+            stricken_reason: null,
+          },
+        ],
+      }),
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await findButton(wrapper, "Strike note")?.trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain("Radio relay confirmed.");
-
-    await showFullHistory(wrapper);
-
-    expect(wrapper.text()).toContain("Radio relay confirmed.");
-    expect(wrapper.text()).toContain("Stricken: Wrong incident note.");
-    expect(wrapper.get(".ims-edit__timeline-body--stricken").text()).toContain(
-      "Radio relay confirmed.",
-    );
+    expect(commandCalls(calls, "strike-incident-note").at(0)?.body).toEqual({
+      event_id: EVENT_ID,
+      incident_id: INCIDENT_ID,
+      timeline_entry_id: NOTE_ENTRY_ID,
+      reason: "Recorded on the wrong incident.",
+    });
   });
 
-  it("adds Name Reference chips for locally appended timeline notes", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
+  it("strikes an attachment with its reason rather than deleting it", async () => {
+    installSession();
+    vi.spyOn(window, "prompt").mockReturnValue("Wrong incident.");
 
-    const { wrapper } = await mountAt("/ims/incidents/incident-radio-check");
+    const calls = stubStandardNode({
+      incident: incidentPayload({
+        attachments: [
+          {
+            id: ATTACHMENT_ID,
+            filename: "gate-a.jpg",
+            mime_type: "image/jpeg",
+            byte_size: 204800,
+            created_at: "2027-07-04T20:20:00+00:00",
+          },
+        ],
+      }),
+    });
 
-    expect(wrapper.text()).not.toContain("@RadioLead");
-
-    await wrapper.get("#ims-note-body").setValue("Follow up with @RadioLead.");
-    await wrapper.get("form.ims-edit__note-form").trigger("submit");
-
-    expect(wrapper.text()).toContain("@RadioLead");
-    expect(
-      wrapper.get(".ims-edit__chip--name-reference").attributes("href"),
-    ).toBe("/ims/incidents?search=RadioLead");
-  });
-
-  it("adds tag chips for locally appended timeline notes", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
-
-    const { wrapper } = await mountAt("/ims/incidents/incident-radio-check");
-
-    expect(wrapper.text()).not.toContain("#radio");
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
 
     await wrapper
-      .get("#ims-note-body")
-      .setValue("Follow up at @RadioHQ for #radio.");
-    await wrapper.get("form.ims-edit__note-form").trigger("submit");
+      .get("button[aria-label='Strike attachment gate-a.jpg']")
+      .trigger("click");
+    await flushPromises();
 
-    expect(wrapper.text()).toContain("@RadioHQ");
-    expect(wrapper.text()).toContain("#radio");
-    expect(wrapper.get(".ims-edit__chip--tag").attributes("href")).toBe(
-      "/ims/incidents?search=%23radio",
+    expect(commandCalls(calls, "strike-incident-attachment").at(0)?.body).toEqual(
+      {
+        event_id: EVENT_ID,
+        incident_id: INCIDENT_ID,
+        attachment_id: ATTACHMENT_ID,
+        reason: "Wrong incident.",
+      },
+    );
+  });
+});
+
+describe("incident editing", () => {
+  it("autosaves an edit through the update command and re-reads the record", async () => {
+    installSession();
+    const calls = stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    const readsBefore = calls.filter((call) =>
+      call.url.includes(`/incidents/${INCIDENT_ID}`),
+    ).length;
+
+    await wrapper.get("#ims-edit-title").setValue("Medical assist, Gate A");
+    await wrapper.get("#ims-edit-title").trigger("blur");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident").at(0)?.body).toMatchObject({
+      event_id: EVENT_ID,
+      incident_id: INCIDENT_ID,
+      title: "Medical assist, Gate A",
+      status: "on_scene",
+      priority_label: "Serious",
+    });
+    expect(
+      calls.filter((call) => call.url.includes(`/incidents/${INCIDENT_ID}`))
+        .length,
+    ).toBeGreaterThan(readsBefore);
+  });
+
+  it("creates an incident and names the fields the author set before the first save", async () => {
+    installSession();
+    const calls = stubStandardNode();
+
+    const { wrapper } = await mountAt("/ims/incidents/create");
+
+    await wrapper.get("#ims-edit-title").setValue("New incident");
+    await wrapper.get("#ims-edit-title").trigger("blur");
+    await flushPromises();
+
+    const created = commandCalls(calls, "create-incident").at(0);
+
+    expect(created?.body).toMatchObject({
+      event_id: EVENT_ID,
+      title: "New incident",
+    });
+    expect(created?.body?.initial_field_update_fields).toEqual(["title"]);
+  });
+
+  it("offers the states and priorities the node says it will accept", async () => {
+    installSession();
+    stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    expect(
+      wrapper
+        .get("#ims-edit-status")
+        .findAll("option")
+        .map((option) => option.attributes("value")),
+    ).toEqual(["open", "on_scene", "monitoring", "on_hold", "closed"]);
+    expect(
+      wrapper
+        .get("#ims-edit-priority")
+        .findAll("option")
+        .map((option) => option.attributes("value")),
+    ).toEqual(["Routine", "Important", "Serious", "Critical"]);
+  });
+
+  it("offers the organization's configured types and adds one to the incident", async () => {
+    installSession();
+    const calls = stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await flushPromises();
+
+    // Medical is already on the incident, so the remaining configured types are
+    // what the picker offers.
+    expect(
+      wrapper
+        .findAll("[aria-label='Incident type matches'] button")
+        .map((button) => button.text()),
+    ).toEqual(["Radio", "Weather"]);
+
+    await wrapper
+      .findAll("[aria-label='Incident type matches'] button")
+      .find((button) => button.text() === "Weather")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident").at(0)?.body).toMatchObject({
+      incident_type_names: ["Medical", "Weather"],
+    });
+  });
+
+  it("never offers to create a type the organization has not configured", async () => {
+    installSession();
+    const calls = stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await wrapper.get("#ims-edit-type-add").setValue("Avalanche");
+    await flushPromises();
+
+    // Nothing to click, and Enter invents nothing: incident types are the
+    // organization's to configure, not this form's to create.
+    expect(
+      wrapper.findAll("[aria-label='Incident type matches'] button"),
+    ).toHaveLength(0);
+    expect(wrapper.get("[aria-label='Incident type matches']").text()).toBe(
+      "No configured incident type matches that.",
+    );
+
+    await wrapper.get("#ims-edit-type-add").trigger("keydown.enter");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident")).toHaveLength(0);
+    expect(wrapper.get("#ims-edit-types").text()).not.toContain("Avalanche");
+  });
+
+  it("says so when the organization has configured no incident types", async () => {
+    installSession();
+    const list = listPayload();
+    (list.assignable as Record<string, unknown>).types = [];
+
+    stubStandardNode({ list });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await flushPromises();
+
+    // An organizer's problem, named as one, rather than a control that looks
+    // broken.
+    expect(wrapper.get("[aria-label='Incident type matches']").text()).toBe(
+      "No incident types are configured for this organization.",
     );
   });
 
-  it("keeps blank timeline notes from being appended in the operator surface", async () => {
-    installIncidentSession(IC_OPERATOR_SESSION);
+  it("shows the node's refusal when an edit is refused", async () => {
+    installSession();
+    stubNode((call) => {
+      if (call.url.includes("/api/commands/update-incident")) {
+        return {
+          status: 403,
+          body: {
+            message:
+              "Only IC operators and IC leads for this event may edit incidents.",
+          },
+        };
+      }
 
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+      if (call.url.includes("/field-reports")) {
+        return { body: fieldReportListPayload() };
+      }
 
-    await wrapper.get("#ims-note-body").setValue("   ");
-    await wrapper.get("form.ims-edit__note-form").trigger("submit");
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return { body: { incident: incidentPayload() } };
+      }
 
-    expect(wrapper.text()).toContain("Incident note body is required.");
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-title").setValue("Refused edit");
+    await wrapper.get("#ims-edit-title").trigger("blur");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Only IC operators and IC leads for this event may edit incidents.",
+    );
   });
 
-  it("fails closed when direct detail access lacks IC authority", async () => {
-    installIncidentSession(NON_IC_SESSION);
+  it("refuses an edit offline in the command catalog's words and sends nothing", async () => {
+    installSession();
+    const calls = stubStandardNode();
 
-    const { wrapper } = await mountAt("/ims/incidents/incident-gate-medical");
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    setNavigatorOnline(false);
+    await flushPromises();
+
+    await wrapper.get("#ims-edit-title").setValue("Offline edit");
+    await wrapper.get("#ims-edit-title").trigger("blur");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident")).toHaveLength(0);
+    expect(wrapper.text()).toContain(
+      "Incident create/edit requires server connection.",
+    );
+  });
+});
+
+describe("incident links", () => {
+  it("links another incident through its command and re-reads the record", async () => {
+    installSession();
+    let linked = false;
+    const calls = stubNode((call) => {
+      if (call.url.includes("/api/commands/link-incident")) {
+        linked = true;
+
+        return { status: 201, body: { id: "link-1" } };
+      }
+
+      if (call.url.includes("/field-reports")) {
+        return { body: fieldReportListPayload() };
+      }
+
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return {
+          body: {
+            incident: incidentPayload({
+              linked_incidents: linked
+                ? [
+                    {
+                      id: OTHER_INCIDENT_ID,
+                      incident_number: "INC-2027-000041",
+                      title: "Radio relay check",
+                      status: "monitoring",
+                    },
+                  ]
+                : [],
+            }),
+          },
+        };
+      }
+
+      return {
+        body: listPayload({
+          incidents: [incidentPayload(), otherIncidentPayload()],
+        }),
+      };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-linked-add").trigger("focus");
+    await flushPromises();
+
+    const option = wrapper
+      .findAll("[aria-label='Linked incident matches'] button")
+      .find((button) => button.text().includes("INC-2027-000041"));
+
+    expect(option).toBeDefined();
+    await option?.trigger("click");
+    await flushPromises();
+
+    expect(commandCalls(calls, "link-incident").at(0)?.body).toEqual({
+      event_id: EVENT_ID,
+      incident_id: INCIDENT_ID,
+      target_incident_id: OTHER_INCIDENT_ID,
+    });
+    expect(wrapper.get("#ims-edit-linked").text()).toContain("INC-2027-000041");
+  });
+
+  it("never offers an incident that is already linked, or the incident itself", async () => {
+    installSession();
+    stubStandardNode({
+      incident: incidentPayload({
+        linked_incidents: [
+          {
+            id: OTHER_INCIDENT_ID,
+            incident_number: "INC-2027-000041",
+            title: "Radio relay check",
+            status: "monitoring",
+          },
+        ],
+      }),
+      list: listPayload({
+        incidents: [incidentPayload(), otherIncidentPayload()],
+      }),
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-linked-add").trigger("focus");
+    await flushPromises();
+
+    expect(
+      wrapper.findAll("[aria-label='Linked incident matches'] button"),
+    ).toHaveLength(0);
+  });
+
+  it("attaches a Field Report from the event read and re-reads the incident", async () => {
+    installSession();
+    let attached = false;
+    const calls = stubNode((call) => {
+      if (call.url.includes("/api/commands/link-field-report")) {
+        attached = true;
+
+        return { status: 201, body: { id: "fr-link-1" } };
+      }
+
+      if (call.url.includes("/field-reports")) {
+        return { body: fieldReportListPayload() };
+      }
+
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return {
+          body: {
+            incident: incidentPayload({
+              attached_field_reports: attached
+                ? [
+                    {
+                      id: FIELD_REPORT_ID,
+                      field_report_id: FIELD_REPORT_ID,
+                      incident_field_report_id: "fr-link-1",
+                      display_number: "FRA-2027-000123",
+                      title: "Medical observation near Gate A",
+                      author_name: "Vera Ranger",
+                      body: "Observed medical response near Gate A.",
+                      linked_at: "2027-07-04T20:45:00+00:00",
+                    },
+                  ]
+                : [],
+            }),
+          },
+        };
+      }
+
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-field-report-add").trigger("focus");
+    await flushPromises();
+
+    const option = wrapper
+      .findAll("[aria-label='Field Report matches'] button")
+      .find((button) => button.text().includes("FRA-2027-000123"));
+
+    expect(option).toBeDefined();
+    await option?.trigger("click");
+    await flushPromises();
+
+    expect(commandCalls(calls, "link-field-report").at(0)?.body).toEqual({
+      event_id: EVENT_ID,
+      incident_id: INCIDENT_ID,
+      field_report_id: FIELD_REPORT_ID,
+    });
+    expect(wrapper.get("#ims-edit-field-reports").text()).toContain(
+      "FRA-2027-000123",
+    );
+  });
+});
+
+describe("the incident PDF", () => {
+  it("asks the node for a short-lived URL and navigates to it", async () => {
+    installSession();
+    const clicked: string[] = [];
+
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      function click(this: HTMLAnchorElement) {
+        clicked.push(this.href);
+      },
+    );
+
+    const calls = stubNode((call) => {
+      if (call.url.includes("/pdf/download-url")) {
+        return {
+          body: {
+            url: "http://node.test/downloads/incident.pdf?signature=abc",
+            expires_at: "2027-07-04T21:00:00+00:00",
+          },
+        };
+      }
+
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return { body: { incident: incidentPayload() } };
+      }
+
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}`);
+
+    await findButton(wrapper, "Print PDF")?.trigger("click");
+    await flushPromises();
+
+    const issued = calls.find((call) => call.url.includes("/pdf/download-url"));
+
+    expect(issued?.method).toBe("POST");
+    expect(issued?.url).toBe(
+      `http://node.test/api/events/${EVENT_ID}/incidents/${INCIDENT_ID}/pdf/download-url`,
+    );
+    expect(clicked).toEqual([
+      "http://node.test/downloads/incident.pdf?signature=abc",
+    ]);
+  });
+
+  it("shows the node's refusal instead of opening anything", async () => {
+    installSession();
+    const clicked: string[] = [];
+
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
+      function click(this: HTMLAnchorElement) {
+        clicked.push(this.href);
+      },
+    );
+
+    stubNode((call) => {
+      if (call.url.includes("/pdf/download-url")) {
+        return {
+          status: 403,
+          body: {
+            message:
+              "Only Incident Command leads for this event may print incidents to PDF.",
+          },
+        };
+      }
+
+      if (call.url.includes(`/incidents/${INCIDENT_ID}`)) {
+        return { body: { incident: incidentPayload() } };
+      }
+
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}`);
+
+    await findButton(wrapper, "Print PDF")?.trigger("click");
+    await flushPromises();
+
+    expect(clicked).toEqual([]);
+    expect(wrapper.get(".ims-edit__print-error").text()).toBe(
+      "Only Incident Command leads for this event may print incidents to PDF.",
+    );
+  });
+});
+
+describe("what the session permits", () => {
+  it("offers no create and no note form to a viewer", async () => {
+    installSession(["incidents.view", "field_reports.view_event"]);
+    stubStandardNode();
+
+    const list = await mountAt("/ims/incidents");
+
+    expect(findButton(list.wrapper, "Create incident")).toBeUndefined();
+    expect(list.wrapper.find("#ims-list-open-mode").exists()).toBe(false);
+
+    const detail = await mountAt(`/ims/incidents/${INCIDENT_ID}`);
+
+    expect(findButton(detail.wrapper, "Print PDF")).toBeUndefined();
+    expect(detail.wrapper.find("form.ims-edit__note-form").exists()).toBe(false);
+  });
+
+  it("refuses the edit route to a caller without the update capability", async () => {
+    installSession(["incidents.view"]);
+    stubStandardNode();
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    expect(wrapper.text()).toContain("IC operator or lead access required");
+  });
+
+  it("shows the restricted notice and reads nothing without incidents.view", async () => {
+    installSession([]);
+    const calls = stubStandardNode();
+
+    const { wrapper } = await mountAt("/ims/incidents");
 
     expect(wrapper.text()).toContain("Incident Command access required");
-    expect(wrapper.text()).not.toContain("Medical assist near Gate A");
-    expect(wrapper.text()).not.toContain("INC-2027-000042");
-    expect(wrapper.text()).not.toContain("@Blue-Hat");
+    expect(listCalls(calls)).toHaveLength(0);
+  });
+});
+
+describe("the IC Field Report list", () => {
+  it("reads the event's Field Reports and names the incidents they are linked to", async () => {
+    installSession();
+    stubStandardNode({
+      fieldReports: fieldReportListPayload([
+        {
+          id: INCIDENT_ID,
+          incident_number: "INC-2027-000042",
+          title: "Medical assist near Gate A",
+          status: "on_scene",
+          priority_label: "Serious",
+        },
+      ]),
+    });
+
+    const { wrapper } = await mountAt("/ims/field-reports");
+
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+    expect(wrapper.text()).toContain("INC-2027-000042");
   });
 
-  it("shows an event-scoped missing state for unknown detail IDs", async () => {
-    installIncidentSession(IC_SESSION);
+  it("narrows the delivered list to unlinked reports without asking again", async () => {
+    installSession();
+    const calls = stubStandardNode({
+      fieldReports: fieldReportListPayload([
+        {
+          id: INCIDENT_ID,
+          incident_number: "INC-2027-000042",
+          title: "Medical assist near Gate A",
+          status: "on_scene",
+          priority_label: "Serious",
+        },
+      ]),
+    });
 
-    const { wrapper } = await mountAt("/ims/incidents/not-this-event");
+    const { wrapper } = await mountAt("/ims/field-reports");
 
-    expect(wrapper.text()).toContain("Incident not found for this event.");
+    expect(wrapper.text()).toContain("FRA-2027-000123");
+
+    const readsBefore = calls.filter((call) =>
+      call.url.includes("/field-reports"),
+    ).length;
+
+    // Link status is a question about the incidents each report already
+    // carries, so narrowing by it is a view of the answer rather than a new
+    // one to ask for.
+    await wrapper.get("#ims-fr-list-link").setValue("not_linked");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("No Field Reports match these filters.");
+    expect(
+      calls.filter((call) => call.url.includes("/field-reports")),
+    ).toHaveLength(readsBefore);
+  });
+
+  it("shows the node's refusal", async () => {
+    installSession();
+    stubNode(() => ({
+      status: 403,
+      body: {
+        message:
+          "This page requires event-wide Field Report access for the event configured IC department.",
+      },
+    }));
+
+    const { wrapper } = await mountAt("/ims/field-reports");
+
+    expect(wrapper.get(".ims-fr-list__load-error").text()).toBe(
+      "This page requires event-wide Field Report access for the event configured IC department.",
+    );
+  });
+});
+
+describe("the IMS routes", () => {
+  it("registers the UI contract route names", () => {
+    const names = routes.map((route) => route.name);
+
+    expect(names).toContain("ims.incidents.index");
+    expect(names).toContain("ims.incidents.create");
+    expect(names).toContain("ims.incidents.edit");
+    expect(names).toContain("ims.incidents.show");
+    expect(names).toContain("ims.field-reports.index");
+    expect(names).toContain("ims.field-reports.show");
+    expect(names).toContain("ims.restricted");
   });
 });

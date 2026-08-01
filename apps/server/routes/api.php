@@ -19,6 +19,7 @@ use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
 use App\Http\Controllers\Events\EventInfoReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
+use App\Http\Controllers\FieldReports\FieldReportReadController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\Incidents\IncidentCommandController;
 use App\Http\Controllers\Incidents\IncidentListPresetController;
@@ -493,6 +494,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/exports/credits-earned', [ReportingExportController::class, 'creditsEarned'])
         ->name('api.events.exports.credits-earned');
+
+    Route::get('/events/{event}/field-reports', [FieldReportReadController::class, 'index'])
+        ->name('api.events.field-reports.index');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

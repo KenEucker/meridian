@@ -72,6 +72,17 @@ final class IncidentReadController extends Controller
                 'responders' => $search->responderOptions($user, $event),
                 'max_per_page' => IncidentSearchFilters::MAX_PER_PAGE,
             ],
+            // What an authoring form may put on an incident, as distinct from
+            // what a reader may filter this list by (M16.20). The two differ:
+            // `active` and `all` are ways of asking a question, not states an
+            // incident can be in, and a type or responder that is not on an
+            // incident yet is still a legitimate thing to add.
+            'assignable' => [
+                'statuses' => Incident::statuses(),
+                'priorities' => Incident::priorityLabels(),
+                'types' => $search->assignableTypeOptions($user, $event),
+                'responders' => $search->assignableResponderOptions($user, $event),
+            ],
             'pagination' => [
                 'page' => $page->currentPage(),
                 'per_page' => $page->perPage(),

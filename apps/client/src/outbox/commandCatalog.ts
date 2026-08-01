@@ -15,10 +15,12 @@
 // prevent.
 //
 // The connected-only entries below are the four families technical spec 11A.5
-// names by hand. They are registered now, ahead of the surfaces that issue them
-// (M16.19 through M16.21), so the refusal has a reason to state rather than a
-// generic one, and so the rule is under test before there is a screen that can
-// break it.
+// names by hand. Each carries the reason the refusal states, so a person who
+// issues one where it cannot be sent is told what happened in words about their
+// work rather than a generic failure. They were registered before the surfaces
+// that issue them existed, so the rule was under test before there was a screen
+// that could break it; the IMS surfaces bound in M16.20 issue theirs through
+// `sendConnectedCommand` and are refused from here.
 
 /** Every command this client can submit today. */
 export type MeridianCommandType =
@@ -29,6 +31,16 @@ export type MeridianCommandType =
   | "mark-no-show"
   // Connected-only families named by technical spec 11A.5.
   | "create-incident"
+  | "update-incident"
+  | "append-incident-note"
+  | "strike-incident-note"
+  | "link-incident"
+  | "unlink-incident"
+  | "link-field-report"
+  | "unlink-field-report"
+  | "strike-incident-attachment"
+  | "save-incident-list-preset"
+  | "delete-incident-list-preset"
   | "acknowledge-document"
   | "submit-application"
   | "publish-event-map"
@@ -119,6 +131,78 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/create-incident",
       "Incident",
       "Creating an incident needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The rest of the incident family (M16.20). Technical spec 19.2 requires an
+     * active server connection for incident mutations, so every one of these is
+     * refused where it stands rather than held: an incident note written at a
+     * dead camp and delivered four hours later is worse than one the writer was
+     * told did not land while they could still say it on the radio.
+     *
+     * Saved list presets are here for a different reason. They are personal view
+     * state and nothing operational turns on them, but they live on the node and
+     * there is no local copy to reconcile, so queueing one would mean holding
+     * work whose only effect is a name in a dropdown.
+     */
+    "update-incident": connectedOnly(
+      "update-incident",
+      "/api/commands/update-incident",
+      "Incident edit",
+      "Editing an incident needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "append-incident-note": connectedOnly(
+      "append-incident-note",
+      "/api/commands/append-incident-note",
+      "Incident note",
+      "Adding an incident note needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "strike-incident-note": connectedOnly(
+      "strike-incident-note",
+      "/api/commands/strike-incident-note",
+      "Incident note strike",
+      "Striking an incident note needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "link-incident": connectedOnly(
+      "link-incident",
+      "/api/commands/link-incident",
+      "Incident link",
+      "Linking incidents needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "unlink-incident": connectedOnly(
+      "unlink-incident",
+      "/api/commands/unlink-incident",
+      "Incident unlink",
+      "Unlinking incidents needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "link-field-report": connectedOnly(
+      "link-field-report",
+      "/api/commands/link-field-report",
+      "Field Report link",
+      "Attaching a Field Report needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "unlink-field-report": connectedOnly(
+      "unlink-field-report",
+      "/api/commands/unlink-field-report",
+      "Field Report unlink",
+      "Removing a Field Report needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "strike-incident-attachment": connectedOnly(
+      "strike-incident-attachment",
+      "/api/commands/strike-incident-attachment",
+      "Attachment strike",
+      "Striking an incident attachment needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "save-incident-list-preset": connectedOnly(
+      "save-incident-list-preset",
+      "/api/commands/save-incident-list-preset",
+      "Saved incident list preset",
+      "Saving a list preset needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "delete-incident-list-preset": connectedOnly(
+      "delete-incident-list-preset",
+      "/api/commands/delete-incident-list-preset",
+      "Saved incident list preset",
+      "Deleting a list preset needs a connection to the node. It cannot be held on this device for later.",
     ),
     "acknowledge-document": connectedOnly(
       "acknowledge-document",

@@ -1,24 +1,74 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
-  findFieldReportForSession,
   formatIncidentDateTime,
-  hasIncidentCommandAccess,
-  resolveIncidentSession,
+  getEventFieldReports,
+  incidentAccess,
+  incidentSessionContext,
   statusLabel,
+  type ImsFieldReportListItem,
 } from "@/ims/incidentReadModel";
 
+/**
+ * `ims.field-reports.show` — one Field Report as Incident Command sees it
+ * (M11.8; bound to the node in M16.20; FR-005, FR-006).
+ *
+ * The report comes out of the event read rather than a per-report endpoint,
+ * because there is no per-report read and the list read already answers under
+ * the permission this page needs. That has one consequence worth stating: a
+ * report id that is not in the caller's event read is reported as not found
+ * here, which is the same answer a per-report read would give a caller who may
+ * not see it.
+ */
 const route = useRoute();
-const session = computed(() => resolveIncidentSession());
-const canView = computed(() => hasIncidentCommandAccess(session.value));
-const fieldReport = computed(() =>
-  findFieldReportForSession(
-    session.value,
-    String(route.params.fieldReportId),
-  ),
+const context = computed(() => incidentSessionContext.value);
+const access = computed(() => incidentAccess.value);
+const canView = computed(() => access.value.canViewFieldReports);
+const fieldReportId = computed(() => String(route.params.fieldReportId ?? ""));
+
+const reports = ref<readonly ImsFieldReportListItem[]>([]);
+const loadError = ref<string | null>(null);
+const loading = ref(false);
+const fieldReport = computed(
+  () =>
+    reports.value.find((report) => report.id === fieldReportId.value) ?? null,
 );
+
+watch(
+  () => [context.value?.eventId ?? null, canView.value, fieldReportId.value] as const,
+  () => {
+    void loadReports();
+  },
+  { immediate: true },
+);
+
+async function loadReports(): Promise<void> {
+  const eventId = context.value?.eventId;
+
+  if (eventId === undefined || !canView.value) {
+    reports.value = [];
+
+    return;
+  }
+
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    reports.value = await getEventFieldReports(eventId);
+  } catch (error) {
+    reports.value = [];
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this Field Report. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
 </script>
 
 <template>
@@ -29,8 +79,12 @@ const fieldReport = computed(() =>
       </RouterLink>
     </div>
 
-    <div v-else-if="!fieldReport" class="ims-fr-detail__missing" role="status">
-      Field Report not found for this event.
+    <div v-else-if="loading" class="ims-fr-detail__missing" role="status">
+      Loading Field Report.
+    </div>
+
+    <div v-else-if="!fieldReport" class="ims-fr-detail__missing" role="alert">
+      {{ loadError ?? "Field Report not found for this event." }}
     </div>
 
     <template v-else>
@@ -67,11 +121,11 @@ const fieldReport = computed(() =>
         <dl class="ims-fr-detail__definition">
           <div>
             <dt>Event</dt>
-            <dd>{{ session?.eventLabel }}</dd>
+            <dd>{{ context?.eventLabel }}</dd>
           </div>
           <div>
             <dt>IC department</dt>
-            <dd>{{ session?.icDepartmentLabel }}</dd>
+            <dd>{{ context?.icDepartmentLabel }}</dd>
           </div>
           <div>
             <dt>Author</dt>

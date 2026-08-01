@@ -1,40 +1,52 @@
 <script setup lang="ts">
-import ControlBar from "@/components/ControlBar.vue";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import ControlBar from "@/components/ControlBar.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
-import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
-import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
-  canEditIncident,
   formatIncidentDateTime,
-  hasIncidentCommandAccess,
-  listFieldReportsForSession,
-  resolveIncidentSession,
+  getEventFieldReports,
+  incidentAccess,
+  incidentSessionContext,
   statusLabel,
   type ImsFieldReportListItem,
-  type IncidentPriorityLabel,
 } from "@/ims/incidentReadModel";
 
+/**
+ * `ims.field-reports` — the IC Field Report review list (M11.8; bound to the
+ * node in M16.20; FR-005, FR-006; IMS surface specification 9).
+ *
+ * The reports are the event's, read from
+ * `GET /api/events/{event}/field-reports` under `field_reports.view_event`, and
+ * each carries the incidents it is actively linked to. Until this task the page
+ * listed three Field Reports compiled into the client.
+ *
+ * The filters stay local and that is deliberate. Link status, related state,
+ * and related priority are all questions about the incidents a report is
+ * attached to, which the read already answers for every report it returns;
+ * there is no page to be on and nothing the node would decide differently. The
+ * "current shift" filter is gone with the shift table it read: a Field Report
+ * carries no shift, and the control was matching submission times against a
+ * fixture.
+ */
 const route = useRoute();
 const router = useRouter();
-const session = computed(() => resolveIncidentSession());
-const canView = computed(
-  () =>
-    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
-    hasIncidentCommandAccess(session.value),
-);
-// Taking a dictated Field Report is gated on the same permission as creating an
+const context = computed(() => incidentSessionContext.value);
+const access = computed(() => incidentAccess.value);
+const canView = computed(() => access.value.canViewFieldReports);
+// Taking a report by dictation is gated on the same permission as creating an
 // incident, the same way it is on the Incidents page.
-const canTakeFieldReport = computed(
-  () =>
-    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
-    canEditIncident(session.value),
-);
+const canTakeFieldReport = computed(() => access.value.canCreate);
+
+const allReports = ref<readonly ImsFieldReportListItem[]>([]);
+const loadError = ref<string | null>(null);
+const loading = ref(false);
+
 const stateFilter = computed(() =>
   typeof route.query.state === "string" ? route.query.state : "active",
 );
@@ -44,9 +56,6 @@ const priorityFilter = computed(() =>
 const linkFilter = computed(() =>
   typeof route.query.link === "string" ? route.query.link : "all",
 );
-const shiftFilter = computed(() =>
-  route.query.shift === "current" ? "current" : "all",
-);
 const sortKey = computed(() =>
   typeof route.query.sort === "string" ? route.query.sort : "submitted",
 );
@@ -54,11 +63,9 @@ const sortDirection = computed(() =>
   route.query.direction === "asc" ? "asc" : "desc",
 );
 
-const allReports = computed(() => listFieldReportsForSession(session.value));
 const reports = computed(() =>
   allReports.value
     .filter((report) => matchesLinkFilter(report, linkFilter.value))
-    .filter((report) => matchesShiftFilter(report, shiftFilter.value))
     .filter((report) => matchesRelatedStateFilter(report, stateFilter.value))
     .filter((report) =>
       matchesRelatedPriorityFilter(report, priorityFilter.value),
@@ -70,13 +77,6 @@ const reportCards = computed(() => [
     label: "Event total",
     value: allReports.value.length,
     detail: "Field Reports submitted for this event",
-  },
-  {
-    label: "This shift",
-    value: allReports.value.filter((report) =>
-      matchesShiftFilter(report, "current"),
-    ).length,
-    detail: "Submitted during the active shift",
   },
   {
     label: "Linked",
@@ -92,6 +92,45 @@ const reportCards = computed(() => [
     detail: "Awaiting incident linkage",
   },
 ]);
+
+watch(
+  () => [context.value?.eventId ?? null, canView.value] as const,
+  () => {
+    void loadReports();
+  },
+  { immediate: true },
+);
+
+/**
+ * Read the event's Field Reports.
+ *
+ * A failed read empties the list rather than leaving the last one up: an event
+ * whose reports could not be read must not look like an event with none.
+ */
+async function loadReports(): Promise<void> {
+  const eventId = context.value?.eventId;
+
+  if (eventId === undefined || !canView.value) {
+    allReports.value = [];
+
+    return;
+  }
+
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    allReports.value = await getEventFieldReports(eventId);
+  } catch (error) {
+    allReports.value = [];
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load Field Reports. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
 
 function relatedIncidentText(report: ImsFieldReportListItem): string {
   if (report.relatedIncidents.length === 0) {
@@ -168,44 +207,6 @@ function matchesLinkFilter(
   return true;
 }
 
-function activeShiftWindow():
-  | { readonly startsAt: number; readonly endsAt: number }
-  | null {
-  const activeShift =
-    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
-
-  if (!activeShift) {
-    return null;
-  }
-
-  const startsAt = Date.parse(activeShift.startsAt);
-  const endsAt = Date.parse(activeShift.endsAt);
-
-  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
-    return null;
-  }
-
-  return { startsAt, endsAt };
-}
-
-function matchesShiftFilter(
-  report: ImsFieldReportListItem,
-  filter: string,
-): boolean {
-  if (filter !== "current") {
-    return true;
-  }
-
-  const shiftWindow = activeShiftWindow();
-  const createdAt = Date.parse(report.createdAt);
-
-  if (!shiftWindow || Number.isNaN(createdAt)) {
-    return false;
-  }
-
-  return createdAt >= shiftWindow.startsAt && createdAt <= shiftWindow.endsAt;
-}
-
 function activeSortDirection(key: string): "ascending" | "descending" | "none" {
   if (sortKey.value !== key) {
     return "none";
@@ -252,36 +253,28 @@ function onLinkFilterChange(event: Event): void {
   });
 }
 
-function onShiftFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
-  void router.push({
-    name: "ims.field-reports.index",
-    query: {
-      ...route.query,
-      shift: target.value === "current" ? "current" : undefined,
-    },
-  });
-}
-
 function compareText(left: string, right: string): number {
   return left.localeCompare(right, undefined, { sensitivity: "base" });
 }
 
-function prioritySortValue(priority: IncidentPriorityLabel): number {
-  return {
-    Critical: 0,
-    Serious: 1,
-    Important: 2,
-    Routine: 3,
-  }[priority];
-}
+/**
+ * Priority order for a report, taken from the most serious incident it is
+ * attached to. Unlinked reports sort last.
+ */
+const PRIORITY_ORDER: readonly string[] = Object.freeze([
+  "Critical",
+  "Serious",
+  "Important",
+  "Routine",
+]);
 
 function firstRelatedPrioritySortValue(report: ImsFieldReportListItem): number {
   return Math.min(
-    ...report.relatedIncidents.map((incident) =>
-      prioritySortValue(incident.priorityLabel),
-    ),
+    ...report.relatedIncidents.map((incident) => {
+      const index = PRIORITY_ORDER.indexOf(incident.priorityLabel);
+
+      return index === -1 ? PRIORITY_ORDER.length : index;
+    }),
     99,
   );
 }
@@ -330,7 +323,7 @@ function compareReports(
     class="ims-fr-list"
     heading-id="ims-field-reports-heading"
     title="Field Reports"
-    :eyebrow="session?.icDepartmentLabel ?? 'Incident Command'"
+    :eyebrow="context?.icDepartmentLabel ?? 'Incident Command'"
     lede="Restricted Field Reports available to Incident Command."
   >
     <template #actions>
@@ -355,7 +348,12 @@ function compareReports(
     </template>
 
     <template #heading-cards>
-      <WorkflowHeadingCardGrid v-if="canView">
+      <!--
+        Counts come off the read, so they stay off the screen when it failed:
+        an unread event has no total, and "0" would be an answer this client
+        made up.
+      -->
+      <WorkflowHeadingCardGrid v-if="canView && !loadError">
         <WorkflowHeadingCard
           v-for="card in reportCards"
           :key="card.label"
@@ -385,18 +383,6 @@ function compareReports(
               <option value="all">All reports</option>
               <option value="linked">Linked</option>
               <option value="not_linked">Not linked</option>
-            </select>
-          </label>
-
-          <label for="ims-fr-list-shift">
-            <span>Shift</span>
-            <select
-              id="ims-fr-list-shift"
-              :value="shiftFilter"
-              @change="onShiftFilterChange"
-            >
-              <option value="all">All shifts</option>
-              <option value="current">Current shift</option>
             </select>
           </label>
 
@@ -434,7 +420,27 @@ function compareReports(
         </form>
       </ControlBar>
 
-      <p v-if="reports.length === 0" class="ims-fr-list__empty" role="status">
+      <p v-if="loadError" class="ims-fr-list__load-error" role="alert">
+        {{ loadError }}
+      </p>
+
+      <p
+        v-if="loading && allReports.length === 0"
+        class="ims-fr-list__empty"
+        role="status"
+      >
+        Loading Field Reports.
+      </p>
+
+      <p v-else-if="loadError" class="ims-fr-list__empty" role="status">
+        The Field Reports for this event could not be read.
+      </p>
+
+      <p
+        v-else-if="reports.length === 0"
+        class="ims-fr-list__empty"
+        role="status"
+      >
         No Field Reports match these filters.
       </p>
 
@@ -613,6 +619,13 @@ function compareReports(
 .ims-fr-list__restricted,
 .ims-fr-list__empty {
   color: var(--m-text-muted);
+}
+
+.ims-fr-list__load-error {
+  margin: 0;
+  color: var(--m-attention-critical);
+  font-size: var(--m-text-sm);
+  font-weight: 700;
 }
 
 .ims-fr-list__restricted a,

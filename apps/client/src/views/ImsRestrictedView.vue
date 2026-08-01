@@ -2,9 +2,9 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
-import { resolveIncidentSession } from "@/ims/incidentReadModel";
+import { incidentSessionContext } from "@/ims/incidentReadModel";
 
-const session = computed(() => resolveIncidentSession());
+const context = computed(() => incidentSessionContext.value);
 </script>
 
 <template>
@@ -17,18 +17,18 @@ const session = computed(() => resolveIncidentSession());
       This page requires IC Viewer, IC Operator, or IC Lead access for the
       event's configured Incident Command department.
     </p>
-    <dl v-if="session" class="ims-restricted__context">
+    <dl v-if="context" class="ims-restricted__context">
       <div>
         <dt>Event</dt>
-        <dd>{{ session.eventLabel }}</dd>
+        <dd>{{ context.eventLabel }}</dd>
       </div>
       <div>
         <dt>Configured IC department</dt>
-        <dd>{{ session.icDepartmentLabel }}</dd>
+        <dd>{{ context.icDepartmentLabel }}</dd>
       </div>
       <div>
         <dt>Current role</dt>
-        <dd>{{ session.roleLabel }}</dd>
+        <dd>{{ context.roleLabel }}</dd>
       </div>
     </dl>
     <RouterLink class="ims-restricted__return" :to="{ name: 'home' }">

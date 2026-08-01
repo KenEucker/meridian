@@ -5,75 +5,113 @@ import { RouterLink, useRoute } from "vue-router";
 import AutosaveStatus, {
   type AutosaveStatusState,
 } from "@/components/AutosaveStatus.vue";
-import { MeridianApiError } from "@/api/meridianApi";
-import { downloadIncidentPdfForSession } from "@/ims/downloadIncidentPdf";
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { downloadIncidentPdf } from "@/ims/downloadIncidentPdf";
 import {
-  appendIncidentNoteForSession,
-  availableFieldReportOptionsForSession,
-  availableLinkedIncidentOptionsForSession,
+  appendIncidentNote,
   blankIncidentAutosaveForm,
-  canEditIncident,
-  canPrintIncidentPdf,
-  createIncidentFromAutosaveForm,
-  findIncidentForSession,
+  createIncident,
   formatIncidentDateTime,
-  hasIncidentCommandAccess,
-  INCIDENT_PRIORITY_LABELS,
-  INCIDENT_TYPE_OPTIONS,
-  LOCAL_IMS_EVENT_ID,
+  getEventFieldReports,
+  getEventIncident,
+  getEventIncidents,
+  incidentAccess,
+  incidentSessionContext,
   incidentToAutosaveForm,
-  linkIncidentForSession,
-  linkFieldReportForSession,
-  RESPONDER_OPTIONS,
-  resolveIncidentSession,
+  linkFieldReport,
+  linkIncident,
+  orderedFieldReportCandidates,
+  orderedLinkCandidates,
   statusLabel,
-  strikeIncidentNoteForSession,
-  unlinkFieldReportForSession,
-  unlinkIncidentForSession,
-  updateIncidentFromAutosaveForm,
+  strikeIncidentAttachment,
+  strikeIncidentNote,
+  unlinkFieldReport,
+  unlinkIncident,
+  updateIncident,
   visibleIncidentTimelineEntries,
+  type FieldReportLinkCandidate,
+  type ImsIncident,
+  type IncidentAssignableOptions,
+  type IncidentAttachment,
   type IncidentAutosaveForm,
-  type IncidentPriorityLabel,
   type IncidentTagChip,
   type IncidentTimelineEntry,
   type NameReferenceChip,
 } from "@/ims/incidentReadModel";
 import { useConnectivity } from "@/offline/useConnectivity";
 
+/**
+ * `ims.incidents.create`, `ims.incidents.edit`, and `ims.incidents.show`
+ * (M11.4, M11.6 through M11.10; bound to the node in M16.20; INC-001 through
+ * INC-015; IMS surface specification 8, 9).
+ *
+ * One screen, three routes, and now one record: the incident on this page is
+ * the node's, read from `GET /api/events/{event}/incidents/{incident}`. Every
+ * change is a command followed by a re-read.
+ *
+ * The re-read is the part worth naming. A command answers with the record it
+ * changed, but not with the timeline entry the change produced, the Name
+ * Reference chips it moved, or the other incident a link touched — those are
+ * decided by `IncidentTimelineService` and `IncidentLinkService`, and the client
+ * used to write its own versions of them into a local store. Asking again is one
+ * request and removes the whole class of disagreement between what this screen
+ * shows and what the node recorded.
+ *
+ * Autosave still autosaves, and is still refused offline: technical spec 19.2
+ * requires an active connection for incident mutations, so the command catalog
+ * refuses every one of these where it stands rather than queueing it, and the
+ * typed form stays on screen (UI contract 16.3).
+ */
 const route = useRoute();
 const connectivity = useConnectivity();
-const session = computed(() => resolveIncidentSession());
-const canView = computed(() => hasIncidentCommandAccess(session.value));
-const canEdit = computed(() => canEditIncident(session.value));
-const canPrintPdf = computed(() => canPrintIncidentPdf(session.value));
-const isLocalImsFixture = computed(
-  () => session.value?.eventId === LOCAL_IMS_EVENT_ID,
-);
-const isPrintOfflineBlocked = computed(
-  () => !isLocalImsFixture.value && connectivity.value !== "online",
-);
+const context = computed(() => incidentSessionContext.value);
+const access = computed(() => incidentAccess.value);
+const canView = computed(() => access.value.canView);
+const canEdit = computed(() => access.value.canUpdate);
+const canPrintPdf = computed(() => access.value.canPrint);
+const eventId = computed(() => context.value?.eventId ?? null);
+
 const routeName = computed(() =>
   typeof route.name === "string" ? route.name : "",
 );
 const isIncidentShowRoute = computed(
   () => routeName.value === "ims.incidents.show",
 );
+const isCreateRoute = computed(
+  () => routeName.value === "ims.incidents.create",
+);
 const requiresEditAccess = computed(
-  () =>
-    routeName.value === "ims.incidents.create" ||
-    routeName.value === "ims.incidents.edit",
+  () => isCreateRoute.value || routeName.value === "ims.incidents.edit",
+);
+/**
+ * Whether the caller holds the capability the route they asked for needs.
+ *
+ * Creating and editing are separate grants in the permission catalog, so the
+ * two routes ask separate questions rather than sharing one "may write" flag.
+ */
+const hasRequiredEditAccess = computed(() =>
+  isCreateRoute.value ? access.value.canCreate : access.value.canUpdate,
 );
 const routeIncidentId = computed(() =>
   typeof route.params.incidentId === "string" ? route.params.incidentId : null,
 );
+
 const savedIncidentId = ref<string | null>(routeIncidentId.value);
+const incident = ref<ImsIncident | null>(null);
+const loadError = ref<string | null>(null);
+const loadingIncident = ref(false);
+const assignable = ref<IncidentAssignableOptions | null>(null);
+const linkCandidates = ref<readonly ImsIncident[]>([]);
+const fieldReportCandidates = ref<readonly FieldReportLinkCandidate[]>([]);
+
 const form = reactive<IncidentAutosaveForm>(blankIncidentAutosaveForm());
 const autosaveState = ref<AutosaveStatusState>("saved");
 const autosaveMessage = ref<string | null>(null);
 const lastSavedAt = ref<string | null>(null);
 const noteBody = ref("");
 const noteError = ref<string | null>(null);
-const revision = ref(0);
+const linkError = ref<string | null>(null);
+const attachmentError = ref<string | null>(null);
 const showFullHistory = ref(false);
 const lastSavedSignature = ref<string | null>(null);
 const lastSavedForm = ref<IncidentAutosaveForm | null>(null);
@@ -96,13 +134,10 @@ const fieldReportPicker = ref<HTMLElement | null>(null);
 const printError = ref<string | null>(null);
 const printBusy = ref(false);
 
-const incident = computed(() => {
-  revision.value;
+/** What the autosave line says when the node cannot be reached. */
+const offlineAutosaveMessage =
+  "Incident create/edit requires server connection. Your typed form remains on this screen.";
 
-  return savedIncidentId.value
-    ? findIncidentForSession(session.value, savedIncidentId.value)
-    : null;
-});
 const isOfflineBlocked = computed(() => connectivity.value !== "online");
 const timelineEntries = computed(() =>
   visibleIncidentTimelineEntries(
@@ -113,25 +148,113 @@ const timelineEntries = computed(() =>
 const showAutosaveStatus = computed(
   () => autosaveState.value !== "saved" || autosaveMessage.value !== null,
 );
+const attachments = computed(() => incident.value?.attachments ?? []);
+/**
+ * The vocabularies these two selects offer.
+ *
+ * The node's, and until it has answered, the value the form already holds and
+ * nothing else. A local fallback list would be the second copy of
+ * `Incident::statuses()` this task removed, and it would let the form propose a
+ * state the node might no longer accept.
+ */
+const statusOptions = computed(() =>
+  assignable.value?.statuses.length ? assignable.value.statuses : [form.status],
+);
+const priorityOptions = computed(() =>
+  assignable.value?.priorities.length
+    ? assignable.value.priorities
+    : [form.priorityLabel],
+);
 const selectedIncidentTypes = computed(() => form.incidentTypeNames);
+
+/**
+ * The responders on the form, named.
+ *
+ * The event's IC department roster answers for most of them, and the incident's
+ * own responders cover anyone assigned before they left it — a name the form
+ * could otherwise show as an id.
+ */
+const responderDirectory = computed(() => {
+  const byStaffId = new Map<string, { staffId: string; displayName: string }>();
+
+  for (const responder of assignable.value?.responders ?? []) {
+    byStaffId.set(responder.staffId, responder);
+  }
+
+  for (const responder of incident.value?.responders ?? []) {
+    if (!byStaffId.has(responder.staffId)) {
+      byStaffId.set(responder.staffId, responder);
+    }
+  }
+
+  return byStaffId;
+});
+const selectedResponders = computed(() =>
+  form.responderStaffIds.map(
+    (staffId) =>
+      responderDirectory.value.get(staffId) ?? {
+        staffId,
+        displayName: "Unknown responder",
+      },
+  ),
+);
 const availableIncidentTypeOptions = computed(() =>
   filteredAddOptions(
-    INCIDENT_TYPE_OPTIONS.filter(
+    (assignable.value?.types ?? []).filter(
       (typeName) => !form.incidentTypeNames.includes(typeName),
     ),
     incidentTypeAddQuery.value,
   ),
 );
-const selectedResponders = computed(() =>
-  RESPONDER_OPTIONS.filter((responder) =>
-    form.responderStaffIds.includes(responder.staffId),
+/**
+ * What the picker says when it offers nothing.
+ *
+ * The two causes are different problems for the person reading it: a search
+ * that matched none of the organization's types is theirs to fix by typing
+ * something else, and an organization with no configured types at all is an
+ * organizer's to fix somewhere this screen cannot reach.
+ */
+const incidentTypeEmptyHint = computed(() => {
+  if ((assignable.value?.types ?? []).length === 0) {
+    return "No incident types are configured for this organization.";
+  }
+
+  return incidentTypeAddQuery.value.trim() === ""
+    ? "Every configured incident type is already on this incident."
+    : "No configured incident type matches that.";
+});
+const availableResponderOptions = computed(() =>
+  filteredAddOptions(
+    (assignable.value?.responders ?? []).filter(
+      (responder) => !form.responderStaffIds.includes(responder.staffId),
+    ),
+    responderAddQuery.value,
+    (responder) => `${responder.displayName} ${responder.detail}`,
   ),
 );
-const selectedLinkedIncidents = computed(() => incident.value?.linkedIncidents ?? []);
+const availableLinkedIncidentOptions = computed(() =>
+  incident.value === null
+    ? []
+    : orderedLinkCandidates(incident.value, linkCandidates.value),
+);
+const availableFieldReportOptions = computed(() =>
+  incident.value === null
+    ? []
+    : orderedFieldReportCandidates(
+        incident.value,
+        fieldReportCandidates.value,
+        fieldReportAddQuery.value,
+      ),
+);
+const selectedLinkedIncidents = computed(
+  () => incident.value?.linkedIncidents ?? [],
+);
 const selectedAttachedFieldReports = computed(
   () => incident.value?.attachedFieldReports ?? [],
 );
-const isViewMode = computed(() => displayMode.value === "view" && incident.value !== null);
+const isViewMode = computed(
+  () => displayMode.value === "view" && incident.value !== null,
+);
 const canToggleViewMode = computed(
   () => canEdit.value && routeIncidentId.value !== null && incident.value !== null,
 );
@@ -146,53 +269,29 @@ const heading = computed(() => {
 
   return "Edit incident";
 });
-const availableResponderOptions = computed(() =>
-  filteredAddOptions(
-    RESPONDER_OPTIONS.filter(
-      (responder) => !form.responderStaffIds.includes(responder.staffId),
-    ),
-    responderAddQuery.value,
-    (responder) => responder.displayName,
-  ),
-);
-const availableLinkedIncidentOptions = computed(() =>
-  savedIncidentId.value
-    ? availableLinkedIncidentOptionsForSession(
-        session.value,
-        savedIncidentId.value,
-        linkedIncidentAddQuery.value,
-      )
-    : [],
-);
-const availableFieldReportOptions = computed(() =>
-  savedIncidentId.value
-    ? availableFieldReportOptionsForSession(
-        session.value,
-        savedIncidentId.value,
-        fieldReportAddQuery.value,
-      )
-    : [],
-);
+
+/**
+ * A typed picker search goes back to the node.
+ *
+ * The list is paged, so the candidates for a link are whichever incidents the
+ * node finds for that search rather than whichever ones happen to be on the
+ * page the reader last looked at. Debounced because it is a keystroke handler
+ * and the search runs across the incident record, its notes, and its attached
+ * Field Reports.
+ */
+let linkCandidateSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 watch(
-  () => [routeIncidentId.value, routeName.value] as const,
-  ([incidentId]) => {
+  () => [routeIncidentId.value, routeName.value, eventId.value] as const,
+  () => {
     displayMode.value = isIncidentShowRoute.value ? "view" : "edit";
-    savedIncidentId.value = incidentId;
-    const existing = incidentId
-      ? findIncidentForSession(session.value, incidentId)
-      : null;
-    Object.assign(
-      form,
-      existing ? incidentToAutosaveForm(existing) : blankIncidentAutosaveForm(),
-    );
-    autosaveState.value = isOfflineBlocked.value ? "blocked_offline" : "saved";
-    autosaveMessage.value = isOfflineBlocked.value
-      ? "Incident create/edit requires server connection. Your typed form remains on this screen."
-      : null;
-    lastSavedAt.value = existing?.updatedAt ?? null;
-    lastSavedSignature.value = formSignature(form);
-    lastSavedForm.value = cloneAutosaveForm(form);
+    savedIncidentId.value = routeIncidentId.value;
+    noteError.value = null;
+    linkError.value = null;
+    attachmentError.value = null;
+    printError.value = null;
+
+    void reload();
   },
   { immediate: true },
 );
@@ -200,12 +299,21 @@ watch(
 watch(isOfflineBlocked, (blocked) => {
   if (blocked) {
     autosaveState.value = "blocked_offline";
-    autosaveMessage.value =
-      "Incident create/edit requires server connection. Your typed form remains on this screen.";
+    autosaveMessage.value = offlineAutosaveMessage;
   } else if (autosaveState.value === "blocked_offline") {
     autosaveState.value = "saved";
     autosaveMessage.value = null;
   }
+});
+
+watch(linkedIncidentAddQuery, () => {
+  if (linkCandidateSearchTimer !== null) {
+    clearTimeout(linkCandidateSearchTimer);
+  }
+
+  linkCandidateSearchTimer = setTimeout(() => {
+    void loadLinkCandidates();
+  }, 250);
 });
 
 onMounted(() => {
@@ -214,7 +322,121 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onDocumentPointerDown);
+
+  if (linkCandidateSearchTimer !== null) {
+    clearTimeout(linkCandidateSearchTimer);
+  }
 });
+
+/** Read the incident and the option lists the form is built from. */
+async function reload(): Promise<void> {
+  await Promise.all([loadIncident(), loadOptions()]);
+}
+
+async function loadIncident(): Promise<void> {
+  const incidentId = savedIncidentId.value;
+
+  if (eventId.value === null || incidentId === null || !canView.value) {
+    incident.value = null;
+    resetFormFromIncident(null);
+
+    return;
+  }
+
+  loadingIncident.value = true;
+  loadError.value = null;
+
+  try {
+    const record = await getEventIncident(eventId.value, incidentId);
+
+    incident.value = record;
+    resetFormFromIncident(record);
+  } catch (error) {
+    incident.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this incident. Check the connection to this node and try again.",
+    );
+  } finally {
+    loadingIncident.value = false;
+  }
+}
+
+/**
+ * Read what the node lets this form assign, and the incidents a link may point
+ * at.
+ *
+ * One request answers both, because both are on the list read. A reader who
+ * cannot edit is not shown a form, so they are not asked for.
+ */
+async function loadOptions(): Promise<void> {
+  if (eventId.value === null || !canEdit.value) {
+    return;
+  }
+
+  try {
+    const list = await getEventIncidents(eventId.value, {
+      state: "all",
+      per_page: "50",
+    });
+
+    assignable.value = list.assignable;
+    linkCandidates.value = list.incidents;
+  } catch {
+    // A form that cannot offer suggestions still saves: the node validates the
+    // typed values either way, and an unreachable option list must not take the
+    // incident down with it.
+  }
+}
+
+async function loadLinkCandidates(): Promise<void> {
+  if (eventId.value === null || !canEdit.value) {
+    return;
+  }
+
+  try {
+    const list = await getEventIncidents(eventId.value, {
+      state: "all",
+      per_page: "50",
+      search: linkedIncidentAddQuery.value.trim(),
+    });
+
+    linkCandidates.value = list.incidents;
+  } catch {
+    // As above: a search that could not run leaves the last candidates alone.
+  }
+}
+
+async function loadFieldReportCandidates(): Promise<void> {
+  if (
+    eventId.value === null ||
+    !access.value.canViewFieldReports ||
+    fieldReportCandidates.value.length > 0
+  ) {
+    return;
+  }
+
+  try {
+    fieldReportCandidates.value = await getEventFieldReports(eventId.value);
+  } catch {
+    // As above.
+  }
+}
+
+/** Put the form back on the record, and forget any autosave state for it. */
+function resetFormFromIncident(record: ImsIncident | null): void {
+  Object.assign(
+    form,
+    record
+      ? incidentToAutosaveForm(record)
+      : blankIncidentAutosaveForm(new Date(), assignable.value),
+  );
+  autosaveState.value = isOfflineBlocked.value ? "blocked_offline" : "saved";
+  autosaveMessage.value = isOfflineBlocked.value ? offlineAutosaveMessage : null;
+  lastSavedAt.value = record?.updatedAt ?? null;
+  lastSavedSignature.value = formSignature(form);
+  lastSavedForm.value = cloneAutosaveForm(form);
+}
 
 function timelineEntryBody(entry: IncidentTimelineEntry): string | null {
   if (entry.body) {
@@ -265,11 +487,11 @@ function showEditState(): void {
   displayMode.value = "edit";
 }
 
-function priorityText(priorityLabel: string | null): string {
-  return priorityLabel ?? "Priority not set";
+function priorityText(priorityLabel: string): string {
+  return priorityLabel === "" ? "Priority not set" : priorityLabel;
 }
 
-function priorityClass(priorityLabel: IncidentPriorityLabel): string {
+function priorityClass(priorityLabel: string): string {
   return `ims-edit__priority-pill--${priorityLabel.toLowerCase()}`;
 }
 
@@ -281,6 +503,14 @@ function responderText(): string {
     : "Responders not set";
 }
 
+function attachmentSize(attachment: IncidentAttachment): string {
+  const kilobytes = attachment.byteSize / 1024;
+
+  return kilobytes < 1024
+    ? `${Math.max(1, Math.round(kilobytes))} KB`
+    : `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
 function commitAutosave(): void {
   if (!canEdit.value) {
     return;
@@ -289,18 +519,20 @@ function commitAutosave(): void {
   if (formSignature(form) === lastSavedSignature.value) {
     autosaveState.value = "saved";
     autosaveMessage.value = null;
+
     return;
   }
 
   if (autosaveState.value === "saving") {
     autosaveQueued.value = true;
+
     return;
   }
 
   if (isOfflineBlocked.value) {
     autosaveState.value = "blocked_offline";
-    autosaveMessage.value =
-      "Incident create/edit requires server connection. Your typed form remains on this screen.";
+    autosaveMessage.value = offlineAutosaveMessage;
+
     return;
   }
 
@@ -311,33 +543,67 @@ function commitAutosave(): void {
 
 async function autosave(): Promise<void> {
   const signature = formSignature(form);
+  const eventIdValue = eventId.value;
   autosaveQueued.value = false;
 
-  try {
-    const previousForm = lastSavedForm.value;
-    const saved = savedIncidentId.value
-      ? updateIncidentFromAutosaveForm(
-          session.value,
-          savedIncidentId.value,
-          form,
-        )
-      : createIncidentFromAutosaveForm(session.value, form, previousForm);
+  if (eventIdValue === null) {
+    return;
+  }
 
-    savedIncidentId.value = saved.id;
-    lastSavedAt.value = saved.updatedAt;
+  try {
+    if (savedIncidentId.value === null) {
+      savedIncidentId.value = await createIncident(
+        eventIdValue,
+        form,
+        lastSavedForm.value,
+      );
+    } else {
+      await updateIncident(eventIdValue, savedIncidentId.value, form);
+    }
+
     lastSavedSignature.value = signature;
     lastSavedForm.value = cloneAutosaveForm(form);
     autosaveState.value = "saved";
     autosaveMessage.value = null;
-    revision.value += 1;
+
+    await refreshIncident();
 
     if (formSignature(form) !== signature || autosaveQueued.value) {
       commitAutosave();
     }
   } catch (error) {
     autosaveState.value = "failed";
-    autosaveMessage.value =
-      error instanceof Error ? error.message : "Unable to autosave incident.";
+    autosaveMessage.value = meridianErrorMessage(
+      error,
+      "Unable to autosave incident.",
+    );
+  }
+}
+
+/**
+ * Re-read the incident after a write, without disturbing what is being typed.
+ *
+ * The read is the record; the form is the draft on top of it. Overwriting the
+ * form here would take a keystroke back from someone typing during a save,
+ * which is exactly when a save is likely to be running.
+ */
+async function refreshIncident(): Promise<void> {
+  const incidentId = savedIncidentId.value;
+
+  if (eventId.value === null || incidentId === null) {
+    return;
+  }
+
+  try {
+    const record = await getEventIncident(eventId.value, incidentId);
+
+    incident.value = record;
+    lastSavedAt.value = record.updatedAt;
+  } catch (error) {
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to re-read this incident after saving.",
+    );
   }
 }
 
@@ -375,6 +641,13 @@ function openIncidentTypeAdd(): void {
   fieldReportAddOpen.value = false;
 }
 
+/**
+ * Enter takes the first match, and nothing when there is none.
+ *
+ * The picker chooses from the organization's configured incident types; it does
+ * not create one. A name that matches nothing is a type this organization has
+ * not configured, and the way to add it is to configure it.
+ */
 function addFirstIncidentTypeOption(): void {
   const [typeName] = availableIncidentTypeOptions.value;
 
@@ -434,28 +707,22 @@ function addFirstLinkedIncidentOption(): void {
   const [linkedIncident] = availableLinkedIncidentOptions.value;
 
   if (linkedIncident) {
-    addLinkedIncident(linkedIncident.id);
+    void addLinkedIncident(linkedIncident.id);
   }
 }
 
-function addLinkedIncident(targetIncidentId: string): void {
-  if (!savedIncidentId.value) {
-    return;
-  }
-
-  linkIncidentForSession(session.value, savedIncidentId.value, targetIncidentId);
-  linkedIncidentAddQuery.value = "";
-  linkedIncidentAddOpen.value = false;
-  revision.value += 1;
+async function addLinkedIncident(targetIncidentId: string): Promise<void> {
+  await runLinkCommand(async (eventIdValue, incidentId) => {
+    await linkIncident(eventIdValue, incidentId, targetIncidentId);
+    linkedIncidentAddQuery.value = "";
+    linkedIncidentAddOpen.value = false;
+  });
 }
 
-function removeLinkedIncident(targetIncidentId: string): void {
-  if (!savedIncidentId.value) {
-    return;
-  }
-
-  unlinkIncidentForSession(session.value, savedIncidentId.value, targetIncidentId);
-  revision.value += 1;
+async function removeLinkedIncident(targetIncidentId: string): Promise<void> {
+  await runLinkCommand((eventIdValue, incidentId) =>
+    unlinkIncident(eventIdValue, incidentId, targetIncidentId),
+  );
 }
 
 function openFieldReportAdd(): void {
@@ -463,34 +730,61 @@ function openFieldReportAdd(): void {
   incidentTypeAddOpen.value = false;
   responderAddOpen.value = false;
   linkedIncidentAddOpen.value = false;
+  void loadFieldReportCandidates();
 }
 
 function addFirstFieldReportOption(): void {
   const [fieldReport] = availableFieldReportOptions.value;
 
   if (fieldReport) {
-    addFieldReport(fieldReport.id);
+    void addFieldReport(fieldReport.id);
   }
 }
 
-function addFieldReport(fieldReportId: string): void {
-  if (!savedIncidentId.value) {
-    return;
-  }
-
-  linkFieldReportForSession(session.value, savedIncidentId.value, fieldReportId);
-  fieldReportAddQuery.value = "";
-  fieldReportAddOpen.value = false;
-  revision.value += 1;
+async function addFieldReport(fieldReportId: string): Promise<void> {
+  await runLinkCommand(async (eventIdValue, incidentId) => {
+    await linkFieldReport(eventIdValue, incidentId, fieldReportId);
+    fieldReportAddQuery.value = "";
+    fieldReportAddOpen.value = false;
+  });
 }
 
-function removeFieldReport(fieldReportId: string): void {
-  if (!savedIncidentId.value) {
+async function removeFieldReport(fieldReportId: string): Promise<void> {
+  await runLinkCommand((eventIdValue, incidentId) =>
+    unlinkFieldReport(eventIdValue, incidentId, fieldReportId),
+  );
+}
+
+/**
+ * Every link command: send it, then re-read.
+ *
+ * Linking touches two records and writes a timeline entry on each, so what the
+ * screen shows afterwards comes from the node rather than from an assumption
+ * about what the link did.
+ */
+async function runLinkCommand(
+  command: (eventId: string, incidentId: string) => Promise<void>,
+): Promise<void> {
+  const eventIdValue = eventId.value;
+  const incidentId = savedIncidentId.value;
+
+  linkError.value = null;
+
+  if (eventIdValue === null || incidentId === null) {
+    linkError.value = "Create the incident before linking records to it.";
+
     return;
   }
 
-  unlinkFieldReportForSession(session.value, savedIncidentId.value, fieldReportId);
-  revision.value += 1;
+  try {
+    await command(eventIdValue, incidentId);
+    await refreshIncident();
+  } catch (error) {
+    linkError.value = meridianErrorMessage(
+      error,
+      "Unable to change this incident's links.",
+    );
+  }
 }
 
 function closeAddPopups(): void {
@@ -505,6 +799,7 @@ function onDocumentPointerDown(event: PointerEvent): void {
 
   if (!(target instanceof Node)) {
     closeAddPopups();
+
     return;
   }
 
@@ -548,13 +843,23 @@ function cloneAutosaveForm(value: IncidentAutosaveForm): IncidentAutosaveForm {
   };
 }
 
+/**
+ * What a timeline field-change entry calls a field.
+ *
+ * The node names fields in its own snake_case, and the create command is handed
+ * the same names, so both spellings resolve here rather than only the one this
+ * screen happens to use.
+ */
 function fieldLabel(field: string): string {
   const labels: Record<string, string> = {
     title: "Title",
     status: "State",
     priorityLabel: "Priority",
+    priority_label: "Priority",
     incidentTypeNames: "Incident types",
+    incident_type_names: "Incident types",
     responders: "Responders",
+    responder_staff_ids: "Responders",
     startedAt: "Started",
     started_at: "Started",
     locationName: "Location name",
@@ -580,96 +885,145 @@ function formatTimelineChangedValue(
     return "not set";
   }
 
-  return field === "status" ? statusLabel(value as IncidentAutosaveForm["status"]) : value;
+  return field === "status" ? statusLabel(value) : value;
 }
 
 function canStrikeTimelineEntry(entry: IncidentTimelineEntry): boolean {
   return (
-    canEdit.value &&
+    access.value.canAddNote &&
     entry.entryType === "operational_note" &&
     !entry.strickenAt
   );
 }
 
-function onStrikeNote(entry: IncidentTimelineEntry): void {
+async function onStrikeNote(entry: IncidentTimelineEntry): Promise<void> {
+  const eventIdValue = eventId.value;
+  const incidentId = savedIncidentId.value;
+
   noteError.value = null;
 
-  if (!savedIncidentId.value) {
+  if (eventIdValue === null || incidentId === null) {
     noteError.value = "Create the incident before striking notes.";
+
     return;
   }
 
   const reason = window.prompt("Reason for striking this note");
+
   if (reason === null) {
     return;
   }
 
   try {
-    strikeIncidentNoteForSession(
-      session.value,
-      savedIncidentId.value,
-      entry.id,
-      reason,
-    );
-    revision.value += 1;
+    await strikeIncidentNote(eventIdValue, incidentId, entry.id, reason);
+    await refreshIncident();
   } catch (error) {
-    noteError.value =
-      error instanceof Error ? error.message : "Unable to strike incident note.";
+    noteError.value = meridianErrorMessage(
+      error,
+      "Unable to strike incident note.",
+    );
   }
 }
 
-function onAppendNote(): void {
+async function onAppendNote(): Promise<void> {
+  const eventIdValue = eventId.value;
+  const incidentId = savedIncidentId.value;
+
   noteError.value = null;
 
-  if (!canEdit.value) {
+  if (!access.value.canAddNote) {
     noteError.value = "Incident note updates require IC operator or lead access.";
+
     return;
   }
 
-  if (!savedIncidentId.value) {
+  if (eventIdValue === null || incidentId === null) {
     noteError.value = "Create the incident before adding notes.";
+
     return;
   }
 
   try {
-    appendIncidentNoteForSession(
-      session.value,
-      savedIncidentId.value,
-      noteBody.value,
-    );
+    await appendIncidentNote(eventIdValue, incidentId, noteBody.value);
     noteBody.value = "";
-    revision.value += 1;
+    await refreshIncident();
   } catch (error) {
-    noteError.value =
-      error instanceof Error ? error.message : "Unable to add incident note.";
+    noteError.value = meridianErrorMessage(
+      error,
+      "Unable to add incident note.",
+    );
+  }
+}
+
+/**
+ * Strike an attachment, with the reason the node requires (INC-013).
+ *
+ * A strike, not a delete: the file stops being served and why it was struck is
+ * kept, so the reason is asked for rather than defaulted.
+ */
+async function onStrikeAttachment(
+  attachment: IncidentAttachment,
+): Promise<void> {
+  const eventIdValue = eventId.value;
+  const incidentId = savedIncidentId.value;
+
+  attachmentError.value = null;
+
+  if (eventIdValue === null || incidentId === null) {
+    return;
+  }
+
+  const reason = window.prompt(
+    `Reason for striking ${attachment.filename}`,
+  );
+
+  if (reason === null) {
+    return;
+  }
+
+  try {
+    await strikeIncidentAttachment(
+      eventIdValue,
+      incidentId,
+      attachment.id,
+      reason,
+    );
+    await refreshIncident();
+  } catch (error) {
+    attachmentError.value = meridianErrorMessage(
+      error,
+      "Unable to strike this attachment.",
+    );
   }
 }
 
 async function onPrintPdf(): Promise<void> {
+  const eventIdValue = eventId.value;
+
   printError.value = null;
 
-  if (!incident.value || !session.value) {
+  if (eventIdValue === null || incident.value === null) {
     printError.value = "Incident not found for this event.";
+
     return;
   }
 
-  if (isPrintOfflineBlocked.value) {
+  if (isOfflineBlocked.value) {
     printError.value =
       "Incident PDF print requires a server connection. Reconnect and try again.";
+
     return;
   }
 
   printBusy.value = true;
 
   try {
-    await downloadIncidentPdfForSession(session.value, incident.value);
+    await downloadIncidentPdf(eventIdValue, incident.value.id);
   } catch (error) {
-    printError.value =
-      error instanceof MeridianApiError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : "Unable to print incident PDF.";
+    printError.value = meridianErrorMessage(
+      error,
+      "Unable to print incident PDF.",
+    );
   } finally {
     printBusy.value = false;
   }
@@ -685,7 +1039,7 @@ async function onPrintPdf(): Promise<void> {
     </div>
 
     <div
-      v-else-if="requiresEditAccess && !canEdit"
+      v-else-if="requiresEditAccess && !hasRequiredEditAccess"
       class="ims-edit__restricted"
       role="status"
     >
@@ -695,11 +1049,25 @@ async function onPrintPdf(): Promise<void> {
     </div>
 
     <div
-      v-else-if="routeIncidentId && !incident"
+      v-else-if="routeIncidentId && loadingIncident && !incident"
       class="ims-edit__restricted"
       role="status"
     >
-      Incident not found for this event.
+      Loading incident.
+    </div>
+
+    <!--
+      The node's own sentence when it refused, and a plain not-found only when
+      it answered without one. A refusal is not an absence, and reading them as
+      the same thing is how a permission problem gets mistaken for a typo in a
+      URL.
+    -->
+    <div
+      v-else-if="routeIncidentId && !incident"
+      class="ims-edit__restricted"
+      role="alert"
+    >
+      {{ loadError ?? "Incident not found for this event." }}
     </div>
 
     <template v-else>
@@ -790,6 +1158,13 @@ async function onPrintPdf(): Promise<void> {
               <output>{{ incident?.incidentNumber ?? "Not assigned yet" }}</output>
             </div>
 
+            <!--
+              The state and priority vocabularies come off the list read's
+              `assignable` block, so this form offers exactly what
+              `IncidentUpdateService` accepts. They used to be typed out here,
+              which meant a state the node added was one this screen could not
+              set and a state it removed was one this screen still offered.
+            -->
             <label class="ims-edit__field">
               <span>State</span>
               <select
@@ -798,13 +1173,13 @@ async function onPrintPdf(): Promise<void> {
                 :disabled="isOfflineBlocked"
                 @change="commitAutosave"
               >
-                <option value="open">{{ statusLabel("open") }}</option>
-                <option value="on_scene">{{ statusLabel("on_scene") }}</option>
-                <option value="monitoring">
-                  {{ statusLabel("monitoring") }}
+                <option
+                  v-for="status in statusOptions"
+                  :key="status"
+                  :value="status"
+                >
+                  {{ statusLabel(status) }}
                 </option>
-                <option value="on_hold">{{ statusLabel("on_hold") }}</option>
-                <option value="closed">{{ statusLabel("closed") }}</option>
               </select>
             </label>
 
@@ -818,7 +1193,7 @@ async function onPrintPdf(): Promise<void> {
                 @change="commitAutosave"
               >
                 <option
-                  v-for="priority in INCIDENT_PRIORITY_LABELS"
+                  v-for="priority in priorityOptions"
                   :key="priority"
                   :value="priority"
                 >
@@ -969,8 +1344,16 @@ async function onPrintPdf(): Promise<void> {
                 @keydown.escape.prevent="closeAddPopups"
               />
             </label>
+            <!--
+              A chooser, not a creator. Incident types are configured for the
+              organization (requirements: configurable areas), so this picker
+              offers what the node configured and says so when nothing matches
+              rather than offering to invent one. The panel still opens on an
+              empty result, because a control that silently does nothing reads
+              as broken.
+            -->
             <div
-              v-if="incidentTypeAddOpen && availableIncidentTypeOptions.length > 0"
+              v-if="incidentTypeAddOpen"
               class="ims-edit__add-results"
               aria-label="Incident type matches"
             >
@@ -983,6 +1366,12 @@ async function onPrintPdf(): Promise<void> {
               >
                 {{ typeName }}
               </button>
+              <p
+                v-if="availableIncidentTypeOptions.length === 0"
+                class="ims-edit__add-hint"
+              >
+                {{ incidentTypeEmptyHint }}
+              </p>
             </div>
           </section>
         </div>
@@ -1133,6 +1522,10 @@ async function onPrintPdf(): Promise<void> {
           </div>
         </section>
 
+        <p v-if="linkError" class="ims-edit__error ims-edit__error--span" role="alert">
+          {{ linkError }}
+        </p>
+
         <section
           class="ims-edit__panel ims-edit__panel--span"
           aria-labelledby="ims-edit-location-heading"
@@ -1175,6 +1568,49 @@ async function onPrintPdf(): Promise<void> {
             </label>
           </div>
         </section>
+
+        <!--
+          Attachments are listed and struck here, never uploaded: an incident
+          attachment reaches the node through the Field Report it arrived on,
+          and there is no incident upload endpoint to offer a control for.
+          Striking keeps the file and the reason (INC-013), which is why the
+          button says strike rather than delete.
+        -->
+        <section
+          class="ims-edit__panel ims-edit__panel--span"
+          aria-labelledby="ims-edit-attachments-heading"
+        >
+          <div class="ims-edit__panel-heading">
+            <h2 id="ims-edit-attachments-heading">Attachments</h2>
+          </div>
+          <div id="ims-edit-attachments" class="ims-edit__selected-list">
+            <div
+              v-for="attachment in attachments"
+              :key="attachment.id"
+              class="ims-edit__selected-row"
+            >
+              <span>{{ attachment.filename }}</span>
+              <em class="ims-edit__attachment-detail">
+                {{ attachment.mimeType }} - {{ attachmentSize(attachment) }}
+              </em>
+              <button
+                type="button"
+                class="ims-edit__remove-button"
+                :disabled="isOfflineBlocked"
+                :aria-label="`Strike attachment ${attachment.filename}`"
+                @click="onStrikeAttachment(attachment)"
+              >
+                Strike
+              </button>
+            </div>
+            <p v-if="attachments.length === 0" class="ims-edit__empty-row">
+              No attachments on this incident.
+            </p>
+          </div>
+          <p v-if="attachmentError" class="ims-edit__error" role="alert">
+            {{ attachmentError }}
+          </p>
+        </section>
       </form>
 
       <section
@@ -1188,14 +1624,14 @@ async function onPrintPdf(): Promise<void> {
             <button
               type="button"
               class="ims-edit__print-button"
-              :disabled="printBusy || isPrintOfflineBlocked"
+              :disabled="printBusy || isOfflineBlocked"
               :aria-busy="printBusy"
               @click="onPrintPdf"
             >
               {{ printBusy ? "Preparing PDF..." : "Print PDF" }}
             </button>
             <p
-              v-if="isPrintOfflineBlocked"
+              v-if="isOfflineBlocked"
               class="ims-edit__print-hint"
               role="status"
             >
@@ -1362,7 +1798,7 @@ async function onPrintPdf(): Promise<void> {
         </ol>
 
         <form
-          v-if="canEdit"
+          v-if="access.canAddNote"
           class="ims-edit__note-form"
           @submit.prevent="onAppendNote"
         >
@@ -1966,6 +2402,14 @@ async function onPrintPdf(): Promise<void> {
   border-bottom: 0;
 }
 
+
+.ims-edit__add-hint {
+  margin: 0;
+  padding: var(--m-space-2) var(--m-space-3);
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
 .ims-edit__form textarea,
 .ims-edit__note-form textarea {
   resize: vertical;
@@ -2122,6 +2566,16 @@ async function onPrintPdf(): Promise<void> {
   background: var(--m-action-primary-bg);
   color: var(--m-action-primary-text);
   font-weight: 800;
+}
+
+.ims-edit__error--span {
+  grid-column: 1 / -1;
+}
+
+.ims-edit__attachment-detail {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-style: normal;
 }
 
 .ims-edit__error {

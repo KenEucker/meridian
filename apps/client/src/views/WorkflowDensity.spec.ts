@@ -13,11 +13,14 @@ import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
 } from "@/department-teams/fixtureDepartmentSession";
-import {
-  installDevelopmentIncidentSession,
-  clearIncidentSession,
-} from "@/ims/incidentReadModel";
+import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
@@ -110,9 +113,74 @@ function stubTeamAdminNode(): void {
   );
 }
 
+/**
+ * A node that answers the incident list read (M16.20).
+ *
+ * This file is about where controls sit on a page, so the answer carries the
+ * filter vocabularies the controls render from and no incidents at all.
+ */
+function stubIncidentListNode(): void {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      // The node echoes the selection it applied, which is what the controls
+      // render from.
+      const query = new URL(String(input), "http://node.test").searchParams;
+
+      return new Response(
+          JSON.stringify({
+            event_id: "11111111-1111-4111-8111-111111111111",
+            filters: {
+              search: query.get("search") ?? "",
+              state: query.get("state") ?? "active",
+              priority: query.get("priority") ?? "all",
+              type: "all",
+              responder: "all",
+              started_from: null,
+              started_to: null,
+              sort: "updated",
+              direction: "desc",
+            },
+            filter_options: {
+              states: ["active", "all", "closed"],
+              priorities: ["all", "Critical"],
+              sorts: ["updated", "priority"],
+              types: [],
+              responders: [],
+              max_per_page: 100,
+            },
+            assignable: {
+              statuses: ["open", "closed"],
+              priorities: ["Routine", "Critical"],
+              types: [],
+              responders: [],
+            },
+            pagination: { page: 1, per_page: 25, total: 0, total_pages: 1 },
+            presets: [],
+            incidents: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }),
+  );
+}
+
+/** The signed-in IC session the incident list renders under. */
+function installIncidentSession(): void {
+  installLocalFieldSession();
+  selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+  stubIncidentListNode();
+}
+
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  clearIncidentSession();
+  clearClientSession();
+  resetSelectedSessionDepartment();
   configureMeridianApi(null);
   resetSelectedFixtureDepartment();
   vi.unstubAllGlobals();
@@ -121,7 +189,7 @@ afterEach(() => {
 describe("workflow control bands", () => {
   it("keeps incident search on the band and collapses filters and presets", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentIncidentSession();
+    installIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
 
@@ -144,11 +212,11 @@ describe("workflow control bands", () => {
 
   it("opens the filter panel and counts the filters when the list arrives narrowed", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentIncidentSession();
+    installIncidentSession();
 
     const wrapper = await mountAt(
       IncidentListView,
-      "/ims/incidents?priority=Critical&shift=current",
+      "/ims/incidents?priority=Critical&state=closed",
     );
 
     const panel = wrapper.get(".ims-list__filter-panel");
@@ -158,7 +226,7 @@ describe("workflow control bands", () => {
 
   it("gives incident filters the roomier label-above-control shape", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentIncidentSession();
+    installIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
 
