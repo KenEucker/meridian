@@ -145,8 +145,28 @@ const timelineEntries = computed(() =>
     showFullHistory.value,
   ),
 );
-const showAutosaveStatus = computed(
-  () => autosaveState.value !== "saved" || autosaveMessage.value !== null,
+/**
+ * The autosave line is part of the form's layout, not something that appears
+ * over it.
+ *
+ * It used to render only when it had something to report, which moved every
+ * control below it down the moment a save started and back up when the save
+ * finished — on the create screen that is the whole form jumping under the
+ * cursor at the exact moment somebody is typing into it. So the row is always
+ * on the page and only its wording changes, and the reserved height in the
+ * stylesheet keeps a two-word "Saving" and a full offline sentence occupying
+ * the same space.
+ *
+ * View mode has no form to displace and nothing to autosave, so it does not
+ * carry the row at all.
+ */
+const autosaveIdleMessage = computed(() =>
+  savedIncidentId.value === null
+    ? "This incident saves as you fill it in. Nothing has reached the node yet."
+    : null,
+);
+const autosaveLineMessage = computed(
+  () => autosaveMessage.value ?? autosaveIdleMessage.value,
 );
 const attachments = computed(() => incident.value?.attachments ?? []);
 /**
@@ -1135,13 +1155,14 @@ async function onPrintPdf(): Promise<void> {
         </nav>
       </header>
 
-      <AutosaveStatus
-        v-if="showAutosaveStatus"
-        :state="autosaveState"
-        :last-saved-at="lastSavedAt"
-        :message="autosaveMessage"
-        repair-href="/readiness"
-      />
+      <div v-if="!isViewMode" class="ims-edit__autosave">
+        <AutosaveStatus
+          :state="autosaveState"
+          :last-saved-at="lastSavedAt"
+          :message="autosaveLineMessage"
+          repair-href="/readiness"
+        />
+      </div>
 
       <form
         v-if="!isViewMode"
@@ -1896,6 +1917,27 @@ async function onPrintPdf(): Promise<void> {
 
 .ims-edit__restricted {
   color: var(--m-text-muted);
+}
+
+/*
+ * The autosave row's reserved height.
+ *
+ * The row is always rendered, so nothing below it moves when a save starts or
+ * finishes. The reserve covers the wording changing length as well: two lines
+ * on a phone, where the offline sentence wraps, and one past the breakpoint
+ * where it does not. The status block sits at the top of the reserve rather
+ * than stretching to fill it, so the band keeps its own proportions.
+ */
+.ims-edit__autosave {
+  display: grid;
+  align-content: start;
+  min-height: 4.25rem;
+}
+
+@media (min-width: 48rem) {
+  .ims-edit__autosave {
+    min-height: 2.5rem;
+  }
 }
 
 .ims-edit__header {

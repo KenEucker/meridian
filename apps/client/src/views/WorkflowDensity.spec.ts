@@ -294,10 +294,11 @@ describe("workflow control bands", () => {
     }
     expect(filters.findAll(".control-field")).toHaveLength(0);
 
-    // Search keeps its inline sizing hint.
+    // Search keeps its inline sizing hint, and so does the open-mode control
+    // that sits beside it on the always-visible band rather than in the panel.
     expect(
       wrapper.findAll(".control-field").map((f) => f.attributes("data-width")),
-    ).toEqual(["grow"]);
+    ).toEqual(["grow", "md"]);
   });
 
   it("puts department filter toolbars on the shared band", async () => {

@@ -47,7 +47,7 @@
 //     rendering rather than a second copy of a rule. Name Reference chips are
 //     the node's `name_reference_chips` and are not re-derived.
 
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import { meridianJson } from "@/api/meridianApi";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
@@ -370,15 +370,57 @@ export const incidentAccess = computed<IncidentAccess>(() => {
  * A per-device preference and nothing more: it decides which route a row links
  * to, and the edit route is only offered to a caller who holds
  * `incidents.update` regardless.
+ *
+ * Kept in local storage rather than in memory. An operator working a busy event
+ * sets this once because they never want the read-only stop on the way to the
+ * form, and a preference that resets on every reload is one they have to set
+ * again every time the tab is refreshed — which is the same as not having it.
+ * It is a device preference and not session state: it says nothing about who is
+ * signed in and grants nothing, so it survives a sign-out the way the configured
+ * node URL does.
  */
-let incidentListOpenMode: IncidentListOpenMode = "view";
+const INCIDENT_LIST_OPEN_MODE_KEY = "meridian.ims.incident-list.open-mode";
+
+const incidentListOpenMode = ref<IncidentListOpenMode>(
+  readIncidentListOpenMode(),
+);
 
 export function resolveIncidentListOpenMode(): IncidentListOpenMode {
-  return incidentListOpenMode;
+  return incidentListOpenMode.value;
 }
 
 export function setIncidentListOpenMode(mode: IncidentListOpenMode): void {
-  incidentListOpenMode = mode;
+  incidentListOpenMode.value = mode;
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(INCIDENT_LIST_OPEN_MODE_KEY, mode);
+  } catch {
+    // The choice still holds for this session; it just will not survive a
+    // restart. Storage being unavailable is not a reason to refuse it.
+  }
+}
+
+/** The reactive preference, for a surface that has to follow it. */
+export const incidentListOpenModePreference = computed(
+  () => incidentListOpenMode.value,
+);
+
+function readIncidentListOpenMode(): IncidentListOpenMode {
+  if (typeof window === "undefined") {
+    return "view";
+  }
+
+  try {
+    return window.localStorage.getItem(INCIDENT_LIST_OPEN_MODE_KEY) === "edit"
+      ? "edit"
+      : "view";
+  } catch {
+    return "view";
+  }
 }
 
 /**
