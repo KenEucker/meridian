@@ -12,6 +12,7 @@ use App\Models\Incident;
 use App\Models\IncidentFieldReport;
 use App\Models\IncidentLink;
 use App\Models\IncidentTimelineEntry;
+use App\Models\IncidentType;
 use App\Models\NameReferenceToken;
 use App\Models\Organization;
 use App\Models\PermissionRole;
@@ -23,6 +24,7 @@ use App\Models\User;
 use App\Services\NameReferences\NameReferenceIndexService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class IncidentCommandHttpTest extends TestCase
@@ -107,6 +109,9 @@ class IncidentCommandHttpTest extends TestCase
             'preferred_name' => 'Vera',
             'handle' => 'vera-ranger',
         ]);
+        // The organization configures its incident types (M18.14A); a command
+        // chooses among them and no longer creates one by naming it.
+        $this->configureTypes($event, 'Medical', 'Safety');
 
         $this->actingAsClient($actor)
             ->postJson('/api/commands/create-incident', [
@@ -243,6 +248,7 @@ class IncidentCommandHttpTest extends TestCase
             'priority_label' => Incident::PRIORITY_ROUTINE,
             'updated_at' => Carbon::parse('2027-07-04T20:00:00Z'),
         ]);
+        $this->configureTypes($event, 'Medical', 'Logistics');
 
         $this->actingAsClient($actor)
             ->postJson('/api/commands/update-incident', [
@@ -1642,6 +1648,75 @@ class IncidentCommandHttpTest extends TestCase
         $this->assertDatabaseCount('incident_links', 0);
         $this->assertDatabaseCount('incident_timeline_entries', 0);
         $this->assertDatabaseCount('audit_events', 0);
+    }
+
+    public function test_an_unconfigured_incident_type_name_is_refused_rather_than_created(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_lead', $event);
+        $this->configureTypes($event, 'Medical');
+
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-incident', [
+                'event_id' => $event->id,
+                'title' => 'Novel incident',
+                'incident_type_names' => ['Medical', 'Avalanche'],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'Avalanche is not a configured incident type for this organization. Incident types are configured by organizers.',
+            );
+
+        // The refusal is the point: naming a type must not bring it into
+        // existence (M18.14A).
+        $this->assertSame(
+            0,
+            IncidentType::query()
+                ->where('organization_id', $event->organization_id)
+                ->where('name', 'Avalanche')
+                ->count(),
+        );
+        $this->assertSame(0, Incident::query()->where('title', 'Novel incident')->count());
+    }
+
+    public function test_an_archived_type_still_resolves_so_its_incidents_stay_editable(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $actor = $this->userWithEventRole('ic_operator', $event);
+        $incident = Incident::factory()->forEvent($event)->create();
+
+        $type = IncidentType::factory()->create([
+            'organization_id' => $event->organization_id,
+            'name' => 'Retired category',
+            'archived_at' => Carbon::parse('2027-07-01T00:00:00Z'),
+        ]);
+        $incident->incidentTypes()->attach($type->id, [
+            'id' => (string) Str::uuid(),
+            'created_at' => Carbon::parse('2027-07-04T20:00:00Z'),
+        ]);
+
+        // The authoring form no longer offers this type, but the incident
+        // already carries it and the update command sends the whole set.
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/update-incident', [
+                'event_id' => $event->id,
+                'incident_id' => $incident->id,
+                'title' => 'Still editable',
+                'incident_type_names' => ['Retired category'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('incident_type_names.0', 'Retired category');
+    }
+
+    private function configureTypes(Event $event, string ...$names): void
+    {
+        foreach ($names as $name) {
+            IncidentType::factory()->create([
+                'organization_id' => $event->organization_id,
+                'name' => $name,
+            ]);
+        }
     }
 
     private function eventWithIncidentCommandDepartment(): Event

@@ -17,6 +17,8 @@ use App\Orchid\Screens\Document\PolicyDocumentListScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentEditScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentListScreen;
 use App\Orchid\Screens\Equipment\EquipmentEditScreen;
+use App\Orchid\Screens\Incident\IncidentTypeEditScreen;
+use App\Orchid\Screens\Incident\IncidentTypeListScreen;
 use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
@@ -286,6 +288,27 @@ Route::screen('staff', StaffListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Staff'), route('platform.staff')));
+
+// Platform > Operations > Incident types > Incident type
+Route::screen('incident-types/{incidentType}/edit', IncidentTypeEditScreen::class)
+    ->name('platform.incident-types.edit')
+    ->breadcrumbs(fn (Trail $trail, $incidentType) => $trail
+        ->parent('platform.incident-types')
+        ->push($incidentType->name, route('platform.incident-types.edit', $incidentType)));
+
+// Platform > Operations > Incident types > Create
+Route::screen('incident-types/create', IncidentTypeEditScreen::class)
+    ->name('platform.incident-types.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.incident-types')
+        ->push(__('Create'), route('platform.incident-types.create')));
+
+// Platform > Operations > Incident types
+Route::screen('incident-types', IncidentTypeListScreen::class)
+    ->name('platform.incident-types')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Incident types'), route('platform.incident-types')));
 
 // Platform > Operations > Equipment > Equipment
 Route::screen('equipment/{equipmentItem}/edit', EquipmentEditScreen::class)

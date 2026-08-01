@@ -51,6 +51,10 @@ export type MeridianCommandType =
   | "strike-incident-attachment"
   | "save-incident-list-preset"
   | "delete-incident-list-preset"
+  | "create-incident-type"
+  | "rename-incident-type"
+  | "archive-incident-type"
+  | "restore-incident-type"
   | "acknowledge-document"
   | "submit-application"
   | "publish-event-map"
@@ -263,6 +267,36 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/delete-incident-list-preset",
       "Saved incident list preset",
       "Deleting a list preset needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Incident type administration (M18.14A). Organization configuration is
+     * central's to hold, and an organizer editing the list is at a desk with a
+     * connection rather than in a field with none, so there is nothing here
+     * worth holding on a device.
+     */
+    "create-incident-type": connectedOnly(
+      "create-incident-type",
+      "/api/commands/create-incident-type",
+      "Incident type",
+      "Adding an incident type needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "rename-incident-type": connectedOnly(
+      "rename-incident-type",
+      "/api/commands/rename-incident-type",
+      "Incident type",
+      "Renaming an incident type needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "archive-incident-type": connectedOnly(
+      "archive-incident-type",
+      "/api/commands/archive-incident-type",
+      "Incident type",
+      "Archiving an incident type needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "restore-incident-type": connectedOnly(
+      "restore-incident-type",
+      "/api/commands/restore-incident-type",
+      "Incident type",
+      "Restoring an incident type needs a connection to the node. It cannot be held on this device for later.",
     ),
     "acknowledge-document": connectedOnly(
       "acknowledge-document",

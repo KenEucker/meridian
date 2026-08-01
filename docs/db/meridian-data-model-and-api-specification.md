@@ -2844,6 +2844,18 @@ maintains its own list from there; Meridian branches on none of the names.
 Archiving a type keeps it on the incidents that already carry it and on the list
 filter, and removes it from what an incident may be given next.
 
+`GET /api/organizations/{organization}/incident-types` is the administration
+read behind the `organizer.configuration` surface, and `create-incident-type`, `rename-incident-type`,
+`archive-incident-type`, and `restore-incident-type` are its commands. All five
+require `organization.incident_types.manage` (organizers and Lead Organizers,
+ORG-020) and are audited. Unlike the other organization reads, this one returns
+archived rows alongside active ones, because restoring one is what it is for.
+
+An incident command names a configured type or is refused: the create and update
+commands no longer bring a type into existence by mentioning it. An *archived*
+type still resolves on a command, so an incident filed before a list changed
+stays editable, while the authoring form no longer offers it.
+
 Key fields:
 
 - `id`

@@ -36,6 +36,7 @@ import {
   CAPABILITY_INCIDENTS_VIEW,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
+  CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
   CAPABILITY_POLICIES_VIEW_PUBLISHED,
   CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
@@ -543,6 +544,22 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         label: "Credentials",
         description: "Event credential eligibility export.",
         to: { name: "organizer.credentials.index" },
+      });
+    }
+
+    // The organization configuration surface ORG-018 requires. One entry rather
+    // than one per setting: the page is the hub those settings live on, and
+    // each featureset inside it carries its own capability.
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
+      )
+    ) {
+      organizationPages.push({
+        label: "Configuration",
+        description: "Organization settings, including incident types.",
+        to: { name: "organizer.configuration.index" },
       });
     }
 
