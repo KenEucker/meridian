@@ -28,6 +28,10 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - `SLB-005`
 - `SLB-006`
 - `SLB-007`
+- `SLB-008`
+- `SLB-015` through `SLB-018`
+- `SLB-019`
+- `CLIENT-015`, `CLIENT-018`, `CLIENT-023`
 - `HOURS-001` through `HOURS-008`
 - `REPORT-004`
 - `REPORT-006`
@@ -38,7 +42,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - Data/API spec sections 7.2 and 10.10
 - UI Implementation Contract sections 12.5 and 16.2
 - Kiosk and Field Hardware UX Guide section 5
-- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, and M13.4
+- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, and M16.21
 
 ## Environment
 
@@ -104,7 +108,11 @@ rows, unauthorized actors are refused, and each successful export is audited.
 8. Clear site data first if an earlier local attendance/offline run is present,
    signing in again afterwards.
 9. Confirm the seeded event/department context is Idaho Decompression 2026 /
-   Rangers and that Logistics search uses the department-scoped offline cache.
+   Rangers, and that the desk names the same event and department under **Search
+   scope** with the time it read them. Since M16.21 the desk reads its staff,
+   equipment, and shifts from the node rather than from data bundled into the
+   client, so a desk showing nobody is a signed-in operator with no department
+   roster rather than a fixture that failed to load.
 
 ## Steps
 
@@ -118,13 +126,15 @@ rows, unauthorized actors are refused, and each successful export is audited.
      tests/Feature/AttendanceCheckOutTest.php \
      tests/Feature/AttendanceMarkNoShowTest.php \
      tests/Feature/AttendanceCommandHttpTest.php \
+     tests/Feature/DepartmentOperationsReadHttpTest.php \
+     tests/Feature/DepartmentOperationsCommandHttpTest.php \
      tests/Feature/HoursCorrectionTest.php \
      tests/Feature/HoursWorkedExportTest.php
    ```
 2. From the repository root, run the shared client attendance/offline suites:
    ```bash
    corepack pnpm --filter @meridian/client run test -- \
-     src/department-ops/logistics.spec.ts \
+     src/department-ops/departmentOpsReadModel.spec.ts \
      src/views/DepartmentOpsViews.spec.ts \
      src/shift-board/offlineAttendanceOperation.spec.ts \
      src/outbox/commandOutbox.spec.ts \
@@ -143,6 +153,12 @@ rows, unauthorized actors are refused, and each successful export is audited.
    - no-show is constrained to started shifts and is idempotent;
    - offline command transport preserves operation UUID, device/node provenance,
      and retry-safe acceptance for check-in, check-out, and no-show;
+   - the four department operations reads answer only callers with standing in
+     the department, carry the same authority the commands enforce, and keep
+     every identity off a Planning Table row;
+   - presence refuses an off-site move while somebody is checked in, and an
+     unscheduled shift addition refuses somebody who is not on-site, each in the
+     domain service's own words;
    - hours correction writes before/after audit, rejects unauthorized actors and
      invalid ranges, and frozen hours reject later correction;
    - the hours worked export matches its committed sample file, reports
@@ -172,8 +188,9 @@ rows, unauthorized actors are refused, and each successful export is audited.
 
 14. Return to Vera's Logistics workspace and open Check out for the checked-in
     shift.
-15. Confirm the check-out dialog defaults the end timestamp to now and allows
-    Department Logistics to edit actual start/end time during check-out.
+15. Confirm the check-out dialog defaults **Actual end** to now, offers an
+    empty **Actual start**, and says that leaving the start empty keeps the
+    recorded check-in.
 16. Set actual start to `2026-07-01 08:00` and actual end to
     `2026-07-01 12:07`, then submit check-out.
 17. Confirm Vera's attendance state changes to checked out and no longer blocks
@@ -187,6 +204,27 @@ rows, unauthorized actors are refused, and each successful export is audited.
 19. Confirm the latest row belongs to the event, department, selected shift, and
     Vera; includes actual start/end; has computed minutes; and is separate from
     the scheduled shift duration.
+
+### C2. Presence and unscheduled shift addition (M16.21)
+
+19a. Pick an on-site Rangers staff member who holds no assignment on the running
+     shift, open their workspace, and confirm the shift card offers **Add to
+     shift**.
+19b. Add them, and confirm the desk re-reads: the card now shows an assignment
+     and offers check-in, and the Department Overview assignment count for that
+     shift goes up by one.
+19c. From `apps/server`, confirm the addition is a real assignment audited as an
+     unscheduled one:
+     ```bash
+     php artisan tinker --execute='App\Models\AuditEvent::query()->where("action", "shift_assignment.unscheduled_added")->latest("created_at")->limit(3)->get(["actor_user_id", "entity_id", "after_json"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+     ```
+19d. Open the workspace of somebody who is off-site and confirm the desk offers
+     them no check-in and no shift addition at all — the node did not offer the
+     actions, rather than the client disabling buttons it drew anyway.
+19e. Confirm presence writes reach the node:
+     ```bash
+     php artisan tinker --execute='App\Models\EventDepartmentPresence::query()->latest("updated_at")->limit(5)->get(["staff_id", "current_state", "marked_on_site_at", "marked_off_site_at", "last_marked_by_user_id"])->each(fn ($presence) => print($presence->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+     ```
 
 ### D. No-show path
 
@@ -209,6 +247,12 @@ rows, unauthorized actors are refused, and each successful export is audited.
     no-show.
 27. Confirm the action remains locally represented as queued/pending sync and
     the UI does not imply current central truth while offline.
+27a. Still offline, try to mark somebody on-site, add somebody to a shift, or
+     hand out a piece of equipment. Confirm each is refused where it stands with
+     a sentence naming the work — "Marking someone on-site needs a connection to
+     the node" and its siblings — and that nothing is queued for it. Attendance
+     queues and the rest does not, which is the line data/API 7.2 draws
+     (CLIENT-018).
 28. Record the queued operation UUID from the UI, local pending queue, or
     browser storage evidence before reconnecting.
 29. Reload the page while still offline.
@@ -262,9 +306,11 @@ rows, unauthorized actors are refused, and each successful export is audited.
     self check-in/out as default staff, and cannot correct hours.
 46. Confirm organizers do not automatically see all department attendance unless
     they also hold the documented department capability.
-47. Confirm this script did not require credit calculation, unscheduled shift
-    addition, equipment offline sync, incident creation, Field Report review,
-    PowerSync conflict repair UI, or direct God Mode attendance editing.
+47. Open the Planning Table and confirm the shift detail beside the chart shows
+    counts and hours only — no name, no roster, and no signup list (SLB-019).
+48. Confirm this script did not require credit calculation, equipment offline
+    sync, incident creation, Field Report review, PowerSync conflict repair UI,
+    or direct God Mode attendance editing.
 
 ### H. Actual hours worked export (M13.4)
 
@@ -344,6 +390,13 @@ froze, so run it after those sections rather than on a freshly seeded database.
   department/event.
 - Department Logistics can check staff out from the selected staff workspace and
   supply actual start/end times during check-out.
+- Department Logistics can mark eligible staff on-site and off-site, and add an
+  on-site staff member to a started shift they were not assigned to, both through
+  the node rather than in the browser.
+- Presence, shift addition, and equipment handoff are refused where they stand
+  when the node is unreachable, while check-in, check-out, and no-show queue.
+- The Planning Table shows aggregates only, with no staff identity anywhere on
+  it.
 - Check-out creates one canonical `hours_worked` record tied to event,
   department, shift, staff, and attendance record, with computed minutes from
   actual times rather than scheduled duration.
@@ -403,6 +456,13 @@ froze, so run it after those sections rather than on a freshly seeded database.
   and file a blocking SLB-005 / HOURS-001 through HOURS-006 issue.
 - If edited actual times during check-out are ignored, stop and file an SLB-006
   issue.
+- If a desk action changes what is on screen without the node recording it, stop
+  and file a blocking CLIENT-023 issue: a surface that reports work it did not
+  send is the failure this milestone exists to end.
+- If presence, shift addition, or equipment handoff is queued rather than refused
+  while offline, stop and file a blocking CLIENT-018 issue.
+- If any staff name appears on the Planning Table, stop and file a blocking
+  SLB-019 issue.
 - If correction lacks authorization, before/after audit, or updated minutes, stop
   and file an SLB-007 / HOURS-007 issue.
 - If frozen hours can be corrected, stop and file a HOURS-008 issue.

@@ -34,7 +34,21 @@ export interface OfflineAttendanceOperation {
   readonly staffId: string;
   readonly createdByUserId: string;
   readonly originDeviceId: string;
-  readonly originNodeId: string;
+  /**
+   * The node this operation originated at, when the device knows one.
+   *
+   * Null from a browser: nothing publishes a node id, deliberately, so the
+   * client names the device it was written on and lets the node that receives
+   * the command record itself as the origin (M16.21). A caller replaying an
+   * operation that came from somewhere else still names that node.
+   */
+  readonly originNodeId: string | null;
+  /**
+   * When the device recorded the operation — and, for a check-in, the time the
+   * record is stamped with, because `AttendanceCheckInService` reads it as the
+   * arrival. The Logistics Window's dialog is therefore editing this field when
+   * an operator adjusts the check-in time.
+   */
   readonly deviceCreatedAt: string;
   readonly actualStartedAt: string | null;
   readonly actualEndedAt: string | null;
@@ -51,9 +65,11 @@ export interface CreateOfflineAttendanceOperationInput {
   readonly staffId: string;
   readonly createdByUserId: string;
   readonly originDeviceId: string;
-  readonly originNodeId: string;
+  readonly originNodeId?: string | null;
   readonly teamId?: string | null;
   readonly shiftAssignmentId?: string | null;
+  /** Overrides "now" when the operator is recording a time that has passed. */
+  readonly deviceCreatedAt?: string | null;
   readonly actualStartedAt?: string | null;
   readonly actualEndedAt?: string | null;
 }
@@ -78,7 +94,6 @@ const REQUIRED_ID_FIELDS: readonly (keyof CreateOfflineAttendanceOperationInput)
     "staffId",
     "createdByUserId",
     "originDeviceId",
-    "originNodeId",
   ];
 
 function defaultGenerateId(): string {
@@ -152,7 +167,9 @@ export function createOfflineAttendanceOperation(
   const generateId = dependencies.generateId ?? defaultGenerateId;
   const now = dependencies.now ?? (() => new Date());
   const operationUuid = requireNonEmpty(generateId(), "operationUuid");
-  const deviceCreatedAt = now().toISOString();
+  const deviceCreatedAt = input.deviceCreatedAt
+    ? requireIsoTimestamp(input.deviceCreatedAt, "deviceCreatedAt")
+    : now().toISOString();
 
   let actualStartedAt: string | null = null;
   let actualEndedAt: string | null = null;
@@ -190,7 +207,7 @@ export function createOfflineAttendanceOperation(
     staffId: input.staffId,
     createdByUserId: input.createdByUserId,
     originDeviceId: input.originDeviceId,
-    originNodeId: input.originNodeId,
+    originNodeId: normalizeOptionalId(input.originNodeId),
     deviceCreatedAt,
     actualStartedAt,
     actualEndedAt,

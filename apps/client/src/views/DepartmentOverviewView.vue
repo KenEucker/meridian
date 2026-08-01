@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import ContentGrid from "@/components/ContentGrid.vue";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
 import ShiftSelector from "@/components/department-ops/ShiftSelector.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
-import { LOCAL_DEPARTMENT_OVERVIEW } from "@/department-ops/fixtures";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   attendanceStateLabel,
   formatTimestamp,
@@ -15,32 +15,96 @@ import {
 import {
   checkedInAssignments,
   deploymentLabel,
+  getDepartmentOverview,
   overviewSummary,
-  selectOverviewShift,
-  selectedShift,
-} from "@/department-ops/overview";
+  type DepartmentOverviewRead,
+} from "@/department-ops/departmentOpsReadModel";
 
+/**
+ * Department Overview (SLB-001, SLB-002; bound to the node in M16.21).
+ *
+ * One read fills the page, and selecting a shift is another one rather than a
+ * filter over what is already here: the exceptions, the checked-in list, and the
+ * counts are all answers about the selected shift, so they come from the node
+ * together and cannot disagree with each other.
+ */
 const route = useRoute();
-const overview = ref(LOCAL_DEPARTMENT_OVERVIEW);
-const shift = computed(() => selectedShift(overview.value));
-const summary = computed(() => overviewSummary(overview.value));
-const checkedIn = computed(() => checkedInAssignments(overview.value));
-const routeParams = computed(() => ({
-  eventId: String(route.params.eventId ?? overview.value.context.eventId),
-  departmentId: String(
-    route.params.departmentId ?? overview.value.context.departmentId,
-  ),
-}));
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
 
-function onShiftChange(shiftId: string): void {
-  overview.value = selectOverviewShift(overview.value, shiftId);
+const overview = ref<DepartmentOverviewRead | null>(null);
+const loadError = ref<string | null>(null);
+
+const shift = computed(
+  () =>
+    overview.value?.shifts.find(
+      (candidate) => candidate.shiftId === overview.value?.selectedShiftId,
+    ) ?? null,
+);
+const summary = computed(() =>
+  overview.value === null
+    ? {
+        assignmentCount: 0,
+        checkedInCount: 0,
+        onSiteCount: 0,
+        equipmentOutCount: 0,
+      }
+    : overviewSummary(overview.value),
+);
+const checkedIn = computed(() =>
+  overview.value === null ? [] : checkedInAssignments(overview.value),
+);
+const routeParams = computed(() => ({
+  eventId: eventId.value,
+  departmentId: departmentId.value,
+}));
+const departmentLabel = computed(
+  () => overview.value?.context.departmentLabel ?? "Department",
+);
+const timeZone = computed(() => overview.value?.context.timeZone ?? "UTC");
+
+/**
+ * Read the overview for a shift, or for whichever one the node picks.
+ *
+ * A failed read clears the page rather than leaving the last shift on screen: a
+ * department whose overview could not be read must not look like a department
+ * with nothing happening in it.
+ */
+async function loadOverview(shiftId: string | null = null): Promise<void> {
+  if (eventId.value === "" || departmentId.value === "") {
+    overview.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    overview.value = await getDepartmentOverview(
+      eventId.value,
+      departmentId.value,
+      shiftId,
+    );
+  } catch (error) {
+    overview.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load this department's overview. Check the connection to this node and try again.",
+    );
+  }
 }
+
+watch([eventId, departmentId], () => {
+  void loadOverview();
+});
+
+void loadOverview();
 </script>
 
 <template>
   <DeptOpsShell
     title="Department Overview"
-    :eyebrow="overview.context.departmentLabel"
+    :eyebrow="departmentLabel"
     lede="Lead situational awareness for the selected shift."
   >
     <template #nav>
@@ -49,26 +113,17 @@ function onShiftChange(shiftId: string): void {
 
     <template #navigation>
       <RouterLink
-        :to="{
-          name: overview.drillThrough.logisticsRouteName,
-          params: routeParams,
-        }"
+        :to="{ name: 'events.departments.logistics', params: routeParams }"
       >
         Open Logistics Window
       </RouterLink>
       <RouterLink
-        :to="{
-          name: overview.drillThrough.operationsRouteName,
-          params: routeParams,
-        }"
+        :to="{ name: 'events.departments.operations', params: routeParams }"
       >
         Open Operations Center
       </RouterLink>
       <RouterLink
-        :to="{
-          name: overview.drillThrough.planningRouteName,
-          params: routeParams,
-        }"
+        :to="{ name: 'events.departments.planning', params: routeParams }"
       >
         Open Planning Table
       </RouterLink>
@@ -95,25 +150,40 @@ function onShiftChange(shiftId: string): void {
       </WorkflowHeadingCardGrid>
     </template>
 
-    <ShiftSelector
-      :shifts="overview.shifts"
-      :model-value="overview.selectedShiftId"
-      :time-zone="overview.context.timeZone"
-      @update:model-value="onShiftChange"
-    />
-
-    <p v-if="shift" class="overview__window" aria-label="Selected shift window">
-      {{ formatTimestamp(shift.startsAt, overview.context.timeZone) }} -
-      {{ formatTimestamp(shift.endsAt, overview.context.timeZone) }}
+    <!--
+      A refusal is the node's own sentence, and an unreachable node is stated
+      rather than shown as a quiet shift. Nothing on this page is a write, so
+      there is nothing to queue.
+    -->
+    <p v-if="loadError" class="overview__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadOverview()">Try again</button>
     </p>
 
-    <!--
-      Overview keeps its documented content order — exceptions, then working
-      staff, then assignments, then summaries — while reading left to right and
-      top to bottom instead of straight down. A lead scanning for an exception
-      should not have to scroll past it to see who is on shift.
-    -->
-    <ContentGrid min="region" :stretch="false">
+    <template v-else-if="overview">
+      <ShiftSelector
+        v-if="overview.selectedShiftId"
+        :shifts="overview.shifts"
+        :model-value="overview.selectedShiftId"
+        :time-zone="timeZone"
+        @update:model-value="(shiftId: string) => loadOverview(shiftId)"
+      />
+      <p v-else class="overview__window" role="status">
+        No shifts are scheduled for this department in the current window.
+      </p>
+
+      <p v-if="shift" class="overview__window" aria-label="Selected shift window">
+        {{ formatTimestamp(shift.startsAt, timeZone) }} -
+        {{ formatTimestamp(shift.endsAt, timeZone) }}
+      </p>
+
+      <!--
+        Overview keeps its documented content order — exceptions, then working
+        staff, then assignments, then summaries — while reading left to right and
+        top to bottom instead of straight down. A lead scanning for an exception
+        should not have to scroll past it to see who is on shift.
+      -->
+      <ContentGrid min="region" :stretch="false">
       <section aria-labelledby="exceptions-heading" class="overview__section">
         <h2 id="exceptions-heading">Exceptions needing attention</h2>
         <p v-if="overview.exceptions.length === 0" role="status">
@@ -141,7 +211,7 @@ function onShiftChange(shiftId: string): void {
             <span>{{ member.displayName }}</span>
             <span>
               {{ attendanceStateLabel(member.attendanceState) }} /
-              {{ deploymentLabel(overview, member.currentDeploymentId) }}
+              {{ deploymentLabel(overview.deployments, member.currentDeploymentId) }}
             </span>
           </li>
         </ul>
@@ -168,7 +238,7 @@ function onShiftChange(shiftId: string): void {
                 <td>{{ member.teamLabel }}</td>
                 <td>{{ attendanceStateLabel(member.attendanceState) }}</td>
                 <td>
-                  {{ deploymentLabel(overview, member.currentDeploymentId) }}
+                  {{ deploymentLabel(overview.deployments, member.currentDeploymentId) }}
                 </td>
               </tr>
             </tbody>
@@ -194,7 +264,8 @@ function onShiftChange(shiftId: string): void {
           </li>
         </ul>
       </section>
-    </ContentGrid>
+      </ContentGrid>
+    </template>
   </DeptOpsShell>
 </template>
 
@@ -202,6 +273,19 @@ function onShiftChange(shiftId: string): void {
 .overview__window {
   margin: 0 0 var(--m-space-5);
   color: var(--m-text-muted);
+}
+
+.overview__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0 0 var(--m-space-5);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .overview__section {

@@ -33,8 +33,13 @@ export function attendanceCommandPayload(
     staff_id: operation.staffId,
     device_created_at: operation.deviceCreatedAt,
     origin_device_id: operation.originDeviceId,
-    origin_node_id: operation.originNodeId,
   };
+
+  // Omitted rather than sent null when the device knows no node: the node that
+  // receives the command records itself as the origin (M16.21).
+  if (operation.originNodeId !== null) {
+    body.origin_node_id = operation.originNodeId;
+  }
 
   if (operation.operationType === "check_out") {
     body.actual_started_at = operation.actualStartedAt;
