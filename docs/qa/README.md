@@ -124,6 +124,19 @@ QA gate.
 |---|---|---|
 | [`QA-STAFF-02-staff-me-and-event-info.md`](QA-STAFF-02-staff-me-and-event-info.md) | Staff Me role-aware event routing, the team-lead Team Overview handoff and its fail-closed behavior, Event Info assembled from visible published documents with explicit empty sections instead of placeholders, the combined Staff/Workflows shell menu, and the mobile-first staff page template for reader views | M11.20 |
 
+## Alpha 1 Client session and API wiring script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-CLIENT-01-session-and-api-wiring.md`](QA-CLIENT-01-session-and-api-wiring.md) | The whole Milestone 16 client path in one sitting: a client holding nothing sent to sign in, `GET /api/me` establishing the session and carrying codes rather than navigation, five shells derived from five session responses, the server still refusing what the client hid, cached permissions bounded by the event window with reduction on refresh, boot from the cache with the node stopped, association-bounded context switching that is absent offline and under a node lock, one command outbox with client-generated idempotency keys and connected-only refusals, downloads through short-lived scoped URLs, a revoked token seen from the client, and every bound surface reading the node instead of a fixture | M16.23 |
+
+The credential half of Milestone 16 — token issuance, device binding, God Mode
+revocation, and shared-workstation login codes and sessions — stays in
+`QA-AUTH-01`, which `QA-CLIENT-01` signs in through rather than repeating.
+`QA-CLIENT-01` turns `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` off first:
+with the development session fixture installed, a populated shell proves nothing
+about session wiring.
+
 ## Alpha 1 Node sync script
 
 | ID | Coverage | Owning task |
