@@ -47,6 +47,7 @@ import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
+import OrganizerCredentialsView from "@/views/OrganizerCredentialsView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
@@ -423,6 +424,16 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/departments/:departmentId/edit",
     name: "organizer.departments.edit",
     component: OrganizerDepartmentEditView,
+  },
+  /*
+   * Event credential administration (UI contract 12.6). Alpha 1 reaches it for
+   * the credential eligibility export entry point (M16.22); revocation lands on
+   * the same surface with M18.5.
+   */
+  {
+    path: "/organizer/credentials",
+    name: "organizer.credentials.index",
+    component: OrganizerCredentialsView,
   },
   {
     path: "/organizer/branding",

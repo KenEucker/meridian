@@ -38,6 +38,7 @@ import {
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
   CAPABILITY_POLICIES_VIEW_PUBLISHED,
+  CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
   ROLE_DEPARTMENT_LEAD,
   ROLE_SHIFT_LEAD,
 } from "@/session/permissionCodes";
@@ -523,6 +524,25 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         label: "Departments",
         description: "Organizer department administration.",
         to: { name: "organizer.departments.index" },
+      });
+    }
+
+    /*
+     * The reporting export entry point (M16.22; REPORT-001). Permitted by the
+     * export capability rather than by an organizer role: a department lead
+     * holds it too and exports their own department, which is REPORT-007 and is
+     * the node's decision to make either way.
+     */
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
+      )
+    ) {
+      organizationPages.push({
+        label: "Credentials",
+        description: "Event credential eligibility export.",
+        to: { name: "organizer.credentials.index" },
       });
     }
 

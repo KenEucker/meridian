@@ -209,14 +209,15 @@ Run this section after section A so at least one Eligible credential exists. A f
     ```
 46. Confirm one audit event per export with the acting user, the event, a `scope` of `event` or `department`, and a `row_count` matching the file.
 47. Optional HTTP check when a browser session is available for Olive (log in with `QA-AUTH-01`): download `/api/events/{event id}/exports/credential-eligibility` and confirm the browser saves a `.csv` attachment. Add `?department_id={department id}` to narrow an organizer export to one department, and confirm a department id from another organization returns 404.
+48. Optional product surface check (M16.22), when a client is running and Olive can sign in to it: open Credentials from the home directory's Organization pages, confirm the page names the event, states that an organizer exports every department while a department role exports its own, and lists the excluded fields and the columns before anything is generated. Press `Export CSV` and confirm the file that saves is the same file section G produced. Sign in as Ira Ineligible and confirm no Credentials entry appears anywhere in navigation, and that opening `/organizer/credentials` directly states that the export requires authority rather than offering a button. Take the device offline as Olive and confirm the export button is disabled with a stated reason rather than queueing.
 
 ### H. Explicit non-goals for this script
 
-48. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
-49. Confirm physical credential issuance is out of scope.
-50. Confirm recorded hours preservation is noted as deferred to Milestone 10 once hours records exist; this script only verifies completed shift assignments remain active after revocation.
-51. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
-52. Confirm the credential eligibility export in section G is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).
+49. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
+50. Confirm physical credential issuance is out of scope.
+51. Confirm recorded hours preservation is noted as deferred to Milestone 10 once hours records exist; this script only verifies completed shift assignments remain active after revocation.
+52. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
+53. Confirm the credential eligibility export in section G is server-generated and online-only, that its product entry point (`organizer.credentials`, M16.22) runs that one export and offers no credential revocation, which is M18.5, and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).
 
 ## Expected results
 
@@ -232,6 +233,7 @@ Run this section after section A so at least one Eligible credential exists. A f
 - Organizers export the whole event; department leads export only their own department; IC roles resolve no export scope.
 - No phone number, emergency contact, or date of birth appears in the export.
 - Every successful export writes one `event_credential_eligibility.exported` audit event naming the actor, event, scope, and row count.
+- The `organizer.credentials` entry point states the scope and the excluded fields before generating, downloads through a short-lived scoped link, is absent for a user holding no export capability, and refuses rather than queues while the device is offline.
 - No physical credential issuance, Orchid/API UI, offline sync, or hours-record preservation beyond completed assignments is required for this Alpha 1 QA gate.
 
 ## Evidence to capture
@@ -247,6 +249,7 @@ Run this section after section A so at least one Eligible credential exists. A f
 - IC lead revocation evidence for Sam.
 - Unscheduled vs planned assignment counting evidence.
 - The saved organizer export file, plus the department-scoped export output and its filename.
+- If the optional surface check ran: the Credentials page showing its scope and exclusions, and the file it downloaded.
 - Sensitive-field check output showing all four values false.
 - Denied export-scope output for the IC personas.
 - Export audit event output.
