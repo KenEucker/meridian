@@ -15,6 +15,11 @@
 // event switch and a shared-workstation session end run. Queued commands are not
 // context data — they are unsent work this device is the only copy of — and
 // technical spec 13.3 requires them to survive a session ending.
+//
+// What does not survive a session ending is a verdict. `discardSettledCommands`
+// is the seam sign-out calls: accepted and rejected commands are dropped and
+// unsent work is kept, so the next person to sign in on this device is not shown
+// the node's refusal of somebody else's Field Report.
 
 import { ref } from "vue";
 
@@ -46,6 +51,23 @@ export function notifyCommandOutbox(): void {
   commandOutbox.pruneAccepted(ACCEPTED_COMMAND_RETENTION);
   commandOutboxLocalStore.save(commandOutbox.all());
   commandOutboxRevision.value += 1;
+}
+
+/**
+ * Drop every command the node has already decided on, keeping unsent work.
+ *
+ * Run when a session ends, whichever way it ends: signing out of a personal
+ * device and a shared workstation locking are the same event as far as "the
+ * verdicts on this screen belong to the person who just left" is concerned.
+ */
+export function discardSettledCommands(): number {
+  const dropped = commandOutbox.dropSettled();
+
+  if (dropped > 0) {
+    notifyCommandOutbox();
+  }
+
+  return dropped;
 }
 
 /** Re-read the queue from durable storage (simulates a restart). */

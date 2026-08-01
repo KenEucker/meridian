@@ -87,7 +87,12 @@ export interface OfflineFieldReport {
   readonly deviceSubmittedAt: string;
   readonly serverReceivedAt: string | null;
   readonly originDeviceId: string;
-  readonly originNodeId: string;
+  /**
+   * The node this report originated at, when the device knows one. Null for a
+   * browser, which cannot learn a node id; the node that accepts the command
+   * records itself as the origin instead (M16.21, M16.22).
+   */
+  readonly originNodeId: string | null;
   readonly syncStatus: FieldReportSyncStatus;
   readonly createdAt: string;
   readonly appends: readonly OfflineFieldReportAppend[];
@@ -106,7 +111,12 @@ export interface CreateOfflineFieldReportInput {
   readonly submittedByUserId: string;
   readonly staffId: string;
   readonly originDeviceId: string;
-  readonly originNodeId: string;
+  /**
+   * The node this report originated at, when the device knows one. Null for a
+   * browser, which cannot learn a node id; the node that accepts the command
+   * records itself as the origin instead (M16.21, M16.22).
+   */
+  readonly originNodeId?: string | null;
   readonly title: string;
   readonly body: string;
   readonly departmentId?: string | null;
@@ -141,7 +151,6 @@ const REQUIRED_ID_FIELDS: readonly (keyof CreateOfflineFieldReportInput)[] = [
   "submittedByUserId",
   "staffId",
   "originDeviceId",
-  "originNodeId",
 ];
 
 function defaultGenerateId(): string {
@@ -293,7 +302,7 @@ export function createOfflineFieldReport(
     deviceSubmittedAt: submittedAt,
     serverReceivedAt: null,
     originDeviceId: input.originDeviceId,
-    originNodeId: input.originNodeId,
+    originNodeId: input.originNodeId ?? null,
     syncStatus: FIELD_REPORT_PENDING_SYNC,
     createdAt: submittedAt,
     appends: Object.freeze([] as OfflineFieldReportAppend[]),

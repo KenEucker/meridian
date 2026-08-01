@@ -126,6 +126,80 @@ class FieldReportCommandHttpTest extends TestCase
     }
 
     /**
+     * A browser cannot name the node a report came from, and does not have to.
+     *
+     * Nothing publishes a node id — deliberately — so the client omits the
+     * field and the node that receives the command records itself as the
+     * origin, exactly as the attendance commands have since M16.21. Before this,
+     * the only way a browser could satisfy the requirement was to send a node id
+     * out of a compiled-in fixture, which is how a signed-in operator ended up
+     * filing Field Reports against seeded identifiers their node had never
+     * heard of.
+     */
+    public function test_a_report_without_an_origin_node_is_recorded_against_this_node(): void
+    {
+        $reportId = (string) Str::uuid();
+
+        $this->postJson('/api/commands/submit-field-report', [
+            'id' => $reportId,
+            'event_id' => LocalFieldFixture::EVENT_ID,
+            'department_id' => null,
+            'team_id' => null,
+            'staff_id' => LocalFieldFixture::STAFF_ID,
+            'temporary_local_number' => 'LOCAL-HTTP0004',
+            'title' => 'Filed from a browser',
+            'body' => 'The receiving node is the origin node.',
+            'device_submitted_at' => '2027-07-04T13:20:00Z',
+            'origin_device_id' => LocalFieldFixture::DEVICE_ID,
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+        ])->assertCreated();
+
+        $report = FieldReport::query()->findOrFail($reportId);
+        $this->assertSame(LocalFieldFixture::NODE_ID, $report->origin_node_id);
+    }
+
+    /** The same for a photo, which travels on its own command. */
+    public function test_a_photo_without_an_origin_node_is_recorded_against_this_node(): void
+    {
+        $reportId = (string) Str::uuid();
+        $photoId = (string) Str::uuid();
+        $bytes = $this->createJpegBytes(48, 36);
+
+        $this->postJson('/api/commands/submit-field-report', [
+            'id' => $reportId,
+            'event_id' => LocalFieldFixture::EVENT_ID,
+            'department_id' => null,
+            'team_id' => null,
+            'staff_id' => LocalFieldFixture::STAFF_ID,
+            'temporary_local_number' => 'LOCAL-HTTP0005',
+            'title' => 'Filed from a browser with a photo',
+            'body' => 'The receiving node is the origin node.',
+            'device_submitted_at' => '2027-07-04T13:20:00Z',
+            'origin_device_id' => LocalFieldFixture::DEVICE_ID,
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+        ])->assertCreated();
+
+        $this->postJson('/api/commands/upload-field-report-photo', [
+            'id' => $photoId,
+            'field_report_id' => $reportId,
+            'origin_device_id' => LocalFieldFixture::DEVICE_ID,
+            'checksum_sha256' => hash('sha256', $bytes),
+            'declared_mime_type' => 'image/jpeg',
+            'device_uploaded_at' => '2027-07-04T13:22:10Z',
+            'bytes_base64' => base64_encode($bytes),
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+        ])->assertCreated();
+
+        $this->assertSame(
+            LocalFieldFixture::NODE_ID,
+            Attachment::query()->findOrFail($photoId)->origin_node_id,
+        );
+    }
+
+    /**
      * The team the client puts an on-shift author on resolves on the node.
      *
      * A report filed while checked into a shift carries that shift's team, so

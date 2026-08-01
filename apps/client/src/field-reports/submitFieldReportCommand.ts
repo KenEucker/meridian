@@ -12,7 +12,7 @@ import type { OfflineFieldReport } from "@/field-reports/offlineFieldReport";
 export function fieldReportCommandPayload(
   report: OfflineFieldReport,
 ): Readonly<Record<string, unknown>> {
-  return Object.freeze({
+  const payload: Record<string, unknown> = {
     id: report.id,
     event_id: report.eventId,
     department_id: report.departmentId,
@@ -23,6 +23,17 @@ export function fieldReportCommandPayload(
     body: report.body,
     device_submitted_at: report.deviceSubmittedAt,
     origin_device_id: report.originDeviceId,
-    origin_node_id: report.originNodeId,
-  });
+  };
+
+  /*
+   * Omitted rather than sent as null when the device does not know a node
+   * (M16.22). The node that receives the command records itself as the origin,
+   * which is right for every report a browser files; a report replayed from
+   * somewhere else names the node it actually came from.
+   */
+  if (report.originNodeId !== null) {
+    payload.origin_node_id = report.originNodeId;
+  }
+
+  return Object.freeze(payload);
 }
