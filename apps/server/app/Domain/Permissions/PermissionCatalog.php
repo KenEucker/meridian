@@ -86,6 +86,8 @@ final class PermissionCatalog
 
     public const PERMISSION_DEPARTMENT_TRAININGS_MANAGE = 'department.trainings.manage';
 
+    public const PERMISSION_ORGANIZATION_INCIDENT_TYPES_MANAGE = 'organization.incident_types.manage';
+
     public const PERMISSION_ORGANIZATION_BRANDING_MANAGE = 'organization.branding.manage';
 
     public const PERMISSION_DEPARTMENT_BRANDING_MANAGE = 'department.branding.manage';
@@ -157,6 +159,7 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'View identity-free Planning Table aggregates comparing plan versus actual.',
             self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer permitted department details and teams (team membership assignment remains a separate workflow).',
             self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE => 'Create and maintain department trainings, prerequisites, rosters, and completion records.',
+            self::PERMISSION_ORGANIZATION_INCIDENT_TYPES_MANAGE => 'Maintain the organization incident type list: add, rename, archive, and restore.',
             self::PERMISSION_ORGANIZATION_BRANDING_MANAGE => 'Edit the organization branding profile: display name, palette, logo assets, and the department override switch.',
             self::PERMISSION_DEPARTMENT_BRANDING_MANAGE => 'Edit the department branding profile: logo, accent color, and surface background color.',
             self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT => 'Export event credential eligibility; organizers export the whole event, department roles export their own department.',
@@ -274,6 +277,7 @@ final class PermissionCatalog
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
+                self::PERMISSION_ORGANIZATION_INCIDENT_TYPES_MANAGE,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
                 self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
@@ -286,6 +290,7 @@ final class PermissionCatalog
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_STAFF_MANAGE,
+                self::PERMISSION_ORGANIZATION_INCIDENT_TYPES_MANAGE,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
                 self::PERMISSION_ORGANIZATION_BRANDING_MANAGE,
                 self::PERMISSION_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,

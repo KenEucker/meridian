@@ -31,6 +31,7 @@ import { computed } from "vue";
 import { clientSessionState } from "@/session/clientSession";
 import {
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
+  CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
 } from "@/session/permissionCodes";
 import { selectedSessionDepartment } from "@/session/sessionAccess";
@@ -88,4 +89,9 @@ export const organizerDepartmentAdminSession = computed(() =>
 /** The organization whose staff this client may administer, or null. */
 export const organizerStaffAdminSession = computed(() =>
   resolveOrganizerAdminSession(CAPABILITY_ORGANIZATION_STAFF_MANAGE),
+);
+
+/** The organization whose incident types this client may maintain, or null. */
+export const organizerIncidentTypeAdminSession = computed(() =>
+  resolveOrganizerAdminSession(CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE),
 );
