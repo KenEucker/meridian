@@ -6,7 +6,9 @@ Verify Milestone 7 shift signup eligibility through the domain services that pow
 
 Section H additionally verifies the Milestone 13 shift roster export (M13.2): an organizer exports the whole event, a department lead exports only their own department, unauthorized actors are refused, phone numbers and emergency contacts never reach the file, an unstaffed shift still appears, a removed staff member does not, and each successful export is audited.
 
-Orchid/API/UI signup surfaces are not required for this script. Use the documented Laravel domain-service tinker commands until dedicated staff-facing screens exist.
+Section J verifies the Milestone 18 staff shift board (M18.2, SHIFT-018): the surface a staff member browses shifts and signs up from, the two commands behind it, and the property that matters most about both — that the reason a shift says it will not take somebody is the reason the command refuses with.
+
+Sections A through H are domain-service checks and need no signup screen. Section J is the screen, and needs a signed-in client.
 
 ## Requirements covered
 
@@ -21,6 +23,7 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - `SHIFT-014`
 - `SHIFT-015`
 - `SHIFT-016`
+- `SHIFT-018`
 - `TRAIN-008`
 - `WAIVER-005`
 - `REPORT-002`
@@ -31,7 +34,7 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
 - Requirements sections 3.11, 3.12, 5.5, 5.12, and 7.14
 - Data/API spec section 10.9
 - Technical spec section 22.2 (CSV export)
-- Meridian Alpha 1 tasks M7.4 through M7.8, M7.11, and M13.2
+- Meridian Alpha 1 tasks M7.4 through M7.8, M7.11, M13.2, and M18.2
 
 ## Environment
 
@@ -42,7 +45,9 @@ Orchid/API/UI signup surfaces are not required for this script. Use the document
   php artisan migrate:fresh --seed
   ```
 - Shell access from `apps/server` for tinker verification commands.
-- No staff-facing shift signup UI is required for this script.
+- Sections A through H need no staff-facing signup UI.
+- Section J needs the client running against the seeded node with a signed-in
+  device (`corepack pnpm run client:dev`, signed in per `QA-AUTH-01`).
 
 ## Personas
 
@@ -214,12 +219,65 @@ Run this section after sections A through G so the event carries a staffed shift
 47. Confirm one audit event per export with the acting user, the event, a `scope` of `event` or `department`, and a `row_count` matching the file.
 48. Optional HTTP check when a browser session is available for Olive (log in with `QA-AUTH-01`): download `/api/events/{event id}/exports/shift-roster` and confirm the browser saves a `.csv` attachment. Add `?department_id={department id}` to narrow an organizer export to one department, and confirm a department id from another organization returns 404.
 
+### J. Staff shift board and self-service commands (M18.2)
+
+Run this section after sections A through G, which leave the seeded event with a
+shift Vera is eligible for and one she is not.
+
+49. Confirm the board and the command give the same answer for the same shift.
+    Close the morning shift's signup window, then ask the board's evaluation and
+    the command in turn:
+    ```bash
+    php artisan tinker --execute='$shift = App\Models\Shift::query()->where("title", "QA SHIFT Eligibility Morning")->latest("created_at")->firstOrFail(); app(App\Services\Shift\ShiftRequirementService::class)->setSignupWindow($shift, now()->subDays(7), now()->subDay()); $user = App\Models\User::query()->where("email", "vera.staff@idaho-burners.test")->firstOrFail(); $staff = $user->staffProfiles()->firstOrFail(); $verdict = app(App\Services\Shift\ShiftSignupService::class)->evaluateSignup($shift->refresh(), $staff, $user); try { app(App\Services\Shift\ShiftSignupService::class)->signUp($shift->refresh(), $staff, $user); $refusal = "UNEXPECTED_SUCCESS"; } catch (App\Services\Shift\ShiftSignupException $e) { $refusal = $e->getMessage(); } print(json_encode(["board_eligible" => $verdict->eligible, "board_reason_code" => $verdict->reasonCode, "board_reason" => $verdict->message, "command_refusal" => $refusal], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+50. Confirm `board_eligible` is false and `board_reason` and `command_refusal`
+    are the same sentence. A board that says something different from what the
+    command does is the failure this surface exists to prevent.
+51. Reopen the signup window before continuing:
+    ```bash
+    php artisan tinker --execute='$shift = App\Models\Shift::query()->where("title", "QA SHIFT Eligibility Morning")->latest("created_at")->firstOrFail(); app(App\Services\Shift\ShiftRequirementService::class)->setSignupWindow($shift, null, null); print("signup window cleared\n");'
+    ```
+52. Sign in to the client as Vera and open **Shifts** from the Staff menu.
+    Confirm the shift board lists the QA shifts for the departments Vera belongs
+    to, each showing its window, department and team, and how many people are
+    signed up.
+53. Confirm a shift Vera may take shows **Open** with a **Sign up** control, and
+    that a shift she may not shows **Unavailable** with the node's reason
+    printed and **no** signup control at all — absent, not greyed out.
+54. Press **Sign up** on the open shift. Confirm the row becomes **Signed up**,
+    the signed-up count goes up by one, and a **Withdraw** control replaces
+    **Sign up**.
+55. Confirm the overlapping afternoon shift from section F still offers **Sign
+    up** and shows the overlap sentence naming the shift it clashes with. Take
+    it, and confirm the page reports the overlap alongside a signup that
+    happened rather than instead of one.
+56. Press **Withdraw** on one of them and confirm the row returns to **Open**
+    and the count goes back down.
+57. Lock the schedule on a shift Vera holds:
+    ```bash
+    php artisan tinker --execute='$shift = App\Models\Shift::query()->where("title", "QA SHIFT Eligibility Morning")->latest("created_at")->firstOrFail(); app(App\Services\Shift\ShiftRequirementService::class)->setScheduleLock($shift, now()->subMinute()); print("locked\n");'
+    ```
+58. Reload the board. Confirm the shift still reads **Signed up** — being on a
+    shift survives the cutoff — and that the **Withdraw** control is gone with
+    the locked-schedule sentence in its place.
+59. Put the device into airplane mode, or stop the node, and reload the board.
+    Confirm the page states that signing up and withdrawing need a connection,
+    the controls are closed, and nothing is queued for later: signup is not one
+    of the Alpha 1 offline writes.
+60. Confirm the audit trail carries the work done from the screen:
+    ```bash
+    php artisan tinker --execute='App\Models\AuditEvent::query()->whereIn("action", ["shift_assignment.signed_up", "shift_assignment.withdrawn"])->latest("created_at")->take(5)->get(["action", "actor_user_id", "event_id", "department_id", "source_context"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+    ```
+61. Confirm each signup and withdrawal from the board wrote an audit event
+    attributed to Vera.
+
 ### I. Explicit non-goals for this script
 
-49. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or PowerSync operations.
-50. Confirm unscheduled shift additions during live operations are out of scope here and belong to Milestone 10 / `QA-SLB-01`.
-51. Confirm credential eligibility recalculation after signup/removal is verified in `QA-CRED-01-credential-eligibility.md`, not as a duplicate pass/fail gate in this script.
-52. Confirm the shift roster export in section H is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.3 through M13.9 (`QA-EXPORT-01`).
+62. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or PowerSync operations.
+63. Confirm unscheduled shift additions during live operations are out of scope here and belong to Milestone 10 / `QA-SLB-01`.
+64. Confirm credential eligibility recalculation after signup/removal is verified in `QA-CRED-01-credential-eligibility.md`, not as a duplicate pass/fail gate in this script.
+65. Confirm the shift roster export in section H is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.3 through M13.9 (`QA-EXPORT-01`).
+66. Confirm lead removal from a surface is still out of scope here: section J covers a staff member's own signup and withdrawal, and the lead's removal control belongs to the department operations binding in M18.8.
 
 ## Expected results
 
@@ -235,7 +293,13 @@ Run this section after sections A through G so the event carries a staffed shift
 - Organizers export the whole event; department leads export only their own department; staff on a roster and IC roles resolve no export scope.
 - No phone number or emergency contact appears in the export.
 - Every successful export writes one `event_shift_roster.exported` audit event naming the actor, event, scope, and row count.
-- No Orchid/API/UI signup surface, offline queue, or unscheduled operational add is required for this Alpha 1 QA gate.
+- The shift board offers every shift in the staff member's departments for the event, states the node's reason for each one it will not take them, and offers no control at all on those.
+- The board's reason and the command's refusal are the same sentence for the same shift.
+- Signing up and withdrawing from the board change the row and the signed-up count on the next read, and each writes its own audit event.
+- Overlap appears on the board as a warning beside a shift that is still offered, and again alongside a signup that succeeded.
+- A shift someone holds still reads as signed up after the schedule locks, with withdrawal closed rather than the shift disappearing.
+- Signup and withdrawal are refused while the device has no connection rather than queued.
+- No Orchid signup surface, offline queue, or unscheduled operational add is required for this Alpha 1 QA gate.
 
 ## Evidence to capture
 
@@ -252,6 +316,10 @@ Run this section after sections A through G so the event carries a staffed shift
 - Sensitive-field check output showing all three values false.
 - Denied export-scope output for the staff and IC personas.
 - Roster export audit event output.
+- The board-versus-command comparison output from section J, showing the same sentence twice.
+- Screenshots of the shift board: a shift offered, a shift refused with its reason and no control, an overlap warning, and a signed-up shift after the schedule locked.
+- The offline state of the board with its controls closed.
+- Audit output for signups and withdrawals made from the screen.
 
 ## Failure notes
 
@@ -262,6 +330,11 @@ Run this section after sections A through G so the event carries a staffed shift
 - If overlap hard-blocks self-signup by default, stop and file a SHIFT-014 issue.
 - If a department lead cannot assign an overlapping shift, stop and file a SHIFT-015 issue.
 - If self-service changes remain allowed after schedule lock, or lead removal is blocked after lock, stop and file a SHIFT-009 / SHIFT-013 issue.
+- If the shift board's reason for refusing a shift differs from the command's refusal, stop and file a blocking SHIFT-018 issue; two rule sets is the failure this surface is built to avoid.
+- If a shift the board offers is refused by the command, or a shift it refuses is accepted, stop and file a blocking SHIFT-018 issue.
+- If the board renders a disabled signup control instead of no control on a shift somebody may not take, file a CLIENT-005 issue.
+- If a signup or withdrawal is queued while the device is offline rather than refused, stop and file a blocking CLIENT-018 / data/API 7.2 issue.
+- If a shift somebody holds stops reading as signed up once the schedule locks, file a blocking SHIFT-018 issue: the cutoff closes withdrawal, not the fact of the assignment.
 - If this script appears to require Orchid shift UI, public API clients, offline sync, or unscheduled operational adds, stop and report scope leakage; those surfaces are deferred.
 - If the roster export carries a phone number or emergency contact, stop and file a blocking REPORT-008 / REPORT-010 issue.
 - If a department lead export returns another department's shifts, or a plain staff member resolves an export scope, stop and file a blocking REPORT-006 / REPORT-007 issue.

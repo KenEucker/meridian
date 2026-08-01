@@ -1219,7 +1219,7 @@ Organization and event selection are connected-only. A client resolves its conte
 | `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
 | `staff.profile-edit` | `staff.profile.edit` | Edit own preferred name, phone, and city/state; change own handle; submit or remove own profile picture | Authenticated staff |
 | `staff.profile-requests` | `staff.profile.requests` | State of own handle and profile picture change requests, remaining self-service handle changes, and decisions already made | Authenticated staff |
-| `staff.shifts` | `staff.shifts.index` | My shifts | Staff with event access |
+| `staff.shifts` | `staff.shifts.index` | Shift board: the shifts in this event a staff member may take, the ones they are on, and why an unavailable one is unavailable (SHIFT-018) | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
 | `event.info` | `events.info` | Staff-safe event information assembled from visible published documents for directions, arrival requirements, packing, food, housing, and event requirements | Staff with event access |
 | `staff.field-reports` | `staff.field-reports.index` | My Field Reports | Authenticated author |

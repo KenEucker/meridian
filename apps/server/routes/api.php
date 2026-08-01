@@ -36,6 +36,8 @@ use App\Http\Controllers\Session\SessionController;
 use App\Http\Controllers\Shifts\ShiftAdminCommandController;
 use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Shifts\ShiftAssignmentCommandController;
+use App\Http\Controllers\Shifts\ShiftBoardReadController;
+use App\Http\Controllers\Shifts\ShiftSignupCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
 use App\Http\Controllers\Teams\TeamCommandController;
@@ -230,6 +232,18 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/add-staff-to-shift', [ShiftAssignmentCommandController::class, 'addUnscheduledStaff'])
         ->name('api.commands.add-staff-to-shift');
+
+    /*
+     * Staff self-service on their own schedule (M18.2; SHIFT-011, SHIFT-013,
+     * SHIFT-018). The neighbours above act on somebody else and are authorized
+     * accordingly; these two act on the caller's own staff profile, which is
+     * what the services check rather than a role.
+     */
+    Route::post('/commands/sign-up-for-shift', [ShiftSignupCommandController::class, 'signUp'])
+        ->name('api.commands.sign-up-for-shift');
+
+    Route::post('/commands/withdraw-from-shift', [ShiftSignupCommandController::class, 'withdraw'])
+        ->name('api.commands.withdraw-from-shift');
 
     Route::post('/commands/checkout-equipment', [EquipmentCommandController::class, 'checkout'])
         ->name('api.commands.checkout-equipment');
@@ -505,6 +519,14 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/info', [EventInfoReadController::class, 'show'])
         ->name('api.events.info');
+
+    /*
+     * The staff shift board (M18.2; SHIFT-018). Event-scoped and self-scoped at
+     * once: the event is in the path, and who the board is about is the caller's
+     * own staff profiles rather than anything the request may name.
+     */
+    Route::get('/events/{event}/shift-board', [ShiftBoardReadController::class, 'index'])
+        ->name('api.events.shift-board');
 
     /*
      * The department operations surfaces (SLB-001 through SLB-022; technical

@@ -177,9 +177,9 @@ describe("navigation without a permitting capability", () => {
     expect(useStaffLinks().value.map((link) => link.label)).toEqual([
       "Me",
       "Event Info",
+      "Shifts",
       "My Field Reports",
       "Documents",
-      "Shifts",
       "Trainings",
     ]);
     expect(sectionLabels("Device")).toEqual(["Readiness", "Health"]);

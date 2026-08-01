@@ -80,8 +80,14 @@ export type NavigationSection = {
  * Below this many total nav items, two dropdowns cost more than they organize:
  * the reader has to guess which menu holds the page instead of reading one
  * short list. At or above it, the split earns its keep.
+ *
+ * Calibrated one item above the fullest role a session carries — a department
+ * lead holding every department capability — so the person with the most to
+ * reach still reads one list. It moved from ten to eleven when the shift board
+ * joined the personal pages (M18.2), because that lead gained a page rather
+ * than gaining a reason to hunt through two menus.
  */
-export const COMBINED_NAVIGATION_MAX_ITEMS = 10;
+export const COMBINED_NAVIGATION_MAX_ITEMS = 11;
 
 /**
  * The event the interface is currently working in, or null when the session
@@ -250,11 +256,11 @@ function imsDirectoryLinks(
  * The Staff menu: the pages that belong to the person rather than to a
  * workflow.
  *
- * Me is always here for a signed-in user, and Event Info sits next to it
- * whenever the session resolved an event. My Field Reports belongs here too:
- * authoring a Field Report is something a person does, not something a
+ * Me is always here for a signed-in user, and Event Info and the shift board sit
+ * next to it whenever the session resolved an event. My Field Reports belongs
+ * here too: authoring a Field Report is something a person does, not something a
  * department workflow owns, and every role can do it. Leads stop there, because
- * their Documents/Shifts/Trainings pages are reached from inside the Admin and
+ * their Documents and Trainings pages are reached from inside the Admin and
  * Planning workflows they already work out of; members get those pages here,
  * since they have no workflow to reach them from.
  */
@@ -277,14 +283,34 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
     ];
 
     if (eventContext.value) {
-      links.push({
-        label: "Event Info",
-        description: "Directions, arrival, packing, food, and housing.",
-        to: {
-          name: "events.info",
-          params: { eventId: eventContext.value.eventId },
+      links.push(
+        {
+          label: "Event Info",
+          description: "Directions, arrival, packing, food, and housing.",
+          to: {
+            name: "events.info",
+            params: { eventId: eventContext.value.eventId },
+          },
         },
-      });
+        /*
+         * The shift board (M18.2; SHIFT-018). A personal page rather than a
+         * department one, and event-scoped rather than department-scoped:
+         * somebody who works two departments at an event signs up across both
+         * from one screen, and which departments are on it is the node's answer
+         * from their own memberships.
+         *
+         * This is where a member's Shifts entry now leads. The department shift
+         * list it replaced showed the same schedule and could do nothing with
+         * it; leads still reach that list from the Admin workflow, where
+         * creating and editing shifts lives.
+         */
+        {
+          label: "Shifts",
+          pageLabel: "Shift Board",
+          description: "Shifts you can take, and the ones you are already on.",
+          to: { name: "staff.shifts.index" },
+        },
+      );
     }
 
     links.push({
@@ -307,11 +333,6 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
         label: "Documents",
         description: "Policies and procedures published to your department.",
         to: { name: "events.departments.documents.index", params },
-      },
-      {
-        label: "Shifts",
-        description: "Shifts your teams are eligible for.",
-        to: { name: "events.departments.shifts.index", params },
       },
       {
         label: "Trainings",
