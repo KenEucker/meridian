@@ -210,6 +210,22 @@ describe("shared ui tokens contract", () => {
     }
   });
 
+  /*
+   * A forced theme must also force `color-scheme`, or the browser paints the
+   * parts of a control the page does not — the option list a `<select>` opens,
+   * date pickers, scrollbars — from the OS preference while the tokens come
+   * from the chosen theme. On an OS set to light that produced a white option
+   * list carrying dark-theme near-white text.
+   */
+  it("binds color-scheme to each explicitly chosen theme", () => {
+    expect(tokensCss).toMatch(
+      /\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark;/u,
+    );
+    expect(tokensCss).toMatch(
+      /\[data-theme="light"\]\s*\{[^}]*color-scheme:\s*light;/u,
+    );
+  });
+
   it("stays byte-identical to the admin (server) mirror copy", () => {
     const mirror = readFileSync(serverMirrorPath, "utf-8");
     expect(mirror).toBe(tokensCss);

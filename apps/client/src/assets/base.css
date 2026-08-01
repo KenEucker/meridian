@@ -6,8 +6,20 @@
   box-sizing: border-box;
 }
 
-:root {
+/*
+ * Only until a theme is chosen.
+ *
+ * The shell writes `data-theme` on its first paint and the token file binds
+ * `color-scheme` to that choice, so this is the pre-mount default and nothing
+ * more. Left unqualified it outranked the token rules on source order — same
+ * specificity, later file — and every client got UA chrome from the OS
+ * preference while its tokens came from the chosen theme.
+ */
+:root:not([data-theme]) {
   color-scheme: light dark;
+}
+
+:root {
   --m-content-narrow: min(80vw, 40rem);
   --m-content-wide: min(80vw, 64rem);
 
@@ -96,6 +108,24 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/*
+ * The list a `<select>` opens is painted by the browser, not by the page, and
+ * several of ours set the control itself to `transparent` so it can sit inside
+ * a bordered field row. `color-scheme` above is what tells the browser which
+ * theme to paint that list in, and in Chromium it is enough on its own; other
+ * engines keep a light default for the rows unless each one carries a color of
+ * its own. Both are stated so the open list is readable everywhere rather than
+ * only where the first mechanism is honored.
+ *
+ * Only the rows are painted here. The closed control keeps whatever background
+ * its own surface gives it.
+ */
+option,
+optgroup {
+  background-color: var(--m-surface-base);
+  color: var(--m-text-primary);
 }
 
 /*
