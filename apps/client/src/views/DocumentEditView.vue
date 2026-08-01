@@ -159,6 +159,79 @@ function emptyDraft(): DocumentDraft {
   };
 }
 
+/**
+ * The scope the form is set to, as the node described it.
+ *
+ * Its label is where the slug prefix comes from, and the label is the node's own
+ * wording — "Department: Rangers" — so the prefix is taken from the part after
+ * the colon rather than the whole of it.
+ */
+const selectedScope = computed(
+  () =>
+    scopes.value.find(
+      (scope) =>
+        scope.scopeType === form.scopeType && scope.scopeId === form.scopeId,
+    ) ?? null,
+);
+
+/**
+ * A slug the node will accept: `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+ *
+ * Written against that expression rather than against a general idea of
+ * slugging, because a suggestion the node refuses is worse than no suggestion —
+ * it looks like the form filled itself in correctly and then blames the person
+ * who accepted it.
+ */
+function slugify(value: string): string {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The scope's own name, without the "Department: " kind the label leads with. */
+function scopeSlugPrefix(): string {
+  const label = selectedScope.value?.label ?? "";
+  const separator = label.indexOf(":");
+
+  return slugify(separator === -1 ? label : label.slice(separator + 1));
+}
+
+function suggestedSlug(): string {
+  return [scopeSlugPrefix(), slugify(form.title)].filter(Boolean).join("-");
+}
+
+/**
+ * Whether somebody has taken the slug over.
+ *
+ * The suggestion follows the title and the scope right up until the moment it is
+ * edited by hand, and then stops for good. A field that keeps overwriting what
+ * was typed into it is worse than one that never filled itself in.
+ */
+const slugEdited = ref(false);
+
+function onSlugInput(): void {
+  slugEdited.value = true;
+}
+
+/*
+ * Only on a create form. An existing document's slug is part of how it is
+ * addressed, and rewriting it because somebody fixed a typo in the title would
+ * change what the document is on the strength of an edit that was not about
+ * that.
+ */
+watch(
+  () => [isCreate.value, form.title, selectedScope.value] as const,
+  () => {
+    if (!isCreate.value || slugEdited.value) {
+      return;
+    }
+
+    form.slug = suggestedSlug();
+  },
+);
+
 function applyDocument(document: ProductDocument): void {
   form.scopeType = document.scopeType;
   form.scopeId = document.scopeId;
@@ -195,6 +268,9 @@ async function load(): Promise<void> {
   savedDocument.value = null;
   savedFragment.value = null;
   Object.assign(form, emptyDraft());
+  // A new form is a new slug. Carrying the flag across would leave the next
+  // document silently not suggesting one, for a reason nothing on screen shows.
+  slugEdited.value = false;
 
   if (organizationId.value === "") {
     library.value = null;
@@ -527,8 +603,12 @@ async function download(format: string): Promise<void> {
 
           <label>
             Slug
-            <input v-model="form.slug" required />
+            <input v-model="form.slug" required @input="onSlugInput" />
           </label>
+          <p v-if="isCreate && !slugEdited" class="document-edit__hint">
+            Suggested from the scope and the title. Edit it and it stays as you
+            leave it.
+          </p>
 
           <label v-if="artifactKind !== 'fragment'">
             Event Info section

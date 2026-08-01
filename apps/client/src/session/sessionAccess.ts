@@ -77,6 +77,24 @@ export interface SessionEventContext {
   readonly eventLabel: string | null;
 }
 
+/**
+ * When the event the session resolved to runs, as far as the client knows.
+ *
+ * The *active event window* first and the published dates as the fallback, which
+ * is the same precedence `sessionStaleness` bounds a cached session by and the
+ * same one authority is handed over on (data/API "Enforcing event authority").
+ * A form defaulting a shift to "the event" means the operational phase, which is
+ * what setup and teardown happen inside.
+ *
+ * Either end can be null on its own. An event with a recorded start and no
+ * recorded end is a real state, and a caller that needs one of the two should
+ * not lose it because the other was never set.
+ */
+export interface SessionEventWindow {
+  readonly startsAt: string | null;
+  readonly endsAt: string | null;
+}
+
 const selectedDepartmentStorageKey = "meridian.session.departmentId";
 
 const selectedDepartmentId = ref<string | null>(readSelectedDepartmentId());
@@ -113,6 +131,29 @@ export const sessionEventContext = computed<SessionEventContext | null>(() => {
   return {
     eventId: document.context.event_id,
     eventLabel: sessionContextEvent(document)?.name ?? null,
+  };
+});
+
+/**
+ * The window the context event runs in, or null when the document carries no
+ * event to read one off.
+ *
+ * A locked node can answer for an event the caller holds no association with, so
+ * the document names an event it does not otherwise carry — there is a context
+ * and no window, and a form that defaults from this leaves its fields blank
+ * rather than defaulting from a guess.
+ */
+export const sessionEventWindow = computed<SessionEventWindow | null>(() => {
+  const document = grantedDocument.value;
+  const event = document === null ? null : sessionContextEvent(document);
+
+  if (event === null) {
+    return null;
+  }
+
+  return {
+    startsAt: event.active_event_window_starts_at ?? event.starts_at,
+    endsAt: event.active_event_window_ends_at ?? event.ends_at,
   };
 });
 
