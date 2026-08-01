@@ -189,12 +189,15 @@ capabilities rather than from authentication.
 
 ### D. Cached permissions and reduction
 
-17. Sign in as Sam and let the session resolve. Confirm the shell shows no
-    permissions notice while the session is live.
+17. Sign in as Sam and let the session resolve. Open **Settings** and confirm the
+    Permissions section reports current permissions and names when the node last
+    answered. Then navigate to two other surfaces and confirm no permissions
+    notice appears anywhere outside Settings.
 18. Take the browser offline in developer tools and navigate between two
-    surfaces Sam can reach.
-19. Read the permissions notice: what it says about where the permissions came
-    from, and what moment it names.
+    surfaces Sam can reach. Confirm those surfaces still say nothing about
+    permissions — the offline banner is a different indicator and is expected.
+19. Open Settings and read the Permissions section: what it says about where the
+    permissions came from, and what moment it names.
 20. Back online, revoke the `department_logistics` grant on the node. Grants hang
     off teams rather than people, so this revokes it for every team that holds
     it — which in the seeded scenario is Sam's, and is why the seed is reset at
@@ -225,8 +228,8 @@ capabilities rather than from authentication.
     surface so the session is cached.
 27. Stop the node (`Ctrl-C` on `server:dev`) and reload the client.
 28. Record how long the client takes to render navigation and what that
-    navigation is, then confirm the permissions notice states the same cached
-    story as step 19.
+    navigation is, then open Settings and confirm the Permissions section states
+    the same cached story as step 19.
 29. Start the node again and reload.
 
 ### F. Organization and event switching
@@ -390,11 +393,14 @@ capabilities rather than from authentication.
 - Step 16: the node refuses with `403` regardless of what the client rendered.
   This is the check that matters most in section C: the client hiding an action
   is a courtesy, and the node refusing it is the boundary (`CLIENT-006`).
-- Step 17: no permissions notice on a live session. A banner reading
-  "permissions are current" on every screen is noise, and the notice is
-  deliberately silent for the ordinary case.
-- Step 19: the notice states that the client is working from cached permissions
-  and names when the node last answered, printed on the event's own clock
+- Step 17: no permissions notice on any surface outside Settings, in any session
+  state. Permission state is a standing property of the session rather than
+  news, and it is read on Settings with the rest of this device's standing
+  (contract 19A.2). Settings itself reports the live state rather than going
+  quiet: a page opened to ask the question answers it.
+- Step 19: the Settings Permissions section states that the client is working
+  from cached permissions and names when the node last answered, printed on the
+  event's own clock
   (`CLIENT-009`). It is stated as information, not as an error — a device
   offline during its event is working normally. It is a separate indicator from
   the offline banner and both may be visible at once.
@@ -478,8 +484,9 @@ capabilities rather than from authentication.
 - Network panel transcript from step 7 showing the session request and its
   `Authorization` header, with the token value redacted.
 - The `403` from step 16.
-- Screenshot of the permissions notice in its cached state (step 19) and in its
-  expired state (step 24).
+- Screenshot of the Settings Permissions section in its current state (step 17),
+  its cached state (step 19), and its expired state (step 24), plus one of an
+  ordinary surface while offline showing no permissions notice on it.
 - Screen recording or timed screenshot of step 28, showing navigation rendered
   with the node stopped.
 - Screenshots of the context surfaces from steps 32, 35, and 36 — the switcher

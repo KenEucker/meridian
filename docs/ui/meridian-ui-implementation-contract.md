@@ -1975,11 +1975,14 @@ Rules:
 
 - the cached response stays usable for the duration of the event the node is locked to;
 - once that window has ended, or when the client holds no event context, the client requires a successful refresh before granting access;
-- a client running on cached permissions says so, and shows when they were last refreshed;
+- permission state is reported on the Settings surface and not in the application shell. Settings names the state, shows when permissions were last refreshed, and offers the refresh;
+- Settings reports the current state as well as the stale ones. A surface somebody opened to ask this question answers it, including when the answer is that nothing is wrong;
 - staleness is presented as information, not as an error. A device working normally offline inside its event window is not in a failure state;
 - on reconnect the client refreshes and applies any reduction in permissions immediately. A revoked capability disappears on refresh, not on next login.
 
-Cached-permission state is distinct from the connectivity states in 16.1. A device may be Online with stale permissions, or Offline but usable with fresh ones. Do not conflate the two indicators.
+Cached-permission state is distinct from the connectivity states in 16.1. A device may be Online with stale permissions, or Offline but usable with fresh ones. Do not conflate the two indicators. Connectivity keeps its shell-level banner because it changes what the next action will do; permission state is a standing property of the session and is read where the rest of this device's standing is read.
+
+This placement is a deliberate revision. Permission state was previously required in the shell, on every screen, so that a missing control could be explained on the screen where it was missing. The cost was a persistent banner during ordinary offline operation, which is the state a field device spends most of an event in. The accepted trade is that a user who cannot find a control has to open Settings to learn why.
 
 ### 19A.3 Context Switching
 

@@ -16,6 +16,8 @@ import {
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import { describeConnectivityState } from "@/offline/syncStatus";
+import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
+import { clientSessionState } from "@/session/clientSession";
 import {
   resolveReadinessChecklist,
   summarizeReadiness,
@@ -64,6 +66,14 @@ const connectivityDescription = computed(() =>
  */
 const readiness = computed(() =>
   summarizeReadiness(resolveReadinessChecklist()),
+);
+/*
+ * Whether there is a session to report permissions for at all. A device that
+ * holds none is not stale — it has nothing — and the Permissions section says
+ * that rather than rendering an empty heading.
+ */
+const sessionEstablished = computed(
+  () => clientSessionState.document !== null,
 );
 const fieldSession = computed(() => resolveFieldSession());
 const fieldSessionText = computed(() => {
@@ -366,6 +376,32 @@ watch(
       </RouterLink>
     </section>
 
+    <!--
+      Cached-permission state (CLIENT-009; contract 19A.2). This is where it
+      lives, rather than on every screen: it is a standing fact about this
+      device's relationship with its node, which is what the rest of this page
+      is about, and it sits above node health because "which permissions am I
+      working from" and "can I reach the node" are the two halves of the same
+      question.
+
+      `show-when-current` because a page opened on purpose should answer the
+      question it was opened for. A section that renders nothing whenever the
+      answer is "fine" reads as broken at the moment it is working.
+    -->
+    <section
+      class="about__permissions"
+      aria-labelledby="about-permissions-heading"
+    >
+      <h2 id="about-permissions-heading" class="about__subheading">
+        Permissions
+      </h2>
+      <SessionPermissionsNotice show-when-current />
+      <p v-if="!sessionEstablished" class="about__permissions-empty">
+        This device holds no session, so there are no permissions to report.
+        Sign in to resolve them.
+      </p>
+    </section>
+
     <section class="about__health" aria-labelledby="about-health-heading">
       <header class="about__section-header">
         <h2 id="about-health-heading" class="about__subheading">
@@ -520,8 +556,19 @@ watch(
 
 .about__settings,
 .about__device,
+.about__permissions,
 .about__about {
   margin-top: var(--m-space-6);
+}
+
+.about__permissions :deep(.session-permissions),
+.about__permissions-empty {
+  margin-top: var(--m-space-3);
+}
+
+.about__permissions-empty {
+  margin-bottom: 0;
+  color: var(--m-text-muted);
 }
 
 .about__readiness-link {

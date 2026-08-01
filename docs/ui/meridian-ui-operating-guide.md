@@ -900,9 +900,13 @@ For default staff, the page should simply indicate that access is restricted.
 
 A client that cannot reach its node works from the permissions it last received, for the duration of the event the node is locked to.
 
-While doing so it says that its permissions are cached and when they were last refreshed. This is stated as information, not as a warning. A device operating normally offline inside its event window is not in a failure state, and dressing it as one trains users to ignore the indicator.
+Settings says which permissions this device is working from, when they were last refreshed, and offers to refresh them. It says so in every state, including the ordinary one where the node has just answered — a page somebody opened to ask the question should answer it rather than going quiet when the news is good.
 
-Cached-permission state is separate from connectivity state. A device can be online with stale permissions, or offline with fresh ones. The two indicators must not be merged.
+Staleness is stated as information, not as a warning. A device operating normally offline inside its event window is not in a failure state, and dressing it as one trains users to ignore the indicator.
+
+Permission state is not in the application shell. It was, on every screen, and during an event that meant a standing banner about a device doing exactly what it is supposed to do. It is a standing property of the session rather than news, so it is read where the rest of this device's standing is read.
+
+Cached-permission state is separate from connectivity state. A device can be online with stale permissions, or offline with fresh ones. The two must not be merged, and connectivity keeps its shell banner: it changes what the next action will do, which is news.
 
 Once the event window has ended, or when the client holds no event context, access requires a successful refresh.
 
