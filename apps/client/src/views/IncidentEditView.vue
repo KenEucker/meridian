@@ -206,33 +206,22 @@ const availableIncidentTypeOptions = computed(() =>
     incidentTypeAddQuery.value,
   ),
 );
-
 /**
- * The typed name, when it is a type this incident does not already have and
- * the node did not already suggest.
+ * What the picker says when it offers nothing.
  *
- * Incident types come into existence by being named: `syncIncidentTypes`
- * matches an existing one case-insensitively and creates the type when there is
- * none, so an organization with no types yet is a normal state rather than a
- * dead end. Offering the typed name is what makes that reachable — without it
- * the picker shows an empty panel and the only way through is an Enter key
- * nothing on screen mentions.
+ * The two causes are different problems for the person reading it: a search
+ * that matched none of the organization's types is theirs to fix by typing
+ * something else, and an organization with no configured types at all is an
+ * organizer's to fix somewhere this screen cannot reach.
  */
-const newIncidentTypeOption = computed(() => {
-  const typed = incidentTypeAddQuery.value.trim();
-
-  if (typed === "") {
-    return null;
+const incidentTypeEmptyHint = computed(() => {
+  if ((assignable.value?.types ?? []).length === 0) {
+    return "No incident types are configured for this organization.";
   }
 
-  const known = [
-    ...form.incidentTypeNames,
-    ...availableIncidentTypeOptions.value,
-  ];
-
-  return known.some((name) => name.toLowerCase() === typed.toLowerCase())
-    ? null
-    : typed;
+  return incidentTypeAddQuery.value.trim() === ""
+    ? "Every configured incident type is already on this incident."
+    : "No configured incident type matches that.";
 });
 const availableResponderOptions = computed(() =>
   filteredAddOptions(
@@ -653,20 +642,17 @@ function openIncidentTypeAdd(): void {
 }
 
 /**
- * Enter takes the first suggestion, or the name as typed.
+ * Enter takes the first match, and nothing when there is none.
  *
- * The create and update commands accept a type name the organization has not
- * used before and create it, so a suggestion list that has run out is not a
- * dead end.
+ * The picker chooses from the organization's configured incident types; it does
+ * not create one. A name that matches nothing is a type this organization has
+ * not configured, and the way to add it is to configure it.
  */
 function addFirstIncidentTypeOption(): void {
   const [typeName] = availableIncidentTypeOptions.value;
-  const typed = incidentTypeAddQuery.value.trim();
 
   if (typeName) {
     addIncidentType(typeName);
-  } else if (typed !== "") {
-    addIncidentType(typed);
   }
 }
 
@@ -1359,9 +1345,12 @@ async function onPrintPdf(): Promise<void> {
               />
             </label>
             <!--
-              Open means open. The panel used to render only when the node had
-              a suggestion, so an organization that has named no types yet got
-              an Add box that visibly did nothing.
+              A chooser, not a creator. Incident types are configured for the
+              organization (requirements: configurable areas), so this picker
+              offers what the node configured and says so when nothing matches
+              rather than offering to invent one. The panel still opens on an
+              empty result, because a control that silently does nothing reads
+              as broken.
             -->
             <div
               v-if="incidentTypeAddOpen"
@@ -1377,20 +1366,11 @@ async function onPrintPdf(): Promise<void> {
               >
                 {{ typeName }}
               </button>
-              <button
-                v-if="newIncidentTypeOption"
-                type="button"
-                class="ims-edit__add-new"
-                :disabled="isOfflineBlocked"
-                @click="addIncidentType(newIncidentTypeOption)"
-              >
-                Add &ldquo;{{ newIncidentTypeOption }}&rdquo;
-              </button>
               <p
-                v-else-if="availableIncidentTypeOptions.length === 0"
+                v-if="availableIncidentTypeOptions.length === 0"
                 class="ims-edit__add-hint"
               >
-                Type a name to add an incident type.
+                {{ incidentTypeEmptyHint }}
               </p>
             </div>
           </section>
@@ -2422,10 +2402,6 @@ async function onPrintPdf(): Promise<void> {
   border-bottom: 0;
 }
 
-/* The typed name reads as the new thing it is, not as another match. */
-.ims-edit__add-new {
-  font-style: italic;
-}
 
 .ims-edit__add-hint {
   margin: 0;

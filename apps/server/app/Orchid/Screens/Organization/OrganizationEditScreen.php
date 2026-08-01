@@ -16,6 +16,7 @@ use App\Services\Branding\BrandingAdminService;
 use App\Services\Branding\BrandingPalette;
 use App\Services\Branding\Lettermark;
 use App\Services\Events\IncidentCommandDepartmentSelectionService;
+use App\Services\Incidents\IncidentTypeProvisioner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -217,7 +218,17 @@ class OrganizationEditScreen extends Screen
         $defaultIcDepartmentId = $attributes['default_ic_department_id'] ?? null;
         unset($attributes['default_ic_department_id']);
 
+        $wasNew = ! $organization->exists;
+
         $organization->fill($attributes)->save();
+
+        // A new organization starts with the default incident types, so its
+        // first incident has something to choose from. Only on creation: these
+        // are a starting point, and re-adding them on every save would undo an
+        // organization's curation of its own list.
+        if ($wasNew) {
+            app(IncidentTypeProvisioner::class)->ensureDefaults($organization);
+        }
 
         $department = filled($defaultIcDepartmentId)
             ? Department::query()->findOrFail($defaultIcDepartmentId)

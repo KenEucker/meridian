@@ -823,35 +823,27 @@ describe("incident editing", () => {
     ).toEqual(["Routine", "Important", "Serious", "Critical"]);
   });
 
-  it("adds an incident type by name when the organization has none yet", async () => {
+  it("offers the organization's configured types and adds one to the incident", async () => {
     installSession();
-    // A fresh organization has named no incident types. The command creates one
-    // on first use, so an empty suggestion list is a normal state rather than a
-    // dead end.
-    const list = listPayload();
-    (list.assignable as Record<string, unknown>).types = [];
-
-    const calls = stubStandardNode({ list });
+    const calls = stubStandardNode();
 
     const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
 
     await wrapper.get("#ims-edit-type-add").trigger("focus");
     await flushPromises();
 
-    // The panel opens and says how to get out of the empty state.
-    expect(wrapper.get("[aria-label='Incident type matches']").text()).toContain(
-      "Type a name to add an incident type.",
-    );
+    // Medical is already on the incident, so the remaining configured types are
+    // what the picker offers.
+    expect(
+      wrapper
+        .findAll("[aria-label='Incident type matches'] button")
+        .map((button) => button.text()),
+    ).toEqual(["Radio", "Weather"]);
 
-    await wrapper.get("#ims-edit-type-add").setValue("Weather");
-    await flushPromises();
-
-    const addNew = wrapper
+    await wrapper
       .findAll("[aria-label='Incident type matches'] button")
-      .find((button) => button.text().includes("Weather"));
-
-    expect(addNew).toBeDefined();
-    await addNew?.trigger("click");
+      .find((button) => button.text() === "Weather")
+      ?.trigger("click");
     await flushPromises();
 
     expect(commandCalls(calls, "update-incident").at(0)?.body).toMatchObject({
@@ -859,22 +851,49 @@ describe("incident editing", () => {
     });
   });
 
-  it("offers a type the node suggested rather than a duplicate of it", async () => {
+  it("never offers to create a type the organization has not configured", async () => {
     installSession();
-    stubStandardNode();
+    const calls = stubStandardNode();
 
     const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
 
     await wrapper.get("#ims-edit-type-add").trigger("focus");
-    await wrapper.get("#ims-edit-type-add").setValue("Radio");
+    await wrapper.get("#ims-edit-type-add").setValue("Avalanche");
     await flushPromises();
 
-    const options = wrapper
-      .findAll("[aria-label='Incident type matches'] button")
-      .map((button) => button.text());
+    // Nothing to click, and Enter invents nothing: incident types are the
+    // organization's to configure, not this form's to create.
+    expect(
+      wrapper.findAll("[aria-label='Incident type matches'] button"),
+    ).toHaveLength(0);
+    expect(wrapper.get("[aria-label='Incident type matches']").text()).toBe(
+      "No configured incident type matches that.",
+    );
 
-    // The node already suggests Radio, so there is nothing to add by name.
-    expect(options).toEqual(["Radio"]);
+    await wrapper.get("#ims-edit-type-add").trigger("keydown.enter");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-incident")).toHaveLength(0);
+    expect(wrapper.get("#ims-edit-types").text()).not.toContain("Avalanche");
+  });
+
+  it("says so when the organization has configured no incident types", async () => {
+    installSession();
+    const list = listPayload();
+    (list.assignable as Record<string, unknown>).types = [];
+
+    stubStandardNode({ list });
+
+    const { wrapper } = await mountAt(`/ims/incidents/${INCIDENT_ID}/edit`);
+
+    await wrapper.get("#ims-edit-type-add").trigger("focus");
+    await flushPromises();
+
+    // An organizer's problem, named as one, rather than a control that looks
+    // broken.
+    expect(wrapper.get("[aria-label='Incident type matches']").text()).toBe(
+      "No incident types are configured for this organization.",
+    );
   });
 
   it("shows the node's refusal when an edit is refused", async () => {

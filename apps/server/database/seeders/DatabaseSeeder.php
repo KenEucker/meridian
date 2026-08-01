@@ -17,6 +17,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionCatalogSeeder::class,
             DevelopmentScenarioSeeder::class,
+            // After the scenario, so the organizations it creates get their
+            // default incident types along with everything created before it.
+            IncidentTypeDefaultsSeeder::class,
         ]);
     }
 }

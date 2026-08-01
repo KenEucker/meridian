@@ -407,11 +407,11 @@ Alongside `filter_options`, which says what a reader may narrow this list by, th
 response carries an `assignable` block saying what an authoring form may put on
 an incident: `statuses` and `priorities` are the canonical vocabularies the
 create and update commands accept, `types` is every unarchived incident type the
-organization has (wider than the in-use `filter_options.types`), and
-`responders` is the event's configured Incident Command department roster. An
-organization that has named no types yet is a normal state: the create and
-update commands match a type name case-insensitively and create the type when
-there is none, so `types` is a suggestion list rather than a vocabulary. The two blocks differ deliberately: `active` and `all`
+organization has configured (wider than the in-use `filter_options.types`), and
+`responders` is the event's configured Incident Command department roster.
+Incident types are configurable per organization and are chosen from rather than
+typed: an organization starts with a documented default set and maintains its
+own list from there. The two blocks differ deliberately: `active` and `all`
 are ways of asking a question rather than states an incident can be in, and a
 type or responder not yet on any incident is still a legitimate thing to add.
 
@@ -2782,7 +2782,12 @@ Key fields:
 
 #### `incident_types`
 
-Represents configurable incident type labels.
+Represents configurable incident type labels, scoped to one organization.
+
+Every organization starts with a default set (`IncidentTypeDefaults`) and
+maintains its own list from there; Meridian branches on none of the names.
+Archiving a type keeps it on the incidents that already carry it and on the list
+filter, and removes it from what an incident may be given next.
 
 Key fields:
 

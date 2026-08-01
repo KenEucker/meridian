@@ -243,10 +243,9 @@ ones; nothing here depends on a particular IMS number.
     incident types, and involved Rangers/responders. Confirm the State and
     Priority options are the node's vocabularies, that the Responder picker
     offers the event's Incident Command department roster, that the Incident
-    types picker suggests the organization's unarchived types and offers to add
-    the name as typed when it matches none — including on an organization that
-    has named no types yet, where the picker says so rather than showing an
-    empty panel — that autosave status is visible, that a
+    types picker offers the organization's configured unarchived types and
+    creates none — a name matching nothing is reported as unconfigured rather
+    than offered as a new type — that autosave status is visible, that a
     refused save shows the node's own sentence, and that Closed status does
     not block further edits when a Closed incident is opened for edit.
 17. Confirm priority, state, and type labels remain visually and textually
