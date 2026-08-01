@@ -150,6 +150,14 @@ function equipment(id: string, name: string, assetTag: string) {
   };
 }
 
+/**
+ * SLB-018's half of the off-site block, which the base payload does not carry:
+ * the one workspace blocked there is blocked by a check-in. Set for the test
+ * that reads the equipment refusal, so the desk still has an unblocked on-site
+ * workspace everywhere else.
+ */
+let ariHoldsEquipment = false;
+
 const AVAILABLE_EQUIPMENT = [
   equipment("equipment-radio-13", "Radio 13", "RDO-13"),
   equipment("equipment-radio-14", "Radio 14", "RDO-14"),
@@ -260,10 +268,23 @@ function logisticsPayload() {
         handle: "ari",
         team_label: "Dirt",
         presence_state: "on_site",
-        can_go_off_site: true,
-        off_site_blocked_reason: null,
+        can_go_off_site: !ariHoldsEquipment,
+        off_site_blocked_reason: ariHoldsEquipment
+          ? "Staff must return or resolve checked-out department equipment before being marked off-site."
+          : null,
         shift_cards: [card({ can_add_to_shift: true })],
-        open_equipment: [],
+        open_equipment: ariHoldsEquipment
+          ? [
+              {
+                checkout_id: "checkout-vest-4",
+                equipment_item_id: "equipment-vest-4",
+                name: "Vest 4",
+                asset_tag: "VST-04",
+                status: "checked_out",
+                checked_out_at: "2027-07-04T17:20:00+00:00",
+              },
+            ]
+          : [],
         available_equipment: AVAILABLE_EQUIPMENT,
         future_signups: [
           {
@@ -552,6 +573,7 @@ async function openWorkspace(
 beforeEach(() => {
   commands = [];
   heldCommand = null;
+  ariHoldsEquipment = false;
   commandOutbox.clear();
   installLocalFieldSession();
   selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
@@ -750,6 +772,37 @@ describe("department operations surfaces", () => {
       staff_id: VERA_STAFF_ID,
     });
     expect(wrapper.text()).toContain("Vera Staff marked on-site.");
+  });
+
+  /*
+   * The two off-site blocks are the node's answers, and the desk's job is to
+   * state them before somebody presses anything (SLB-017, SLB-018). The button
+   * is closed and the sentence is the one the command would have refused with,
+   * so the operator reads what to do about it — return the vest — rather than a
+   * disabled control with no explanation.
+   */
+  it("closes the off-site option in the node's words when equipment is still out", async () => {
+    ariHoldsEquipment = true;
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+
+    const panel = wrapper.get(".logistics__workspace");
+    const offSite = panel
+      .findAll("button")
+      .find((button) => button.text() === "Mark off-site");
+
+    expect(offSite!.attributes("disabled")).toBeDefined();
+    expect(panel.text()).toContain(
+      "Staff must return or resolve checked-out department equipment before being marked off-site.",
+    );
+    expect(panel.text()).toContain("Vest 4");
+
+    await offSite!.trigger("click");
+    await flushPromises();
+
+    expect(commands).toHaveLength(0);
   });
 
   /*

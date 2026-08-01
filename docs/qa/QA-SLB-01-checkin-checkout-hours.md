@@ -159,6 +159,10 @@ rows, unauthorized actors are refused, and each successful export is audited.
    - presence refuses an off-site move while somebody is checked in, and an
      unscheduled shift addition refuses somebody who is not on-site, each in the
      domain service's own words;
+   - presence refuses an off-site move while somebody still holds checked-out
+     department equipment, accepts it once that equipment is returned or written
+     off as Missing or Damaged, and the Logistics Desk read answers the same way
+     the command does in both cases;
    - hours correction writes before/after audit, rejects unauthorized actors and
      invalid ranges, and frozen hours reject later correction;
    - the hours worked export matches its committed sample file, reports
@@ -225,6 +229,21 @@ rows, unauthorized actors are refused, and each successful export is audited.
      ```bash
      php artisan tinker --execute='App\Models\EventDepartmentPresence::query()->latest("updated_at")->limit(5)->get(["staff_id", "current_state", "marked_on_site_at", "marked_off_site_at", "last_marked_by_user_id"])->each(fn ($presence) => print($presence->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
      ```
+19f. Hand a radio to an on-site staff member who is not checked into anything,
+     then open their workspace. Confirm **Mark off-site** is closed, the desk
+     states "Staff must return or resolve checked-out department equipment
+     before being marked off-site," and the radio is named in the workspace's
+     equipment list, so the operator reads what to do about it (SLB-018).
+19g. Take the radio back through the desk's own return control, choosing
+     **Returned**. Confirm **Mark off-site** opens, the sentence is gone, and
+     marking them off-site is accepted.
+19h. Repeat 19f, then write the radio off from God Mode instead of returning it:
+     in Orchid, open the equipment item and set its status to **Missing**. Reload
+     the desk and confirm the radio is still listed in the workspace's equipment,
+     because the department is still owed it, and that **Mark off-site** is now
+     open and accepted. SLB-018 blocks on equipment somebody is still holding,
+     not on equipment already written off, and the desk and the command have to
+     read that the same way.
 
 ### D. No-show path
 
@@ -388,6 +407,11 @@ froze, so run it after those sections rather than on a freshly seeded database.
   current state, and audits accepted state changes.
 - Staff cannot be marked off-site while checked into a shift for that
   department/event.
+- Staff cannot be marked off-site while holding checked-out equipment for that
+  department/event, and can be once that equipment is returned or marked Missing
+  or Damaged. The Logistics Desk states the block in the same words the command
+  refuses with, and offers the off-site control in exactly the cases the command
+  would accept.
 - Department Logistics can check staff out from the selected staff workspace and
   supply actual start/end times during check-out.
 - Department Logistics can mark eligible staff on-site and off-site, and add an
@@ -430,6 +454,9 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Screenshot or screen recording of Vera's Logistics workspace before check-in,
   after on-site/check-in, and after check-out.
 - Screenshot showing off-site blocked while checked in.
+- Screenshot showing off-site blocked while equipment is still out, with the
+  equipment named, and a second one showing the same workspace once the item is
+  returned or written off.
 - Tinker output showing the `hours_worked` row with event, department, shift,
   staff, attendance record, actual times, minutes, and status.
 - No-show UI evidence and/or server output proving idempotent no-show state.
