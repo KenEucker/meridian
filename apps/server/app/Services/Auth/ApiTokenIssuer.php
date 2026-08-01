@@ -33,6 +33,13 @@ use Laravel\Sanctum\NewAccessToken;
  * The plaintext token is returned to the caller and never stored, logged, or
  * audited (AUTH-025). Audit entries name the token by identifier and by bound
  * device.
+ *
+ * Issuance is also where the user/device pair becomes trusted (technical spec
+ * 12.1, 12.4). The two are written in one transaction because they are one
+ * event: a person proved who they are, from a device that proved it holds usable
+ * key material, and there is no second ceremony in Alpha 1 to separate them.
+ * Before this, nothing established trust at all — every Field Report a genuinely
+ * signed-in person filed was refused as coming from an untrusted device.
  */
 class ApiTokenIssuer
 {
@@ -44,7 +51,10 @@ class ApiTokenIssuer
     /** The client completed a Google or Discord handoff in the system browser (AUTH-020). */
     public const REASON_PROVIDER_HANDOFF = 'provider_handoff';
 
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly DeviceTrustService $deviceTrust,
+    ) {}
 
     /**
      * Issue a bearer token for a user, bound to the device that will hold it.
@@ -91,6 +101,14 @@ class ApiTokenIssuer
                 reason: $reason,
                 sourceContext: AuditEvent::SOURCE_API,
             );
+
+            /*
+             * Same transaction as the token, because a token bound to a device
+             * and that device being trusted for this user are the same fact
+             * written twice. A revoked trust is left revoked and the token is
+             * still issued: signing in is not how somebody undoes a revocation.
+             */
+            $this->deviceTrust->trust($user, $device);
 
             return $token;
         });
