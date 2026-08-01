@@ -47,6 +47,7 @@ import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
+import OrganizerConfigurationView from "@/views/OrganizerConfigurationView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
@@ -413,6 +414,11 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/departments",
     name: "organizer.departments.index",
     component: OrganizerDepartmentListView,
+  },
+  {
+    path: "/organizer/configuration",
+    name: "organizer.configuration.index",
+    component: OrganizerConfigurationView,
   },
   {
     path: "/organizer/departments/create",

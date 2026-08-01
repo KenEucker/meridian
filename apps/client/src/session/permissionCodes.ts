@@ -29,6 +29,8 @@ export const CAPABILITY_DEPARTMENT_BRANDING_MANAGE =
 export const CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE =
   "organization.departments.manage";
 export const CAPABILITY_ORGANIZATION_STAFF_MANAGE = "organization.staff.manage";
+export const CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE =
+  "organization.incident_types.manage";
 export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";
