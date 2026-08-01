@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AttendanceRecord;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
+use App\Models\EquipmentCheckout;
+use App\Models\EquipmentItem;
 use App\Models\Event;
 use App\Models\EventDepartmentPresence;
 use App\Models\Organization;
@@ -89,6 +91,57 @@ class DepartmentOperationsCommandHttpTest extends TestCase
                 'message',
                 'Staff must be checked out from department shifts before being marked off-site.',
             );
+    }
+
+    public function test_going_off_site_is_refused_while_equipment_is_held_and_allowed_once_it_is_written_off(): void
+    {
+        $scenario = $this->scenario();
+
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'staff_id' => $scenario['staff']->id,
+        ]);
+
+        $radio = EquipmentItem::factory()->create([
+            'organization_id' => $scenario['event']->organization_id,
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'name' => 'Radio 12',
+            'status' => EquipmentItem::STATUS_CHECKED_OUT,
+        ]);
+        EquipmentCheckout::factory()->create([
+            'equipment_item_id' => $radio->id,
+            'event_id' => $scenario['event']->id,
+            'staff_id' => $scenario['staff']->id,
+            'shift_id' => null,
+            'returned_at' => null,
+        ]);
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/mark-staff-off-site', [
+                'event_id' => $scenario['event']->id,
+                'department_id' => $scenario['department']->id,
+                'staff_id' => $scenario['staff']->id,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'Staff must return or resolve checked-out department equipment before being marked off-site.',
+            );
+
+        // SLB-018's own exception: an item marked Missing is outstanding but no
+        // longer a reason to hold somebody here.
+        $radio->forceFill(['status' => EquipmentItem::STATUS_MISSING])->save();
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/mark-staff-off-site', [
+                'event_id' => $scenario['event']->id,
+                'department_id' => $scenario['department']->id,
+                'staff_id' => $scenario['staff']->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('current_state', EventDepartmentPresence::STATE_OFF_SITE);
     }
 
     public function test_presence_is_refused_without_the_logistics_role(): void

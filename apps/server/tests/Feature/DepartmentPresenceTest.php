@@ -126,7 +126,7 @@ class DepartmentPresenceTest extends TestCase
         );
     }
 
-    public function test_staff_cannot_leave_site_while_checked_in_or_holding_equipment(): void
+    public function test_staff_cannot_leave_site_while_checked_in(): void
     {
         [$event, $department, $staff, $logistics] = $this->presenceScenario();
         $shift = $this->shiftFor($event, $department, $staff);
@@ -159,19 +159,19 @@ class DepartmentPresenceTest extends TestCase
             'checked_out_at' => Carbon::parse('2026-07-01 12:00:00'),
         ]);
 
-        $equipment = EquipmentItem::factory()->create([
-            'organization_id' => $event->organization_id,
-            'event_id' => $event->id,
-            'department_id' => $department->id,
-            'status' => EquipmentItem::STATUS_CHECKED_OUT,
-        ]);
-        EquipmentCheckout::factory()->create([
-            'equipment_item_id' => $equipment->id,
-            'event_id' => $event->id,
-            'staff_id' => $staff->id,
-            'shift_id' => null,
-            'returned_at' => null,
-        ]);
+        $result = app(DepartmentPresenceService::class)->markOffSite($event, $department, $staff, $logistics);
+
+        $this->assertTrue($result->createdStateChange);
+        $this->assertSame(EventDepartmentPresence::STATE_OFF_SITE, $result->presence->current_state);
+    }
+
+    public function test_staff_cannot_leave_site_while_holding_equipment(): void
+    {
+        [$event, $department, $staff, $logistics] = $this->presenceScenario();
+
+        app(DepartmentPresenceService::class)->markOnSite($event, $department, $staff, $logistics);
+
+        $equipment = $this->checkedOutEquipmentFor($event, $department, $staff);
 
         try {
             app(DepartmentPresenceService::class)->markOffSite($event, $department, $staff, $logistics);
@@ -194,6 +194,33 @@ class DepartmentPresenceTest extends TestCase
 
         $this->assertTrue($result->createdStateChange);
         $this->assertSame(EventDepartmentPresence::STATE_OFF_SITE, $result->presence->current_state);
+    }
+
+    /**
+     * SLB-018 blocks the off-site mark while somebody holds checked-out
+     * equipment "unless the equipment is returned or marked Missing/Damaged".
+     * An item written off while its checkout is still open — which is what a God
+     * Mode repair of a lost radio looks like — is still owed to the department
+     * and is no longer a reason to keep its holder standing at the desk.
+     */
+    public function test_equipment_written_off_as_missing_no_longer_keeps_staff_on_site(): void
+    {
+        [$event, $department, $staff, $logistics] = $this->presenceScenario();
+
+        app(DepartmentPresenceService::class)->markOnSite($event, $department, $staff, $logistics);
+
+        $equipment = $this->checkedOutEquipmentFor($event, $department, $staff);
+        $equipment->forceFill(['status' => EquipmentItem::STATUS_MISSING])->save();
+
+        $result = app(DepartmentPresenceService::class)->markOffSite($event, $department, $staff, $logistics);
+
+        $this->assertTrue($result->createdStateChange);
+        $this->assertSame(EventDepartmentPresence::STATE_OFF_SITE, $result->presence->current_state);
+        $this->assertDatabaseHas('equipment_checkouts', [
+            'equipment_item_id' => $equipment->id,
+            'staff_id' => $staff->id,
+            'returned_at' => null,
+        ]);
     }
 
     /**
@@ -229,6 +256,26 @@ class DepartmentPresenceTest extends TestCase
         ]);
 
         return $shift;
+    }
+
+    private function checkedOutEquipmentFor(Event $event, Department $department, Staff $staff): EquipmentItem
+    {
+        $equipment = EquipmentItem::factory()->create([
+            'organization_id' => $event->organization_id,
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'status' => EquipmentItem::STATUS_CHECKED_OUT,
+        ]);
+
+        EquipmentCheckout::factory()->create([
+            'equipment_item_id' => $equipment->id,
+            'event_id' => $event->id,
+            'staff_id' => $staff->id,
+            'shift_id' => null,
+            'returned_at' => null,
+        ]);
+
+        return $equipment;
     }
 
     private function departmentRoleUserFor(Department $department, string $roleCode): User

@@ -194,6 +194,14 @@ final class DepartmentOperationsReadController extends Controller
             $held = $openEquipment->get($staffId, new Collection);
             $checkedIn = $attendance->get($staffId, new Collection)
                 ->contains(fn (AttendanceRecord $record): bool => $record->current_state === AttendanceRecord::STATE_CHECKED_IN);
+            // Everything outstanding is listed below; only some of it keeps
+            // somebody here. An item written off as missing or damaged is still
+            // owed to the department and is no longer a reason to refuse an
+            // off-site mark (SLB-018), which is the answer
+            // `DepartmentPresenceService` gives from the same predicate.
+            $holdingBlocksOffSite = $held->contains(
+                fn (EquipmentCheckout $checkout): bool => $checkout->blocksOffSite(),
+            );
 
             $workspaces[$staffId] = [
                 'staff_id' => $staffId,
@@ -203,10 +211,10 @@ final class DepartmentOperationsReadController extends Controller
                 'presence_state' => $presence[$staffId] ?? EventDepartmentPresence::STATE_OFF_SITE,
                 // The same two blocks `DepartmentPresenceService` enforces, in
                 // the words its refusal uses (SLB-017, SLB-018).
-                'can_go_off_site' => ! $checkedIn && $held->isEmpty(),
+                'can_go_off_site' => ! $checkedIn && ! $holdingBlocksOffSite,
                 'off_site_blocked_reason' => match (true) {
                     $checkedIn => DepartmentPresenceException::checkedInToShift()->getMessage(),
-                    $held->isNotEmpty() => DepartmentPresenceException::openEquipmentCheckout()->getMessage(),
+                    $holdingBlocksOffSite => DepartmentPresenceException::openEquipmentCheckout()->getMessage(),
                     default => null,
                 },
                 'shift_cards' => $this->shiftCards(
@@ -955,12 +963,8 @@ final class DepartmentOperationsReadController extends Controller
 
         return EquipmentCheckout::query()
             ->with(['equipmentItem', 'staff'])
-            ->where('event_id', $event->id)
+            ->outstandingForDepartment($event, $department)
             ->whereIn('staff_id', $staffIds)
-            ->whereNull('returned_at')
-            ->whereHas('equipmentItem', fn (Builder $query) => $query->where(function (Builder $scope) use ($department): void {
-                $scope->whereNull('department_id')->orWhere('department_id', $department->id);
-            }))
             ->get()
             ->groupBy(fn (EquipmentCheckout $checkout): string => (string) $checkout->staff_id);
     }

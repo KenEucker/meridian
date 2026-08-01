@@ -125,6 +125,55 @@ class DepartmentOperationsReadHttpTest extends TestCase
     }
 
     /**
+     * The equipment half of the off-site block (SLB-018), and the exception the
+     * requirement writes into it.
+     *
+     * The desk's answer and the command's have to be the same answer. An item
+     * written off as Missing while its checkout is still open is outstanding —
+     * it stays in the workspace's equipment list, because somebody still has to
+     * account for it — and it is no longer a reason to refuse an off-site mark,
+     * which is what `mark-staff-off-site` would do with it.
+     */
+    public function test_held_equipment_blocks_leaving_until_it_is_returned_or_written_off(): void
+    {
+        $scenario = $this->scenario();
+
+        $vest = EquipmentItem::factory()->forDepartment($scenario['department'])->checkedOut()->create([
+            'name' => 'Vest 4',
+            'asset_tag' => 'VST-04',
+        ]);
+        EquipmentCheckout::factory()->create([
+            'equipment_item_id' => $vest->id,
+            'event_id' => $scenario['event']->id,
+            'staff_id' => $scenario['unassigned']->id,
+            'shift_id' => null,
+        ]);
+
+        $holding = $this->actingAsClient($scenario['logistics'])
+            ->getJson($this->path($scenario, 'logistics'))
+            ->assertOk()
+            ->json('staff_workspaces.'.(string) $scenario['unassigned']->id);
+
+        $this->assertFalse($holding['can_go_off_site']);
+        $this->assertSame(
+            'Staff must return or resolve checked-out department equipment before being marked off-site.',
+            $holding['off_site_blocked_reason'],
+        );
+        $this->assertSame('Vest 4', $holding['open_equipment'][0]['name']);
+
+        $vest->forceFill(['status' => EquipmentItem::STATUS_MISSING])->save();
+
+        $writtenOff = $this->actingAsClient($scenario['logistics'])
+            ->getJson($this->path($scenario, 'logistics'))
+            ->assertOk()
+            ->json('staff_workspaces.'.(string) $scenario['unassigned']->id);
+
+        $this->assertTrue($writtenOff['can_go_off_site']);
+        $this->assertNull($writtenOff['off_site_blocked_reason']);
+        $this->assertSame('Vest 4', $writtenOff['open_equipment'][0]['name']);
+    }
+
+    /**
      * The desk says why it is not offering an addition instead of showing
      * nothing at all.
      *

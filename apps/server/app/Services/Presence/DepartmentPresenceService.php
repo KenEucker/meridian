@@ -7,7 +7,6 @@ use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\EquipmentCheckout;
-use App\Models\EquipmentItem;
 use App\Models\Event;
 use App\Models\EventDepartmentPresence;
 use App\Models\Staff;
@@ -177,16 +176,11 @@ class DepartmentPresenceService
         }
 
         $openEquipment = EquipmentCheckout::query()
-            ->where('event_id', $event->id)
+            ->with('equipmentItem')
+            ->outstandingForDepartment($event, $department)
             ->where('staff_id', $staff->id)
-            ->whereNull('returned_at')
-            ->whereHas('equipmentItem', fn ($query) => $query
-                ->where(function ($scope) use ($department): void {
-                    $scope->whereNull('department_id')
-                        ->orWhere('department_id', $department->id);
-                })
-                ->whereIn('status', [EquipmentItem::STATUS_CHECKED_OUT]))
-            ->exists();
+            ->get()
+            ->contains(fn (EquipmentCheckout $checkout): bool => $checkout->blocksOffSite());
 
         if ($openEquipment) {
             throw DepartmentPresenceException::openEquipmentCheckout();
