@@ -364,6 +364,15 @@ published documents and only the row itself can say which of the two is looking
 at it. Rendering is the node's: every document carries `rendered_html` with its
 fragment text inline, raw HTML stripped, and unsafe links refused.
 
+The event Field Report read (`GET /api/events/{event}/field-reports`) is the IC
+review list and the source the incident link picker chooses from. It requires
+`field_reports.view_event` (17.6) — authorship alone grants no event-wide read —
+and returns every Field Report for the event, newest acceptance first, each
+carrying its display number, title, author, body, and acceptance time. Each
+report also names the incidents it is *actively* linked to; that part is gated
+separately on `incidents.view`, because a Field Report naming its incidents is
+an incident disclosure.
+
 Incident APIs must return data only to IC-authorized users.
 
 The incident list (`GET /api/events/{event}/incidents`) accepts explicit search,
@@ -393,6 +402,16 @@ event's filter options:
   tiebreakers so a record cannot appear on two pages or be skipped between them.
 
 The response also carries the caller's saved filter presets (see 10.16A).
+
+Alongside `filter_options`, which says what a reader may narrow this list by, the
+response carries an `assignable` block saying what an authoring form may put on
+an incident: `statuses` and `priorities` are the canonical vocabularies the
+create and update commands accept, `types` is every incident type the
+organization has (wider than the in-use `filter_options.types`, and the commands
+still accept a new name), and `responders` is the event's configured Incident
+Command department roster. The two blocks differ deliberately: `active` and `all`
+are ways of asking a question rather than states an incident can be in, and a
+type or responder not yet on any incident is still a legitimate thing to add.
 
 The IC permission check runs before any parameter is parsed, so filters never
 widen visibility and an unauthorized actor learns nothing from a filtered,

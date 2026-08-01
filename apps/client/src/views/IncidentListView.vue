@@ -2,100 +2,169 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
 import ControlBar from "@/components/ControlBar.vue";
 import ControlField from "@/components/ControlField.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
-import { LOCAL_PLANNING_TABLE } from "@/department-ops/fixtures";
-import { selectedFixtureDepartment } from "@/department-teams/fixtureDepartmentAccess";
 import {
-  canEditIncident,
   DEFAULT_INCIDENT_LIST_PAGE_SIZE,
-  deleteIncidentPresetForSession,
+  deleteIncidentListPreset,
   formatIncidentDateTime,
-  hasIncidentCommandAccess,
+  getEventIncidents,
   INCIDENT_LIST_PAGE_SIZES,
   INCIDENT_LIST_PRESET_NAME_MAX_LENGTH,
-  incidentResponderOptionsForSession,
-  incidentTypeOptionsForSession,
-  listIncidentPresetsForSession,
+  incidentAccess,
+  incidentSessionContext,
   resolveIncidentListOpenMode,
-  listIncidentsForSession,
-  resolveIncidentSession,
-  saveIncidentPresetForSession,
+  saveIncidentListPreset,
   setIncidentListOpenMode,
   statusLabel,
+  type ImsIncident,
+  type IncidentList,
   type IncidentListFilterSelection,
   type IncidentListOpenMode,
-  type IncidentPriorityLabel,
-  type ImsIncident,
+  type IncidentListPreset,
 } from "@/ims/incidentReadModel";
 
-const session = computed(() => resolveIncidentSession());
-const canView = computed(
-  () =>
-    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
-    hasIncidentCommandAccess(session.value),
-);
-const canEdit = computed(
-  () =>
-    selectedFixtureDepartment.value.capabilities.hasIncidentCommand &&
-    canEditIncident(session.value),
-);
+/**
+ * `ims.incidents` — the restricted incident list (M11.5, M11.19; bound to the
+ * node in M16.20; IMS surface specification 9; UI contract 15.1).
+ *
+ * The URL is the request. Search, filters, sort, and page live in the query
+ * string, go to `GET /api/events/{event}/incidents` as they stand, and the node
+ * answers with the page it decided on plus the selection it applied. Nothing
+ * here narrows or reorders that answer: this list used to filter and sort a
+ * compiled-in array in the browser, which meant the row count, the page count,
+ * and the "matches the current filters" line could all describe a different
+ * result than the one the server would give.
+ *
+ * One filter did not survive the move. "Current shift" matched an incident's
+ * creation time against a shift table compiled into the client; there is no
+ * shift on an incident and no shift window in the read, so a control that
+ * quietly hid rows against fixture data is gone rather than reimplemented
+ * against nothing.
+ */
+const DEFAULT_SELECTION: IncidentListFilterSelection = Object.freeze({
+  search: "",
+  state: "active",
+  priority: "all",
+  type: "all",
+  responder: "all",
+  startedFrom: null,
+  startedTo: null,
+  sort: "updated",
+  direction: "desc",
+});
+
+/** The query parameters the list read takes (data/API 5.1). */
+const LIST_QUERY_KEYS = [
+  "search",
+  "state",
+  "priority",
+  "type",
+  "responder",
+  "started_from",
+  "started_to",
+  "sort",
+  "direction",
+  "page",
+  "per_page",
+] as const;
+
 const route = useRoute();
 const router = useRouter();
-const searchQuery = computed(() =>
-  typeof route.query.search === "string" ? route.query.search : "",
-);
-const stateFilter = computed(() =>
-  typeof route.query.state === "string" ? route.query.state : "active",
-);
-const priorityFilter = computed(() =>
-  typeof route.query.priority === "string" ? route.query.priority : "all",
-);
-const typeFilter = computed(() =>
-  typeof route.query.type === "string" ? route.query.type : "all",
-);
-const responderFilter = computed(() =>
-  typeof route.query.responder === "string" ? route.query.responder : "all",
-);
-const shiftFilter = computed(() =>
-  route.query.shift === "current" ? "current" : "all",
-);
-const sortKey = computed(() =>
-  typeof route.query.sort === "string" ? route.query.sort : "updated",
-);
-const sortDirection = computed(() =>
-  route.query.direction === "asc" ? "asc" : "desc",
-);
-const searchDraft = ref(searchQuery.value);
+const context = computed(() => incidentSessionContext.value);
+const access = computed(() => incidentAccess.value);
+const canView = computed(() => access.value.canView);
+const canEdit = computed(() => access.value.canUpdate);
+
+const list = ref<IncidentList | null>(null);
+const loadError = ref<string | null>(null);
+const loading = ref(false);
+const presets = ref<readonly IncidentListPreset[]>([]);
+const presetNameDraft = ref("");
+const presetError = ref("");
+const presetBusy = ref(false);
 const listOpenMode = ref<IncidentListOpenMode>(resolveIncidentListOpenMode());
-const typeOptions = computed(() => incidentTypeOptionsForSession(session.value));
-const responderOptions = computed(() =>
-  incidentResponderOptionsForSession(session.value),
-);
-const incidents = computed(() => {
-  return listIncidentsForSession(session.value, searchQuery.value)
-    .filter((incident) => matchesStateFilter(incident, stateFilter.value))
-    .filter((incident) => matchesPriorityFilter(incident, priorityFilter.value))
-    .filter((incident) => matchesTypeFilter(incident, typeFilter.value))
-    .filter((incident) =>
-      matchesResponderFilter(incident, responderFilter.value),
-    )
-    .filter((incident) => matchesShiftFilter(incident, shiftFilter.value))
-    .sort(compareIncidents);
+
+/** The table's columns, and the sort key each one asks the node for. */
+const columns: readonly { key: string; label: string }[] = Object.freeze([
+  { key: "incident", label: "Incident" },
+  { key: "state", label: "State" },
+  { key: "priority", label: "Priority" },
+  { key: "types", label: "Types" },
+  { key: "location", label: "Location" },
+  { key: "updated", label: "Last update" },
+]);
+
+/** The request, taken from the URL exactly as the node will read it. */
+const requestQuery = computed(() => {
+  const query: Record<string, string> = {};
+
+  for (const key of LIST_QUERY_KEYS) {
+    const value = route.query[key];
+
+    if (typeof value === "string" && value !== "") {
+      query[key] = value;
+    }
+  }
+
+  return query;
 });
+
+/**
+ * The selection the controls render from.
+ *
+ * The node's applied selection once a read has landed, and the URL's before
+ * then. A control never shows a value the list was not actually narrowed by:
+ * an unparseable filter is refused with a sentence rather than silently
+ * dropped, and the refusal leaves the previous answer on screen.
+ */
+const selection = computed<IncidentListFilterSelection>(
+  () => list.value?.filters ?? { ...DEFAULT_SELECTION, ...urlSelection() },
+);
+const searchQuery = computed(() => selection.value.search);
+const searchDraft = ref(searchQuery.value);
+const incidents = computed(() => list.value?.incidents ?? []);
+const typeOptions = computed(() => list.value?.filterOptions.types ?? []);
+const responderOptions = computed(
+  () => list.value?.filterOptions.responders ?? [],
+);
+const stateOptions = computed(() =>
+  list.value === null ? [selection.value.state] : list.value.filterOptions.states,
+);
+const priorityOptions = computed(() =>
+  list.value === null
+    ? [selection.value.priority]
+    : list.value.filterOptions.priorities,
+);
+const pagination = computed(
+  () =>
+    list.value?.pagination ?? {
+      page: 1,
+      perPage: DEFAULT_INCIDENT_LIST_PAGE_SIZE,
+      total: 0,
+      totalPages: 1,
+      hasMore: false,
+    },
+);
+const pageSize = computed(() => pagination.value.perPage);
+const currentPage = computed(() => pagination.value.page);
+const totalPages = computed(() => pagination.value.totalPages);
 const hasNarrowedList = computed(
   () =>
-    searchQuery.value !== "" ||
-    stateFilter.value !== "active" ||
-    priorityFilter.value !== "all" ||
-    typeFilter.value !== "all" ||
-    responderFilter.value !== "all" ||
-    shiftFilter.value !== "all",
+    selection.value.search !== "" ||
+    selection.value.state !== DEFAULT_SELECTION.state ||
+    selection.value.priority !== DEFAULT_SELECTION.priority ||
+    selection.value.type !== DEFAULT_SELECTION.type ||
+    selection.value.responder !== DEFAULT_SELECTION.responder ||
+    selection.value.startedFrom !== null ||
+    selection.value.startedTo !== null,
 );
+
 /**
  * How many list filters are currently narrowing the list.
  *
@@ -103,17 +172,16 @@ const hasNarrowedList = computed(
  * hiding anything — a filter the reader cannot see and cannot count is how a
  * list ends up looking empty for no visible reason.
  */
-const activeFilterCount = computed(() => {
-  const active = [
-    stateFilter.value !== "active",
-    priorityFilter.value !== "all",
-    typeFilter.value !== "all",
-    responderFilter.value !== "all",
-    shiftFilter.value !== "all",
-  ];
-
-  return active.filter(Boolean).length;
-});
+const activeFilterCount = computed(
+  () =>
+    [
+      selection.value.state !== DEFAULT_SELECTION.state,
+      selection.value.priority !== DEFAULT_SELECTION.priority,
+      selection.value.type !== DEFAULT_SELECTION.type,
+      selection.value.responder !== DEFAULT_SELECTION.responder,
+      selection.value.startedFrom !== null || selection.value.startedTo !== null,
+    ].filter(Boolean).length,
+);
 
 /**
  * The panel starts closed and opens itself when a filter is already applied,
@@ -121,60 +189,17 @@ const activeFilterCount = computed(() => {
  */
 const filtersOpen = ref(activeFilterCount.value > 0);
 
-watch(activeFilterCount, (count) => {
-  if (count > 0) {
-    filtersOpen.value = true;
-  }
-});
-
-const pageSize = computed(() => {
-  const requested = Number.parseInt(String(route.query.per_page ?? ""), 10);
-
-  return INCIDENT_LIST_PAGE_SIZES.includes(requested)
-    ? requested
-    : DEFAULT_INCIDENT_LIST_PAGE_SIZE;
-});
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(incidents.value.length / pageSize.value)),
-);
-const currentPage = computed(() => {
-  const requested = Number.parseInt(String(route.query.page ?? ""), 10);
-
-  if (!Number.isFinite(requested) || requested < 1) {
-    return 1;
-  }
-
-  return Math.min(requested, totalPages.value);
-});
-const pagedIncidents = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value;
-
-  return incidents.value.slice(start, start + pageSize.value);
-});
 const resultSummary = computed(() => {
-  const total = incidents.value.length;
+  const total = pagination.value.total;
   const matched =
     total === 1
       ? "1 incident matches the current filters."
       : `${total} incidents match the current filters.`;
 
   return totalPages.value > 1
-    ? `${matched} Showing ${pagedIncidents.value.length} on page ${currentPage.value} of ${totalPages.value}.`
+    ? `${matched} Showing ${incidents.value.length} on page ${currentPage.value} of ${totalPages.value}.`
     : matched;
 });
-const currentSelection = computed<IncidentListFilterSelection>(() => ({
-  search: searchQuery.value,
-  state: stateFilter.value,
-  priority: priorityFilter.value,
-  type: typeFilter.value,
-  responder: responderFilter.value,
-  shift: shiftFilter.value,
-  sort: sortKey.value,
-  direction: sortDirection.value,
-}));
-const presets = ref(listIncidentPresetsForSession(session.value));
-const presetNameDraft = ref("");
-const presetError = ref("");
 const matchingPreset = computed(
   () =>
     presets.value.find(
@@ -183,19 +208,79 @@ const matchingPreset = computed(
     ) ?? null,
 );
 
+watch(activeFilterCount, (count) => {
+  if (count > 0) {
+    filtersOpen.value = true;
+  }
+});
+
 watch(searchQuery, (value) => {
   searchDraft.value = value;
 });
 
-watch(session, () => {
-  refreshPresets();
-});
+watch(
+  () => [context.value?.eventId ?? null, requestQuery.value] as const,
+  () => {
+    void loadIncidents();
+  },
+  { deep: true, immediate: true },
+);
 
-function priorityText(priorityLabel: string | null): string {
-  return priorityLabel ?? "Priority not set";
+function urlSelection(): Partial<IncidentListFilterSelection> {
+  const query = requestQuery.value;
+
+  return {
+    ...(query.search === undefined ? {} : { search: query.search }),
+    ...(query.state === undefined ? {} : { state: query.state }),
+    ...(query.priority === undefined ? {} : { priority: query.priority }),
+    ...(query.type === undefined ? {} : { type: query.type }),
+    ...(query.responder === undefined ? {} : { responder: query.responder }),
+    ...(query.sort === undefined ? {} : { sort: query.sort }),
+    ...(query.direction === undefined ? {} : { direction: query.direction }),
+  };
 }
 
-function priorityClass(priorityLabel: IncidentPriorityLabel): string {
+/**
+ * Read the page the URL asks for.
+ *
+ * A failed read clears the list rather than leaving the last page on screen: an
+ * event whose incidents could not be read must not look like an event with no
+ * incidents.
+ */
+async function loadIncidents(): Promise<void> {
+  const eventId = context.value?.eventId;
+
+  if (eventId === undefined || !canView.value) {
+    list.value = null;
+    presets.value = [];
+
+    return;
+  }
+
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    const page = await getEventIncidents(eventId, requestQuery.value);
+
+    list.value = page;
+    presets.value = page.presets;
+  } catch (error) {
+    list.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load incidents. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
+
+function priorityText(priorityLabel: string): string {
+  return priorityLabel === "" ? "Priority not set" : priorityLabel;
+}
+
+function priorityClass(priorityLabel: string): string {
   return `ims-list__priority--${priorityLabel.toLowerCase()}`;
 }
 
@@ -203,17 +288,39 @@ function typeText(typeNames: readonly string[]): string {
   return typeNames.length > 0 ? typeNames.join(", ") : "Types not set";
 }
 
+/**
+ * What one entry of the node's state vocabulary is called in the control.
+ *
+ * `active` and `all` are questions rather than states, so they read as
+ * questions; everything else is a status and gets the label the rest of the
+ * IMS gives it.
+ */
+function stateFilterLabel(state: string): string {
+  if (state === "active") {
+    return "Active states";
+  }
+
+  return state === "all" ? "All states" : statusLabel(state);
+}
+
+/** Whether the node offers this sort at all; unlisted headings stay plain. */
+function isSortable(key: string): boolean {
+  return (list.value?.filterOptions.sorts ?? []).includes(key);
+}
+
 function activeSortDirection(key: string): "ascending" | "descending" | "none" {
-  if (sortKey.value !== key) {
+  if (selection.value.sort !== key) {
     return "none";
   }
 
-  return sortDirection.value === "asc" ? "ascending" : "descending";
+  return selection.value.direction === "asc" ? "ascending" : "descending";
 }
 
 function nextSortQuery(key: string) {
   const nextDirection =
-    sortKey.value === key && sortDirection.value === "asc" ? "desc" : "asc";
+    selection.value.sort === key && selection.value.direction === "asc"
+      ? "desc"
+      : "asc";
 
   return {
     ...route.query,
@@ -223,26 +330,43 @@ function nextSortQuery(key: string) {
   };
 }
 
-function onStateFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
+/** Every filter change lands on the first page of its own result. */
+function pushFilter(key: string, value: string | undefined): void {
   void router.push({
     name: "ims.incidents.index",
-    query: { ...route.query, state: target.value, page: undefined },
+    query: { ...route.query, [key]: value, page: undefined },
   });
+}
+
+function onStateFilterChange(event: Event): void {
+  pushFilter("state", (event.target as HTMLSelectElement).value);
 }
 
 function onPriorityFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
-  void router.push({
-    name: "ims.incidents.index",
-    query: { ...route.query, priority: target.value, page: undefined },
-  });
+  pushFilter("priority", (event.target as HTMLSelectElement).value);
 }
 
-function refreshPresets(): void {
-  presets.value = listIncidentPresetsForSession(session.value);
+function onTypeFilterChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value;
+
+  pushFilter("type", value === "all" ? undefined : value);
+}
+
+function onResponderFilterChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value;
+
+  pushFilter("responder", value === "all" ? undefined : value);
+}
+
+function onPageSizeChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value;
+
+  pushFilter(
+    "per_page",
+    Number.parseInt(value, 10) === DEFAULT_INCIDENT_LIST_PAGE_SIZE
+      ? undefined
+      : value,
+  );
 }
 
 function onPresetApply(event: Event): void {
@@ -257,64 +381,65 @@ function onPresetApply(event: Event): void {
 
   presetNameDraft.value = preset.name;
 
-  // A preset replaces the whole selection rather than merging into it, and
-  // always lands on the first page of its own result.
+  // A preset replaces the whole selection rather than merging into it, and the
+  // node hands its own query parameters back ready to be used as one.
   void router.push({
     name: "ims.incidents.index",
     query: { ...preset.query },
   });
 }
 
-function onPresetSave(): void {
+async function onPresetSave(): Promise<void> {
+  const eventId = context.value?.eventId;
+
   presetError.value = "";
 
-  try {
-    const preset = saveIncidentPresetForSession(
-      session.value,
-      presetNameDraft.value,
-      currentSelection.value,
-    );
-
-    presetNameDraft.value = preset.name;
-    refreshPresets();
-  } catch (error) {
-    presetError.value =
-      error instanceof Error ? error.message : "Unable to save this preset.";
-  }
-}
-
-function onPresetDelete(): void {
-  const preset = matchingPreset.value;
-  presetError.value = "";
-
-  if (!preset) {
+  if (eventId === undefined) {
     return;
   }
 
+  presetBusy.value = true;
+
   try {
-    deleteIncidentPresetForSession(session.value, preset.id);
-    presetNameDraft.value = "";
-    refreshPresets();
+    presets.value = await saveIncidentListPreset(
+      eventId,
+      presetNameDraft.value,
+      selection.value,
+    );
+    presetNameDraft.value = presetNameDraft.value.trim();
   } catch (error) {
-    presetError.value =
-      error instanceof Error ? error.message : "Unable to delete this preset.";
+    presetError.value = meridianErrorMessage(
+      error,
+      "Unable to save this preset.",
+    );
+  } finally {
+    presetBusy.value = false;
   }
 }
 
-function onPageSizeChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
+async function onPresetDelete(): Promise<void> {
+  const eventId = context.value?.eventId;
+  const preset = matchingPreset.value;
 
-  void router.push({
-    name: "ims.incidents.index",
-    query: {
-      ...route.query,
-      per_page:
-        Number.parseInt(target.value, 10) === DEFAULT_INCIDENT_LIST_PAGE_SIZE
-          ? undefined
-          : target.value,
-      page: undefined,
-    },
-  });
+  presetError.value = "";
+
+  if (eventId === undefined || !preset) {
+    return;
+  }
+
+  presetBusy.value = true;
+
+  try {
+    presets.value = await deleteIncidentListPreset(eventId, preset.id);
+    presetNameDraft.value = "";
+  } catch (error) {
+    presetError.value = meridianErrorMessage(
+      error,
+      "Unable to delete this preset.",
+    );
+  } finally {
+    presetBusy.value = false;
+  }
 }
 
 function pageQuery(page: number) {
@@ -322,45 +447,6 @@ function pageQuery(page: number) {
     ...route.query,
     page: page <= 1 ? undefined : String(page),
   };
-}
-
-function onTypeFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
-  void router.push({
-    name: "ims.incidents.index",
-    query: {
-      ...route.query,
-      type: target.value === "all" ? undefined : target.value,
-      page: undefined,
-    },
-  });
-}
-
-function onResponderFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
-  void router.push({
-    name: "ims.incidents.index",
-    query: {
-      ...route.query,
-      responder: target.value === "all" ? undefined : target.value,
-      page: undefined,
-    },
-  });
-}
-
-function onShiftFilterChange(event: Event): void {
-  const target = event.target as HTMLSelectElement;
-
-  void router.push({
-    name: "ims.incidents.index",
-    query: {
-      ...route.query,
-      shift: target.value === "current" ? "current" : undefined,
-      page: undefined,
-    },
-  });
 }
 
 function onListOpenModeChange(event: Event): void {
@@ -385,134 +471,6 @@ function incidentOpenTarget(incident: ImsIncident) {
   };
 }
 
-function matchesStateFilter(incident: ImsIncident, filter: string): boolean {
-  if (filter === "all") {
-    return true;
-  }
-
-  if (filter === "active") {
-    return incident.status !== "closed";
-  }
-
-  return incident.status === filter;
-}
-
-function matchesPriorityFilter(incident: ImsIncident, filter: string): boolean {
-  return filter === "all" || incident.priorityLabel === filter;
-}
-
-function matchesTypeFilter(incident: ImsIncident, filter: string): boolean {
-  return (
-    filter === "all" ||
-    incident.incidentTypeNames.some(
-      (name) => name.toLowerCase() === filter.toLowerCase(),
-    )
-  );
-}
-
-function matchesResponderFilter(incident: ImsIncident, filter: string): boolean {
-  return (
-    filter === "all" ||
-    incident.responders.some((responder) => responder.staffId === filter)
-  );
-}
-
-function activeShiftWindow():
-  | { readonly startsAt: number; readonly endsAt: number }
-  | null {
-  const activeShift =
-    LOCAL_PLANNING_TABLE.rows.find((row) => row.lifecycle === "active") ?? null;
-
-  if (!activeShift) {
-    return null;
-  }
-
-  const startsAt = Date.parse(activeShift.startsAt);
-  const endsAt = Date.parse(activeShift.endsAt);
-
-  if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) {
-    return null;
-  }
-
-  return { startsAt, endsAt };
-}
-
-function matchesShiftFilter(incident: ImsIncident, filter: string): boolean {
-  if (filter !== "current") {
-    return true;
-  }
-
-  const shiftWindow = activeShiftWindow();
-  const createdAt = Date.parse(incident.createdAt);
-
-  if (!shiftWindow || Number.isNaN(createdAt)) {
-    return false;
-  }
-
-  return createdAt >= shiftWindow.startsAt && createdAt <= shiftWindow.endsAt;
-}
-
-function statusSortValue(status: ImsIncident["status"]): number {
-  return {
-    open: 0,
-    on_scene: 1,
-    monitoring: 2,
-    on_hold: 3,
-    closed: 4,
-  }[status];
-}
-
-function prioritySortValue(priority: IncidentPriorityLabel): number {
-  return {
-    Critical: 0,
-    Serious: 1,
-    Important: 2,
-    Routine: 3,
-  }[priority];
-}
-
-function compareText(left: string, right: string): number {
-  return left.localeCompare(right, undefined, { sensitivity: "base" });
-}
-
-function compareIncidents(left: ImsIncident, right: ImsIncident): number {
-  const direction = sortDirection.value === "asc" ? 1 : -1;
-  let result = 0;
-
-  switch (sortKey.value) {
-    case "incident":
-      result =
-        compareText(left.incidentNumber, right.incidentNumber) ||
-        compareText(left.title, right.title);
-      break;
-    case "state":
-      result = statusSortValue(left.status) - statusSortValue(right.status);
-      break;
-    case "priority":
-      result =
-        prioritySortValue(left.priorityLabel) -
-        prioritySortValue(right.priorityLabel);
-      break;
-    case "types":
-      result = compareText(
-        typeText(left.incidentTypeNames),
-        typeText(right.incidentTypeNames),
-      );
-      break;
-    case "location":
-      result = compareText(left.locationName ?? "", right.locationName ?? "");
-      break;
-    case "updated":
-    default:
-      result = left.updatedAt.localeCompare(right.updatedAt);
-      break;
-  }
-
-  return result === 0
-    ? right.updatedAt.localeCompare(left.updatedAt)
-    : result * direction;
-}
-
 async function onSearchSubmit(): Promise<void> {
   const search = searchDraft.value.trim();
 
@@ -520,8 +478,7 @@ async function onSearchSubmit(): Promise<void> {
     name: "ims.incidents.index",
     query: {
       ...route.query,
-      ...(search ? { search } : {}),
-      ...(!search ? { search: undefined } : {}),
+      search: search === "" ? undefined : search,
       page: undefined,
     },
   });
@@ -533,13 +490,13 @@ async function onSearchSubmit(): Promise<void> {
     class="ims-list"
     heading-id="ims-incidents-heading"
     title="Incidents"
-    :eyebrow="session?.icDepartmentLabel ?? 'Incident Command'"
+    :eyebrow="context?.icDepartmentLabel ?? 'Incident Command'"
     lede="Restricted Incident Command workspace for event incident records."
   >
     <template #actions>
       <div class="ims-list__links">
         <WorkflowActionButton
-          v-if="canEdit"
+          v-if="access.canCreate"
           :to="{ name: 'ims.incidents.create' }"
         >
           Create incident
@@ -550,7 +507,7 @@ async function onSearchSubmit(): Promise<void> {
           behalf, which is Incident Command work.
         -->
         <WorkflowActionButton
-          v-if="canEdit"
+          v-if="access.canCreate"
           variant="secondary"
           :to="{ name: 'ims.field-reports.create' }"
         >
@@ -561,7 +518,7 @@ async function onSearchSubmit(): Promise<void> {
 
     <template #navigation>
       <RouterLink
-        v-if="canView"
+        v-if="access.canViewFieldReports"
         class="ims-list__secondary-link"
         :to="{ name: 'ims.field-reports.index' }"
       >
@@ -570,17 +527,17 @@ async function onSearchSubmit(): Promise<void> {
     </template>
 
     <template #heading-cards>
-      <WorkflowHeadingCardGrid v-if="session">
+      <WorkflowHeadingCardGrid v-if="context">
         <WorkflowHeadingCard
           label="Organization"
-          :value="session.organizationLabel"
+          :value="context.organizationLabel"
         />
-        <WorkflowHeadingCard label="Event" :value="session.eventLabel" />
+        <WorkflowHeadingCard label="Event" :value="context.eventLabel" />
         <WorkflowHeadingCard
           label="IC department"
-          :value="session.icDepartmentLabel"
+          :value="context.icDepartmentLabel"
         />
-        <WorkflowHeadingCard label="Role" :value="session.roleLabel" />
+        <WorkflowHeadingCard label="Role" :value="context.roleLabel" />
       </WorkflowHeadingCardGrid>
     </template>
 
@@ -622,8 +579,12 @@ async function onSearchSubmit(): Promise<void> {
         </form>
       </ControlBar>
 
+      <p v-if="loadError" class="ims-list__load-error" role="alert">
+        {{ loadError }}
+      </p>
+
       <!--
-        Filters collapse by default. Seven selects above a list is more chrome
+        Filters collapse by default. Six selects above a list is more chrome
         than data on a phone, and the reader arrives wanting the incidents, not
         the controls. The summary carries the active count so a closed panel
         never hides a filter silently.
@@ -637,40 +598,48 @@ async function onSearchSubmit(): Promise<void> {
         </summary>
         <div class="ims-list__filter-body">
         <form class="ims-list__filters" aria-label="Filter incidents">
+          <!--
+            The state and priority vocabularies are the node's, off the read's
+            own `filter_options`, so a state Meridian adds appears here without
+            this template learning about it. `active` and `all` are ways of
+            asking rather than states, which is why they get their own wording.
+          -->
           <label for="ims-list-state"><span>State</span>
             <select
               id="ims-list-state"
-              :value="stateFilter"
+              :value="selection.state"
               @change="onStateFilterChange"
             >
-              <option value="active">Active states</option>
-              <option value="open">Open</option>
-              <option value="on_scene">On Scene</option>
-              <option value="monitoring">Monitoring</option>
-              <option value="on_hold">On Hold</option>
-              <option value="closed">Closed</option>
-              <option value="all">All states</option>
+              <option
+                v-for="state in stateOptions"
+                :key="state"
+                :value="state"
+              >
+                {{ stateFilterLabel(state) }}
+              </option>
             </select>
           </label>
 
           <label for="ims-list-priority"><span>Priority</span>
             <select
               id="ims-list-priority"
-              :value="priorityFilter"
+              :value="selection.priority"
               @change="onPriorityFilterChange"
             >
-              <option value="all">All priorities</option>
-              <option value="Critical">Critical</option>
-              <option value="Serious">Serious</option>
-              <option value="Important">Important</option>
-              <option value="Routine">Routine</option>
+              <option
+                v-for="priority in priorityOptions"
+                :key="priority"
+                :value="priority"
+              >
+                {{ priority === "all" ? "All priorities" : priority }}
+              </option>
             </select>
           </label>
 
           <label for="ims-list-type"><span>Type</span>
             <select
               id="ims-list-type"
-              :value="typeFilter"
+              :value="selection.type"
               @change="onTypeFilterChange"
             >
               <option value="all">All types</option>
@@ -683,7 +652,7 @@ async function onSearchSubmit(): Promise<void> {
           <label for="ims-list-responder"><span>Responder</span>
             <select
               id="ims-list-responder"
-              :value="responderFilter"
+              :value="selection.responder"
               @change="onResponderFilterChange"
             >
               <option value="all">All responders</option>
@@ -694,17 +663,6 @@ async function onSearchSubmit(): Promise<void> {
               >
                 {{ responder.displayName }}
               </option>
-            </select>
-          </label>
-
-          <label for="ims-list-shift"><span>Shift</span>
-            <select
-              id="ims-list-shift"
-              :value="shiftFilter"
-              @change="onShiftFilterChange"
-            >
-              <option value="all">All shifts</option>
-              <option value="current">Current shift</option>
             </select>
           </label>
 
@@ -770,10 +728,15 @@ async function onSearchSubmit(): Promise<void> {
             />
           </label>
 
-          <button type="submit">
+          <button type="submit" :disabled="presetBusy">
             {{ matchingPreset ? "Update preset" : "Save preset" }}
           </button>
-          <button v-if="matchingPreset" type="button" @click="onPresetDelete">
+          <button
+            v-if="matchingPreset"
+            type="button"
+            :disabled="presetBusy"
+            @click="onPresetDelete"
+          >
             Delete preset
           </button>
         </form>
@@ -784,7 +747,12 @@ async function onSearchSubmit(): Promise<void> {
         {{ presetError }}
       </p>
 
-      <p class="ims-list__summary" role="status">
+      <!--
+        Counts and empty states stay off the screen while the read is unknown.
+        "No incidents are recorded for this event" under a failed read is the
+        client answering a question the node did not.
+      -->
+      <p v-if="!loadError" class="ims-list__summary" role="status">
         <span>{{ resultSummary }}</span>
         <RouterLink
           v-if="hasNarrowedList"
@@ -795,7 +763,19 @@ async function onSearchSubmit(): Promise<void> {
         </RouterLink>
       </p>
 
-      <p v-if="incidents.length === 0" class="ims-list__empty">
+      <p
+        v-if="loading && list === null"
+        class="ims-list__empty"
+        role="status"
+      >
+        Loading incidents.
+      </p>
+
+      <p v-else-if="loadError" class="ims-list__empty">
+        The incidents for this event could not be read.
+      </p>
+
+      <p v-else-if="incidents.length === 0" class="ims-list__empty">
         {{
           hasNarrowedList
             ? "No incidents match this search."
@@ -821,40 +801,33 @@ async function onSearchSubmit(): Promise<void> {
           </caption>
           <thead>
             <tr>
-              <th scope="col" :aria-sort="activeSortDirection('incident')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('incident') }">
-                  Incident
+              <!--
+                A heading is a sort control only where the node offers that
+                sort. Types is the one that never was: it was sorted here over
+                a compiled-in array, and `filter_options.sorts` does not list
+                it, so asking for it would be refused.
+              -->
+              <th
+                v-for="column in columns"
+                :key="column.key"
+                scope="col"
+                :aria-sort="activeSortDirection(column.key)"
+              >
+                <RouterLink
+                  v-if="isSortable(column.key)"
+                  :to="{
+                    name: 'ims.incidents.index',
+                    query: nextSortQuery(column.key),
+                  }"
+                >
+                  {{ column.label }}
                 </RouterLink>
-              </th>
-              <th scope="col" :aria-sort="activeSortDirection('state')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('state') }">
-                  State
-                </RouterLink>
-              </th>
-              <th scope="col" :aria-sort="activeSortDirection('priority')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('priority') }">
-                  Priority
-                </RouterLink>
-              </th>
-              <th scope="col" :aria-sort="activeSortDirection('types')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('types') }">
-                  Types
-                </RouterLink>
-              </th>
-              <th scope="col" :aria-sort="activeSortDirection('location')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('location') }">
-                  Location
-                </RouterLink>
-              </th>
-              <th scope="col" :aria-sort="activeSortDirection('updated')">
-                <RouterLink :to="{ name: 'ims.incidents.index', query: nextSortQuery('updated') }">
-                  Last update
-                </RouterLink>
+                <span v-else>{{ column.label }}</span>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="incident in pagedIncidents" :key="incident.id">
+            <tr v-for="incident in incidents" :key="incident.id">
               <th scope="row">
                 <RouterLink
                   class="ims-list__incident-link"
@@ -1082,7 +1055,8 @@ async function onSearchSubmit(): Promise<void> {
   color: var(--m-text-muted);
 }
 
-.ims-list__preset-error {
+.ims-list__preset-error,
+.ims-list__load-error {
   margin: 0;
   color: var(--m-attention-critical);
   font-size: var(--m-text-sm);

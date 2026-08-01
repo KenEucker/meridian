@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
@@ -10,33 +10,83 @@ import {
   installFieldSession,
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
-import {
-  clearIncidentSession,
-  installIncidentSession,
-  LOCAL_IMS_EVENT_ID,
-  type IncidentSessionContext,
-} from "@/ims/incidentReadModel";
+import { configureMeridianApi } from "@/api/meridianApi";
+import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
+import { installLocalFieldSession } from "@/session/localFieldSession";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
+import type { SessionRole } from "@/session/sessionDocument";
 
 /**
  * An IC operator takes a Field Report by dictation from the Incidents
  * workspace: they name the staff member who gave it to them, submit, and the
  * report files to that staff member with the operator recorded on it.
+ *
+ * Dictation is gated on `incidents.create`, which since M16.20 comes from the
+ * session response rather than an installed IMS role. A viewer holds
+ * `incidents.view` and nothing else.
  */
-const IC_SESSION: IncidentSessionContext = {
-  eventId: LOCAL_IMS_EVENT_ID,
-  eventLabel: "Idaho Decompression 2026",
-  organizationLabel: "Idaho Burners",
-  icDepartmentLabel: "Rangers",
-  role: "ic_operator",
-  roleLabel: "Incident Command Operator",
-};
+const RANGERS = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
 
-const IC_VIEWER_SESSION: IncidentSessionContext = {
-  ...IC_SESSION,
-  role: "ic_viewer",
-  roleLabel: "Incident Command Viewer",
-};
+function icRoles(capabilities: readonly string[]): SessionRole[] {
+  return [
+    {
+      role_code: "ic_viewer",
+      role_name: "Incident Command Viewer",
+      scope_type: "event",
+      organization_id: null,
+      department_id: RANGERS,
+      team_id: null,
+      team_name: null,
+      event_id: "11111111-1111-4111-8111-111111111111",
+      team_grant_id: null,
+      reason: null,
+      capabilities: [...capabilities],
+    },
+  ];
+}
+
+function installIcSession(capabilities?: readonly string[]): void {
+  installLocalFieldSession(
+    capabilities === undefined ? {} : { roles: icRoles(capabilities) },
+  );
+  selectSessionDepartment(RANGERS);
+}
+
+/**
+ * A node with no incidents, so mounting the Incidents page in this file is
+ * about which actions it offers rather than what it lists.
+ */
+function stubEmptyIncidentNode(): void {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            event_id: "11111111-1111-4111-8111-111111111111",
+            filters: {},
+            filter_options: {},
+            assignable: {},
+            pagination: { page: 1, per_page: 25, total: 0, total_pages: 1 },
+            presets: [],
+            incidents: [],
+            field_reports: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    ),
+  );
+}
 
 // The operator's own staff id is the one the department fixtures know as
 // "Local Field Author", so the attribution line can name them.
@@ -73,15 +123,19 @@ function buttonByText(wrapper: VueWrapper, text: string) {
 beforeEach(async () => {
   await resetFieldReportRuntime();
   clearFieldSession();
-  clearIncidentSession();
+  clearClientSession();
   installFieldSession(OPERATOR_SESSION);
-  installIncidentSession(IC_SESSION);
+  installIcSession();
+  stubEmptyIncidentNode();
 });
 
 afterEach(async () => {
   await resetFieldReportRuntime();
   clearFieldSession();
-  clearIncidentSession();
+  clearClientSession();
+  resetSelectedSessionDepartment();
+  configureMeridianApi(null);
+  vi.unstubAllGlobals();
 });
 
 describe("dictated Field Report entry point", () => {
@@ -96,7 +150,7 @@ describe("dictated Field Report entry point", () => {
   });
 
   it("hides Take Field Report from an IC viewer", async () => {
-    installIncidentSession(IC_VIEWER_SESSION);
+    installIcSession(["incidents.view"]);
     const { wrapper } = await mountAt("/ims/incidents");
 
     expect(
@@ -105,7 +159,7 @@ describe("dictated Field Report entry point", () => {
   });
 
   it("refuses the dictation form to an IC viewer who navigates to it directly", async () => {
-    installIncidentSession(IC_VIEWER_SESSION);
+    installIcSession(["incidents.view"]);
     const { wrapper } = await mountAt("/ims/field-reports/create");
 
     expect(wrapper.text()).toContain(

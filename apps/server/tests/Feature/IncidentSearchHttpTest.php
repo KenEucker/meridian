@@ -372,6 +372,49 @@ class IncidentSearchHttpTest extends TestCase
             ->assertJsonPath('filters.direction', 'desc');
     }
 
+    public function test_list_returns_what_an_authoring_form_may_assign(): void
+    {
+        $event = $this->eventWithIncidentCommandDepartment();
+        $otherEvent = $this->eventWithIncidentCommandDepartment();
+        $lead = $this->userWithEventRole('ic_lead', $event);
+        $incident = $this->incident($event, ['title' => 'Assignable record']);
+
+        $this->attachType($incident, $event, 'Medical');
+        IncidentType::factory()->create([
+            'organization_id' => $event->organization_id,
+            'name' => 'Weather',
+        ]);
+        IncidentType::factory()->create([
+            'organization_id' => $otherEvent->organization_id,
+            'name' => 'Other organization type',
+        ]);
+
+        $responder = Staff::factory()->create(['preferred_name' => 'Vera']);
+        DepartmentMembership::factory()
+            ->for(Department::query()->findOrFail($event->ic_department_id))
+            ->for($responder)
+            ->create();
+        $outsider = Staff::factory()->create(['preferred_name' => 'Wanda']);
+        DepartmentMembership::factory()
+            ->for(Department::factory()->for($event->organization)->create())
+            ->for($outsider)
+            ->create();
+
+        $response = $this->actingAsClient($lead)
+            ->getJson("/api/events/{$event->id}/incidents")
+            ->assertOk()
+            ->assertJsonPath('assignable.statuses', Incident::statuses())
+            ->assertJsonPath('assignable.priorities', Incident::priorityLabels())
+            // In use for this event, and known to the organization but not yet
+            // used here. The other organization's type is neither.
+            ->assertJsonPath('assignable.types', ['Medical', 'Weather']);
+
+        $responderIds = array_column($response->json('assignable.responders'), 'staff_id');
+
+        $this->assertContains($responder->id, $responderIds);
+        $this->assertNotContains($outsider->id, $responderIds);
+    }
+
     public function test_invalid_filter_values_are_refused_without_falling_back(): void
     {
         $event = $this->eventWithIncidentCommandDepartment();

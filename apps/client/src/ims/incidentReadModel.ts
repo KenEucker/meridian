@@ -1,27 +1,114 @@
-export type IncidentRole =
-  | "ic_viewer"
-  | "ic_operator"
-  | "ic_lead"
-  | "department_lead"
-  | "organizer"
-  | "staff";
+// The IMS surfaces' data layer (M16.20; CLIENT-023, CLIENT-006, CLIENT-015;
+// INC-001 through INC-015; data/API 5.1, 5.2; IMS surface specification 8, 9).
+//
+// Until this task this module *was* the IMS. Three incidents, three Field
+// Reports, and three responders were compiled into the client; a dozen `Map`s
+// held the notes, links, strikes, and field edits a session made; and the rules
+// the node enforces in `IncidentCreationService`, `IncidentUpdateService`,
+// `IncidentTimelineService`, `IncidentLinkService`, `IncidentSearchService`, and
+// `IncidentListPresetService` were written a second time in the browser —
+// incident numbering, the timeline entries a field change produces, the
+// same-event link rule, the free-text search, the preset cap. None of it reached
+// a node, so an incident opened at a desk was nobody's incident, and every rule
+// kept here could only drift from the one that actually governs.
+//
+// This module is now a translation of the incident endpoints. Five choices in it
+// are deliberate:
+//
+//  1. **One read per surface, and the node answers the question that was
+//     asked.** `GET /api/events/{event}/incidents` takes the search, filters,
+//     sort, and page as query parameters and answers with the incidents, the
+//     applied selection, the filter vocabulary, what a form may assign, the
+//     caller's saved presets, and where the reader is in the result. Nothing
+//     here re-filters or re-sorts what came back: a list narrowed locally is a
+//     different answer than the one the node gave, and the page counts stop
+//     meaning anything.
+//  2. **Authority comes from the session response** (M16.6; CLIENT-004). The
+//     capability codes `GET /api/me` publishes for the department the client is
+//     working in decide what the surfaces offer — `incidents.view`,
+//     `incidents.create`, `incidents.update`, `incidents.add_note`,
+//     `incidents.link_field_report`, `incidents.print`. The old role predicates
+//     over a compiled-in `IncidentSessionContext` are gone; all they could do
+//     was disagree with the server, which refuses the request either way
+//     (CLIENT-006).
+//  3. **Every write is a command, and every one of them is connected-only.**
+//     Technical spec 19.2 requires an active server connection for incident
+//     mutations, so they go through `sendConnectedCommand` and are refused where
+//     they stand rather than queued (CLIENT-015, CLIENT-018). The refusal is the
+//     command catalog's own sentence.
+//  4. **A write is followed by a read.** The commands answer with the record
+//     they changed, but the timeline entry a change produced, the chips it moved,
+//     and the other incident a link touched are the node's business. Re-reading
+//     is one request and removes the whole class of bug where the screen and the
+//     node disagree about what just happened.
+//  5. **Tags stay client-side, and only tags.** `#tag` chips have no server
+//     model — the list search strips a leading `#` and searches the text
+//     (NR-010) — so they are parsed here from text the node sent, which is
+//     rendering rather than a second copy of a rule. Name Reference chips are
+//     the node's `name_reference_chips` and are not re-derived.
 
+import { computed } from "vue";
+
+import { meridianJson } from "@/api/meridianApi";
+import { sendConnectedCommand } from "@/outbox/submitCommand";
+import {
+  CAPABILITY_FIELD_REPORTS_VIEW_EVENT,
+  CAPABILITY_INCIDENTS_ADD_NOTE,
+  CAPABILITY_INCIDENTS_CREATE,
+  CAPABILITY_INCIDENTS_LINK_FIELD_REPORT,
+  CAPABILITY_INCIDENTS_PRINT,
+  CAPABILITY_INCIDENTS_UPDATE,
+  CAPABILITY_INCIDENTS_VIEW,
+} from "@/session/permissionCodes";
+import {
+  departmentHasCapability,
+  selectedSessionDepartment,
+  sessionEventContext,
+} from "@/session/sessionAccess";
+import { sessionOrganizationLabel } from "@/session/sessionContext";
+
+/**
+ * A status string as the node spells it.
+ *
+ * Not a union: `Incident::statuses()` is the vocabulary and it arrives on every
+ * list read as `assignable.statuses`. A closed set declared here would be a
+ * second copy of it that can only fall behind, and the one thing this client
+ * does with a status — print it — degrades gracefully instead.
+ */
+export type IncidentStatus = string;
+
+export type IncidentPriorityLabel = string;
+
+/** Where the client is working, for the labels the IMS surfaces show. */
 export interface IncidentSessionContext {
   readonly eventId: string;
   readonly eventLabel: string;
   readonly organizationLabel: string;
+  /** The department the incident capabilities are held in. */
   readonly icDepartmentLabel: string;
-  readonly role: IncidentRole;
+  /** The node's own names for the roles that carry `incidents.view` here. */
   readonly roleLabel: string;
+}
+
+/** What this caller may do with incidents, as the session response said. */
+export interface IncidentAccess {
+  readonly canView: boolean;
+  readonly canCreate: boolean;
+  readonly canUpdate: boolean;
+  readonly canAddNote: boolean;
+  readonly canLinkFieldReport: boolean;
+  readonly canPrint: boolean;
+  readonly canViewFieldReports: boolean;
 }
 
 export type IncidentListOpenMode = "view" | "edit";
 
 /**
- * One saved incident list selection (M11.19).
+ * One saved incident list selection (M11.19; data/API 5.2).
  *
  * Presets capture what is being looked for, never where the reader had paged
- * to, so applying one always starts at the first page.
+ * to, so applying one always starts at the first page. The field names are the
+ * node's own, because a preset is handed straight back to the list endpoint.
  */
 export interface IncidentListFilterSelection {
   readonly search: string;
@@ -29,7 +116,8 @@ export interface IncidentListFilterSelection {
   readonly priority: string;
   readonly type: string;
   readonly responder: string;
-  readonly shift: string;
+  readonly startedFrom: string | null;
+  readonly startedTo: string | null;
   readonly sort: string;
   readonly direction: string;
 }
@@ -39,12 +127,11 @@ export interface IncidentListPreset {
   readonly eventId: string;
   readonly name: string;
   readonly filters: IncidentListFilterSelection;
+  /** Ready to hand back to the list endpoint as query parameters. */
   readonly query: Record<string, string>;
 }
 
 export const INCIDENT_LIST_PRESET_NAME_MAX_LENGTH = 60;
-
-export const INCIDENT_LIST_PRESET_MAX_PER_EVENT = 20;
 
 export const INCIDENT_LIST_PAGE_SIZES: readonly number[] = Object.freeze([
   10, 25, 50, 100,
@@ -56,18 +143,11 @@ export interface IncidentTimelineEntry {
   readonly id: string;
   readonly incidentId: string;
   readonly actorName: string | null;
-  readonly entryType:
-    | "incident_opened"
-    | "operational_note"
-    | "incident_field_updated"
-    | "incident_linked"
-    | "incident_unlinked"
-    | "field_report_linked"
-    | "field_report_unlinked"
-    | "incident_attachment_stricken";
+  readonly entryType: string;
   readonly body: string | null;
   readonly previousValue?: Record<string, string | null>;
   readonly newValue?: Record<string, string | null>;
+  readonly reason?: string | null;
   readonly createdAt: string;
   readonly strickenAt?: string | null;
   readonly strickenReason?: string | null;
@@ -83,23 +163,24 @@ export interface IncidentTagChip {
   readonly normalizedTag: string;
 }
 
-export type IncidentPriorityLabel =
-  | "Routine"
-  | "Important"
-  | "Serious"
-  | "Critical";
-
 export interface IncidentResponder {
   readonly staffId: string;
   readonly displayName: string;
   readonly relationshipLabel: string;
 }
 
+/** A responder a form may attach, from the event's IC department roster. */
+export interface AssignableResponder {
+  readonly staffId: string;
+  readonly displayName: string;
+  readonly detail: string;
+}
+
 export interface LinkedIncidentSummary {
   readonly id: string;
   readonly incidentNumber: string;
   readonly title: string;
-  readonly status: ImsIncident["status"];
+  readonly status: IncidentStatus;
 }
 
 export interface AttachedFieldReportSummary {
@@ -108,7 +189,16 @@ export interface AttachedFieldReportSummary {
   readonly title: string;
   readonly authorName: string;
   readonly body: string;
-  readonly linkedAt: string;
+  readonly linkedAt: string | null;
+}
+
+/** One file held against the incident, as the detail read reports it. */
+export interface IncidentAttachment {
+  readonly id: string;
+  readonly filename: string;
+  readonly mimeType: string;
+  readonly byteSize: number;
+  readonly createdAt: string | null;
 }
 
 export interface FieldReportLinkCandidate {
@@ -126,7 +216,7 @@ export interface ImsFieldReportListItem extends FieldReportLinkCandidate {
     readonly id: string;
     readonly incidentNumber: string;
     readonly title: string;
-    readonly status: ImsIncident["status"];
+    readonly status: IncidentStatus;
     readonly priorityLabel: IncidentPriorityLabel;
   }[];
 }
@@ -136,12 +226,13 @@ export interface ImsIncident {
   readonly eventId: string;
   readonly incidentNumber: string;
   readonly title: string;
-  readonly status: "open" | "on_scene" | "monitoring" | "on_hold" | "closed";
+  readonly status: IncidentStatus;
   readonly priorityLabel: IncidentPriorityLabel;
   readonly incidentTypeNames: readonly string[];
   readonly responders: readonly IncidentResponder[];
   readonly linkedIncidents: readonly LinkedIncidentSummary[];
   readonly attachedFieldReports: readonly AttachedFieldReportSummary[];
+  readonly attachments: readonly IncidentAttachment[];
   readonly startedAt: string;
   readonly locationName: string | null;
   readonly locationAddress: string | null;
@@ -149,14 +240,16 @@ export interface ImsIncident {
   readonly createdByName: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly closedAt: string | null;
   readonly nameReferenceChips: readonly NameReferenceChip[];
+  /** Parsed from the node's own text; see the module header. */
   readonly tagChips: readonly IncidentTagChip[];
   readonly timelineEntries: readonly IncidentTimelineEntry[];
 }
 
 export interface IncidentAutosaveForm {
   title: string;
-  status: ImsIncident["status"];
+  status: IncidentStatus;
   priorityLabel: IncidentPriorityLabel;
   incidentTypeNames: string[];
   responderStaffIds: string[];
@@ -166,303 +259,119 @@ export interface IncidentAutosaveForm {
   locationDetails: string;
 }
 
-export const LOCAL_IMS_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+/** What a reader may narrow the list by, as the node published it. */
+export interface IncidentListFilterOptions {
+  readonly states: readonly string[];
+  readonly priorities: readonly string[];
+  readonly sorts: readonly string[];
+  readonly types: readonly string[];
+  readonly responders: readonly { staffId: string; displayName: string }[];
+  readonly maxPerPage: number;
+}
 
-export const INCIDENT_PRIORITY_LABELS: readonly IncidentPriorityLabel[] =
-  Object.freeze(["Routine", "Important", "Serious", "Critical"]);
+/** What an authoring form may put on an incident, as the node published it. */
+export interface IncidentAssignableOptions {
+  readonly statuses: readonly string[];
+  readonly priorities: readonly string[];
+  readonly types: readonly string[];
+  readonly responders: readonly AssignableResponder[];
+}
 
-export const INCIDENT_TYPE_OPTIONS: readonly string[] = Object.freeze([
-  "Medical",
-  "Safety",
-  "Logistics",
-  "Radio",
-  "Weather",
-]);
+export interface IncidentListPagination {
+  readonly page: number;
+  readonly perPage: number;
+  readonly total: number;
+  readonly totalPages: number;
+  readonly hasMore: boolean;
+}
 
-export const RESPONDER_OPTIONS: readonly IncidentResponder[] = Object.freeze([
-  Object.freeze({
-    staffId: "22222222-2222-4222-8222-222222222201",
-    displayName: "Vera Ranger",
-    relationshipLabel: "Responder",
-  }),
-  Object.freeze({
-    staffId: "22222222-2222-4222-8222-222222222202",
-    displayName: "Omar Operator",
-    relationshipLabel: "Responder",
-  }),
-  Object.freeze({
-    staffId: "22222222-2222-4222-8222-222222222203",
-    displayName: "Ingrid ICLead",
-    relationshipLabel: "Responder",
-  }),
-]);
+/** The whole incident list surface in one response. */
+export interface IncidentList {
+  readonly eventId: string;
+  readonly filters: IncidentListFilterSelection;
+  readonly filterOptions: IncidentListFilterOptions;
+  readonly assignable: IncidentAssignableOptions;
+  readonly pagination: IncidentListPagination;
+  readonly presets: readonly IncidentListPreset[];
+  readonly incidents: readonly ImsIncident[];
+}
 
-const IC_ROLES: readonly IncidentRole[] = [
-  "ic_viewer",
-  "ic_operator",
-  "ic_lead",
-];
-
-const LOCAL_SESSION: IncidentSessionContext = Object.freeze({
-  eventId: LOCAL_IMS_EVENT_ID,
-  eventLabel: "Local Field Event",
-  organizationLabel: "Local Field Organization",
-  icDepartmentLabel: "Rangers",
-  role: "ic_lead",
-  roleLabel: "Incident Command Lead",
+const STATUS_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  open: "Open",
+  on_scene: "On Scene",
+  monitoring: "Monitoring",
+  on_hold: "On Hold",
+  closed: "Closed",
 });
 
-const LOCAL_INCIDENTS: readonly ImsIncident[] = Object.freeze([
-  Object.freeze({
-    id: "incident-gate-medical",
-    eventId: LOCAL_IMS_EVENT_ID,
-    incidentNumber: "INC-2027-000042",
-    title: "Medical assist near Gate A",
-    status: "on_scene",
-    priorityLabel: "Serious",
-    incidentTypeNames: Object.freeze(["Medical", "Safety"]),
-    responders: Object.freeze([
-      Object.freeze({
-        staffId: "22222222-2222-4222-8222-222222222201",
-        displayName: "Vera Ranger",
-        relationshipLabel: "Responder",
-      }),
-    ]),
-    linkedIncidents: Object.freeze([
-      Object.freeze({
-        id: "incident-radio-check",
-        incidentNumber: "INC-2027-000041",
-        title: "Radio relay check",
-        status: "monitoring",
-      }),
-    ]),
-    attachedFieldReports: Object.freeze([]),
-    startedAt: "2027-07-04T20:15:00.000Z",
-    locationName: "Gate A",
-    locationAddress: "North entry road",
-    locationDetails: "Responder staged near the shade structure.",
-    createdByName: "Ingrid ICLead",
-    createdAt: "2027-07-04T20:18:00.000Z",
-    updatedAt: "2027-07-04T20:32:00.000Z",
-    nameReferenceChips: Object.freeze([
-      Object.freeze({
-        token: "Blue-Hat",
-        normalizedToken: "blue-hat",
-      }),
-      Object.freeze({
-        token: "Gate_A",
-        normalizedToken: "gate_a",
-      }),
-    ]),
-    tagChips: Object.freeze([
-      Object.freeze({
-        tag: "medical",
-        normalizedTag: "medical",
-      }),
-    ]),
-    timelineEntries: Object.freeze([
-      Object.freeze({
-        id: "timeline-gate-opened",
-        incidentId: "incident-gate-medical",
-        actorName: "Ingrid ICLead",
-        entryType: "incident_opened",
-        body: "Incident INC-2027-000042 opened.",
-        createdAt: "2027-07-04T20:18:00.000Z",
-      }),
-      Object.freeze({
-        id: "timeline-gate-note",
-        incidentId: "incident-gate-medical",
-        actorName: "Omar ICOperator",
-        entryType: "operational_note",
-        body: "Responder is on scene and monitoring breathing.",
-        createdAt: "2027-07-04T20:32:00.000Z",
-      }),
-    ]),
-  }),
-  Object.freeze({
-    id: "incident-radio-check",
-    eventId: LOCAL_IMS_EVENT_ID,
-    incidentNumber: "INC-2027-000041",
-    title: "Radio relay check",
-    status: "monitoring",
-    priorityLabel: "Routine",
-    incidentTypeNames: Object.freeze(["Radio"]),
-    responders: Object.freeze([]),
-    linkedIncidents: Object.freeze([
-      Object.freeze({
-        id: "incident-gate-medical",
-        incidentNumber: "INC-2027-000042",
-        title: "Medical assist near Gate A",
-        status: "on_scene",
-      }),
-    ]),
-    attachedFieldReports: Object.freeze([]),
-    startedAt: "2027-07-04T19:40:00.000Z",
-    locationName: "Ranger HQ",
-    locationAddress: null,
-    locationDetails: "Monitoring signal reports from the west side.",
-    createdByName: "Omar ICOperator",
-    createdAt: "2027-07-04T19:45:00.000Z",
-    updatedAt: "2027-07-04T19:56:00.000Z",
-    nameReferenceChips: Object.freeze([]),
-    tagChips: Object.freeze([]),
-    timelineEntries: Object.freeze([
-      Object.freeze({
-        id: "timeline-radio-opened",
-        incidentId: "incident-radio-check",
-        actorName: "Omar ICOperator",
-        entryType: "incident_opened",
-        body: "Incident INC-2027-000041 opened.",
-        createdAt: "2027-07-04T19:45:00.000Z",
-      }),
-      Object.freeze({
-        id: "timeline-radio-note",
-        incidentId: "incident-radio-check",
-        actorName: "Omar ICOperator",
-        entryType: "operational_note",
-        body: "Monitoring signal reports from the west side.",
-        createdAt: "2027-07-04T19:56:00.000Z",
-      }),
-    ]),
-  }),
-  Object.freeze({
-    id: "incident-closed-supply",
-    eventId: LOCAL_IMS_EVENT_ID,
-    incidentNumber: "INC-2027-000040",
-    title: "Closed supply handoff",
-    status: "closed",
-    priorityLabel: "Important",
-    incidentTypeNames: Object.freeze(["Logistics"]),
-    responders: Object.freeze([]),
-    linkedIncidents: Object.freeze([]),
-    attachedFieldReports: Object.freeze([]),
-    startedAt: "2027-07-04T18:05:00.000Z",
-    locationName: "Depot",
-    locationAddress: null,
-    locationDetails: "Resolved supply handoff at the depot.",
-    createdByName: "Ingrid ICLead",
-    createdAt: "2027-07-04T18:10:00.000Z",
-    updatedAt: "2027-07-04T18:45:00.000Z",
-    nameReferenceChips: Object.freeze([]),
-    tagChips: Object.freeze([
-      Object.freeze({
-        tag: "logistics",
-        normalizedTag: "logistics",
-      }),
-    ]),
-    timelineEntries: Object.freeze([
-      Object.freeze({
-        id: "timeline-closed-supply-opened",
-        incidentId: "incident-closed-supply",
-        actorName: "Ingrid ICLead",
-        entryType: "incident_opened",
-        body: "Incident INC-2027-000040 opened.",
-        createdAt: "2027-07-04T18:10:00.000Z",
-      }),
-      Object.freeze({
-        id: "timeline-closed-supply-note",
-        incidentId: "incident-closed-supply",
-        actorName: "Ingrid ICLead",
-        entryType: "operational_note",
-        body: "Closed after supplies were handed off. #logistics",
-        createdAt: "2027-07-04T18:45:00.000Z",
-      }),
-    ]),
-  }),
-]);
+/**
+ * The IC context, or null when the client is not working in one.
+ *
+ * Both halves are required. An event-scoped read is not constructible without an
+ * event id, and the department is where the incident capabilities are held, so a
+ * client holding neither has no IMS to show rather than an empty one.
+ */
+export const incidentSessionContext = computed<IncidentSessionContext | null>(
+  () => {
+    const event = sessionEventContext.value;
+    const department = selectedSessionDepartment.value;
 
-const LOCAL_FIELD_REPORTS: readonly FieldReportLinkCandidate[] = Object.freeze([
-  Object.freeze({
-    id: "field-report-medical-gate",
-    eventId: LOCAL_IMS_EVENT_ID,
-    displayNumber: "FRA-2027-000123",
-    title: "Medical observation near Gate A",
-    authorName: "Vera Ranger",
-    body: "Observed medical response near Gate A for @Blue-Hat. Follow-up requested. #medical",
-    createdAt: "2027-07-04T20:34:00.000Z",
-  }),
-  Object.freeze({
-    id: "field-report-radio-relay",
-    eventId: LOCAL_IMS_EVENT_ID,
-    displayNumber: "FRA-2027-000122",
-    title: "Radio relay notes",
-    authorName: "Omar Operator",
-    body: "West-side relay heard intermittent traffic from Ranger HQ. #radio",
-    createdAt: "2027-07-04T20:36:00.000Z",
-  }),
-  Object.freeze({
-    id: "field-report-newer-logistics",
-    eventId: LOCAL_IMS_EVENT_ID,
-    displayNumber: "FRA-2027-000124",
-    title: "Supply cart movement",
-    authorName: "Ingrid ICLead",
-    body: "Logistics moved shade supplies toward the north road. #logistics",
-    createdAt: "2027-07-04T20:38:00.000Z",
-  }),
-]);
+    if (event === null || department === null) {
+      return null;
+    }
 
-let session: IncidentSessionContext | null = null;
-let noteSequence = 0;
-let incidentSequence = 42;
-let fieldUpdateSequence = 0;
-let incidentLinkSequence = 0;
-let incidentFieldReportLinkSequence = 0;
+    return {
+      eventId: event.eventId,
+      eventLabel: event.eventLabel ?? "This event",
+      organizationLabel: sessionOrganizationLabel.value ?? "This organization",
+      icDepartmentLabel: department.departmentLabel,
+      roleLabel: incidentRoleLabel(),
+    };
+  },
+);
+
+/**
+ * What the IMS surfaces may offer, from the capabilities the session carries
+ * for the department the client is working in.
+ *
+ * Presentation only. Each of these is decided again on the server, and a client
+ * that fails to hide an action is still refused (CLIENT-006).
+ */
+export const incidentAccess = computed<IncidentAccess>(() => {
+  const department = selectedSessionDepartment.value;
+  const canView = departmentHasCapability(department, CAPABILITY_INCIDENTS_VIEW);
+
+  return {
+    canView,
+    canCreate:
+      canView && departmentHasCapability(department, CAPABILITY_INCIDENTS_CREATE),
+    canUpdate:
+      canView && departmentHasCapability(department, CAPABILITY_INCIDENTS_UPDATE),
+    canAddNote:
+      canView &&
+      departmentHasCapability(department, CAPABILITY_INCIDENTS_ADD_NOTE),
+    canLinkFieldReport:
+      canView &&
+      departmentHasCapability(
+        department,
+        CAPABILITY_INCIDENTS_LINK_FIELD_REPORT,
+      ),
+    canPrint:
+      canView && departmentHasCapability(department, CAPABILITY_INCIDENTS_PRINT),
+    canViewFieldReports:
+      canView &&
+      departmentHasCapability(department, CAPABILITY_FIELD_REPORTS_VIEW_EVENT),
+  };
+});
+
+/**
+ * Whether the list opens an incident for viewing or for editing.
+ *
+ * A per-device preference and nothing more: it decides which route a row links
+ * to, and the edit route is only offered to a caller who holds
+ * `incidents.update` regardless.
+ */
 let incidentListOpenMode: IncidentListOpenMode = "view";
-
-const localIncidentListPresets = new Map<string, IncidentListPreset>();
-let incidentListPresetSequence = 0;
-const localTimelineEntries = new Map<string, IncidentTimelineEntry[]>();
-const localTimelineEntryOverrides = new Map<string, IncidentTimelineEntry>();
-const localIncidentUpdatedAt = new Map<string, string>();
-const localIncidentOverrides = new Map<string, ImsIncident>();
-const localCreatedIncidents = new Map<string, ImsIncident>();
-
-export function installDevelopmentIncidentSession(): void {
-  session = LOCAL_SESSION;
-}
-
-export function installIncidentSession(context: IncidentSessionContext): void {
-  session = Object.freeze({ ...context });
-}
-
-export function clearIncidentSession(): void {
-  session = null;
-  localTimelineEntries.clear();
-  localTimelineEntryOverrides.clear();
-  localIncidentUpdatedAt.clear();
-  localIncidentOverrides.clear();
-  localCreatedIncidents.clear();
-  localIncidentListPresets.clear();
-  incidentListPresetSequence = 0;
-  noteSequence = 0;
-  incidentSequence = 42;
-  fieldUpdateSequence = 0;
-  incidentLinkSequence = 0;
-  incidentFieldReportLinkSequence = 0;
-  incidentListOpenMode = "view";
-}
-
-export function resolveIncidentSession(): IncidentSessionContext | null {
-  return session;
-}
-
-export function hasIncidentCommandAccess(
-  context: IncidentSessionContext | null,
-): boolean {
-  return context !== null && IC_ROLES.includes(context.role);
-}
-
-export function canAppendIncidentNote(
-  context: IncidentSessionContext | null,
-): boolean {
-  return context?.role === "ic_operator" || context?.role === "ic_lead";
-}
-
-export function canEditIncident(
-  context: IncidentSessionContext | null,
-): boolean {
-  return canAppendIncidentNote(context);
-}
 
 export function resolveIncidentListOpenMode(): IncidentListOpenMode {
   return incidentListOpenMode;
@@ -472,366 +381,122 @@ export function setIncidentListOpenMode(mode: IncidentListOpenMode): void {
   incidentListOpenMode = mode;
 }
 
-export function canPrintIncidentPdf(
-  context: IncidentSessionContext | null,
-): boolean {
-  return context?.role === "ic_lead";
-}
-
-export function listIncidentsForSession(
-  context: IncidentSessionContext | null,
-  search = "",
-): ImsIncident[] {
-  if (!hasIncidentCommandAccess(context)) {
-    return [];
-  }
-
-  const normalizedSearch = normalizeIncidentSearch(search);
-
-  return [...LOCAL_INCIDENTS, ...localCreatedIncidents.values()]
-    .filter((incident) => incident.eventId === context?.eventId)
-    .map((incident) =>
-      incidentWithLocalTimeline(localIncidentOverrides.get(incident.id) ?? incident),
-    )
-    .filter((incident) => incidentMatchesSearch(incident, normalizedSearch))
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-}
-
 /**
- * The caller's saved incident list presets for this event (M11.19).
+ * Read one page of an event's incidents.
  *
- * Presets are personal view state and never an authorization source: a session
- * without IC access sees none, and the list read is gated independently.
+ * The selection goes to the node as query parameters and comes back on
+ * `filters`, so the controls render from the node's answer rather than from
+ * what was typed: an unparseable value is a refusal with a sentence, not a
+ * control quietly showing something the list was not narrowed by.
  */
-export function listIncidentPresetsForSession(
-  context: IncidentSessionContext | null,
-): IncidentListPreset[] {
-  if (!hasIncidentCommandAccess(context)) {
-    return [];
+export async function getEventIncidents(
+  eventId: string,
+  query: Readonly<Record<string, string | number | null | undefined>> = {},
+): Promise<IncidentList> {
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value === null || value === undefined || value === "") {
+      continue;
+    }
+
+    search.set(key, String(value));
   }
 
-  return [...localIncidentListPresets.values()]
-    .filter((preset) => preset.eventId === context?.eventId)
-    .sort((left, right) =>
-      left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
-    );
-}
-
-export function saveIncidentPresetForSession(
-  context: IncidentSessionContext | null,
-  name: string,
-  selection: IncidentListFilterSelection,
-): IncidentListPreset {
-  if (!hasIncidentCommandAccess(context)) {
-    throw new Error("Incident Command access is required to save list presets.");
-  }
-
-  const trimmed = name.trim();
-
-  if (trimmed.length === 0) {
-    throw new Error("Preset name is required.");
-  }
-
-  if (trimmed.length > INCIDENT_LIST_PRESET_NAME_MAX_LENGTH) {
-    throw new Error(
-      `Preset name may not be greater than ${INCIDENT_LIST_PRESET_NAME_MAX_LENGTH} characters.`,
-    );
-  }
-
-  const existing = listIncidentPresetsForSession(context).find(
-    (preset) => preset.name.toLowerCase() === trimmed.toLowerCase(),
+  const suffix = search.toString();
+  const payload = await meridianJson<IncidentListPayload>(
+    `/api/events/${encodeURIComponent(eventId)}/incidents${suffix === "" ? "" : `?${suffix}`}`,
   );
 
-  if (
-    !existing &&
-    listIncidentPresetsForSession(context).length >=
-      INCIDENT_LIST_PRESET_MAX_PER_EVENT
-  ) {
-    throw new Error(
-      `You already have ${INCIDENT_LIST_PRESET_MAX_PER_EVENT} saved incident list presets for this event. Delete one before saving another.`,
-    );
-  }
-
-  const preset: IncidentListPreset = Object.freeze({
-    id: existing?.id ?? `local-incident-preset-${++incidentListPresetSequence}`,
-    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
-    name: trimmed,
-    filters: Object.freeze({ ...selection }),
-    query: Object.freeze(incidentPresetQuery(selection)),
-  });
-
-  localIncidentListPresets.set(preset.id, preset);
-
-  return preset;
-}
-
-export function deleteIncidentPresetForSession(
-  context: IncidentSessionContext | null,
-  presetId: string,
-): void {
-  if (!hasIncidentCommandAccess(context)) {
-    throw new Error(
-      "Incident Command access is required to delete list presets.",
-    );
-  }
-
-  const preset = localIncidentListPresets.get(presetId);
-
-  if (!preset || preset.eventId !== context?.eventId) {
-    throw new Error("Saved incident list preset not found.");
-  }
-
-  localIncidentListPresets.delete(presetId);
-}
-
-/**
- * Only non-default values become query parameters, so an applied preset reads
- * as the selection it saved rather than a wall of redundant defaults.
- */
-function incidentPresetQuery(
-  selection: IncidentListFilterSelection,
-): Record<string, string> {
-  const defaults: IncidentListFilterSelection = {
-    search: "",
-    state: "active",
-    priority: "all",
-    type: "all",
-    responder: "all",
-    shift: "all",
-    sort: "updated",
-    direction: "desc",
+  return {
+    eventId: payload.event_id ?? eventId,
+    filters: toFilterSelection(payload.filters ?? {}),
+    filterOptions: {
+      states: payload.filter_options?.states ?? [],
+      priorities: payload.filter_options?.priorities ?? [],
+      sorts: payload.filter_options?.sorts ?? [],
+      types: payload.filter_options?.types ?? [],
+      responders: (payload.filter_options?.responders ?? []).map((option) => ({
+        staffId: option.staff_id,
+        displayName: option.display_name,
+      })),
+      maxPerPage:
+        payload.filter_options?.max_per_page ?? DEFAULT_INCIDENT_LIST_PAGE_SIZE,
+    },
+    assignable: {
+      statuses: payload.assignable?.statuses ?? [],
+      priorities: payload.assignable?.priorities ?? [],
+      types: payload.assignable?.types ?? [],
+      responders: (payload.assignable?.responders ?? []).map((option) => ({
+        staffId: option.staff_id,
+        displayName: option.display_name,
+        detail: option.detail ?? "",
+      })),
+    },
+    pagination: {
+      page: payload.pagination?.page ?? 1,
+      perPage: payload.pagination?.per_page ?? DEFAULT_INCIDENT_LIST_PAGE_SIZE,
+      total: payload.pagination?.total ?? 0,
+      totalPages: Math.max(1, payload.pagination?.total_pages ?? 1),
+      hasMore: payload.pagination?.has_more ?? false,
+    },
+    presets: (payload.presets ?? []).map(toPreset),
+    incidents: (payload.incidents ?? []).map(toIncident),
   };
-  const query: Record<string, string> = {};
-
-  for (const key of Object.keys(defaults) as (keyof IncidentListFilterSelection)[]) {
-    const value = selection[key];
-
-    if (value !== "" && value !== defaults[key]) {
-      query[key] = value;
-    }
-  }
-
-  return query;
 }
 
 /**
- * Incident type labels in use for this event, for list filter controls
- * (M11.19; UI contract 15.1).
+ * Read one incident.
+ *
+ * An incident outside the caller's visibility, or one that does not belong to
+ * this event, is the node's refusal rather than a row missing from a list, so
+ * the screen can say what happened instead of rendering empty.
  */
-export function incidentTypeOptionsForSession(
-  context: IncidentSessionContext | null,
-): string[] {
-  const names = new Map<string, string>();
-
-  for (const incident of listIncidentsForSession(context)) {
-    for (const name of incident.incidentTypeNames) {
-      const key = name.toLowerCase();
-
-      if (!names.has(key)) {
-        names.set(key, name);
-      }
-    }
-  }
-
-  return [...names.values()].sort((left, right) =>
-    left.localeCompare(right, undefined, { sensitivity: "base" }),
-  );
-}
-
-/**
- * Responders attached to this event's incidents, for list filter controls
- * (M11.19; UI contract 15.1).
- */
-export function incidentResponderOptionsForSession(
-  context: IncidentSessionContext | null,
-): IncidentResponder[] {
-  const responders = new Map<string, IncidentResponder>();
-
-  for (const incident of listIncidentsForSession(context)) {
-    for (const responder of incident.responders) {
-      if (!responders.has(responder.staffId)) {
-        responders.set(responder.staffId, responder);
-      }
-    }
-  }
-
-  return [...responders.values()].sort((left, right) =>
-    left.displayName.localeCompare(right.displayName, undefined, {
-      sensitivity: "base",
-    }),
-  );
-}
-
-export function listFieldReportsForSession(
-  context: IncidentSessionContext | null,
-): ImsFieldReportListItem[] {
-  if (!hasIncidentCommandAccess(context)) {
-    return [];
-  }
-
-  const incidents = listIncidentsForSession(context);
-
-  return LOCAL_FIELD_REPORTS.filter(
-    (report) => report.eventId === context?.eventId,
-  )
-    .map((report) =>
-      Object.freeze({
-        ...report,
-        relatedIncidents: Object.freeze(
-          incidents
-            .filter((incident) =>
-              incident.attachedFieldReports.some(
-                (attached) => attached.id === report.id,
-              ),
-            )
-            .map((incident) =>
-              Object.freeze({
-                id: incident.id,
-                incidentNumber: incident.incidentNumber,
-                title: incident.title,
-                status: incident.status,
-                priorityLabel: incident.priorityLabel,
-              }),
-            ),
-        ),
-      }),
-    )
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-}
-
-export function findIncidentForSession(
-  context: IncidentSessionContext | null,
+export async function getEventIncident(
+  eventId: string,
   incidentId: string,
-): ImsIncident | null {
-  return (
-    listIncidentsForSession(context).find(
-      (incident) => incident.id === incidentId,
-    ) ?? null
+): Promise<ImsIncident> {
+  const payload = await meridianJson<{ incident: IncidentPayload }>(
+    `/api/events/${encodeURIComponent(eventId)}/incidents/${encodeURIComponent(incidentId)}`,
   );
+
+  return toIncident(payload.incident);
 }
 
-export function findFieldReportForSession(
-  context: IncidentSessionContext | null,
-  fieldReportId: string,
-): ImsFieldReportListItem | null {
-  return (
-    listFieldReportsForSession(context).find(
-      (report) => report.id === fieldReportId,
-    ) ?? null
+/** Read the event's Field Reports, as Incident Command sees them. */
+export async function getEventFieldReports(
+  eventId: string,
+): Promise<ImsFieldReportListItem[]> {
+  const payload = await meridianJson<FieldReportListPayload>(
+    `/api/events/${encodeURIComponent(eventId)}/field-reports`,
   );
+
+  return (payload.field_reports ?? []).map((report) => ({
+    id: report.id,
+    eventId: report.event_id ?? eventId,
+    displayNumber: report.display_number,
+    title: report.title,
+    authorName: report.author_name,
+    body: report.body,
+    createdAt: report.created_at ?? "",
+    relatedIncidents: (report.related_incidents ?? []).map((incident) => ({
+      id: incident.id,
+      incidentNumber: incident.incident_number,
+      title: incident.title,
+      status: incident.status,
+      priorityLabel: incident.priority_label ?? "",
+    })),
+  }));
 }
 
-function findStoredIncidentForSession(
-  context: IncidentSessionContext | null,
-  incidentId: string,
-): ImsIncident | null {
-  if (!hasIncidentCommandAccess(context)) {
-    return null;
-  }
-
-  const incident =
-    localIncidentOverrides.get(incidentId) ??
-    localCreatedIncidents.get(incidentId) ??
-    LOCAL_INCIDENTS.find((candidate) => candidate.id === incidentId) ??
-    null;
-
-  return incident?.eventId === context?.eventId ? incident : null;
-}
-
-export function appendIncidentNoteForSession(
-  context: IncidentSessionContext | null,
-  incidentId: string,
-  body: string,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canAppendIncidentNote(context)) {
-    throw new Error("Only IC operators and IC leads may add incident notes.");
-  }
-
-  const trimmedBody = body.trim();
-  if (trimmedBody.length === 0) {
-    throw new Error("Incident note body is required.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  if (!incident) {
-    throw new Error("Incident not found for this event.");
-  }
-
-  const timestamp = createdAt.toISOString();
-  const entry: IncidentTimelineEntry = Object.freeze({
-    id: `local-incident-note-${++noteSequence}`,
-    incidentId: incident.id,
-    actorName: context?.roleLabel ?? null,
-    entryType: "operational_note",
-    body: trimmedBody,
-    createdAt: timestamp,
-  });
-
-  localTimelineEntries.set(incident.id, [
-    ...(localTimelineEntries.get(incident.id) ?? []),
-    entry,
-  ]);
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-
-  return findIncidentForSession(context, incidentId) ?? incident;
-}
-
-export function strikeIncidentNoteForSession(
-  context: IncidentSessionContext | null,
-  incidentId: string,
-  timelineEntryId: string,
-  reason: string,
-  strickenAt = new Date(),
-): ImsIncident {
-  if (!canAppendIncidentNote(context)) {
-    throw new Error("Only IC operators and IC leads may strike incident notes.");
-  }
-
-  const trimmedReason = reason.trim();
-  if (trimmedReason.length === 0) {
-    throw new Error("Incident note strike reason is required.");
-  }
-
-  const incident = findIncidentForSession(context, incidentId);
-  if (!incident) {
-    throw new Error("Incident not found for this event.");
-  }
-
-  const entry = incident.timelineEntries.find(
-    (candidate) => candidate.id === timelineEntryId,
-  );
-  if (!entry) {
-    throw new Error("Incident note not found for this event.");
-  }
-
-  if (entry.entryType !== "operational_note") {
-    throw new Error("Only operational notes may be stricken.");
-  }
-
-  if (entry.strickenAt) {
-    throw new Error("Incident note is already stricken.");
-  }
-
-  const timestamp = strickenAt.toISOString();
-  localTimelineEntryOverrides.set(
-    entry.id,
-    Object.freeze({
-      ...entry,
-      strickenAt: timestamp,
-      strickenReason: trimmedReason,
-    }),
-  );
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-
-  return findIncidentForSession(context, incidentId) ?? incident;
-}
-
-export function blankIncidentAutosaveForm(now = new Date()): IncidentAutosaveForm {
+export function blankIncidentAutosaveForm(
+  now = new Date(),
+  assignable: IncidentAssignableOptions | null = null,
+): IncidentAutosaveForm {
   return {
     title: "",
-    status: "open",
-    priorityLabel: "Routine",
+    status: assignable?.statuses[0] ?? "open",
+    priorityLabel: assignable?.priorities[0] ?? "Routine",
     incidentTypeNames: [],
     responderStaffIds: [],
     startedAt: toDatetimeLocalValue(now),
@@ -857,379 +522,177 @@ export function incidentToAutosaveForm(
   };
 }
 
-export function createIncidentFromAutosaveForm(
-  context: IncidentSessionContext | null,
+/**
+ * Open an incident.
+ *
+ * `initial_field_update_fields` names the fields the author changed from the
+ * blank form before the first save, which is what the node records as the
+ * opening field-update entry. It is the only place the client tells the node
+ * anything about the timeline, and it says which fields moved, not what the
+ * entry should say.
+ */
+export async function createIncident(
+  eventId: string,
   form: IncidentAutosaveForm,
   previousForm: IncidentAutosaveForm | null = null,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may create incidents.");
+): Promise<string> {
+  const response = (await sendIncidentCommand("create-incident", {
+    event_id: eventId,
+    ...incidentAttributes(form),
+    initial_field_update_fields: previousForm
+      ? changedFormFields(previousForm, form)
+      : [],
+  })) as { id?: unknown };
+
+  if (typeof response?.id !== "string") {
+    throw new Error("The node accepted the incident but named no record.");
   }
 
-  const timestamp = createdAt.toISOString();
-  const id = `local-incident-${++incidentSequence}`;
-  const startedAt = fromDatetimeLocalValue(form.startedAt, createdAt);
-  const nextValues = {
-    title: normalizedTitle(form.title),
-    status: form.status,
-    priorityLabel: validatedPriorityLabel(form.priorityLabel),
-    incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
-    responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
-    linkedIncidents: Object.freeze([]),
-    attachedFieldReports: Object.freeze([]),
-    startedAt,
-    locationName: nullableText(form.locationName),
-    locationAddress: nullableText(form.locationAddress),
-    locationDetails: nullableText(form.locationDetails),
-  };
-  const previousValue = previousForm
-    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "before")
-    : {};
-  const newValue = previousForm
-    ? changedInitialAutosaveFields(previousForm, nextValues, createdAt, "after")
-    : {};
-  const incident: ImsIncident = Object.freeze({
-    id,
-    eventId: context?.eventId ?? LOCAL_IMS_EVENT_ID,
-    incidentNumber: `INC-2027-${String(incidentSequence).padStart(6, "0")}`,
-    ...nextValues,
-    createdByName: context?.roleLabel ?? null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    nameReferenceChips: Object.freeze([]),
-    tagChips: Object.freeze([]),
-    timelineEntries: Object.freeze([
-      Object.freeze({
-        id: `local-incident-opened-${incidentSequence}`,
-        incidentId: id,
-        actorName: context?.roleLabel ?? null,
-        entryType: "incident_opened",
-        body: `Incident INC-2027-${String(incidentSequence).padStart(6, "0")} opened.`,
-        createdAt: timestamp,
-      }),
-      ...(Object.keys(newValue).length > 0
-        ? [
-            Object.freeze({
-              id: `local-incident-field-${++fieldUpdateSequence}`,
-              incidentId: id,
-              actorName: context?.roleLabel ?? null,
-              entryType: "incident_field_updated" as const,
-              body: timelineFieldUpdateBody(newValue),
-              previousValue,
-              newValue,
-              createdAt: timestamp,
-            }),
-          ]
-        : []),
-    ]),
-  });
-
-  localCreatedIncidents.set(incident.id, incident);
-
-  return incident;
+  return response.id;
 }
 
-export function updateIncidentFromAutosaveForm(
-  context: IncidentSessionContext | null,
+export async function updateIncident(
+  eventId: string,
   incidentId: string,
   form: IncidentAutosaveForm,
-  updatedAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may edit incidents.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  if (!incident) {
-    throw new Error("Incident not found for this event.");
-  }
-
-  const timestamp = updatedAt.toISOString();
-  const nextValues = {
-    title: normalizedTitle(form.title),
-    status: form.status,
-    priorityLabel: validatedPriorityLabel(form.priorityLabel),
-    incidentTypeNames: Object.freeze(normalizedStringList(form.incidentTypeNames)),
-    responders: Object.freeze(respondersForStaffIds(form.responderStaffIds)),
-    startedAt: fromDatetimeLocalValue(form.startedAt, updatedAt),
-    locationName: nullableText(form.locationName),
-    locationAddress: nullableText(form.locationAddress),
-    locationDetails: nullableText(form.locationDetails),
-  };
-  const previousValue = changedAutosaveFields(incident, nextValues, "before");
-  const newValue = changedAutosaveFields(incident, nextValues, "after");
-
-  if (Object.keys(newValue).length === 0) {
-    return incident;
-  }
-
-  const nextIncident: ImsIncident = Object.freeze({
-    ...incident,
-    ...nextValues,
-    updatedAt: timestamp,
+): Promise<void> {
+  await sendIncidentCommand("update-incident", {
+    event_id: eventId,
+    incident_id: incidentId,
+    ...incidentAttributes(form),
   });
-
-  localIncidentOverrides.set(incident.id, nextIncident);
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-  localTimelineEntries.set(incident.id, [
-    ...(localTimelineEntries.get(incident.id) ?? []),
-    Object.freeze({
-      id: `local-incident-field-${++fieldUpdateSequence}`,
-      incidentId: incident.id,
-      actorName: context?.roleLabel ?? null,
-      entryType: "incident_field_updated",
-      body: timelineFieldUpdateBody(newValue),
-      previousValue,
-      newValue,
-      createdAt: timestamp,
-    }),
-  ]);
-
-  return findIncidentForSession(context, incidentId) ?? nextIncident;
 }
 
-export function availableLinkedIncidentOptionsForSession(
-  context: IncidentSessionContext | null,
+export async function appendIncidentNote(
+  eventId: string,
   incidentId: string,
-  search = "",
-): ImsIncident[] {
-  const incident = findIncidentForSession(context, incidentId);
-
-  if (!incident) {
-    return [];
-  }
-
-  const selectedIds = new Set(incident.linkedIncidents.map((linked) => linked.id));
-  const normalizedSearch = normalizeIncidentSearch(search);
-  const incidentTags = linkSuggestionTagSet(incident);
-
-  return listIncidentsForSession(context)
-    .filter((candidate) => candidate.id !== incident.id)
-    .filter((candidate) => !selectedIds.has(candidate.id))
-    .filter((candidate) => incidentMatchesSearch(candidate, normalizedSearch))
-    .sort((left, right) =>
-      compareLinkSuggestionCandidates(left, right, incidentTags),
-    )
-    .slice(0, 6);
+  body: string,
+): Promise<void> {
+  await sendIncidentCommand("append-incident-note", {
+    event_id: eventId,
+    incident_id: incidentId,
+    body: body.trim(),
+  });
 }
 
-export function availableFieldReportOptionsForSession(
-  context: IncidentSessionContext | null,
+export async function strikeIncidentNote(
+  eventId: string,
   incidentId: string,
-  search = "",
-): FieldReportLinkCandidate[] {
-  const incident = findIncidentForSession(context, incidentId);
-
-  if (!incident) {
-    return [];
-  }
-
-  const selectedIds = new Set(
-    incident.attachedFieldReports.map((report) => report.id),
-  );
-  const normalizedSearch = normalizeIncidentSearch(search);
-  const incidentTags = linkSuggestionTagSet(incident);
-
-  return LOCAL_FIELD_REPORTS.filter(
-    (report) => report.eventId === context?.eventId,
-  )
-    .filter((report) => !selectedIds.has(report.id))
-    .filter((report) => fieldReportMatchesSearch(report, normalizedSearch))
-    .sort((left, right) =>
-      compareFieldReportSuggestionCandidates(left, right, incidentTags),
-    )
-    .slice(0, 6);
+  timelineEntryId: string,
+  reason: string,
+): Promise<void> {
+  await sendIncidentCommand("strike-incident-note", {
+    event_id: eventId,
+    incident_id: incidentId,
+    timeline_entry_id: timelineEntryId,
+    reason: reason.trim(),
+  });
 }
 
-export function linkIncidentForSession(
-  context: IncidentSessionContext | null,
+export async function linkIncident(
+  eventId: string,
   incidentId: string,
   targetIncidentId: string,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may link incidents.");
-  }
-
-  if (incidentId === targetIncidentId) {
-    throw new Error("An incident cannot be linked to itself.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  const target = findStoredIncidentForSession(context, targetIncidentId);
-
-  if (!incident || !target) {
-    throw new Error("Linked incident not found for this event.");
-  }
-
-  if (incident.eventId !== target.eventId) {
-    throw new Error("Linked incidents must belong to the same event.");
-  }
-
-  if (incident.linkedIncidents.some((linked) => linked.id === target.id)) {
-    throw new Error("Incidents are already linked.");
-  }
-
-  const timestamp = createdAt.toISOString();
-  writeLinkedIncidentPair(incident, target, timestamp, "incident_linked", context);
-
-  return findIncidentForSession(context, incidentId) ?? incident;
+): Promise<void> {
+  await sendIncidentCommand("link-incident", {
+    event_id: eventId,
+    incident_id: incidentId,
+    target_incident_id: targetIncidentId,
+  });
 }
 
-export function unlinkIncidentForSession(
-  context: IncidentSessionContext | null,
+export async function unlinkIncident(
+  eventId: string,
   incidentId: string,
   targetIncidentId: string,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may link incidents.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  const target = findStoredIncidentForSession(context, targetIncidentId);
-
-  if (!incident || !target) {
-    throw new Error("Linked incident not found for this event.");
-  }
-
-  if (!incident.linkedIncidents.some((linked) => linked.id === target.id)) {
-    throw new Error("Incidents are not currently linked.");
-  }
-
-  const timestamp = createdAt.toISOString();
-  writeLinkedIncidentPair(incident, target, timestamp, "incident_unlinked", context);
-
-  return findIncidentForSession(context, incidentId) ?? incident;
+): Promise<void> {
+  await sendIncidentCommand("unlink-incident", {
+    event_id: eventId,
+    incident_id: incidentId,
+    target_incident_id: targetIncidentId,
+  });
 }
 
-export function linkFieldReportForSession(
-  context: IncidentSessionContext | null,
+export async function linkFieldReport(
+  eventId: string,
   incidentId: string,
   fieldReportId: string,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may link Field Reports.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  const report = LOCAL_FIELD_REPORTS.find(
-    (candidate) => candidate.id === fieldReportId,
-  );
-
-  if (!incident) {
-    throw new Error("Incident not found for this event.");
-  }
-
-  if (!report || report.eventId !== context?.eventId) {
-    throw new Error("Field Report not found for this event.");
-  }
-
-  if (incident.eventId !== report.eventId) {
-    throw new Error("Field Report must belong to the same event as the incident.");
-  }
-
-  if (incident.attachedFieldReports.some((attached) => attached.id === report.id)) {
-    throw new Error("Field Report is already linked to this incident.");
-  }
-
-  const timestamp = createdAt.toISOString();
-  const linkId = `local-incident-field-report-link-${++incidentFieldReportLinkSequence}`;
-  const nextIncident = Object.freeze({
-    ...incident,
-    attachedFieldReports: Object.freeze(
-      mergeAttachedFieldReports([
-        ...incident.attachedFieldReports,
-        attachedFieldReportSummary(report, timestamp),
-      ]),
-    ),
-    updatedAt: timestamp,
+): Promise<void> {
+  await sendIncidentCommand("link-field-report", {
+    event_id: eventId,
+    incident_id: incidentId,
+    field_report_id: fieldReportId,
   });
-
-  localIncidentOverrides.set(incident.id, nextIncident);
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-  localTimelineEntries.set(incident.id, [
-    ...(localTimelineEntries.get(incident.id) ?? []),
-    fieldReportLinkedTimelineEntry(incident, report, linkId, timestamp, context),
-  ]);
-
-  return findIncidentForSession(context, incidentId) ?? nextIncident;
 }
 
-export function unlinkFieldReportForSession(
-  context: IncidentSessionContext | null,
+export async function unlinkFieldReport(
+  eventId: string,
   incidentId: string,
   fieldReportId: string,
-  createdAt = new Date(),
-): ImsIncident {
-  if (!canEditIncident(context)) {
-    throw new Error("Only IC operators and IC leads may link Field Reports.");
-  }
-
-  const incident = findStoredIncidentForSession(context, incidentId);
-  const report = LOCAL_FIELD_REPORTS.find(
-    (candidate) => candidate.id === fieldReportId,
-  );
-
-  if (!incident) {
-    throw new Error("Incident not found for this event.");
-  }
-
-  if (!report || report.eventId !== context?.eventId) {
-    throw new Error("Field Report not found for this event.");
-  }
-
-  if (incident.eventId !== report.eventId) {
-    throw new Error("Field Report must belong to the same event as the incident.");
-  }
-
-  if (!incident.attachedFieldReports.some((attached) => attached.id === report.id)) {
-    throw new Error("Field Report is not currently linked to this incident.");
-  }
-
-  const timestamp = createdAt.toISOString();
-  const nextIncident = Object.freeze({
-    ...incident,
-    attachedFieldReports: Object.freeze(
-      incident.attachedFieldReports.filter(
-        (attached) => attached.id !== report.id,
-      ),
-    ),
-    updatedAt: timestamp,
+): Promise<void> {
+  await sendIncidentCommand("unlink-field-report", {
+    event_id: eventId,
+    incident_id: incidentId,
+    field_report_id: fieldReportId,
   });
-  const strickenReason = "Field Report removed from incident.";
-  const timelineEntries = localTimelineEntries.get(incident.id) ?? [];
-
-  localIncidentOverrides.set(incident.id, nextIncident);
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-  localTimelineEntries.set(incident.id, [
-    ...timelineEntries.map((entry) =>
-      entry.entryType === "field_report_linked" &&
-      entry.newValue?.fieldReportId === report.id &&
-      !entry.strickenAt
-        ? Object.freeze({
-            ...entry,
-            strickenAt: timestamp,
-            strickenReason,
-          })
-        : entry,
-    ),
-    fieldReportUnlinkedTimelineEntry(incident, report, timestamp, context),
-  ]);
-
-  return findIncidentForSession(context, incidentId) ?? nextIncident;
 }
 
-export function statusLabel(status: ImsIncident["status"]): string {
-  return {
-    open: "Open",
-    on_scene: "On Scene",
-    monitoring: "Monitoring",
-    on_hold: "On Hold",
-    closed: "Closed",
-  }[status];
+/**
+ * Strike an incident attachment.
+ *
+ * A strike, not a delete: the file stops being served and the reason is kept
+ * (INC-013). The node requires the reason, so it is asked for rather than
+ * defaulted.
+ */
+export async function strikeIncidentAttachment(
+  eventId: string,
+  incidentId: string,
+  attachmentId: string,
+  reason: string,
+): Promise<void> {
+  await sendIncidentCommand("strike-incident-attachment", {
+    event_id: eventId,
+    incident_id: incidentId,
+    attachment_id: attachmentId,
+    reason: reason.trim(),
+  });
+}
+
+/**
+ * Save the caller's list preset under this name, and return their presets.
+ *
+ * Saving an existing name updates it: that is the node's behavior, not a
+ * decision made here, and the response carries the whole list back so the
+ * control never has to guess where the new one sorts.
+ */
+export async function saveIncidentListPreset(
+  eventId: string,
+  name: string,
+  filters: IncidentListFilterSelection,
+): Promise<readonly IncidentListPreset[]> {
+  const response = (await sendIncidentCommand("save-incident-list-preset", {
+    event_id: eventId,
+    name: name.trim(),
+    filters: toFilterPayload(filters),
+  })) as { presets?: PresetPayload[] };
+
+  return (response?.presets ?? []).map(toPreset);
+}
+
+export async function deleteIncidentListPreset(
+  eventId: string,
+  presetId: string,
+): Promise<readonly IncidentListPreset[]> {
+  const response = (await sendIncidentCommand("delete-incident-list-preset", {
+    event_id: eventId,
+    preset_id: presetId,
+  })) as { presets?: PresetPayload[] };
+
+  return (response?.presets ?? []).map(toPreset);
+}
+
+export function statusLabel(status: IncidentStatus): string {
+  return STATUS_LABELS[status] ?? status;
 }
 
 export function formatIncidentDateTime(value: string): string {
@@ -1275,6 +738,278 @@ export function visibleIncidentTimelineEntries(
   });
 }
 
+/**
+ * Incidents this one may be linked to, ordered as the IMS specification asks.
+ *
+ * The node found them — same event, matching the picker's search — and the
+ * ordering on top of that is the specification's: candidates sharing a `#tag`
+ * with this incident first, most recently created first within each group
+ * (IMS spec 9). Anything already actively linked is dropped, and an incident is
+ * never a candidate for itself.
+ */
+export function orderedLinkCandidates(
+  incident: ImsIncident,
+  candidates: readonly ImsIncident[],
+): ImsIncident[] {
+  const linkedIds = new Set(incident.linkedIncidents.map((linked) => linked.id));
+  const tags = incidentTagSet(incident);
+
+  return candidates
+    .filter((candidate) => candidate.id !== incident.id)
+    .filter((candidate) => !linkedIds.has(candidate.id))
+    .sort((left, right) => {
+      const leftShares = sharesTag(incidentTagSet(left), tags);
+      const rightShares = sharesTag(incidentTagSet(right), tags);
+
+      if (leftShares !== rightShares) {
+        return leftShares ? -1 : 1;
+      }
+
+      return (
+        right.createdAt.localeCompare(left.createdAt) ||
+        right.incidentNumber.localeCompare(left.incidentNumber)
+      );
+    })
+    .slice(0, 6);
+}
+
+/**
+ * Field Reports this incident may be attached to, ordered the same way.
+ *
+ * Most recent first is the node's acceptance time, which is what the
+ * specification names for Field Report candidates.
+ */
+export function orderedFieldReportCandidates(
+  incident: ImsIncident,
+  candidates: readonly FieldReportLinkCandidate[],
+  search = "",
+): FieldReportLinkCandidate[] {
+  const attachedIds = new Set(
+    incident.attachedFieldReports.map((report) => report.id),
+  );
+  const tags = incidentTagSet(incident);
+  const normalizedSearch = normalizeSearch(search);
+
+  return candidates
+    .filter((candidate) => !attachedIds.has(candidate.id))
+    .filter((candidate) => fieldReportMatches(candidate, normalizedSearch))
+    .sort((left, right) => {
+      const leftShares = sharesTag(textTagSet([left.title, left.body]), tags);
+      const rightShares = sharesTag(textTagSet([right.title, right.body]), tags);
+
+      if (leftShares !== rightShares) {
+        return leftShares ? -1 : 1;
+      }
+
+      return (
+        right.createdAt.localeCompare(left.createdAt) ||
+        right.displayNumber.localeCompare(left.displayNumber)
+      );
+    })
+    .slice(0, 6);
+}
+
+/**
+ * Every incident command, sent now or refused now.
+ *
+ * The idempotency key is generated per call rather than per form. These are
+ * connected-only commands and nothing holds them, so the key is not what makes
+ * a repeat safe here; it is what lets the node recognize a repeat if one of
+ * these ever becomes queueable.
+ */
+async function sendIncidentCommand(
+  commandType: Parameters<typeof sendConnectedCommand>[0]["commandType"],
+  payload: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+  return sendConnectedCommand({
+    commandType,
+    idempotencyKey: commandIdempotencyKey(),
+    payload,
+    eventId: typeof payload.event_id === "string" ? payload.event_id : null,
+  });
+}
+
+function commandIdempotencyKey(): string {
+  const cryptoScope = (globalThis as { crypto?: { randomUUID?: () => string } })
+    .crypto;
+
+  return typeof cryptoScope?.randomUUID === "function"
+    ? cryptoScope.randomUUID()
+    : `incident-command-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/**
+ * The form as the create and update commands take it.
+ *
+ * Trimmed, and empty text sent as null. The node trims too, so this changes
+ * nothing it stores; it changes what a whitespace-only location does, which
+ * would otherwise be stored as a location that looks set and reads blank.
+ */
+function incidentAttributes(
+  form: IncidentAutosaveForm,
+): Record<string, unknown> {
+  return {
+    title: form.title.trim(),
+    status: form.status,
+    priority_label: form.priorityLabel,
+    started_at: fromDatetimeLocalValue(form.startedAt),
+    location_name: nullableText(form.locationName),
+    location_address: nullableText(form.locationAddress),
+    location_details: nullableText(form.locationDetails),
+    incident_type_names: normalizedStringList(form.incidentTypeNames),
+    responder_staff_ids: [...new Set(form.responderStaffIds)],
+  };
+}
+
+/** The command's own field names for what moved between two form states. */
+function changedFormFields(
+  previous: IncidentAutosaveForm,
+  next: IncidentAutosaveForm,
+): string[] {
+  const before = incidentAttributes(previous);
+  const after = incidentAttributes(next);
+
+  return Object.keys(after).filter(
+    (field) => JSON.stringify(before[field]) !== JSON.stringify(after[field]),
+  );
+}
+
+function toFilterSelection(
+  payload: Partial<FilterSelectionPayload>,
+): IncidentListFilterSelection {
+  return {
+    search: payload.search ?? "",
+    state: payload.state ?? "active",
+    priority: payload.priority ?? "all",
+    type: payload.type ?? "all",
+    responder: payload.responder ?? "all",
+    startedFrom: payload.started_from ?? null,
+    startedTo: payload.started_to ?? null,
+    sort: payload.sort ?? "updated",
+    direction: payload.direction ?? "desc",
+  };
+}
+
+function toFilterPayload(
+  selection: IncidentListFilterSelection,
+): Record<string, string> {
+  const payload: Record<string, string> = {
+    search: selection.search,
+    state: selection.state,
+    priority: selection.priority,
+    type: selection.type,
+    responder: selection.responder,
+    sort: selection.sort,
+    direction: selection.direction,
+  };
+
+  if (selection.startedFrom) {
+    payload.started_from = selection.startedFrom;
+  }
+
+  if (selection.startedTo) {
+    payload.started_to = selection.startedTo;
+  }
+
+  return payload;
+}
+
+function toPreset(payload: PresetPayload): IncidentListPreset {
+  return {
+    id: payload.id,
+    eventId: payload.event_id,
+    name: payload.name,
+    filters: toFilterSelection(payload.filters ?? {}),
+    query: payload.query ?? {},
+  };
+}
+
+function toIncident(payload: IncidentPayload): ImsIncident {
+  const timelineEntries = (payload.timeline_entries ?? []).map(
+    toTimelineEntry,
+  );
+  const attachedFieldReports = (payload.attached_field_reports ?? []).map(
+    (report) => ({
+      id: report.field_report_id ?? report.id,
+      displayNumber: report.display_number,
+      title: report.title,
+      authorName: report.author_name,
+      body: report.body,
+      linkedAt: report.linked_at ?? null,
+    }),
+  );
+  const incidentTypeNames = payload.incident_type_names ?? [];
+  const responders = (payload.responders ?? []).map((responder) => ({
+    staffId: responder.staff_id,
+    displayName: responder.display_name,
+    relationshipLabel: responder.relationship_label ?? "Responder",
+  }));
+
+  return {
+    id: payload.id,
+    eventId: payload.event_id,
+    incidentNumber: payload.incident_number,
+    title: payload.title ?? "",
+    status: payload.status,
+    priorityLabel: payload.priority_label ?? "",
+    incidentTypeNames,
+    responders,
+    linkedIncidents: (payload.linked_incidents ?? []).map((linked) => ({
+      id: linked.id,
+      incidentNumber: linked.incident_number,
+      title: linked.title,
+      status: linked.status,
+    })),
+    attachedFieldReports,
+    attachments: (payload.attachments ?? []).map((attachment) => ({
+      id: attachment.id,
+      filename: attachment.filename,
+      mimeType: attachment.mime_type,
+      byteSize: attachment.byte_size,
+      createdAt: attachment.created_at ?? null,
+    })),
+    startedAt: payload.started_at ?? "",
+    locationName: payload.location_name ?? null,
+    locationAddress: payload.location_address ?? null,
+    locationDetails: payload.location_details ?? null,
+    createdByName: payload.created_by_name ?? null,
+    createdAt: payload.created_at ?? "",
+    updatedAt: payload.updated_at ?? payload.created_at ?? "",
+    closedAt: payload.closed_at ?? null,
+    nameReferenceChips: (payload.name_reference_chips ?? []).map((chip) => ({
+      token: chip.token,
+      normalizedToken: chip.normalized_token,
+    })),
+    tagChips: textTagChips([
+      payload.title ?? "",
+      ...incidentTypeNames,
+      ...responders.map((responder) => responder.displayName),
+      ...attachedFieldReports.map((report) => report.body),
+      ...timelineEntries
+        .filter((entry) => entry.entryType !== "field_report_linked")
+        .filter((entry) => !entry.strickenAt)
+        .map((entry) => entry.body ?? ""),
+    ]),
+    timelineEntries,
+  };
+}
+
+function toTimelineEntry(payload: TimelineEntryPayload): IncidentTimelineEntry {
+  return {
+    id: payload.id,
+    incidentId: payload.incident_id,
+    actorName: payload.actor_name ?? null,
+    entryType: payload.entry_type,
+    body: payload.body ?? null,
+    previousValue: payload.previous_value ?? undefined,
+    newValue: payload.new_value ?? undefined,
+    reason: payload.reason ?? null,
+    createdAt: payload.created_at ?? "",
+    strickenAt: payload.stricken_at ?? null,
+    strickenReason: payload.stricken_reason ?? null,
+  };
+}
+
 function latestOpenCloseStatusEntry(
   entries: readonly IncidentTimelineEntry[],
 ): IncidentTimelineEntry | null {
@@ -1291,295 +1026,47 @@ function latestOpenCloseStatusEntry(
   return statusEntries[statusEntries.length - 1] ?? null;
 }
 
-function incidentWithLocalTimeline(incident: ImsIncident): ImsIncident {
-  const timelineEntries = [
-    ...incident.timelineEntries,
-    ...(localTimelineEntries.get(incident.id) ?? []),
-  ]
-    .map((entry) => localTimelineEntryOverrides.get(entry.id) ?? entry)
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-
-  return Object.freeze({
-    ...incident,
-    updatedAt: localIncidentUpdatedAt.get(incident.id) ?? incident.updatedAt,
-    nameReferenceChips: Object.freeze(
-      mergeNameReferenceChips([
-        ...incident.nameReferenceChips,
-        ...extractIncidentNameReferences(incident, timelineEntries),
-      ]),
-    ),
-    tagChips: Object.freeze(
-      mergeTagChips([
-        ...incident.tagChips,
-        ...extractIncidentTags(incident, timelineEntries),
-      ]),
-    ),
-    timelineEntries: Object.freeze(timelineEntries),
-  });
+function incidentTagSet(incident: ImsIncident): Set<string> {
+  return new Set(incident.tagChips.map((chip) => chip.normalizedTag));
 }
 
-function writeLinkedIncidentPair(
-  incident: ImsIncident,
-  target: ImsIncident,
-  timestamp: string,
-  entryType: "incident_linked" | "incident_unlinked",
-  context: IncidentSessionContext | null,
-): void {
-  const link = entryType === "incident_linked";
-  const nextIncident = Object.freeze({
-    ...incident,
-    linkedIncidents: Object.freeze(
-      link
-        ? mergeLinkedIncidents([
-            ...incident.linkedIncidents,
-            linkedIncidentSummary(target),
-          ])
-        : incident.linkedIncidents.filter((linked) => linked.id !== target.id),
-    ),
-    updatedAt: timestamp,
-  });
-  const nextTarget = Object.freeze({
-    ...target,
-    linkedIncidents: Object.freeze(
-      link
-        ? mergeLinkedIncidents([
-            ...target.linkedIncidents,
-            linkedIncidentSummary(incident),
-          ])
-        : target.linkedIncidents.filter((linked) => linked.id !== incident.id),
-    ),
-    updatedAt: timestamp,
-  });
-
-  localIncidentOverrides.set(incident.id, nextIncident);
-  localIncidentOverrides.set(target.id, nextTarget);
-  localIncidentUpdatedAt.set(incident.id, timestamp);
-  localIncidentUpdatedAt.set(target.id, timestamp);
-  localTimelineEntries.set(incident.id, [
-    ...(localTimelineEntries.get(incident.id) ?? []),
-    linkedIncidentTimelineEntry(incident, target, timestamp, entryType, context),
-  ]);
-  localTimelineEntries.set(target.id, [
-    ...(localTimelineEntries.get(target.id) ?? []),
-    linkedIncidentTimelineEntry(target, incident, timestamp, entryType, context),
-  ]);
+function textTagSet(values: readonly string[]): Set<string> {
+  return new Set(textTagChips(values).map((chip) => chip.normalizedTag));
 }
 
-function linkedIncidentTimelineEntry(
-  incident: ImsIncident,
-  target: ImsIncident,
-  timestamp: string,
-  entryType: "incident_linked" | "incident_unlinked",
-  context: IncidentSessionContext | null,
-): IncidentTimelineEntry {
-  const verb = entryType === "incident_linked" ? "Linked" : "Unlinked";
-
-  return Object.freeze({
-    id: `local-incident-link-${++incidentLinkSequence}`,
-    incidentId: incident.id,
-    actorName: context?.roleLabel ?? null,
-    entryType,
-    body: `${verb} related incident ${target.incidentNumber}: ${target.title || "Untitled incident"}.`,
-    previousValue:
-      entryType === "incident_unlinked"
-        ? { linkedIncidentId: target.id }
-        : undefined,
-    newValue:
-      entryType === "incident_linked"
-        ? { linkedIncidentId: target.id }
-        : undefined,
-    createdAt: timestamp,
-  });
-}
-
-function linkedIncidentSummary(incident: ImsIncident): LinkedIncidentSummary {
-  return Object.freeze({
-    id: incident.id,
-    incidentNumber: incident.incidentNumber,
-    title: incident.title,
-    status: incident.status,
-  });
-}
-
-function attachedFieldReportSummary(
-  report: FieldReportLinkCandidate,
-  linkedAt: string,
-): AttachedFieldReportSummary {
-  return Object.freeze({
-    id: report.id,
-    displayNumber: report.displayNumber,
-    title: report.title,
-    authorName: report.authorName,
-    body: report.body,
-    linkedAt,
-  });
-}
-
-function mergeLinkedIncidents(
-  linkedIncidents: readonly LinkedIncidentSummary[],
-): LinkedIncidentSummary[] {
-  const byId = new Map<string, LinkedIncidentSummary>();
-
-  for (const incident of linkedIncidents) {
-    if (!byId.has(incident.id)) {
-      byId.set(incident.id, incident);
-    }
-  }
-
-  return [...byId.values()].sort((left, right) =>
-    left.incidentNumber.localeCompare(right.incidentNumber),
-  );
-}
-
-function mergeAttachedFieldReports(
-  attachedFieldReports: readonly AttachedFieldReportSummary[],
-): AttachedFieldReportSummary[] {
-  const byId = new Map<string, AttachedFieldReportSummary>();
-
-  for (const report of attachedFieldReports) {
-    if (!byId.has(report.id)) {
-      byId.set(report.id, report);
-    }
-  }
-
-  return [...byId.values()].sort((left, right) =>
-    left.displayNumber.localeCompare(right.displayNumber),
-  );
-}
-
-function fieldReportLinkedTimelineEntry(
-  incident: ImsIncident,
-  report: FieldReportLinkCandidate,
-  linkId: string,
-  timestamp: string,
-  context: IncidentSessionContext | null,
-): IncidentTimelineEntry {
-  return Object.freeze({
-    id: `local-field-report-linked-${incidentFieldReportLinkSequence}`,
-    incidentId: incident.id,
-    actorName: context?.roleLabel ?? null,
-    entryType: "field_report_linked",
-    body: `Field Report: ${report.title}\nAuthor: ${report.authorName}\n${report.body}`,
-    newValue: {
-      fieldReportId: report.id,
-      incidentFieldReportId: linkId,
-    },
-    createdAt: timestamp,
-    strickenAt: null,
-    strickenReason: null,
-  });
-}
-
-function fieldReportUnlinkedTimelineEntry(
-  incident: ImsIncident,
-  report: FieldReportLinkCandidate,
-  timestamp: string,
-  context: IncidentSessionContext | null,
-): IncidentTimelineEntry {
-  return Object.freeze({
-    id: `local-field-report-unlinked-${++incidentFieldReportLinkSequence}`,
-    incidentId: incident.id,
-    actorName: context?.roleLabel ?? null,
-    entryType: "field_report_unlinked",
-    body: `Removed Field Report ${report.displayNumber}: ${report.title}.`,
-    previousValue: {
-      fieldReportId: report.id,
-    },
-    createdAt: timestamp,
-  });
-}
-
-function compareLinkSuggestionCandidates(
-  left: ImsIncident,
-  right: ImsIncident,
-  incidentTags: ReadonlySet<string>,
-): number {
-  const leftSharesTags = sharesLinkSuggestionTag(left, incidentTags);
-  const rightSharesTags = sharesLinkSuggestionTag(right, incidentTags);
-
-  if (leftSharesTags !== rightSharesTags) {
-    return leftSharesTags ? -1 : 1;
-  }
-
-  const createdAtComparison = right.createdAt.localeCompare(left.createdAt);
-
-  return createdAtComparison === 0
-    ? right.incidentNumber.localeCompare(left.incidentNumber)
-    : createdAtComparison;
-}
-
-function compareFieldReportSuggestionCandidates(
-  left: FieldReportLinkCandidate,
-  right: FieldReportLinkCandidate,
-  incidentTags: ReadonlySet<string>,
-): number {
-  const leftSharesTags = sharesFieldReportSuggestionTag(left, incidentTags);
-  const rightSharesTags = sharesFieldReportSuggestionTag(right, incidentTags);
-
-  if (leftSharesTags !== rightSharesTags) {
-    return leftSharesTags ? -1 : 1;
-  }
-
-  const createdAtComparison = right.createdAt.localeCompare(left.createdAt);
-
-  return createdAtComparison === 0
-    ? right.displayNumber.localeCompare(left.displayNumber)
-    : createdAtComparison;
-}
-
-function sharesLinkSuggestionTag(
-  incident: ImsIncident,
+function sharesTag(
+  candidateTags: ReadonlySet<string>,
   incidentTags: ReadonlySet<string>,
 ): boolean {
   if (incidentTags.size === 0) {
     return false;
   }
 
-  return [...linkSuggestionTagSet(incident)].some((tag) =>
-    incidentTags.has(tag),
-  );
+  return [...candidateTags].some((tag) => incidentTags.has(tag));
 }
 
-function sharesFieldReportSuggestionTag(
-  report: FieldReportLinkCandidate,
-  incidentTags: ReadonlySet<string>,
-): boolean {
-  if (incidentTags.size === 0) {
-    return false;
+function textTagChips(values: readonly string[]): IncidentTagChip[] {
+  const byNormalizedTag = new Map<string, IncidentTagChip>();
+
+  for (const value of values) {
+    for (const match of value.matchAll(/#([A-Za-z0-9_-]+)/gu)) {
+      const tag = match[1] ?? "";
+
+      if (tag === "" || byNormalizedTag.has(tag.toLowerCase())) {
+        continue;
+      }
+
+      byNormalizedTag.set(tag.toLowerCase(), {
+        tag,
+        normalizedTag: tag.toLowerCase(),
+      });
+    }
   }
 
-  return [...fieldReportSuggestionTagSet(report)].some((tag) =>
-    incidentTags.has(tag),
-  );
+  return [...byNormalizedTag.values()];
 }
 
-function linkSuggestionTagSet(incident: ImsIncident): Set<string> {
-  return new Set(
-    [
-      ...incident.tagChips.map((chip) => chip.normalizedTag),
-      ...[
-        incident.title,
-        ...incident.incidentTypeNames,
-        ...incident.responders.map((responder) => responder.displayName),
-        ...incident.attachedFieldReports.map((report) => report.body),
-        ...incident.timelineEntries
-          .filter((entry) => !entry.strickenAt)
-          .map((entry) => entry.body ?? ""),
-      ].flatMap(parseTags).map((chip) => chip.normalizedTag),
-    ].filter((tag) => tag.length > 0),
-  );
-}
-
-function fieldReportSuggestionTagSet(report: FieldReportLinkCandidate): Set<string> {
-  return new Set(
-    [report.title, report.body]
-      .flatMap(parseTags)
-      .map((chip) => chip.normalizedTag)
-      .filter((tag) => tag.length > 0),
-  );
-}
-
-function normalizeIncidentSearch(search: string): string {
+function normalizeSearch(search: string): string {
   const trimmed = search.trim();
 
   return trimmed.startsWith("@") || trimmed.startsWith("#")
@@ -1587,7 +1074,7 @@ function normalizeIncidentSearch(search: string): string {
     : trimmed.toLowerCase();
 }
 
-function fieldReportMatchesSearch(
+function fieldReportMatches(
   report: FieldReportLinkCandidate,
   normalizedSearch: string,
 ): boolean {
@@ -1595,164 +1082,37 @@ function fieldReportMatchesSearch(
     return true;
   }
 
-  const searchableText = [
-    report.displayNumber,
-    report.title,
-    report.authorName,
-    report.body,
-  ].join(" ").toLowerCase();
-
-  return (
-    searchableText.includes(normalizedSearch) ||
-    parseTags(report.body).some((chip) => chip.normalizedTag === normalizedSearch)
-  );
+  return [report.displayNumber, report.title, report.authorName, report.body]
+    .join(" ")
+    .toLowerCase()
+    .includes(normalizedSearch);
 }
 
-function incidentMatchesSearch(
-  incident: ImsIncident,
-  normalizedSearch: string,
-): boolean {
-  if (normalizedSearch.length === 0) {
-    return true;
+/**
+ * The roles that carry `incidents.view` here, as the node names them.
+ *
+ * Printed on the IMS heading cards so the person can see which standing they
+ * are working under. Names rather than codes, because the node already sent
+ * them and a person reading a screen mid-event should not have to translate
+ * `ic_lead`.
+ */
+function incidentRoleLabel(): string {
+  const department = selectedSessionDepartment.value;
+
+  if (department === null) {
+    return "Incident Command";
   }
 
-  // Mirrors the server list search (M11.19): the incident record, its active
-  // notes, and its attached Field Reports. Stricken history stays out of search
-  // for the same reason it stays out of the default timeline.
-  const searchableText = [
-    incident.incidentNumber,
-    incident.title,
-    incident.locationName ?? "",
-    incident.locationAddress ?? "",
-    incident.locationDetails ?? "",
-    ...incident.incidentTypeNames,
-    ...incident.responders.map((responder) => responder.displayName),
-    ...incident.timelineEntries
-      .filter((entry) => !entry.strickenAt)
-      .map((entry) => entry.body ?? ""),
-    ...incident.attachedFieldReports.flatMap((report) => [
-      report.displayNumber,
-      report.title,
-      report.body,
-    ]),
-  ].join(" ").toLowerCase();
+  const names = [
+    ...new Set(
+      department.roles
+        .filter((role) => role.capabilities.includes(CAPABILITY_INCIDENTS_VIEW))
+        .map((role) => role.role_name)
+        .filter((name): name is string => typeof name === "string" && name !== ""),
+    ),
+  ];
 
-  return (
-    searchableText.includes(normalizedSearch) ||
-    incident.nameReferenceChips.some(
-      (chip) => chip.normalizedToken === normalizedSearch,
-    ) ||
-    incident.tagChips.some((chip) => chip.normalizedTag === normalizedSearch)
-  );
-}
-
-function extractIncidentNameReferences(
-  incident: ImsIncident,
-  timelineEntries: readonly IncidentTimelineEntry[],
-): NameReferenceChip[] {
-  return [
-    incident.title,
-    incident.locationName ?? "",
-    incident.locationAddress ?? "",
-    incident.locationDetails ?? "",
-    ...incident.incidentTypeNames,
-    ...incident.responders.map((responder) => responder.displayName),
-    ...incident.attachedFieldReports.map((report) => report.body),
-    ...timelineEntries
-      .filter((entry) => entry.entryType !== "field_report_linked")
-      .filter((entry) => !entry.strickenAt)
-      .map((entry) => entry.body ?? ""),
-  ].flatMap(parseNameReferences);
-}
-
-function extractIncidentTags(
-  incident: ImsIncident,
-  timelineEntries: readonly IncidentTimelineEntry[],
-): IncidentTagChip[] {
-  return [
-    incident.title,
-    ...incident.incidentTypeNames,
-    ...incident.responders.map((responder) => responder.displayName),
-    ...incident.attachedFieldReports.map((report) => report.body),
-    ...timelineEntries
-      .filter((entry) => entry.entryType !== "field_report_linked")
-      .filter((entry) => !entry.strickenAt)
-      .map((entry) => entry.body ?? ""),
-  ].flatMap(parseTags);
-}
-
-function parseNameReferences(text: string): NameReferenceChip[] {
-  const matches = text.matchAll(/@([A-Za-z0-9_-]+)/gu);
-
-  return mergeNameReferenceChips(
-    [...matches].map((match) => ({
-      token: match[1] ?? "",
-      normalizedToken: (match[1] ?? "").toLowerCase(),
-    })),
-  );
-}
-
-function parseTags(text: string): IncidentTagChip[] {
-  const matches = text.matchAll(/#([A-Za-z0-9_-]+)/gu);
-
-  return mergeTagChips(
-    [...matches].map((match) => ({
-      tag: match[1] ?? "",
-      normalizedTag: (match[1] ?? "").toLowerCase(),
-    })),
-  );
-}
-
-function mergeNameReferenceChips(
-  chips: readonly NameReferenceChip[],
-): NameReferenceChip[] {
-  const byNormalizedToken = new Map<string, NameReferenceChip>();
-
-  for (const chip of chips) {
-    if (chip.normalizedToken.length === 0) {
-      continue;
-    }
-
-    if (!byNormalizedToken.has(chip.normalizedToken)) {
-      byNormalizedToken.set(chip.normalizedToken, chip);
-    }
-  }
-
-  return [...byNormalizedToken.values()];
-}
-
-function mergeTagChips(chips: readonly IncidentTagChip[]): IncidentTagChip[] {
-  const byNormalizedTag = new Map<string, IncidentTagChip>();
-
-  for (const chip of chips) {
-    if (chip.normalizedTag.length === 0) {
-      continue;
-    }
-
-    if (!byNormalizedTag.has(chip.normalizedTag)) {
-      byNormalizedTag.set(chip.normalizedTag, chip);
-    }
-  }
-
-  return [...byNormalizedTag.values()];
-}
-
-function normalizedTitle(value: string): string {
-  const title = value.trim();
-
-  if (title.length > 200) {
-    throw new Error("Incident title may not be greater than 200 characters.");
-  }
-
-  return title;
-}
-
-function validatedPriorityLabel(value: IncidentPriorityLabel): IncidentPriorityLabel {
-  if (!INCIDENT_PRIORITY_LABELS.includes(value)) {
-    throw new Error("Incident priority label is invalid.");
-  }
-
-  return value;
+  return names.length > 0 ? names.join(", ") : "Incident Command";
 }
 
 function normalizedStringList(values: readonly string[]): string[] {
@@ -1762,29 +1122,15 @@ function normalizedStringList(values: readonly string[]): string[] {
   for (const value of values) {
     const trimmed = value.trim();
 
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || seen.has(trimmed.toLowerCase())) {
       continue;
     }
 
-    const key = trimmed.toLowerCase();
-
-    if (seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
+    seen.add(trimmed.toLowerCase());
     nextValues.push(trimmed);
   }
 
   return nextValues;
-}
-
-function respondersForStaffIds(staffIds: readonly string[]): IncidentResponder[] {
-  const selectedIds = new Set(staffIds);
-
-  return RESPONDER_OPTIONS.filter((responder) =>
-    selectedIds.has(responder.staffId),
-  );
 }
 
 function nullableText(value: string): string | null {
@@ -1807,165 +1153,149 @@ function toDatetimeLocalValue(date: Date): string {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
-function fromDatetimeLocalValue(value: string, fallback: Date): string {
+function fromDatetimeLocalValue(value: string): string {
   const parsed = new Date(value);
 
   return Number.isNaN(parsed.getTime())
-    ? fallback.toISOString()
+    ? new Date().toISOString()
     : parsed.toISOString();
 }
 
-function autosaveDiffSnapshot(
-  incident: ImsIncident,
-): Record<string, string | null> {
-  return {
-    title: incident.title,
-    status: incident.status,
-    priorityLabel: incident.priorityLabel,
-    startedAt: incident.startedAt,
-    locationName: incident.locationName,
-    locationAddress: incident.locationAddress,
-    locationDetails: incident.locationDetails,
-    incidentTypeNames: incident.incidentTypeNames.join(", "),
-    responders: incident.responders
-      .map((responder) => responder.displayName)
-      .join(", "),
-  };
+interface FilterSelectionPayload {
+  readonly search: string;
+  readonly state: string;
+  readonly priority: string;
+  readonly type: string;
+  readonly responder: string;
+  readonly started_from: string | null;
+  readonly started_to: string | null;
+  readonly sort: string;
+  readonly direction: string;
 }
 
-function changedAutosaveFields(
-  incident: ImsIncident,
-  nextValues: Pick<
-    ImsIncident,
-    | "title"
-    | "status"
-    | "priorityLabel"
-    | "incidentTypeNames"
-    | "responders"
-    | "startedAt"
-    | "locationName"
-    | "locationAddress"
-    | "locationDetails"
-  >,
-  direction: "before" | "after",
-): Record<string, string | null> {
-  const before = autosaveDiffSnapshot(incident);
-  const after: Record<string, string | null> = {
-    title: nextValues.title,
-    status: nextValues.status,
-    priorityLabel: nextValues.priorityLabel,
-    startedAt: nextValues.startedAt,
-    locationName: nextValues.locationName,
-    locationAddress: nextValues.locationAddress,
-    locationDetails: nextValues.locationDetails,
-    incidentTypeNames: nextValues.incidentTypeNames.join(", "),
-    responders: nextValues.responders
-      .map((responder) => responder.displayName)
-      .join(", "),
-  };
-  const values = direction === "before" ? before : after;
-  const changed: Record<string, string | null> = {};
-
-  for (const field of Object.keys(after)) {
-    if (before[field] !== after[field]) {
-      changed[field] = values[field] ?? null;
-    }
-  }
-
-  return changed;
+interface PresetPayload {
+  readonly id: string;
+  readonly event_id: string;
+  readonly name: string;
+  readonly filters?: Partial<FilterSelectionPayload>;
+  readonly query?: Record<string, string>;
 }
 
-function changedInitialAutosaveFields(
-  previousForm: IncidentAutosaveForm,
-  nextValues: Pick<
-    ImsIncident,
-    | "title"
-    | "status"
-    | "priorityLabel"
-    | "incidentTypeNames"
-    | "responders"
-    | "startedAt"
-    | "locationName"
-    | "locationAddress"
-    | "locationDetails"
-  >,
-  fallback: Date,
-  direction: "before" | "after",
-): Record<string, string | null> {
-  const before: Record<string, string | null> = {
-    title: normalizedTitle(previousForm.title),
-    status: previousForm.status,
-    priorityLabel: previousForm.priorityLabel,
-    startedAt: fromDatetimeLocalValue(previousForm.startedAt, fallback),
-    locationName: nullableText(previousForm.locationName),
-    locationAddress: nullableText(previousForm.locationAddress),
-    locationDetails: nullableText(previousForm.locationDetails),
-    incidentTypeNames: normalizedStringList(previousForm.incidentTypeNames).join(", "),
-    responders: respondersForStaffIds(previousForm.responderStaffIds)
-      .map((responder) => responder.displayName)
-      .join(", "),
-  };
-  const after: Record<string, string | null> = {
-    title: nextValues.title,
-    status: nextValues.status,
-    priorityLabel: nextValues.priorityLabel,
-    startedAt: nextValues.startedAt,
-    locationName: nextValues.locationName,
-    locationAddress: nextValues.locationAddress,
-    locationDetails: nextValues.locationDetails,
-    incidentTypeNames: nextValues.incidentTypeNames.join(", "),
-    responders: nextValues.responders
-      .map((responder) => responder.displayName)
-      .join(", "),
-  };
-  const values = direction === "before" ? before : after;
-  const changed: Record<string, string | null> = {};
-
-  for (const field of Object.keys(after)) {
-    if (before[field] !== after[field]) {
-      changed[field] = values[field] ?? null;
-    }
-  }
-
-  return changed;
+interface TimelineEntryPayload {
+  readonly id: string;
+  readonly incident_id: string;
+  readonly actor_name?: string | null;
+  readonly entry_type: string;
+  readonly body?: string | null;
+  readonly previous_value?: Record<string, string | null> | null;
+  readonly new_value?: Record<string, string | null> | null;
+  readonly reason?: string | null;
+  readonly created_at?: string | null;
+  readonly stricken_at?: string | null;
+  readonly stricken_reason?: string | null;
 }
 
-function timelineFieldUpdateBody(
-  newValue: Record<string, string | null>,
-): string {
-  return Object.keys(newValue)
-    .map((field) => {
-      const label = fieldLabel(field).toLowerCase();
-      const value = formatTimelineChangedValue(field, newValue[field] ?? null);
-
-      return `Changed ${label}: ${value}`;
-    })
-    .join("\n");
+interface IncidentPayload {
+  readonly id: string;
+  readonly event_id: string;
+  readonly incident_number: string;
+  readonly status: string;
+  readonly priority_label?: string | null;
+  readonly started_at?: string | null;
+  readonly title?: string | null;
+  readonly location_name?: string | null;
+  readonly location_address?: string | null;
+  readonly location_details?: string | null;
+  readonly incident_type_names?: string[];
+  readonly responders?: {
+    readonly staff_id: string;
+    readonly display_name: string;
+    readonly relationship_label?: string | null;
+  }[];
+  readonly linked_incidents?: {
+    readonly id: string;
+    readonly incident_number: string;
+    readonly title: string;
+    readonly status: string;
+  }[];
+  readonly attached_field_reports?: {
+    readonly id: string;
+    readonly field_report_id?: string;
+    readonly display_number: string;
+    readonly title: string;
+    readonly author_name: string;
+    readonly body: string;
+    readonly linked_at?: string | null;
+  }[];
+  readonly attachments?: {
+    readonly id: string;
+    readonly filename: string;
+    readonly mime_type: string;
+    readonly byte_size: number;
+    readonly created_at?: string | null;
+  }[];
+  readonly created_by_name?: string | null;
+  readonly created_at?: string | null;
+  readonly updated_at?: string | null;
+  readonly closed_at?: string | null;
+  readonly name_reference_chips?: {
+    readonly token: string;
+    readonly normalized_token: string;
+  }[];
+  readonly timeline_entries?: TimelineEntryPayload[];
 }
 
-function fieldLabel(field: string): string {
-  const labels: Record<string, string> = {
-    title: "Title",
-    status: "State",
-    priorityLabel: "Priority",
-    incidentTypeNames: "Incident types",
-    responders: "Responders",
-    startedAt: "Started",
-    locationName: "Location name",
-    locationAddress: "Location address",
-    locationDetails: "Location details",
+interface IncidentListPayload {
+  readonly event_id?: string;
+  readonly filters?: Partial<FilterSelectionPayload>;
+  readonly filter_options?: {
+    readonly states?: string[];
+    readonly priorities?: string[];
+    readonly sorts?: string[];
+    readonly types?: string[];
+    readonly responders?: {
+      readonly staff_id: string;
+      readonly display_name: string;
+    }[];
+    readonly max_per_page?: number;
   };
-
-  return labels[field] ?? field;
+  readonly assignable?: {
+    readonly statuses?: string[];
+    readonly priorities?: string[];
+    readonly types?: string[];
+    readonly responders?: {
+      readonly staff_id: string;
+      readonly display_name: string;
+      readonly detail?: string;
+    }[];
+  };
+  readonly pagination?: {
+    readonly page?: number;
+    readonly per_page?: number;
+    readonly total?: number;
+    readonly total_pages?: number;
+    readonly has_more?: boolean;
+  };
+  readonly presets?: PresetPayload[];
+  readonly incidents?: IncidentPayload[];
 }
 
-function formatTimelineChangedValue(
-  field: string,
-  value: string | null,
-): string {
-  if (value === null || value === "") {
-    return "not set";
-  }
-
-  return field === "status" ? statusLabel(value as ImsIncident["status"]) : value;
+interface FieldReportListPayload {
+  readonly event_id?: string;
+  readonly field_reports?: {
+    readonly id: string;
+    readonly event_id?: string;
+    readonly display_number: string;
+    readonly title: string;
+    readonly author_name: string;
+    readonly body: string;
+    readonly created_at?: string | null;
+    readonly related_incidents?: {
+      readonly id: string;
+      readonly incident_number: string;
+      readonly title: string;
+      readonly status: string;
+      readonly priority_label?: string | null;
+    }[];
+  }[];
 }

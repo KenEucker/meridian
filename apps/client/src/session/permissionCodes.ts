@@ -33,6 +33,12 @@ export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";
 export const CAPABILITY_INCIDENTS_VIEW = "incidents.view";
+export const CAPABILITY_INCIDENTS_CREATE = "incidents.create";
+export const CAPABILITY_INCIDENTS_UPDATE = "incidents.update";
+export const CAPABILITY_INCIDENTS_ADD_NOTE = "incidents.add_note";
+export const CAPABILITY_INCIDENTS_LINK_FIELD_REPORT =
+  "incidents.link_field_report";
+export const CAPABILITY_INCIDENTS_PRINT = "incidents.print";
 export const CAPABILITY_FIELD_REPORTS_VIEW_EVENT = "field_reports.view_event";
 
 /**

@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
+import { configureMeridianApi } from "@/api/meridianApi";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { routes } from "@/router";
@@ -56,16 +57,75 @@ function homeCardByHeading(wrapper: VueWrapper, heading: string) {
     .find((item) => item.find("h3").text() === heading);
 }
 
+/**
+ * A node that counts this event's incidents and Field Reports (M16.20).
+ *
+ * The Operations Center's IMS modules ask the incident list read for one count
+ * each, so the stub answers each filter with its own total rather than with a
+ * page of rows: three incidents in all, two of them not closed, none critical.
+ */
+function stubImsCountNode(): void {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://node.test");
+
+      if (url.pathname.endsWith("/field-reports")) {
+        return new Response(
+          JSON.stringify({
+            event_id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+            field_reports: [1, 2, 3].map((index) => ({
+              id: `field-report-${index}`,
+              display_number: `FRA-2027-00000${index}`,
+              title: `Field Report ${index}`,
+              author_name: "Vera Ranger",
+              body: "Observed.",
+              created_at: "2027-07-04T20:00:00+00:00",
+              related_incidents: [],
+            })),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      const state = url.searchParams.get("state");
+      const priority = url.searchParams.get("priority");
+      const total = priority === "Critical" ? 0 : state === "active" ? 2 : 3;
+
+      return new Response(
+        JSON.stringify({
+          event_id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+          filters: {},
+          filter_options: {},
+          assignable: {},
+          pagination: { page: 1, per_page: 1, total, total_pages: 1 },
+          presets: [],
+          incidents: [],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }),
+  );
+}
+
 // Navigation follows the session response (M16.6), so the home directory has
 // nothing in it until one is established.
 beforeEach(() => {
   installLocalFieldSession();
   selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+  stubImsCountNode();
 });
 
 afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
+  configureMeridianApi(null);
+  vi.unstubAllGlobals();
 });
 
 describe("department operations surfaces", () => {
@@ -360,16 +420,16 @@ describe("department operations surfaces", () => {
         .findAll("a")
         .some((link) => link.text() === "Open IMS incidents"),
     ).toBe(true);
+    await flushPromises();
+
+    // Each count is the node's total for the filter its card links to. The
+    // "current shift" cards went with the shift table they used to read
+    // (M16.20): an incident carries no shift.
     const metricCards = wrapper.findAll(".ops__metric-card");
-    const incidentCards = metricCards.slice(0, 4);
-    expect(incidentCards).toHaveLength(4);
+    const incidentCards = metricCards.slice(0, 3);
+    expect(incidentCards).toHaveLength(3);
     expect(
       incidentCards.find((card) => card.text().includes("Event total"))?.text(),
-    ).toContain("3");
-    expect(
-      incidentCards
-        .find((card) => card.text().includes("Current shift"))
-        ?.text(),
     ).toContain("3");
     expect(
       incidentCards.find((card) => card.text().includes("Active"))?.text(),
@@ -379,11 +439,8 @@ describe("department operations surfaces", () => {
         .find((card) => card.text().includes("Critical priority"))
         ?.text(),
     ).toContain("0");
-    const fieldReportCards = metricCards.slice(4);
-    expect(fieldReportCards).toHaveLength(4);
-    expect(
-      fieldReportCards.find((card) => card.text().includes("This shift"))?.text(),
-    ).toContain("3");
+    const fieldReportCards = metricCards.slice(3);
+    expect(fieldReportCards).toHaveLength(3);
     expect(
       fieldReportCards.find((card) => card.text().includes("Linked"))?.text(),
     ).toContain("0");
@@ -403,14 +460,14 @@ describe("department operations surfaces", () => {
     expect(wrapper.find("#deployments-heading").exists()).toBe(true);
 
     await incidentCards
-      .find((card) => card.text().includes("Current shift"))!
+      .find((card) => card.text().includes("Critical priority"))!
       .trigger("click");
     await flushPromises();
 
     expect(router.currentRoute.value.name).toBe("ims.incidents.index");
     expect(router.currentRoute.value.query).toMatchObject({
       state: "all",
-      shift: "current",
+      priority: "Critical",
     });
   });
 

@@ -2,6 +2,7 @@
 
 namespace App\Services\Incidents;
 
+use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\Incident;
 use App\Models\IncidentStaff;
@@ -130,6 +131,85 @@ final class IncidentSearchService
             ->sortBy('display_name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
             ->all();
+    }
+
+    /**
+     * Every incident type this organization has, for the authoring form
+     * (M16.20).
+     *
+     * Wider than {@see typeOptions}, which answers "what is on an incident here
+     * already" for a filter control. A form is choosing what to put on one, and
+     * a type the organization uses but this event has not needed yet is a
+     * legitimate choice. The command still accepts a name that is on neither
+     * list and creates the type, so this is a suggestion list rather than a
+     * vocabulary.
+     *
+     * @return list<string>
+     */
+    public function assignableTypeOptions(User $user, Event $event): array
+    {
+        if (! $this->access->canViewIncidents($user, $event)) {
+            return [];
+        }
+
+        return IncidentType::query()
+            ->where('organization_id', $event->organization_id)
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(fn ($name): string => (string) $name)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Staff who may be attached to an incident as responders (M16.20).
+     *
+     * The event's configured Incident Command department, which is the roster
+     * an IC user already works from and already sees. It is deliberately not
+     * every staff member at the event: an incident form is not a staff
+     * directory, and the assignment command takes ids, so a wider list here
+     * would disclose people rather than enable anything.
+     *
+     * @return list<array{staff_id: string, display_name: string, detail: string}>
+     */
+    public function assignableResponderOptions(User $user, Event $event): array
+    {
+        if (! $this->access->canViewIncidents($user, $event)) {
+            return [];
+        }
+
+        $departmentId = $this->incidentCommandDepartmentId($event);
+
+        if ($departmentId === null) {
+            return [];
+        }
+
+        return DepartmentMembership::query()
+            ->with(['staff', 'department'])
+            ->active()
+            ->where('department_id', $departmentId)
+            ->get()
+            ->map(fn (DepartmentMembership $membership): array => [
+                'staff_id' => (string) $membership->staff_id,
+                'display_name' => $membership->staff?->preferred_name
+                    ?? $membership->staff?->handle
+                    ?? $membership->staff?->legal_name
+                    ?? 'Unknown responder',
+                'detail' => (string) ($membership->department?->name ?? ''),
+            ])
+            ->unique('staff_id')
+            ->sortBy('display_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+    }
+
+    private function incidentCommandDepartmentId(Event $event): ?string
+    {
+        $event->loadMissing('organization');
+
+        $departmentId = $event->ic_department_id ?? $event->organization?->default_ic_department_id;
+
+        return $departmentId === null ? null : (string) $departmentId;
     }
 
     /**

@@ -35,10 +35,6 @@ import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import { workstationSessionState } from "@/session/workstationSession";
-import {
-  installDevelopmentIncidentSession,
-  resolveIncidentSession,
-} from "@/ims/incidentReadModel";
 import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
 import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
@@ -77,17 +73,6 @@ import {
 function ensureFieldSession(): void {
   if (!resolveFieldSession()) {
     installDevelopmentFieldSession();
-  }
-}
-
-/**
- * Development IMS session until auth/event selection own the real IC context.
- * The screen components still fail closed when the installed role lacks IC
- * authority (M11.5).
- */
-function ensureIncidentSession(): void {
-  if (!resolveIncidentSession()) {
-    installDevelopmentIncidentSession();
   }
 }
 
@@ -377,13 +362,11 @@ export const routes: RouteRecordRaw[] = [
     path: "/ims/incidents",
     name: "ims.incidents.index",
     component: IncidentListView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/ims/field-reports",
     name: "ims.field-reports.index",
     component: ImsFieldReportListView,
-    beforeEnter: ensureIncidentSession,
   },
   // Dictated Field Report create. Static segment before the `:fieldReportId`
   // route so `/ims/field-reports/create` is not read as a report id. Both
@@ -394,37 +377,32 @@ export const routes: RouteRecordRaw[] = [
     path: "/ims/field-reports/create",
     name: "ims.field-reports.create",
     component: FieldReportCreateView,
-    beforeEnter: [ensureIncidentSession, ensureFieldSession],
+    beforeEnter: ensureFieldSession,
   },
   {
     path: "/ims/field-reports/:fieldReportId",
     name: "ims.field-reports.show",
     component: ImsFieldReportDetailView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/ims/incidents/create",
     name: "ims.incidents.create",
     component: IncidentEditView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/ims/incidents/:incidentId/edit",
     name: "ims.incidents.edit",
     component: IncidentEditView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/ims/incidents/:incidentId",
     name: "ims.incidents.show",
     component: IncidentEditView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/ims/restricted",
     name: "ims.restricted",
     component: ImsRestrictedView,
-    beforeEnter: ensureIncidentSession,
   },
   {
     path: "/organizer/staff",

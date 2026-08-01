@@ -8,10 +8,7 @@ import {
   type DictationStaffOption,
 } from "@/field-reports/dictationStaffDirectory";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
-import {
-  canEditIncident,
-  resolveIncidentSession,
-} from "@/ims/incidentReadModel";
+import { incidentAccess } from "@/ims/incidentReadModel";
 import {
   FIELD_REPORT_TITLE_MAX_LENGTH,
   OfflineFieldReportError,
@@ -50,11 +47,10 @@ import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 const router = useRouter();
 const route = useRoute();
 const session = computed(() => resolveFieldSession());
-const incidentSession = computed(() => resolveIncidentSession());
 
 /** True on the `/ims/field-reports/create` route, false on the staff route. */
 const dictationRoute = computed(() => route.name === "ims.field-reports.create");
-const canDictate = computed(() => canEditIncident(incidentSession.value));
+const canDictate = computed(() => incidentAccess.value.canCreate);
 const dictationMode = computed(() => dictationRoute.value && canDictate.value);
 
 const staffQuery = ref("");
