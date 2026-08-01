@@ -579,6 +579,140 @@ fieldset:disabled .btn {
 }
 
 /*
+ * Enhanced select controls.
+ *
+ * Every `Select` and `Relation` field in the console — the organization,
+ * department, and team pickers among them — is replaced at runtime by a
+ * scripted widget whose markup is `.ts-wrapper` / `.ts-control` /
+ * `.ts-dropdown`, not `<select>`. None of the `.form-select` rules above reach
+ * it, and the widget's own stylesheet paints itself in literal light-mode
+ * colors: a white panel, a near-black label, a grey chip for each chosen
+ * value. Bridged through `--bs-*` it would have followed the theme, but those
+ * colors are written directly, so they are re-declared here at the same
+ * selectors.
+ *
+ * The control is mapped to the input surface rather than the canvas so it
+ * matches the fields beside it, and the open panel is mapped to the same
+ * raised surface and overlay shadow as `.dropdown-menu`, because a reader
+ * should not be able to tell which of the two kinds of menu they opened.
+ */
+.ts-control,
+.ts-control input,
+.ts-dropdown {
+    color: var(--m-text-primary);
+}
+
+.ts-control {
+    background-color: var(--m-surface-base);
+    border-color: var(--m-console-border);
+}
+
+.ts-control input::placeholder {
+    color: var(--m-text-muted);
+}
+
+.ts-dropdown {
+    background: var(--m-surface-raised);
+    border-color: var(--m-border-subtle);
+    box-shadow: var(--m-shadow-overlay);
+}
+
+/* Supporting labels inside the panel take the secondary foreground rather than
+   the muted one: muted measures 4.48:1 on the raised surface in dark mode, a
+   hundredth under the floor, and these are ordinary text rather than an
+   inactive control the exemption would cover. */
+.ts-dropdown .optgroup-header {
+    background: var(--m-surface-raised);
+    color: var(--m-text-secondary);
+}
+
+.ts-dropdown .active,
+.ts-dropdown .active.create {
+    background-color: var(--m-surface-overlay);
+    color: var(--m-text-primary);
+}
+
+.ts-dropdown .create {
+    color: var(--m-text-secondary);
+}
+
+/* The typed value is highlighted inside each result. A tint of the focus
+   color carries it in both themes; the widget's own yellow does not. */
+.ts-dropdown [data-selectable] .highlight {
+    background: color-mix(in srgb, var(--m-focus-ring) 32%, transparent);
+    color: inherit;
+}
+
+/* The chips a multi-value control shows for what is already chosen. */
+.ts-wrapper.multi .ts-control > div {
+    background: var(--m-surface-overlay);
+    border-color: var(--m-border-subtle);
+    color: var(--m-text-primary);
+}
+
+.ts-wrapper.multi .ts-control > div.active {
+    background: var(--m-action-primary-bg);
+    border-color: var(--m-action-primary-bg);
+    color: var(--m-action-primary-text);
+}
+
+/* A disabled widget recedes to the canvas at full opacity, the same way the
+   native controls above do, rather than fading its label out of contrast. */
+.disabled .ts-control,
+.ts-wrapper.multi.disabled .ts-control > div,
+.ts-wrapper.multi.disabled .ts-control > div.active {
+    background: var(--m-surface-app);
+    background-color: var(--m-surface-app);
+    border-color: var(--m-console-border);
+    color: var(--m-text-muted);
+    opacity: 1;
+}
+
+.ts-wrapper .dropdown-header {
+    background: var(--m-surface-overlay);
+    border-bottom-color: var(--m-border-subtle);
+}
+
+.ts-wrapper .dropdown-header-close,
+.ts-wrapper .dropdown-header-close:hover {
+    color: var(--m-text-primary);
+}
+
+/* The widget's search field carries the framework's own blue focus ring;
+   the console's focus color is the one every other control here uses. */
+.ts-dropdown .dropdown-input {
+    background-color: var(--m-surface-base);
+    border-color: var(--m-focus-ring);
+    box-shadow: none;
+    color: var(--m-text-primary);
+}
+
+/*
+ * Lists of links and records.
+ *
+ * The framework's list group hard-codes a white fill and a white disabled
+ * fill, and takes its text from the bridged body color. In dark mode that is
+ * near-white text on a white panel — the Documentation page's document list is
+ * where an operator meets it. Only the fill was ever literal, so mapping the
+ * variables is enough.
+ */
+.list-group {
+    --bs-list-group-color: var(--m-text-primary);
+    --bs-list-group-bg: var(--m-surface-base);
+    --bs-list-group-border-color: var(--m-border-subtle);
+    --bs-list-group-action-color: var(--m-text-secondary);
+    --bs-list-group-action-hover-color: var(--m-text-primary);
+    --bs-list-group-action-hover-bg: var(--m-surface-raised);
+    --bs-list-group-action-active-color: var(--m-text-primary);
+    --bs-list-group-action-active-bg: var(--m-surface-overlay);
+    --bs-list-group-disabled-color: var(--m-text-muted);
+    --bs-list-group-disabled-bg: var(--m-surface-app);
+    --bs-list-group-active-color: var(--m-action-primary-text);
+    --bs-list-group-active-bg: var(--m-action-primary-bg);
+    --bs-list-group-active-border-color: var(--m-action-primary-bg);
+}
+
+/*
  * Buttons.
  *
  * The framework does not theme its buttons through Bootstrap's `--bs-btn-*`
@@ -763,7 +897,12 @@ fieldset:disabled .btn {
     --bs-dropdown-link-hover-color: var(--m-text-primary);
     --bs-dropdown-link-active-bg: var(--m-action-primary-bg);
     --bs-dropdown-link-active-color: var(--m-action-primary-text);
-    --bs-dropdown-link-disabled-color: var(--m-text-muted);
+    /* Muted alone measures 4.48:1 on the raised surface in dark mode. The
+       console does not lean on the WCAG exemption for inactive components —
+       see the disabled control rules above — so the color is pulled a tenth
+       toward the foreground, which clears the floor on the raised surface and
+       on the overlay surface a hovered row sits on. */
+    --bs-dropdown-link-disabled-color: color-mix(in srgb, var(--m-text-muted) 90%, var(--m-text-primary));
     --bs-dropdown-box-shadow: var(--m-shadow-overlay);
 }
 

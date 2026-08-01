@@ -50,6 +50,31 @@ class ConsoleContrastTest extends TestCase
             // take the normal-text threshold rather than the large-text one.
             'table heading on a card' => ['var(--m-text-muted)', 'var(--m-surface-base)', 4.5],
 
+            // Menus and popovers. Every open panel in the console — the
+            // framework's own dropdown, the enhanced select widget's result
+            // list, a list group's hovered row — is drawn on the raised
+            // surface, with the hovered or chosen row lifted to the overlay
+            // surface above it. Neither was measured while only the canvas and
+            // the card were listed here.
+            //
+            // Muted is deliberately absent: it measures 4.48:1 on the raised
+            // surface in dark mode, a hundredth under the floor, so supporting
+            // text in a panel takes the secondary foreground and a disabled row
+            // takes muted pulled toward the foreground.
+            'foreground on a raised surface' => ['var(--m-text-primary)', 'var(--m-surface-raised)', 4.5],
+            'secondary foreground on a raised surface' => ['var(--m-text-secondary)', 'var(--m-surface-raised)', 4.5],
+            'foreground on an overlay surface' => ['var(--m-text-primary)', 'var(--m-surface-overlay)', 4.5],
+            'disabled menu item label on a menu' => [
+                'color-mix(in srgb, var(--m-text-muted) 90%, var(--m-text-primary))',
+                'var(--m-surface-raised)',
+                4.5,
+            ],
+            'disabled menu item label on a hovered row' => [
+                'color-mix(in srgb, var(--m-text-muted) 90%, var(--m-text-primary))',
+                'var(--m-surface-overlay)',
+                4.5,
+            ],
+
             // Control boundaries and focus.
             'control boundary on the canvas' => [
                 'color-mix(in srgb, var(--m-border-default) 70%, var(--m-text-primary))',

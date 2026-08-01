@@ -83,6 +83,54 @@ class ConsoleVisualIdentityTest extends TestCase
     }
 
     /**
+     * The framework's list group hard-codes its fill rather than taking it from
+     * a bridged variable, so in dark mode it rendered a white panel carrying
+     * near-white text — the Documentation page's document list is where an
+     * operator meets it.
+     */
+    public function test_list_groups_take_their_fill_from_the_shared_tokens(): void
+    {
+        $css = $this->bridge();
+
+        foreach ([
+            '--bs-list-group-bg: var(--m-surface-base);',
+            '--bs-list-group-color: var(--m-text-primary);',
+            '--bs-list-group-disabled-bg: var(--m-surface-app);',
+        ] as $mapping) {
+            $this->assertStringContainsString($mapping, $css);
+        }
+    }
+
+    /**
+     * Every `Select` and `Relation` field — the organization, department, and
+     * team pickers among them — is replaced at runtime by a scripted widget
+     * with its own markup and its own literal light-mode colors, which no
+     * `.form-select` rule reaches. Its panel and its control have to be painted
+     * from the tokens directly.
+     */
+    public function test_the_enhanced_select_widget_paints_from_the_shared_tokens(): void
+    {
+        $css = $this->bridge();
+
+        foreach ([
+            '.ts-control,',
+            '.ts-control input,',
+            '.ts-dropdown {',
+            '.ts-wrapper.multi .ts-control > div {',
+        ] as $selector) {
+            $this->assertStringContainsString($selector, $css);
+        }
+
+        // The widget ships `.ts-dropdown{background:#fff}` and paints its
+        // control text near-black; both have to be replaced, not merely
+        // reshaped, which the no-hex rule alone would not catch.
+        $this->assertStringContainsString(
+            "background: var(--m-surface-raised);\n    border-color: var(--m-border-subtle);",
+            $css,
+        );
+    }
+
+    /**
      * Bridging `--bs-link-color` is not enough on its own: the framework paints
      * links from a separate `--bs-link-color-rgb` triple that a hex token
      * cannot produce, so links kept the framework's near-black and turned
