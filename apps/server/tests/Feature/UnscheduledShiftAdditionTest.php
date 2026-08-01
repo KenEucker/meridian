@@ -25,6 +25,7 @@ use App\Services\Shift\ShiftRequirementService;
 use App\Services\Shift\UnscheduledShiftAdditionException;
 use App\Services\Shift\UnscheduledShiftAdditionService;
 use App\Services\Status\StaffStatusService;
+use App\Services\Teams\TeamAdminService;
 use App\Services\Training\TrainingService;
 use App\Services\Waiver\WaiverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -176,6 +177,144 @@ class UnscheduledShiftAdditionTest extends TestCase
 
         app(UnscheduledShiftAdditionService::class)->addStaffToShift(
             shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:00:00'),
+        );
+    }
+
+    /**
+     * On-site presence comes first (SLB-008, requirements 5.8).
+     *
+     * The desk's own order of work: somebody walks up, Logistics marks them
+     * on-site, and only then are they somebody who can be put on a shift. A
+     * staff member who is off-site — or who this department has never marked
+     * either way — is refused here rather than assigned to a shift they are not
+     * at.
+     */
+    public function test_unscheduled_addition_refuses_staff_who_are_not_on_site(): void
+    {
+        [$shift, $staff, $shiftLead] = $this->unscheduledScenario();
+
+        EventDepartmentPresence::query()
+            ->where('event_id', $shift->event_id)
+            ->where('department_id', $shift->department_id)
+            ->where('staff_id', $staff->id)
+            ->update([
+                'current_state' => EventDepartmentPresence::STATE_OFF_SITE,
+                'marked_on_site_at' => null,
+                'marked_off_site_at' => now(),
+            ]);
+
+        try {
+            app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+                shift: $shift,
+                staff: $staff,
+                actor: $shiftLead,
+                moment: Carbon::parse('2026-07-01 10:00:00'),
+            );
+
+            $this->fail('An off-site staff member should not be added to a shift.');
+        } catch (UnscheduledShiftAdditionException $exception) {
+            $this->assertSame(
+                'Staff must be marked on-site with this department before unscheduled shift addition.',
+                $exception->getMessage(),
+            );
+        }
+
+        // No presence record at all is the same answer, and is the ordinary case
+        // on the first day of an event.
+        EventDepartmentPresence::query()
+            ->where('event_id', $shift->event_id)
+            ->where('staff_id', $staff->id)
+            ->delete();
+
+        $this->expectException(UnscheduledShiftAdditionException::class);
+        $this->expectExceptionMessage('Staff must be marked on-site with this department before unscheduled shift addition.');
+
+        app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:00:00'),
+        );
+    }
+
+    /**
+     * Somebody from another department is refused before presence is even asked
+     * about, because a presence record for a department they do not belong to
+     * says nothing about whether this shift is theirs to work.
+     */
+    public function test_unscheduled_addition_refuses_staff_outside_the_shift_department(): void
+    {
+        [$shift, , $shiftLead] = $this->unscheduledScenario();
+        $outsider = Staff::factory()->create();
+        $otherDepartment = Department::factory()
+            ->for($shift->event->organization)
+            ->create(['name' => 'Gate']);
+
+        app(DepartmentMembershipService::class)->assignStaffWithDefaultTeam($outsider, $otherDepartment);
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $shift->event_id,
+            'department_id' => $shift->department_id,
+            'staff_id' => $outsider->id,
+        ]);
+
+        $this->expectException(UnscheduledShiftAdditionException::class);
+        $this->expectExceptionMessage('Staff must belong to the shift department before unscheduled shift addition.');
+
+        app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $outsider,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:00:00'),
+        );
+    }
+
+    /**
+     * Archiving a team does not archive its memberships, so the membership row
+     * outlives the team it names. The addition asks about the team as well
+     * (`TeamMembership::onEligibleShiftTeam`), which is what keeps the Logistics
+     * Desk from offering an addition this refuses.
+     */
+    public function test_unscheduled_addition_refuses_a_membership_on_an_archived_team(): void
+    {
+        [$shift, $staff, $shiftLead, $departmentMembership] = $this->unscheduledScenario();
+        $department = $shift->department;
+
+        // A named operational team beside the structural default, which is what
+        // a department that has been set up for an event actually looks like.
+        $dirt = Team::factory()->for($department)->create([
+            'name' => 'Dirt',
+            'is_default' => false,
+        ]);
+        TeamMembership::factory()->create([
+            'team_id' => $dirt->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $departmentMembership->id,
+        ]);
+        $dirtShift = Shift::factory()->create([
+            'event_id' => $shift->event_id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $dirt->id,
+            'title' => 'Ranger Dirt Sweep',
+            'starts_at' => Carbon::parse('2026-07-01 08:00:00'),
+            'ends_at' => Carbon::parse('2026-07-01 16:00:00'),
+        ]);
+
+        app(TeamAdminService::class)->archive($dirt, $shiftLead);
+
+        $this->assertDatabaseHas('team_memberships', [
+            'team_id' => $dirt->id,
+            'staff_id' => $staff->id,
+            'archived_at' => null,
+        ]);
+
+        $this->expectException(UnscheduledShiftAdditionException::class);
+        $this->expectExceptionMessage('Staff must belong to the shift eligible team before unscheduled shift addition.');
+
+        app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $dirtShift,
             staff: $staff,
             actor: $shiftLead,
             moment: Carbon::parse('2026-07-01 10:00:00'),

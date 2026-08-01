@@ -14,7 +14,6 @@ use App\Models\User;
 use App\Services\Attendance\AttendanceCheckInAccess;
 use App\Services\Audit\AuditService;
 use App\Services\Credential\CredentialEligibilityService;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -152,12 +151,12 @@ class UnscheduledShiftAdditionService
             throw $this->unscheduledExceptionFor($exception);
         }
 
+        // The same rule the Logistics Desk decides whether to offer the addition
+        // by, asked from one place so the two cannot drift (SLB-008).
         $hasEligibleTeamMembership = TeamMembership::query()
-            ->active()
+            ->onEligibleShiftTeam($departmentMembership)
             ->where('team_id', $shift->eligible_team_id)
             ->where('staff_id', $staff->id)
-            ->where('department_membership_id', $departmentMembership->id)
-            ->whereHas('team', fn (Builder $query) => $query->active())
             ->exists();
 
         if (! $hasEligibleTeamMembership) {

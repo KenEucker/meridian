@@ -81,6 +81,44 @@ class TeamMembership extends Model
         return $query->whereNull('archived_at');
     }
 
+    /**
+     * Memberships that put somebody on a shift's eligible team (SLB-008,
+     * SHIFT-016).
+     *
+     * Three conditions, and a caller that skips any of them is asking a looser
+     * question than the one an unscheduled addition is decided by: the
+     * membership is not archived, the team it names is not archived, and it
+     * hangs off the department membership that puts the person in that
+     * department — a row left behind by a membership that was archived and
+     * replaced is not standing on that team any more.
+     *
+     * It lives on the model because `UnscheduledShiftAdditionService` and the
+     * Logistics Desk read both ask it, and they did not ask it the same way.
+     * The desk weighed only the membership, so an archived team kept offering
+     * **Add to shift** for a shift the node then refused — the desk drawing a
+     * button whose answer it had got wrong, which is the failure the read
+     * exists to prevent.
+     *
+     * @param  Builder<TeamMembership>  $query
+     * @param  DepartmentMembership|list<string>|string  $departmentMemberships
+     * @return Builder<TeamMembership>
+     */
+    public function scopeOnEligibleShiftTeam(
+        Builder $query,
+        DepartmentMembership|array|string $departmentMemberships,
+    ): Builder {
+        $ids = match (true) {
+            $departmentMemberships instanceof DepartmentMembership => [(string) $departmentMemberships->getKey()],
+            is_array($departmentMemberships) => $departmentMemberships,
+            default => [$departmentMemberships],
+        };
+
+        return $query
+            ->active()
+            ->whereIn('department_membership_id', $ids)
+            ->whereHas('team', fn (Builder $team) => $team->active());
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;

@@ -22,6 +22,7 @@ use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Membership\DepartmentMembershipService;
+use App\Services\Teams\TeamAdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -244,6 +245,76 @@ class DepartmentOperationsReadHttpTest extends TestCase
             [],
             $response->json('staff_workspaces.'.(string) $scenario['offSite']->id.'.shift_cards'),
         );
+    }
+
+    /**
+     * The desk offers an addition on exactly the terms the command takes one
+     * (M18.3; SLB-008).
+     *
+     * Archiving a team leaves its memberships alone and leaves its shifts on the
+     * desk, so the read used to go on offering **Add to shift** for a shift
+     * `UnscheduledShiftAdditionService` would refuse — a button whose answer the
+     * desk had got wrong, which is the one thing a node-decided control must not
+     * be. Both sides now ask `TeamMembership::onEligibleShiftTeam`.
+     */
+    public function test_an_archived_eligible_team_withdraws_the_addition_the_command_would_refuse(): void
+    {
+        $scenario = $this->scenario();
+
+        $sweeps = Team::factory()->for($scenario['department'])->create(['name' => 'Sweeps']);
+        TeamMembership::factory()->create([
+            'team_id' => $sweeps->id,
+            'staff_id' => $scenario['unassigned']->id,
+            'department_membership_id' => DepartmentMembership::query()
+                ->active()
+                ->where('department_id', $scenario['department']->id)
+                ->where('staff_id', $scenario['unassigned']->id)
+                ->value('id'),
+        ]);
+
+        $sweepShift = Shift::factory()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'eligible_team_id' => $sweeps->id,
+            'title' => 'Ranger Sweeps Afternoon',
+            'starts_at' => Carbon::parse('2027-07-04 17:00:00'),
+            'ends_at' => Carbon::parse('2027-07-04 23:00:00'),
+            'capacity' => null,
+        ]);
+
+        $offered = $this->addToShiftCard($scenario, $sweepShift);
+        $this->assertTrue($offered['can_add_to_shift']);
+        $this->assertNull($offered['add_to_shift_blocked_reason']);
+
+        app(TeamAdminService::class)->archive($sweeps, $scenario['logistics']);
+
+        $withdrawn = $this->addToShiftCard($scenario, $sweepShift);
+        $this->assertFalse($withdrawn['can_add_to_shift']);
+        // Not "they are not a member of it": they still are, and sending an
+        // operator to put them on a team that takes nobody is a wasted trip.
+        $this->assertSame(
+            'The Sweeps team has been archived, so this shift takes no additions.',
+            $withdrawn['add_to_shift_blocked_reason'],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $scenario
+     * @return array<string, mixed>
+     */
+    private function addToShiftCard(array $scenario, Shift $shift): array
+    {
+        $cards = collect(
+            $this->actingAsClient($scenario['logistics'])
+                ->getJson($this->path($scenario, 'logistics'))
+                ->assertOk()
+                ->json('staff_workspaces.'.(string) $scenario['unassigned']->id.'.shift_cards'),
+        );
+
+        $card = $cards->firstWhere('shift_id', (string) $shift->id);
+        $this->assertNotNull($card, 'The card is on screen so it can explain itself.');
+
+        return $card;
     }
 
     public function test_operations_lists_deployment_options_and_staff_on_shift(): void

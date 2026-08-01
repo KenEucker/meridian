@@ -209,7 +209,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
     Vera; includes actual start/end; has computed minutes; and is separate from
     the scheduled shift duration.
 
-### C2. Presence and unscheduled shift addition (M16.21)
+### C2. Presence and unscheduled shift addition (M16.21, M18.3)
 
 19a. Pick an on-site Rangers staff member who holds no assignment on the running
      shift, open their workspace, and confirm the shift card offers **Add to
@@ -224,7 +224,18 @@ rows, unauthorized actors are refused, and each successful export is audited.
      ```
 19d. Open the workspace of somebody who is off-site and confirm the desk offers
      them no check-in and no shift addition at all — the node did not offer the
-     actions, rather than the client disabling buttons it drew anyway.
+     actions, rather than the client disabling buttons it drew anyway. Mark them
+     on-site and confirm the addition appears, which is the order requirements
+     5.8 asks for: presence first, then the shift.
+19d1. With that person still on-site, look at a running shift belonging to a team
+     they are not on. Confirm its card is on screen, offers no **Add to shift**,
+     and reads "This shift is for the *team* team, and they are not a member of
+     it." A card that cannot be acted on still has to say why.
+19d2. Archive the team behind one of those shifts from the department's team
+     administration, reload the desk, and confirm the card now reads "The *team*
+     team has been archived, so this shift takes no additions" and still offers
+     nothing. The desk and `UnscheduledShiftAdditionService` decide this on one
+     rule, so a button here would be one the node refuses.
 19e. Confirm presence writes reach the node:
      ```bash
      php artisan tinker --execute='App\Models\EventDepartmentPresence::query()->latest("updated_at")->limit(5)->get(["staff_id", "current_state", "marked_on_site_at", "marked_off_site_at", "last_marked_by_user_id"])->each(fn ($presence) => print($presence->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
