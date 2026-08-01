@@ -13,6 +13,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - Technical spec section 21.3: document states, scope, and visibility.
 - Data/API spec section 11.4A: Event Info section selection and assembly rules.
 - Data/API spec sections 5.1 and 5.2: `GET /api/events/{event}/info` and the `event_info_section` command field.
+- `CLIENT-023`: Event Info renders the node's assembly rather than bundled client data (Meridian Alpha 1 task M16.19).
 - UI implementation contract sections 7.0 (primary navigation menus), 10.2 (layout tokens), 11.5A (StaffPageShell and staff card lists), 11.5B (ContentGrid and large-display scaling), 12.3 (`staff.me`, `event.info`), and 12.4 (`team.overview`).
 - Accessibility checklist sections 8, 9, 14, and 18.
 
@@ -59,6 +60,7 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 15. Widen the same pages through 1366px, 1920px, and 2560px, and to 3840px if a 4K display or browser emulation is available. Watch the column count on Event Info, Documents, Shifts, Trainings, and Home.
 16. At 1600px, confirm Event Info places the At a glance summary in the middle column with section cards either side of it, then narrow below 1500px and confirm it returns to a normal tile grid with the summary first.
 17. Open the shell user menu and note the icon and dot colour against the connection state.
+18. Stop the node (or disconnect the network), reload Event Info, and read what the page states. Restart the node and use the retry control.
 
 ## Expected results
 
@@ -71,7 +73,9 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - The `arrival` section stays empty while its document is a draft, including for the department lead who maintains it. It fills in after publish.
 - The team-scoped `housing` document is visible to members of that team and absent for staff outside it; the department-scoped `packing` document is visible to department members and absent for staff in other departments.
 - Clearing the Event Info section removes the document from Event Info while leaving it published and visible in the document library, and does not change the document version.
-- The staff member with no standing in the event's organization receives HTTP 403 from `/api/events/{event}/info`.
+- The staff member with no standing in the event's organization receives HTTP 403 from `/api/events/{event}/info`, and the Event Info page shows that refusal in the server's own words rather than an empty event.
+- The event name, the operations window, and its time zone on the At a glance summary match the event the URL names, and come from the same response as the sections below them.
+- With the node unreachable, Event Info states that it could not be loaded and offers a retry. It never renders as an event with six empty sections, because "no guidance published" and "could not ask" are different answers.
 - Every persona sees a single **Menu** rather than separate Staff and Workflows menus, listing Me and Event Info first, then the workflows they can reach. No Alpha 1 role reaches the ten-item split threshold: the department lead, the fullest role, reaches nine.
 - Documents, Shifts, Trainings, My Field Reports, and Event Info render for the non-lead as a single narrow column of labelled cards. Nothing scrolls sideways at 375px, and every action, link, and disclosure control is at least 44px tall.
 - The same Documents, Shifts, and Trainings pages render for the department lead as the wide workflow shell with the management table and its create/edit actions intact.
@@ -91,10 +95,12 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 - API or notes showing HTTP 403 for the staff member outside the organization.
 - 375px-wide screenshots of the shell menu, one reader page, and the matching lead page.
 - Screenshots of Event Info and Home at 1920px and at the largest width available, showing the column counts.
+- Screenshot of Event Info with the node unreachable, showing the stated failure and the retry control.
 
 ## Failure notes
 
 - If Event Info shows placeholder or sample text in place of a published document, stop testing and file a blocking M11.20 issue; staff cannot distinguish placeholder guidance from real guidance.
+- If Event Info renders sections while the node is unreachable, stop testing and file a blocking M16.19 issue: content on that page must have come from the node the event runs on.
 - If a draft or archived document appears on Event Info for anyone, stop testing and file a document-visibility issue.
 - If a section shows a document scoped to a department or team the signed-in staff member does not belong to, stop testing and file a blocking visibility issue.
 - If Team Overview renders a team the persona does not lead, or silently substitutes a team they do, stop testing and file a blocking authorization issue.

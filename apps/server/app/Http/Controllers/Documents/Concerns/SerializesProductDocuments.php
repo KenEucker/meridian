@@ -7,6 +7,8 @@ use App\Models\DocumentFragment;
 use App\Models\DocumentFragmentReference;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
+use App\Models\User;
+use App\Services\Documents\DocumentProductAccess;
 use App\Services\Documents\DocumentRenderer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
@@ -16,8 +18,12 @@ trait SerializesProductDocuments
     /**
      * @return array<string, mixed>
      */
-    private function documentPayload(PolicyDocument|ProcedureDocument $document, DocumentRenderer $renderer): array
-    {
+    private function documentPayload(
+        PolicyDocument|ProcedureDocument $document,
+        DocumentRenderer $renderer,
+        DocumentProductAccess $access,
+        User $user,
+    ): array {
         $document->loadMissing([
             'organization',
             'organizationScope',
@@ -60,6 +66,11 @@ trait SerializesProductDocuments
                 ->all(),
             'visibility_summary' => $this->visibilitySummary($document),
             'export_formats' => ['markdown', 'pdf'],
+            // Whether this caller may edit, publish, or archive this document,
+            // which is the same answer the commands enforce. A reader and a
+            // maintainer both receive published documents, and only the row
+            // itself can say which of the two is looking at it.
+            'can_maintain' => $access->canMaintainDocument($user, $document),
         ];
     }
 

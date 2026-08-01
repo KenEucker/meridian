@@ -1,48 +1,60 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import StaffCardList from "@/components/StaffCardList.vue";
 import StaffListCard from "@/components/StaffListCard.vue";
 import ControlBar from "@/components/ControlBar.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import {
-  archiveDocument,
-  canAccessDocumentSurface,
-  canMaintainDocuments,
-  documentVersion,
-  publishDocument,
-  referencingDocuments,
-  renderDocumentMarkdown,
-  resolveDocumentAuthoringSession,
-  scopeLabel,
-  visibleDocuments,
-  visibleFragments,
-  visibilitySummary,
+  getOrganizationDocuments,
+  publishedReferenceImpact,
+  transitionDocument,
+  type DocumentLibrary,
+  type DocumentStateFilter,
   type ProductDocument,
-  type ProductDocumentState,
 } from "@/documents/documentAuthoringModel";
-import { eventInfoSectionLabel } from "@/documents/eventInfoSections";
+import { sessionOrganizationId } from "@/session/sessionContext";
 
 /**
- * Policy, procedure, and fragment library featureset (M11.15, M11.17).
+ * Policy, procedure, and fragment library featureset (M11.15, M11.17; bound to
+ * the node in M16.19).
  *
  * Rendered as its own page at `department.documents` / `organizer.documents`
  * and embedded as a featureset in the Admin workflow hub.
+ *
+ * The page above it already reads the organization's documents for its shell
+ * and heading, so it hands that response down through `library` and re-reads on
+ * `reload`; embedded on its own the section makes the read itself. Either way
+ * one read is behind what is shown rather than two that could disagree about
+ * which documents exist.
+ *
+ * Who sees what is the node's answer, carried on that response: it returns the
+ * published documents in the caller's scopes plus anything they maintain, and
+ * `access.can_maintain` says whether they are here to author or to read
+ * (CLIENT-006).
  */
 const props = withDefaults(
   defineProps<{
     variant?: "page" | "section";
     surface?: "department" | "organizer" | null;
+    organizationId?: string | null;
+    library?: DocumentLibrary | null;
   }>(),
   {
     variant: "page",
     surface: null,
+    organizationId: null,
+    library: undefined,
   },
 );
 
+const emit = defineEmits<{ reload: [] }>();
+
 const route = useRoute();
 const router = useRouter();
+
 const surface = computed(
   () =>
     props.surface ??
@@ -50,34 +62,60 @@ const surface = computed(
       ? ("organizer" as const)
       : ("department" as const)),
 );
-const session = computed(() =>
-  resolveDocumentAuthoringSession(
-    surface.value,
-    typeof route.params.departmentId === "string"
-      ? route.params.departmentId
-      : null,
-  ),
+
+const organizationId = computed(
+  () => props.organizationId ?? sessionOrganizationId.value ?? "",
 );
-const stateFilter = computed<ProductDocumentState | "all">(() => {
+
+/** Whether this section is responsible for its own read. */
+const ownsRead = computed(() => props.library === undefined);
+
+const ownLibrary = ref<DocumentLibrary | null>(null);
+const library = computed<DocumentLibrary | null>(() =>
+  ownsRead.value ? ownLibrary.value : (props.library ?? null),
+);
+
+const loadError = ref<string | null>(null);
+const actionError = ref<string | null>(null);
+const actionNotice = ref<string | null>(null);
+const busyId = ref<string | null>(null);
+
+/**
+ * The publish or archive waiting on a reason.
+ *
+ * Both commands require one and it is what the audit snapshot records, so the
+ * surface asks rather than sending a sentence the maintainer did not write.
+ */
+const pending = ref<{
+  readonly document: ProductDocument;
+  readonly state: "published" | "archived";
+} | null>(null);
+const pendingReason = ref("");
+
+const stateFilter = computed<DocumentStateFilter>(() => {
   const value = route.query.state;
+
   return value === "draft" || value === "published" || value === "archived"
     ? value
     : "all";
 });
-const documents = computed(() =>
-  visibleDocuments(session.value, stateFilter.value),
-);
-const fragments = computed(() => visibleFragments(session.value));
-const canAccess = computed(() => canAccessDocumentSurface(session.value));
-const canMaintain = computed(() => canMaintainDocuments(session.value));
-const actionError = ref<string | null>(null);
-const actionNotice = ref<string | null>(null);
 
-const description = computed(() =>
-  surface.value === "organizer"
-    ? `${session.value.organizationLabel} policy, procedure, and fragment authoring.`
-    : `${session.value.department.roleLabel} document library and maintainer workspace.`,
+const canAccess = computed(() => library.value !== null);
+const canMaintain = computed(() => library.value?.access.canMaintain ?? false);
+const documents = computed<readonly ProductDocument[]>(
+  () => library.value?.documents ?? [],
 );
+const fragments = computed(() => library.value?.fragments ?? []);
+
+const description = computed(() => {
+  if (!canMaintain.value) {
+    return "Policies and procedures published to you.";
+  }
+
+  return surface.value === "organizer"
+    ? "Organization policy, procedure, and fragment authoring."
+    : "Department and team document library and maintainer workspace.";
+});
 
 const indexRouteName = computed(() =>
   surface.value === "organizer"
@@ -98,15 +136,67 @@ const baseParams = computed(() =>
   surface.value === "organizer"
     ? ({} as Record<string, string>)
     : {
-        eventId: session.value.eventId,
-        departmentId: session.value.department.departmentId,
+        eventId: String(route.params.eventId ?? ""),
+        departmentId: String(route.params.departmentId ?? ""),
       },
 );
 
+async function loadOwnLibrary(): Promise<void> {
+  if (!ownsRead.value) {
+    return;
+  }
+
+  if (organizationId.value === "") {
+    ownLibrary.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    ownLibrary.value = await getOrganizationDocuments(
+      organizationId.value,
+      stateFilter.value,
+    );
+  } catch (error) {
+    ownLibrary.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load documents. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch([organizationId, stateFilter], () => {
+  actionError.value = null;
+  actionNotice.value = null;
+  pending.value = null;
+  void loadOwnLibrary();
+});
+
+void loadOwnLibrary();
+
 defineExpose({ canAccess, canMaintain, description });
 
+function editParams(kind: string, artifactId: string): Record<string, string> {
+  return { ...baseParams.value, artifactKind: kind, artifactId };
+}
+
+function createParams(kind: string): Record<string, string> {
+  return { ...baseParams.value, artifactKind: kind };
+}
+
+/**
+ * Move the state filter into the URL.
+ *
+ * The filter is the read's, not the rendered list's: the page or this section
+ * watches the query and asks the node again, so the table is always the answer
+ * to the filter that is showing.
+ */
 function onStateChange(event: Event): void {
   const value = (event.target as HTMLSelectElement).value;
+
   void router.replace({
     name: indexRouteName.value,
     params: baseParams.value,
@@ -114,42 +204,68 @@ function onStateChange(event: Event): void {
   });
 }
 
-function editParams(kind: string, artifactId: string): Record<string, string> {
-  return {
-    ...baseParams.value,
-    artifactKind: kind,
-    artifactId,
-  };
-}
-
-function createParams(kind: string): Record<string, string> {
-  return {
-    ...baseParams.value,
-    artifactKind: kind,
-  };
-}
-
-function stateLabel(state: ProductDocumentState): string {
-  return state[0]!.toUpperCase() + state.slice(1);
-}
-
-function transition(
+function askForReason(
   document: ProductDocument,
-  state: ProductDocumentState,
+  state: "published" | "archived",
 ): void {
   actionError.value = null;
   actionNotice.value = null;
+  pendingReason.value = "";
+  pending.value = { document, state };
+}
+
+function cancelTransition(): void {
+  pending.value = null;
+  pendingReason.value = "";
+}
+
+/**
+ * Run the transition and then take the surface's state from the node again.
+ *
+ * Nothing is patched in place: a publish that changes which actions a row
+ * offers, and a refusal that changes nothing at all, are both read back rather
+ * than guessed at.
+ */
+async function confirmTransition(): Promise<void> {
+  const request = pending.value;
+
+  if (request === null) {
+    return;
+  }
+
+  actionError.value = null;
+  actionNotice.value = null;
+  busyId.value = request.document.id;
 
   try {
-    const updated =
-      state === "published"
-        ? publishDocument(session.value, document.id)
-        : archiveDocument(session.value, document.id);
-    actionNotice.value = `${updated.title} is now ${stateLabel(updated.state).toLowerCase()}.`;
+    const updated = await transitionDocument(
+      request.document.documentType,
+      request.document.id,
+      request.state,
+      pendingReason.value,
+    );
+    actionNotice.value = `${updated.title} is now ${updated.stateLabel.toLowerCase()}.`;
+    pending.value = null;
+    pendingReason.value = "";
+    await reload();
   } catch (error) {
-    actionError.value =
-      error instanceof Error ? error.message : "Unable to update document.";
+    actionError.value = meridianErrorMessage(
+      error,
+      "Unable to update this document.",
+    );
+  } finally {
+    busyId.value = null;
   }
+}
+
+async function reload(): Promise<void> {
+  if (ownsRead.value) {
+    await loadOwnLibrary();
+
+    return;
+  }
+
+  emit("reload");
 }
 </script>
 
@@ -181,9 +297,17 @@ function transition(
       </RouterLink>
     </template>
 
-    <p v-if="!canAccess" class="documents__restricted" role="status">
-      Documents are available only to staff with organization, department, or
-      team document visibility.
+    <!--
+      A refusal is the node's own sentence, and an unreachable node is stated
+      rather than shown as an organization with no documents (data/API 7.2).
+    -->
+    <p v-if="loadError" class="documents__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="reload">Try again</button>
+    </p>
+
+    <p v-else-if="!canAccess" class="documents__muted" role="status">
+      Loading documents.
     </p>
 
     <!--
@@ -202,18 +326,15 @@ function transition(
           v-for="document in documents"
           :key="document.id"
           :title="document.title"
-          :eyebrow="document.kind === 'policy' ? 'Policy' : 'Procedure'"
+          :eyebrow="document.documentType === 'policy' ? 'Policy' : 'Procedure'"
           :meta="[
-            { label: 'Scope', value: scopeLabel(document.scopeType, document.scopeId) },
-            { label: 'Version', value: documentVersion(document) },
+            { label: 'Scope', value: document.scopeLabel },
+            { label: 'Version', value: document.version },
           ]"
         >
           <details class="documents__reader">
             <summary>Read document</summary>
-            <div
-              class="documents__reader-body"
-              v-html="renderDocumentMarkdown(document.markdownSource)"
-            />
+            <div class="documents__reader-body" v-html="document.renderedHtml" />
           </details>
         </StaffListCard>
       </StaffCardList>
@@ -239,6 +360,22 @@ function transition(
         {{ actionNotice }}
       </p>
 
+      <form
+        v-if="pending"
+        class="documents__reason"
+        @submit.prevent="confirmTransition"
+      >
+        <label>
+          Reason for {{ pending.state === "published" ? "publishing" : "archiving" }}
+          {{ pending.document.title }}
+          <input v-model="pendingReason" required />
+        </label>
+        <button type="submit" :disabled="busyId === pending.document.id">
+          {{ pending.state === "published" ? "Publish" : "Archive" }}
+        </button>
+        <button type="button" @click="cancelTransition">Cancel</button>
+      </form>
+
       <section class="documents__section" aria-labelledby="documents-list-heading">
         <h3 id="documents-list-heading">Policies and procedures</h3>
         <div class="documents__table-wrap" role="region" aria-label="Documents">
@@ -262,50 +399,57 @@ function transition(
               <tr v-for="document in documents" :key="document.id">
                 <td>
                   <RouterLink
+                    v-if="document.canMaintain"
                     :to="{
                       name: editRouteName,
-                      params: editParams(document.kind, document.id),
+                      params: editParams(document.documentType, document.id),
                     }"
                   >
                     {{ document.title }}
                   </RouterLink>
+                  <template v-else>{{ document.title }}</template>
                 </td>
-                <td>{{ document.kind === "policy" ? "Policy" : "Procedure" }}</td>
+                <td>
+                  {{ document.documentType === "policy" ? "Policy" : "Procedure" }}
+                </td>
                 <td>
                   <span class="documents__status" :data-state="document.state">
-                    {{ stateLabel(document.state) }}
+                    {{ document.stateLabel }}
                   </span>
                 </td>
-                <td>{{ scopeLabel(document.scopeType, document.scopeId) }}</td>
-                <td>{{ documentVersion(document) }}</td>
-                <td>
-                  {{
-                    document.eventInfoSection
-                      ? eventInfoSectionLabel(document.eventInfoSection)
-                      : "Not shown"
-                  }}
-                </td>
-                <td>{{ visibilitySummary(document) }}</td>
+                <td>{{ document.scopeLabel }}</td>
+                <td>{{ document.version }}</td>
+                <td>{{ document.eventInfoSectionLabel ?? "Not shown" }}</td>
+                <td>{{ document.visibilitySummary }}</td>
+                <!--
+                  Each row offers what the node said this caller may do with it.
+                  A maintainer of one department reads another department's
+                  published documents here, and the commands would refuse them
+                  (CLIENT-006).
+                -->
                 <td class="documents__actions">
                   <RouterLink
+                    v-if="document.canMaintain"
                     :to="{
                       name: editRouteName,
-                      params: editParams(document.kind, document.id),
+                      params: editParams(document.documentType, document.id),
                     }"
                   >
                     Edit
                   </RouterLink>
                   <button
-                    v-if="canMaintain && document.state !== 'published'"
+                    v-if="document.canMaintain && document.state !== 'published'"
                     type="button"
-                    @click="transition(document, 'published')"
+                    :disabled="busyId === document.id"
+                    @click="askForReason(document, 'published')"
                   >
                     Publish
                   </button>
                   <button
-                    v-if="canMaintain && document.state !== 'archived'"
+                    v-if="document.canMaintain && document.state !== 'archived'"
                     type="button"
-                    @click="transition(document, 'archived')"
+                    :disabled="busyId === document.id"
+                    @click="askForReason(document, 'archived')"
                   >
                     Archive
                   </button>
@@ -318,10 +462,7 @@ function transition(
 
       <section class="documents__section" aria-labelledby="fragments-heading">
         <h3 id="fragments-heading">Fragments</h3>
-        <p v-if="!canMaintain" class="documents__muted">
-          Fragment maintenance is available only to document maintainers.
-        </p>
-        <div v-else class="documents__fragment-grid">
+        <div class="documents__fragment-grid">
           <article
             v-for="fragment in fragments"
             :key="fragment.id"
@@ -329,15 +470,11 @@ function transition(
           >
             <div>
               <h4>{{ fragment.name }}</h4>
-              <p>{{ scopeLabel(fragment.scopeType, fragment.scopeId) }}</p>
+              <p>{{ fragment.scopeLabel }}</p>
               <p>Version {{ fragment.version }}</p>
               <p>
                 Published reference impact:
-                {{
-                  referencingDocuments(fragment).filter(
-                    (document) => document.state === "published",
-                  ).length
-                }}
+                {{ publishedReferenceImpact(fragment) }}
               </p>
             </div>
             <RouterLink
@@ -422,9 +559,41 @@ function transition(
   color: var(--m-text-primary);
 }
 
+.documents__reason {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+}
+
+.documents__reason label {
+  display: grid;
+  flex: 1 1 20rem;
+  gap: var(--m-space-1);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+}
+
+.documents__reason input {
+  min-height: 2.5rem;
+  padding: var(--m-space-2);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+}
+
 .documents__button,
 .documents__actions a,
 .documents__actions button,
+.documents__reason button,
+.documents__error button,
 .documents__fragment a {
   min-height: 2.25rem;
   padding: var(--m-space-2) var(--m-space-3);
@@ -499,7 +668,6 @@ function transition(
 .documents__fragment h4,
 .documents__fragment p,
 .documents__section h3,
-.documents__restricted,
 .documents__muted,
 .documents__error,
 .documents__notice {
@@ -521,8 +689,11 @@ function transition(
   font-size: var(--m-text-sm);
 }
 
-.documents__error,
-.documents__restricted {
+.documents__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
   color: var(--m-status-danger);
   font-weight: 800;
 }

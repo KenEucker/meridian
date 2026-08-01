@@ -21,7 +21,6 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory, type RouteLocationRaw } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { routes } from "@/router";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
@@ -71,7 +70,13 @@ function stubNode(reply: (call: NodeCall) => NodeReply): readonly NodeCall[] {
 
       calls.push(call);
 
-      const answer = reply(call);
+      // Admin embeds the document library beside its team panels, and that
+      // featureset makes its own read (M16.19). These tests are about the team
+      // panels, so the library is answered as a reader with nothing published
+      // rather than left to parse a teams payload.
+      const answer = call.url.includes("/documents")
+        ? { body: emptyDocumentLibraryPayload() }
+        : reply(call);
 
       return new Response(JSON.stringify(answer.body), {
         status: answer.status ?? 200,
@@ -81,6 +86,17 @@ function stubNode(reply: (call: NodeCall) => NodeReply): readonly NodeCall[] {
   );
 
   return calls;
+}
+
+/** The document library read, answered as a reader with nothing published. */
+function emptyDocumentLibraryPayload(): Record<string, unknown> {
+  return {
+    organization_id: ORGANIZATION_ID,
+    access: { can_maintain: false, scopes: [] },
+    event_info_sections: [],
+    documents: [],
+    fragments: [],
+  };
 }
 
 /** A node that cannot be reached at all, as `fetch` reports it. */
@@ -183,7 +199,6 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   configureMeridianApi(null);
-  resetDocumentAuthoringFixtures();
   vi.unstubAllGlobals();
 });
 

@@ -320,9 +320,13 @@ GET /api/events/{event}/departments/{department}/planning
 GET /api/events/{event}/field-reports
 GET /api/events/{event}/incidents
 GET /api/events/{event}/incidents/{incident}/pdf
+GET /api/organizations/{organization}/documents
 GET /api/policy-documents
+GET /api/policy-documents/{policyDocument}
 GET /api/procedure-documents
+GET /api/procedure-documents/{procedureDocument}
 GET /api/document-fragments
+GET /api/document-fragments/{fragment}
 GET /api/document-acknowledgments/me
 ```
 
@@ -345,6 +349,20 @@ information surface: event context plus one entry per Event Info section, in the
 documented order, each carrying the published documents the caller may see or an
 `empty_description` naming the gap. Access requires staff standing in the event's
 organization and nothing more. Assembly rules are in 11.4A.
+
+The document library read (`GET /api/organizations/{organization}/documents`) is
+the one read the policy, procedure, and fragment surfaces render from. It
+returns the documents the caller may see — published within their scopes, plus
+anything they maintain — narrowed by an optional `?state=` filter (`all`,
+`draft`, `published`, `archived`), and the fragments they may maintain. It also
+carries the two answers an authoring form needs before there is any document to
+read them off: `access.scopes` lists the organization, department, and team
+scopes the caller may maintain in, ordered by scope breadth then name, and
+`event_info_sections` lists the placements of 11.4A with their labels. Each
+document carries `can_maintain`, because a reader and a maintainer both receive
+published documents and only the row itself can say which of the two is looking
+at it. Rendering is the node's: every document carries `rendered_html` with its
+fragment text inline, raw HTML stripped, and unsafe links refused.
 
 Incident APIs must return data only to IC-authorized users.
 

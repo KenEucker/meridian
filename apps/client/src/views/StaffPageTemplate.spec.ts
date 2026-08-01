@@ -21,7 +21,6 @@ import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
 } from "@/department-teams/fixtureDepartmentSession";
-import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -181,6 +180,111 @@ function stubShiftNode(departmentId: string, canManage: boolean): void {
   );
 }
 
+/**
+ * Answer the Event Info read as the node would (M16.19).
+ *
+ * The six sections are the node's assembly, so this file — which is about the
+ * shell and the hero layout, not about the guidance — answers with all six
+ * empty.
+ */
+function stubEventInfoNode(): void {
+  const body = {
+    event: {
+      id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+      organization_id: "88888888-8888-4888-8888-888888888888",
+      name: "Signal Camp 2026",
+      timezone: "UTC",
+      starts_at: "2026-08-20T15:00:00+00:00",
+      ends_at: "2026-08-24T15:00:00+00:00",
+      status: "published",
+    },
+    section_order: [
+      "directions",
+      "arrival",
+      "packing",
+      "food",
+      "housing",
+      "requirements",
+    ],
+    sections: [
+      "directions",
+      "arrival",
+      "packing",
+      "food",
+      "housing",
+      "requirements",
+    ].map((section) => ({
+      section,
+      label: section,
+      documents: [],
+      empty_description: `No published document covers ${section} yet.`,
+    })),
+  };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+}
+
+/**
+ * Answer the document library read as the node would (M16.19).
+ *
+ * `can_maintain` decides which shell the page wears, so a reader is answered
+ * with no maintainable scopes and one published document to fill a card.
+ */
+function stubDocumentLibraryNode(): void {
+  const body = {
+    organization_id: "88888888-8888-4888-8888-888888888888",
+    access: { can_maintain: false, scopes: [] },
+    event_info_sections: [],
+    documents: [
+      {
+        id: "44444444-4444-4444-8444-444444444401",
+        document_type: "policy",
+        organization_id: "88888888-8888-4888-8888-888888888888",
+        scope_type: "organization",
+        scope_id: "88888888-8888-4888-8888-888888888888",
+        scope_label: "Organization: Idaho Burners",
+        title: "Volunteer Conduct",
+        slug: "volunteer-conduct",
+        event_info_section: null,
+        event_info_section_label: null,
+        markdown_source: "Treat people with care.",
+        rendered_html: "<p>Treat people with care.</p>",
+        state: "published",
+        state_label: "Published",
+        version: "1.00",
+        published_at: "2026-07-01T16:00:00+00:00",
+        archived_at: null,
+        updated_at: "2026-07-01T16:00:00+00:00",
+        fragment_references: [],
+        visibility_summary: "Published to staff in this organization.",
+        export_formats: ["markdown", "pdf"],
+        can_maintain: false,
+      },
+    ],
+    fragments: [],
+  };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+}
+
 // Navigation follows the session response (M16.6).
 beforeEach(() => {
   installLocalFieldSession();
@@ -192,7 +296,6 @@ beforeEach(() => {
 
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
   clearClientSession();
   configureMeridianApi(null);
@@ -210,6 +313,7 @@ describe("staff page template", () => {
 
   it("renders Event Info on the narrow touch-first shell", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    stubEventInfoNode();
     const wrapper = await mountAt(
       EventInfoView,
       `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
@@ -277,6 +381,7 @@ describe("staff page template", () => {
 
   it("surrounds the Event Info summary with its section cards", async () => {
     selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    stubEventInfoNode();
     const wrapper = await mountAt(
       EventInfoView,
       `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
@@ -294,6 +399,7 @@ describe("staff page template", () => {
   it("tiles reader lists on the department staff surfaces", async () => {
     selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
     installDevelopmentDepartmentSelfAdminSession();
+    stubDocumentLibraryNode();
 
     const documents = await mountAt(
       DocumentLibraryView,
