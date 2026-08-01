@@ -1,7 +1,22 @@
-import { afterEach, describe, expect, it } from "vitest";
+// Staff Me routing, Team Overview handoff, and Event Info against a stubbed
+// node (M16.19; CLIENT-023, CLIENT-024; data/API 11.4A).
+//
+// The Event Info tests were fixture tests. They asserted that the browser's own
+// copy of `EventInfoService` — six section keys, six empty descriptions, a
+// published-only filter, and a scope-breadth sort — had assembled the client's
+// compiled-in documents correctly. None of it reached an endpoint, so a section
+// that looked empty was empty of fixtures rather than empty of guidance.
+//
+// They now stub `fetch` and answer with the payload `EventInfoReadController`
+// publishes, so what they prove is that the page asks the right event and
+// renders the node's assembly: its section order, its labels, its rendered
+// document HTML, and its named gaps.
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
+import { configureMeridianApi } from "@/api/meridianApi";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import {
   FIXTURE_DPW_BIKES_TEAM_ID,
@@ -17,11 +32,8 @@ import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
 } from "@/department-teams/fixtureDepartmentSession";
-import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
-import { resolveEventInfo } from "@/event-info/eventInfoModel";
+import { getEventInfo } from "@/event-info/eventInfoModel";
 import { routes } from "@/router";
-import DocumentEditView from "@/views/DocumentEditView.vue";
-import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
 import MeView from "@/views/MeView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
@@ -54,10 +66,109 @@ async function mountAt(component: unknown, path: string) {
   return { router, wrapper };
 }
 
+/** One Event Info document, as `EventInfoService::documentPayload` publishes it. */
+function documentPayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: "44444444-4444-4444-8444-444444444404",
+    document_type: "policy",
+    title: "Getting To Signal Camp",
+    slug: "getting-to-signal-camp",
+    scope_type: "organization",
+    scope_label: "Organization: Idaho Burners",
+    version: "1.00",
+    rendered_html:
+      "<p>Take the north access road to Gate 1. The last fuel stop is 40 miles out.</p>",
+    published_at: "2026-07-04T17:00:00+00:00",
+    updated_at: "2026-07-04T17:00:00+00:00",
+    ...overrides,
+  };
+}
+
+/**
+ * The `GET /api/events/{event}/info` envelope.
+ *
+ * `documentsBySection` names only the sections that have something in them; the
+ * rest come back with the node's `empty_description`, which is the behavior the
+ * empty-state test is about (11.4A).
+ */
+function eventInfoPayload(
+  documentsBySection: Record<string, Record<string, unknown>[]> = {},
+): Record<string, unknown> {
+  const sections = [
+    ["directions", "How to get to the event"],
+    ["arrival", "Arrival requirements"],
+    ["packing", "What to bring"],
+    ["food", "Food"],
+    ["housing", "Housing"],
+    ["requirements", "Event requirements"],
+  ] as const;
+
+  const emptyDescriptions: Record<string, string> = {
+    directions:
+      "No published document covers travel, gate access, or arrival checkpoints for this event yet.",
+    arrival:
+      "No published document covers arrival requirements, credentials, or check-in for this event yet.",
+    packing:
+      "No published document covers what staff should bring to this event yet.",
+    food: "No published document covers meals or food availability for this event yet.",
+    housing:
+      "No published document covers housing, camping, or shelter for this event yet.",
+    requirements:
+      "No published document covers what this event requires of staff yet.",
+  };
+
+  return {
+    event: {
+      id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+      organization_id: "88888888-8888-4888-8888-888888888888",
+      name: "Signal Camp 2026",
+      slug: "signal-camp-2026",
+      timezone: "UTC",
+      starts_at: "2026-08-20T15:00:00+00:00",
+      ends_at: "2026-08-24T15:00:00+00:00",
+      status: "published",
+    },
+    section_order: sections.map(([key]) => key),
+    sections: sections.map(([key, label]) => {
+      const documents = documentsBySection[key] ?? [];
+
+      return {
+        section: key,
+        label,
+        documents,
+        empty_description: documents.length === 0 ? emptyDescriptions[key] : null,
+      };
+    }),
+  };
+}
+
+function stubEventInfoNode(body: unknown, status = 200): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+}
+
+beforeEach(() => {
+  configureMeridianApi({
+    baseUrl: "http://node.test",
+    bearerToken: "device-token",
+  });
+});
+
 afterEach(() => {
   clearDepartmentSelfAdminSession();
-  resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
+  configureMeridianApi(null);
+  vi.unstubAllGlobals();
 });
 
 describe("Staff Me role-aware event routing", () => {
@@ -176,20 +287,49 @@ describe("team overview handoff", () => {
 });
 
 describe("event info document resolution", () => {
-  it("renders published assigned documents instead of placeholder prose", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+  it("reads the event and renders the node's assembled sections", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify(
+            eventInfoPayload({
+              directions: [documentPayload()],
+              packing: [
+                documentPayload({
+                  id: "44444444-4444-4444-8444-444444444407",
+                  document_type: "procedure",
+                  title: "Ranger Packing List",
+                  scope_type: "department",
+                  scope_label: "Department: Rangers",
+                  rendered_html:
+                    "<p>Dust goggles, a working headlamp, and warm layers for night patrol.</p>",
+                }),
+              ],
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
     const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
 
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      `http://node.test/api/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
+    );
     expect(wrapper.text()).toContain("How to get to the event");
     expect(wrapper.text()).toContain("Getting To Signal Camp");
     expect(wrapper.text()).toContain("Take the north access road to Gate 1.");
     expect(wrapper.text()).toContain("Ranger Packing List");
-    expect(wrapper.text()).toContain("Dirt Team Housing");
+    // Scope, type, and version are the node's words rather than a client lookup.
+    expect(wrapper.text()).toContain("Organization: Idaho Burners");
+    expect(wrapper.text()).toContain("2 visible to you");
     expect(wrapper.text()).not.toContain("Placeholder:");
   });
 
-  it("names the gap in a section with no visible published document", async () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+  it("names the gap the node named in a section with nothing visible", async () => {
+    stubEventInfoNode(eventInfoPayload({ directions: [documentPayload()] }));
+
     const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
 
     const housing = wrapper.get('[data-section="housing"]');
@@ -199,36 +339,12 @@ describe("event info document resolution", () => {
     );
   });
 
-  it("does not widen document visibility", () => {
-    const rangers = resolveEventInfo(null, FIXTURE_RANGERS_DEPARTMENT_ID);
-    const gate = resolveEventInfo(null, FIXTURE_GATE_DEPARTMENT_ID);
+  it("keeps the section order the node sent", async () => {
+    stubEventInfoNode(eventInfoPayload());
 
-    const rangerHousing = rangers.sections.find(
-      (section) => section.section === "housing",
-    );
-    const gateHousing = gate.sections.find(
-      (section) => section.section === "housing",
-    );
+    const view = await getEventInfo(LOCAL_DEPARTMENT_OPS_CONTEXT.eventId);
 
-    expect(rangerHousing?.documents.map((document) => document.title)).toEqual([
-      "Dirt Team Housing",
-    ]);
-    expect(gateHousing?.documents).toEqual([]);
-    expect(gateHousing?.emptyDescription).not.toBeNull();
-  });
-
-  it("orders a section from the broadest scope to the narrowest", () => {
-    const rangers = resolveEventInfo(null, FIXTURE_RANGERS_DEPARTMENT_ID);
-    const packing = rangers.sections.find(
-      (section) => section.section === "packing",
-    );
-
-    expect(packing?.documents.map((document) => document.scopeType)).toEqual([
-      "department",
-    ]);
-
-    const sectionOrder = rangers.sections.map((section) => section.section);
-    expect(sectionOrder).toEqual([
+    expect(view.sections.map((section) => section.section)).toEqual([
       "directions",
       "arrival",
       "packing",
@@ -238,65 +354,46 @@ describe("event info document resolution", () => {
     ]);
   });
 
-  it("shows each document's Event Info placement in the maintainer library", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+  it("does not widen visibility: a section the node left empty stays empty", async () => {
+    stubEventInfoNode(eventInfoPayload());
 
-    const { wrapper } = await mountAt(
-      DocumentLibraryView,
-      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${FIXTURE_RANGERS_DEPARTMENT_ID}/documents`,
+    const view = await getEventInfo(LOCAL_DEPARTMENT_OPS_CONTEXT.eventId);
+    const housing = view.sections.find(
+      (section) => section.section === "housing",
     );
 
-    const packingRow = wrapper
-      .findAll("tbody tr")
-      .find((row) => row.text().includes("Ranger Packing List"));
-
-    expect(packingRow?.text()).toContain("What to bring");
-
-    const radioRow = wrapper
-      .findAll("tbody tr")
-      .find((row) => row.text().includes("Radio Checkout"));
-
-    expect(radioRow?.text()).toContain("Not shown");
+    expect(housing?.documents).toEqual([]);
+    expect(housing?.emptyDescription).not.toBeNull();
+    expect(view.documentCount).toBe(0);
   });
 
-  it("keeps unpublished documents off Event Info even for their maintainer", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-
-    const { wrapper: editor } = await mountAt(
-      DocumentEditView,
-      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${FIXTURE_RANGERS_DEPARTMENT_ID}/documents/procedure/create`,
+  it("states an unreachable node rather than an event with no guidance", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
     );
 
-    const inputs = editor.findAll("input");
-    await inputs[0]!.setValue("Ranger Arrival Notes");
-    await inputs[1]!.setValue("ranger-arrival-notes");
-    await editor
-      .get("select[value], select")
-      .setValue(`department:${FIXTURE_RANGERS_DEPARTMENT_ID}`);
-    await editor.findAll("select")[1]!.setValue("arrival");
-    await editor.get("textarea").setValue("Report to the Ranger HQ shade.");
-    await editor.get("form").trigger("submit");
-    await flushPromises();
+    const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
 
-    const draftOnly = resolveEventInfo(null, FIXTURE_RANGERS_DEPARTMENT_ID);
-    expect(
-      draftOnly.sections
-        .find((section) => section.section === "arrival")
-        ?.documents.map((document) => document.title),
-    ).not.toContain("Ranger Arrival Notes");
+    expect(wrapper.text()).toContain("Unable to load event information.");
+    expect(wrapper.text()).not.toContain("At a glance");
+  });
 
-    const publishButton = editor
-      .findAll("button")
-      .find((button) => button.text() === "Publish");
-    await publishButton!.trigger("click");
-    await flushPromises();
+  it("shows the node's refusal when the caller has no standing in the event", async () => {
+    stubEventInfoNode(
+      {
+        message:
+          "Event information requires staff standing in this event organization.",
+      },
+      403,
+    );
 
-    const published = resolveEventInfo(null, FIXTURE_RANGERS_DEPARTMENT_ID);
-    expect(
-      published.sections
-        .find((section) => section.section === "arrival")
-        ?.documents.map((document) => document.title),
-    ).toContain("Ranger Arrival Notes");
+    const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
+
+    expect(wrapper.text()).toContain(
+      "Event information requires staff standing in this event organization.",
+    );
   });
 });

@@ -183,6 +183,112 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('documents.0.title', 'Published Department Procedure');
     }
 
+    public function test_document_index_states_the_scopes_the_caller_may_maintain(): void
+    {
+        [$organization, $organizer] = $this->organizationWithRole('organizer');
+
+        // The authoring form needs the scope options and the Event Info
+        // placements before it has a document to read them off (data/API 11.4A),
+        // so the index answers with both (M16.19).
+        $this->actingAsClient($organizer)
+            ->getJson("/api/organizations/{$organization->id}/documents")
+            ->assertOk()
+            ->assertJsonPath('access.can_maintain', true)
+            ->assertJsonCount(1, 'access.scopes')
+            ->assertJsonPath('access.scopes.0.scope_type', PolicyDocument::SCOPE_ORGANIZATION)
+            ->assertJsonPath('access.scopes.0.scope_id', (string) $organization->id)
+            ->assertJsonPath('access.scopes.0.label', 'Organization: '.$organization->name)
+            ->assertJsonPath('event_info_sections.0.value', 'directions')
+            ->assertJsonPath('event_info_sections.0.label', 'How to get to the event')
+            ->assertJsonCount(6, 'event_info_sections');
+    }
+
+    public function test_department_lead_maintains_only_their_own_department_scope(): void
+    {
+        [$department, $actor] = $this->departmentWithRole('department_lead');
+
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents")
+            ->assertOk()
+            ->assertJsonPath('access.can_maintain', true)
+            ->assertJsonCount(1, 'access.scopes')
+            ->assertJsonPath('access.scopes.0.scope_type', PolicyDocument::SCOPE_DEPARTMENT)
+            ->assertJsonPath('access.scopes.0.scope_id', (string) $department->id)
+            ->assertJsonPath('access.scopes.0.label', 'Department: Rangers');
+    }
+
+    public function test_team_lead_maintains_only_the_team_they_lead(): void
+    {
+        [$team, $actor] = $this->teamWithRole('shift_lead');
+
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$team->department->organization_id}/documents")
+            ->assertOk()
+            ->assertJsonPath('access.can_maintain', true)
+            ->assertJsonCount(1, 'access.scopes')
+            ->assertJsonPath('access.scopes.0.scope_type', PolicyDocument::SCOPE_TEAM)
+            ->assertJsonPath('access.scopes.0.scope_id', (string) $team->id)
+            ->assertJsonPath('access.scopes.0.label', 'Team: Dirt');
+    }
+
+    public function test_reader_receives_no_maintainable_scopes_and_no_maintainable_documents(): void
+    {
+        [$department, $actor] = $this->departmentWithRole('staff');
+
+        ProcedureDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Published Department Procedure',
+        ]);
+
+        // A reader and a maintainer both receive published documents, so the
+        // row itself has to say which of the two is looking at it; a client that
+        // offered Edit here would only meet the command's refusal (CLIENT-006).
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents")
+            ->assertOk()
+            ->assertJsonPath('access.can_maintain', false)
+            ->assertJsonCount(0, 'access.scopes')
+            ->assertJsonPath('documents.0.can_maintain', false);
+    }
+
+    public function test_maintainer_reads_can_maintain_on_their_own_document_and_not_on_another_scope(): void
+    {
+        [$department, $actor, $ownTeam] = $this->departmentWithRole('department_lead');
+        $otherDepartment = Department::factory()
+            ->for($department->organization)
+            ->create(['name' => 'Gate', 'code' => 'GATE']);
+
+        ProcedureDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Own Department Procedure',
+        ]);
+        PolicyDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => PolicyDocument::SCOPE_TEAM,
+            'scope_id' => $ownTeam->id,
+            'title' => 'Own Team Policy',
+        ]);
+        PolicyDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => PolicyDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $otherDepartment->id,
+            'title' => 'Other Department Policy',
+        ]);
+
+        $documents = collect($this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents")
+            ->assertOk()
+            ->json('documents'))
+            ->keyBy('title');
+
+        $this->assertTrue($documents['Own Department Procedure']['can_maintain']);
+        // Team-scoped documents are maintained by that team's designated lead
+        // (data/API 11.2), so a member reads this one without maintaining it.
+        $this->assertFalse($documents['Own Team Policy']['can_maintain']);
+        // The other department's published policy is not visible at all.
+        $this->assertFalse($documents->has('Other Department Policy'));
+    }
+
     /**
      * @return array{Organization, User}
      */
@@ -199,7 +305,7 @@ class DocumentProductHttpTest extends TestCase
     }
 
     /**
-     * @return array{Department, User}
+     * @return array{Department, User, Team}
      */
     private function departmentWithRole(string $roleCode): array
     {
@@ -208,7 +314,7 @@ class DocumentProductHttpTest extends TestCase
         $team = Team::factory()->for($department)->create(['is_default' => true]);
         $user = $this->userOnTeam($team, $roleCode);
 
-        return [$department, $user];
+        return [$department, $user, $team];
     }
 
     /**

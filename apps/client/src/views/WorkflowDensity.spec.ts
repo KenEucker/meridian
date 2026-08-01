@@ -13,7 +13,6 @@ import {
   clearDepartmentSelfAdminSession,
   installDevelopmentDepartmentSelfAdminSession,
 } from "@/department-teams/fixtureDepartmentSession";
-import { resetDocumentAuthoringFixtures } from "@/documents/documentAuthoringModel";
 import {
   installDevelopmentIncidentSession,
   clearIncidentSession,
@@ -56,9 +55,24 @@ function stubTeamAdminNode(): void {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () =>
-        new Response(
+    vi.fn(async (input: RequestInfo | URL) => {
+      // Admin embeds the document library beside its team panels, and that
+      // featureset makes its own read (M16.19). This test is about the panel
+      // layout, so the library is answered as a reader with nothing published.
+      if (String(input).includes("/documents")) {
+        return new Response(
+          JSON.stringify({
+            organization_id: "11111111-1111-4111-8111-111111111111",
+            access: { can_maintain: false, scopes: [] },
+            event_info_sections: [],
+            documents: [],
+            fragments: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      return new Response(
           JSON.stringify({
             department: {
               id: FIXTURE_RANGERS_DEPARTMENT_ID,
@@ -91,8 +105,8 @@ function stubTeamAdminNode(): void {
             department_staff: [],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
-        ),
-    ),
+      );
+    }),
   );
 }
 
@@ -100,7 +114,6 @@ afterEach(() => {
   clearDepartmentSelfAdminSession();
   clearIncidentSession();
   configureMeridianApi(null);
-  resetDocumentAuthoringFixtures();
   resetSelectedFixtureDepartment();
   vi.unstubAllGlobals();
 });

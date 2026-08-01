@@ -210,7 +210,7 @@ final class DocumentCommandController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        return response()->json($this->documentPayload($document, $renderer), 201);
+        return response()->json($this->documentPayload($document, $renderer, $access, $user), 201);
     }
 
     private function updateDocument(
@@ -242,7 +242,7 @@ final class DocumentCommandController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        return response()->json($this->documentPayload($document, $renderer));
+        return response()->json($this->documentPayload($document, $renderer, $access, $user));
     }
 
     private function transitionDocument(
@@ -278,7 +278,7 @@ final class DocumentCommandController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        return response()->json($this->documentPayload($document, $renderer));
+        return response()->json($this->documentPayload($document, $renderer, $access, $user));
     }
 
     /**

@@ -33,6 +33,84 @@ final class DocumentProductAccess
         };
     }
 
+    /**
+     * The scopes this caller may maintain documents and fragments in, inside
+     * one organization.
+     *
+     * The authoring form has to offer a scope before there is a document to
+     * read one off, and a maintainer's authority is spread across three
+     * different questions — organizer of the organization, administrator of a
+     * department, designated lead of a team — that no single record answers.
+     * Answering it here keeps the list the form offers and the list
+     * `canMaintainScope` enforces the same list (CLIENT-006).
+     *
+     * Ordered by scope breadth, then name, so the default the form lands on is
+     * the broadest scope the caller holds and the order never shifts between
+     * two requests.
+     *
+     * @return list<array{scope_type: string, scope_id: string, label: string}>
+     */
+    public function maintainableScopes(User $user, Organization $organization): array
+    {
+        $scopes = [];
+
+        if ($this->hasOrganizationMaintainerRole($user, $organization)) {
+            $scopes[] = [
+                'scope_type' => DocumentFragment::SCOPE_ORGANIZATION,
+                'scope_id' => (string) $organization->id,
+                'label' => 'Organization: '.$organization->name,
+            ];
+        }
+
+        /** @var array<string, string> $departments */
+        $departments = [];
+        /** @var array<string, string> $teams */
+        $teams = [];
+
+        foreach ($user->staffProfiles()->get() as $staff) {
+            foreach ($this->roles->resolveForStaff($staff) as $role) {
+                $team = Team::query()->with('department')->find($role->teamId);
+
+                if ($team?->department === null
+                    || (string) $team->department->organization_id !== (string) $organization->id) {
+                    continue;
+                }
+
+                if (PermissionCatalog::roleHasPermission(
+                    $role->roleCode,
+                    PermissionCatalog::PERMISSION_DEPARTMENT_ADMINISTER,
+                )) {
+                    $departments[(string) $team->department_id] = (string) $team->department->name;
+                }
+
+                if ($role->roleCode === PermissionCatalog::ROLE_SHIFT_LEAD) {
+                    $teams[(string) $team->id] = (string) $team->name;
+                }
+            }
+        }
+
+        asort($departments);
+        asort($teams);
+
+        foreach ($departments as $departmentId => $name) {
+            $scopes[] = [
+                'scope_type' => DocumentFragment::SCOPE_DEPARTMENT,
+                'scope_id' => $departmentId,
+                'label' => 'Department: '.$name,
+            ];
+        }
+
+        foreach ($teams as $teamId => $name) {
+            $scopes[] = [
+                'scope_type' => DocumentFragment::SCOPE_TEAM,
+                'scope_id' => $teamId,
+                'label' => 'Team: '.$name,
+            ];
+        }
+
+        return $scopes;
+    }
+
     public function canMaintainDocument(User $user, PolicyDocument|ProcedureDocument $document): bool
     {
         $document->loadMissing('organization');

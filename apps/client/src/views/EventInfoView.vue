@@ -1,73 +1,128 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import HeroCenterLayout from "@/components/HeroCenterLayout.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
-import {
-  LOCAL_DEPARTMENT_OPS_CONTEXT,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
+import { meridianErrorMessage } from "@/api/meridianApi";
 import { formatTimestamp } from "@/department-ops/labels";
+import { getEventInfo, type EventInfoView } from "@/event-info/eventInfoModel";
 import {
-  renderDocumentMarkdown,
-  scopeLabel,
-} from "@/documents/documentAuthoringModel";
-import { resolveEventInfo } from "@/event-info/eventInfoModel";
+  selectedSessionDepartment,
+  sessionEventContext,
+} from "@/session/sessionAccess";
+import { sessionOrganizationLabel } from "@/session/sessionContext";
 
+/**
+ * `event.info` (M11.20; bound to the node in M16.19; UI contract 12.3;
+ * data/API 11.4A).
+ *
+ * One read fills the page. The node assembles the six sections, decides which
+ * published documents this staff member may read in each, names the gap in the
+ * ones that are empty, and renders each document's Markdown with its fragments
+ * resolved. Nothing here re-derives any of it: Event Info grants no visibility
+ * of its own, so a second copy of the assembly rule in the browser could only
+ * disagree with the one that governs.
+ */
 const route = useRoute();
-const eventInfo = computed(() =>
-  resolveEventInfo(
-    typeof route.params.eventId === "string" ? route.params.eventId : null,
-    typeof route.params.departmentId === "string"
-      ? route.params.departmentId
-      : null,
-  ),
+const eventId = computed(
+  () =>
+    (typeof route.params.eventId === "string" ? route.params.eventId : "") ||
+    (sessionEventContext.value?.eventId ?? ""),
 );
-const eventWindow = computed(() => {
-  const starts = LOCAL_PLANNING_TABLE.rows.map((row) => row.startsAt).sort();
-  const ends = LOCAL_PLANNING_TABLE.rows.map((row) => row.endsAt).sort();
 
-  return {
-    startsAt: starts[0] ?? null,
-    endsAt: ends.at(-1) ?? null,
-  };
-});
+const eventInfo = ref<EventInfoView | null>(null);
+const loadError = ref<string | null>(null);
+
+const sections = computed(() => eventInfo.value?.sections ?? []);
+const eventLabel = computed(
+  () => eventInfo.value?.event.name || sessionEventContext.value?.eventLabel || "Event",
+);
+const departmentLabel = computed(
+  () => selectedSessionDepartment.value?.departmentLabel ?? "Not assigned",
+);
+const organizationLabel = computed(
+  () => sessionOrganizationLabel.value ?? "Not resolved",
+);
+
+/**
+ * The event's own window, in the event's own timezone.
+ *
+ * Both come from the read rather than from a department operations fixture, so
+ * a page that answers "how do I get there" is not describing a different event
+ * than the one it names.
+ */
 const operationsWindowLabel = computed(() => {
-  const startsAt = eventWindow.value.startsAt;
-  const endsAt = eventWindow.value.endsAt;
+  const event = eventInfo.value?.event;
 
-  if (!startsAt || !endsAt) {
+  if (!event?.startsAt || !event.endsAt) {
     return "Operations window not set";
   }
 
-  return `${formatTimestamp(
-    startsAt,
-    LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone,
-  )} to ${formatTimestamp(endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone)}`;
+  const timeZone = event.timezone ?? "UTC";
+
+  return `${formatTimestamp(event.startsAt, timeZone)} to ${formatTimestamp(
+    event.endsAt,
+    timeZone,
+  )}`;
 });
+
+async function loadEventInfo(): Promise<void> {
+  if (eventId.value === "") {
+    eventInfo.value = null;
+
+    return;
+  }
+
+  loadError.value = null;
+
+  try {
+    eventInfo.value = await getEventInfo(eventId.value);
+  } catch (error) {
+    eventInfo.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to load event information. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch(eventId, () => {
+  void loadEventInfo();
+});
+
+void loadEventInfo();
 </script>
 
 <template>
   <StaffPageShell
     heading-id="event-info-heading"
     eyebrow="Event info"
-    :title="eventInfo.eventLabel"
+    :title="eventLabel"
   >
+    <!--
+      A refusal is the node's own sentence, and an unreachable node is stated
+      rather than shown as an event with no guidance at all (data/API 7.2).
+    -->
+    <p v-if="loadError" class="event-info__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadEventInfo">Try again</button>
+    </p>
+
     <!--
       The six sections all answer one question, so the summary they belong to
       sits among them rather than above them once there is room for a card
       column either side of it. One hero row with six cards puts three above it,
       one either side, and one below.
     -->
-    <HeroCenterLayout label="Event information" :hero-rows="1">
+    <HeroCenterLayout v-else label="Event information" :hero-rows="1">
       <template #hero>
         <article class="event-info__hero">
           <h2>At a glance</h2>
           <dl>
             <div>
               <dt>Department</dt>
-              <dd>{{ eventInfo.departmentLabel }}</dd>
+              <dd>{{ departmentLabel }}</dd>
             </div>
             <div>
               <dt>Operations</dt>
@@ -75,11 +130,11 @@ const operationsWindowLabel = computed(() => {
             </div>
             <div>
               <dt>Organization</dt>
-              <dd>{{ eventInfo.organizationLabel }}</dd>
+              <dd>{{ organizationLabel }}</dd>
             </div>
             <div>
               <dt>Published documents</dt>
-              <dd>{{ eventInfo.documentCount }} visible to you</dd>
+              <dd>{{ eventInfo?.documentCount ?? 0 }} visible to you</dd>
             </div>
           </dl>
           <p class="event-info__source" role="note">
@@ -91,7 +146,7 @@ const operationsWindowLabel = computed(() => {
       </template>
 
       <article
-        v-for="section in eventInfo.sections"
+        v-for="section in sections"
         :key="section.section"
         class="event-info__section"
         :data-section="section.section"
@@ -109,13 +164,15 @@ const operationsWindowLabel = computed(() => {
           class="event-info__document"
         >
           <h3>{{ document.title }}</h3>
-          <div
-            class="event-info__document-body"
-            v-html="renderDocumentMarkdown(document.markdownSource)"
-          />
+          <!--
+            The node's render, with fragment text inline and raw HTML stripped
+            (POL-022, POL-034), so staff read the published document rather than
+            the browser's approximation of it.
+          -->
+          <div class="event-info__document-body" v-html="document.renderedHtml" />
           <p class="event-info__document-meta">
-            {{ document.kind === "policy" ? "Policy" : "Procedure" }} /
-            {{ scopeLabel(document.scopeType, document.scopeId) }} / version
+            {{ document.documentType === "policy" ? "Policy" : "Procedure" }} /
+            {{ document.scopeLabel }} / version
             {{ document.version }}
           </p>
         </section>
@@ -376,5 +433,31 @@ const operationsWindowLabel = computed(() => {
   margin: 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
+}
+
+.event-info__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0;
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
+}
+
+.event-info__error button {
+  min-height: 2.25rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  cursor: pointer;
 }
 </style>

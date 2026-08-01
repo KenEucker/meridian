@@ -1,723 +1,559 @@
-import { shallowRef } from "vue";
+// The policy, procedure, and fragment surfaces' data layer (M16.19;
+// CLIENT-023, CLIENT-019, CLIENT-020; data/API 11.1 through 11.7, 11.4A, 5.7).
+//
+// Until this task this module was the document library. Eight documents and two
+// fragments were compiled into the client, two `shallowRef`s held them, and the
+// rules the node enforces in `DocumentAdminService`, `DocumentProductAccess`,
+// `DocumentRenderer`, and `DocumentFragmentReferenceService` were written out a
+// second time in the browser: who may maintain which scope, who may see a
+// published document, slug shape, the document/fragment revision split, the
+// fragment-driven version bump across referencing published documents, the
+// refusal to nest fragments, and a hand-rolled Markdown renderer. None of it
+// reached a node, so a policy it published was nobody's policy and a version it
+// bumped was nobody's version — and each rule kept here could only drift from
+// the one that actually governs.
+//
+// This module is now a translation of the document endpoints. Four choices in
+// it are deliberate:
+//
+//  1. **One read per surface.** `GET /api/organizations/{id}/documents` answers
+//     with the caller's maintainable scopes, the Event Info placements a
+//     document may take, every document they may see, and every fragment they
+//     may maintain. The library page, the featureset embedded in Admin, and the
+//     option lists on the authoring form all render off that one response.
+//  2. **Authority comes from the response.** `access.can_maintain` is the
+//     node's answer for the surface and `canMaintain` on each document is its
+//     answer for that row, which is the same answer the commands enforce. The
+//     old predicates over a fixture department's role flags are gone; all they
+//     could do was disagree with the server (CLIENT-006).
+//  3. **The node renders.** `renderedHtml` is `DocumentRenderer`'s output, with
+//     fragments resolved, raw HTML stripped, and unsafe links refused
+//     (POL-022, POL-034, POL-035). The browser's second renderer resolved only
+//     the fragments it happened to hold and stripped nothing, so what a reader
+//     saw was never quite the published document.
+//  4. **Exports go through the download URL path.** A bearer token cannot ride
+//     a browser navigation, so Markdown and PDF exports ask the node for a
+//     short-lived URL scoped to that one document and format, then navigate to
+//     it (M16.12; CLIENT-019, CLIENT-020). The client no longer assembles an
+//     export of its own, so the exported file carries the metadata, resolved
+//     fragment text, and branding the node puts in it.
+//
+// These are connected-only surfaces. Document authoring is not in the closed set
+// of offline-writable work (data/API 7.2), so a request made with no node
+// reachable fails and says so rather than queueing.
 
-import type { EventInfoSection } from "@/documents/eventInfoSections";
+import { meridianJson } from "@/api/meridianApi";
 import {
-  FIXTURE_ORGANIZER_DEFAULT_TEAM_ID,
-  FIXTURE_ORGANIZER_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DIRT_TEAM_ID,
-  FIXTURE_RANGERS_DEFAULT_TEAM_ID,
-  fixtureDepartmentAccesses,
-  fixtureDepartmentById,
-  fixtureDepartmentHasOrganizerDepartmentAccess,
-  selectedFixtureDepartment,
-  type FixtureDepartmentAccess,
-} from "@/department-teams/fixtureDepartmentAccess";
+  downloadThroughShortLivedUrl,
+  shortLivedDownloadEndpoints,
+  type ShortLivedDownloadUrl,
+} from "@/downloads/shortLivedDownload";
 
-export type DocumentArtifactKind = "policy" | "procedure" | "fragment";
+/** Policy and procedure are separate product types, not one type with a flag. */
+export type DocumentType = "policy" | "procedure";
+
+/** What an authoring route may open on. */
+export type DocumentArtifactKind = DocumentType | "fragment";
+
 export type DocumentScopeType = "organization" | "department" | "team";
+
 export type ProductDocumentState = "draft" | "published" | "archived";
+
+/** One scope the caller may maintain in, as the node named it. */
+export interface DocumentScopeOption {
+  readonly scopeType: DocumentScopeType;
+  readonly scopeId: string;
+  readonly label: string;
+}
+
+/** One Event Info placement a document may take (data/API 11.4A). */
+export interface EventInfoSectionOption {
+  readonly value: string;
+  readonly label: string;
+}
+
+/**
+ * A fragment token the node found in the document's Markdown.
+ *
+ * `fragmentVersion` is the fragment's current version and
+ * `fragmentVersionAtLastEdit` is the version present when the document was last
+ * saved, so an editor can see that the text underneath moved (data/API 11.6).
+ */
+export interface DocumentFragmentReference {
+  readonly token: string;
+  readonly fragmentId: string;
+  readonly fragmentName: string | null;
+  readonly fragmentSlug: string | null;
+  readonly fragmentVersion: number | null;
+  readonly fragmentVersionAtLastEdit: number | null;
+}
 
 export interface ProductDocument {
   readonly id: string;
-  readonly kind: Exclude<DocumentArtifactKind, "fragment">;
+  readonly documentType: DocumentType;
   readonly organizationId: string;
   readonly scopeType: DocumentScopeType;
   readonly scopeId: string;
+  /** The node's name for the scope, so a row never needs a scope lookup. */
+  readonly scopeLabel: string;
   readonly title: string;
   readonly slug: string;
-  /** Event Info placement, or null when the document is library-only (M11.20). */
-  readonly eventInfoSection: EventInfoSection | null;
+  readonly eventInfoSection: string | null;
+  readonly eventInfoSectionLabel: string | null;
   readonly markdownSource: string;
+  /** `DocumentRenderer`'s HTML, with fragments resolved and raw HTML stripped. */
+  readonly renderedHtml: string;
   readonly state: ProductDocumentState;
-  readonly documentRevision: number;
-  readonly fragmentRevision: number;
+  readonly stateLabel: string;
+  /** `document_revision.fragment_revision`, formatted by the node. */
+  readonly version: string;
   readonly publishedAt: string | null;
   readonly archivedAt: string | null;
-  readonly updatedAt: string;
+  readonly updatedAt: string | null;
+  readonly visibilitySummary: string;
+  readonly exportFormats: readonly string[];
+  /** Whether this caller may edit, publish, or archive this document. */
+  readonly canMaintain: boolean;
+  readonly fragmentReferences: readonly DocumentFragmentReference[];
 }
 
-export interface DocumentFragment {
+/** A document referencing a fragment, as the fragment's read reports it. */
+export interface ReferencingDocument {
+  readonly id: string;
+  readonly documentType: DocumentType;
+  readonly title: string;
+  readonly state: string;
+  readonly version: string;
+  readonly published: boolean;
+}
+
+export interface ProductDocumentFragment {
   readonly id: string;
   readonly organizationId: string;
   readonly scopeType: DocumentScopeType;
   readonly scopeId: string;
+  readonly scopeLabel: string;
   readonly name: string;
   readonly slug: string;
   readonly markdownSource: string;
   readonly version: number;
-  readonly updatedAt: string;
+  readonly updatedAt: string | null;
+  readonly referencingDocuments: readonly ReferencingDocument[];
 }
 
+/** What the caller may do on the surface as a whole, as the node decided it. */
+export interface DocumentLibraryAccess {
+  readonly canMaintain: boolean;
+  readonly scopes: readonly DocumentScopeOption[];
+}
+
+/** The whole document library surface in one response. */
+export interface DocumentLibrary {
+  readonly organizationId: string;
+  readonly access: DocumentLibraryAccess;
+  readonly eventInfoSections: readonly EventInfoSectionOption[];
+  readonly documents: readonly ProductDocument[];
+  readonly fragments: readonly ProductDocumentFragment[];
+}
+
+/**
+ * The authoring form, as edited.
+ *
+ * One shape for all three artifact kinds: a fragment has no Event Info
+ * placement and its `title` is the name the command calls `name`, which is a
+ * translation this module makes rather than a second form.
+ */
 export interface DocumentDraft {
-  kind: DocumentArtifactKind;
   scopeType: DocumentScopeType;
   scopeId: string;
   title: string;
   slug: string;
-  eventInfoSection: EventInfoSection | null;
+  eventInfoSection: string | null;
   markdownSource: string;
 }
 
-export interface DocumentAuthoringSession {
-  readonly surface: "organizer" | "department";
-  readonly organizationId: string;
-  readonly organizationLabel: string;
-  readonly eventId: string;
-  readonly eventLabel: string;
-  readonly department: FixtureDepartmentAccess;
+export type DocumentStateFilter = ProductDocumentState | "all";
+
+interface FragmentReferencePayload {
+  readonly token: string;
+  readonly fragment_id: string;
+  readonly fragment_name?: string | null;
+  readonly fragment_slug?: string | null;
+  readonly fragment_version?: number | null;
+  readonly fragment_version_at_last_edit?: number | null;
 }
 
-export interface ScopeOption {
-  readonly type: DocumentScopeType;
+interface DocumentPayload {
   readonly id: string;
-  readonly label: string;
+  readonly document_type: DocumentType;
+  readonly organization_id: string;
+  readonly scope_type: DocumentScopeType;
+  readonly scope_id: string;
+  readonly scope_label?: string;
+  readonly title: string;
+  readonly slug: string;
+  readonly event_info_section?: string | null;
+  readonly event_info_section_label?: string | null;
+  readonly markdown_source: string;
+  readonly rendered_html?: string;
+  readonly state: ProductDocumentState;
+  readonly state_label?: string;
+  readonly version?: string;
+  readonly published_at?: string | null;
+  readonly archived_at?: string | null;
+  readonly updated_at?: string | null;
+  readonly visibility_summary?: string;
+  readonly export_formats?: string[];
+  readonly can_maintain?: boolean;
+  readonly fragment_references?: FragmentReferencePayload[];
 }
 
-const organizationId = "11111111-1111-4111-8111-111111111111";
-const organizationLabel = "Signal Camp (development)";
+interface ReferencingDocumentPayload {
+  readonly id: string;
+  readonly document_type: DocumentType;
+  readonly title: string;
+  readonly state: string;
+  readonly version?: string;
+  readonly published?: boolean;
+}
 
-const INITIAL_DOCUMENTS: ProductDocument[] = [
-  {
-    id: "44444444-4444-4444-8444-444444444401",
-    kind: "policy",
-    organizationId,
-    scopeType: "organization",
-    scopeId: organizationId,
-    title: "Volunteer Conduct",
-    slug: "volunteer-conduct",
-    eventInfoSection: "requirements",
-    markdownSource:
-      "# Volunteer Conduct\n\n{{fragment:shared-conduct}}\n\nStaff are expected to keep commitments visible and ask for help early.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-01T16:00:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-01T16:00:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444402",
-    kind: "procedure",
-    organizationId,
-    scopeType: "department",
-    scopeId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    title: "Radio Checkout",
-    slug: "radio-checkout",
-    eventInfoSection: null,
-    markdownSource:
-      "# Radio Checkout\n\n1. Confirm the staff member and shift.\n2. Record the radio number.\n3. Ask the staff member to test before leaving Logistics.",
-    state: "draft",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: null,
-    archivedAt: null,
-    updatedAt: "2026-07-02T18:30:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444403",
-    kind: "policy",
-    organizationId,
-    scopeType: "team",
-    scopeId: FIXTURE_RANGERS_DIRT_TEAM_ID,
-    title: "Dirt Team Radio Policy",
-    slug: "dirt-team-radio-policy",
-    eventInfoSection: null,
-    markdownSource:
-      "# Dirt Team Radio Policy\n\n{{fragment:radio-language}}\n\nUse the team channel for patrol coordination.",
-    state: "published",
-    documentRevision: 2,
-    fragmentRevision: 1,
-    publishedAt: "2026-07-03T15:15:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-03T15:15:00.000Z",
-  },
-  // Event Info fixtures (M11.20). Deliberately spread across scopes and states
-  // so the local screen shows the assembly order, the team-scoped narrowing,
-  // and at least one section that is still legitimately empty.
-  {
-    id: "44444444-4444-4444-8444-444444444404",
-    kind: "policy",
-    organizationId,
-    scopeType: "organization",
-    scopeId: organizationId,
-    title: "Getting To Signal Camp",
-    slug: "getting-to-signal-camp",
-    eventInfoSection: "directions",
-    markdownSource:
-      "# Getting To Signal Camp\n\nTake the north access road to Gate 1. The last fuel stop is 40 miles out.\n\nGate 1 is open 08:00 to 22:00; arrivals after 22:00 wait in the holding lot until morning.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-04T17:00:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-04T17:00:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444405",
-    kind: "procedure",
-    organizationId,
-    scopeType: "organization",
-    scopeId: organizationId,
-    title: "Arrival And Gate Check-In",
-    slug: "arrival-and-gate-check-in",
-    eventInfoSection: "arrival",
-    markdownSource:
-      "# Arrival And Gate Check-In\n\nBring photo identification and your staff credential to the staff lane at Gate 1.\n\nLogistics marks you on-site before your first shift.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-04T17:10:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-04T17:10:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444406",
-    kind: "procedure",
-    organizationId,
-    scopeType: "organization",
-    scopeId: organizationId,
-    title: "Meals And Camp Kitchen",
-    slug: "meals-and-camp-kitchen",
-    eventInfoSection: "food",
-    markdownSource:
-      "# Meals And Camp Kitchen\n\nStaff meals are served at the camp kitchen between shifts.\n\nBring your own water bottle and cup.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-04T17:20:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-04T17:20:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444407",
-    kind: "procedure",
-    organizationId,
-    scopeType: "department",
-    scopeId: FIXTURE_RANGERS_DEPARTMENT_ID,
-    title: "Ranger Packing List",
-    slug: "ranger-packing-list",
-    eventInfoSection: "packing",
-    markdownSource:
-      "# Ranger Packing List\n\nDust goggles, a working headlamp, closed-toe boots, and warm layers for night patrol.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-04T17:30:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-04T17:30:00.000Z",
-  },
-  {
-    id: "44444444-4444-4444-8444-444444444408",
-    kind: "procedure",
-    organizationId,
-    scopeType: "team",
-    scopeId: FIXTURE_RANGERS_DIRT_TEAM_ID,
-    title: "Dirt Team Housing",
-    slug: "dirt-team-housing",
-    eventInfoSection: "housing",
-    markdownSource:
-      "# Dirt Team Housing\n\nDirt patrol camps together behind Ranger HQ. Quiet hours run 10:00 to 16:00 for the overnight rotation.",
-    state: "published",
-    documentRevision: 1,
-    fragmentRevision: 0,
-    publishedAt: "2026-07-04T17:40:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-07-04T17:40:00.000Z",
-  },
-];
+interface FragmentPayload {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly scope_type: DocumentScopeType;
+  readonly scope_id: string;
+  readonly scope_label?: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly markdown_source: string;
+  readonly version: number;
+  readonly updated_at?: string | null;
+  readonly referencing_documents?: ReferencingDocumentPayload[];
+}
 
-const INITIAL_FRAGMENTS: DocumentFragment[] = [
-  {
-    id: "55555555-5555-4555-8555-555555555501",
-    organizationId,
-    scopeType: "organization",
-    scopeId: organizationId,
-    name: "Shared Conduct",
-    slug: "shared-conduct",
-    markdownSource: "Treat people, radios, vehicles, and camp spaces with care.",
-    version: 1,
-    updatedAt: "2026-07-01T15:30:00.000Z",
-  },
-  {
-    id: "55555555-5555-4555-8555-555555555502",
-    organizationId,
-    scopeType: "team",
-    scopeId: FIXTURE_RANGERS_DIRT_TEAM_ID,
-    name: "Radio Language",
-    slug: "radio-language",
-    markdownSource: "Use plain language and confirm urgent calls.",
-    version: 2,
-    updatedAt: "2026-07-03T14:50:00.000Z",
-  },
-];
+interface DocumentIndexPayload {
+  readonly organization_id?: string;
+  readonly access?: {
+    readonly can_maintain?: boolean;
+    readonly scopes?: {
+      readonly scope_type: DocumentScopeType;
+      readonly scope_id: string;
+      readonly label: string;
+    }[];
+  };
+  readonly event_info_sections?: EventInfoSectionOption[];
+  readonly documents?: DocumentPayload[];
+  readonly fragments?: FragmentPayload[];
+}
 
-const documents = shallowRef<ProductDocument[]>([...INITIAL_DOCUMENTS]);
-const fragments = shallowRef<DocumentFragment[]>([...INITIAL_FRAGMENTS]);
+function toDocument(payload: DocumentPayload): ProductDocument {
+  return {
+    id: payload.id,
+    documentType: payload.document_type,
+    organizationId: payload.organization_id,
+    scopeType: payload.scope_type,
+    scopeId: payload.scope_id,
+    scopeLabel: payload.scope_label ?? "",
+    title: payload.title,
+    slug: payload.slug,
+    eventInfoSection: payload.event_info_section ?? null,
+    eventInfoSectionLabel: payload.event_info_section_label ?? null,
+    markdownSource: payload.markdown_source,
+    renderedHtml: payload.rendered_html ?? "",
+    state: payload.state,
+    stateLabel: payload.state_label ?? payload.state,
+    version: payload.version ?? "",
+    publishedAt: payload.published_at ?? null,
+    archivedAt: payload.archived_at ?? null,
+    updatedAt: payload.updated_at ?? null,
+    visibilitySummary: payload.visibility_summary ?? "",
+    exportFormats: payload.export_formats ?? [],
+    canMaintain: payload.can_maintain ?? false,
+    fragmentReferences: (payload.fragment_references ?? []).map((reference) => ({
+      token: reference.token,
+      fragmentId: reference.fragment_id,
+      fragmentName: reference.fragment_name ?? null,
+      fragmentSlug: reference.fragment_slug ?? null,
+      fragmentVersion: reference.fragment_version ?? null,
+      fragmentVersionAtLastEdit: reference.fragment_version_at_last_edit ?? null,
+    })),
+  };
+}
 
-export function resolveDocumentAuthoringSession(
-  surface: "organizer" | "department",
-  departmentId?: string | null,
-): DocumentAuthoringSession {
-  const department =
-    surface === "organizer"
-      ? (fixtureDepartmentById(FIXTURE_ORGANIZER_DEPARTMENT_ID) ??
-        fixtureDepartmentAccesses[0]!)
-      : (fixtureDepartmentById(departmentId) ?? selectedFixtureDepartment.value);
+function toFragment(payload: FragmentPayload): ProductDocumentFragment {
+  return {
+    id: payload.id,
+    organizationId: payload.organization_id,
+    scopeType: payload.scope_type,
+    scopeId: payload.scope_id,
+    scopeLabel: payload.scope_label ?? "",
+    name: payload.name,
+    slug: payload.slug,
+    markdownSource: payload.markdown_source,
+    version: payload.version,
+    updatedAt: payload.updated_at ?? null,
+    referencingDocuments: (payload.referencing_documents ?? []).map(
+      (document) => ({
+        id: document.id,
+        documentType: document.document_type,
+        title: document.title,
+        state: document.state,
+        version: document.version ?? "",
+        published: document.published ?? false,
+      }),
+    ),
+  };
+}
+
+/**
+ * The submitted form, trimmed.
+ *
+ * The server trims too, so this changes nothing it stores. It changes what a
+ * whitespace-only title does: sent as typed it passes `required` and comes back
+ * as a domain refusal, which reads oddly next to a field that visibly has
+ * something in it.
+ */
+function toDocumentAttributes(
+  organizationId: string,
+  draft: DocumentDraft,
+): Record<string, unknown> {
+  return {
+    organization_id: organizationId,
+    scope_type: draft.scopeType,
+    scope_id: draft.scopeId,
+    title: draft.title.trim(),
+    slug: draft.slug.trim(),
+    // Always sent, including as null: omitting the key leaves the current
+    // placement alone, which is not what clearing the field means (11.4A).
+    event_info_section: draft.eventInfoSection,
+    markdown_source: draft.markdownSource,
+  };
+}
+
+function toFragmentAttributes(
+  organizationId: string,
+  draft: DocumentDraft,
+): Record<string, unknown> {
+  return {
+    organization_id: organizationId,
+    scope_type: draft.scopeType,
+    scope_id: draft.scopeId,
+    name: draft.title.trim(),
+    slug: draft.slug.trim(),
+    markdown_source: draft.markdownSource,
+  };
+}
+
+/** The read path for one document type. */
+function documentPath(documentType: DocumentType, id: string): string {
+  return documentType === "policy"
+    ? `/api/policy-documents/${encodeURIComponent(id)}`
+    : `/api/procedure-documents/${encodeURIComponent(id)}`;
+}
+
+/**
+ * Read the whole document surface for one organization.
+ *
+ * The state filter goes to the node rather than narrowing what came back: the
+ * list is the answer to the question that was asked, not a view of a wider one.
+ * Which documents a caller may see at all — published in their scopes, plus
+ * anything they maintain — is the node's decision and not a case handled here.
+ */
+export async function getOrganizationDocuments(
+  organizationId: string,
+  state: DocumentStateFilter = "all",
+): Promise<DocumentLibrary> {
+  const query = state === "all" ? "" : `?state=${state}`;
+  const result = await meridianJson<DocumentIndexPayload>(
+    `/api/organizations/${encodeURIComponent(organizationId)}/documents${query}`,
+  );
+
+  const scopes = (result.access?.scopes ?? []).map((scope) => ({
+    scopeType: scope.scope_type,
+    scopeId: scope.scope_id,
+    label: scope.label,
+  }));
 
   return {
-    surface,
-    organizationId,
-    organizationLabel,
-    eventId: department.eventId,
-    eventLabel: department.eventLabel,
-    department,
+    organizationId: result.organization_id ?? organizationId,
+    access: {
+      canMaintain: result.access?.can_maintain ?? false,
+      scopes,
+    },
+    eventInfoSections: result.event_info_sections ?? [],
+    documents: (result.documents ?? []).map(toDocument),
+    fragments: (result.fragments ?? []).map(toFragment),
   };
 }
 
-export function canAccessDocumentSurface(
-  session: DocumentAuthoringSession,
-): boolean {
-  return (
-    session.surface === "organizer" ||
-    session.department.isDepartmentLead ||
-    session.department.teams.some((team) => team.isTeamLead || team.isMember)
+/**
+ * Read one document for the edit form.
+ *
+ * A document outside the caller's visibility is the node's refusal rather than
+ * a row missing from a list, so the form can say what happened instead of
+ * rendering empty.
+ */
+export async function getDocument(
+  documentType: DocumentType,
+  documentId: string,
+): Promise<ProductDocument> {
+  return toDocument(
+    await meridianJson<DocumentPayload>(documentPath(documentType, documentId)),
   );
 }
 
-export function canMaintainDocuments(session: DocumentAuthoringSession): boolean {
-  return maintainableScopes(session).length > 0;
-}
-
-export function maintainableScopes(
-  session: DocumentAuthoringSession,
-): ScopeOption[] {
-  if (
-    session.surface === "organizer" &&
-    fixtureDepartmentHasOrganizerDepartmentAccess(session.department)
-  ) {
-    return [
-      {
-        type: "organization",
-        id: session.organizationId,
-        label: `Organization: ${session.organizationLabel}`,
-      },
-    ];
-  }
-
-  const scopes: ScopeOption[] = [];
-
-  if (session.department.isDepartmentLead) {
-    scopes.push({
-      type: "department",
-      id: session.department.departmentId,
-      label: `Department: ${session.department.departmentLabel}`,
-    });
-  }
-
-  for (const team of session.department.teams) {
-    if (team.isTeamLead) {
-      scopes.push({
-        type: "team",
-        id: team.teamId,
-        label: `Team: ${team.teamLabel}`,
-      });
-    }
-  }
-
-  return scopes;
-}
-
-export function visibleDocuments(
-  session: DocumentAuthoringSession,
-  state: ProductDocumentState | "all" = "all",
-): ProductDocument[] {
-  return documents.value
-    .filter((document) => document.organizationId === session.organizationId)
-    .filter((document) => state === "all" || document.state === state)
-    .filter((document) => canViewDocument(session, document))
-    .slice()
-    .sort((left, right) => left.title.localeCompare(right.title));
-}
-
-export function visibleFragments(
-  session: DocumentAuthoringSession,
-): DocumentFragment[] {
-  return fragments.value
-    .filter((fragment) => fragment.organizationId === session.organizationId)
-    .filter((fragment) => canMaintainScope(session, fragment.scopeType, fragment.scopeId))
-    .slice()
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-export function getDocument(
-  session: DocumentAuthoringSession,
-  id: string,
-): ProductDocument | null {
-  return (
-    documents.value.find((document) => document.id === id && canViewDocument(session, document)) ??
-    null
+/** Read one fragment. The node refuses a fragment this caller cannot maintain. */
+export async function getDocumentFragment(
+  fragmentId: string,
+): Promise<ProductDocumentFragment> {
+  return toFragment(
+    await meridianJson<FragmentPayload>(
+      `/api/document-fragments/${encodeURIComponent(fragmentId)}`,
+    ),
   );
 }
 
-export function getFragment(
-  session: DocumentAuthoringSession,
-  id: string,
-): DocumentFragment | null {
-  return (
-    fragments.value.find(
-      (fragment) =>
-        fragment.id === id &&
-        canMaintainScope(session, fragment.scopeType, fragment.scopeId),
-    ) ?? null
-  );
-}
-
-export function saveDocumentDraft(
-  session: DocumentAuthoringSession,
-  artifactId: string | null,
+/**
+ * Create a document, and answer with it as the node saved it.
+ *
+ * New documents are always created in draft (data/API 11.2); no state is sent,
+ * because that is the server's rule rather than a default this form fills in.
+ */
+export async function createDocument(
+  documentType: DocumentType,
+  organizationId: string,
   draft: DocumentDraft,
-): ProductDocument | DocumentFragment {
-  assertCanMaintainScope(session, draft.scopeType, draft.scopeId);
-  const title = draft.title.trim();
-  const slug = draft.slug.trim();
-  const markdownSource = draft.markdownSource.trim();
-
-  if (title === "" || slug === "" || markdownSource === "") {
-    throw new Error("Title, slug, and Markdown are required.");
-  }
-
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    throw new Error("Slug must use lowercase letters, numbers, and hyphens.");
-  }
-
-  if (draft.kind === "fragment") {
-    return saveFragment(session, artifactId, {
-      name: title,
-      slug,
-      markdownSource,
-      scopeType: draft.scopeType,
-      scopeId: draft.scopeId,
-    });
-  }
-
-  const now = new Date().toISOString();
-  const existing =
-    artifactId === null
-      ? null
-      : documents.value.find((document) => document.id === artifactId) ?? null;
-
-  if (existing !== null && !canMaintainScope(session, existing.scopeType, existing.scopeId)) {
-    throw new Error("You do not have permission to edit this document.");
-  }
-
-  const changedPublishedContent =
-    existing !== null &&
-    existing.state === "published" &&
-    (existing.title !== title ||
-      existing.slug !== slug ||
-      existing.markdownSource !== markdownSource ||
-      existing.scopeType !== draft.scopeType ||
-      existing.scopeId !== draft.scopeId);
-
-  const saved: ProductDocument = {
-    id: existing?.id ?? crypto.randomUUID(),
-    kind: draft.kind,
-    organizationId: session.organizationId,
-    scopeType: draft.scopeType,
-    scopeId: draft.scopeId,
-    title,
-    slug,
-    // Event Info placement is where the document is shown, not what it says,
-    // so it never participates in the published-content revision bump below.
-    eventInfoSection: draft.eventInfoSection,
-    markdownSource,
-    state: existing?.state ?? "draft",
-    documentRevision: changedPublishedContent
-      ? existing.documentRevision + 1
-      : (existing?.documentRevision ?? 1),
-    fragmentRevision: changedPublishedContent ? 0 : (existing?.fragmentRevision ?? 0),
-    publishedAt: existing?.publishedAt ?? null,
-    archivedAt: existing?.archivedAt ?? null,
-    updatedAt: now,
-  };
-
-  documents.value =
-    existing === null
-      ? [...documents.value, saved]
-      : documents.value.map((document) => (document.id === saved.id ? saved : document));
-
-  return saved;
-}
-
-export function publishDocument(
-  session: DocumentAuthoringSession,
-  id: string,
-): ProductDocument {
-  return transitionDocument(session, id, "published");
-}
-
-export function archiveDocument(
-  session: DocumentAuthoringSession,
-  id: string,
-): ProductDocument {
-  return transitionDocument(session, id, "archived");
-}
-
-export function renderDocumentMarkdown(source: string): string {
-  const escaped = escapeHtml(resolveFragmentMarkdown(source));
-  return escaped
-    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
-    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/^/, "<p>")
-    .replace(/$/, "</p>")
-    .replace(/<p><h/g, "<h")
-    .replace(/<\/h([12])><\/p>/g, "</h$1>")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-}
-
-export function documentVersion(document: ProductDocument): string {
-  return `${document.documentRevision}.${String(document.fragmentRevision).padStart(2, "0")}`;
-}
-
-export function scopeLabel(
-  scopeType: DocumentScopeType,
-  scopeId: string,
-): string {
-  if (scopeType === "organization") {
-    return `Organization: ${organizationLabel}`;
-  }
-
-  const department = fixtureDepartmentById(scopeId);
-  if (scopeType === "department" && department !== null) {
-    return `Department: ${department.departmentLabel}`;
-  }
-
-  for (const fixtureDepartment of fixtureDepartmentAccesses) {
-    const team = fixtureDepartment.teams.find((candidate) => candidate.teamId === scopeId);
-    if (team) {
-      return `Team: ${team.teamLabel}`;
-    }
-  }
-
-  return `${scopeType}: ${scopeId}`;
-}
-
-export function visibilitySummary(document: ProductDocument): string {
-  if (document.state !== "published") {
-    return "Visible only to permitted maintainers until published.";
-  }
-
-  if (document.scopeType === "organization") {
-    return "Published to staff in this organization.";
-  }
-
-  if (document.scopeType === "department") {
-    return "Published to members of this department.";
-  }
-
-  return "Published to members of this team.";
-}
-
-export function referencingDocuments(fragment: DocumentFragment): ProductDocument[] {
-  const token = `{{fragment:${fragment.slug}}}`;
-
-  return documents.value
-    .filter((document) => document.markdownSource.includes(token))
-    .sort((left, right) => left.title.localeCompare(right.title));
-}
-
-export function documentExportMarkdown(document: ProductDocument): string {
-  return [
-    `# ${document.title}`,
-    "",
-    `- Document type: ${document.kind === "policy" ? "Policy" : "Procedure"}`,
-    `- Document title: ${document.title}`,
-    `- Document version: ${documentVersion(document)}`,
-    `- Scope: ${scopeLabel(document.scopeType, document.scopeId)}`,
-    `- Exported at: ${new Date().toISOString()}`,
-    "",
-    "---",
-    "",
-    resolveFragmentMarkdown(document.markdownSource),
-    "",
-  ].join("\n");
-}
-
-export function resetDocumentAuthoringFixtures(): void {
-  documents.value = INITIAL_DOCUMENTS.map((document) => ({ ...document }));
-  fragments.value = INITIAL_FRAGMENTS.map((fragment) => ({ ...fragment }));
-}
-
-function saveFragment(
-  session: DocumentAuthoringSession,
-  artifactId: string | null,
-  draft: {
-    name: string;
-    slug: string;
-    markdownSource: string;
-    scopeType: DocumentScopeType;
-    scopeId: string;
-  },
-): DocumentFragment {
-  if (draft.markdownSource.includes("{{fragment:")) {
-    throw new Error("Fragments cannot reference other fragments.");
-  }
-
-  const now = new Date().toISOString();
-  const existing =
-    artifactId === null
-      ? null
-      : fragments.value.find((fragment) => fragment.id === artifactId) ?? null;
-
-  if (existing !== null && !canMaintainScope(session, existing.scopeType, existing.scopeId)) {
-    throw new Error("You do not have permission to edit this fragment.");
-  }
-
-  const saved: DocumentFragment = {
-    id: existing?.id ?? crypto.randomUUID(),
-    organizationId: session.organizationId,
-    scopeType: draft.scopeType,
-    scopeId: draft.scopeId,
-    name: draft.name,
-    slug: draft.slug,
-    markdownSource: draft.markdownSource,
-    version:
-      existing !== null && existing.markdownSource !== draft.markdownSource
-        ? existing.version + 1
-        : (existing?.version ?? 1),
-    updatedAt: now,
-  };
-
-  fragments.value =
-    existing === null
-      ? [...fragments.value, saved]
-      : fragments.value.map((fragment) => (fragment.id === saved.id ? saved : fragment));
-
-  if (existing !== null && existing.markdownSource !== draft.markdownSource) {
-    bumpReferencingPublishedDocuments(saved);
-  }
-
-  return saved;
-}
-
-function transitionDocument(
-  session: DocumentAuthoringSession,
-  id: string,
-  state: ProductDocumentState,
-): ProductDocument {
-  const existing = documents.value.find((document) => document.id === id) ?? null;
-
-  if (existing === null) {
-    throw new Error("Document not found.");
-  }
-
-  assertCanMaintainScope(session, existing.scopeType, existing.scopeId);
-
-  const transitioned: ProductDocument = {
-    ...existing,
-    state,
-    publishedAt:
-      state === "published" && existing.state !== "published"
-        ? new Date().toISOString()
-        : existing.publishedAt,
-    archivedAt:
-      state === "archived" && existing.state !== "archived"
-        ? new Date().toISOString()
-        : state === "archived"
-          ? existing.archivedAt
-          : null,
-    updatedAt: new Date().toISOString(),
-  };
-
-  documents.value = documents.value.map((document) =>
-    document.id === id ? transitioned : document,
-  );
-
-  return transitioned;
-}
-
-function bumpReferencingPublishedDocuments(fragment: DocumentFragment): void {
-  const token = `{{fragment:${fragment.slug}}}`;
-  documents.value = documents.value.map((document) =>
-    document.state === "published" && document.markdownSource.includes(token)
-      ? {
-          ...document,
-          fragmentRevision: document.fragmentRevision + 1,
-          updatedAt: new Date().toISOString(),
-        }
-      : document,
+): Promise<ProductDocument> {
+  return toDocument(
+    await meridianJson<DocumentPayload>(
+      `/api/commands/create-${documentType}-document`,
+      {
+        method: "POST",
+        body: JSON.stringify(toDocumentAttributes(organizationId, draft)),
+      },
+    ),
   );
 }
 
-function canViewDocument(
-  session: DocumentAuthoringSession,
-  document: ProductDocument,
-): boolean {
-  if (canMaintainScope(session, document.scopeType, document.scopeId)) {
-    return true;
-  }
-
-  if (document.state !== "published") {
-    return false;
-  }
-
-  if (session.surface === "organizer") {
-    return true;
-  }
-
-  if (document.scopeType === "organization") {
-    return true;
-  }
-
-  if (document.scopeType === "department") {
-    return document.scopeId === session.department.departmentId;
-  }
-
-  return session.department.teams.some(
-    (team) => team.teamId === document.scopeId && team.isMember,
+export async function updateDocument(
+  documentType: DocumentType,
+  documentId: string,
+  organizationId: string,
+  draft: DocumentDraft,
+): Promise<ProductDocument> {
+  return toDocument(
+    await meridianJson<DocumentPayload>(
+      `/api/commands/update-${documentType}-document`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          document_id: documentId,
+          ...toDocumentAttributes(organizationId, draft),
+        }),
+      },
+    ),
   );
 }
 
-function canMaintainScope(
-  session: DocumentAuthoringSession,
-  scopeType: DocumentScopeType,
-  scopeId: string,
-): boolean {
-  return maintainableScopes(session).some(
-    (scope) => scope.type === scopeType && scope.id === scopeId,
+/**
+ * Publish or archive a document.
+ *
+ * The reason is required by the command and is what the audit snapshot records,
+ * so the surface asks for it rather than sending a sentence the maintainer did
+ * not write.
+ */
+export async function transitionDocument(
+  documentType: DocumentType,
+  documentId: string,
+  state: "published" | "archived",
+  reason: string,
+): Promise<ProductDocument> {
+  const verb = state === "published" ? "publish" : "archive";
+
+  return toDocument(
+    await meridianJson<DocumentPayload>(
+      `/api/commands/${verb}-${documentType}-document`,
+      {
+        method: "POST",
+        body: JSON.stringify({ document_id: documentId, reason }),
+      },
+    ),
   );
 }
 
-function assertCanMaintainScope(
-  session: DocumentAuthoringSession,
-  scopeType: DocumentScopeType,
-  scopeId: string,
-): void {
-  if (!canMaintainScope(session, scopeType, scopeId)) {
-    throw new Error("You do not have permission to maintain documents for this scope.");
-  }
-}
-
-function resolveFragmentMarkdown(source: string): string {
-  return fragments.value.reduce(
-    (resolved, fragment) =>
-      resolved.replaceAll(`{{fragment:${fragment.slug}}}`, fragment.markdownSource),
-    source,
+export async function createDocumentFragment(
+  organizationId: string,
+  draft: DocumentDraft,
+): Promise<ProductDocumentFragment> {
+  return toFragment(
+    await meridianJson<FragmentPayload>(
+      "/api/commands/create-document-fragment",
+      {
+        method: "POST",
+        body: JSON.stringify(toFragmentAttributes(organizationId, draft)),
+      },
+    ),
   );
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+export async function updateDocumentFragment(
+  fragmentId: string,
+  organizationId: string,
+  draft: DocumentDraft,
+): Promise<ProductDocumentFragment> {
+  return toFragment(
+    await meridianJson<FragmentPayload>(
+      "/api/commands/update-document-fragment",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          fragment_id: fragmentId,
+          ...toFragmentAttributes(organizationId, draft),
+        }),
+      },
+    ),
+  );
 }
 
-export const DEVELOPMENT_ORGANIZATION_ID = organizationId;
-export const DEVELOPMENT_ORGANIZER_SCOPE_ID = organizationId;
-export const DEVELOPMENT_ORGANIZER_TEAM_ID = FIXTURE_ORGANIZER_DEFAULT_TEAM_ID;
-export const DEVELOPMENT_RANGERS_DEPARTMENT_ID = FIXTURE_RANGERS_DEPARTMENT_ID;
-export const DEVELOPMENT_RANGERS_DEFAULT_TEAM_ID = FIXTURE_RANGERS_DEFAULT_TEAM_ID;
+/**
+ * Download one document in one format (M16.12; CLIENT-019, CLIENT-020).
+ *
+ * The format is part of the resource the URL is scoped to, so the URL issued for
+ * the Markdown export does not retrieve the PDF. Authorization is decided when
+ * the node issues the URL, which is why a refused export throws here rather than
+ * opening a tab onto an error page.
+ */
+export async function exportDocument(
+  documentType: DocumentType,
+  documentId: string,
+  format: string,
+): Promise<ShortLivedDownloadUrl> {
+  const endpoint =
+    documentType === "policy"
+      ? shortLivedDownloadEndpoints.policyDocumentExport(documentId, format)
+      : shortLivedDownloadEndpoints.procedureDocumentExport(documentId, format);
+
+  return downloadThroughShortLivedUrl(endpoint);
+}
+
+/** The label to show for an export format the node offered. */
+export function documentExportFormatLabel(format: string): string {
+  return format === "markdown"
+    ? "Export Markdown"
+    : `Export ${format.toUpperCase()}`;
+}
+
+/**
+ * How many published documents a fragment edit would bump (data/API 11.7).
+ *
+ * The count is over what the fragment's own read reported, so it describes the
+ * documents the node knows reference it rather than the ones this browser can
+ * see.
+ */
+export function publishedReferenceImpact(
+  fragment: ProductDocumentFragment | null,
+): number {
+  return (fragment?.referencingDocuments ?? []).filter(
+    (document) => document.published,
+  ).length;
+}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Documents;
 
+use App\Domain\Documents\EventInfoSection;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Documents\Concerns\SerializesProductDocuments;
 use App\Models\DocumentFragment;
@@ -48,13 +49,30 @@ final class DocumentReadController extends Controller
             ->get()
             ->filter(fn (DocumentFragment $fragment): bool => $access->canMaintainFragment($user, $fragment))
             ->values();
+        $maintainableScopes = $access->maintainableScopes($user, $organization);
 
         return response()->json([
             'organization_id' => (string) $organization->id,
+            // What this caller may maintain in this organization, and the
+            // Event Info placements a document may be assigned to (11.4A).
+            // The authoring form needs both before it has a document to read
+            // them off, and answering them here keeps the options the form
+            // offers and the options the commands accept the same options.
+            'access' => [
+                'can_maintain' => $maintainableScopes !== [],
+                'scopes' => $maintainableScopes,
+            ],
+            'event_info_sections' => array_map(
+                fn (string $section): array => [
+                    'value' => $section,
+                    'label' => EventInfoSection::label($section),
+                ],
+                EventInfoSection::keys(),
+            ),
             'documents' => $policyDocuments
                 ->concat($procedureDocuments)
                 ->sortBy(fn (PolicyDocument|ProcedureDocument $document): string => $document->title.'|'.($document instanceof PolicyDocument ? 'policy' : 'procedure'))
-                ->map(fn (PolicyDocument|ProcedureDocument $document): array => $this->documentPayload($document, $renderer))
+                ->map(fn (PolicyDocument|ProcedureDocument $document): array => $this->documentPayload($document, $renderer, $access, $user))
                 ->values()
                 ->all(),
             'fragments' => $fragments
@@ -111,7 +129,7 @@ final class DocumentReadController extends Controller
             return response()->json(['message' => 'You do not have permission to view this document.'], 403);
         }
 
-        return response()->json($this->documentPayload($document, $renderer));
+        return response()->json($this->documentPayload($document, $renderer, $access, $user));
     }
 
     /**
