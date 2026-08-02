@@ -1,17 +1,27 @@
-// Staff an operator may record a dictated Field Report for.
+// Staff an operator may record a dictated Field Report for (M18.9; FR-015
+// through FR-017).
 //
 // An operator taking a report by radio or at a desk is writing down someone
 // else's account. They need to name that person before they start typing, so
 // this is the directory the create surface searches.
 //
-// It reads the department operations fixtures rather than a directory endpoint
-// because that is where the client's staff roster lives today; when a real
-// staff directory read lands, this module is the single seam that changes. The
-// shape it returns is deliberately narrow — an id, a name, and enough context to
-// tell two people with similar names apart — so a wider staff record never leaks
-// into the Field Report surfaces through here.
+// It read `department-ops/fixtures.ts` until M18.9, which meant the picker
+// offered the same four invented people to every operator on every event, and an
+// operator who picked one filed a report against a staff id that existed
+// nowhere. The directory is now the department index the node already answers
+// for the Logistics Window: one read, department-scoped, and scoped again by
+// whatever the node will disclose to the caller.
+//
+// That the source is a node read rather than a list held here is the whole point
+// of FR-016. M18.24A gives dictation its own server side and may narrow this
+// further; until then an operator sees the department they are working and
+// nobody outside it, rather than a fixture that respected no scope at all.
+//
+// The shape stays deliberately narrow — an id, a name, and enough context to tell
+// two people with similar names apart — so a wider staff record never leaks into
+// the Field Report surfaces through here.
 
-import { LOCAL_DEPARTMENT_OVERVIEW, LOCAL_LOGISTICS_DESK } from "@/department-ops/fixtures";
+import { getLogisticsDesk } from "@/department-ops/departmentOpsReadModel";
 
 export interface DictationStaffOption {
   readonly staffId: string;
@@ -21,40 +31,33 @@ export interface DictationStaffOption {
 }
 
 /**
- * Every staff member an operator can name, sorted by display name.
+ * Read the staff an operator may name, sorted by display name.
  *
- * Sources are merged on `staffId` with the first one winning, so a staff member
- * who appears in both the logistics roster and the shift assignments is listed
- * once.
+ * One read, and the node decides what is in it. A caller the node will not
+ * answer for gets the refusal rather than a shorter list, because a directory
+ * that quietly empties is indistinguishable from a department with nobody in it.
  */
-export function dictationStaffDirectory(): readonly DictationStaffOption[] {
-  const byStaffId = new Map<string, DictationStaffOption>();
+export async function loadDictationStaffDirectory(
+  eventId: string,
+  departmentId: string,
+): Promise<readonly DictationStaffOption[]> {
+  if (eventId === "" || departmentId === "") {
+    return [];
+  }
 
-  for (const staff of LOCAL_LOGISTICS_DESK.searchableStaff) {
-    byStaffId.set(staff.staffId, {
+  const desk = await getLogisticsDesk(eventId, departmentId);
+
+  return desk.searchableStaff
+    .map((staff) => ({
       staffId: staff.staffId,
       displayName: staff.displayName,
       detail: staff.teamLabel,
-    });
-  }
-
-  for (const assignment of LOCAL_DEPARTMENT_OVERVIEW.assignments) {
-    if (byStaffId.has(assignment.staffId)) {
-      continue;
-    }
-
-    byStaffId.set(assignment.staffId, {
-      staffId: assignment.staffId,
-      displayName: assignment.displayName,
-      detail: assignment.teamLabel,
-    });
-  }
-
-  return [...byStaffId.values()].sort((left, right) =>
-    left.displayName.localeCompare(right.displayName, undefined, {
-      sensitivity: "base",
-    }),
-  );
+    }))
+    .sort((left, right) =>
+      left.displayName.localeCompare(right.displayName, undefined, {
+        sensitivity: "base",
+      }),
+    );
 }
 
 /**
@@ -65,8 +68,8 @@ export function dictationStaffDirectory(): readonly DictationStaffOption[] {
  */
 export function searchDictationStaff(
   query: string,
+  directory: readonly DictationStaffOption[],
   limit = 8,
-  directory: readonly DictationStaffOption[] = dictationStaffDirectory(),
 ): readonly DictationStaffOption[] {
   const needle = query.trim().toLowerCase();
 
@@ -86,7 +89,7 @@ export function searchDictationStaff(
 /** Resolve one directory entry by staff id, or `null` when it is not listed. */
 export function findDictationStaff(
   staffId: string,
-  directory: readonly DictationStaffOption[] = dictationStaffDirectory(),
+  directory: readonly DictationStaffOption[],
 ): DictationStaffOption | null {
   return directory.find((option) => option.staffId === staffId) ?? null;
 }

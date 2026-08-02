@@ -69,10 +69,47 @@ function stubEmptyIncidentNode(): void {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://node.test");
+
+      /*
+       * The staff picker reads the department index rather than a fixture
+       * (M18.9; FR-016), so the node has to answer it here. What it returns is
+       * the scope under test: the operator and one other member of the
+       * department they are working, and nobody outside it.
+       */
+      const body = url.pathname.endsWith("/logistics")
+        ? {
+            context: {
+              event_id: "11111111-1111-4111-8111-111111111111",
+              event_label: "Local Field Event",
+              department_id: RANGERS,
+              department_label: "Rangers",
+              time_zone: "UTC",
+              as_of: "2027-07-04T18:00:00+00:00",
+            },
+            access: {},
+            searchable_staff: [
+              {
+                staff_id: "33333333-3333-4333-8333-333333333333",
+                display_name: "Local Field Author",
+                handle: "local-field-author",
+                team_label: "Command",
+                presence_state: "on_site",
+              },
+              {
+                staff_id: VERA_STAFF_ID,
+                display_name: "Vera Staff",
+                handle: "vera",
+                team_label: "Dirt",
+                presence_state: "on_site",
+              },
+            ],
+            searchable_equipment: [],
+            searchable_shifts: [],
+            staff_workspaces: {},
+          }
+        : {
             event_id: "11111111-1111-4111-8111-111111111111",
             filters: {},
             filter_options: {},
@@ -81,10 +118,13 @@ function stubEmptyIncidentNode(): void {
             presets: [],
             incidents: [],
             field_reports: [],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-    ),
+          };
+
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
   );
 }
 
