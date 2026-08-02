@@ -144,7 +144,16 @@ class CredentialRevocationService
         }
     }
 
-    private function isCompletedShift(Shift $shift, Carbon $moment): bool
+    /**
+     * Whether a shift is one revocation leaves alone (CRED-012, CRED-013).
+     *
+     * Public because the credential administration surface counts what a
+     * revocation would remove and what it would preserve before an organizer
+     * commits to it (M18.5), and a preview computed from a second copy of this
+     * rule is a preview that can disagree with the act. A shift with no
+     * recorded end has not completed and is removed.
+     */
+    public function isCompletedShift(Shift $shift, Carbon $moment): bool
     {
         return $shift->ends_at !== null && $shift->ends_at->lte($moment);
     }

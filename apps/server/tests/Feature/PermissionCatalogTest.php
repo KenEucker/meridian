@@ -67,6 +67,11 @@ class PermissionCatalogTest extends TestCase
             'incidents.print',
             'field_reports.view_event',
             'field_reports.download_photo',
+            // CRED-011 / M18.5: the one authority outside IMS an IC lead holds.
+            // It reaches the catalog through this role rather than through the
+            // event's Incident Command Department because the department is
+            // what makes the grant `ic_lead` in the first place.
+            'event.credentials.revoke',
         ], $this->permissionCodesFor('ic_lead'));
 
         // ic_operator matches ic_lead except it cannot download field report
@@ -83,6 +88,9 @@ class PermissionCatalogTest extends TestCase
         ], $this->permissionCodesFor('ic_operator'));
         $this->assertNotContains('field_reports.download_photo', $this->permissionCodesFor('ic_operator'));
         $this->assertNotContains('incidents.print', $this->permissionCodesFor('ic_operator'));
+        // CRED-011 names the Incident Command Department *lead*, and revocation
+        // stops there: categorizing an incident is not deciding who may work.
+        $this->assertNotContains('event.credentials.revoke', $this->permissionCodesFor('ic_operator'));
 
         // ic_viewer can only view incidents and field reports.
         $this->assertSame([

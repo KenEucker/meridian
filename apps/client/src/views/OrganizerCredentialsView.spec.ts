@@ -1,11 +1,14 @@
-// The reporting export entry point against a stubbed node (M16.22; CLIENT-019,
-// CLIENT-020, CLIENT-023; REPORT-001, REPORT-010, REPORT-014, REPORT-015).
+// The credentials surface against a stubbed node: event credential
+// administration (M18.5; CRED-009 through CRED-014) and the eligibility export
+// entry point (M16.22; CLIENT-019, CLIENT-020, CLIENT-023; REPORT-001,
+// REPORT-010, REPORT-014, REPORT-015).
 //
-// Two halves are under test and they are the seam this task moved: what the
-// surface asks the node for, and what it does with the answer. The first is the
-// M16.12 path — a POST that asks for a scoped short-lived URL, followed by a
-// plain navigation to whatever URL came back — and the second is that a refusal
-// is printed rather than opened.
+// Two featuresets on one page and two separate authorities over the same
+// records, so the tests come in two halves. The export half is the M16.12 path —
+// a POST that asks for a scoped short-lived URL, followed by a plain navigation
+// to whatever URL came back, and a refusal printed rather than opened. The
+// administration half is the read that says what a revocation would cost and the
+// connected-only command that spends it.
 //
 // No server runs for any of it, which is the requirement (CLIENT-024).
 
@@ -14,13 +17,18 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_TEAM_IDS,
+} from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
 import { clearClientSession, installClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
+  LOCAL_FIELD_ORGANIZATION_ID,
   localFieldSessionDocument,
 } from "@/session/localFieldSession";
+import { CAPABILITY_EVENT_CREDENTIALS_REVOKE } from "@/session/permissionCodes";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
@@ -30,6 +38,37 @@ import OrganizerCredentialsView from "@/views/OrganizerCredentialsView.vue";
 const EVENT_ID = "11111111-1111-4111-8111-111111111111";
 const ISSUED_URL =
   "http://node.test/downloads/events/11111111-1111-4111-8111-111111111111/exports/credential-eligibility?actor=u1&expires=1&signature=abc";
+
+const CREDENTIALS_PATH = `/api/events/${EVENT_ID}/credentials`;
+const EXPORT_URL_PATH = `/api/events/${EVENT_ID}/exports/credential-eligibility/download-url`;
+const REVOKE_PATH = "/api/commands/revoke-credential";
+
+const WREN_STAFF_ID = "22222222-2222-4222-8222-222222222222";
+const RIVER_STAFF_ID = "33333333-3333-4333-8333-333333333333";
+
+/** One row as the node reports it, defaulted so a test names only its point. */
+function credentialPayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    staff_id: WREN_STAFF_ID,
+    legal_name: "Wren Subject",
+    preferred_name: null,
+    display_name: "Wren Subject",
+    handle: "wren",
+    departments: ["Gate"],
+    status: "eligible",
+    status_reason: null,
+    status_reason_label: null,
+    revoked_at: null,
+    future_shift_count: 2,
+    completed_shift_count: 1,
+    recorded_minutes: 480,
+    can_revoke: true,
+    revoke_blocked_reason: null,
+    ...overrides,
+  };
+}
 
 /** One request this client made, as the assertions read it. */
 interface NodeCall {
@@ -67,6 +106,39 @@ function stubNode(
   );
 
   return calls;
+}
+
+/**
+ * A node that answers the credential list and nothing else.
+ *
+ * The list read happens on mount for anybody holding revocation, so every test
+ * in here needs an answer for it whether or not the test is about it.
+ */
+function stubNodeWithCredentials(
+  credentials: readonly Record<string, unknown>[],
+  reply: (
+    call: NodeCall,
+  ) => { readonly status?: number; readonly body: unknown } | null = () => null,
+): readonly NodeCall[] {
+  return stubNode((call) => {
+    const answered = reply(call);
+
+    if (answered !== null) {
+      return answered;
+    }
+
+    if (call.url.endsWith(CREDENTIALS_PATH)) {
+      return {
+        body: {
+          event_id: EVENT_ID,
+          event_name: "Local Field Event",
+          credentials,
+        },
+      };
+    }
+
+    return { body: {} };
+  });
 }
 
 /** Every URL the browser was sent to, so a refusal that opens a tab is visible. */
@@ -119,9 +191,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Work as the organizer, which is where the export capability is held. */
+/** Work as the organizer, which holds both the export and revocation. */
 function actAsOrganizer(): void {
   selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+}
+
+/**
+ * Work as somebody holding revocation and nothing else.
+ *
+ * The seeded Rangers membership is a department lead as well as an Incident
+ * Command lead, so it holds the export too; this replaces the role list with
+ * the one shape the fixture cannot express — CRED-011's authority on its own.
+ */
+function actAsIncidentCommandLeadOnly(): void {
+  installClientSession(
+    localFieldSessionDocument({
+      roles: [
+        {
+          role_code: "ic_lead",
+          role_name: "Incident Command Lead",
+          scope_type: "event",
+          organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+          department_id: LOCAL_FIELD_DEPARTMENT_IDS.gate,
+          team_id: LOCAL_FIELD_TEAM_IDS.gateCredentials,
+          team_name: "Credentials",
+          event_id: EVENT_ID,
+          team_grant_id: null,
+          reason:
+            "You have the Incident Command Lead role because your department commands this event.",
+          capabilities: [CAPABILITY_EVENT_CREDENTIALS_REVOKE],
+        },
+      ],
+      capabilities: [CAPABILITY_EVENT_CREDENTIALS_REVOKE],
+    }),
+    "network",
+  );
+  selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 }
 
 async function mountView(): Promise<VueWrapper> {
@@ -147,30 +252,59 @@ function exportButton(wrapper: VueWrapper) {
     .find((button) => button.text().startsWith("Export"));
 }
 
+function revokeButton(wrapper: VueWrapper, name = "Wren Subject") {
+  return wrapper
+    .findAll("button")
+    .find(
+      (button) =>
+        button.attributes("aria-label") ===
+        `Revoke the credential for ${name}`,
+    );
+}
+
+/**
+ * Submit the open confirmation.
+ *
+ * The form is what carries the handler, and jsdom does not raise `submit` from
+ * a click on a submit button, so the test drives the event the component
+ * listens for.
+ */
+async function confirmRevocation(
+  wrapper: VueWrapper,
+  name = "Wren Subject",
+): Promise<void> {
+  await wrapper
+    .find(`form[aria-label="Revoke the credential for ${name}"]`)
+    .trigger("submit");
+}
+
 describe("the credential eligibility export entry point", () => {
   it("asks the node for a short-lived URL and navigates to the one it issued", async () => {
     actAsOrganizer();
 
     const opened = recordNavigations();
-    const calls = stubNode(() => ({
-      body: { url: ISSUED_URL, expires_at: "2026-08-01T18:05:00+00:00" },
-    }));
+    const calls = stubNodeWithCredentials([], (call) =>
+      call.url.endsWith(EXPORT_URL_PATH)
+        ? { body: { url: ISSUED_URL, expires_at: "2026-08-01T18:05:00+00:00" } }
+        : null,
+    );
 
     const wrapper = await mountView();
 
     await exportButton(wrapper)!.trigger("click");
     await flushPromises();
 
+    const exportCalls = calls.filter((call) =>
+      call.url.endsWith(EXPORT_URL_PATH),
+    );
+
     // The credential rides on the request that asks for the URL, never in the
     // link that comes back (CLIENT-019).
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe(
-      `http://node.test/api/events/${EVENT_ID}/exports/credential-eligibility/download-url`,
-    );
-    expect(calls[0]?.method).toBe("POST");
+    expect(exportCalls).toHaveLength(1);
+    expect(exportCalls[0]?.method).toBe("POST");
     // No narrowing is sent: the scope is the caller's own, and a department
     // picker is M18.26's.
-    expect(calls[0]?.body).toEqual({});
+    expect(exportCalls[0]?.body).toEqual({});
 
     expect(opened).toEqual([ISSUED_URL]);
     expect(wrapper.text()).toContain("Credential eligibility is downloading.");
@@ -179,7 +313,7 @@ describe("the credential eligibility export entry point", () => {
   it("states the scope and the excluded fields before anything is generated", async () => {
     actAsOrganizer();
 
-    const calls = stubNode(() => ({ body: {} }));
+    const calls = stubNodeWithCredentials([]);
     const wrapper = await mountView();
     const text = wrapper.text();
 
@@ -189,22 +323,28 @@ describe("the credential eligibility export entry point", () => {
     expect(text).toContain("An organizer exports every department in the event");
     expect(text).toContain("Emergency contacts");
     expect(text).toContain("Phone numbers");
-    // Reading the page asks the node for nothing; an export is a file, not a
-    // list this surface renders.
-    expect(calls).toHaveLength(0);
+    // Generating nothing asks the node for nothing: an export is a file, not a
+    // list this surface renders. The credential list beside it is a read, and
+    // it is the only request opening this page makes.
+    expect(calls.map((call) => call.method)).toEqual(["GET"]);
+    expect(calls[0]?.url).toContain(CREDENTIALS_PATH);
   });
 
   it("prints the node's refusal and opens nothing", async () => {
     actAsOrganizer();
 
     const opened = recordNavigations();
-    stubNode(() => ({
-      status: 403,
-      body: {
-        message:
-          "You do not have permission to export credential eligibility for this event.",
-      },
-    }));
+    stubNodeWithCredentials([], (call) =>
+      call.url.endsWith(EXPORT_URL_PATH)
+        ? {
+            status: 403,
+            body: {
+              message:
+                "You do not have permission to export credential eligibility for this event.",
+            },
+          }
+        : null,
+    );
 
     const wrapper = await mountView();
 
@@ -219,15 +359,16 @@ describe("the credential eligibility export entry point", () => {
     expect(opened).toEqual([]);
   });
 
-  it("offers no export to a client whose session carries no export capability", async () => {
+  it("offers neither featureset to a client whose session carries neither capability", async () => {
     // The Gate membership is ordinary staff. Absent, not disabled (CLIENT-005).
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
     const wrapper = await mountView();
 
     expect(exportButton(wrapper)).toBeUndefined();
+    expect(revokeButton(wrapper)).toBeUndefined();
     expect(wrapper.text()).toContain(
-      "Credential eligibility export requires organizer or department lead authority",
+      "Event credential administration requires organizer or Incident Command lead authority",
     );
   });
 
@@ -258,7 +399,9 @@ describe("the credential eligibility export entry point", () => {
     actAsOrganizer();
     setNavigatorOnline(false);
 
-    const calls = stubNode(() => ({ body: { url: ISSUED_URL } }));
+    const calls = stubNodeWithCredentials([], (call) =>
+      call.url.endsWith(EXPORT_URL_PATH) ? { body: { url: ISSUED_URL } } : null,
+    );
     const wrapper = await mountView();
 
     expect(exportButton(wrapper)!.attributes("disabled")).toBeDefined();
@@ -270,6 +413,254 @@ describe("the credential eligibility export entry point", () => {
     await flushPromises();
 
     // An export is not a command; there is nothing for the outbox to replay.
-    expect(calls).toHaveLength(0);
+    expect(calls.filter((call) => call.url.endsWith(EXPORT_URL_PATH))).toEqual(
+      [],
+    );
+  });
+});
+
+describe("event credential administration", () => {
+  it("states what revocation would remove and what it would preserve", async () => {
+    actAsOrganizer();
+
+    stubNodeWithCredentials([credentialPayload()]);
+
+    const wrapper = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Wren Subject");
+    expect(text).toContain("Eligible");
+    // CRED-012 and CRED-013 in the same breath, before anybody acts: the two
+    // halves of what revocation does are the decision an organizer is making.
+    expect(text).toContain("2 upcoming shifts would be removed");
+    expect(text).toContain(
+      "1 completed shift and 8 hr recorded stay on the record",
+    );
+    expect(revokeButton(wrapper)).toBeDefined();
+  });
+
+  it("sends the command with its reason and replaces the row with the answer", async () => {
+    actAsOrganizer();
+
+    const calls = stubNodeWithCredentials([credentialPayload()], (call) =>
+      call.url.endsWith(REVOKE_PATH)
+        ? {
+            body: {
+              event_id: EVENT_ID,
+              credential: credentialPayload({
+                status: "revoked",
+                status_reason: "manual_revocation",
+                status_reason_label: "Manual revocation",
+                revoked_at: "2026-08-01T18:00:00+00:00",
+                future_shift_count: 0,
+                completed_shift_count: 1,
+                recorded_minutes: 480,
+                can_revoke: false,
+                revoke_blocked_reason: "This credential is already revoked.",
+              }),
+            },
+          }
+        : null,
+    );
+
+    const wrapper = await mountView();
+
+    await revokeButton(wrapper)!.trigger("click");
+    await wrapper.find("textarea").setValue("Asked to leave site.");
+    await confirmRevocation(wrapper);
+    await flushPromises();
+
+    const revokeCalls = calls.filter((call) => call.url.endsWith(REVOKE_PATH));
+
+    expect(revokeCalls).toHaveLength(1);
+    expect(revokeCalls[0]?.method).toBe("POST");
+    expect(revokeCalls[0]?.body).toEqual({
+      event_id: EVENT_ID,
+      staff_id: WREN_STAFF_ID,
+      reason: "Asked to leave site.",
+    });
+
+    // The answer is the whole row rebuilt, so the surface shows what is now
+    // true without a second read — including the hours that survived.
+    const text = wrapper.text();
+    expect(text).toContain("Revoked");
+    expect(text).toContain("Manual revocation");
+    expect(text).toContain("This credential is already revoked.");
+    expect(text).toContain(
+      "1 completed shift and 8 hr recorded stay on the record",
+    );
+    expect(revokeButton(wrapper)).toBeUndefined();
+  });
+
+  it("sends no reason at all when none was typed", async () => {
+    actAsOrganizer();
+
+    const calls = stubNodeWithCredentials([credentialPayload()], (call) =>
+      call.url.endsWith(REVOKE_PATH)
+        ? { body: { credential: credentialPayload({ can_revoke: false }) } }
+        : null,
+    );
+
+    const wrapper = await mountView();
+
+    await revokeButton(wrapper)!.trigger("click");
+    await wrapper.find("textarea").setValue("   ");
+    await confirmRevocation(wrapper);
+    await flushPromises();
+
+    // An empty reason would be recorded as a reason that says nothing, which
+    // reads in an audit log like somebody typed a space rather than like
+    // nobody was asked.
+    expect(
+      calls.find((call) => call.url.endsWith(REVOKE_PATH))?.body,
+    ).toEqual({
+      event_id: EVENT_ID,
+      staff_id: WREN_STAFF_ID,
+    });
+  });
+
+  it("prints the node's refusal and leaves the row as it was", async () => {
+    actAsOrganizer();
+
+    stubNodeWithCredentials([credentialPayload()], (call) =>
+      call.url.endsWith(REVOKE_PATH)
+        ? {
+            status: 403,
+            body: {
+              message: "You are not authorized to revoke event credentials.",
+            },
+          }
+        : null,
+    );
+
+    const wrapper = await mountView();
+
+    await revokeButton(wrapper)!.trigger("click");
+    await confirmRevocation(wrapper);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "You are not authorized to revoke event credentials.",
+    );
+    // CLIENT-006: the node decides, and a refused command changes nothing on
+    // the screen that issued it.
+    expect(wrapper.text()).toContain("Eligible");
+    expect(revokeButton(wrapper)).toBeDefined();
+  });
+
+  it("keeps a revoked credential in the list with no control to revoke it again", async () => {
+    actAsOrganizer();
+
+    stubNodeWithCredentials([
+      credentialPayload({
+        staff_id: RIVER_STAFF_ID,
+        legal_name: "River Past",
+        display_name: "River Past",
+        handle: "river",
+        status: "revoked",
+        status_reason: "manual_revocation",
+        status_reason_label: "Manual revocation",
+        revoked_at: "2026-07-01T12:00:00+00:00",
+        future_shift_count: 0,
+        can_revoke: false,
+        revoke_blocked_reason: "This credential is already revoked.",
+      }),
+    ]);
+
+    const wrapper = await mountView();
+
+    // An organizer checking whether a past decision was right is looking for
+    // exactly the row a tidier list would have dropped.
+    expect(wrapper.text()).toContain("River Past");
+    expect(wrapper.text()).toContain("This credential is already revoked.");
+    expect(revokeButton(wrapper, "River Past")).toBeUndefined();
+  });
+
+  it("says there is nothing to remove rather than counting to zero", async () => {
+    actAsOrganizer();
+
+    stubNodeWithCredentials([
+      credentialPayload({
+        status: "blocked",
+        status_reason: "no_signed_up_shifts",
+        status_reason_label: "No signed-up shifts",
+        future_shift_count: 0,
+        completed_shift_count: 0,
+        recorded_minutes: 0,
+      }),
+    ]);
+
+    const wrapper = await mountView();
+
+    await revokeButton(wrapper)!.trigger("click");
+
+    // "Removes Wren Subject from 0 upcoming shifts" is the kind of sentence
+    // that makes an operator wonder whether the screen knows what it is about
+    // to do, and the answer to that doubt is not a confirmation button.
+    expect(wrapper.text()).toContain(
+      "Wren Subject has no upcoming shifts to remove. There is no completed work to preserve.",
+    );
+    expect(wrapper.text()).not.toContain("0 upcoming shifts");
+  });
+
+  it("filters the list it already holds without asking the node again", async () => {
+    actAsOrganizer();
+
+    const calls = stubNodeWithCredentials([
+      credentialPayload(),
+      credentialPayload({
+        staff_id: RIVER_STAFF_ID,
+        legal_name: "River Past",
+        display_name: "River Past",
+        handle: "river",
+      }),
+    ]);
+
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).toContain("River Past");
+
+    await wrapper.find("#credential-filter").setValue("wren");
+
+    expect(wrapper.text()).toContain("Wren Subject");
+    expect(wrapper.text()).not.toContain("River Past");
+    // Filtering is over what the node already sent, so it costs no request and
+    // works with the node unreachable.
+    expect(calls.filter((call) => call.url.includes(CREDENTIALS_PATH))).toHaveLength(
+      1,
+    );
+  });
+
+  it("refuses to revoke while the device has no network rather than queueing it", async () => {
+    actAsOrganizer();
+
+    const calls = stubNodeWithCredentials([credentialPayload()]);
+    const wrapper = await mountView();
+
+    setNavigatorOnline(false);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Revoking a credential removes shifts other people are being scheduled around",
+    );
+    expect(revokeButton(wrapper)!.attributes("disabled")).toBeDefined();
+
+    expect(calls.filter((call) => call.url.endsWith(REVOKE_PATH))).toEqual([]);
+  });
+
+  it("offers the list and no export to an Incident Command lead", async () => {
+    actAsIncidentCommandLeadOnly();
+
+    stubNodeWithCredentials([credentialPayload()]);
+
+    const wrapper = await mountView();
+
+    // CRED-011 names them and REPORT-007 does not, so they administer
+    // credentials here and are offered no file to take away.
+    expect(revokeButton(wrapper)).toBeDefined();
+    expect(exportButton(wrapper)).toBeUndefined();
+    expect(wrapper.text()).toContain(
+      "administered as Incident Command Lead",
+    );
   });
 });

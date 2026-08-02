@@ -44,6 +44,15 @@ export const CAPABILITY_INCIDENTS_PRINT = "incidents.print";
 export const CAPABILITY_FIELD_REPORTS_VIEW_EVENT = "field_reports.view_event";
 export const CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT =
   "reports.credential_eligibility.export";
+/**
+ * Revoking an event credential (CRED-011).
+ *
+ * Next to the export above and deliberately not the same thing. The export is
+ * held by department leads for their own department; this is held by organizers
+ * and Incident Command leads for the whole event, and the credentials surface
+ * offers each half to whoever holds it.
+ */
+export const CAPABILITY_EVENT_CREDENTIALS_REVOKE = "event.credentials.revoke";
 
 /**
  * Role codes, for the two surfaces the catalog registers no capability for.

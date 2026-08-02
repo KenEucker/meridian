@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Credential\CredentialEligibilityService;
 use App\Services\Credential\CredentialRevocationService;
+use App\Services\Credential\CredentialStatusReasons;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -56,22 +57,6 @@ final class CredentialEligibilityExportService
         'credential_shift_count',
         'credential_updated_at',
         'revoked_at',
-    ];
-
-    /**
-     * Human labels for the recorded credential status reasons, so the file is
-     * readable by an operator without a copy of the domain constants.
-     *
-     * @var array<string, string>
-     */
-    private const REASON_LABELS = [
-        CredentialEligibilityService::REASON_NO_SIGNED_UP_SHIFTS => 'No signed-up shifts',
-        CredentialEligibilityService::REASON_ORGANIZATION_BLOCKING_STATUS => 'Organization blocking status',
-        CredentialEligibilityService::REASON_DEPARTMENT_INELIGIBLE => 'Department Ineligible status',
-        CredentialEligibilityService::REASON_MISSING_REQUIRED_WAIVER => 'Missing required waiver',
-        CredentialEligibilityService::REASON_AGE_REQUIREMENT_NOT_SATISFIED => 'Age requirement not satisfied',
-        CredentialEligibilityService::REASON_MISSING_DATE_OF_BIRTH => 'Missing date of birth',
-        CredentialRevocationService::REASON_MANUAL_REVOCATION => 'Manual revocation',
     ];
 
     public function __construct(
@@ -229,7 +214,7 @@ final class CredentialEligibilityExportService
             'departments' => implode('; ', $departments),
             'credential_status' => (string) $credential->status,
             'status_reason' => (string) ($credential->status_reason ?? ''),
-            'status_reason_label' => self::REASON_LABELS[$credential->status_reason] ?? '',
+            'status_reason_label' => CredentialStatusReasons::label($credential->status_reason) ?? '',
             'credential_shift_count' => (string) $shiftCount,
             'credential_updated_at' => $credential->updated_at?->utc()->toIso8601String() ?? '',
             'revoked_at' => $credential->revoked_at?->utc()->toIso8601String() ?? '',

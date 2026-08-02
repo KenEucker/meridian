@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
 use App\Http\Controllers\Auth\SharedWorkstationSessionController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
+use App\Http\Controllers\Credentials\EventCredentialAdminController;
 use App\Http\Controllers\DepartmentOps\DepartmentOperationsReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
@@ -230,6 +231,16 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::post('/commands/correct-hours', [AttendanceCommandController::class, 'correctHours'])
         ->name('api.commands.correct-hours');
+
+    /*
+     * Credential revocation (M18.5; CRED-011 through CRED-013). Restricted to
+     * organizers and Incident Command leads by the service itself, and
+     * connected-only: it removes future shifts other people are being scheduled
+     * around, so a copy held on a device would be a roster somebody is still
+     * working from.
+     */
+    Route::post('/commands/revoke-credential', [EventCredentialAdminController::class, 'revoke'])
+        ->name('api.commands.revoke-credential');
 
     Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
         ->name('api.commands.set-current-deployment');
@@ -558,6 +569,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/departments/{department}/planning', [DepartmentOperationsReadController::class, 'planning'])
         ->name('api.events.departments.planning');
+
+    /*
+     * Event credential administration (M18.5; CRED-009 through CRED-014; UI
+     * contract 12.6).
+     *
+     * It sits above the exports rather than among them on purpose. The
+     * eligibility export below reads the same records and answers to
+     * `reports.credential_eligibility.export`, which a department lead holds for
+     * their own department; this one answers to `event.credentials.revoke`,
+     * which only organizers and Incident Command leads hold, because it is the
+     * list a revocation is aimed from.
+     */
+    Route::get('/events/{event}/credentials', [EventCredentialAdminController::class, 'index'])
+        ->name('api.events.credentials.index');
 
     // Reporting exports (REPORT-001 through REPORT-005). Scope comes from the
     // caller's own authority; `department_id` may only narrow it.
