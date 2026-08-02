@@ -612,7 +612,7 @@ describe("AppShell menu behavior", () => {
     });
 
     // The Rangers department lead holds every department capability the seeded
-    // session carries, and still lands under the combine threshold at ten
+    // session carries, and still lands under the combine threshold at eleven
     // items.
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
@@ -624,6 +624,7 @@ describe("AppShell menu behavior", () => {
       "Event Info",
       "Shifts",
       "My Field Reports",
+      "Acknowledgments",
       "Overview",
       "Planning",
       "Logistics",
@@ -647,7 +648,7 @@ describe("AppShell menu behavior", () => {
       .find((button) => button.text().includes("Gate"))!
       .trigger("click");
 
-    // In Gate the user is a plain member holding no capability at all: six
+    // In Gate the user is a plain member holding no capability at all: seven
     // personal and member items total, so splitting them across two dropdowns
     // would only make the reader guess.
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
@@ -660,6 +661,7 @@ describe("AppShell menu behavior", () => {
       "Event Info",
       "Shifts",
       "My Field Reports",
+      "Acknowledgments",
       "Documents",
       "Trainings",
     ]);
@@ -695,6 +697,7 @@ describe("AppShell menu behavior", () => {
       "Event Info",
       "Shifts",
       "My Field Reports",
+      "Acknowledgments",
       "Documents",
       "Trainings",
       "Team",

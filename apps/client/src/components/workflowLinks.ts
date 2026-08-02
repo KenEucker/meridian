@@ -33,6 +33,7 @@ import {
   CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE,
   CAPABILITY_DEPARTMENT_PRESENCE_MANAGE,
   CAPABILITY_DEPARTMENT_SCHEDULE_MANAGE,
+  CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW,
   CAPABILITY_EVENT_CREDENTIALS_REVOKE,
   CAPABILITY_INCIDENTS_VIEW,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
@@ -85,10 +86,11 @@ export type NavigationSection = {
  * Calibrated one item above the fullest role a session carries — a department
  * lead holding every department capability — so the person with the most to
  * reach still reads one list. It moved from ten to eleven when the shift board
- * joined the personal pages (M18.2), because that lead gained a page rather
- * than gaining a reason to hunt through two menus.
+ * joined the personal pages (M18.2), and from eleven to twelve when
+ * acknowledgments did (M18.6), each time for the same reason: that lead gained
+ * a page rather than gaining a reason to hunt through two menus.
  */
-export const COMBINED_NAVIGATION_MAX_ITEMS = 11;
+export const COMBINED_NAVIGATION_MAX_ITEMS = 12;
 
 /**
  * The event the interface is currently working in, or null when the session
@@ -314,11 +316,26 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       );
     }
 
-    links.push({
-      label: "My Field Reports",
-      description: "Field report author workspace.",
-      to: { name: "staff.field-reports.index" },
-    });
+    links.push(
+      {
+        label: "My Field Reports",
+        description: "Field report author workspace.",
+        to: { name: "staff.field-reports.index" },
+      },
+      /*
+       * Acknowledgments (M18.6; POL-023, POL-043). Personal, like Me and My
+       * Field Reports, and gated by no capability: being asked to read a
+       * document is a fact about a person rather than a permission somebody
+       * grants them. The page says plainly when nobody has asked them anything,
+       * which is the honest empty state — a missing entry would leave a staff
+       * member with no way to check what they accepted.
+       */
+      {
+        label: "Acknowledgments",
+        description: "Documents you were asked to read, and the version you accepted.",
+        to: { name: "staff.documents.acknowledgments" },
+      },
+    );
 
     if (
       params === null ||
@@ -599,6 +616,27 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         description:
           "Organization policies, procedures, fragments, and exports.",
         to: { name: "organizer.documents.index" },
+      });
+    }
+
+    /*
+     * Acknowledgment requirements and review (M18.6; POL-023, POL-046,
+     * POL-047). Next to Documents and a separate entry, because it answers to a
+     * separate capability: publishing a document and deciding it must be
+     * acknowledged are different decisions, and the second is the one this page
+     * is for.
+     */
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW,
+      )
+    ) {
+      organizationPages.push({
+        label: "Acknowledgments",
+        description:
+          "What must be acknowledged at signup and training, and who has.",
+        to: { name: "organizer.document-acknowledgments.index" },
       });
     }
 

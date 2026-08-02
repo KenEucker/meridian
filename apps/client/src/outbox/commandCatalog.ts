@@ -62,6 +62,9 @@ export type MeridianCommandType =
   | "archive-incident-type"
   | "restore-incident-type"
   | "acknowledge-document"
+  // Acknowledgment requirement administration (M18.6).
+  | "create-document-acknowledgment-requirement"
+  | "set-document-acknowledgment-requirement-active"
   | "submit-application"
   | "publish-event-map"
   | "archive-event-map"
@@ -363,11 +366,38 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "Incident type",
       "Restoring an incident type needs a connection to the node. It cannot be held on this device for later.",
     ),
+    /*
+     * The acknowledgment path's three writes (M18.6; POL-023, POL-043,
+     * POL-046, POL-047).
+     *
+     * Acceptance is connected-only for a reason peculiar to it: the record has
+     * to name the version of the document the person actually read (POL-043),
+     * and a device holding one for later would be holding an acceptance of
+     * whichever version it last cached. It would arrive claiming agreement to
+     * text that may have moved on — which is worse than not arriving, because
+     * the record would look complete.
+     *
+     * The two requirement commands are connected-only for the ordinary reason:
+     * they are organizer administration, done at a desk, and there is no case
+     * where deciding what everybody must read is urgent enough to queue.
+     */
     "acknowledge-document": connectedOnly(
       "acknowledge-document",
       "/api/commands/acknowledge-document",
       "Acknowledgment",
       "Acknowledging a policy or procedure needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "create-document-acknowledgment-requirement": connectedOnly(
+      "create-document-acknowledgment-requirement",
+      "/api/commands/create-document-acknowledgment-requirement",
+      "Acknowledgment requirement",
+      "Requiring a document needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "set-document-acknowledgment-requirement-active": connectedOnly(
+      "set-document-acknowledgment-requirement-active",
+      "/api/commands/set-document-acknowledgment-requirement-active",
+      "Acknowledgment requirement",
+      "Changing an acknowledgment requirement needs a connection to the node. It cannot be held on this device for later.",
     ),
     "submit-application": connectedOnly(
       "submit-application",

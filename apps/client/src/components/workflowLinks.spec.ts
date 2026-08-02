@@ -179,6 +179,10 @@ describe("navigation without a permitting capability", () => {
       "Event Info",
       "Shifts",
       "My Field Reports",
+      // M18.6: acknowledgments are personal too, and gated by no capability —
+      // being asked to read a document is a fact about somebody rather than a
+      // permission granted to them.
+      "Acknowledgments",
       "Documents",
       "Trainings",
     ]);

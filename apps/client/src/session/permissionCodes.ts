@@ -53,6 +53,17 @@ export const CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT =
  * offers each half to whoever holds it.
  */
 export const CAPABILITY_EVENT_CREDENTIALS_REVOKE = "event.credentials.revoke";
+/**
+ * Maintaining and reviewing document acknowledgment requirements (POL-023,
+ * POL-046, POL-047).
+ *
+ * Gates the organizer review surface and nothing a staff member does. Reading
+ * and answering your own acknowledgments needs no capability at all — being
+ * asked is a fact about you, not a permission — so `staff.document-acknowledgments`
+ * and the signup surface check for requirements rather than for a code.
+ */
+export const CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW =
+  "documents.acknowledgments.review";
 
 /**
  * Role codes, for the two surfaces the catalog registers no capability for.

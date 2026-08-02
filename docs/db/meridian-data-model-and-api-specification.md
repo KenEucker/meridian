@@ -328,6 +328,7 @@ GET /api/procedure-documents/{procedureDocument}
 GET /api/document-fragments
 GET /api/document-fragments/{fragment}
 GET /api/document-acknowledgments/me
+GET /api/organizations/{organization}/document-acknowledgments
 ```
 
 All read APIs return permission-filtered resources.
@@ -444,6 +445,41 @@ document carries `can_maintain`, because a reader and a maintainer both receive
 published documents and only the row itself can say which of the two is looking
 at it. Rendering is the node's: every document carries `rendered_html` with its
 fragment text inline, raw HTML stripped, and unsafe links refused.
+
+The two acknowledgment reads are a pair rather than one endpoint with a filter,
+because they answer different questions and carry different authority
+(POL-023 through POL-027, POL-043 through POL-047).
+
+`GET /api/document-acknowledgments/me` is a fact about the caller and requires no
+capability: being asked to acknowledge a document is not a permission somebody
+grants. It returns every active requirement that reaches them — organization
+scope reaches anybody holding a status with the organization, prospective
+included because POL-024 puts acknowledgment in signup, and department scope
+reaches that department's active members — with the document's title, its
+current version, and `rendered_html` carrying its fragment text inline (POL-022),
+because somebody cannot acknowledge what they were never shown. A requirement
+pointing at an unpublished document is absent: the command refuses it, and
+listing an item nobody can act on lists a fault as a task. Each row carries
+`acknowledged`, the version that was accepted (`acknowledged_version`, POL-043),
+and `document_changed_since` — which is reported and never makes a row
+outstanding, because POL-045 is explicit that a document change does not
+re-require anything. The response also carries a `gating` block whose two halves
+are both false and stay false: POL-026 and POL-027 keep acknowledgment out of
+shift signup and credential eligibility, and a list of outstanding items reads as
+a list of blockers unless the answer says otherwise.
+
+`GET /api/organizations/{organization}/document-acknowledgments` is an
+organizer's read of other people and requires
+`documents.acknowledgments.review`. It returns every requirement in the
+organization — retired ones included, because checking whether something was ever
+asked is half of why somebody opens it — each with the people its scope reaches
+and whether each of them has answered. Identity is the display name and the
+handle and stops there, for the reason the credential administration list stops
+there: reading who acknowledged a policy is not a reason to read anybody's
+contact details. It also carries the three answers the create form needs before
+there is a requirement to read them off: the organization's published policy and
+procedure documents, the organization and department scopes of POL-047 (team
+scope is deliberately absent), and the signup and training contexts of POL-046.
 
 The event Field Report read (`GET /api/events/{event}/field-reports`) is the IC
 review list and the source the incident link picker chooses from. It requires
@@ -566,6 +602,8 @@ POST /api/commands/archive-procedure-document
 POST /api/commands/create-document-fragment
 POST /api/commands/update-document-fragment
 POST /api/commands/acknowledge-document
+POST /api/commands/create-document-acknowledgment-requirement
+POST /api/commands/set-document-acknowledgment-requirement-active
 POST /api/commands/export-document
 POST /api/commands/designate-placement-department
 POST /api/commands/publish-event-map
@@ -686,6 +724,42 @@ which is a roster other people are being scheduled around, so one held on a
 device is an event still planning around somebody who was removed from it hours
 ago — and the decision is not local either: the node weighs it against the
 credential and the assignments as they stand when it arrives.
+
+The acknowledgment commands are three writes over one path (POL-023, POL-043,
+POL-046, POL-047).
+
+`acknowledge-document` names the requirement and nothing else. Who is
+acknowledging comes from the caller's own session, and which staff profile the
+acknowledgment is recorded against is the node's answer from the requirement's
+scope — a client that named its own subject would be a client that could name
+somebody else's. A requirement the caller is not inside the scope of is refused
+with 403 (`This acknowledgment was not asked of you.`), which is the half a read
+that hides the row does not cover: hiding is presentation and this is
+authorization. The accepting node is this install's own; nothing publishes a node
+id to a browser, and an install with none configured refuses with 422 rather than
+recording a guess. Acceptance is idempotent on the version already accepted
+(POL-045), so pressing the button twice or on a second device returns the row
+that already exists rather than writing a second one. The answer is the rebuilt
+row, including the version that was recorded.
+
+`acknowledge-document` is not in section 7.2's offline writes, for a reason
+peculiar to it: the record has to name the version the person actually read
+(POL-043), and one held on a device would name whichever version that device last
+cached — arriving as agreement to text that may have moved on, which is worse
+than not arriving, because the record would look complete.
+
+`create-document-acknowledgment-requirement` and
+`set-document-acknowledgment-requirement-active` both require
+`documents.acknowledgments.review` for the requirement's organization and are
+refused with 403 otherwise. Creation additionally refuses a document that is not
+published (422): a requirement pointing at a draft is one the acknowledge command
+refuses for everybody it is addressed to, which makes it a trap rather than a
+requirement. Retiring is a switch rather than a delete and leaves the
+acknowledgments recorded against it untouched — somebody who read a policy and
+said so did that, and an organizer deciding to stop asking the next person is a
+different fact. Both write audit events
+(`document_acknowledgment_requirement.created`, `.retired`, `.restored`) carrying
+the requirement's organization and, at department scope, its department.
 
 Incident list preset commands (`save-incident-list-preset`, `delete-incident-list-preset`) manage one user's saved incident list selections for one event. They reuse the `incidents.view` gate rather than adding a capability: if a user may read the event's incident list, they may name their own way of reading it. Presets are always addressed by owner, so an IC user can neither overwrite nor delete another's, and a preset never grants access to an incident the applying user could not already see. Saving an existing name overwrites that preset; paging position is never stored. Presets are personal view state rather than operational records, so they are not audited.
 
@@ -3715,6 +3789,9 @@ Rules:
 - acknowledgments are not direct shift-signup gates
 - acknowledgments are not direct credential-eligibility gates
 - acknowledgments are not required outside signup or training in Alpha 1
+- requirement administration is restricted to the two organizer roles, through the `documents.acknowledgments.review` capability they carry and no other role does; it is the authority to say a document must be acknowledged and to read who has, not the authority to publish the document, which follows whoever maintains its scope
+- a requirement may only name a published document, because an unpublished one is refused at acceptance for everybody the requirement is addressed to
+- `active` is a retirement switch rather than a deletion; the acknowledgments recorded against a retired requirement stand
 
 ### 11.10 `document_acknowledgments`
 
@@ -3741,8 +3818,10 @@ Rules:
 - creation requires server connection and Laravel acceptance
 - acknowledgment records do not store the full rendered text directly
 - associated document versions with acknowledgments must preserve enough snapshot state to prove what was acknowledged
-- acknowledgments do not need to be automatically re-required when a document or included fragment changes
+- acknowledgments do not need to be automatically re-required when a document or included fragment changes, and a surface reports a version that has moved rather than reopening the requirement
 - acknowledgments are audit events as well as acknowledgment records
+- a user may only acknowledge a requirement whose scope reaches them: organization scope reaches anybody holding a status with the organization, prospective included, and department scope reaches that department's active members
+- `staff_id` and `accepted_by_node_id` are resolved by the node from the requirement's scope and from this install, never named by the client
 
 ### 11.11 Document Exports
 

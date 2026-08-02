@@ -4,7 +4,9 @@
 
 Verify the Milestone 6 policy/procedure gate: an authorized maintainer can create a reusable Markdown fragment, author separate policy and procedure documents that reference it, publish and review their rendered content, understand the published-document impact of changing the fragment, record a connected acknowledgment through the current domain-service path, and export each document as Markdown and PDF.
 
-This scenario uses Orchid for the implemented document and fragment administration surfaces. Acknowledgment requirements and acceptance currently have no browser UI or API command surface, so their human verification uses the documented Laravel domain services from `apps/server`. Do not treat that domain-service verification as a substitute for the future signup/training acknowledgment UI.
+This scenario uses Orchid for the implemented document and fragment administration surfaces. Sections A through E verify the domain through Orchid and the documented Laravel domain services from `apps/server`, which reach rules no surface exposes.
+
+Section F verifies the M18.6 acknowledgment path, which is the product route to what sections A through E reach through tinker: an organizer says which published document must be acknowledged and at which point, a staff member reads the document and says they have, and the organizer reads back who did. It also verifies the two requirements with no positive behavior of their own — POL-026 and POL-027 — by confirming an outstanding acknowledgment stops neither a shift signup nor a credential.
 
 ## Requirements covered
 
@@ -13,9 +15,9 @@ This scenario uses Orchid for the implemented document and fragment administrati
 - `POL-046` and `POL-047`
 - Technical spec sections 21.3 through 21.12 and 22.2
 - Data/API spec sections 11.2 through 11.11
-- UI implementation contract sections 11.15 through 11.17, 12.9, and 17
+- UI implementation contract sections 11.15 through 11.17, 12.9, and 17, plus 12.1 (`signup.policy-acknowledgment`), 12.3 (`staff.document-acknowledgments`), and 12.6 (`organizer.document-acknowledgments`)
 - Accessibility checklist sections 2 through 5, 8, 14, 17, and 18
-- Meridian Alpha 1 tasks M6.1 through M6.12
+- Meridian Alpha 1 tasks M6.1 through M6.12 and M18.6
 
 ## Environment
 
@@ -33,6 +35,7 @@ This scenario uses Orchid for the implemented document and fragment administrati
   php artisan queue:work --once
   ```
 - Shell access from `apps/server` for tinker verification commands and an installed PDF reader for the exported PDF.
+- A running client and the ability to sign in as the personas below for section F. Sections A through E need no client at all.
 
 ## Personas
 
@@ -137,25 +140,59 @@ This scenario uses Orchid for the implemented document and fragment administrati
    php artisan tinker --execute='$policy = App\Models\PolicyDocument::query()->where("slug", "qa-radio-safety-policy")->firstOrFail(); $requirement = App\Models\DocumentAcknowledgmentRequirement::query()->where("document_type", "policy")->where("document_id", $policy->id)->where("requirement_context", "signup")->firstOrFail(); $user = App\Models\User::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $staff = $user->staffProfiles()->firstOrFail(); $node = App\Models\Node::query()->where("organization_id", $policy->organization_id)->firstOrFail(); $before = ["acknowledgments" => App\Models\DocumentAcknowledgment::query()->where("document_type", "policy")->where("document_id", $policy->id)->count(), "snapshots" => App\Models\DocumentVersionSnapshot::query()->where("document_type", "policy")->where("document_id", $policy->id)->count(), "acceptance_audits" => App\Models\AuditEvent::query()->where("action", "document_acknowledgment.accepted")->count()]; $acknowledgment = app(App\Services\Documents\DocumentAcknowledgmentService::class)->acknowledge($requirement, $user, $node, $staff); $after = ["acknowledgments" => App\Models\DocumentAcknowledgment::query()->where("document_type", "policy")->where("document_id", $policy->id)->count(), "snapshots" => App\Models\DocumentVersionSnapshot::query()->where("document_type", "policy")->where("document_id", $policy->id)->count(), "acceptance_audits" => App\Models\AuditEvent::query()->where("action", "document_acknowledgment.accepted")->count()]; print(json_encode(["acknowledgment_id" => $acknowledgment->id, "before" => $before, "after" => $after], JSON_PRETTY_PRINT).PHP_EOL);'
    ```
 34. Confirm the before/after counts are identical and the returned ID matches the policy acknowledgment from step 27.
-35. Confirm the current Alpha 1 boundary: no acknowledgment control or review screen is expected in Orchid, no offline/queued acknowledgment path exists, and acknowledgments are not presented as direct shift-signup or credential-eligibility gates. Do not test packet assembly, document search, or automatic re-acknowledgment after a future document/fragment edit; they are outside this task's implemented path.
+35. Confirm the current Alpha 1 boundary: no acknowledgment control or review screen is expected in Orchid, no offline/queued acknowledgment path exists, and acknowledgments are not presented as direct shift-signup or credential-eligibility gates. The product surfaces for all of this are section F. Do not test packet assembly, document search, or automatic re-acknowledgment after a future document/fragment edit; they are outside this task's implemented path.
 
-### E. Verify Markdown/PDF exports and accessibility
+### F. Verify the acknowledgment path through the product surfaces (M18.6)
 
-36. Open the saved policy editor and select **Export Markdown**, then **Export PDF**. Repeat for the saved procedure.
-37. Confirm every download is available only to the corresponding permitted document maintainer; as the restricted admin, direct navigation to either document's export URL is denied and does not add an export audit event.
-38. Inspect the Markdown files and PDF text. Confirm each includes document type, title, current version, scope, and an export timestamp; the fragment text is inline; and neither output includes `{{fragment:qa-radio-callout}}`. Confirm the PDF does not contain active raw HTML/script output.
-39. Verify format-specific export audit events:
+Run this section after section D, which leaves both requirements and Vera's two acknowledgments in place. It repeats section D's decisions through the surfaces an organizer and a staff member actually have, and adds the two checks section D cannot make: that the document is on screen before anybody accepts it, and that an outstanding acknowledgment stops nothing.
+
+36. Retire the two requirements section D created through tinker, so this section starts from an organizer making the decision rather than inheriting it:
+    ```bash
+    php artisan tinker --execute='App\Models\DocumentAcknowledgmentRequirement::query()->update(["active" => false]); print(App\Models\DocumentAcknowledgmentRequirement::query()->where("active", true)->count().PHP_EOL);'
+    ```
+37. Sign in to the client as Olive Organizer and open **Acknowledgments** from the home directory's Organization pages. Confirm the page lists the two retired requirements as **Retired**, each still reporting the acknowledgments recorded against it, and states that an outstanding acknowledgment blocks neither shift signup nor credential eligibility.
+38. In the **Require a document** form, open the document list. Confirm it offers only the two published QA documents and no draft, that the scope list offers the organization and its departments and no team, and that the required-at list offers only **Staff signup** and **Training**. These are POL-046 and POL-047 as choices rather than as validation errors.
+39. Require **QA Radio Safety Policy** for the organization at **Staff signup**. Confirm a new requirement appears as **Required**, naming the document version, and that **Who was asked** lists the organization's staff with Vera already answered at the version she accepted in section D and everybody else **Not yet acknowledged**.
+40. Confirm no email address, phone number, or date of birth appears anywhere in that list. Reading who acknowledged a policy is not a reason to read anybody's contact details.
+41. Sign out and sign in as Vera Staff. Open `/signup/acknowledgments`. Confirm the surface is empty and says signup can continue, because Vera already acknowledged this document — POL-045 in the one place it would be most tempting to ask again.
+42. Open **Acknowledgments** from the home directory's You pages. Confirm the row is present and answered, states the version Vera accepted and when, and offers no control to acknowledge it again.
+43. As Olive, edit the **QA Radio Callout** fragment source once more and run `php artisan queue:work --once`. As Vera, reload **Acknowledgments** and confirm the row still reads as acknowledged, now reports that the document has changed since and that she is not being asked again, and that `/signup/acknowledgments` is still empty. A version bump is reported, not re-required.
+44. As Olive, require **QA Radio Check Procedure** for the **Rangers** department at **Staff signup**. As Vera, open `/signup/acknowledgments` and confirm the procedure is now the one item, that its text is on screen with the fragment rendered inline as document text rather than as a `{{fragment:...}}` token, and that the training-context requirement is not in the way.
+45. Press **I have read this**. Confirm the surface reports the version that was recorded, and verify the record names the same version:
+    ```bash
+    php artisan tinker --execute='$procedure = App\Models\ProcedureDocument::query()->where("slug", "qa-radio-check-procedure")->firstOrFail(); $user = App\Models\User::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $acknowledgment = App\Models\DocumentAcknowledgment::query()->where("user_id", $user->id)->where("document_type", "procedure")->where("scope_type", "department")->latest("acknowledged_at")->firstOrFail(); print(json_encode(["acknowledged_version" => sprintf("%d.%02d", $acknowledgment->document_revision, $acknowledgment->fragment_revision), "current_version" => $procedure->version(), "staff_id" => $acknowledgment->staff_id, "node_id" => $acknowledgment->accepted_by_node_id], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+46. Confirm the recorded version matches the version the surface named, the staff profile is Vera's own, and the accepting node is this install's node rather than one the client chose.
+47. Reload the page and confirm the acknowledge control is gone rather than disabled, and that no second acknowledgment row was written:
+    ```bash
+    php artisan tinker --execute='$user = App\Models\User::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); print(App\Models\DocumentAcknowledgment::query()->where("user_id", $user->id)->count().PHP_EOL);'
+    ```
+48. Confirm POL-026 and POL-027 with a requirement outstanding. As Olive, require **QA Radio Safety Policy** for the **Rangers** department at **Training** — a requirement Vera has not answered. As Vera, confirm **Acknowledgments** reports it outstanding, then open the **Shift Board**, sign up for any shift she is eligible for, and confirm the signup is accepted with no mention of the acknowledgment. Then confirm the credential is unaffected:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $evaluation = app(App\Services\Credential\CredentialEligibilityService::class)->evaluate($event, $staff); print(json_encode(["eligible" => $evaluation->eligible, "block_reason" => $evaluation->blockReason], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+49. Confirm the evaluation is eligible with no block reason. An unread policy is not a gate, and nothing on either screen implies it is.
+50. As Vera, take the device offline. Confirm **I have read this** is disabled with a stated reason rather than queueing the acceptance, and that the rows already read are still on screen.
+51. Sign in as the restricted admin, or any user holding no organizer role. Confirm no **Acknowledgments** entry appears under Organization pages, that opening `/organizer/acknowledgments` directly states the authority it requires rather than showing an empty table, and that `GET /api/organizations/{organization id}/document-acknowledgments` returns 403. Confirm the personal `/staff/acknowledgments` page still opens for them, because being asked to read something is not a permission.
+52. Confirm a requirement addressed to somebody else is refused rather than merely hidden. As that same user, post `{"requirement_id": "<the Rangers training requirement id>"}` to `/api/commands/acknowledge-document` and confirm a 403 with `This acknowledgment was not asked of you.`
+
+### G. Verify Markdown/PDF exports and accessibility
+
+53. Open the saved policy editor and select **Export Markdown**, then **Export PDF**. Repeat for the saved procedure.
+54. Confirm every download is available only to the corresponding permitted document maintainer; as the restricted admin, direct navigation to either document's export URL is denied and does not add an export audit event.
+55. Inspect the Markdown files and PDF text. Confirm each includes document type, title, current version, scope, and an export timestamp; the fragment text is inline; and neither output includes `{{fragment:qa-radio-callout}}`. Confirm the PDF does not contain active raw HTML/script output.
+56. Verify format-specific export audit events:
    ```bash
    php artisan tinker --execute='$policy = App\Models\PolicyDocument::query()->where("slug", "qa-radio-safety-policy")->firstOrFail(); $procedure = App\Models\ProcedureDocument::query()->where("slug", "qa-radio-check-procedure")->firstOrFail(); App\Models\AuditEvent::query()->whereIn("entity_id", [$policy->id, $procedure->id])->whereIn("action", ["policy_document.exported", "procedure_document.exported"])->orderBy("created_at")->get(["action", "entity_id", "actor_user_id", "source_context", "after_json"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
    ```
-40. Confirm there is one audited event for each requested export format, attributed to Olive with Orchid source context and metadata for `markdown` or `pdf`, document type, version, scope, and export time.
-41. Complete the applicable accessibility review by keyboard only:
+57. Confirm there is one audited event for each requested export format, attributed to Olive with Orchid source context and metadata for `markdown` or `pdf`, document type, version, scope, and export time.
+58. Complete the applicable accessibility review by keyboard only:
     - tab through document/fragment list links, creation/edit fields, Save, Cancel, and the export links in task order;
     - confirm visible focus, visible/programmatic labels, and non-color-only state labels for Draft/Published/Archived;
     - confirm the document viewer exposes document type, title, scope, version, and state; Markdown headings/lists/links remain semantic; and inline fragment text reads as ordinary document text;
     - confirm the Fragment references and Referencing documents tables retain column headings and readable fragment names/versions;
     - confirm the published-document-impact warning is understandable without color alone; and
-    - record that acknowledgment UI and its server-connection state cannot be reviewed in this task because no such UI exists yet.
+    - on the three acknowledgment surfaces of section F, confirm visible focus and reachable controls by keyboard alone, that the acknowledged/not-yet state is carried by its words rather than by color, that the rendered document body keeps its Markdown semantics, and that the requirement form's three selects have visible and programmatic labels.
 
 ## Expected results
 
@@ -167,8 +204,12 @@ This scenario uses Orchid for the implemented document and fragment administrati
 - Editing a fragment lists every referencing document and warns with the exact count of published references. After the queued job runs, every published referencing document shows new fragment text and increments only its fragment revision; drafts/archived documents are not expected to change.
 - Active acknowledgment requirements permit only policy/procedure documents, organization/department scope, and signup/training context. The connected domain action rejects inactive, unpublished, cross-organization, invalid-scope, unlinked-staff, or revoked-node requests without partial history.
 - A successful connected acknowledgment records document type/ID/version, requirement scope, timestamp, node, optional linked staff, an immutable proof snapshot, and `document_acknowledgment.accepted` audit history. Repeating an unchanged acceptance is idempotent; later document/fragment changes do not automatically re-require it.
+- Requirement administration offers only published documents, only organization and department scope, and only the signup and training contexts, so POL-046 and POL-047 are choices rather than validation errors. A retired requirement stays visible with the acknowledgments recorded against it intact.
+- The staff surfaces show the document text with its fragments inline before offering to accept it, report the version that was accepted alongside the version standing, and report a document that has changed since without making the row outstanding again.
+- An outstanding acknowledgment blocks neither shift signup nor credential eligibility, both surfaces say so in words, and a shift signup and a credential evaluation performed with one outstanding are unaffected.
+- A caller a requirement never reached is refused by the command with 403, not merely shown a list without it. The organizer review surface is absent for a user holding no review capability; the personal acknowledgment page is not, because being asked to read something is not a permission.
 - Markdown and PDF exports are authorized per document resource, generated one document at a time, include required metadata and current inline fragments, and create format-specific audit events. Packet assembly and acknowledgment-status exports are not expected.
-- The reviewed document/admin controls satisfy the applicable manual keyboard, focus, label, semantic-rendering, non-color, permission, and table accessibility checks. No acknowledgment UI, offline acknowledgment, or direct shift/credential gate is expected in this slice.
+- The reviewed document/admin controls satisfy the applicable manual keyboard, focus, label, semantic-rendering, non-color, permission, and table accessibility checks. No offline acknowledgment and no direct shift/credential gate is expected in this slice.
 
 ## Evidence to capture
 
@@ -182,6 +223,11 @@ This scenario uses Orchid for the implemented document and fragment administrati
 - Tinker output for the immutable snapshot and `document_acknowledgment.accepted` audit event.
 - Tinker output or row counts proving the repeated policy acknowledgment reused the existing record.
 - Saved Markdown and PDF export samples for both document types, plus export-audit query output.
+- The organizer Acknowledgments page showing the create form's three option lists, and a requirement row with its answered count and its who-was-asked list.
+- The staff signup surface showing the document text inline before acceptance, and the same row afterwards naming the version recorded.
+- The staff ledger row after a fragment change, showing the accepted version, the current version, and the not-re-required sentence.
+- Tinker output for the credential evaluation performed with a requirement outstanding, and a note of the shift signup accepted alongside it.
+- The 403 body from the acknowledge command for a requirement addressed to somebody else.
 - Restricted-admin denial evidence for document screens and export routes.
 - Notes from the manual keyboard/accessibility review, including the unimplemented acknowledgment UI boundary.
 
@@ -195,4 +241,10 @@ This scenario uses Orchid for the implemented document and fragment administrati
 - If an acknowledgment accepts a Draft/Archived document, inactive requirement, unsupported context/scope, cross-organization document/node, revoked node, or staff profile not linked to the user, stop and file a blocking acknowledgment-integrity issue.
 - If a successful acknowledgment lacks the immutable version snapshot, version/scope/node/timestamp data, or audit attribution, stop and file an evidence-history issue.
 - If repeated acknowledgment creates duplicate rows, snapshots, or audit events, or if a later document/fragment edit mutates an old acknowledgment, stop and file an idempotency/history issue.
-- If an acknowledgment appears as an offline queue, a direct shift-signup/credential gate, an acknowledgement-review UI, or packet assembly during this scenario, stop and file a scope-leakage issue. These surfaces are not implemented by M6.12.
+- If the requirement form offers a draft document, a team scope, or a context other than signup and training, stop and file a POL-046 / POL-047 issue.
+- If retiring a requirement removes or hides the acknowledgments recorded against it, stop and file a history issue.
+- If a staff member can acknowledge a document whose text was never shown to them, or the rendered body exposes a `{{fragment:...}}` token, stop and file a POL-022 / POL-043 issue.
+- If a document change moves an answered row back to outstanding, or the signup surface asks again for something already accepted, stop and file a POL-045 issue.
+- If a shift signup or a credential evaluation is affected by an outstanding acknowledgment, or either surface implies it would be, stop and file a blocking POL-026 / POL-027 issue.
+- If the acknowledge command accepts a requirement the caller was never inside the scope of, stop and file a blocking authorization issue.
+- If an acknowledgment appears as an offline queue or as packet assembly during this scenario, stop and file a scope-leakage issue. Those surfaces are not implemented by M6.12 or M18.6.

@@ -12,6 +12,7 @@ use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
 use App\Http\Controllers\Deployments\DeploymentCommandController;
+use App\Http\Controllers\Documents\DocumentAcknowledgmentController;
 use App\Http\Controllers\Documents\DocumentCommandController;
 use App\Http\Controllers\Documents\DocumentExportController;
 use App\Http\Controllers\Documents\DocumentReadController;
@@ -428,6 +429,26 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/archive-policy-document', [DocumentCommandController::class, 'archivePolicy'])
         ->name('api.commands.archive-policy-document');
 
+    /*
+     * The document acknowledgment path (M18.6; POL-023 through POL-027,
+     * POL-043 through POL-047).
+     *
+     * All three are connected-only, and acceptance is the one that matters.
+     * Technical spec 21.9 and the M6.10 domain service both restrict
+     * acknowledgment creation to the connected write path: the record has to
+     * name the document version that was actually shown, and a device holding an
+     * acceptance for later would be holding an acceptance of whichever version
+     * it last cached rather than the one standing when it arrives.
+     */
+    Route::post('/commands/acknowledge-document', [DocumentAcknowledgmentController::class, 'acknowledge'])
+        ->name('api.commands.acknowledge-document');
+
+    Route::post('/commands/create-document-acknowledgment-requirement', [DocumentAcknowledgmentController::class, 'createRequirement'])
+        ->name('api.commands.create-document-acknowledgment-requirement');
+
+    Route::post('/commands/set-document-acknowledgment-requirement-active', [DocumentAcknowledgmentController::class, 'setRequirementActive'])
+        ->name('api.commands.set-document-acknowledgment-requirement-active');
+
     Route::post('/commands/create-procedure-document', [DocumentCommandController::class, 'createProcedure'])
         ->name('api.commands.create-procedure-document');
 
@@ -499,6 +520,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');
+
+    /*
+     * The two acknowledgment reads (M18.6). Deliberately a pair rather than one
+     * endpoint with a filter: they answer different questions and carry
+     * different authority. `/me` is a fact about the caller and needs none — a
+     * person may always read what they have been asked — while the review is an
+     * organizer's read of other people and answers to
+     * `documents.acknowledgments.review`.
+     */
+    Route::get('/document-acknowledgments/me', [DocumentAcknowledgmentController::class, 'mine'])
+        ->name('api.document-acknowledgments.me');
+
+    Route::get('/organizations/{organization}/document-acknowledgments', [DocumentAcknowledgmentController::class, 'review'])
+        ->name('api.organizations.document-acknowledgments.index');
 
     Route::get('/policy-documents/{policyDocument}', [DocumentReadController::class, 'policy'])
         ->name('api.policy-documents.show');
