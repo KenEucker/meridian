@@ -9,8 +9,8 @@ use App\Models\Organization;
 use InvalidArgumentException;
 
 /**
- * Creates valid organization- or department-scoped document acknowledgment
- * requirements. Recording a person's acknowledgment remains M6.10 work.
+ * Creates and retires valid organization- or department-scoped document
+ * acknowledgment requirements (POL-023 through POL-027, POL-046, POL-047).
  */
 class DocumentAcknowledgmentRequirementService
 {
@@ -58,6 +58,24 @@ class DocumentAcknowledgmentRequirementService
             'requirement_context' => $requirementContext,
             'active' => $active,
         ]);
+    }
+
+    /**
+     * Retire a requirement, or put it back (M18.6).
+     *
+     * A switch rather than a delete, and the acknowledgments already recorded
+     * against it are untouched either way. Somebody who read a policy and said
+     * so did that; an organizer deciding to stop asking the next person is a
+     * different fact, and erasing the first to record the second would lose the
+     * one of the two that is history.
+     */
+    public function setActive(
+        DocumentAcknowledgmentRequirement $requirement,
+        bool $active,
+    ): DocumentAcknowledgmentRequirement {
+        $requirement->forceFill(['active' => $active])->save();
+
+        return $requirement->refresh();
     }
 
     private function assertSupportedDocumentType(string $documentType): void

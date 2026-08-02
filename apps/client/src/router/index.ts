@@ -49,6 +49,9 @@ import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerConfigurationView from "@/views/OrganizerConfigurationView.vue";
 import OrganizerCredentialsView from "@/views/OrganizerCredentialsView.vue";
+import OrganizerDocumentAcknowledgmentsView from "@/views/OrganizerDocumentAcknowledgmentsView.vue";
+import SignupAcknowledgmentView from "@/views/SignupAcknowledgmentView.vue";
+import StaffDocumentAcknowledgmentsView from "@/views/StaffDocumentAcknowledgmentsView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
@@ -357,6 +360,30 @@ export const routes: RouteRecordRaw[] = [
     name: "staff.shifts.index",
     component: StaffShiftBoardView,
   },
+  /*
+   * The acknowledgment pair (M18.6; POL-024, POL-046; UI contract 12.1, 12.3).
+   *
+   * Two routes over one read, and the split is about what somebody is doing
+   * rather than about what they may see. `/signup/acknowledgments` is a step in
+   * staff signup: the outstanding signup-context documents, open, one task.
+   * `/staff/acknowledgments` is the ledger afterwards, every context, answered
+   * rows included, because the version you accepted is the part worth keeping
+   * (POL-043).
+   *
+   * Neither is department-scoped and neither is event-scoped. A requirement is
+   * asked by an organization or a department of a person, and which ones reach
+   * them is the node's answer from their own memberships.
+   */
+  {
+    path: "/signup/acknowledgments",
+    name: "signup.documents.acknowledge",
+    component: SignupAcknowledgmentView,
+  },
+  {
+    path: "/staff/acknowledgments",
+    name: "staff.documents.acknowledgments",
+    component: StaffDocumentAcknowledgmentsView,
+  },
   {
     path: "/staff/field-reports",
     name: "staff.field-reports.index",
@@ -455,6 +482,17 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/credentials",
     name: "organizer.credentials.index",
     component: OrganizerCredentialsView,
+  },
+  /*
+   * Acknowledgment requirement administration and review (M18.6; POL-023,
+   * POL-046, POL-047; UI contract 12.6). Organization-scoped, because a
+   * requirement's scope is an organization or one of its departments and never
+   * an event.
+   */
+  {
+    path: "/organizer/acknowledgments",
+    name: "organizer.document-acknowledgments.index",
+    component: OrganizerDocumentAcknowledgmentsView,
   },
   {
     path: "/organizer/branding",

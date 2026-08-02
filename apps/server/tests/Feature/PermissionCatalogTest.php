@@ -133,6 +133,13 @@ class PermissionCatalogTest extends TestCase
             $this->assertContains('reports.hours_worked.export', $permissions);
             $this->assertContains('reports.credits_earned.export', $permissions);
 
+            // POL-023 / POL-046 / POL-047 / M18.6: organizers say which
+            // documents must be acknowledged at signup and training, and read
+            // who has. It is not the authority to publish the document — that
+            // follows whoever maintains its scope (POL-048) — and POL-026 and
+            // POL-027 keep it from being authority over anybody's schedule.
+            $this->assertContains('documents.acknowledgments.review', $permissions);
+
             // HOURS-007: reading hours is not correcting them, which stays with
             // the department attendance managers.
             $this->assertNotContains('department.attendance.manage', $permissions);
