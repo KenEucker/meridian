@@ -52,6 +52,8 @@ import OrganizerCredentialsView from "@/views/OrganizerCredentialsView.vue";
 import OrganizerDocumentAcknowledgmentsView from "@/views/OrganizerDocumentAcknowledgmentsView.vue";
 import SignupAcknowledgmentView from "@/views/SignupAcknowledgmentView.vue";
 import StaffDocumentAcknowledgmentsView from "@/views/StaffDocumentAcknowledgmentsView.vue";
+import StaffDocumentDetailView from "@/views/StaffDocumentDetailView.vue";
+import StaffDocumentLibraryView from "@/views/StaffDocumentLibraryView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
@@ -383,6 +385,31 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/acknowledgments",
     name: "staff.documents.acknowledgments",
     component: StaffDocumentAcknowledgmentsView,
+  },
+  /*
+   * The staff document library and one document in it (M18.7; POL-006, POL-008
+   * through POL-013, POL-055; UI contract 12.3).
+   *
+   * Neither is department-scoped, for the same reason the shift board is not: an
+   * organization-scoped policy is published to a person rather than to one of
+   * their departments, and somebody in two departments should not have to know
+   * which one a document was scoped to in order to find it. The department
+   * library at `events.departments.documents.index` stays where it is — it is
+   * the maintainer's workspace, which is a different job on the same records.
+   *
+   * The type is in the path because policy and procedure are separate resources
+   * on the node, not one resource with a flag, and the detail read has to pick
+   * the endpoint before it can ask for anything.
+   */
+  {
+    path: "/staff/documents",
+    name: "staff.documents.index",
+    component: StaffDocumentLibraryView,
+  },
+  {
+    path: "/staff/documents/:documentType/:documentId",
+    name: "staff.documents.show",
+    component: StaffDocumentDetailView,
   },
   {
     path: "/staff/field-reports",
