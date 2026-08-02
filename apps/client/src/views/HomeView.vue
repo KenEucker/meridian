@@ -2,13 +2,14 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
-import {
-  LOCAL_DEPARTMENT_OPS_CONTEXT,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
 import { formatTimestamp } from "@/department-ops/labels";
 import { useNavigationSections } from "@/components/workflowLinks";
-import { selectedSessionDepartment } from "@/session/sessionAccess";
+import {
+  selectedSessionDepartment,
+  sessionEventContext,
+  sessionEventTimeZone,
+  sessionEventWindow,
+} from "@/session/sessionAccess";
 
 // Home lists every page the current user can reach, grouped so workflows stay
 // distinguishable from the individual pages they contain. What that is comes
@@ -25,48 +26,70 @@ const workspaceLede = computed(() => {
     : `${department.departmentLabel} operations workspace.`;
 });
 
-const eventWindow = computed(() => {
-  const sortedStarts = LOCAL_PLANNING_TABLE.rows
-    .map((row) => row.startsAt)
-    .sort();
-  const sortedEnds = LOCAL_PLANNING_TABLE.rows.map((row) => row.endsAt).sort();
+/**
+ * The event this client is operating in, as the session resolved it (M16.6,
+ * CLIENT-011).
+ *
+ * Until M18.9 the heading, the window, and the status badge all came out of
+ * `department-ops/fixtures.ts`, so every signed-in user was greeted by name with
+ * somebody else's event: "Local Field Event", running on the fixture's dates,
+ * marked ongoing against the fixture's frozen clock. A client that has resolved
+ * no event says so rather than borrowing one.
+ */
+const eventLabel = computed(
+  () => sessionEventContext.value?.eventLabel ?? "No event selected",
+);
+const timeZone = computed(() => sessionEventTimeZone.value);
 
-  return {
-    startsAt: sortedStarts[0] ?? null,
-    endsAt: sortedEnds.at(-1) ?? null,
-  };
-});
+/**
+ * Upcoming, ongoing, or ended, measured against this device's clock.
+ *
+ * The device's own "now" is the honest one here. The reads that carry a server
+ * `asOf` are the operational surfaces, and this is a heading on a directory
+ * page; asking the node what time it is to label a badge would be a request per
+ * page load for something a wall clock answers.
+ *
+ * An unknown window is reported as unknown. It was previously reported as
+ * "upcoming", which is a claim about an event nobody had told this client
+ * anything about.
+ */
 const eventStatus = computed(() => {
-  const startsAt = eventWindow.value.startsAt;
-  const endsAt = eventWindow.value.endsAt;
-  const asOf = Date.parse(LOCAL_DEPARTMENT_OPS_CONTEXT.asOf);
+  const startsAt = sessionEventWindow.value?.startsAt ?? null;
+  const endsAt = sessionEventWindow.value?.endsAt ?? null;
+  const now = Date.now();
 
-  if (!startsAt || !endsAt || Number.isNaN(asOf)) {
+  if (startsAt !== null && now < Date.parse(startsAt)) {
     return "upcoming";
   }
 
-  if (asOf < Date.parse(startsAt)) {
-    return "upcoming";
-  }
-
-  if (asOf > Date.parse(endsAt)) {
+  if (endsAt !== null && now > Date.parse(endsAt)) {
     return "ended";
   }
 
-  return "ongoing";
+  return startsAt === null && endsAt === null ? "unscheduled" : "ongoing";
 });
-const operationsWindowLabel = computed(() => {
-  const startsAt = eventWindow.value.startsAt;
-  const endsAt = eventWindow.value.endsAt;
 
-  if (!startsAt || !endsAt) {
+/**
+ * The operations window in words.
+ *
+ * Either end can be missing on its own — an event with a recorded start and no
+ * recorded end is a real state — so each end is stated or named as unset rather
+ * than the pair collapsing to one "not set" that hides the half that is known.
+ */
+const operationsWindowLabel = computed(() => {
+  const startsAt = sessionEventWindow.value?.startsAt ?? null;
+  const endsAt = sessionEventWindow.value?.endsAt ?? null;
+
+  if (startsAt === null && endsAt === null) {
     return "Operations window not set";
   }
 
-  return `${formatTimestamp(
-    startsAt,
-    LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone,
-  )} to ${formatTimestamp(endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone)}`;
+  const from =
+    startsAt === null ? "Start not set" : formatTimestamp(startsAt, timeZone.value);
+  const to =
+    endsAt === null ? "end not set" : formatTimestamp(endsAt, timeZone.value);
+
+  return `${from} to ${to}`;
 });
 </script>
 
@@ -74,9 +97,7 @@ const operationsWindowLabel = computed(() => {
   <section class="home" aria-labelledby="home-heading">
     <header class="home__event-card">
       <div>
-        <h1 id="home-heading" class="home__heading">
-          {{ LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel }}
-        </h1>
+        <h1 id="home-heading" class="home__heading">{{ eventLabel }}</h1>
         <p class="home__lede">{{ workspaceLede }}</p>
         <dl class="home__event-details" aria-label="Event information">
           <div>
@@ -203,6 +224,11 @@ const operationsWindowLabel = computed(() => {
 
 .home__status[data-status="ended"] {
   border-color: var(--m-text-muted);
+}
+
+/* An event whose window this client has not been told about. */
+.home__status[data-status="unscheduled"] {
+  border-color: var(--m-status-neutral);
 }
 
 .home__section {

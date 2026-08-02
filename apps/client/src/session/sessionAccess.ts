@@ -158,6 +158,22 @@ export const sessionEventWindow = computed<SessionEventWindow | null>(() => {
 });
 
 /**
+ * The clock the context event keeps, falling back to UTC.
+ *
+ * An event's own time zone, not the device's. A shift that starts at 08:00 is
+ * 08:00 on site, and a lead reading their schedule on a phone that never left
+ * another time zone is owed the site's hour rather than their own. UTC is the
+ * fallback rather than the device zone for the same reason: it is visibly not a
+ * local time, so a reader can tell a missing answer from a wrong one.
+ */
+export const sessionEventTimeZone = computed<string>(() => {
+  const document = grantedDocument.value;
+  const event = document === null ? null : sessionContextEvent(document);
+
+  return event?.timezone ?? "UTC";
+});
+
+/**
  * The departments the user is associated with, in the order the server sent
  * them, each carrying what holds there.
  */

@@ -143,12 +143,31 @@ describe("department operations fixture isolation", () => {
   );
 
   /*
-   * The walker has to be able to fail, or the four assertions above are four
-   * assertions that a regex found nothing. `MeView` is a surface that still reads
-   * `department-ops/fixtures.ts` and is bound by its own later task, so it is the
-   * honest proof that a fixture import is visible from here.
+   * The walker has to be able to fail, or the assertions above are assertions
+   * that a regex found nothing.
+   *
+   * The control is synthetic rather than a real surface that still imports a
+   * fixture, because the whole direction of travel is that no such surface
+   * exists. It was `MeView` until that page was bound to the session, and
+   * pinning it to whichever module has not been rebound yet means the control
+   * evaporates exactly when the check starts mattering most.
    */
-  it("finds a fixture module where one is still imported", () => {
-    expect(fixtureTrails("/src/views/MeView.vue").length).toBeGreaterThan(0);
+  it("finds a fixture module through a chain of imports", () => {
+    const entry = "/src/views/__isolation-control__.vue";
+    const middle = "/src/views/__isolation-middle__.ts";
+
+    SOURCES[entry] = `import x from "@/views/__isolation-middle__";`;
+    SOURCES[middle] = `import y from "@/department-teams/fixtureControl";`;
+    SOURCES["/src/department-teams/fixtureControl.ts"] = "export default 1;";
+
+    try {
+      expect(fixtureTrails(entry)).toEqual([
+        `${entry} -> ${middle} -> /src/department-teams/fixtureControl.ts`,
+      ]);
+    } finally {
+      delete SOURCES[entry];
+      delete SOURCES[middle];
+      delete SOURCES["/src/department-teams/fixtureControl.ts"];
+    }
   });
 });

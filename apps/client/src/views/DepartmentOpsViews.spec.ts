@@ -682,7 +682,13 @@ describe("department operations surfaces", () => {
     const eventCard = wrapper.get(".home__event-card");
     expect(eventCard.find(".home__eyebrow").exists()).toBe(false);
     expect(eventCard.text()).not.toContain("Admin");
-    expect(eventCard.get(".home__status").text()).toBe("ongoing");
+    /*
+     * The badge follows the session's own event window now rather than the
+     * planning fixture's shift bounds (M18.9). This session's event carries no
+     * window, and an unknown window is reported as unknown instead of being
+     * guessed at.
+     */
+    expect(eventCard.get(".home__status").text()).toBe("unscheduled");
     expect(eventCard.text()).toContain("Operations");
     expect(eventCard.text()).toContain("Location");
     expect(eventCard.text()).toContain("Description");
@@ -712,15 +718,24 @@ describe("department operations surfaces", () => {
     expect(wrapper.get(".me__photo").attributes("aria-label")).toContain(
       "Local Field Author profile photo",
     );
-    expect(wrapper.text()).toContain("Years of service");
-    expect(wrapper.text()).toContain("Events worked");
+    /*
+     * Department, team, and role come from the session document now (M18.9).
+     * Years of service, handle, and presence are gone rather than rebound: none
+     * of the three has a read behind it, and the fixture's answers were
+     * arithmetic over invented shift dates. M18.20 builds the profile surface
+     * that carries them.
+     */
+    expect(wrapper.text()).toContain("Department");
+    expect(wrapper.text()).toContain("Role");
+    expect(wrapper.text()).not.toContain("Years of service");
     expect(wrapper.text()).toContain("My Field Reports");
     expect(
       wrapper
         .findAll(".me__links a")
         .some((link) => link.attributes("href") === "/staff/field-reports"),
     ).toBe(true);
-    expect(wrapper.text()).toContain("Schedule for ongoing event");
+    // This session's event carries no window, so the heading is the neutral one.
+    expect(wrapper.text()).toContain("Schedule for next event");
     expect(wrapper.get(".me__event").attributes("href")).toBe(overviewPath());
   });
 
