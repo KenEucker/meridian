@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import BrandMark from "@/branding/BrandMark.vue";
 import { findTeamBranding } from "@/branding/brandingProfile";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
-import {
-  attendanceStateLabel,
-  formatTimestamp,
-  lifecycleLabel,
-} from "@/department-ops/labels";
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { formatTimestamp, lifecycleLabel } from "@/department-ops/labels";
 import {
   resolveTeamOverview,
   type TeamOverviewModel,
@@ -18,11 +15,48 @@ import {
 const route = useRoute();
 const router = useRouter();
 
-const overview = computed<TeamOverviewModel | null>(() =>
-  resolveTeamOverview(
-    typeof route.params.teamId === "string" ? route.params.teamId : null,
-  ),
+/**
+ * The team's overview, as the node answered (M18.9).
+ *
+ * Three states rather than two, because a refusal and an unreachable node are
+ * different news: null with no error is "you may not open this team", and an
+ * error is "nobody could ask". The page used to have only the first, so a node
+ * it could not reach looked exactly like a permission it did not hold.
+ */
+const overview = ref<TeamOverviewModel | null>(null);
+const loadError = ref<string | null>(null);
+const loading = ref(false);
+
+const eventId = computed(() => String(route.params.eventId ?? ""));
+const departmentId = computed(() => String(route.params.departmentId ?? ""));
+const teamId = computed(() =>
+  typeof route.params.teamId === "string" ? route.params.teamId : null,
 );
+
+async function loadOverview(): Promise<void> {
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    overview.value = await resolveTeamOverview(
+      eventId.value,
+      departmentId.value,
+      teamId.value,
+    );
+  } catch (error) {
+    overview.value = null;
+    loadError.value = meridianErrorMessage(
+      error,
+      "Unable to read this team. Check the connection to this node and try again.",
+    );
+  } finally {
+    loading.value = false;
+  }
+}
+
+watch([eventId, departmentId, teamId], () => void loadOverview(), {
+  immediate: true,
+});
 /**
  * This team's own mark (BRAND-025). Null for a team that has uploaded none,
  * which BrandMark renders as a lettermark from the team name.
@@ -70,7 +104,14 @@ function onTeamChange(event: Event): void {
       />
     </template>
 
-    <p v-if="!overview" class="team-overview__restricted" role="status">
+    <p v-if="loadError" class="team-overview__error" role="alert">
+      {{ loadError }}
+      <button type="button" @click="loadOverview()">Try again</button>
+    </p>
+
+    <p v-else-if="loading && !overview" role="status">Reading this team.</p>
+
+    <p v-else-if="!overview" class="team-overview__restricted" role="status">
       Team Overview requires department lead or team lead authority for a team in
       this department.
     </p>
@@ -182,18 +223,6 @@ function onTeamChange(event: Event): void {
                 }}<template v-if="member.handle"> / @{{ member.handle }}</template>
               </span>
             </div>
-            <dl>
-              <div>
-                <dt>Current shift</dt>
-                <dd>
-                  {{
-                    member.attendanceState
-                      ? attendanceStateLabel(member.attendanceState)
-                      : "Not on an active shift"
-                  }}
-                </dd>
-              </div>
-            </dl>
           </li>
         </ul>
       </section>
@@ -357,6 +386,19 @@ function onTeamChange(event: Event): void {
   border-radius: 8px;
   background: var(--m-surface-raised);
   color: var(--m-text-secondary);
+}
+
+.team-overview__error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0;
+  padding: var(--m-space-4);
+  border: 1px solid var(--m-status-danger, #cc792f);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-status-danger, #cc792f);
 }
 
 .team-overview__links a:focus-visible {

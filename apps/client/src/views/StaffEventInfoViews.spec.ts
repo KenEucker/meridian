@@ -17,20 +17,6 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
-import {
-  FIXTURE_DPW_DEPARTMENT_ID,
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEFAULT_TEAM_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DIRT_TEAM_ID,
-  resetSelectedFixtureDepartment,
-  selectFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
-import {
-  clearDepartmentSelfAdminSession,
-  installDevelopmentDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
 import { getEventInfo } from "@/event-info/eventInfoModel";
 import { routes } from "@/router";
 import {
@@ -53,11 +39,11 @@ function buildRouter() {
 }
 
 function eventInfoPath(): string {
-  return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`;
+  return `/events/${SESSION_EVENT_ID}/info`;
 }
 
 function teamOverviewPath(departmentId: string, teamId: string): string {
-  return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${departmentId}/teams/${teamId}`;
+  return `/events/${SESSION_EVENT_ID}/departments/${departmentId}/teams/${teamId}`;
 }
 
 async function mountAt(component: unknown, path: string) {
@@ -128,7 +114,7 @@ function eventInfoPayload(
 
   return {
     event: {
-      id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+      id: SESSION_EVENT_ID,
       organization_id: "88888888-8888-4888-8888-888888888888",
       name: "Signal Camp 2026",
       slug: "signal-camp-2026",
@@ -268,8 +254,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearDepartmentSelfAdminSession();
-  resetSelectedFixtureDepartment();
   clearClientSession();
   resetSelectedSessionDepartment();
   configureMeridianApi(null);
@@ -412,33 +396,160 @@ describe("Staff Me role-aware event routing", () => {
   });
 });
 
+/*
+ * Team Overview reads the node now (M18.9; CLIENT-023).
+ *
+ * The authority under test is the `access` block on the teams read, which is the
+ * same answer the Admin surface is shaped by and the same one the commands
+ * enforce. It used to be a compiled-in list of who leads what, which is how a
+ * real department lead was refused a team in their own department.
+ */
 describe("team overview handoff", () => {
+  const DIRT_TEAM_ID = "019fc2e7-fbee-7328-a30e-354e37d15edd";
+  const DEFAULT_TEAM_ID = "019fc2e7-fbfa-71a4-91cb-bf3f9b086bc4";
+
+  function teamPayload(
+    id: string,
+    name: string,
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      id,
+      department_id: SESSION_DEPARTMENT_ID,
+      name,
+      code: name.toUpperCase(),
+      description: null,
+      is_default: id === DEFAULT_TEAM_ID,
+      archived_at: null,
+      created_at: "2026-01-01T00:00:00+00:00",
+      updated_at: "2026-01-01T00:00:00+00:00",
+      ...overrides,
+    };
+  }
+
+  function planningRow(
+    shiftId: string,
+    title: string,
+    lifecycle: string,
+  ): Record<string, unknown> {
+    return {
+      shift_id: shiftId,
+      title,
+      team_id: DIRT_TEAM_ID,
+      team_label: "Dirt",
+      starts_at: "2026-09-11T16:00:00+00:00",
+      ends_at: "2026-09-11T22:00:00+00:00",
+      lifecycle,
+      capacity: 4,
+      signed_up_or_assigned_count: 3,
+      checked_in_count: 2,
+      no_show_count: 0,
+      unscheduled_count: 0,
+      planned_hours: 24,
+      actual_hours: 4,
+      variance_hours: -20,
+      status_label: "Under target",
+    };
+  }
+
+  /**
+   * A node answering the two reads Team Overview makes.
+   *
+   * `access` is the whole subject here, so it is a parameter rather than a
+   * constant: each test is one shape of authority.
+   */
+  function stubTeamNode(access: Record<string, unknown>): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "http://node.test");
+        const body = url.pathname.includes("/teams")
+          ? {
+              department: {
+                id: SESSION_DEPARTMENT_ID,
+                organization_id: "org-northwood-collective",
+                name: "Rangers",
+                code: "RANGERS",
+                description: null,
+                default_team_id: DEFAULT_TEAM_ID,
+                archived_at: null,
+              },
+              access,
+              teams: [
+                teamPayload(DIRT_TEAM_ID, "Dirt"),
+                teamPayload(DEFAULT_TEAM_ID, "Rangers"),
+              ],
+              team_staff: [
+                {
+                  staff_id: "staff-vera",
+                  display_name: "Vera Staff",
+                  handle: "vera",
+                  team_id: DIRT_TEAM_ID,
+                  team_label: "Dirt",
+                  membership_role: "member",
+                  role_label: "Member",
+                },
+                {
+                  staff_id: "staff-other",
+                  display_name: "Other Team Member",
+                  handle: "other",
+                  team_id: DEFAULT_TEAM_ID,
+                  team_label: "Rangers",
+                  membership_role: "member",
+                  role_label: "Member",
+                },
+              ],
+              department_staff: [],
+            }
+          : {
+              context: {
+                event_id: SESSION_EVENT_ID,
+                event_label: "Emberfall 2026",
+                department_id: SESSION_DEPARTMENT_ID,
+                department_label: "Rangers",
+                time_zone: "America/Los_Angeles",
+                as_of: "2026-09-11T18:00:00+00:00",
+              },
+              access: {},
+              teams: [],
+              filters: { team_id: url.searchParams.get("team_id"), date: null },
+              rows: [
+                planningRow("shift-day", "Dirt Day Patrol", "active"),
+                planningRow("shift-swing", "Dirt Swing Patrol", "upcoming"),
+              ],
+            };
+
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+  }
+
   it("shows the led team's roster, shifts, and current staffing", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    stubTeamNode({ can_administer: true, can_view_led_teams: false, led_team_ids: [] });
 
     const { wrapper } = await mountAt(
       TeamOverviewView,
-      teamOverviewPath(FIXTURE_RANGERS_DEPARTMENT_ID, FIXTURE_RANGERS_DIRT_TEAM_ID),
+      teamOverviewPath(SESSION_DEPARTMENT_ID, DIRT_TEAM_ID),
     );
 
     expect(wrapper.get("#team-overview-heading").text()).toBe("Dirt");
-    expect(wrapper.text()).toContain("Ranger Dirt Day Shift");
-    expect(wrapper.text()).toContain("Ranger Dirt Swing Shift");
-    expect(wrapper.text()).toContain("Local Field Author");
+    expect(wrapper.text()).toContain("Dirt Day Patrol");
+    expect(wrapper.text()).toContain("Dirt Swing Patrol");
     expect(wrapper.text()).toContain("Vera Staff");
+    // The roster is this team's, not the department's.
+    expect(wrapper.text()).not.toContain("Other Team Member");
     expect(wrapper.text()).toContain("Checked in");
-    // The Command team's overnight shift belongs to another team.
-    expect(wrapper.text()).not.toContain("Ranger Command Overnight");
   });
 
   it("fails closed for a staff member without department or team lead authority", async () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    stubTeamNode({ can_administer: false, can_view_led_teams: false, led_team_ids: [] });
 
     const { wrapper } = await mountAt(
       TeamOverviewView,
-      teamOverviewPath(FIXTURE_GATE_DEPARTMENT_ID, FIXTURE_RANGERS_DIRT_TEAM_ID),
+      teamOverviewPath(SESSION_DEPARTMENT_ID, DIRT_TEAM_ID),
     );
 
     expect(wrapper.text()).toContain(
@@ -448,35 +559,58 @@ describe("team overview handoff", () => {
   });
 
   it("refuses a team the session does not lead instead of swapping in one it does", async () => {
-    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    stubTeamNode({
+      can_administer: false,
+      can_view_led_teams: true,
+      led_team_ids: [DEFAULT_TEAM_ID],
+    });
 
     const { wrapper } = await mountAt(
       TeamOverviewView,
-      teamOverviewPath(FIXTURE_DPW_DEPARTMENT_ID, FIXTURE_RANGERS_DIRT_TEAM_ID),
+      teamOverviewPath(SESSION_DEPARTMENT_ID, DIRT_TEAM_ID),
     );
 
     expect(wrapper.text()).toContain(
       "Team Overview requires department lead or team lead authority",
     );
-    expect(wrapper.text()).not.toContain("Bikes");
+    expect(wrapper.text()).not.toContain("Vera Staff");
   });
 
   it("lets a department lead switch between the department's teams", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    stubTeamNode({ can_administer: true, can_view_led_teams: false, led_team_ids: [] });
 
     const { router, wrapper } = await mountAt(
       TeamOverviewView,
-      teamOverviewPath(FIXTURE_RANGERS_DEPARTMENT_ID, FIXTURE_RANGERS_DIRT_TEAM_ID),
+      teamOverviewPath(SESSION_DEPARTMENT_ID, DIRT_TEAM_ID),
     );
 
-    await wrapper.get("select").setValue(FIXTURE_RANGERS_DEFAULT_TEAM_ID);
+    await wrapper.get("select").setValue(DEFAULT_TEAM_ID);
     await flushPromises();
 
-    expect(router.currentRoute.value.params.teamId).toBe(
-      FIXTURE_RANGERS_DEFAULT_TEAM_ID,
+    expect(router.currentRoute.value.params.teamId).toBe(DEFAULT_TEAM_ID);
+  });
+
+  /*
+   * An unreachable node is not a refusal. The page had only the refusal state,
+   * so a lead whose node was down was told they lacked authority they hold.
+   */
+  it("states an unreachable node rather than a missing permission", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
     );
+
+    const { wrapper } = await mountAt(
+      TeamOverviewView,
+      teamOverviewPath(SESSION_DEPARTMENT_ID, DIRT_TEAM_ID),
+    );
+
+    expect(wrapper.get(".team-overview__error").text()).toContain(
+      "Unable to read this team",
+    );
+    expect(wrapper.text()).not.toContain("requires department lead");
   });
 });
 
@@ -509,7 +643,7 @@ describe("event info document resolution", () => {
     const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
 
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      `http://node.test/api/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
+      `http://node.test/api/events/${SESSION_EVENT_ID}/info`,
     );
     expect(wrapper.text()).toContain("How to get to the event");
     expect(wrapper.text()).toContain("Getting To Signal Camp");
@@ -536,7 +670,7 @@ describe("event info document resolution", () => {
   it("keeps the section order the node sent", async () => {
     stubEventInfoNode(eventInfoPayload());
 
-    const view = await getEventInfo(LOCAL_DEPARTMENT_OPS_CONTEXT.eventId);
+    const view = await getEventInfo(SESSION_EVENT_ID);
 
     expect(view.sections.map((section) => section.section)).toEqual([
       "directions",
@@ -551,7 +685,7 @@ describe("event info document resolution", () => {
   it("does not widen visibility: a section the node left empty stays empty", async () => {
     stubEventInfoNode(eventInfoPayload());
 
-    const view = await getEventInfo(LOCAL_DEPARTMENT_OPS_CONTEXT.eventId);
+    const view = await getEventInfo(SESSION_EVENT_ID);
     const housing = view.sections.find(
       (section) => section.section === "housing",
     );
