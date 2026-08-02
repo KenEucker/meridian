@@ -2,7 +2,7 @@ import { createApp } from "vue";
 
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
-import { clearCachedLogisticsDesk } from "@/department-ops/logisticsDeskCache";
+import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
@@ -44,14 +44,14 @@ followSessionBranding();
 registerSessionContextReset((context) => {
   discardFieldReportsOutsideEvent(context.eventId);
   /*
-   * The Logistics Desk's stored department index goes whole rather than by
-   * event, because it is one department's roster and there is no version of it
-   * that belongs to the context being entered (M18.8; SLB-021, CLIENT-014). The
-   * same registry runs on sign-out and on a shared-workstation session end, which
-   * is what keeps a department's staff off a workstation the next person signs
-   * in to (technical spec 13.3).
+   * Every stored read goes, whole (M18.9; technical spec 9.3, CLIENT-014). The
+   * cache holds one user's authorized reads for one context, and there is no
+   * version of a department roster or a planning aggregate that belongs to the
+   * context being entered. The same registry runs on sign-out and on a
+   * shared-workstation session end, which is what keeps one person's department
+   * off the workstation the next person signs in to (technical spec 13.3).
    */
-  clearCachedLogisticsDesk();
+  clearReadCache();
 });
 
 /*

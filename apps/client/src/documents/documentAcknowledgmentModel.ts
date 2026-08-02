@@ -29,7 +29,7 @@
 
 import { computed } from "vue";
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import type { MeridianCommandType } from "@/outbox/commandCatalog";
 import { CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW } from "@/session/permissionCodes";
@@ -149,9 +149,9 @@ function toMyAcknowledgments(
 
 export async function getMyAcknowledgments(): Promise<MyAcknowledgments> {
   return toMyAcknowledgments(
-    await meridianJson<MyAcknowledgmentsPayload>(
+    (await meridianCachedJson<MyAcknowledgmentsPayload>(
       "/api/document-acknowledgments/me",
-    ),
+    )).data,
   );
 }
 
@@ -355,9 +355,9 @@ function toReviewedRequirement(
 export async function getAcknowledgmentReview(
   organizationId: string,
 ): Promise<AcknowledgmentReview> {
-  const payload = await meridianJson<ReviewPayload>(
+  const payload = (await meridianCachedJson<ReviewPayload>(
     `/api/organizations/${encodeURIComponent(organizationId)}/document-acknowledgments`,
-  );
+  )).data;
 
   return {
     organizationId: payload.organization_id ?? organizationId,

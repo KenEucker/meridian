@@ -13,7 +13,7 @@ import {
   logisticsStatePills,
   planningSummary,
   queueCheckIn,
-  readLogisticsDesk,
+  getLogisticsDesk,
   searchLogisticsDesk,
   setDepartmentPresence,
   type DepartmentOpsContext,
@@ -23,10 +23,7 @@ import {
   type LogisticsStaffWorkspace,
   type PlanningRow,
 } from "@/department-ops/departmentOpsReadModel";
-import {
-  clearCachedLogisticsDesk,
-  readCachedLogisticsDesk,
-} from "@/department-ops/logisticsDeskCache";
+import { LIVE_READ, clearReadCache, readCache } from "@/offline/readCache";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -104,6 +101,7 @@ function equipment(
 
 function desk(overrides: Partial<LogisticsDeskRead> = {}): LogisticsDeskRead {
   return {
+    freshness: LIVE_READ,
     context: CONTEXT,
     access: {
       isDepartmentLead: false,
@@ -550,11 +548,11 @@ describe("logistics desk offline index", () => {
   }
 
   beforeEach(() => {
-    clearCachedLogisticsDesk();
+    clearReadCache();
   });
 
   afterEach(() => {
-    clearCachedLogisticsDesk();
+    clearReadCache();
   });
 
   it("stores the node's answer and reports the desk as live", async () => {
@@ -566,17 +564,15 @@ describe("logistics desk offline index", () => {
         }),
     );
 
-    const snapshot = await readLogisticsDesk(
-      CONTEXT.eventId,
-      CONTEXT.departmentId,
-    );
+    const snapshot = await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
-    expect(snapshot.source).toBe("node");
-    expect(snapshot.cachedAt).toBeNull();
+    expect(snapshot.freshness.source).toBe("node");
+    expect(snapshot.freshness.cachedAt).toBeNull();
     expect(
-      readCachedLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId)?.desk
-        .searchableStaff,
-    ).toHaveLength(1);
+      readCache.read(
+        `/api/events/${CONTEXT.eventId}/departments/${CONTEXT.departmentId}/logistics`,
+      ),
+    ).not.toBeNull();
   });
 
   it("searches the stored index when the node cannot be reached", async () => {
@@ -587,20 +583,17 @@ describe("logistics desk offline index", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+    await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
     stubNode(async () => {
       throw new TypeError("Failed to fetch");
     });
 
-    const snapshot = await readLogisticsDesk(
-      CONTEXT.eventId,
-      CONTEXT.departmentId,
-    );
+    const snapshot = await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
-    expect(snapshot.source).toBe("cache");
-    expect(snapshot.cachedAt).not.toBeNull();
-    expect(searchLogisticsDesk(snapshot.desk, "vera")).toHaveLength(1);
+    expect(snapshot.freshness.source).toBe("cache");
+    expect(snapshot.freshness.cachedAt).not.toBeNull();
+    expect(searchLogisticsDesk(snapshot, "vera")).toHaveLength(1);
   });
 
   /*
@@ -617,14 +610,14 @@ describe("logistics desk offline index", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+    await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
     stubNode(async () => {
       throw new TypeError("Failed to fetch");
     });
 
     await expect(
-      readLogisticsDesk(CONTEXT.eventId, "department-gate"),
+      getLogisticsDesk(CONTEXT.eventId, "department-gate"),
     ).rejects.toThrow(/Failed to fetch/);
   });
 
@@ -640,7 +633,7 @@ describe("logistics desk offline index", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+    await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
     stubNode(
       async () =>
@@ -651,7 +644,7 @@ describe("logistics desk offline index", () => {
     );
 
     await expect(
-      readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+      getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
     ).rejects.toThrow(/unauthorized/);
   });
 
@@ -661,7 +654,7 @@ describe("logistics desk offline index", () => {
     });
 
     await expect(
-      readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+      getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
     ).rejects.toThrow(/Failed to fetch/);
   });
 
@@ -673,12 +666,14 @@ describe("logistics desk offline index", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+    await getLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
 
-    clearCachedLogisticsDesk();
+    clearReadCache();
 
     expect(
-      readCachedLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+      readCache.read(
+        `/api/events/${CONTEXT.eventId}/departments/${CONTEXT.departmentId}/logistics`,
+      ),
     ).toBeNull();
   });
 });

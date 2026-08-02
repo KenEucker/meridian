@@ -15,6 +15,7 @@ import { departmentSurfaceAttributes } from "@/branding/departmentSurfaceScope";
 import { applyDocumentTitle } from "@/branding/documentTitle";
 import { applyFavicon } from "@/branding/favicon";
 import OfflineBanner from "@/components/OfflineBanner.vue";
+import { servingStoredReads } from "@/offline/readCache";
 import {
   useCombinedNavigation,
   useShowStaffMenu,
@@ -985,6 +986,23 @@ onBeforeUnmount(() => {
       </div>
     </header>
     <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
+
+    <!--
+      What is on screen came out of this device's store rather than from the
+      node (M18.9; technical spec 9.3, UI contract 16.2).
+
+      Separate from the OfflineBanner above, which reports the device's network.
+      A device with a perfectly good network and an unreachable node is the case
+      that matters on an event site, and it looks online to the browser.
+    -->
+    <p
+      v-if="servingStoredReads"
+      class="app-shell__stored-reads"
+      role="status"
+    >
+      This node could not be reached. You are seeing data this device stored
+      earlier, and it may have moved on since.
+    </p>
     <!--
       Cached-permission state is not here. It lives on Settings, next to the
       other facts about this device's standing with its node, and the shell says

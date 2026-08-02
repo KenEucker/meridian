@@ -39,19 +39,23 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
-//  5. **The desk's index is the one read this device keeps** (M18.8; SLB-021).
-//     `readLogisticsDesk` stores each answer and opens on the stored one when
-//     the node cannot be reached, because department-scoped search has to work
-//     offline and search runs over the index rather than over the network. The
-//     other three reads have no such requirement and are not held: a lead's
-//     situational awareness and a planning aggregate are worth nothing stale,
-//     and an unreachable node is stated instead.
+//  5. **All four reads are held on the device** (M18.8, M18.9; SLB-021;
+//     technical spec 9.3). "The device should cache as much authorized data as
+//     possible. Offline data may be stale, but stale authorized data is better
+//     than no data." Section 9.3 then names these very payloads: the desk's
+//     staff, equipment, and shift indexes; the Overview's selected-shift
+//     summaries, assignments, and equipment; the deployment options and current
+//     assignments; the identity-free plan-versus-actual rows.
+//
+//     M18.8 held only the desk, on the grounds that SLB-021 named it and the
+//     other three were "worth nothing stale". That was wrong, and it is the
+//     reason a lead out of coverage got four pages of "check the connection to
+//     this node" instead of the department they were standing in. Each read now
+//     carries the freshness of what it returned, so a surface showing a stored
+//     copy says which copy it is showing.
 
-import { MeridianApiError, meridianJson } from "@/api/meridianApi";
-import {
-  readCachedLogisticsDesk,
-  writeCachedLogisticsDesk,
-} from "@/department-ops/logisticsDeskCache";
+import { meridianCachedJson } from "@/api/meridianApi";
+import type { ReadFreshness } from "@/offline/readCache";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
 import { clientSessionState } from "@/session/clientSession";
@@ -140,6 +144,8 @@ export interface DeploymentOption {
 }
 
 export interface DepartmentOverviewRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly shifts: readonly DepartmentOpsShift[];
@@ -267,6 +273,8 @@ export interface LogisticsEquipmentRow {
 }
 
 export interface LogisticsDeskRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly searchableStaff: readonly LogisticsStaffRow[];
@@ -286,6 +294,8 @@ export interface OperationsDeploymentRow {
 }
 
 export interface OperationsCenterRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly deployments: readonly DeploymentOption[];
@@ -323,6 +333,8 @@ export interface PlanningFilters {
 }
 
 export interface PlanningTableRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly teams: readonly PlanningTeamOption[];
@@ -412,7 +424,7 @@ export async function getDepartmentOverview(
   shiftId: string | null = null,
 ): Promise<DepartmentOverviewRead> {
   const query = shiftId === null ? "" : `?shift_id=${encodeURIComponent(shiftId)}`;
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly shifts?: ShiftPayload[];
       readonly selected_shift_id?: string | null;
@@ -439,8 +451,10 @@ export async function getDepartmentOverview(
       readonly on_site_count?: number;
     }
   >(base("overview", eventId, departmentId) + query);
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     shifts: (payload.shifts ?? []).map(toShift),
@@ -554,7 +568,7 @@ export async function getLogisticsDesk(
   eventId: string,
   departmentId: string,
 ): Promise<LogisticsDeskRead> {
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly searchable_staff?: {
         readonly staff_id: string;
@@ -576,6 +590,7 @@ export async function getLogisticsDesk(
       readonly staff_workspaces?: Record<string, WorkspacePayload>;
     }
   >(base("logistics", eventId, departmentId));
+  const payload = read.data;
 
   const workspaces: Record<string, LogisticsStaffWorkspace> = {};
 
@@ -626,6 +641,7 @@ export async function getLogisticsDesk(
   }
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     searchableStaff: (payload.searchable_staff ?? []).map((row) => ({
@@ -649,59 +665,12 @@ export async function getLogisticsDesk(
   };
 }
 
-/** Where a desk on screen came from (SLB-021). */
-export interface LogisticsDeskSnapshot {
-  readonly desk: LogisticsDeskRead;
-  readonly source: "node" | "cache";
-  /** When this device stored the copy, for a cached read; null for a live one. */
-  readonly cachedAt: string | null;
-}
-
-/**
- * Read the desk from the node, or from what this device last stored (SLB-021).
- *
- * The fallback turns on whether the node *answered*, not on whether the answer
- * was yes. A `MeridianApiError` carries a status, which means the node spoke: a
- * refusal, a revoked token, a department this user may no longer work. Serving a
- * stored index there would be a client re-granting access the node had just taken
- * away, which is the opposite of CLIENT-006 and CLIENT-010. Anything else — a
- * fetch that never completed — is the unreachable node SLB-021 is written for,
- * and the desk opens on the index this device is holding.
- *
- * A successful read replaces the stored copy, so the index a desk falls back to
- * is always the last one the node gave this device for this department.
- */
-export async function readLogisticsDesk(
-  eventId: string,
-  departmentId: string,
-): Promise<LogisticsDeskSnapshot> {
-  try {
-    const desk = await getLogisticsDesk(eventId, departmentId);
-
-    writeCachedLogisticsDesk(desk);
-
-    return { desk, source: "node", cachedAt: null };
-  } catch (error) {
-    if (error instanceof MeridianApiError) {
-      throw error;
-    }
-
-    const cached = readCachedLogisticsDesk(eventId, departmentId);
-
-    if (cached === null) {
-      throw error;
-    }
-
-    return { desk: cached.desk, source: "cache", cachedAt: cached.cachedAt };
-  }
-}
-
 /** The Operations Center's deployment module (SLB-009, SLB-010). */
 export async function getOperationsCenter(
   eventId: string,
   departmentId: string,
 ): Promise<OperationsCenterRead> {
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly deployments?: DeploymentPayload[];
       readonly rows?: {
@@ -716,8 +685,10 @@ export async function getOperationsCenter(
       readonly equipment_out_count?: number;
     }
   >(base("operations", eventId, departmentId));
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     deployments: (payload.deployments ?? []).map(toDeployment),
@@ -757,7 +728,7 @@ export async function getPlanningTable(
   }
 
   const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly teams?: { readonly team_id: string; readonly team_label: string }[];
       readonly filters?: {
@@ -784,8 +755,10 @@ export async function getPlanningTable(
       }[];
     }
   >(base("planning", eventId, departmentId) + suffix);
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     teams: (payload.teams ?? []).map((team) => ({

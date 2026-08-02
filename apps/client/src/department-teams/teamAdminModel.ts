@@ -27,7 +27,7 @@
 // closed set of offline-writable work (data/API 7.2), so a request made with no
 // node reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
 
 export type TeamMembershipRole = "member" | "lead";
 
@@ -259,9 +259,9 @@ function toAttributes(
 export async function getDepartmentTeamAdminWorkspace(
   departmentId: string,
 ): Promise<DepartmentTeamAdminWorkspace> {
-  const result = await meridianJson<TeamIndexPayload>(
+  const result = (await meridianCachedJson<TeamIndexPayload>(
     `/api/departments/${departmentId}/teams?status=all`,
-  );
+  )).data;
 
   return {
     department: result.department ? toDepartment(result.department) : null,
@@ -288,9 +288,9 @@ export async function getDepartmentTeam(
   departmentId: string,
   teamId: string,
 ): Promise<DepartmentTeamDetail> {
-  const result = await meridianJson<TeamPayload & { access?: TeamAccessPayload }>(
+  const result = (await meridianCachedJson<TeamPayload & { access?: TeamAccessPayload }>(
     `/api/departments/${departmentId}/teams/${teamId}`,
-  );
+  )).data;
 
   return {
     team: toTeam(result),

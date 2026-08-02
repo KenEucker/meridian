@@ -8,7 +8,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { clearCachedLogisticsDesk } from "@/department-ops/logisticsDeskCache";
+import { clearReadCache } from "@/offline/readCache";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -662,7 +662,7 @@ beforeEach(() => {
   // The desk's index is durable from M18.8, so it outlives a test unless a test
   // says otherwise. Cleared on both sides: a leftover index would let a test that
   // means to open on an unreachable node open on a roster instead.
-  clearCachedLogisticsDesk();
+  clearReadCache();
   installLocalFieldSession();
   selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
   stubDepartmentOpsNode();
@@ -672,7 +672,7 @@ afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
   commandOutbox.clear();
-  clearCachedLogisticsDesk();
+  clearReadCache();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
 });

@@ -42,7 +42,9 @@
 // of offline-writable work (data/API 7.2), so a request made with no node
 // reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianJson,
+  meridianCachedJson,
+} from "@/api/meridianApi";
 import {
   downloadThroughShortLivedUrl,
   shortLivedDownloadEndpoints,
@@ -377,11 +379,11 @@ export async function getOrganizationDocuments(
   }
 
   const query = parameters.toString();
-  const result = await meridianJson<DocumentIndexPayload>(
+  const result = (await meridianCachedJson<DocumentIndexPayload>(
     `/api/organizations/${encodeURIComponent(organizationId)}/documents${
       query === "" ? "" : `?${query}`
     }`,
-  );
+  )).data;
 
   const scopes = (result.access?.scopes ?? []).map((scope) => ({
     scopeType: scope.scope_type,
@@ -413,7 +415,7 @@ export async function getDocument(
   documentId: string,
 ): Promise<ProductDocument> {
   return toDocument(
-    await meridianJson<DocumentPayload>(documentPath(documentType, documentId)),
+    (await meridianCachedJson<DocumentPayload>(documentPath(documentType, documentId))).data,
   );
 }
 
@@ -422,9 +424,9 @@ export async function getDocumentFragment(
   fragmentId: string,
 ): Promise<ProductDocumentFragment> {
   return toFragment(
-    await meridianJson<FragmentPayload>(
+    (await meridianCachedJson<FragmentPayload>(
       `/api/document-fragments/${encodeURIComponent(fragmentId)}`,
-    ),
+    )).data,
   );
 }
 

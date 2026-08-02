@@ -30,8 +30,8 @@ import {
   logisticsStatePills,
   queueCheckIn,
   queueCheckOut,
+  getLogisticsDesk,
   queueMarkNoShow,
-  readLogisticsDesk,
   returnEquipment,
   searchLogisticsDesk,
   setDepartmentPresence,
@@ -258,14 +258,14 @@ async function loadDesk(): Promise<void> {
   loadError.value = null;
 
   try {
-    const snapshot = await readLogisticsDesk(eventId.value, departmentId.value);
+    const read = await getLogisticsDesk(eventId.value, departmentId.value);
 
-    desk.value = snapshot.desk;
-    deskCachedAt.value = snapshot.cachedAt;
+    desk.value = read;
+    deskCachedAt.value = read.freshness.cachedAt;
 
     if (
       selectedStaffId.value !== null &&
-      snapshot.desk.staffWorkspaces[selectedStaffId.value] === undefined
+      read.staffWorkspaces[selectedStaffId.value] === undefined
     ) {
       selectedStaffId.value = null;
     }

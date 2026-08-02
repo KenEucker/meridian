@@ -24,7 +24,7 @@
 
 import { computed } from "vue";
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { CAPABILITY_EVENT_CREDENTIALS_REVOKE } from "@/session/permissionCodes";
 import {
@@ -170,9 +170,9 @@ function toRow(payload: CredentialPayload): EventCredentialRow {
 export async function listEventCredentials(
   eventId: string,
 ): Promise<EventCredentialList> {
-  const payload = await meridianJson<CredentialListPayload>(
+  const payload = (await meridianCachedJson<CredentialListPayload>(
     `/api/events/${encodeURIComponent(eventId)}/credentials`,
-  );
+  )).data;
 
   return {
     eventId: payload.event_id ?? eventId,

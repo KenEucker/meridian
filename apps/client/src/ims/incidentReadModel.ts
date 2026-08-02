@@ -49,7 +49,7 @@
 
 import { computed, ref } from "vue";
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import {
   CAPABILITY_FIELD_REPORTS_VIEW_EVENT,
@@ -446,9 +446,9 @@ export async function getEventIncidents(
   }
 
   const suffix = search.toString();
-  const payload = await meridianJson<IncidentListPayload>(
+  const payload = (await meridianCachedJson<IncidentListPayload>(
     `/api/events/${encodeURIComponent(eventId)}/incidents${suffix === "" ? "" : `?${suffix}`}`,
-  );
+  )).data;
 
   return {
     eventId: payload.event_id ?? eventId,
@@ -498,9 +498,9 @@ export async function getEventIncident(
   eventId: string,
   incidentId: string,
 ): Promise<ImsIncident> {
-  const payload = await meridianJson<{ incident: IncidentPayload }>(
+  const payload = (await meridianCachedJson<{ incident: IncidentPayload }>(
     `/api/events/${encodeURIComponent(eventId)}/incidents/${encodeURIComponent(incidentId)}`,
-  );
+  )).data;
 
   return toIncident(payload.incident);
 }
@@ -509,9 +509,9 @@ export async function getEventIncident(
 export async function getEventFieldReports(
   eventId: string,
 ): Promise<ImsFieldReportListItem[]> {
-  const payload = await meridianJson<FieldReportListPayload>(
+  const payload = (await meridianCachedJson<FieldReportListPayload>(
     `/api/events/${encodeURIComponent(eventId)}/field-reports`,
-  );
+  )).data;
 
   return (payload.field_reports ?? []).map((report) => ({
     id: report.id,

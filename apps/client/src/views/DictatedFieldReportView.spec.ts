@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearReadCache } from "@/offline/readCache";
 import { flushPromises, mount } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
@@ -161,6 +162,13 @@ function buttonByText(wrapper: VueWrapper, text: string) {
 }
 
 beforeEach(async () => {
+  /*
+   * Reads are durable from M18.9 (technical spec 9.3), so a successful read in
+   * one case would be served to the next one from the store. Cleared between
+   * cases, and the unreachable-node cases below are about a device that is
+   * holding nothing.
+   */
+  clearReadCache();
   await resetFieldReportRuntime();
   clearFieldSession();
   clearClientSession();
