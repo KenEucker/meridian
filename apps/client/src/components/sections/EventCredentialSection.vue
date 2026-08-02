@@ -486,7 +486,7 @@ function confirmLede(row: EventCredentialRow): string {
   padding: 0 var(--m-space-4);
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
-  background: var(--m-surface-default);
+  background: var(--m-surface-base);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -509,7 +509,7 @@ function confirmLede(row: EventCredentialRow): string {
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
-  background: var(--m-surface-default);
+  background: var(--m-surface-base);
 }
 
 .credential-admin__confirm-lede {
