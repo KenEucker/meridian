@@ -86,11 +86,12 @@ export type NavigationSection = {
  * Calibrated one item above the fullest role a session carries — a department
  * lead holding every department capability — so the person with the most to
  * reach still reads one list. It moved from ten to eleven when the shift board
- * joined the personal pages (M18.2), and from eleven to twelve when
- * acknowledgments did (M18.6), each time for the same reason: that lead gained
- * a page rather than gaining a reason to hunt through two menus.
+ * joined the personal pages (M18.2), from eleven to twelve when acknowledgments
+ * did (M18.6), and from twelve to thirteen when the document library did
+ * (M18.7), each time for the same reason: that lead gained a page rather than
+ * gaining a reason to hunt through two menus.
  */
-export const COMBINED_NAVIGATION_MAX_ITEMS = 12;
+export const COMBINED_NAVIGATION_MAX_ITEMS = 13;
 
 /**
  * The event the interface is currently working in, or null when the session
@@ -262,10 +263,10 @@ function imsDirectoryLinks(
  * Me is always here for a signed-in user, and Event Info and the shift board sit
  * next to it whenever the session resolved an event. My Field Reports belongs
  * here too: authoring a Field Report is something a person does, not something a
- * department workflow owns, and every role can do it. Leads stop there, because
- * their Documents and Trainings pages are reached from inside the Admin and
- * Planning workflows they already work out of; members get those pages here,
- * since they have no workflow to reach them from.
+ * department workflow owns, and every role can do it. So is reading a policy, so
+ * the document library is here for everybody. Leads stop there, because their
+ * Trainings page is reached from inside the Planning workflow they already work
+ * out of; members get it here, since they have no workflow to reach it from.
  */
 export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   const eventContext = useEventContext();
@@ -335,6 +336,22 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
         description: "Documents you were asked to read, and the version you accepted.",
         to: { name: "staff.documents.acknowledgments" },
       },
+      /*
+       * The document library (M18.7; POL-006, POL-008 through POL-012). This is
+       * where a member's Documents entry now leads, and it is here for everybody
+       * rather than only for members without an Admin workflow: a policy is
+       * published to a person, so reading one is personal work even for the lead
+       * who maintains a different one. The department library it replaced could
+       * only show one department's documents at a time, from inside the surface
+       * for maintaining them; leads still reach that library from Admin, where
+       * authoring lives.
+       */
+      {
+        label: "Documents",
+        pageLabel: "Policies & Procedures",
+        description: "Policies and procedures published to you.",
+        to: { name: "staff.documents.index" },
+      },
     );
 
     if (
@@ -346,18 +363,11 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       return links;
     }
 
-    links.push(
-      {
-        label: "Documents",
-        description: "Policies and procedures published to your department.",
-        to: { name: "events.departments.documents.index", params },
-      },
-      {
-        label: "Trainings",
-        description: "Department training schedule, signup, and completion.",
-        to: { name: "events.departments.trainings.index", params },
-      },
-    );
+    links.push({
+      label: "Trainings",
+      description: "Department training schedule, signup, and completion.",
+      to: { name: "events.departments.trainings.index", params },
+    });
 
     return links;
   });

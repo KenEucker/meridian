@@ -612,7 +612,7 @@ describe("AppShell menu behavior", () => {
     });
 
     // The Rangers department lead holds every department capability the seeded
-    // session carries, and still lands under the combine threshold at eleven
+    // session carries, and still lands under the combine threshold at twelve
     // items.
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
@@ -625,6 +625,9 @@ describe("AppShell menu behavior", () => {
       "Shifts",
       "My Field Reports",
       "Acknowledgments",
+      // M18.7: the document library is personal too, so the lead who maintains
+      // one department's documents still reads the ones published to them here.
+      "Documents",
       "Overview",
       "Planning",
       "Logistics",

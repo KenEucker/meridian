@@ -433,10 +433,16 @@ documented order, each carrying the published documents the caller may see or an
 organization and nothing more. Assembly rules are in 11.4A.
 
 The document library read (`GET /api/organizations/{organization}/documents`) is
-the one read the policy, procedure, and fragment surfaces render from. It
-returns the documents the caller may see — published within their scopes, plus
-anything they maintain — narrowed by an optional `?state=` filter (`all`,
-`draft`, `published`, `archived`), and the fragments they may maintain. It also
+the one read the policy, procedure, and fragment surfaces render from, the staff
+reading library of 12.3 included. It returns the documents the caller may see —
+published within their scopes, plus anything they maintain — narrowed by an
+optional `?state=` filter (`all`, `draft`, `published`, `archived`) and an
+optional `?q=` title search, and the fragments they may maintain. Both filters
+are applied after the visibility decision and never before it, which is what
+POL-055 asks for by qualifying searchability with visibility permissions: a
+title in a scope the caller is outside stays absent from a search that names it,
+rather than becoming a way to learn that the document exists. The search matches
+titles only, per 11.12. It also
 carries the two answers an authoring form needs before there is any document to
 read them off: `access.scopes` lists the organization, department, and team
 scopes the caller may maintain in, ordered by scope breadth then name, and
@@ -3850,6 +3856,12 @@ Alpha 1 supports title search only.
 Full-text search within policy/procedure document bodies or fragments is not required.
 
 PostgreSQL full-text search is not required for this feature in Alpha 1.
+
+Search is the `?q=` parameter on the document library read (section 5.1), applied
+after the caller's visibility has been decided. It is case-insensitive and
+matches a substring of the title, because somebody looking a policy up types part
+of what they remember of its name. An empty term is not a filter and returns the
+whole visible library.
 
 ### 11.13 PowerSync Rules for Policies/Procedures
 

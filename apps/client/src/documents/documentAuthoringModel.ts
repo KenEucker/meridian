@@ -354,18 +354,33 @@ function documentPath(documentType: DocumentType, id: string): string {
 /**
  * Read the whole document surface for one organization.
  *
- * The state filter goes to the node rather than narrowing what came back: the
- * list is the answer to the question that was asked, not a view of a wider one.
- * Which documents a caller may see at all — published in their scopes, plus
- * anything they maintain — is the node's decision and not a case handled here.
+ * The state filter and the title search both go to the node rather than
+ * narrowing what came back: the list is the answer to the question that was
+ * asked, not a view of a wider one. Which documents a caller may see at all —
+ * published in their scopes, plus anything they maintain — is the node's
+ * decision and not a case handled here, and searching a list the browser holds
+ * would only search the part of it that happened to arrive (POL-055).
  */
 export async function getOrganizationDocuments(
   organizationId: string,
   state: DocumentStateFilter = "all",
+  search = "",
 ): Promise<DocumentLibrary> {
-  const query = state === "all" ? "" : `?state=${state}`;
+  const parameters = new URLSearchParams();
+
+  if (state !== "all") {
+    parameters.set("state", state);
+  }
+
+  if (search !== "") {
+    parameters.set("q", search);
+  }
+
+  const query = parameters.toString();
   const result = await meridianJson<DocumentIndexPayload>(
-    `/api/organizations/${encodeURIComponent(organizationId)}/documents${query}`,
+    `/api/organizations/${encodeURIComponent(organizationId)}/documents${
+      query === "" ? "" : `?${query}`
+    }`,
   );
 
   const scopes = (result.access?.scopes ?? []).map((scope) => ({

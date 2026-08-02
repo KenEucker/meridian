@@ -183,6 +183,92 @@ class DocumentProductHttpTest extends TestCase
             ->assertJsonPath('documents.0.title', 'Published Department Procedure');
     }
 
+    public function test_title_search_narrows_the_library_and_never_widens_visibility(): void
+    {
+        // POL-055 with its qualifier attached: searchable *according to
+        // visibility permissions*. The search runs after the visibility filter,
+        // so a matching title in a department this member does not belong to
+        // stays absent — a search that could surface it would make the search
+        // box a way to learn which documents exist (M18.7).
+        [$department, $actor] = $this->departmentWithRole('staff');
+        $otherDepartment = Department::factory()
+            ->for($department->organization)
+            ->create(['name' => 'Gate', 'code' => 'GATE']);
+
+        ProcedureDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Radio Procedure',
+        ]);
+        PolicyDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => PolicyDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Volunteer Conduct',
+        ]);
+        PolicyDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => PolicyDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $otherDepartment->id,
+            'title' => 'Radio Policy For Gate',
+        ]);
+
+        // Case-insensitive and a substring, because somebody looking a policy up
+        // types part of what they remember of its name (11.12: titles only).
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents?q=radio")
+            ->assertOk()
+            ->assertJsonCount(1, 'documents')
+            ->assertJsonPath('documents.0.title', 'Radio Procedure');
+
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents?q=conduct")
+            ->assertOk()
+            ->assertJsonCount(1, 'documents')
+            ->assertJsonPath('documents.0.title', 'Volunteer Conduct');
+
+        // An empty term is not a filter, so it is the whole visible library
+        // rather than nothing at all.
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents?q=")
+            ->assertOk()
+            ->assertJsonCount(2, 'documents');
+    }
+
+    public function test_published_filter_leaves_a_draft_off_the_reading_library_even_for_its_maintainer(): void
+    {
+        // What `staff.documents` asks for (M18.7). The reading surface is
+        // published documents, so a maintainer opening it reads what everybody
+        // else reads rather than finding their own unfinished draft filed among
+        // the policies; the authoring library is where a draft belongs
+        // (POL-004, POL-006). For everybody else the node had already refused
+        // it, which the staff-visibility test above covers.
+        [$department, $actor] = $this->departmentWithRole('department_lead');
+
+        ProcedureDocument::factory()->for($department->organization)->published()->create([
+            'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Published Department Procedure',
+        ]);
+        ProcedureDocument::factory()->for($department->organization)->create([
+            'scope_type' => ProcedureDocument::SCOPE_DEPARTMENT,
+            'scope_id' => $department->id,
+            'title' => 'Draft Department Procedure',
+        ]);
+
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents?state=published")
+            ->assertOk()
+            ->assertJsonCount(1, 'documents')
+            ->assertJsonPath('documents.0.title', 'Published Department Procedure');
+
+        // The same caller, asking the authoring library's question, still has
+        // the draft. Nothing about visibility changed; the surface asked a
+        // different question.
+        $this->actingAsClient($actor)
+            ->getJson("/api/organizations/{$department->organization_id}/documents")
+            ->assertOk()
+            ->assertJsonCount(2, 'documents');
+    }
+
     public function test_document_index_states_the_scopes_the_caller_may_maintain(): void
     {
         [$organization, $organizer] = $this->organizationWithRole('organizer');

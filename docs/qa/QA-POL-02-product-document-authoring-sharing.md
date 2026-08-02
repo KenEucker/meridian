@@ -2,17 +2,18 @@
 
 ## Purpose
 
-Verify the M11.15 product path for policy, procedure, and fragment maintainer work in Meridian Admin, outside Orchid/God Mode.
+Verify the M11.15 product path for policy, procedure, and fragment maintainer work in Meridian Admin, outside Orchid/God Mode, and the M18.7 staff reading library those documents are published to.
 
 ## Requirements covered
 
 - `POL-001` through `POL-047`
+- `POL-055`: staff search policies and procedures within their own visibility
 - `CLIENT-023`, `CLIENT-019`, `CLIENT-020`: the surfaces read and write through their endpoints, and exports go through short-lived download URLs
 - Requirements sections 3.8, 3.15, and 7.10
 - Technical spec section 21
-- Data/API spec sections 11.1 through 11.7, 11.4A, and 5.7
+- Data/API spec sections 11.1 through 11.7, 11.4A, 11.12, and 5.7
 - UI implementation contract sections 12.3, 12.4, 12.6, and 17.3
-- Meridian Alpha 1 tasks M11.15 and M16.19
+- Meridian Alpha 1 tasks M11.15, M16.19, and M18.7
 
 ## Environment
 
@@ -61,8 +62,16 @@ Verify the M11.15 product path for policy, procedure, and fragment maintainer wo
 18. Confirm only published visible documents are listed, fragment maintenance is hidden, and New Policy/New Procedure/New Fragment actions are not shown.
 19. Find a published document this persona can read but not maintain and confirm the row offers no Edit, Publish, or Archive control.
 20. Attempt direct navigation to a maintainer create/edit URL as staff-only and confirm the page fails closed without the form.
-21. Stop the node, reload the document library, and attempt an edit. Restart the node and use the retry control.
-22. Keyboard through the list, filters, editor fields, save, the publish/archive reason prompt, and export/share controls. Confirm focus is visible, labels are clear, and state/visibility are not color-only.
+21. Still as the Gate staff-only persona, open **Policies & Procedures** from the Staff menu and confirm it is reached without entering any department.
+22. Confirm the library lists every published document visible to this persona across their departments and the organization, and that the draft created earlier is absent.
+23. With the network panel open, confirm the list read is `GET /api/organizations/{organization}/documents?state=published`.
+24. Search for part of a document title. Confirm the term appears in the page URL, that the client re-requests the list with `q=` rather than filtering the list it already holds, and that clearing the search restores the full library.
+25. Search for part of a title that exists only in a department this persona does not belong to. Confirm no result is returned and that the document's existence is not disclosed.
+26. Open a document from the list. Confirm the page renders the server's HTML with fragment text inline, no `{{fragment:...}}` token, and scope, version, state, published date, and visibility summary below the text.
+27. Copy the document address, then open it as a persona without visibility of that document. Confirm the page shows the server's refusal rather than an empty document.
+28. As the department lead persona, open **Policies & Procedures** and confirm their own unpublished draft is not listed there while it is still listed in the department Documents library.
+29. Stop the node, reload the document library, and attempt an edit. Restart the node and use the retry control.
+30. Keyboard through the list, search, filters, editor fields, save, the publish/archive reason prompt, and export/share controls. Confirm focus is visible, labels are clear, and state/visibility are not color-only.
 
 ## Expected results
 
@@ -75,6 +84,9 @@ Verify the M11.15 product path for policy, procedure, and fragment maintainer wo
 - Every list column — state, scope, version, Event Info placement, visibility summary — is the server's own wording rather than a label the client keeps.
 - Export/share entry points are present only for permitted maintainers. An export is fetched by requesting a short-lived URL and then navigating to it, the link carries no bearer token, and the file includes required metadata and resolved fragment text.
 - Fragment edits show published reference impact before save and produce expected version bump behavior.
+- The staff Policies & Procedures library is reachable without entering a department, shows published documents from every scope the reader belongs to, and never shows a draft — including to the maintainer who wrote it.
+- Search is sent to the server with the term in the URL, matches titles only, and never returns or discloses a document outside the reader's visibility.
+- A document address opened by somebody without visibility of it shows the server's refusal rather than an empty page.
 - With the node unreachable, the library states that it could not be loaded and offers a retry, and no edit is queued or reported as saved. Document authoring is connected-only work.
 
 ## Evidence to capture
@@ -83,6 +95,8 @@ Verify the M11.15 product path for policy, procedure, and fragment maintainer wo
 - Screenshot of policy editor showing preview, visibility review, and export/share entry points.
 - Screenshot of department/team-scoped authoring.
 - Screenshot of staff-only restricted/no-maintainer state.
+- Screenshot of the staff Policies & Procedures library and of one rendered document.
+- Network trace of one search showing the `q=` request rather than a browser-side filter.
 - Exported Markdown sample showing metadata and inline fragment text.
 - Network trace of one export showing the download-url request followed by the navigation, with no credential in the issued link.
 - Screenshot of the document library with the node unreachable, showing the stated failure and the retry control.
@@ -95,3 +109,4 @@ Verify the M11.15 product path for policy, procedure, and fragment maintainer wo
 - If an export link carries a bearer token, or the client fetches the file without first asking for a short-lived URL, stop testing and file a blocking `CLIENT-019` issue.
 - If the library renders documents while the node is unreachable, or reports a save that never reached it, stop testing and file a blocking M16.19 issue.
 - If a row offers Edit, Publish, or Archive on a document the server refuses to update, file a `CLIENT-006` issue: the row must offer what the command would accept.
+- If a search returns, names, or otherwise discloses a document the reader has no visibility of, stop testing and file a blocking `POL-055` issue.

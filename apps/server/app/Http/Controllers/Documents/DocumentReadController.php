@@ -13,6 +13,7 @@ use App\Services\Documents\DocumentProductAccess;
 use App\Services\Documents\DocumentRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 final class DocumentReadController extends Controller
 {
@@ -32,17 +33,33 @@ final class DocumentReadController extends Controller
             return response()->json(['message' => 'State filter must be all, draft, published, or archived.'], 422);
         }
 
+        /*
+         * Title search (M18.7; POL-055; 11.12).
+         *
+         * Applied after the visibility filter and never before it, which is the
+         * whole of what POL-055 asks: search narrows what this caller may
+         * already see, so a title nobody showed them stays unfindable rather
+         * than becoming a way to learn that it exists.
+         *
+         * Titles only. 11.12 is explicit that Alpha 1 searches titles and that
+         * full-text search of document bodies and fragments is not required, so
+         * this matches what a reader is looking a document up by.
+         */
+        $search = trim((string) $request->query('q', ''));
+
         $policyDocuments = $this->visibleDocuments(
             PolicyDocument::query()->where('organization_id', $organization->id)->get(),
             $user,
             $access,
             $state,
+            $search,
         );
         $procedureDocuments = $this->visibleDocuments(
             ProcedureDocument::query()->where('organization_id', $organization->id)->get(),
             $user,
             $access,
             $state,
+            $search,
         );
         $fragments = DocumentFragment::query()
             ->where('organization_id', $organization->id)
@@ -136,11 +153,18 @@ final class DocumentReadController extends Controller
      * @param  \Illuminate\Support\Collection<int, PolicyDocument|ProcedureDocument>  $documents
      * @return \Illuminate\Support\Collection<int, PolicyDocument|ProcedureDocument>
      */
-    private function visibleDocuments($documents, $user, DocumentProductAccess $access, string $state)
-    {
+    private function visibleDocuments(
+        $documents,
+        $user,
+        DocumentProductAccess $access,
+        string $state,
+        string $search = '',
+    ) {
         return $documents
             ->filter(fn (PolicyDocument|ProcedureDocument $document): bool => $access->canViewDocument($user, $document))
             ->filter(fn (PolicyDocument|ProcedureDocument $document): bool => $state === 'all' || $document->state === $state)
+            ->filter(fn (PolicyDocument|ProcedureDocument $document): bool => $search === ''
+                || Str::contains($document->title, $search, ignoreCase: true))
             ->values();
     }
 }

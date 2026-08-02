@@ -189,6 +189,20 @@ describe("navigation without a permitting capability", () => {
     expect(sectionLabels("Device")).toEqual(["Readiness", "Health"]);
   });
 
+  it("sends the personal Documents entry to the staff library rather than to a department", () => {
+    // M18.7: which documents reach somebody is answered from their own
+    // memberships, so the entry is neither department-scoped nor conditional on
+    // holding a department with teams — the same reason the shift board is not.
+    install(sessionWith({ capabilities: ["department.administer"] }));
+
+    const documents = useStaffLinks().value.find(
+      (link) => link.label === "Documents",
+    );
+
+    expect(documents?.to.name).toBe("staff.documents.index");
+    expect(documents?.to.params).toBeUndefined();
+  });
+
   it.each([
     ["department.schedule.manage", "Planning"],
     ["department.attendance.manage", "Logistics"],
