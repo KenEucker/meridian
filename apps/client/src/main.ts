@@ -2,6 +2,7 @@ import { createApp } from "vue";
 
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
+import { clearCachedLogisticsDesk } from "@/department-ops/logisticsDeskCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
@@ -42,6 +43,15 @@ followSessionBranding();
  */
 registerSessionContextReset((context) => {
   discardFieldReportsOutsideEvent(context.eventId);
+  /*
+   * The Logistics Desk's stored department index goes whole rather than by
+   * event, because it is one department's roster and there is no version of it
+   * that belongs to the context being entered (M18.8; SLB-021, CLIENT-014). The
+   * same registry runs on sign-out and on a shared-workstation session end, which
+   * is what keeps a department's staff off a workstation the next person signs
+   * in to (technical spec 13.3).
+   */
+  clearCachedLogisticsDesk();
 });
 
 /*

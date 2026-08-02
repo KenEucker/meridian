@@ -39,8 +39,19 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
+//  5. **The desk's index is the one read this device keeps** (M18.8; SLB-021).
+//     `readLogisticsDesk` stores each answer and opens on the stored one when
+//     the node cannot be reached, because department-scoped search has to work
+//     offline and search runs over the index rather than over the network. The
+//     other three reads have no such requirement and are not held: a lead's
+//     situational awareness and a planning aggregate are worth nothing stale,
+//     and an unreachable node is stated instead.
 
-import { meridianJson } from "@/api/meridianApi";
+import { MeridianApiError, meridianJson } from "@/api/meridianApi";
+import {
+  readCachedLogisticsDesk,
+  writeCachedLogisticsDesk,
+} from "@/department-ops/logisticsDeskCache";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
 import { clientSessionState } from "@/session/clientSession";
@@ -636,6 +647,53 @@ export async function getLogisticsDesk(
     searchableShifts: (payload.searchable_shifts ?? []).map(toShift),
     staffWorkspaces: workspaces,
   };
+}
+
+/** Where a desk on screen came from (SLB-021). */
+export interface LogisticsDeskSnapshot {
+  readonly desk: LogisticsDeskRead;
+  readonly source: "node" | "cache";
+  /** When this device stored the copy, for a cached read; null for a live one. */
+  readonly cachedAt: string | null;
+}
+
+/**
+ * Read the desk from the node, or from what this device last stored (SLB-021).
+ *
+ * The fallback turns on whether the node *answered*, not on whether the answer
+ * was yes. A `MeridianApiError` carries a status, which means the node spoke: a
+ * refusal, a revoked token, a department this user may no longer work. Serving a
+ * stored index there would be a client re-granting access the node had just taken
+ * away, which is the opposite of CLIENT-006 and CLIENT-010. Anything else — a
+ * fetch that never completed — is the unreachable node SLB-021 is written for,
+ * and the desk opens on the index this device is holding.
+ *
+ * A successful read replaces the stored copy, so the index a desk falls back to
+ * is always the last one the node gave this device for this department.
+ */
+export async function readLogisticsDesk(
+  eventId: string,
+  departmentId: string,
+): Promise<LogisticsDeskSnapshot> {
+  try {
+    const desk = await getLogisticsDesk(eventId, departmentId);
+
+    writeCachedLogisticsDesk(desk);
+
+    return { desk, source: "node", cachedAt: null };
+  } catch (error) {
+    if (error instanceof MeridianApiError) {
+      throw error;
+    }
+
+    const cached = readCachedLogisticsDesk(eventId, departmentId);
+
+    if (cached === null) {
+      throw error;
+    }
+
+    return { desk: cached.desk, source: "cache", cachedAt: cached.cachedAt };
+  }
 }
 
 /** The Operations Center's deployment module (SLB-009, SLB-010). */

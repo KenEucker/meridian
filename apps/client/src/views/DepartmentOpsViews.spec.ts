@@ -6,6 +6,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
 import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
+import { clearCachedLogisticsDesk } from "@/department-ops/logisticsDeskCache";
 import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
@@ -644,6 +645,10 @@ beforeEach(() => {
   heldCommand = null;
   ariHoldsEquipment = false;
   commandOutbox.clear();
+  // The desk's index is durable from M18.8, so it outlives a test unless a test
+  // says otherwise. Cleared on both sides: a leftover index would let a test that
+  // means to open on an unreachable node open on a roster instead.
+  clearCachedLogisticsDesk();
   installLocalFieldSession();
   selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
   stubDepartmentOpsNode();
@@ -653,6 +658,7 @@ afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
   commandOutbox.clear();
+  clearCachedLogisticsDesk();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
 });
@@ -1380,5 +1386,66 @@ describe("department operations surfaces", () => {
       "Unable to load this department's logistics desk",
     );
     expect(wrapper.find(".logistics__on-shift-list").exists()).toBe(false);
+  });
+
+  /*
+   * SLB-021's offline half (M18.8). The desk that has read its department once
+   * opens on that index with the node unreachable, searches it, and says it is
+   * doing so — a desk out of coverage that could look nobody up is a service
+   * station that has stopped serving.
+   */
+  it("searches the stored department index when the node is unreachable", async () => {
+    await mountAt(logisticsPath());
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    expect(wrapper.find(".logistics__error").exists()).toBe(false);
+
+    const scope = wrapper.get(".logistics__cache");
+    expect(scope.attributes("data-source")).toBe("cache");
+    expect(scope.text()).toContain("This node could not be reached");
+    expect(scope.text()).toContain("the copy this device stored");
+
+    await openWorkspace(wrapper, "Vera Staff");
+
+    expect(wrapper.get(".logistics__workspace").text()).toContain("Vera Staff");
+  });
+
+  it("says the desk is live when the node answered", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const scope = wrapper.get(".logistics__cache");
+    expect(scope.attributes("data-source")).toBe("node");
+    expect(scope.text()).not.toContain("This node could not be reached");
+  });
+
+  /*
+   * A refusal is not unreachability. The desk that is told no shows the node's
+   * sentence rather than reopening the roster it happens to be holding
+   * (CLIENT-006, CLIENT-010).
+   */
+  it("shows a refusal rather than the stored index when the node answers no", async () => {
+    await mountAt(logisticsPath());
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({ message: "You may no longer work this department." }, 403),
+      ),
+    );
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    expect(wrapper.get(".logistics__error").text()).toContain(
+      "You may no longer work this department.",
+    );
+    expect(wrapper.find(".logistics__cache").exists()).toBe(false);
   });
 });

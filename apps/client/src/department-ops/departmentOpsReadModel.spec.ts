@@ -13,6 +13,7 @@ import {
   logisticsStatePills,
   planningSummary,
   queueCheckIn,
+  readLogisticsDesk,
   searchLogisticsDesk,
   setDepartmentPresence,
   type DepartmentOpsContext,
@@ -22,6 +23,10 @@ import {
   type LogisticsStaffWorkspace,
   type PlanningRow,
 } from "@/department-ops/departmentOpsReadModel";
+import {
+  clearCachedLogisticsDesk,
+  readCachedLogisticsDesk,
+} from "@/department-ops/logisticsDeskCache";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -501,6 +506,180 @@ describe("planning table presentation", () => {
     expect(requested).toContain("team_id=team-command");
     expect(requested).toContain("date=2027-07-04");
     expect(table.filters).toEqual({ teamId: "team-command", date: "2027-07-04" });
+  });
+});
+
+/**
+ * SLB-021's offline half: the desk searches the index it stored when the node
+ * cannot be reached, and does not when the node answered (M18.8).
+ */
+describe("logistics desk offline index", () => {
+  function logisticsPayload(): unknown {
+    return {
+      context: {
+        event_id: CONTEXT.eventId,
+        event_label: CONTEXT.eventLabel,
+        department_id: CONTEXT.departmentId,
+        department_label: CONTEXT.departmentLabel,
+        time_zone: CONTEXT.timeZone,
+        as_of: CONTEXT.asOf,
+      },
+      access: { can_manage_attendance: true },
+      searchable_staff: [
+        {
+          staff_id: "staff-1",
+          display_name: "Vera Staff",
+          handle: "vera",
+          team_label: "Dirt",
+          presence_state: "on_site",
+        },
+      ],
+      searchable_equipment: [],
+      searchable_shifts: [],
+      staff_workspaces: {},
+    };
+  }
+
+  function stubNode(respond: () => Promise<Response>): void {
+    configureMeridianApi({
+      baseUrl: "http://node.test",
+      bearerToken: "device-token",
+    });
+
+    vi.stubGlobal("fetch", vi.fn(respond));
+  }
+
+  beforeEach(() => {
+    clearCachedLogisticsDesk();
+  });
+
+  afterEach(() => {
+    clearCachedLogisticsDesk();
+  });
+
+  it("stores the node's answer and reports the desk as live", async () => {
+    stubNode(
+      async () =>
+        new Response(JSON.stringify(logisticsPayload()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    const snapshot = await readLogisticsDesk(
+      CONTEXT.eventId,
+      CONTEXT.departmentId,
+    );
+
+    expect(snapshot.source).toBe("node");
+    expect(snapshot.cachedAt).toBeNull();
+    expect(
+      readCachedLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId)?.desk
+        .searchableStaff,
+    ).toHaveLength(1);
+  });
+
+  it("searches the stored index when the node cannot be reached", async () => {
+    stubNode(
+      async () =>
+        new Response(JSON.stringify(logisticsPayload()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+
+    stubNode(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    const snapshot = await readLogisticsDesk(
+      CONTEXT.eventId,
+      CONTEXT.departmentId,
+    );
+
+    expect(snapshot.source).toBe("cache");
+    expect(snapshot.cachedAt).not.toBeNull();
+    expect(searchLogisticsDesk(snapshot.desk, "vera")).toHaveLength(1);
+  });
+
+  /*
+   * The department is half the key. An index stored for Rangers is Rangers'
+   * roster whatever heading it is rendered under, and serving it for another
+   * department would disclose staff from outside the one being opened
+   * (CLIENT-014).
+   */
+  it("offers the stored index only for the department it was read for", async () => {
+    stubNode(
+      async () =>
+        new Response(JSON.stringify(logisticsPayload()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+
+    stubNode(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(
+      readLogisticsDesk(CONTEXT.eventId, "department-gate"),
+    ).rejects.toThrow(/Failed to fetch/);
+  });
+
+  /*
+   * A refusal is the node speaking. Falling back there would be the client
+   * re-granting access the node had just withdrawn (CLIENT-006, CLIENT-010).
+   */
+  it("does not fall back to the stored index when the node refuses the read", async () => {
+    stubNode(
+      async () =>
+        new Response(JSON.stringify(logisticsPayload()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+
+    stubNode(
+      async () =>
+        new Response(JSON.stringify({ message: "This action is unauthorized." }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+
+    await expect(
+      readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+    ).rejects.toThrow(/unauthorized/);
+  });
+
+  it("has nothing to fall back to on a device that has never read the desk", async () => {
+    stubNode(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(
+      readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+    ).rejects.toThrow(/Failed to fetch/);
+  });
+
+  it("drops the stored index when the context it belonged to goes", async () => {
+    stubNode(
+      async () =>
+        new Response(JSON.stringify(logisticsPayload()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await readLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId);
+
+    clearCachedLogisticsDesk();
+
+    expect(
+      readCachedLogisticsDesk(CONTEXT.eventId, CONTEXT.departmentId),
+    ).toBeNull();
   });
 });
 
