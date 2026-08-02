@@ -309,6 +309,15 @@ rows, unauthorized actors are refused, and each successful export is audited.
      online, and confirm that desk states the unreachable node rather than
      showing the first department's staff under the second department's heading
      (CLIENT-014).
+29d. Still offline, walk the other pages this persona can reach — Me, the shift
+     board, Event Info, Documents, Acknowledgments, Department Overview, the
+     department's Admin, Shifts and Documents pages, and Team Overview. Confirm
+     each renders the data this device read earlier rather than "Unable to load
+     … check the connection to this node", and that the shell states it is
+     showing stored data (technical spec 9.3, M18.9).
+29e. Confirm that signing up for or withdrawing from a shift is still refused
+     where it stands with its own sentence. Reads are held on the device; that
+     write is not, and the two are different answers (technical spec 9.4).
 30. Confirm the queued attendance action remains visible enough for the
     Department Logistics operator to trust that it was captured.
 31. Restore the browser network condition to Online.
@@ -511,6 +520,12 @@ froze, so run it after those sections rather than on a freshly seeded database.
   equipment, and shifts with the node unreachable, states that it is searching a
   stored copy and when that copy was taken, and offers no index at all for a
   department this device has not read.
+- Every read-only surface this persona can reach renders what the device stored
+  when the node is unreachable, and none of them reports "Unable to load". The
+  shell states that stored data is on screen, and stops saying so as soon as the
+  node answers again.
+- Shift signup and withdrawal are still refused where they stand while offline.
+  A read held on the device does not make a write that is not held.
 - Authorized attendance managers can correct unfrozen hours with before/after
   audit evidence, from the Logistics Desk staff workspace as well as from the
   domain, and the dialog opens on the recorded times rather than on now or on
