@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-
 import {
-  FIXTURE_DPW_DEPARTMENT_ID,
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DIRT_TEAM_ID,
-  resetSelectedFixtureDepartment,
-  selectFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
+
 import {
   installFieldShiftResolver,
   OFF_SHIFT_TEAM_LABEL,
@@ -22,7 +18,11 @@ import {
   resolveInstalledFieldSession,
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_FIXTURE,
+  LOCAL_FIELD_TEAM_IDS,
+} from "@/field-reports/localFieldFixture";
 import { clearClientSession } from "@/session/clientSession";
 import { deviceId } from "@/session/deviceIdentity";
 import {
@@ -52,7 +52,7 @@ afterEach(() => {
   clearFieldSession();
   clearClientSession();
   resetFieldShiftResolver();
-  resetSelectedFixtureDepartment();
+  resetSelectedSessionDepartment();
   window.localStorage.clear();
 });
 
@@ -111,9 +111,9 @@ function installRangersDirtShift(): void {
   installFieldShiftResolver(() => ({
     shiftId: "shift-rangers-day",
     shiftTitle: "Ranger Dirt Day Shift",
-    departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
+    departmentId: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
     departmentLabel: "Rangers",
-    teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
+    teamId: LOCAL_FIELD_TEAM_IDS.rangersDirt,
     teamLabel: "Dirt",
   }));
 }
@@ -124,9 +124,9 @@ describe("resolveFieldSession while on shift", () => {
     installDevelopmentFieldSession();
 
     expect(resolveFieldSession()).toMatchObject({
-      departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
+      departmentId: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
       departmentLabel: "Rangers",
-      teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
+      teamId: LOCAL_FIELD_TEAM_IDS.rangersDirt,
       teamLabel: "Dirt",
     });
   });
@@ -137,11 +137,11 @@ describe("resolveFieldSession while on shift", () => {
     installRangersDirtShift();
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
     expect(resolveFieldSession()).toMatchObject({
-      departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
-      teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
+      departmentId: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
+      teamId: LOCAL_FIELD_TEAM_IDS.rangersDirt,
       teamLabel: "Dirt",
     });
   });
@@ -150,17 +150,17 @@ describe("resolveFieldSession while on shift", () => {
     installFieldShiftResolver(() => ({
       shiftId: "shift-gate-swing",
       shiftTitle: "Gate Swing",
-      departmentId: FIXTURE_GATE_DEPARTMENT_ID,
+      departmentId: LOCAL_FIELD_DEPARTMENT_IDS.gate,
       departmentLabel: "Gate",
       teamId: "team-gate-credentials",
       teamLabel: "Credentials",
     }));
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
     expect(resolveFieldSession()).toMatchObject({
-      departmentId: FIXTURE_GATE_DEPARTMENT_ID,
+      departmentId: LOCAL_FIELD_DEPARTMENT_IDS.gate,
       departmentLabel: "Gate",
       teamId: "team-gate-credentials",
       teamLabel: "Credentials",
@@ -194,11 +194,11 @@ describe("resolveFieldSession while off shift", () => {
     offShift();
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
     expect(resolveFieldSession()?.departmentId).toBeNull();
 
-    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
     expect(resolveFieldSession()?.departmentId).toBeNull();
   });
@@ -209,7 +209,7 @@ describe("resolveFieldSession while off shift", () => {
     offShift();
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
 
     expect(resolveFieldSession()?.teamId).toBeNull();
   });
@@ -220,7 +220,7 @@ describe("resolveFieldSession identity", () => {
     offShift();
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
     expect(resolveFieldSession()).toMatchObject({
       eventId: LOCAL_FIELD_FIXTURE.eventId,
@@ -235,7 +235,7 @@ describe("resolveFieldSession identity", () => {
     // A session installed without opting into operational context is the seam
     // real auth and tests use to state a department deliberately.
     installFieldSession(explicitSession);
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
     expect(resolveFieldSession()).toBe(explicitSession);
   });
@@ -322,7 +322,7 @@ describe("resolveInstalledFieldSession", () => {
   it("reports the session as installed, ignoring shift and department", () => {
     installDevelopmentFieldSession();
 
-    selectFixtureDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
     expect(resolveInstalledFieldSession()).toMatchObject({
       departmentId: LOCAL_FIELD_FIXTURE.departmentId,

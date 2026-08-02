@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import { clearCachedLogisticsDesk } from "@/department-ops/logisticsDeskCache";
-import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -17,8 +18,21 @@ import {
   selectSessionDepartment,
 } from "@/session/sessionAccess";
 
-const EVENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.eventId;
-const DEPARTMENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId;
+/*
+ * The event and department these tests work in.
+ *
+ * Declared here rather than imported from a fixture module (M18.9). They are the
+ * ids the local development session document carries, which is what the client
+ * under test is holding; a shared constants module would make them look like
+ * product data rather than what one test file is standing on.
+ */
+const LOCAL_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+const LOCAL_EVENT_LABEL = "Local Field Event";
+const LOCAL_DEPARTMENT_ID = "66666666-6666-4666-8666-666666666666";
+
+
+const EVENT_ID = LOCAL_EVENT_ID;
+const DEPARTMENT_ID = LOCAL_DEPARTMENT_ID;
 const DAY_SHIFT_ID = "99999999-9999-4999-8999-999999999999";
 const SWING_SHIFT_ID = "99999999-9999-4999-8999-999999999998";
 // Two shifts that have ended, one still inside the correction grace period and
@@ -85,7 +99,7 @@ function homeCardByHeading(wrapper: VueWrapper, heading: string) {
 function context() {
   return {
     event_id: EVENT_ID,
-    event_label: LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
+    event_label: LOCAL_EVENT_LABEL,
     department_id: DEPARTMENT_ID,
     department_label: "Rangers",
     time_zone: "America/Los_Angeles",
@@ -650,7 +664,7 @@ beforeEach(() => {
   // means to open on an unreachable node open on a roster instead.
   clearCachedLogisticsDesk();
   installLocalFieldSession();
-  selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+  selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
   stubDepartmentOpsNode();
 });
 
@@ -677,7 +691,7 @@ describe("department operations surfaces", () => {
 
     const { wrapper } = await mountAt("/");
     expect(wrapper.get("#home-heading").text()).toBe(
-      LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
+      LOCAL_EVENT_LABEL,
     );
     const eventCard = wrapper.get(".home__event-card");
     expect(eventCard.find(".home__eyebrow").exists()).toBe(false);

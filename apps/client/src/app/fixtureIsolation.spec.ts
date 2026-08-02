@@ -1,5 +1,4 @@
-// The department operations surfaces reach no fixture module (M18.8; CLIENT-023,
-// CLIENT-024).
+// No production module reaches a fixture (M18.8, M18.9; CLIENT-023, CLIENT-024).
 //
 // A test over the module graph rather than over rendered output, because what it
 // has to catch cannot be observed by rendering. A view that imports a fixture and
@@ -7,9 +6,16 @@
 // fixture shows up the day somebody is standing at a desk and the read comes back
 // empty. Only the imports say whether the compiled-in seed data is still there.
 //
-// Transitive, and that is the point. Both times this went wrong it went wrong two
-// or three modules down: the four views were clean and something they imported
-// for its formatting reached back into `department-ops/fixtures.ts` for an id.
+// Transitive, and that is the point. Every time this went wrong it went wrong two
+// or three modules down: a view was clean and something it imported for its
+// formatting reached back into `department-ops/fixtures.ts` for an id.
+//
+// It started at M18.8 as a check over the four department operations views and
+// widened at M18.9 to the whole production graph, which is what the task asks
+// for: a repository check asserting that no production module imports a fixture.
+// The entry points are the two the application actually boots from, so anything
+// a user can reach is covered by construction and nothing has to be added here
+// when a surface is.
 //
 // The sources come from `import.meta.glob` rather than from the filesystem, so
 // the check needs no Node types in the browser project and runs with the rest of
@@ -27,11 +33,26 @@ const SOURCES = import.meta.glob("/src/**/*.{ts,vue}", {
 }) as Record<string, string>;
 
 /**
- * The four surfaces the department operations task names.
+ * What the application boots from.
  *
- * Listed rather than globbed: "a department operations view" is a fact about
- * these four screens, and a glob over the views directory would quietly stop
- * covering one if it were renamed.
+ * `main.ts` is the entry the bundler builds, and `App.vue` is what it mounts.
+ * Every route, view, and model a user can reach hangs off one of the two, so a
+ * fixture anywhere in production code is reachable from here. Spec files are not
+ * entries and are never walked: a test may hold whatever seed data it needs, and
+ * that is the distinction this check exists to keep (CLIENT-024).
+ */
+const PRODUCTION_ENTRY_POINTS = [
+  "/src/main.ts",
+  "/src/App.vue",
+] as const;
+
+/**
+ * The four surfaces M18.8 named, kept as their own cases.
+ *
+ * Redundant against the entry-point walk and deliberately so: these four are the
+ * ones the department operations task is accountable for, and a failure that
+ * names the surface is worth more to whoever is reading it than one that names
+ * `main.ts`.
  */
 const DEPARTMENT_OPERATIONS_VIEWS = [
   "/src/views/DepartmentOverviewView.vue",
@@ -122,17 +143,43 @@ function reachableModules(entry: string): Map<string, readonly string[]> {
   return trails;
 }
 
+/**
+ * The one fixture production code is still allowed to reach, and why.
+ *
+ * `localFieldFixture` holds the identities the development Field session and the
+ * development session document are built from, and both are installed only when
+ * `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` is set — off by default since
+ * M18.9. It is a development *session installer* rather than data behind a
+ * product surface: no screen renders it while somebody is signed in, which is
+ * what the surfaces this file guards were doing until M18.9.
+ *
+ * It is named here rather than tolerated by a loose rule, so a second fixture
+ * cannot appear without this list growing and somebody noticing. Removing it
+ * means deriving `FieldSessionContext` from the session document and moving 35
+ * spec files onto a session builder; that is the last of M18.9 and is not done.
+ */
+const ALLOWED_FIXTURES: readonly string[] = [
+  "/src/field-reports/localFieldFixture.ts",
+  "/src/session/localFieldSession.ts",
+];
+
 function fixtureTrails(entry: string): string[] {
   return [...reachableModules(entry).entries()]
-    .filter(([module]) => /fixture/i.test(module))
+    .filter(
+      ([module]) => /fixture/i.test(module) && !ALLOWED_FIXTURES.includes(module),
+    )
     .map(([, trail]) => trail.join(" -> "));
 }
 
-describe("department operations fixture isolation", () => {
+describe("fixture isolation", () => {
   it("reads every client source it is asked to walk", () => {
-    for (const view of DEPARTMENT_OPERATIONS_VIEWS) {
-      expect(SOURCES[view]).toBeTypeOf("string");
+    for (const entry of [...PRODUCTION_ENTRY_POINTS, ...DEPARTMENT_OPERATIONS_VIEWS]) {
+      expect(SOURCES[entry]).toBeTypeOf("string");
     }
+  });
+
+  it.each(PRODUCTION_ENTRY_POINTS)("reaches no fixture module from %s", (entry) => {
+    expect(fixtureTrails(entry)).toEqual([]);
   });
 
   it.each(DEPARTMENT_OPERATIONS_VIEWS)(
@@ -152,6 +199,23 @@ describe("department operations fixture isolation", () => {
    * pinning it to whichever module has not been rebound yet means the control
    * evaporates exactly when the check starts mattering most.
    */
+  it("does not excuse a fixture that is not on the allowlist", () => {
+    const entry = "/src/views/__isolation-unlisted__.vue";
+
+    SOURCES[entry] = `import x from "@/session/localFieldSession";
+import y from "@/department-teams/someOtherFixture";`;
+    SOURCES["/src/department-teams/someOtherFixture.ts"] = "export default 1;";
+
+    try {
+      expect(fixtureTrails(entry)).toEqual([
+        `${entry} -> /src/department-teams/someOtherFixture.ts`,
+      ]);
+    } finally {
+      delete SOURCES[entry];
+      delete SOURCES["/src/department-teams/someOtherFixture.ts"];
+    }
+  });
+
   it("finds a fixture module through a chain of imports", () => {
     const entry = "/src/views/__isolation-control__.vue";
     const middle = "/src/views/__isolation-middle__.ts";

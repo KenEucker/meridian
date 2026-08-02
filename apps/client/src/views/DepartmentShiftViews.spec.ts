@@ -20,22 +20,25 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
-import { clearDepartmentSelfAdminSession } from "@/department-teams/fixtureDepartmentSession";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_FIXTURE,
+} from "@/field-reports/localFieldFixture";
 import { clearClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
   LOCAL_FIELD_ORGANIZATION_ID,
 } from "@/session/localFieldSession";
-import { selectSessionDepartment } from "@/session/sessionAccess";
+import {
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 import { routes } from "@/router";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 
 const EVENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const DEPARTMENT_ID = FIXTURE_RANGERS_DEPARTMENT_ID;
+const DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
 const DIRT_TEAM_ID = "77777777-7777-4777-8777-777777777771";
 const OPERATORS_TEAM_ID = "77777777-7777-4777-8777-777777777772";
 const DAY_SHIFT_ID = "55555555-5555-4555-8555-555555555551";
@@ -247,7 +250,6 @@ afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   configureMeridianApi(null);
   clearClientSession();
-  clearDepartmentSelfAdminSession();
   vi.unstubAllGlobals();
 });
 

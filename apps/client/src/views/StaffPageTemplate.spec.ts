@@ -1,4 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetSelectedSessionDepartment,
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -9,18 +16,6 @@ import {
   useStaffLinks,
   useWorkflowLinks,
 } from "@/components/workflowLinks";
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
-import {
-  FIXTURE_DPW_DEPARTMENT_ID,
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  resetSelectedFixtureDepartment,
-  selectFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
-import {
-  clearDepartmentSelfAdminSession,
-  installDevelopmentDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -29,6 +24,17 @@ import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
+
+/*
+ * The event and department these tests work in.
+ *
+ * Declared here rather than imported from a fixture module (M18.9). They are the
+ * ids the local development session document carries, which is what the client
+ * under test is holding; a shared constants module would make them look like
+ * product data rather than what one test file is standing on.
+ */
+const LOCAL_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+
 
 async function mountAt(component: unknown, path: string) {
   const router = createRouter({ history: createWebHistory(), routes });
@@ -44,7 +50,7 @@ async function mountAt(component: unknown, path: string) {
 }
 
 function departmentPath(departmentId: string, suffix: string): string {
-  return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${departmentId}/${suffix}`;
+  return `/events/${LOCAL_EVENT_ID}/departments/${departmentId}/${suffix}`;
 }
 
 /**
@@ -57,7 +63,7 @@ function departmentPath(departmentId: string, suffix: string): string {
  */
 function stubTrainingNode(canManage: boolean): void {
   const body = {
-    department_id: FIXTURE_GATE_DEPARTMENT_ID,
+    department_id: LOCAL_FIELD_DEPARTMENT_IDS.gate,
     organization_id: "11111111-1111-4111-8111-111111111111",
     access: { can_manage: canManage, can_record_completions: canManage },
     teams: [],
@@ -66,7 +72,7 @@ function stubTrainingNode(canManage: boolean): void {
       {
         id: "99999999-9999-4999-8999-999999999901",
         organization_id: "11111111-1111-4111-8111-111111111111",
-        department_id: FIXTURE_GATE_DEPARTMENT_ID,
+        department_id: LOCAL_FIELD_DEPARTMENT_IDS.gate,
         team_id: null,
         team_name: null,
         event_id: null,
@@ -190,7 +196,7 @@ function stubShiftNode(departmentId: string, canManage: boolean): void {
 function stubEventInfoNode(): void {
   const body = {
     event: {
-      id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+      id: LOCAL_EVENT_ID,
       organization_id: "88888888-8888-4888-8888-888888888888",
       name: "Signal Camp 2026",
       timezone: "UTC",
@@ -295,8 +301,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearDepartmentSelfAdminSession();
-  resetSelectedFixtureDepartment();
+  resetSelectedSessionDepartment();
   clearClientSession();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
@@ -312,11 +317,11 @@ describe("staff page template", () => {
   });
 
   it("renders Event Info on the narrow touch-first shell", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubEventInfoNode();
     const wrapper = await mountAt(
       EventInfoView,
-      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
+      `/events/${LOCAL_EVENT_ID}/info`,
     );
 
     expect(wrapper.find(".staff-page").exists()).toBe(true);
@@ -324,25 +329,21 @@ describe("staff page template", () => {
   });
 
   it("gives a member the shift card list and a lead the shift table", async () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
-    stubShiftNode(FIXTURE_GATE_DEPARTMENT_ID, false);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
+    stubShiftNode(LOCAL_FIELD_DEPARTMENT_IDS.gate, false);
     const member = await mountAt(
       DepartmentShiftListView,
-      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "shifts"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.gate, "shifts"),
     );
 
     expect(member.find(".staff-page").exists()).toBe(true);
     expect(member.find("table").exists()).toBe(false);
     expect(member.text()).toContain("Shifts your teams are eligible for.");
-
-    clearDepartmentSelfAdminSession();
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
-    stubShiftNode(FIXTURE_RANGERS_DEPARTMENT_ID, true);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+    stubShiftNode(LOCAL_FIELD_DEPARTMENT_IDS.rangers, true);
     const lead = await mountAt(
       DepartmentShiftListView,
-      departmentPath(FIXTURE_RANGERS_DEPARTMENT_ID, "shifts"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.rangers, "shifts"),
     );
 
     expect(lead.find(".workflow-page").exists()).toBe(true);
@@ -352,25 +353,21 @@ describe("staff page template", () => {
   });
 
   it("gives a member the training card list and a manager the training table", async () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
     stubTrainingNode(false);
     const member = await mountAt(
       DepartmentTrainingListView,
-      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "trainings"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.gate, "trainings"),
     );
 
     expect(member.find(".staff-page").exists()).toBe(true);
     expect(member.find("table").exists()).toBe(false);
     expect(member.text()).not.toContain("New training");
-
-    clearDepartmentSelfAdminSession();
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubTrainingNode(true);
     const manager = await mountAt(
       DepartmentTrainingListView,
-      departmentPath(FIXTURE_RANGERS_DEPARTMENT_ID, "trainings"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.rangers, "trainings"),
     );
 
     expect(manager.find(".workflow-page").exists()).toBe(true);
@@ -380,11 +377,11 @@ describe("staff page template", () => {
   });
 
   it("surrounds the Event Info summary with its section cards", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubEventInfoNode();
     const wrapper = await mountAt(
       EventInfoView,
-      `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/info`,
+      `/events/${LOCAL_EVENT_ID}/info`,
     );
 
     const layout = wrapper.get(".hero-center");
@@ -397,22 +394,21 @@ describe("staff page template", () => {
   });
 
   it("tiles reader lists on the department staff surfaces", async () => {
-    selectFixtureDepartment(FIXTURE_GATE_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
     stubDocumentLibraryNode();
 
     const documents = await mountAt(
       DocumentLibraryView,
-      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "documents"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.gate, "documents"),
     );
     expect(documents.get(".content-grid").classes()).toContain(
       "content-grid--wide",
     );
 
-    stubShiftNode(FIXTURE_GATE_DEPARTMENT_ID, false);
+    stubShiftNode(LOCAL_FIELD_DEPARTMENT_IDS.gate, false);
     const shifts = await mountAt(
       DepartmentShiftListView,
-      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "shifts"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.gate, "shifts"),
     );
     expect(shifts.get(".content-grid").classes()).toContain(
       "content-grid--tile",
@@ -421,7 +417,7 @@ describe("staff page template", () => {
     stubTrainingNode(false);
     const trainings = await mountAt(
       DepartmentTrainingListView,
-      departmentPath(FIXTURE_GATE_DEPARTMENT_ID, "trainings"),
+      departmentPath(LOCAL_FIELD_DEPARTMENT_IDS.gate, "trainings"),
     );
     expect(trainings.get(".content-grid").classes()).toContain(
       "content-grid--wide",
@@ -446,11 +442,11 @@ describe("combined staff and workflow navigation", () => {
     // is therefore asserted as a rule rather than driven through a fixture, so
     // raising or lowering the limit keeps this honest.
     for (const departmentId of [
-      FIXTURE_GATE_DEPARTMENT_ID,
-      FIXTURE_DPW_DEPARTMENT_ID,
-      FIXTURE_RANGERS_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.gate,
+      LOCAL_FIELD_DEPARTMENT_IDS.dpw,
+      LOCAL_FIELD_DEPARTMENT_IDS.rangers,
     ]) {
-      selectFixtureDepartment(departmentId);
+      selectSessionDepartment(departmentId);
       const navigation = useCombinedNavigation();
 
       expect(navigation.value.combined).toBe(
@@ -462,11 +458,11 @@ describe("combined staff and workflow navigation", () => {
 
   it("puts Event Info next to Me whenever the interface is locked to an event", () => {
     for (const departmentId of [
-      FIXTURE_GATE_DEPARTMENT_ID,
-      FIXTURE_DPW_DEPARTMENT_ID,
-      FIXTURE_RANGERS_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.gate,
+      LOCAL_FIELD_DEPARTMENT_IDS.dpw,
+      LOCAL_FIELD_DEPARTMENT_IDS.rangers,
     ]) {
-      selectFixtureDepartment(departmentId);
+      selectSessionDepartment(departmentId);
       const staffLinks = useStaffLinks();
 
       expect(staffLinks.value.slice(0, 2).map((link) => link.label)).toEqual([
@@ -478,7 +474,7 @@ describe("combined staff and workflow navigation", () => {
   });
 
   it("keeps Me out of the workflow hubs", () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     const workflowLinks = useWorkflowLinks();
 
     expect(workflowLinks.value.map((link) => link.label)).not.toContain("Me");

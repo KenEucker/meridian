@@ -17,14 +17,18 @@
 // No server runs for any of this, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory, type RouteLocationRaw } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
-import { selectSessionDepartment } from "@/session/sessionAccess";
+import {
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 import { routes } from "@/router";
 import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
 import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
@@ -33,7 +37,7 @@ import HomeView from "@/views/HomeView.vue";
 
 const EVENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ORGANIZATION_ID = "11111111-1111-4111-8111-111111111111";
-const DEPARTMENT_ID = FIXTURE_RANGERS_DEPARTMENT_ID;
+const DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
 const TEAM_ID = "77777777-7777-4777-8777-777777777771";
 const ORIENTATION_ID = "99999999-9999-4999-8999-999999999901";
 const RADIO_ID = "99999999-9999-4999-8999-999999999902";

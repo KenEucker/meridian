@@ -58,7 +58,12 @@ function main() {
       resolve(clientEnvDir, file),
       {
         VITE_MERIDIAN_API_BASE_URL: apiBaseUrl,
-        VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "true",
+        // Off by default since M18.9. A generated setup points the client at a
+        // seeded node, and installing a session belonging to "Local Field
+        // Author" on "Local Field Event" hides that node's own staff, events,
+        // and departments behind names that exist nowhere in its database.
+        // Turn it on by hand to work on the shell with no server at all.
+        VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "false",
       },
       removedLocalFieldApiKeys,
     );
