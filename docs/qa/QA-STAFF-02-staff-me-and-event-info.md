@@ -43,10 +43,13 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 
 ## Steps
 
-1. Sign in as the department lead and open **Me** (`/staff/me`).
+1. Sign in as the department lead and open **Me** (`/staff/me`) **without reloading the page**.
+1a. Confirm the page names the staff member who just signed in and the event they hold, and that neither is "Local Field Author" or "Local Field Event" (M18.9). Confirm the same on **Home**: its heading and operations window are this event's.
+1b. Confirm the schedule lists the shifts this staff member is signed up for, or states that they are on none — not that "no upcoming assignments are available in the local fixture".
 2. Confirm the event card states which surface it opens, then activate it.
 3. Sign out and sign in as the team lead. Open **Me**, confirm the stated destination, and activate the event card.
-4. On Team Overview, review the team shifts, the team roster with current attendance, and the drill-through links.
+4. On Team Overview, review the team shifts, the team roster, and the drill-through links.
+4a. Sign in as the department lead again and open Team Overview for a team in their own department. Confirm it opens rather than refusing them for lack of authority (M18.9).
 5. Edit the URL to a team in the same department that this persona does not lead, and reload.
 6. Sign out and sign in as the staff member with no lead authority. Open **Me** and activate the event card.
 7. On Event Info, read every section in order: directions, arrival requirements, what to bring, food, housing, event requirements.
@@ -65,7 +68,10 @@ Verify that Staff Me routes an ongoing event by role, that team leads land on a 
 ## Expected results
 
 - Staff Me routes the department lead to Department Overview, the team lead to Team Overview for a team they lead, and the staff member without lead authority to Event Info. The card names the destination before it is activated.
-- Team Overview shows only the selected team's shifts and roster, with staffing counts and current attendance; a department lead can switch between the department's teams, and a team lead sees only teams they lead.
+- Team Overview shows only the selected team's shifts and roster, with the node's staffing counts; a department lead can switch between the department's teams and can open any team in their own department, and a team lead sees only teams they lead.
+- Team Overview states an unreachable node as an unreachable node. It does not report a missing permission for a lead who holds one.
+- Home and Me name the signed-in staff member and the event they hold, immediately after signing in and with no page reload. No screen shows "Local Field Author" or "Local Field Event" to a signed-in user, and no screen mentions a fixture.
+- Me's schedule is the shifts the staff member is signed up for. A schedule that could not be read says so and offers a retry rather than reporting an empty schedule.
 - Requesting a team the persona may not open fails closed with the restricted message. It does not redirect to a team they may open, and no other team's roster is shown.
 - Event Info renders the published document content itself, not a summary or a link-only list. Each rendered document shows its type, scope, and version.
 - Sections are shown in the documented order, and within a section documents are ordered organization scope first, then department, then team, then by title.
