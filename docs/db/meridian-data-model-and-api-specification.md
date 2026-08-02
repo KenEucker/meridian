@@ -399,6 +399,32 @@ do. A running shift with no hours yet carries neither: hours arrive at
 check-out, and a card saying so mid-shift would appear on every workspace at the
 desk.
 
+Event credential administration (`GET /api/events/{event}/credentials`) returns
+the event's credentials for the surface a revocation is aimed from (CRED-009
+through CRED-014). It is not the eligibility export in another format and does
+not answer to the export's permission: it requires `event.credentials.revoke`,
+which only organizers and Incident Command leads hold, while a department lead
+holding `reports.credential_eligibility.export` reads the same records as a file
+for their own department (REPORT-007) and is refused here.
+
+The rows are the union of the event's `event_credentials` and the staff members
+carrying active assignments to its shifts, which is exactly the set the command
+can act on — a staff member with unscheduled work and no credential row is
+revocable (CRED-014 grants them no eligibility and they are still on the
+schedule), and a revoked row belongs in the list because reviewing a past
+decision is half of why somebody opens it. A staff member the domain has
+recorded nothing for reports a null status rather than `blocked`; the two are
+different states and neither is presented as the other.
+
+Each row carries what revocation would cost before anybody commits to it:
+`future_shift_count` is what would be removed and `completed_shift_count` and
+`recorded_minutes` are what would stand (CRED-012, CRED-013), split by the same
+predicate `CredentialRevocationService` applies when it acts rather than by a
+second copy of the rule. Identity is the legal and preferred name, the handle,
+and the departments those shifts belong to, and no further: contact details are
+absent for the reason REPORT-010 keeps them out of the export, and an Incident
+Command lead reaching this surface holds no export capability at all.
+
 Event Info (`GET /api/events/{event}/info`) returns the staff-facing event
 information surface: event context plus one entry per Event Info section, in the
 documented order, each carrying the published documents the caller may see or an
@@ -508,6 +534,7 @@ POST /api/commands/mark-staff-off-site
 POST /api/commands/add-staff-to-shift
 POST /api/commands/sign-up-for-shift
 POST /api/commands/withdraw-from-shift
+POST /api/commands/revoke-credential
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
 POST /api/commands/return-equipment
@@ -636,6 +663,29 @@ the node that receives the command records itself as the origin, because nothing
 publishes a node id to a browser and provenance is better recorded than guessed.
 `origin_device_id` stays required: the device that captured the work is the
 device that knows which one it is.
+
+The credential revocation command (`revoke-credential`) is the one write of the
+credential administration surface (CRED-011 through CRED-013). It names the
+event and the staff member rather than a credential id, because a staff member
+with shifts and no credential row is revocable and there would be no id to name,
+and it carries an optional free-text `reason` that reaches the audit entry and
+that nothing branches on. Authorization is the service's, not the controller's:
+`CredentialRevocationAccess` resolves `event.credentials.revoke` for the event,
+so a grant scoped to another event or to a department that is not this event's
+Incident Command Department does not answer here. The two refusals are different
+answers and carry different statuses — an unauthorized caller is a 403, a staff
+member with no credential and no shift history is a 422 — and the command
+answers with the staff member's whole row rebuilt rather than an acknowledgment,
+so the surface replaces what it was showing with what is now true, including the
+completed shifts and recorded hours that survived. Revoking an already-revoked
+credential changes nothing and writes no second audit entry.
+
+`revoke-credential` is not in section 7.2's offline writes and is the least
+queueable command in the catalog. It removes the future shifts somebody was on,
+which is a roster other people are being scheduled around, so one held on a
+device is an event still planning around somebody who was removed from it hours
+ago — and the decision is not local either: the node weighs it against the
+credential and the assignments as they stand when it arrives.
 
 Incident list preset commands (`save-incident-list-preset`, `delete-incident-list-preset`) manage one user's saved incident list selections for one event. They reuse the `incidents.view` gate rather than adding a capability: if a user may read the event's incident list, they may name their own way of reading it. Presets are always addressed by owner, so an IC user can neither overwrite nor delete another's, and a preset never grants access to an incident the applying user could not already see. Saving an existing name overwrites that preset; paging position is never stored. Presets are personal view state rather than operational records, so they are not audited.
 
@@ -2515,7 +2565,7 @@ Rules:
 - credential is not a physical item
 - physical items are provisions or external workflows
 - credential eligibility requires at least one signed-up shift, required waivers, age requirements, no organization blocking status, and no department Ineligible status for worked departments
-- credential revocation is restricted to organizers and IC department leads
+- credential revocation is restricted to organizers and IC department leads, through the `event.credentials.revoke` capability those three roles carry and no other role does
 - revocation removes future shifts where possible while preserving completed shifts and hours
 
 ---

@@ -33,6 +33,7 @@ import {
   CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE,
   CAPABILITY_DEPARTMENT_PRESENCE_MANAGE,
   CAPABILITY_DEPARTMENT_SCHEDULE_MANAGE,
+  CAPABILITY_EVENT_CREDENTIALS_REVOKE,
   CAPABILITY_INCIDENTS_VIEW,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
@@ -550,20 +551,28 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     }
 
     /*
-     * The reporting export entry point (M16.22; REPORT-001). Permitted by the
-     * export capability rather than by an organizer role: a department lead
-     * holds it too and exports their own department, which is REPORT-007 and is
-     * the node's decision to make either way.
+     * The credentials surface (M16.22, M18.5; REPORT-001; CRED-011). Two
+     * capabilities reach it and either one is enough, because the page carries
+     * a featureset for each: a department lead holds the export and exports
+     * their own department (REPORT-007), an Incident Command lead holds
+     * revocation and no export at all, and an organizer holds both. Gating on
+     * one of them would have hidden the page from half of who it is for.
      */
     if (
       departmentHasCapability(
         department,
         CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
-      )
+      ) ||
+      departmentHasCapability(department, CAPABILITY_EVENT_CREDENTIALS_REVOKE)
     ) {
       organizationPages.push({
         label: "Credentials",
-        description: "Event credential eligibility export.",
+        description: departmentHasCapability(
+          department,
+          CAPABILITY_EVENT_CREDENTIALS_REVOKE,
+        )
+          ? "Event credential administration and eligibility export."
+          : "Event credential eligibility export.",
         to: { name: "organizer.credentials.index" },
       });
     }

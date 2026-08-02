@@ -37,6 +37,8 @@ export type MeridianCommandType =
   | "mark-staff-off-site"
   | "add-staff-to-shift"
   | "correct-hours"
+  // Event credential administration (M18.5).
+  | "revoke-credential"
   // Staff self-service on their own schedule (M18.2).
   | "sign-up-for-shift"
   | "withdraw-from-shift"
@@ -193,6 +195,23 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/correct-hours",
       "Hours correction",
       "Correcting hours needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Credential revocation (M18.5; CRED-011 through CRED-013).
+     *
+     * Connected-only, and of everything in this catalog it is the least
+     * queueable. Revoking removes the future shifts somebody was on, which is a
+     * roster other people are being scheduled around — a revocation held on a
+     * device is an event still planning around somebody who was removed from it
+     * hours ago. Nothing about the decision is local either: the node weighs it
+     * against the credential and the assignments as they stand when it arrives,
+     * not as this device last saw them.
+     */
+    "revoke-credential": connectedOnly(
+      "revoke-credential",
+      "/api/commands/revoke-credential",
+      "Credential revocation",
+      "Revoking a credential needs a connection to the node. It cannot be held on this device for later.",
     ),
     /*
      * The shift board's two writes (M18.2; SHIFT-011, SHIFT-013).

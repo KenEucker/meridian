@@ -4,9 +4,11 @@
 
 Verify Milestone 7 event credential eligibility and manual revocation through the domain services that power Alpha 1: a reviewer can confirm that a credential-counting shift signup creates an Eligible credential, later failures move the credential to Blocked with documented reasons, organizers and IC leads can revoke credentials, unauthorized actors cannot, future shifts are removed on revocation while completed shifts remain, revoked state is preserved through recalculation, and unscheduled assignments do not grant credential eligibility.
 
-Section H additionally verifies the Milestone 13 credential eligibility export (M13.1): an organizer exports the whole event, a department lead exports only their own department, unauthorized actors are refused, sensitive contact fields never reach the file, and each successful export is audited.
+Section G additionally verifies the Milestone 13 credential eligibility export (M13.1): an organizer exports the whole event, a department lead exports only their own department, unauthorized actors are refused, sensitive contact fields never reach the file, and each successful export is audited.
 
-Orchid/API/UI credential screens are not required for this script. Use the documented Laravel domain-service tinker commands until dedicated admin/staff surfaces exist. Run this script independently from `QA-SHIFT-01` after a fresh seed unless noted.
+Section H verifies the M18.5 credential administration surface, which is the product path to the revocation sections A through F reach through tinker: the list states what a revocation would remove and what it would preserve before it happens, the command is restricted to the same two authorities, and the recorded hours of a completed shift survive it unchanged — the half of CRED-013 that could not be checked until hours records existed.
+
+Sections A through G use the documented Laravel domain-service tinker commands, which reach rules the surfaces do not expose. Section H needs a running client and a signed-in session. Run this script independently from `QA-SHIFT-01` after a fresh seed unless noted.
 
 ## Requirements covered
 
@@ -32,7 +34,8 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
 - Requirements sections 3.16, 5.6, 5.12, and 7.14
 - Data/API spec section 10.11
 - Technical spec section 22.2 (CSV export)
-- Meridian Alpha 1 tasks M7.9, M7.10, M7.11, and M13.1
+- UI implementation contract 12.6 (`organizer.credentials`)
+- Meridian Alpha 1 tasks M7.9, M7.10, M7.11, M13.1, M16.22, and M18.5
 
 ## Environment
 
@@ -43,7 +46,7 @@ Orchid/API/UI credential screens are not required for this script. Use the docum
   php artisan migrate:fresh --seed
   ```
 - Shell access from `apps/server` for tinker verification commands.
-- No credential admin UI is required for this script.
+- A running client and the ability to sign in as the personas below for section H. Sections A through G need no UI at all.
 
 ## Personas
 
@@ -209,15 +212,40 @@ Run this section after section A so at least one Eligible credential exists. A f
     ```
 46. Confirm one audit event per export with the acting user, the event, a `scope` of `event` or `department`, and a `row_count` matching the file.
 47. Optional HTTP check when a browser session is available for Olive (log in with `QA-AUTH-01`): download `/api/events/{event id}/exports/credential-eligibility` and confirm the browser saves a `.csv` attachment. Add `?department_id={department id}` to narrow an organizer export to one department, and confirm a department id from another organization returns 404.
-48. Optional product surface check (M16.22), when a client is running and Olive can sign in to it: open Credentials from the home directory's Organization pages, confirm the page names the event, states that an organizer exports every department while a department role exports its own, and lists the excluded fields and the columns before anything is generated. Press `Export CSV` and confirm the file that saves is the same file section G produced. Sign in as Ira Ineligible and confirm no Credentials entry appears anywhere in navigation, and that opening `/organizer/credentials` directly states that the export requires authority rather than offering a button. Take the device offline as Olive and confirm the export button is disabled with a stated reason rather than queueing.
+48. Optional product surface check (M16.22), when a client is running and Olive can sign in to it: open Credentials from the home directory's Organization pages, confirm the page names the event, states that an organizer exports every department while a department role exports its own, and lists the excluded fields and the columns before anything is generated. Press `Export CSV` and confirm the file that saves is the same file section G produced. Sign in as Ira Ineligible and confirm no Credentials entry appears anywhere in navigation, and that opening `/organizer/credentials` directly states which authorities the page's two featuresets require rather than offering either. Take the device offline as Olive and confirm the export button is disabled with a stated reason rather than queueing.
 
-### H. Explicit non-goals for this script
+### H. Credential administration through the product path (M18.5)
 
-49. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
-50. Confirm physical credential issuance is out of scope.
-51. Confirm recorded hours preservation is noted as deferred to Milestone 10 once hours records exist; this script only verifies completed shift assignments remain active after revocation.
-52. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
-53. Confirm the credential eligibility export in section G is server-generated and online-only, that its product entry point (`organizer.credentials`, M16.22) runs that one export and offers no credential revocation, which is M18.5, and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).
+Run this section after a fresh seed. It repeats section E's decision through the surface an organizer actually has, and adds the one thing section E could not check: that recorded hours survive it.
+
+49. Give Vera one completed shift with recorded hours and two future shifts, so the surface has something to preserve and something to remove:
+    ```bash
+    php artisan tinker --execute='$event = App\Models\Event::query()->where("slug", "emberfall-2026")->firstOrFail(); $department = App\Models\Department::query()->where("code", "RANGERS")->firstOrFail(); $team = App\Models\Team::query()->where("department_id", $department->id)->where("code", "DIRT")->firstOrFail(); $staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $completed = App\Models\Shift::factory()->create(["event_id" => $event->id, "department_id" => $department->id, "eligible_team_id" => $team->id, "title" => "QA CRED M18.5 Completed", "starts_at" => now()->subDays(2)->setTime(9, 0), "ends_at" => now()->subDays(2)->setTime(17, 0)]); App\Models\ShiftAssignment::factory()->create(["shift_id" => $completed->id, "staff_id" => $staff->id, "assignment_status" => App\Models\ShiftAssignment::STATUS_SIGNED_UP, "assigned_by_user_id" => null, "removed_at" => null]); $hours = App\Models\HoursWorked::factory()->create(["shift_id" => $completed->id, "staff_id" => $staff->id, "actual_started_at" => now()->subDays(2)->setTime(9, 2), "actual_ended_at" => now()->subDays(2)->setTime(17, 0), "minutes_worked" => 478]); foreach ([10, 12] as $offset) { $starts = now()->addDays($offset)->setTime(13, 0); $shift = App\Models\Shift::factory()->create(["event_id" => $event->id, "department_id" => $department->id, "eligible_team_id" => $team->id, "title" => "QA CRED M18.5 Future ".$offset, "starts_at" => $starts, "ends_at" => $starts->copy()->addHours(8)]); App\Models\ShiftAssignment::factory()->create(["shift_id" => $shift->id, "staff_id" => $staff->id, "assignment_status" => App\Models\ShiftAssignment::STATUS_SIGNED_UP, "assigned_by_user_id" => null, "removed_at" => null]); } app(App\Services\Credential\CredentialEligibilityService::class)->recalculate($event, $staff); print(json_encode(["hours_worked_id" => $hours->id, "minutes_worked" => $hours->minutes_worked], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+50. Sign in to the client as Olive Organizer and open Credentials from the home directory's Organization pages. Confirm the page carries both featuresets: the credential list and the eligibility export.
+51. Find Vera in the list. Confirm her row states `2 upcoming shifts would be removed` and `1 completed shift and 7 hr 58 min recorded stay on the record` before anything is pressed. This is CRED-012 and CRED-013 stated as the decision rather than discovered afterwards.
+52. Type part of another staff member's name into the filter and confirm the list narrows without the page reloading or the node being asked again; clear it.
+53. Press `Revoke credential` on Vera's row, type `QA CRED M18.5 product path` as the reason, and confirm. Confirm her row becomes `Revoked` with reason `Manual revocation`, reports `No upcoming shifts to remove`, still reports the completed shift and the recorded hours, and offers no control to revoke again.
+54. Confirm the recorded hours record is untouched, which is the half of CRED-013 no earlier script could check:
+    ```bash
+    php artisan tinker --execute='$staff = App\Models\Staff::query()->where("email", "vera.staff@northwood-collective.test")->firstOrFail(); $hours = App\Models\HoursWorked::query()->where("staff_id", $staff->id)->whereHas("shift", fn ($q) => $q->where("title", "QA CRED M18.5 Completed"))->firstOrFail(); $completed = App\Models\ShiftAssignment::query()->where("staff_id", $staff->id)->whereHas("shift", fn ($q) => $q->where("title", "QA CRED M18.5 Completed"))->firstOrFail(); $future = App\Models\ShiftAssignment::query()->where("staff_id", $staff->id)->whereHas("shift", fn ($q) => $q->where("title", "like", "QA CRED M18.5 Future%"))->get(); print(json_encode(["minutes_worked" => $hours->minutes_worked, "status" => $hours->status, "actual_started_at" => (string) $hours->actual_started_at, "actual_ended_at" => (string) $hours->actual_ended_at, "completed_removed_at" => $completed->removed_at, "future_removed" => $future->every(fn ($a) => $a->removed_at !== null)], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+55. Confirm `minutes_worked` is still 478, `status` is `recorded`, both actual times are unchanged, `completed_removed_at` is null, and `future_removed` is true.
+56. Confirm the audit entry carries the typed reason:
+    ```bash
+    php artisan tinker --execute='App\Models\AuditEvent::query()->where("action", "event_credential.revoked")->latest("created_at")->take(1)->get(["actor_user_id", "reason", "source_context"])->each(fn ($event) => print($event->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+    ```
+57. Sign in as Dana Departmentlead and open Credentials. Confirm the page offers the eligibility export and no credential list, and that `GET /api/events/{event id}/credentials` returns 403 with `Only organizers and Incident Command leads may administer event credentials.` A department lead reads the same records as a file (REPORT-007) and administers none of them.
+58. Sign in as Ingrid ICLead and open Credentials. Confirm the opposite shape: the credential list is present and no export is offered.
+59. Sign in as Omar ICOperator and confirm no Credentials entry appears in navigation at all, and that `POST /api/commands/revoke-credential` for Vera returns 403.
+60. As Olive, take the device offline and confirm the revoke controls are disabled with a stated reason rather than queueing the decision.
+
+### I. Explicit non-goals for this script
+
+61. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
+62. Confirm physical credential issuance is out of scope.
+63. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
+64. Confirm the credential eligibility export in section G is server-generated and online-only, that it and the credential administration of section H are separate authorities on one page (`organizer.credentials`, M16.22 and M18.5), and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).
 
 ## Expected results
 
@@ -234,7 +262,10 @@ Run this section after section A so at least one Eligible credential exists. A f
 - No phone number, emergency contact, or date of birth appears in the export.
 - Every successful export writes one `event_credential_eligibility.exported` audit event naming the actor, event, scope, and row count.
 - The `organizer.credentials` entry point states the scope and the excluded fields before generating, downloads through a short-lived scoped link, is absent for a user holding no export capability, and refuses rather than queues while the device is offline.
-- No physical credential issuance, Orchid/API UI, offline sync, or hours-record preservation beyond completed assignments is required for this Alpha 1 QA gate.
+- The credential list on that same page states what a revocation would remove and what it would preserve before it is pressed, keeps revoked rows visible with no control to revoke them again, and filters what it already holds without asking the node again.
+- Revoking through the product path leaves the `hours_worked` record byte-for-byte as it was — minutes, status, and both actual times — and removes only the assignments on shifts that have not ended.
+- The two featuresets answer to separate authorities on one page: an organizer holds both, a department lead sees the export alone, an Incident Command lead sees the list alone, and an IC operator reaches neither.
+- No physical credential issuance, Orchid/API UI, or offline sync is required for this Alpha 1 QA gate.
 
 ## Evidence to capture
 
@@ -248,6 +279,10 @@ Run this section after section A so at least one Eligible credential exists. A f
 - Recalculation output proving revoked state is preserved.
 - IC lead revocation evidence for Sam.
 - Unscheduled vs planned assignment counting evidence.
+- The credential list showing Vera's row before revocation, with the upcoming and preserved counts on it.
+- The same row after revocation, and the tinker output proving the hours record is unchanged.
+- The audit entry carrying the reason typed into the surface.
+- The three role shapes of the Credentials page: organizer, department lead, and Incident Command lead.
 - The saved organizer export file, plus the department-scoped export output and its filename.
 - If the optional surface check ran: the Credentials page showing its scope and exclusions, and the file it downloaded.
 - Sensitive-field check output showing all four values false.
@@ -263,6 +298,8 @@ Run this section after section A so at least one Eligible credential exists. A f
 - If DNS or department Ineligible leaves the credential Eligible, stop and file a CRED-007 / CRED-008 issue.
 - If Dana or Omar can revoke, stop and file a blocking CRED-011 issue.
 - If revocation deletes completed assignments or fails to remove future assignments, stop and file a CRED-012 / CRED-013 issue.
+- If revoking through the product path changes an `hours_worked` record in any way, stop and file a blocking CRED-013 issue; recorded hours are what a person is paid, credited, and remembered by.
+- If a department lead can read the credential list, or an Incident Command lead cannot, stop and file a blocking CRED-011 issue.
 - If recalculation moves a revoked credential back to eligible/blocked, stop and file a CRED-009 issue.
 - If an unscheduled after-start assignment grants credential eligibility, stop and file a blocking CRED-014 issue.
 - If this script appears to require Orchid credential UI, physical badge issuance, offline sync, or hours-record checks beyond completed assignments, stop and report scope leakage.
