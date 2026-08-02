@@ -233,6 +233,35 @@ export async function submitLoginCode(
     state.email = null;
     state.codeExpiresInMinutes = null;
 
+    /*
+     * Drop whoever this client was holding before resolving who it is holding
+     * now (CLIENT-014).
+     *
+     * Not housekeeping. `refreshClientSession` scopes `GET /api/me` to the
+     * context event it is already holding, which is right for a reconnect —
+     * it stops a refresh silently moving a device to a different event — and
+     * wrong for a sign-in, where the previous occupant's event has no standing.
+     * Left in place it asks the node to resolve this user's roles at an event
+     * they may hold no association with, and the node refuses with a 409 that
+     * is neither a bad credential nor an unreachable node, so no document
+     * installs and the surfaces keep rendering the previous occupant's.
+     *
+     * In development that previous occupant is the local field session
+     * installed at boot, which is how signing in as a real staff member left
+     * the fixture's event and department in the navigation until the page was
+     * reloaded. The same hole swallows a real user switching to a second
+     * account on a shared device.
+     */
+    clearClientSession();
+    /*
+     * And everything the previous occupant's context had populated, on the same
+     * registry a sign-out and a context switch run. Their department selection,
+     * their branding, the Logistics Desk index their device stored: none of it
+     * belongs to the person who just signed in. Unsent work survives, because
+     * this device is the only copy of it (technical spec 13.3).
+     */
+    discardSessionContextData();
+
     // The token says who this is; the session says what they may do, and every
     // surface reads the session (CLIENT-004). Signing in without resolving it
     // would leave a signed-in user looking at an empty shell.
