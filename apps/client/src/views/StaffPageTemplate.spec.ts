@@ -5,8 +5,9 @@ import {
   selectSessionDepartment,
 } from "@/session/sessionAccess";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -19,7 +20,6 @@ import {
 } from "@/components/workflowLinks";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";

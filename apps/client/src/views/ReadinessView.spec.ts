@@ -6,7 +6,7 @@ import App from "@/App.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 
 function buildRouter() {
   return createRouter({

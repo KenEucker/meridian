@@ -19,7 +19,7 @@ import {
   LOCAL_FIELD_OTHER_EVENT_ID,
   LOCAL_FIELD_OTHER_ORGANIZATION_ID,
   switchableLocalFieldContext,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
 
 /*
  * Branding follows the session's organization (M16.7; CLIENT-011, CLIENT-014).

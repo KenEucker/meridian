@@ -25,7 +25,7 @@ import {
   LOCAL_FIELD_ORGANIZATION_ID,
   installLocalFieldSession,
   localFieldSessionDocument,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
 import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
 import StaffDocumentDetailView from "@/views/StaffDocumentDetailView.vue";
 import StaffDocumentLibraryView from "@/views/StaffDocumentLibraryView.vue";

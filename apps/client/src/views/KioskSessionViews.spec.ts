@@ -12,7 +12,7 @@ import {
 } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { localFieldSessionDocument } from "@/session/localFieldSession";
+import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import { configureSharedWorkstationId } from "@/session/workstationIdentity";
 import {
   enterWorkstationLoginCode,

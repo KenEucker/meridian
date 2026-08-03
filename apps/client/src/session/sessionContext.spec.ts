@@ -7,12 +7,13 @@ import {
   installClientSession,
 } from "@/session/clientSession";
 import {
-  localFieldSessionDocument,
+  LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_ORGANIZATION_ID,
   LOCAL_FIELD_OTHER_EVENT_ID,
   LOCAL_FIELD_OTHER_ORGANIZATION_ID,
+  localFieldSessionDocument,
   switchableLocalFieldContext,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
 import { readCachedSession, writeCachedSession } from "@/session/sessionCache";
 import {
   registerSessionContextReset,
@@ -31,7 +32,6 @@ import {
   selectSessionDepartment,
   selectedSessionDepartmentId,
 } from "@/session/sessionAccess";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
 
 /*
  * Context resolution and switching (M16.7; CLIENT-011 through CLIENT-014;

@@ -23,13 +23,14 @@ in through rather than repeating. The one credential behavior repeated here is
 revocation seen from the client, because what a client does when its token stops
 working is a client behavior.
 
-The single most important setup step in this script is turning the development
-session fixture off. `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` installs a
-labeled development session document when a client boots holding nothing, so a
-developer running `pnpm run client:dev` sees a populated shell without signing
-in. It is the thing this script exists to look past: with it on, a shell full of
-navigation proves nothing about session wiring. Every section below assumes it is
-`false`.
+Until M18.9 the most important setup step in this script was turning the
+development session fixture off: `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION`
+installed a labeled development session document when a client booted holding
+nothing, and with it on a shell full of navigation proved nothing about session
+wiring. The flag and the fixture modules behind it are gone. A client that has
+not signed in shows the sign-in screen, so there is nothing left to turn off —
+but a `.env.*.local` generated before M18.9 may still carry the key, and step 2
+clears it.
 
 ## Requirements covered
 
@@ -110,10 +111,10 @@ capabilities rather than from authentication.
 - Organization `Northwood Collective` (`northwood-collective`); event `Emberfall 2026`
   (`emberfall-2026`, `America/Los_Angeles`); departments Organizers, Rangers,
   Gate, DPW.
-- `apps/client/.env.meridian-admin.local` and `.env.meridian-field.local` with
-  `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=false`. Both files are ignored and
-  are written by `corepack pnpm run env:local` with the flag on, so this is an
-  edit the reviewer makes and then reverts.
+- `apps/client/.env.meridian-admin.local` and `.env.meridian-field.local`
+  carrying no `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` key. Both files are
+  ignored and are rewritten by `corepack pnpm run env:local`, which strips the
+  key from a file generated before M18.9.
 - The client's durable state, all of it device-local, all readable and clearable
   from Application → Local Storage:
   - `meridian.api-token.v1` — the bearer token, its user, its device, its expiry.
@@ -141,10 +142,10 @@ capabilities rather than from authentication.
    php apps/server/artisan migrate:fresh --seed
    ```
 
-2. Confirm `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=false` in
-   `apps/client/.env.meridian-admin.local` — it is the default since M18.9, but a
-   file generated before then still says `true`. Then start the client in Admin
-   mode with `corepack pnpm run client:dev:admin`.
+2. Run `corepack pnpm run env:local` to regenerate the client env files. It
+   strips `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION`, which no longer exists and
+   which a file generated before M18.9 still carries. Then start the client in
+   Admin mode with `corepack pnpm run client:dev:admin`.
 3. In the browser, clear `meridian.api-token.v1` and `meridian.session.v1` from
    Local Storage, then open the client at `/`.
 4. Note where the client lands and what the shell shows.
@@ -351,10 +352,12 @@ capabilities rather than from authentication.
     incident list, and the Logistics Desk.
 56. On any two of them, make a change and confirm it reaches the database rather
     than only the screen — reload after the change and confirm it survived.
-57. Search the client for fixture routes still in the path of a bound surface:
+57. Run the repository check that walks the client's module graph from its two
+    entry points and fails if any module a user can reach imports a fixture
+    (M18.9):
 
     ```bash
-    grep -rn "fixtureDepartmentAccess\|localFieldFixture" apps/client/src --include=*.ts --include=*.vue | grep -v spec
+    corepack pnpm --filter @meridian/client run test -- fixtureIsolation
     ```
 
 58. Permission-scoped replication (`CLIENT-021`, `CLIENT-022`) is verified by
@@ -370,9 +373,9 @@ capabilities rather than from authentication.
 ## Expected results
 
 - Step 4: the client lands on the sign-in screen with no navigation at all —
-  not a reduced menu, not an empty shell (`CLIENT-005`). If it shows a populated
-  shell, `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` is still `true`; fix that
-  and start again, because nothing after this step means anything until it is.
+  not a reduced menu, not an empty shell (`CLIENT-005`). A populated shell here
+  is a blocking `CLIENT-001` finding: nothing but a signed-in session may fill
+  one since M18.9, and nothing after this step means anything until it does not.
 - Step 5: the typed URL lands on sign-in too, by replacement rather than by push
   — the back button does not return to the surface nobody could see.
 - Step 7: exactly one request establishes the session, `GET /api/me`, carrying
@@ -481,10 +484,12 @@ capabilities rather than from authentication.
 - Step 55: every surface listed made an HTTP request to the node. A surface that
   rendered content while making no request is reading a fixture (`CLIENT-023`).
 - Step 56: the change survives a reload, so it reached the database.
-- Step 57: no bound surface's path reaches a fixture. `fixtureDepartmentAccess`
-  is gone entirely; remaining `localFieldFixture` references belong to the
-  development session module and the Field Report development seed, both of
-  which are inert with the environment flag off.
+- Step 57: the check passes with an empty allowlist. No module reachable from
+  `main.ts` or `App.vue` imports a fixture, transitively or otherwise
+  (`CLIENT-023`). The one fixture left in the tree,
+  `session/localFieldSessionFixture.ts`, is what the client's own tests stand on
+  so they run without a server (`CLIENT-024`), and this check is what proves
+  nothing a user can reach imports it.
 - Step 58: the PowerSync tests pass.
 
 ## Evidence to capture

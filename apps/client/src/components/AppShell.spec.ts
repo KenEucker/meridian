@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
-} from "@/field-reports/localFieldFixture";
+  localFieldSessionDocument,
+  switchableLocalFieldContext,
+} from "@/session/localFieldSessionFixture";
 import { mount } from "@vue/test-utils";
 
 import { appConfigForUiMode, type UiMode } from "@/app/appConfig";
@@ -18,11 +21,6 @@ import {
   clearClientSession,
   installClientSession,
 } from "@/session/clientSession";
-import {
-  installLocalFieldSession,
-  localFieldSessionDocument,
-  switchableLocalFieldContext,
-} from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

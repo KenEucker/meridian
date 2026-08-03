@@ -18,7 +18,7 @@ import {
   resetCommandOutbox,
 } from "@/outbox/commandOutboxRuntime";
 import { clearClientSession, clientSessionState } from "@/session/clientSession";
-import { localFieldSessionDocument } from "@/session/localFieldSession";
+import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import { readCachedSession } from "@/session/sessionCache";
 import { registerSessionContextReset } from "@/session/sessionContext";
 import {

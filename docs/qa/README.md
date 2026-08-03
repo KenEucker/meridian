@@ -133,9 +133,10 @@ QA gate.
 The credential half of Milestone 16 — token issuance, device binding, God Mode
 revocation, and shared-workstation login codes and sessions — stays in
 `QA-AUTH-01`, which `QA-CLIENT-01` signs in through rather than repeating.
-`QA-CLIENT-01` turns `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` off first:
-with the development session fixture installed, a populated shell proves nothing
-about session wiring.
+`QA-CLIENT-01` used to turn `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` off
+first, because a populated shell proved nothing about session wiring while a
+development session fixture could fill one. The flag is gone at M18.9 and a
+populated shell is now a finding rather than a setup mistake.
 
 ## Alpha 1 Node sync script
 

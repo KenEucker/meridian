@@ -70,12 +70,13 @@ or spreadsheet incident exports (INC-016).
 - Browser DevTools capable of switching the page network condition to Offline.
 - At least three terminals: Laravel server (for automated suites), shared
   client dev server, and QA commands.
-- Human IMS UI steps run against a reachable node. The client holds a session
-  for a user with event-scoped `ic_lead` at the event's configured Incident
-  Command department; the local development session installed by
-  `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` is that user for the seeded Local
-  Field Event. Every list, detail, note, link, and PDF in section B onward is a
-  server round trip.
+- Human IMS UI steps run against a reachable node, signed in. The client holds a
+  session for a user with event-scoped `ic_lead` at the event's configured
+  Incident Command department; the staff member
+  `php artisan meridian:seed-local-field-fixture` seeds is that user for the
+  seeded Local Field Event. There is no development session to install since
+  M18.9 — sign in against the node. Every list, detail, note, link, and PDF in
+  section B onward is a server round trip.
 
 ## Personas
 

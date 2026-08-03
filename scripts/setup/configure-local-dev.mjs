@@ -15,17 +15,19 @@ const clientEnvDir = resolve(repoRoot, "apps/client");
 const defaultApiBaseUrl = "http://127.0.0.1:8000";
 const defaultViteUrl = "http://localhost:5173";
 /*
- * Settings the shared-token middleware used, cleared out of an environment that
- * still carries them (M16.11).
+ * Settings that no longer exist, cleared out of an environment that still
+ * carries them (M16.11, M18.9).
  *
  * Nothing reads them any more, so leaving them would be harmless and confusing:
- * a developer reading their own `.env` would find a credential that looks live.
+ * a developer reading their own `.env` would find a credential that looks live,
+ * or a session switch that looks like it still turns something on.
  */
-const removedLocalFieldApiKeys = [
+const removedLocalFieldKeys = [
   "MERIDIAN_LOCAL_FIELD_API_ENABLED",
   "MERIDIAN_LOCAL_FIELD_API_TOKEN",
   "MERIDIAN_LOCAL_FIELD_API_USER_ID",
   "VITE_MERIDIAN_LOCAL_FIELD_API_TOKEN",
+  "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION",
 ];
 const clientEnvFiles = [
   ".env.development.local",
@@ -51,21 +53,13 @@ function main() {
       "http://127.0.0.1:5173",
       "http://localhost:5173",
     ]),
-  }, removedLocalFieldApiKeys);
+  }, removedLocalFieldKeys);
 
   for (const file of clientEnvFiles) {
     writeEnvFile(
       resolve(clientEnvDir, file),
-      {
-        VITE_MERIDIAN_API_BASE_URL: apiBaseUrl,
-        // Off by default since M18.9. A generated setup points the client at a
-        // seeded node, and installing a session belonging to "Local Field
-        // Author" on "Local Field Event" hides that node's own staff, events,
-        // and departments behind names that exist nowhere in its database.
-        // Turn it on by hand to work on the shell with no server at all.
-        VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "false",
-      },
-      removedLocalFieldApiKeys,
+      { VITE_MERIDIAN_API_BASE_URL: apiBaseUrl },
+      removedLocalFieldKeys,
     );
   }
 

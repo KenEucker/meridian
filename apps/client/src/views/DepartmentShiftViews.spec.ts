@@ -22,14 +22,12 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_FIXTURE,
-} from "@/field-reports/localFieldFixture";
-import { clearClientSession } from "@/session/clientSession";
-import {
-  installLocalFieldSession,
   LOCAL_FIELD_ORGANIZATION_ID,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
+import { clearClientSession } from "@/session/clientSession";
 import {
   selectSessionDepartment,
 } from "@/session/sessionAccess";

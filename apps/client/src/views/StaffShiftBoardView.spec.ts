@@ -15,13 +15,13 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
-import { routes } from "@/router";
-import { clearClientSession, installClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
+  LOCAL_FIELD_FIXTURE,
   localFieldSessionDocument,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
+import { routes } from "@/router";
+import { clearClientSession, installClientSession } from "@/session/clientSession";
 import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 

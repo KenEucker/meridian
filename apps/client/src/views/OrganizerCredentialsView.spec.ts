@@ -19,16 +19,14 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
+  LOCAL_FIELD_ORGANIZATION_ID,
   LOCAL_FIELD_TEAM_IDS,
-} from "@/field-reports/localFieldFixture";
+  localFieldSessionDocument,
+} from "@/session/localFieldSessionFixture";
 import { routes } from "@/router";
 import { clearClientSession, installClientSession } from "@/session/clientSession";
-import {
-  installLocalFieldSession,
-  LOCAL_FIELD_ORGANIZATION_ID,
-  localFieldSessionDocument,
-} from "@/session/localFieldSession";
 import { CAPABILITY_EVENT_CREDENTIALS_REVOKE } from "@/session/permissionCodes";
 import {
   resetSelectedSessionDepartment,

@@ -26,12 +26,12 @@ import { createRouter, createWebHistory } from "vue-router";
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_FIXTURE,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

@@ -5,7 +5,7 @@ import {
   clearFieldSession,
   installFieldSession,
 } from "@/field-reports/fieldSession";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
+import { LOCAL_FIELD_FIXTURE } from "@/session/localFieldSessionFixture";
 import {
   attachPendingFieldReportPhotos,
   clearPendingFieldReportPhotos,

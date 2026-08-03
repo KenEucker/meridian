@@ -9,7 +9,7 @@ import {
   clearClientSession,
   installClientSession,
 } from "@/session/clientSession";
-import { localFieldSessionDocument } from "@/session/localFieldSession";
+import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

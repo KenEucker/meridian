@@ -4,18 +4,14 @@ import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
-import { installDevelopmentFieldSessionFromEnv } from "@/field-reports/fieldSession";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
-// Importing this adopts the token this device already holds and registers it as
-// the credential every request carries (M16.11).
-import { signedIn } from "@/session/apiLogin";
+// Imported for its side effect: adopting the token this device already holds and
+// registering it as the credential every request carries (M16.11).
+import "@/session/apiLogin";
 import { loadClientSession } from "@/session/clientSession";
 import { registerSessionContextReset } from "@/session/sessionContext";
-import { installLocalFieldSessionFromEnv } from "@/session/localFieldSession";
 import "@meridian/ui-tokens/tokens.css";
 import "@/assets/base.css";
-
-installDevelopmentFieldSessionFromEnv();
 
 /*
  * Resolve the organization's branding before anything renders (BRAND-002,
@@ -55,6 +51,13 @@ registerSessionContextReset((context) => {
 });
 
 /*
+ * A client that loses its session goes to sign in, wherever it was standing
+ * (M16.11; AUTH-023). Installed before the first resolution so a refusal that
+ * lands during boot is covered too.
+ */
+redirectWhenSignedOut();
+
+/*
  * Establish the session the same way, and for the same reason (CLIENT-007,
  * CLIENT-010).
  *
@@ -63,32 +66,12 @@ registerSessionContextReset((context) => {
  * do; the node's answer replaces it when one arrives. Awaiting it would hold the
  * mount on a network call, which is the failure this cache exists to prevent.
  *
- * Navigation follows from this and from nothing else (M16.6, CLIENT-004), which
- * is why the local development session is installed only when the client ended
- * up with no document at all: a developer running `npm run dev` against a seeded
- * node, who has not signed in, would otherwise be shown an empty shell. A node
- * that answers always wins, here and on every later refresh, and so does a
- * cached session from a real sign-in.
+ * Navigation follows from this and from nothing else (M16.6, CLIENT-001,
+ * CLIENT-004). There is no second source any more: a client that resolves no
+ * document and holds no cached one shows a sign-in screen, not a shell filled in
+ * from a development session (M18.9).
  */
-// Whether this device came up holding a token, captured before the refresh can
-// drop it. A refused refresh means two different things depending on the answer:
-// somebody was signed out, or nobody was ever signed in (M16.11).
-const bootedSignedIn = signedIn.value;
-
-/*
- * A client that loses its session goes to sign in, wherever it was standing
- * (M16.11; AUTH-023). Installed before the first resolution so a refusal that
- * lands during boot is covered too.
- */
-redirectWhenSignedOut();
-
-void loadClientSession().then((outcome) => {
-  if (outcome !== "refreshed") {
-    installLocalFieldSessionFromEnv({
-      credentialRefused: outcome === "unauthenticated" && bootedSignedIn,
-    });
-  }
-
+void loadClientSession().then(() => {
   /*
    * Now that the client knows what it holds, send it to sign in if it holds
    * nothing (M16.11).

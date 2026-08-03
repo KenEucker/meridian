@@ -1,19 +1,21 @@
 // Field operational session context for Field Report author surfaces (M9.4;
-// bound to the node's session in M16.22).
+// bound to the node's session in M16.22, and to nothing else since M18.9).
 //
 // Technical spec 17.3 and UI contract 14.2 require Field Report create/view to
 // show event and department/team context and to set submitted-by from the
-// authenticated session (not user-editable). That session is now the real one:
-// the event, the user, and the staff record come off the session document the
-// node answered `GET /api/me` with, and the device comes from this device's own
-// identity (M16.11).
+// authenticated session (not user-editable). That session is the real one and
+// now the only one: the event, the user, and the staff record come off the
+// session document the node answered `GET /api/me` with, and the device comes
+// from this device's own identity (M16.11, CLIENT-001).
 //
 // Which matters because the alternative was wrong in the one way that shows up
 // only against a real node. The development fixture named a seeded event, a
 // seeded staff member, and a seeded device, and a signed-in operator filing a
 // Field Report sent those ids to a node that had never heard of them — the node
 // refused the submission with "Field Report event does not exist", which is
-// exactly what it should say about an event that is not there.
+// exactly what it should say about an event that is not there. It survived M16
+// as a flagged development installer and is gone at M18.9; a developer signs in
+// against a seeded node and files against that node's own event.
 //
 // The origin node is the one identifier that does not come from anywhere: a
 // browser cannot learn a node id, because nothing publishes one, deliberately.
@@ -66,7 +68,6 @@ import {
   OFF_SHIFT_TEAM_LABEL,
   resolveCurrentFieldShift,
 } from "@/field-reports/fieldShiftAssignment";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 import { clientSessionState } from "@/session/clientSession";
 import { deviceId } from "@/session/deviceIdentity";
 import { sessionEventContext } from "@/session/sessionAccess";
@@ -94,87 +95,57 @@ export interface FieldSessionContext {
 
 export interface InstallFieldSessionOptions {
   /**
-   * Resolve department and team from the current shift, falling back to the
-   * active department selection. Real auth will set this; a test that pins a
-   * department deliberately leaves it off.
+   * Resolve department and team from the current shift, rather than keeping the
+   * ones the pinned session names. A test that pins a department deliberately
+   * leaves it off.
    */
   readonly followOperationalContext?: boolean;
-  /**
-   * Mark this as the local development stand-in rather than a pinned session, so
-   * it stops applying once the node answers for somebody else.
-   */
-  readonly developmentFixture?: boolean;
 }
 
 let installedSession: FieldSessionContext | null = null;
 let followsOperationalContext = false;
-/**
- * Whether the installed session is the local development fixture rather than a
- * deliberately pinned one.
- *
- * The distinction decides when the install stops applying. A session a test or a
- * tool pinned is an override and stays one; the development fixture stands in
- * for a session nobody had, so the moment the node answers for somebody else it
- * is describing a user who is not here. Without that, a developer who boots the
- * fixture and then signs in for real files their Field Reports against the
- * fixture's event — which is the failure this milestone is fixing.
- */
-let installedIsDevelopmentFixture = false;
 
-/** Install the operational session used by Field Report author surfaces. */
+/**
+ * Pin an operational session, overriding the one the session document describes.
+ *
+ * The seam a test states an identity through. No production caller installs one
+ * since M18.9: a Field Report's event, author, and staff record come off the
+ * node's own session response and nowhere else, which is the whole point of
+ * CLIENT-001. It stays because a pinned context is the only way to express a
+ * report that originated somewhere other than this device — a replay carries the
+ * origin node it was filed at, and a session derived here never can.
+ */
 export function installFieldSession(
   session: FieldSessionContext,
   options: InstallFieldSessionOptions = {},
 ): void {
   installedSession = session;
   followsOperationalContext = options.followOperationalContext ?? false;
-  installedIsDevelopmentFixture = options.developmentFixture ?? false;
 }
 
-/** Clear the installed session (tests / logout placeholder). */
+/** Clear the pinned session, restoring the one the session document describes. */
 export function clearFieldSession(): void {
   installedSession = null;
   followsOperationalContext = false;
-  installedIsDevelopmentFixture = false;
 }
 
 /**
  * Current field session, or `null` when auth/event context is unavailable.
  *
- * An installed session is an override and wins; otherwise the session comes off
- * the client's own session document. Either way the department and team are
- * where the author is working now rather than values carried from anywhere else,
- * which is what keeps a report filed on shift attributed to the team whose shift
- * it is.
+ * A pinned session is an override and wins; otherwise the session comes off the
+ * client's own session document, which is where every session a user can reach
+ * comes from since M18.9. Either way the department and team are where the
+ * author is working now rather than values carried from anywhere else, which is
+ * what keeps a report filed on shift attributed to the team whose shift it is.
  */
 export function resolveFieldSession(): FieldSessionContext | null {
-  if (installedSession !== null && installedOverrideApplies()) {
+  if (installedSession !== null) {
     return followsOperationalContext
       ? withOperationalContext(installedSession)
       : installedSession;
   }
 
   return sessionFromClient();
-}
-
-/**
- * Whether the installed session still describes the session in effect.
- *
- * True for anything but the development fixture. The fixture applies while it is
- * the document the client is working from and stops the moment a real one
- * replaces it, which is the same rule `installLocalFieldSessionFromEnv` follows
- * on the session side (M16.11).
- */
-function installedOverrideApplies(): boolean {
-  if (!installedIsDevelopmentFixture) {
-    return true;
-  }
-
-  const document = clientSessionState.document;
-
-  return (
-    document === null || document.user.id === installedSession?.submittedByUserId
-  );
 }
 
 /**
@@ -217,10 +188,10 @@ function sessionFromClient(): FieldSessionContext | null {
 }
 
 /**
- * The session as installed, ignoring shift and department selection. Exposed
- * for anything that needs "who is signed in" rather than "where they are
- * working" — neither switching department nor checking into a shift changes
- * this.
+ * The pinned session as installed, ignoring shift and department selection —
+ * neither switching department nor checking into a shift changes it. Null when
+ * nothing is pinned, which is the state a running client is always in since
+ * M18.9.
  */
 export function resolveInstalledFieldSession(): FieldSessionContext | null {
   return installedSession;
@@ -260,43 +231,4 @@ function withOperationalContext(
     teamId: null,
     teamLabel: OFF_SHIFT_TEAM_LABEL,
   };
-}
-
-/**
- * Development helper that installs the well-known local Field fixture session
- * so author surfaces and command upload QA share server-seeded UUIDs
- * (`php artisan meridian:seed-local-field-fixture`).
- *
- * The fixture pins identity only. Department and team follow the current shift
- * and are absent when there is none, which is how real auth will behave.
- */
-export function installDevelopmentFieldSession(): FieldSessionContext {
-  installFieldSession(
-    {
-      eventId: LOCAL_FIELD_FIXTURE.eventId,
-      eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
-      submittedByUserId: LOCAL_FIELD_FIXTURE.submittedByUserId,
-      staffId: LOCAL_FIELD_FIXTURE.staffId,
-      originDeviceId: LOCAL_FIELD_FIXTURE.originDeviceId,
-      originNodeId: LOCAL_FIELD_FIXTURE.originNodeId,
-      departmentId: LOCAL_FIELD_FIXTURE.departmentId,
-      departmentLabel: LOCAL_FIELD_FIXTURE.departmentLabel,
-      teamId: LOCAL_FIELD_FIXTURE.teamId,
-      teamLabel: LOCAL_FIELD_FIXTURE.teamLabel,
-    },
-    { followOperationalContext: true, developmentFixture: true },
-  );
-
-  return resolveFieldSession()!;
-}
-
-/** Install the local development fixture session when enabled by Vite env. */
-export function installDevelopmentFieldSessionFromEnv(
-  env: Pick<ImportMetaEnv, "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"> = import.meta.env,
-): FieldSessionContext | null {
-  if (env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true") {
-    return resolveFieldSession();
-  }
-
-  return resolveFieldSession() ?? installDevelopmentFieldSession();
 }
