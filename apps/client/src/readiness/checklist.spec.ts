@@ -12,7 +12,7 @@ import {
 import type { DeviceSigningReadiness } from "@/readiness/deviceSigning";
 import type { LocalEncryptionReadiness } from "@/readiness/localEncryption";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 
 afterEach(() => {
   clearNodeUrl();

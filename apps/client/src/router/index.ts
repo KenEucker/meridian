@@ -15,10 +15,6 @@ import {
 } from "@/branding/brandingRouteProps";
 import DepartmentBrandingView from "@/views/DepartmentBrandingView.vue";
 import OrganizationBrandingView from "@/views/OrganizationBrandingView.vue";
-import {
-  installDevelopmentFieldSession,
-  resolveFieldSession,
-} from "@/field-reports/fieldSession";
 import AboutView from "@/views/AboutView.vue";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DocumentEditView from "@/views/DocumentEditView.vue";
@@ -69,16 +65,14 @@ import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 
-/**
- * Until auth and event selection land, author Field Report surfaces install a
- * clearly labeled development session so list/create/detail remain
- * exercisable in the shared client shell (M9.4).
+/*
+ * The Field Report routes installed a development session on entry until M18.9
+ * (M9.4), so list, create, and detail stayed exercisable before login existed.
+ * Nothing installs one now. The author surfaces resolve their session from the
+ * session document, and render their unavailable state when there is none —
+ * which is the honest answer for a client nobody has signed in to, and the one a
+ * route guard was hiding.
  */
-function ensureFieldSession(): void {
-  if (!resolveFieldSession()) {
-    installDevelopmentFieldSession();
-  }
-}
 
 /**
  * Work the department named in the URL (M16.6).
@@ -341,7 +335,6 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/me",
     name: "staff.me",
     component: MeView,
-    beforeEnter: ensureFieldSession,
   },
   /*
    * The staff shift board (M18.2; SHIFT-018; UI contract 12.3 `staff.shifts`).
@@ -410,19 +403,16 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/field-reports",
     name: "staff.field-reports.index",
     component: FieldReportsIndexView,
-    beforeEnter: ensureFieldSession,
   },
   {
     path: "/staff/field-reports/create",
     name: "staff.field-reports.create",
     component: FieldReportCreateView,
-    beforeEnter: ensureFieldSession,
   },
   {
     path: "/staff/field-reports/:fieldReportId",
     name: "staff.field-reports.show",
     component: FieldReportDetailView,
-    beforeEnter: ensureFieldSession,
   },
   {
     path: "/ims/incidents",
@@ -443,7 +433,6 @@ export const routes: RouteRecordRaw[] = [
     path: "/ims/field-reports/create",
     name: "ims.field-reports.create",
     component: FieldReportCreateView,
-    beforeEnter: ensureFieldSession,
   },
   {
     path: "/ims/field-reports/:fieldReportId",

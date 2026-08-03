@@ -15,7 +15,7 @@ import {
   clearClientSession,
   installClientSession,
 } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 import AboutView from "@/views/AboutView.vue";
 

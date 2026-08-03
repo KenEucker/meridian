@@ -1,9 +1,5 @@
 /// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION?: string;
-}
-
 interface MeridianRuntimeConfig {
   readonly apiBaseUrl?: string;
   readonly deploymentTarget?: "server" | "mobile" | "desktop";

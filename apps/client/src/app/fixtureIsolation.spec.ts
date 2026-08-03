@@ -144,30 +144,28 @@ function reachableModules(entry: string): Map<string, readonly string[]> {
 }
 
 /**
- * The one fixture production code is still allowed to reach, and why.
+ * Fixtures production code may still reach: none, since M18.9.
  *
- * `localFieldFixture` holds the identities the development Field session and the
- * development session document are built from, and both are installed only when
- * `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` is set — off by default since
- * M18.9. It is a development *session installer* rather than data behind a
- * product surface: no screen renders it while somebody is signed in, which is
- * what the surfaces this file guards were doing until M18.9.
+ * It held two until then — `localFieldFixture` and `localFieldSession`, the
+ * development session installers behind
+ * `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION`. Both are gone: the flag is gone,
+ * `FieldSessionContext` derives from the session document, and what the specs
+ * stand on is `session/localFieldSessionFixture.ts`, which no production module
+ * imports and this walk proves it.
  *
- * It is named here rather than tolerated by a loose rule, so a second fixture
- * cannot appear without this list growing and somebody noticing. Removing it
- * means deriving `FieldSessionContext` from the session document and moving 35
- * spec files onto a session builder; that is the last of M18.9 and is not done.
+ * Kept as an empty list rather than deleted, because the mechanism is the
+ * assertion. An exception to this rule should have to be written down here and
+ * argued for in review, and the test below asserts that being on the list is the
+ * only way to be excused.
  */
-const ALLOWED_FIXTURES: readonly string[] = [
-  "/src/field-reports/localFieldFixture.ts",
-  "/src/session/localFieldSession.ts",
-];
+const ALLOWED_FIXTURES: readonly string[] = [];
 
-function fixtureTrails(entry: string): string[] {
+function fixtureTrails(
+  entry: string,
+  allowed: readonly string[] = ALLOWED_FIXTURES,
+): string[] {
   return [...reachableModules(entry).entries()]
-    .filter(
-      ([module]) => /fixture/i.test(module) && !ALLOWED_FIXTURES.includes(module),
-    )
+    .filter(([module]) => /fixture/i.test(module) && !allowed.includes(module))
     .map(([, trail]) => trail.join(" -> "));
 }
 
@@ -200,19 +198,27 @@ describe("fixture isolation", () => {
    * evaporates exactly when the check starts mattering most.
    */
   it("does not excuse a fixture that is not on the allowlist", () => {
+    /*
+     * The allowlist is empty, so the mechanism is exercised against a synthetic
+     * one rather than against whatever happens to be on it. That is the point of
+     * passing it in: this stays a test of "only a listed module is excused" on
+     * the day somebody adds an entry, and on the day nobody ever does.
+     */
     const entry = "/src/views/__isolation-unlisted__.vue";
+    const listed = "/src/department-teams/listedFixture.ts";
+    const unlisted = "/src/department-teams/someOtherFixture.ts";
 
-    SOURCES[entry] = `import x from "@/session/localFieldSession";
+    SOURCES[entry] = `import x from "@/department-teams/listedFixture";
 import y from "@/department-teams/someOtherFixture";`;
-    SOURCES["/src/department-teams/someOtherFixture.ts"] = "export default 1;";
+    SOURCES[listed] = "export default 1;";
+    SOURCES[unlisted] = "export default 1;";
 
     try {
-      expect(fixtureTrails(entry)).toEqual([
-        `${entry} -> /src/department-teams/someOtherFixture.ts`,
-      ]);
+      expect(fixtureTrails(entry, [listed])).toEqual([`${entry} -> ${unlisted}`]);
     } finally {
       delete SOURCES[entry];
-      delete SOURCES["/src/department-teams/someOtherFixture.ts"];
+      delete SOURCES[listed];
+      delete SOURCES[unlisted];
     }
   });
 

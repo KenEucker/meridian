@@ -1,17 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
-} from "@/field-reports/localFieldFixture";
+  localFieldSessionDocument,
+} from "@/session/localFieldSessionFixture";
 
 import {
   departmentBrandingRouteProps,
   organizationBrandingRouteProps,
 } from "@/branding/brandingRouteProps";
 import { clearClientSession } from "@/session/clientSession";
-import {
-  installLocalFieldSession,
-  localFieldSessionDocument,
-} from "@/session/localFieldSession";
 import {
   departmentHasCapability,
   departmentHasRole,

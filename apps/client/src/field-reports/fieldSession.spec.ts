@@ -11,24 +11,20 @@ import {
 } from "@/field-reports/fieldShiftAssignment";
 import {
   clearFieldSession,
-  installDevelopmentFieldSession,
-  installDevelopmentFieldSessionFromEnv,
   installFieldSession,
   resolveFieldSession,
   resolveInstalledFieldSession,
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_FIXTURE,
+  LOCAL_FIELD_ORGANIZATION_ID,
   LOCAL_FIELD_TEAM_IDS,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { clearClientSession } from "@/session/clientSession";
 import { deviceId } from "@/session/deviceIdentity";
-import {
-  installLocalFieldSession,
-  LOCAL_FIELD_ORGANIZATION_ID,
-} from "@/session/localFieldSession";
 
 const explicitSession: FieldSessionContext = {
   eventId: "event-existing",
@@ -56,46 +52,19 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe("installDevelopmentFieldSessionFromEnv", () => {
-  it("leaves the session unavailable when the local fixture flag is absent", () => {
-    expect(installDevelopmentFieldSessionFromEnv({})).toBeNull();
+/*
+ * There is no session to resolve until somebody is signed in (M18.9;
+ * CLIENT-001).
+ *
+ * A development installer used to answer here, behind an environment flag, so a
+ * client that had never signed in still had an event, a staff record, and a
+ * device to file a Field Report against. None of the three were on the node, and
+ * every report filed that way was refused by it. Unavailable is the true answer
+ * and it is now the only one.
+ */
+describe("resolveFieldSession without a session", () => {
+  it("is unavailable when nobody is signed in", () => {
     expect(resolveFieldSession()).toBeNull();
-  });
-
-  it("installs the local Field fixture identity when the local fixture flag is true", () => {
-    const session = installDevelopmentFieldSessionFromEnv({
-      VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "true",
-    });
-
-    /*
-     * Off shift, because nothing has installed a resolver that can say
-     * otherwise (M18.9). The department and team used to arrive here from the
-     * fixture's own idea of who was checked in, which was an answer no real
-     * author ever got.
-     */
-    expect(session).toEqual({
-      eventId: LOCAL_FIELD_FIXTURE.eventId,
-      eventLabel: LOCAL_FIELD_FIXTURE.eventLabel,
-      submittedByUserId: LOCAL_FIELD_FIXTURE.submittedByUserId,
-      staffId: LOCAL_FIELD_FIXTURE.staffId,
-      originDeviceId: LOCAL_FIELD_FIXTURE.originDeviceId,
-      originNodeId: LOCAL_FIELD_FIXTURE.originNodeId,
-      departmentId: null,
-      departmentLabel: null,
-      teamId: null,
-      teamLabel: OFF_SHIFT_TEAM_LABEL,
-    });
-    expect(resolveFieldSession()).toEqual(session);
-  });
-
-  it("keeps an explicitly installed session when local development setup runs again", () => {
-    installFieldSession(explicitSession);
-
-    expect(
-      installDevelopmentFieldSessionFromEnv({
-        VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION: "true",
-      }),
-    ).toBe(explicitSession);
   });
 });
 
@@ -121,7 +90,7 @@ function installRangersDirtShift(): void {
 describe("resolveFieldSession while on shift", () => {
   it("records the team whose shift the author is checked into", () => {
     installRangersDirtShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     expect(resolveFieldSession()).toMatchObject({
       departmentId: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
@@ -135,7 +104,7 @@ describe("resolveFieldSession while on shift", () => {
     // You cannot work a Rangers shift and file the report against Gate, so the
     // shift wins over the switcher rather than being merged with it.
     installRangersDirtShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
@@ -155,7 +124,7 @@ describe("resolveFieldSession while on shift", () => {
       teamId: "team-gate-credentials",
       teamLabel: "Credentials",
     }));
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
@@ -176,7 +145,7 @@ describe("resolveFieldSession while off shift", () => {
     // available"; data/API 10.15 makes both columns nullable. Off shift it is
     // not available, so the record says so instead of guessing.
     offShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     expect(resolveFieldSession()).toMatchObject({
       departmentId: null,
@@ -192,7 +161,7 @@ describe("resolveFieldSession while off shift", () => {
     // immutable record to it on the strength of what the author was reading is
     // the behavior this replaced.
     offShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
@@ -207,7 +176,7 @@ describe("resolveFieldSession while off shift", () => {
     // The author belongs to teams in Rangers. They were not working one, so the
     // report does not claim they were — not even the department's default team.
     offShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
 
@@ -218,7 +187,7 @@ describe("resolveFieldSession while off shift", () => {
 describe("resolveFieldSession identity", () => {
   it("keeps identity fixed across a department switch", () => {
     offShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
@@ -226,14 +195,14 @@ describe("resolveFieldSession identity", () => {
       eventId: LOCAL_FIELD_FIXTURE.eventId,
       submittedByUserId: LOCAL_FIELD_FIXTURE.submittedByUserId,
       staffId: LOCAL_FIELD_FIXTURE.staffId,
-      originDeviceId: LOCAL_FIELD_FIXTURE.originDeviceId,
-      originNodeId: LOCAL_FIELD_FIXTURE.originNodeId,
+      originDeviceId: deviceId(),
+      originNodeId: null,
     });
   });
 
   it("returns a pinned session unchanged, including its department and team", () => {
-    // A session installed without opting into operational context is the seam
-    // real auth and tests use to state a department deliberately.
+    // A session installed without opting into operational context is the seam a
+    // report that originated somewhere other than this device is stated through.
     installFieldSession(explicitSession);
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
@@ -241,7 +210,7 @@ describe("resolveFieldSession identity", () => {
   });
 });
 
-describe("resolveFieldSession from the client's own session (M16.22)", () => {
+describe("resolveFieldSession from the client's own session (M16.22, M18.9)", () => {
   it("takes the event, user, staff, and device from the session document", () => {
     offShift();
     installLocalFieldSession();
@@ -287,12 +256,14 @@ describe("resolveFieldSession from the client's own session (M16.22)", () => {
     expect(resolveFieldSession()).toBeNull();
   });
 
-  it("drops the development fixture once the node answers for somebody else", () => {
-    // The failure this replaced: a developer boots on the fixture, signs in for
-    // real, and files a Field Report against the fixture's event — which the
-    // node refuses, because that event is not there.
+  it("follows the node when it answers for somebody else", () => {
+    // The failure this replaced: a developer boots on a development session,
+    // signs in for real, and files a Field Report against the fixture's event —
+    // which the node refuses, because that event is not there. Nothing installs
+    // a session but the node now, so the one in effect is always the last one it
+    // answered with.
     offShift();
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
     installLocalFieldSession({
       user: {
         id: "user-real",
@@ -319,18 +290,18 @@ describe("resolveFieldSession from the client's own session (M16.22)", () => {
 });
 
 describe("resolveInstalledFieldSession", () => {
-  it("reports the session as installed, ignoring shift and department", () => {
-    installDevelopmentFieldSession();
+  it("reports the pinned session, ignoring shift and department", () => {
+    installFieldSession(explicitSession, { followOperationalContext: true });
 
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
 
     expect(resolveInstalledFieldSession()).toMatchObject({
-      departmentId: LOCAL_FIELD_FIXTURE.departmentId,
-      teamId: LOCAL_FIELD_FIXTURE.teamId,
+      departmentId: explicitSession.departmentId,
+      teamId: explicitSession.teamId,
     });
   });
 
-  it("is null when no session is installed", () => {
+  it("is null when no session is pinned", () => {
     expect(resolveInstalledFieldSession()).toBeNull();
   });
 });

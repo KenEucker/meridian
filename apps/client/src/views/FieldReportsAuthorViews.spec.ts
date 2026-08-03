@@ -11,6 +11,7 @@ import {
 import {
   clearFieldSession,
   installFieldSession,
+  resolveFieldSession,
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
 import { applyLocalFieldReportAcceptance } from "@/field-reports/submitFieldReport";
@@ -21,7 +22,7 @@ import {
 } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 
 const SESSION: FieldSessionContext = {
   eventId: "event-1",
@@ -70,6 +71,38 @@ afterEach(async () => {
   resetCommandOutbox();
   clearFieldSession();
   clearClientSession();
+});
+
+/*
+ * Nothing installs a session on the way in any more (M18.9; CLIENT-001).
+ *
+ * These four routes carried a `beforeEnter` that installed the development Field
+ * session when none was resolvable, which is why they were reachable before
+ * login existed. The guard is gone with the fixture behind it, so a client that
+ * holds no session meets the surface's own unavailable state — the one every one
+ * of these views has always rendered and no visitor could reach.
+ */
+describe("Field Report author surfaces without a session (M18.9)", () => {
+  beforeEach(() => {
+    clearFieldSession();
+    clearClientSession();
+  });
+
+  it.each([
+    ["/staff/field-reports", "to view your"],
+    ["/staff/field-reports/create", "before submitting"],
+  ])("says the session is unavailable at %s", async (path, tail) => {
+    const { wrapper } = await mountAt(path);
+
+    expect(wrapper.text()).toContain("Field session is unavailable");
+    expect(wrapper.text()).toContain(tail);
+  });
+
+  it("installs no session by reaching the route", async () => {
+    await mountAt("/staff/field-reports/create");
+
+    expect(resolveFieldSession()).toBeNull();
+  });
 });
 
 describe("Field Report author list/detail surfaces (M9.4)", () => {

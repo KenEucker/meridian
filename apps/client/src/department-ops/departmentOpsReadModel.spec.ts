@@ -26,7 +26,7 @@ import {
 import { LIVE_READ, clearReadCache, readCache } from "@/offline/readCache";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 
 const CONTEXT: DepartmentOpsContext = {
   eventId: "11111111-1111-4111-8111-111111111111",

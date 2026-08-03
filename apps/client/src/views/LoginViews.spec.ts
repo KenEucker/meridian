@@ -8,7 +8,7 @@ import { resetApiLoginForTests } from "@/session/apiLogin";
 import { API_TOKEN_STORAGE_KEY, apiBearerToken, clearApiToken } from "@/session/apiToken";
 import { clearClientSession } from "@/session/clientSession";
 import { configureDeviceIdentity } from "@/session/deviceIdentity";
-import { localFieldSessionDocument } from "@/session/localFieldSession";
+import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
 

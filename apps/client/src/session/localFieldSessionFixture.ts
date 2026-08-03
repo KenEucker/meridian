@@ -1,36 +1,33 @@
-// A session document standing in for `GET /api/me` in local development
-// (M16.6; CLIENT-001, CLIENT-024).
+// The session document the client's specs run on (M18.9; CLIENT-024).
 //
-// Navigation now follows the session response, and the client holds no bearer
-// token until login is wired into it, so a developer running `npm run dev`
-// against a seeded node would otherwise be shown a shell with nothing in it. The
-// same compromise the Field Report, IMS, organizer, and department-admin
-// surfaces already make applies here: a clearly labeled development session,
-// installed only behind an explicit environment flag.
+// Nothing in the application imports this. It is the last of the fixtures, and
+// what is left of it after M18.9 is scaffolding for tests rather than data
+// behind a screen: no route installs it, no environment flag installs it, and
+// `app/fixtureIsolation.spec.ts` asserts that no module reachable from `main.ts`
+// or `App.vue` can reach it. The `Fixture` in the filename is load-bearing —
+// that guard matches on it — so a production import of this module fails the
+// suite rather than shipping.
 //
-// Two rules keep it honest, and they are the whole reason this is not the
-// fixture-driven navigation CLIENT-001 forbids:
+// It exists because CLIENT-024 requires the client's tests to run without a live
+// server, and because the path they have to exercise starts at a real session
+// document. The specs establish a session by installing one of these and let
+// capabilities, navigation, branding, and context resolve from it by exactly the
+// path `GET /api/me` takes. A test that stubbed navigation directly would prove
+// nothing about the rule under test.
 //
-//  1. **The node always wins.** This is installed only after a refresh has
-//     failed to produce a document. A node that answers replaces it, and every
-//     later refresh replaces it again.
-//  2. **It is a document, not a decision.** It carries the same role codes and
-//     capability codes the permission catalog publishes, and navigation derives
-//     from it by exactly the path a real response takes. Nothing reads it
-//     directly, and there is no branch anywhere that behaves differently because
-//     the document came from here.
+// It was two modules until M18.9. `field-reports/localFieldFixture.ts` held the
+// identifiers and `session/localFieldSession.ts` built the document and
+// installed it into the running client behind
+// `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION`. The installer is gone — a
+// developer signs in against a seeded node now — and with it the reason the ids
+// lived apart from the document that is their only remaining reader.
 //
-// It goes when a login surface lands and a developer can sign in for real.
+// The identifiers stay aligned with the server's
+// `php artisan meridian:seed-local-field-fixture`, which is a real seeder for
+// human QA and is not in scope here. Keeping them equal costs nothing and means
+// a spec and a QA script can talk about the same event.
 
-import {
-  LOCAL_FIELD_DEPARTMENT_IDS,
-  LOCAL_FIELD_FIXTURE,
-  LOCAL_FIELD_TEAM_IDS,
-} from "@/field-reports/localFieldFixture";
-import {
-  clientSessionState,
-  installClientSession,
-} from "@/session/clientSession";
+import { installClientSession } from "@/session/clientSession";
 import {
   CAPABILITY_DEPARTMENT_ADMINISTER,
   CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
@@ -56,7 +53,38 @@ import type {
   SessionRole,
 } from "@/session/sessionDocument";
 
-/** Shared with the server fixture `meridian:seed-local-field-fixture` seeds. */
+/** Identities shared with the server's `meridian:seed-local-field-fixture`. */
+export const LOCAL_FIELD_FIXTURE = {
+  eventId: "11111111-1111-4111-8111-111111111111",
+  eventLabel: "Local Field Event",
+  submittedByUserId: "22222222-2222-4222-8222-222222222222",
+  staffId: "33333333-3333-4333-8333-333333333333",
+  originDeviceId: "44444444-4444-4444-8444-444444444444",
+  originNodeId: "55555555-5555-4555-8555-555555555555",
+  departmentId: "66666666-6666-4666-8666-666666666666",
+  departmentLabel: "Rangers",
+  teamId: "77777777-7777-4777-8777-777777777777",
+  teamLabel: "Command",
+} as const;
+
+/** The departments this session's staff member belongs to. */
+export const LOCAL_FIELD_DEPARTMENT_IDS = {
+  organizer: "22222222-2222-4222-8222-222222222201",
+  rangers: LOCAL_FIELD_FIXTURE.departmentId,
+  gate: "22222222-2222-4222-8222-222222222202",
+  dpw: "22222222-2222-4222-8222-222222222203",
+} as const;
+
+export const LOCAL_FIELD_TEAM_IDS = {
+  organizerDefault: "77777777-7777-4777-8777-777777777760",
+  rangersDefault: "77777777-7777-4777-8777-777777777770",
+  rangersDirt: "77777777-7777-4777-8777-777777777771",
+  gateDefault: "77777777-7777-4777-8777-777777777780",
+  gateCredentials: "77777777-7777-4777-8777-777777777781",
+  dpwDefault: "77777777-7777-4777-8777-777777777790",
+  dpwBikes: "77777777-7777-4777-8777-777777777791",
+} as const;
+
 export const LOCAL_FIELD_ORGANIZATION_ID = "88888888-8888-4888-8888-888888888888";
 
 const ORGANIZATION_ID = LOCAL_FIELD_ORGANIZATION_ID;
@@ -87,13 +115,13 @@ function role(
 }
 
 /**
- * The roles the local fixture's staff member holds, one department at a time.
+ * The roles this session's staff member holds, one department at a time.
  *
- * Rangers is the fullest role in the seed — department lead who also runs
- * logistics, operations, planning, and Incident Command, and leads the Dirt team
- * — because that is the account a developer wants to land in. The other three
- * exist so the department switcher has something to switch between and so each
- * of the narrower shapes is reachable without editing anything.
+ * Rangers is the fullest — department lead who also runs logistics, operations,
+ * planning, and Incident Command, and leads the Dirt team — because a spec that
+ * wants an authority usually wants that one. The other three exist so the
+ * department switcher has something to switch between and so each of the
+ * narrower shapes is reachable without building a document by hand.
  */
 function localFieldRoles(): SessionRole[] {
   return [
@@ -255,7 +283,7 @@ export function localFieldSessionDocument(
         starts_at: null,
         ends_at: null,
         // No window bound, so a cached copy of this document stays usable. A
-        // development node is not running to a schedule.
+        // spec that is about the window sets one.
         active_event_window_starts_at: null,
         active_event_window_ends_at: null,
         is_node_locked: true,
@@ -299,8 +327,8 @@ export function localFieldSessionDocument(
     context: {
       organization_id: ORGANIZATION_ID,
       event_id: LOCAL_FIELD_FIXTURE.eventId,
-      // Rangers, so a developer lands in the fullest of the four rather than in
-      // whichever one happens to be first.
+      // Rangers, so a spec that does not select one lands in the fullest of the
+      // four rather than in whichever happens to be first.
       department_id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
       node_locked: true,
       node_locked_event_id: LOCAL_FIELD_FIXTURE.eventId,
@@ -318,11 +346,10 @@ export const LOCAL_FIELD_OTHER_EVENT_ID = "event-cascadia-thaw-2027";
 /**
  * The same session as resolved by a node with no event lock (M16.7).
  *
- * The seeded node is locked to one event, which is the right shape for the
- * development fixture — it stands for an on-site node — and the wrong shape for
- * exercising a switcher, which by definition only exists where a node is not
- * locked. These overrides give the same user two organizations, two events, and
- * switching offered.
+ * The seeded node is locked to one event, which is the right shape for an
+ * on-site node and the wrong shape for exercising a switcher, which by
+ * definition only exists where a node is not locked. These overrides give the
+ * same user two organizations, two events, and switching offered.
  *
  * The seeded organization stays first and stays the context, so departments,
  * teams, and roles all still resolve against the organization they belong to and
@@ -371,11 +398,12 @@ export function switchableLocalFieldContext(): Pick<
 }
 
 /**
- * Establish the local development session.
+ * Establish this session on the client under test.
  *
- * Also what the specs establish a session through, which is the point of
- * CLIENT-024: the client's tests exercise the real capability-to-navigation path
- * against a real document, with no server running.
+ * `installClientSession` is the same seam a cached document is restored
+ * through, so what a spec gets afterwards is a client in the state a real
+ * session leaves it in — capabilities, context, branding, and navigation all
+ * derived by the production path (CLIENT-024).
  */
 export function installLocalFieldSession(
   overrides: Partial<SessionDocument> = {},
@@ -385,57 +413,6 @@ export function installLocalFieldSession(
   installClientSession(document, "network");
 
   return document;
-}
-
-/**
- * Install the local development session when the environment asks for it, the
- * client has no session of its own, and the node has not just refused it.
- *
- * Shares `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` with the Field Report
- * development session: they stand for the same seeded staff member on the same
- * seeded node, and two switches for one fixture is one switch too many.
- *
- * Two states it stays out of, and they are different states (M16.11):
- *
- *  1. **A session is held.** A developer can now sign in for real, and a real
- *     session resolved yesterday and booted from cache today must not be
- *     replaced by a fixture because the node happened to be unreachable this
- *     morning.
- *  2. **A credential this client held was refused.** A revoked token or a
- *     revoked device arrives as an unauthenticated refresh (AUTH-023), and the
- *     honest state after one is signed out. Filling the shell back in with a
- *     fixture would show a developer a populated session at the exact moment the
- *     node stopped accepting them — the one moment the screen has to be
- *     believed.
- *
- *     Deliberately narrower than "the refresh was unauthenticated". A client
- *     that has never signed in is refused too, and that is the case this fixture
- *     exists for: a developer who has not signed in should still see a populated
- *     shell. Only a credential that was held and then refused means somebody was
- *     signed out.
- */
-export function installLocalFieldSessionFromEnv(
-  options: {
-    readonly credentialRefused?: boolean;
-    readonly env?: Pick<
-      ImportMetaEnv,
-      "VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION"
-    >;
-  } = {},
-): boolean {
-  const env = options.env ?? import.meta.env;
-
-  if (
-    env.VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION !== "true" ||
-    clientSessionState.document !== null ||
-    options.credentialRefused === true
-  ) {
-    return false;
-  }
-
-  installLocalFieldSession();
-
-  return true;
 }
 
 function department(id: string, name: string, code: string) {

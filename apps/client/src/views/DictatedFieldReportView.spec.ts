@@ -12,10 +12,12 @@ import {
   type FieldSessionContext,
 } from "@/field-reports/fieldSession";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
+import {
+  installLocalFieldSession,
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/session/localFieldSessionFixture";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

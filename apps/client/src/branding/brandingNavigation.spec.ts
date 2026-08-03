@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 
 import { useNavigationSections } from "@/components/workflowLinks";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

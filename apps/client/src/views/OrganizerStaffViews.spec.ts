@@ -19,13 +19,13 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory, type RouteLocationRaw } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
-import { routes } from "@/router";
-import { clearClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
+  LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_ORGANIZATION_ID,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
+import { routes } from "@/router";
+import { clearClientSession } from "@/session/clientSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

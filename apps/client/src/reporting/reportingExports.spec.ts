@@ -9,14 +9,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MeridianApiError, configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
+import {
+  installLocalFieldSession,
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/session/localFieldSessionFixture";
 import {
   CREDENTIAL_ELIGIBILITY_EXPORT,
   downloadCredentialEligibilityExport,
   reportingExportAuthority,
 } from "@/reporting/reportingExports";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,

@@ -4,19 +4,16 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
+import { clearFieldSession } from "@/field-reports/fieldSession";
 import {
-  clearFieldSession,
-  installDevelopmentFieldSession,
-} from "@/field-reports/fieldSession";
-import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_FIXTURE,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { routes } from "@/router";
 import { adoptHeldApiToken } from "@/session/apiLogin";
 import { clearApiToken, storeApiToken } from "@/session/apiToken";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
@@ -145,7 +142,7 @@ describe("shared client shell", () => {
       baseUrl: "http://localhost:8000",
       bearerToken: "device-token",
     });
-    installDevelopmentFieldSession();
+    installLocalFieldSession();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>

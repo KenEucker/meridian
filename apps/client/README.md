@@ -126,22 +126,21 @@ department in the shell's context block all come from the session response
 hold, and a client that has resolved no session renders no navigation at all —
 not a reduced menu, none.
 
-`GET /api/me` sits behind `auth:sanctum`, so until client login is wired the
-endpoint answers 401 in local development. To see a populated shell, set
+`GET /api/me` sits behind `auth:sanctum`, so a shell is populated by signing in
+and by nothing else (M18.9; CLIENT-001). There was a
+`VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION` switch that installed a development
+session document when the node produced none; it is gone, along with the two
+fixture modules behind it. A client holding no session shows the sign-in screen.
 
-```dotenv
-VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=true
+To see a populated shell locally, seed a node and sign in against it:
+
+```bash
+corepack pnpm run setup:local
 ```
 
-in `apps/client/.env.development` — the same switch that installs the Field
-Report development session. It installs a development session document
-(`src/session/localFieldSession.ts`) for the staff member
-`php artisan meridian:seed-local-field-fixture` seeds, and only when the node
-produced no document of its own. A node that answers always replaces it, on
-startup and on every later refresh.
-
-That seeded user is in four departments, and switching between them in the user
-menu is the quickest way to see the rule at work:
+`php artisan meridian:seed-local-field-fixture` seeds a staff member in four
+departments, and switching between them in the user menu is the quickest way to
+see the permission rules at work:
 
 | Department | Holds | Reaches |
 |---|---|---|
@@ -149,6 +148,11 @@ menu is the quickest way to see the rule at work:
 | Organizer | organizer | the organization pages, and no department workflow |
 | Gate | staff | their own pages and Gate's member pages |
 | DPW | team lead of Bikes | their own pages, DPW's member pages, and Team Overview |
+
+The client's specs stand on the same shape without a server at all
+(`src/session/localFieldSessionFixture.ts`, CLIENT-024). Nothing in the
+application imports it, and `src/app/fixtureIsolation.spec.ts` walks the module
+graph from `main.ts` and `App.vue` to prove it.
 
 ### Organization and event context (local QA)
 
@@ -175,8 +179,8 @@ Switching is connected-only and is offered only by a node with no event lock:
 The seeded development node is locked to its one event, which is the right shape
 for an on-site node and the wrong shape for exercising a switcher. The specs
 build the unlocked shape through `switchableLocalFieldContext()` in
-`src/session/localFieldSession.ts`; to see it in the browser, point the client at
-a node whose `nodes` row carries no `event_id`.
+`src/session/localFieldSessionFixture.ts`; to see it in the browser, point the
+client at a node whose `nodes` row carries no `event_id`.
 
 A switch that lands re-resolves permissions, navigation, branding, and the
 durable session copy, and drops what belonged to the context being left — the

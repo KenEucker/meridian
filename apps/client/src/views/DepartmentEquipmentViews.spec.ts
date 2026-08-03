@@ -20,14 +20,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearReadCache } from "@/offline/readCache";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
 import {
   selectSessionDepartment,
 } from "@/session/sessionAccess";

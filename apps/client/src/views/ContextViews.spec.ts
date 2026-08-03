@@ -17,7 +17,7 @@ import {
   LOCAL_FIELD_OTHER_EVENT_ID,
   LOCAL_FIELD_OTHER_ORGANIZATION_ID,
   switchableLocalFieldContext,
-} from "@/session/localFieldSession";
+} from "@/session/localFieldSessionFixture";
 import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
 import type { SessionDocument } from "@/session/sessionDocument";
 import EventContextView from "@/views/EventContextView.vue";

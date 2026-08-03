@@ -24,16 +24,14 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import {
+  installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_FIXTURE,
+  LOCAL_FIELD_ORGANIZATION_ID,
   LOCAL_FIELD_TEAM_IDS,
-} from "@/field-reports/localFieldFixture";
+} from "@/session/localFieldSessionFixture";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import {
-  LOCAL_FIELD_ORGANIZATION_ID,
-  installLocalFieldSession,
-} from "@/session/localFieldSession";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 import DocumentEditView from "@/views/DocumentEditView.vue";
 import DocumentLibraryView from "@/views/DocumentLibraryView.vue";
