@@ -11,13 +11,7 @@
 // registers its session key, and this module knows nothing about either.
 
 import { resolveNodeUrl } from "@/app/nodeConnection";
-import {
-  LIVE_READ,
-  noteLiveRead,
-  noteStoredRead,
-  readCache,
-  type CachedRead,
-} from "@/offline/readCache";
+import { LIVE_READ, readCache, type CachedRead } from "@/offline/readCache";
 
 export class MeridianApiError extends Error {
   readonly status: number;
@@ -221,7 +215,6 @@ export async function meridianCachedJson<T>(
     const data = await meridianJson<T>(path);
 
     readCache.write(path, data, new Date().toISOString());
-    noteLiveRead();
 
     return { data, freshness: LIVE_READ };
   } catch (error) {
@@ -232,8 +225,6 @@ export async function meridianCachedJson<T>(
     const stored = readCache.read(path);
 
     if (stored !== null) {
-      noteStoredRead();
-
       return {
         data: stored.payload as T,
         freshness: { source: "cache", cachedAt: stored.cachedAt, narrowed: false },
@@ -248,8 +239,6 @@ export async function meridianCachedJson<T>(
     if (fallback === null) {
       throw error;
     }
-
-    noteStoredRead();
 
     return {
       data: fallback.payload as T,

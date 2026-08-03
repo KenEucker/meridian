@@ -35,14 +35,20 @@
 //     session end, through the same registry every other context-scoped cache
 //     uses. A device holds one user's authorized reads, not a pile of them.
 //
+// Freshness is disclosed by the surfaces that carry it, not by the shell. A
+// shell-wide "you are seeing stored data" line was tried and removed: it floated
+// under the offline banner on every page, said the same thing that banner
+// already implies, and told a reader nothing they could act on. What is worth
+// saying is tied to one read — which copy this board is, when this index was
+// taken, what a locally matched search actually covered — and that belongs on
+// the surface making the claim.
+//
 // What is stored is what the node already sent this client about data it is
 // entitled to read. `localStorage` is the same device-local seam the session
 // cache and the command outbox use and moves onto encrypted local storage with
 // them. PowerSync replication (M16.13) is the eventual home for the reads it
 // covers; this is what the client can honestly do until then, and the disclosure
 // it carries stays true either way.
-
-import { ref } from "vue";
 
 export const READ_CACHE_KEY = "meridian.reads.v1";
 
@@ -217,32 +223,8 @@ export function createReadCache(
 export const readCache = createReadCache();
 
 /**
- * Whether the last read this client completed came out of the store.
- *
- * A page-level signal for the shell, so a surface discloses staleness without
- * every read model having to thread freshness into its own view. The precise,
- * per-read notice still belongs on surfaces where one read is the whole page and
- * the moment it was taken changes what an operator does with it — the Logistics
- * Desk's index and the staff shift board both carry their own.
- *
- * Reset by the next live read rather than by a timer: what the reader needs to
- * know is whether what they are looking at came from the node, and that stops
- * being true the moment one answers.
+ * Forget every stored read. Sign-out, context switch, and session end call this.
  */
-export const servingStoredReads = ref(false);
-
-/** Note that a read was answered from the store, for the shell's disclosure. */
-export function noteStoredRead(): void {
-  servingStoredReads.value = true;
-}
-
-/** Note that the node answered, which clears the disclosure. */
-export function noteLiveRead(): void {
-  servingStoredReads.value = false;
-}
-
-/** Forget every stored read. Sign-out, context switch, and session end call this. */
 export function clearReadCache(): void {
   readCache.clear();
-  servingStoredReads.value = false;
 }
