@@ -211,14 +211,31 @@ class PermissionCatalogTest extends TestCase
         ], $this->permissionCodesFor('department_planning'));
     }
 
-    public function test_designation_only_roles_carry_no_capabilities_until_their_owning_milestones(): void
+    public function test_department_operator_carries_no_capabilities_until_its_owning_milestone(): void
     {
-        // M18.10 registers these roles so the Operator and Staff Coordinator
-        // team designations have a role to attach a grant to. Their capability
-        // sets are owned by M18.10A (section 4.8A) and M18.11 (requirements
-        // 4.4), so holding either grants nothing yet.
+        // M18.10 registers the role so the Operator team designation has a
+        // role to attach a grant to. Its capability set is owned by M18.10A
+        // (section 4.8A), so holding it grants nothing yet.
         $this->assertSame([], $this->permissionCodesFor('department_operator'));
-        $this->assertSame([], $this->permissionCodesFor('staff_coordinator'));
+    }
+
+    public function test_staff_coordinator_carries_application_review_and_nothing_else(): void
+    {
+        // M18.11 / TEAM-014 / requirements 4.4: application review, approval,
+        // rejection, and deferral, and no other organizer governance
+        // capability. The single-permission list is the requirement, not an
+        // implementation detail — anything added here widens a role that
+        // exists precisely because it is narrower than organizer.
+        $this->assertSame(
+            ['organization.applications.review'],
+            $this->permissionCodesFor('staff_coordinator'),
+        );
+
+        // Organizers and Lead Organizers review through the same capability,
+        // which is what lets one policy answer for the whole reviewer
+        // population (APP-005; M18.20A reuses it for profile change requests).
+        $this->assertContains('organization.applications.review', $this->permissionCodesFor('organizer'));
+        $this->assertContains('organization.applications.review', $this->permissionCodesFor('lead_organizer'));
     }
 
     public function test_seeder_is_idempotent(): void

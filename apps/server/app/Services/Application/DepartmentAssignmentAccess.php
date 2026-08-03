@@ -39,7 +39,11 @@ class DepartmentAssignmentAccess
             return false;
         }
 
-        if (app(ApplicationReviewAccess::class)->canReviewApplications($user)) {
+        // Application review authority — God Mode's platform permission or the
+        // organization-scoped catalog capability organizers and Staff
+        // Coordinators hold (M18.11; requirements 4.4) — assigns to any
+        // eligible department in the application organization.
+        if (app(ApplicationReviewAccess::class)->canReviewApplication($user, $application)) {
             return (string) $application->organization_id === (string) $department->organization_id;
         }
 

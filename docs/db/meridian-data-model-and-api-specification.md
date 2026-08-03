@@ -1114,7 +1114,7 @@ teams:
 - `department_planning` views identity-free Planning Table aggregates comparing plan versus actual by shift/team window.
 - `department_administration` manages department/team administrative settings as permitted.
 - `department_operator` is the department dispatch/console function (requirements 4.8A). It enters the catalog with the team designation model (TEAM-012); its capability set and the derived event-scoped `ic_operator` elevation are owned by M18.10A.
-- `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It enters the catalog with the team designation model; its application review capability set is owned by M18.11.
+- `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It carries `organization.applications.review` — application review, approval, rejection, and deferral, plus assigning approved applicants to departments (requirements 4.4) — and no other organizer governance capability. Organizers and Lead Organizers hold the same capability, so one policy answers for the whole reviewer population.
 
 Department team designations (TEAM-011 through TEAM-013) attach these grants to
 a named team per function through `team_designations` (section 10.6); the

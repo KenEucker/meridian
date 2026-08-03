@@ -110,16 +110,19 @@ final class PermissionCatalog
 
     public const PERMISSION_REPORTS_CREDITS_EARNED_EXPORT = 'reports.credits_earned.export';
 
+    public const PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW = 'organization.applications.review';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
      *
      * `department_operator` and `staff_coordinator` enter the catalog with
      * M18.10 so the TEAM-012 Operator and TEAM-014 Staff Coordinator team
-     * designations have a role to attach a grant to. Their capability sets are
-     * owned by M18.10A (section 4.8A Operator capabilities and the derived
-     * `ic_operator` elevation) and M18.11 (application review authority), so
-     * neither role carries a catalog permission here.
+     * designations have a role to attach a grant to. The Operator capability
+     * set is owned by M18.10A (section 4.8A Operator capabilities and the
+     * derived `ic_operator` elevation), so that role carries no catalog
+     * permission here. M18.11 gives `staff_coordinator` its application review
+     * authority (requirements 4.4; TEAM-014).
      *
      * @return array<string, array{name: string, scope_type: string}>
      */
@@ -186,6 +189,7 @@ final class PermissionCatalog
             self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT => 'Export the staff contact list; organizers export the whole event without emergency contacts, department roles export their own department with them.',
             self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT => 'Export actual hours worked with the scheduled window and correction state; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT => 'Export credits earned with the calculation basis each number was frozen at; organizers export the whole event, department roles export their own department.',
+            self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW => 'Review event applications for the organization: approve, reject, and defer, and assign approved applicants to departments.',
         ];
     }
 
@@ -246,6 +250,15 @@ final class PermissionCatalog
      * department_administration, which is exactly the split BRAND-019 draws:
      * organizers own the organization palette, departments own only their own
      * logo, accent, and surface background.
+     * M18.11 adds organization.applications.review to the two organizer roles
+     * and to staff_coordinator, and to staff_coordinator nothing else. That
+     * asymmetry is the role (TEAM-014; requirements 4.4): a Staff Coordinator
+     * reviews, approves, rejects, and defers the organization's applications
+     * and supports department assignment after approval, without holding any
+     * of the remaining organizer governance authority — not departments, not
+     * staff status, not credentials. Review is organization-scoped through the
+     * designated team within the configured Organizers Department, the same
+     * scoping every organizer capability already resolves through.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -312,6 +325,9 @@ final class PermissionCatalog
             self::ROLE_DEPARTMENT_PLANNING => [
                 self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
             ],
+            self::ROLE_STAFF_COORDINATOR => [
+                self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+            ],
             self::ROLE_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
                 self::PERMISSION_ORGANIZATION_DEPARTMENTS_MANAGE,
@@ -326,6 +342,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
+                self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -341,6 +358,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_STAFF_CONTACT_EXPORT,
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
+                self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
             ],
         ];
     }

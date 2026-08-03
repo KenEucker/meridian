@@ -319,11 +319,11 @@ class TeamDesignationTest extends TestCase
             (new EffectiveRoleResolver)->resolveForStaff($staff)->pluck('roleCode')->all(),
         );
 
-        // The review capability set is owned by M18.11; the designation grants
-        // the role and the role carries nothing until then.
-        $this->assertArrayNotHasKey(
-            PermissionCatalog::ROLE_STAFF_COORDINATOR,
-            PermissionCatalog::rolePermissions(),
+        // M18.11 gives the role its application review capability, and only
+        // that (TEAM-014; requirements 4.4).
+        $this->assertSame(
+            [PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW],
+            PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_STAFF_COORDINATOR],
         );
 
         $removed = $this->service()->removeStaffCoordinatorTeam($organization, $this->actor());
