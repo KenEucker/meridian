@@ -727,7 +727,15 @@ export async function getPlanningTable(
     query.set("date", filters.date);
   }
 
+  const endpoint = base("planning", eventId, departmentId);
   const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
+  /*
+   * With no node in reach, fall back to the unfiltered table this device holds
+   * and narrow it here (M18.9). The filters go to the node whenever there is
+   * one — the counts on a filtered row are that view's counts, computed by the
+   * node — but a lead who has read the table and then loses the node should be
+   * able to pick a team without the page going blank.
+   */
   const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly teams?: { readonly team_id: string; readonly team_label: string }[];
@@ -754,7 +762,7 @@ export async function getPlanningTable(
         readonly status_label: string;
       }[];
     }
-  >(base("planning", eventId, departmentId) + suffix);
+  >(endpoint + suffix, { fallbackPath: endpoint });
   const payload = read.data;
 
   return {
@@ -769,25 +777,54 @@ export async function getPlanningTable(
       teamId: payload.filters?.team_id ?? null,
       date: payload.filters?.date ?? null,
     },
-    rows: (payload.rows ?? []).map((row) => ({
-      shiftId: row.shift_id,
-      title: row.title,
-      teamId: row.team_id,
-      teamLabel: row.team_label ?? "",
-      startsAt: row.starts_at ?? "",
-      endsAt: row.ends_at ?? "",
-      lifecycle: row.lifecycle,
-      capacity: row.capacity,
-      signedUpOrAssignedCount: row.signed_up_or_assigned_count,
-      checkedInCount: row.checked_in_count,
-      noShowCount: row.no_show_count,
-      unscheduledCount: row.unscheduled_count,
-      plannedHours: row.planned_hours,
-      actualHours: row.actual_hours,
-      varianceHours: row.variance_hours,
-      statusLabel: row.status_label,
-    })),
+    rows: narrowPlanningRows(
+      (payload.rows ?? []).map((row) => ({
+        shiftId: row.shift_id,
+        title: row.title,
+        teamId: row.team_id,
+        teamLabel: row.team_label ?? "",
+        startsAt: row.starts_at ?? "",
+        endsAt: row.ends_at ?? "",
+        lifecycle: row.lifecycle,
+        capacity: row.capacity,
+        signedUpOrAssignedCount: row.signed_up_or_assigned_count,
+        checkedInCount: row.checked_in_count,
+        noShowCount: row.no_show_count,
+        unscheduledCount: row.unscheduled_count,
+        plannedHours: row.planned_hours,
+        actualHours: row.actual_hours,
+        varianceHours: row.variance_hours,
+        statusLabel: row.status_label,
+      })),
+      read.freshness.narrowed === true ? filters : { teamId: null, date: null },
+      toContext(payload.context).timeZone,
+    ),
   };
+}
+
+/**
+ * Apply the team and date filters the node would have applied.
+ *
+ * Only reached when a filtered read fell back to the unfiltered copy this device
+ * holds. The counts on each row are the node's and are not recomputed here: a
+ * row's checked-in count is that shift's, whatever set of rows it is shown in,
+ * so narrowing the list never has to touch the arithmetic on it.
+ */
+function narrowPlanningRows(
+  rows: readonly PlanningRow[],
+  filters: PlanningFilters,
+  timeZone: string,
+): readonly PlanningRow[] {
+  return rows.filter((row) => {
+    if (filters.teamId !== null && row.teamId !== filters.teamId) {
+      return false;
+    }
+
+    return (
+      filters.date === null ||
+      dateKeyForTimestamp(row.startsAt, timeZone) === filters.date
+    );
+  });
 }
 
 /** The signed-in user, for the attendance operations they record. */
