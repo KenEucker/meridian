@@ -31,6 +31,15 @@ export const CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE =
 export const CAPABILITY_ORGANIZATION_STAFF_MANAGE = "organization.staff.manage";
 export const CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE =
   "organization.incident_types.manage";
+/**
+ * Maintaining organization-level team designations (TEAM-016) — today, which
+ * team within the configured Organizers Department carries Staff Coordinator
+ * authority. Department team designations answer to `department.administer`
+ * on the department administration surface instead, so no code exists for
+ * them here.
+ */
+export const CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE =
+  "organization.designations.manage";
 export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";

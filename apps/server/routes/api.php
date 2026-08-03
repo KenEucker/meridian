@@ -42,7 +42,9 @@ use App\Http\Controllers\Shifts\ShiftBoardReadController;
 use App\Http\Controllers\Shifts\ShiftSignupCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
+use App\Http\Controllers\Teams\OrganizationDesignationController;
 use App\Http\Controllers\Teams\TeamCommandController;
+use App\Http\Controllers\Teams\TeamDesignationCommandController;
 use App\Http\Controllers\Teams\TeamReadController;
 use App\Http\Controllers\Teams\TeamStaffCommandController;
 use App\Http\Controllers\Trainings\TrainingCommandController;
@@ -405,6 +407,23 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/remove-staff-from-team', [TeamStaffCommandController::class, 'removeStaffFromTeam'])
         ->name('api.commands.remove-staff-from-team');
 
+    /*
+     * Team designations (M18.12; TEAM-016). Department functions are
+     * department administration; the Staff Coordinator designation is
+     * organization configuration, and each path answers to its own authority.
+     */
+    Route::post('/commands/designate-department-team', [TeamDesignationCommandController::class, 'designate'])
+        ->name('api.commands.designate-department-team');
+
+    Route::post('/commands/remove-department-team-designation', [TeamDesignationCommandController::class, 'remove'])
+        ->name('api.commands.remove-department-team-designation');
+
+    Route::post('/commands/designate-staff-coordinator-team', [OrganizationDesignationController::class, 'designateStaffCoordinator'])
+        ->name('api.commands.designate-staff-coordinator-team');
+
+    Route::post('/commands/remove-staff-coordinator-team', [OrganizationDesignationController::class, 'removeStaffCoordinator'])
+        ->name('api.commands.remove-staff-coordinator-team');
+
     Route::post('/commands/create-shift', [ShiftAdminCommandController::class, 'create'])
         ->name('api.commands.create-shift');
 
@@ -517,6 +536,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/incident-types', [IncidentTypeAdminController::class, 'index'])
         ->name('api.organizations.incident-types.index');
+
+    Route::get('/organizations/{organization}/designations', [OrganizationDesignationController::class, 'index'])
+        ->name('api.organizations.designations.index');
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');

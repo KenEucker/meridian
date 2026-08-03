@@ -2171,6 +2171,12 @@ Rules:
 - removed designations keep their row for history
 - creation, change, and removal are audited with the department or organization, the function, and the team recorded (TEAM-017)
 
+Administration (M18.12; TEAM-016, TEAM-018):
+
+- department designations are maintained from the department administration surface by `department.administer` holders: the `GET /api/departments/{department}/teams` workspace read carries one designation row per function (undesignated functions included with a null team), and `POST /api/commands/designate-department-team` / `POST /api/commands/remove-department-team-designation` change them
+- the organization-level Staff Coordinator designation is maintained from the organization configuration surface by `organization.designations.manage` holders (organizer, lead_organizer): `GET /api/organizations/{organization}/designations` answers with the current designation and the eligible teams — active teams of the configured Organizers Department — and `POST /api/commands/designate-staff-coordinator-team` / `POST /api/commands/remove-staff-coordinator-team` change it
+- a permission explanation for a designation-owned grant names the designation (TEAM-018), e.g. "You have the Department Logistics role because your team, Gate Crew, is the department's designated Logistics team."
+
 #### `event_department_assignments`
 
 Represents a department participating in an event.

@@ -19,7 +19,9 @@ import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   archiveDepartmentTeam,
   assignStaffToTeam,
+  designateDepartmentTeam,
   getDepartmentTeamAdminWorkspace,
+  removeDepartmentTeamDesignation,
   removeStaffFromTeam,
   removeTeamLead,
   restoreDepartmentTeam,
@@ -27,6 +29,7 @@ import {
   updateDepartmentDetails,
   type DepartmentTeam,
   type DepartmentTeamAdminWorkspace,
+  type DepartmentTeamDesignation,
   type DepartmentTeamStaffMember,
 } from "@/department-teams/teamAdminModel";
 
@@ -117,6 +120,80 @@ const assignableTeams = computed(() =>
   allTeams.value.filter((team) => team.archivedAt === null),
 );
 const assignableStaff = computed(() => workspace.value?.departmentStaff ?? []);
+
+/**
+ * Which team carries each department operational function (M18.12; TEAM-011,
+ * TEAM-016). The node answers with one row per designatable function, so this
+ * panel renders the whole frame — designated or not — from the same read as
+ * everything else on the page.
+ */
+const designations = computed<readonly DepartmentTeamDesignation[]>(
+  () => workspace.value?.designations ?? [],
+);
+const designationError = ref<string | null>(null);
+const designationBusy = ref<string | null>(null);
+const designationDrafts = reactive<Record<string, string>>({});
+
+watch(designations, (rows) => {
+  for (const row of rows) {
+    designationDrafts[row.functionCode] = "";
+  }
+});
+
+async function runDesignationCommand(
+  functionCode: string,
+  command: () => Promise<void>,
+  fallback: string,
+): Promise<void> {
+  designationError.value = null;
+  designationBusy.value = functionCode;
+
+  try {
+    await command();
+    await loadWorkspace();
+  } catch (error) {
+    designationError.value = meridianErrorMessage(error, fallback);
+  } finally {
+    designationBusy.value = null;
+  }
+}
+
+async function onDesignate(row: DepartmentTeamDesignation): Promise<void> {
+  const teamId = designationDrafts[row.functionCode] ?? "";
+
+  if (teamId === "") {
+    return;
+  }
+
+  await runDesignationCommand(
+    row.functionCode,
+    () => designateDepartmentTeam(departmentId.value, row.functionCode, teamId),
+    `Unable to designate the ${row.functionLabel} team.`,
+  );
+}
+
+async function onRemoveDesignation(
+  row: DepartmentTeamDesignation,
+): Promise<void> {
+  await runDesignationCommand(
+    row.functionCode,
+    () => removeDepartmentTeamDesignation(departmentId.value, row.functionCode),
+    `Unable to remove the ${row.functionLabel} designation.`,
+  );
+}
+
+/**
+ * The teams a function may be handed to: active, and not the one already
+ * carrying it — designating the same team again is the one selection the node
+ * would refuse.
+ */
+function designatableTeams(
+  row: DepartmentTeamDesignation,
+): readonly DepartmentTeam[] {
+  return allTeams.value.filter(
+    (team) => team.archivedAt === null && team.id !== row.teamId,
+  );
+}
 
 async function loadWorkspace(): Promise<void> {
   if (departmentId.value === "") {
@@ -762,6 +839,99 @@ function teamCreateRoute() {
             </table>
           </div>
         </section>
+
+        <!--
+          Which team carries each department operational function (TEAM-011,
+          TEAM-016). Designating attaches the function's operational grant to
+          the team; removing revokes exactly what the designation granted.
+        -->
+        <section
+          v-if="canAdminister"
+          class="dept-teams__designations"
+          aria-labelledby="team-designations-heading"
+        >
+          <div>
+            <h2 id="team-designations-heading" class="dept-teams__subheading">
+              Team designations
+            </h2>
+            <p class="dept-teams__hint">
+              Designate which team carries each department function. Members of
+              a designated team hold that function's capabilities, and their
+              permission explanations name the designation.
+            </p>
+          </div>
+
+          <p v-if="designationError" class="dept-teams__error" role="alert">
+            {{ designationError }}
+          </p>
+
+          <div
+            class="dept-teams__table-wrap"
+            role="region"
+            aria-label="Team designations"
+          >
+            <table class="dept-teams__table">
+              <thead>
+                <tr>
+                  <th scope="col">Function</th>
+                  <th scope="col">Designated team</th>
+                  <th scope="col">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in designations" :key="row.functionCode">
+                  <td>
+                    <strong>{{ row.functionLabel }}</strong>
+                  </td>
+                  <td>
+                    <span v-if="row.teamName">{{ row.teamName }}</span>
+                    <span v-else class="dept-teams__none">No team designated</span>
+                  </td>
+                  <td>
+                    <form
+                      class="dept-teams__designate"
+                      :aria-label="`Designate the ${row.functionLabel} team`"
+                      @submit.prevent="onDesignate(row)"
+                    >
+                      <select
+                        v-model="designationDrafts[row.functionCode]"
+                        :aria-label="`Team to designate for ${row.functionLabel}`"
+                      >
+                        <option value="" disabled>Select team</option>
+                        <option
+                          v-for="team in designatableTeams(row)"
+                          :key="team.id"
+                          :value="team.id"
+                        >
+                          {{ team.name }}
+                        </option>
+                      </select>
+                      <button
+                        type="submit"
+                        :disabled="
+                          designationBusy === row.functionCode ||
+                          !designationDrafts[row.functionCode]
+                        "
+                      >
+                        {{ row.teamId ? "Change" : "Designate" }}
+                      </button>
+                      <button
+                        v-if="row.teamId"
+                        type="button"
+                        class="dept-teams__archive"
+                        :disabled="designationBusy === row.functionCode"
+                        :aria-label="`Remove the ${row.functionLabel} designation`"
+                        @click="onRemoveDesignation(row)"
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </ContentGrid>
 
       <!--
@@ -986,10 +1156,59 @@ function teamCreateRoute() {
   font-weight: 400;
 }
 
+.dept-teams__designate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+  align-items: center;
+}
+
+.dept-teams__designate select {
+  min-height: 2.25rem;
+  padding: 0 var(--m-space-2);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  font: inherit;
+  font-weight: 400;
+}
+
+.dept-teams__designate button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  padding: 0 var(--m-space-2);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dept-teams__designate button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dept-teams__designate .dept-teams__archive {
+  border-color: var(--m-action-destructive-bg);
+  background: var(--m-action-destructive-bg);
+  color: var(--m-action-destructive-text);
+}
+
+.dept-teams__none {
+  color: var(--m-text-muted);
+}
+
 .dept-teams__details,
 .dept-teams__lead,
 .dept-teams__staffmgmt,
-.dept-teams__management {
+.dept-teams__management,
+.dept-teams__designations {
   display: grid;
   gap: var(--m-space-3);
   padding: var(--m-space-4);

@@ -69,6 +69,15 @@ class TeamDesignation extends Model
     }
 
     /**
+     * The human-readable label for a designated function, as audit reasons
+     * and permission explanations name it (TEAM-017, TEAM-018).
+     */
+    public static function functionLabel(string $functionCode): string
+    {
+        return str_replace('_', ' ', ucwords($functionCode, '_'));
+    }
+
+    /**
      * The permission role a designated function attaches to the team
      * (TEAM-012, TEAM-014).
      *

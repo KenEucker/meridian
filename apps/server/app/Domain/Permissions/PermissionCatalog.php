@@ -112,6 +112,8 @@ final class PermissionCatalog
 
     public const PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW = 'organization.applications.review';
 
+    public const PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE = 'organization.designations.manage';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -190,6 +192,7 @@ final class PermissionCatalog
             self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT => 'Export actual hours worked with the scheduled window and correction state; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT => 'Export credits earned with the calculation basis each number was frozen at; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW => 'Review event applications for the organization: approve, reject, and defer, and assign approved applicants to departments.',
+            self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE => 'Maintain organization-level team designations: which team within the configured Organizers Department carries Staff Coordinator authority.',
         ];
     }
 
@@ -269,6 +272,12 @@ final class PermissionCatalog
      * staff status, not credentials. Review is organization-scoped through the
      * designated team within the configured Organizers Department, the same
      * scoping every organizer capability already resolves through.
+     * M18.12 adds organization.designations.manage to the two organizer roles,
+     * which is the TEAM-016 split: organization-level designations — today the
+     * Staff Coordinator team — are maintained by organizers and Lead
+     * Organizers from the organization configuration surface, while department
+     * team designations answer to department.administer on the department
+     * administration surface and need no capability of their own.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -357,6 +366,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+                self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -373,6 +383,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_HOURS_WORKED_EXPORT,
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+                self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
             ],
         ];
     }

@@ -5,6 +5,7 @@ namespace App\Services\Permissions;
 use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Event;
 use App\Models\Staff;
+use App\Models\TeamDesignation;
 use App\Models\TeamGrant;
 use Illuminate\Support\Collection;
 
@@ -17,6 +18,10 @@ use Illuminate\Support\Collection;
  * `membership_role = 'lead'` in the grant-bearing team, so department leads can
  * designate individual team leads without every team member gaining lead
  * authority (M11.17; technical spec 15.2).
+ *
+ * A grant a team designation created and owns is explained by the designation
+ * (TEAM-018): the reason names the designated function, so a user reads why
+ * their team carries the authority rather than only that it does.
  */
 class EffectiveRoleResolver
 {
@@ -42,7 +47,7 @@ class EffectiveRoleResolver
 
         $icDepartmentId = $event === null ? null : $this->effectiveIncidentCommandDepartmentId($event);
 
-        return TeamGrant::query()
+        $grants = TeamGrant::query()
             ->active()
             ->whereIn('team_id', $teamIds)
             ->where(function ($query) use ($event): void {
@@ -68,13 +73,15 @@ class EffectiveRoleResolver
                 }
 
                 return $leadTeamIds->contains((string) $grant->team_id);
-            })
-            ->map(function (TeamGrant $grant): EffectiveRole {
+            });
+
+        $designations = $this->designationsByGrantId($grants);
+
+        return $grants
+            ->map(function (TeamGrant $grant) use ($designations): EffectiveRole {
                 $roleName = $grant->permissionRole->name;
                 $teamName = $grant->team->name;
-                $reason = $grant->permissionRole->code === PermissionCatalog::ROLE_SHIFT_LEAD
-                    ? "You have the {$roleName} role because you are a designated lead of the {$teamName} team."
-                    : "You have the {$roleName} role because you are a member of the {$teamName} team.";
+                $reason = $this->reasonFor($grant, $designations->get((string) $grant->id));
 
                 return new EffectiveRole(
                     roleCode: $grant->permissionRole->code,
@@ -87,6 +94,49 @@ class EffectiveRoleResolver
                 );
             })
             ->values();
+    }
+
+    /**
+     * The active designations that created and own the given grants, keyed by
+     * grant id (TEAM-018).
+     *
+     * @param  Collection<int, TeamGrant>  $grants
+     * @return Collection<string, TeamDesignation>
+     */
+    private function designationsByGrantId(Collection $grants): Collection
+    {
+        if ($grants->isEmpty()) {
+            return collect();
+        }
+
+        return TeamDesignation::query()
+            ->active()
+            ->whereIn('team_grant_id', $grants->map(fn (TeamGrant $grant): string => (string) $grant->id))
+            ->get()
+            ->keyBy(fn (TeamDesignation $designation): string => (string) $designation->team_grant_id);
+    }
+
+    /**
+     * Why the staff member holds the role, naming the designation that granted
+     * it where one did (TEAM-018; technical spec 15.2).
+     */
+    private function reasonFor(TeamGrant $grant, ?TeamDesignation $designation): string
+    {
+        $roleName = $grant->permissionRole->name;
+        $teamName = $grant->team->name;
+
+        if ($designation !== null) {
+            $functionLabel = TeamDesignation::functionLabel($designation->function_code);
+            $scope = $designation->department_id === null
+                ? "the organization's designated {$functionLabel} team"
+                : "the department's designated {$functionLabel} team";
+
+            return "You have the {$roleName} role because your team, {$teamName}, is {$scope}.";
+        }
+
+        return $grant->permissionRole->code === PermissionCatalog::ROLE_SHIFT_LEAD
+            ? "You have the {$roleName} role because you are a designated lead of the {$teamName} team."
+            : "You have the {$roleName} role because you are a member of the {$teamName} team.";
     }
 
     private function effectiveIncidentCommandDepartmentId(Event $event): ?string

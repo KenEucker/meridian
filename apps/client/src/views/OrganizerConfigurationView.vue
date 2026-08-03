@@ -3,8 +3,12 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 
 import IncidentTypeSection from "@/components/sections/IncidentTypeSection.vue";
+import OrganizationDesignationSection from "@/components/sections/OrganizationDesignationSection.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
-import { organizerIncidentTypeAdminSession } from "@/session/organizerAdminSession";
+import {
+  organizerDesignationAdminSession,
+  organizerIncidentTypeAdminSession,
+} from "@/session/organizerAdminSession";
 
 /**
  * `organizer.configuration` — the organization configuration surface (M18.14A;
@@ -12,25 +16,32 @@ import { organizerIncidentTypeAdminSession } from "@/session/organizerAdminSessi
  *
  * ORG-018 asks for one place where an organization sets the values that govern
  * how it operates, and says that place may not be reachable only through God
- * Mode. This is that page. It carries one featureset today — the incident type
- * list — and is the hub the rest of ORG-018 lands in: the Prospective and Active
+ * Mode. This is that page. It carries two featuresets today — the incident type
+ * list, and the organization's team designations (M18.12; TEAM-014, TEAM-016)
+ * — and is the hub the rest of ORG-018 lands in: the Prospective and Active
  * inactivity thresholds, the hours correction grace period, the calendar year
  * start, the default credit policy, and the Organizers, default Incident
  * Command, and default Placement department designations, all of which are
  * M18.14.
  *
  * Each featureset carries its own authority rather than inheriting one from the
- * page. `organization.incident_types.manage` is what admits somebody to the
- * incident type list, and the values M18.14 adds will bring their own; a person
- * who may set one of them is not thereby entitled to the rest.
+ * page. `organization.incident_types.manage` admits somebody to the incident
+ * type list and `organization.designations.manage` to the designations; a
+ * person who may set one of them is not thereby entitled to the rest.
  */
 const incidentTypes = organizerIncidentTypeAdminSession;
+const designations = organizerDesignationAdminSession;
 const organizationLabel = computed(
-  () => incidentTypes.value?.organizationLabel ?? null,
+  () =>
+    incidentTypes.value?.organizationLabel ??
+    designations.value?.organizationLabel ??
+    null,
 );
 
 /** Whether any featureset on this page admits this user. */
-const canConfigureSomething = computed(() => incidentTypes.value !== null);
+const canConfigureSomething = computed(
+  () => incidentTypes.value !== null || designations.value !== null,
+);
 </script>
 
 <template>
@@ -59,6 +70,12 @@ const canConfigureSomething = computed(() => incidentTypes.value !== null);
         v-if="incidentTypes"
         variant="section"
         :organization-id="incidentTypes.organizationId"
+      />
+
+      <OrganizationDesignationSection
+        v-if="designations"
+        variant="section"
+        :organization-id="designations.organizationId"
       />
     </template>
   </WorkflowPageShell>
