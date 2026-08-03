@@ -19,6 +19,7 @@ use App\Models\Staff;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Services\Attendance\HoursCorrectionException;
+use App\Services\Attendance\HoursCorrectionWindow;
 use App\Services\DepartmentOps\DepartmentOperationsAccess;
 use App\Services\DepartmentOps\DepartmentOperationsAuthority;
 use App\Services\Presence\DepartmentPresenceException;
@@ -168,6 +169,7 @@ final class DepartmentOperationsReadController extends Controller
         Event $event,
         Department $department,
         DepartmentOperationsAccess $access,
+        HoursCorrectionWindow $correctionWindow,
     ): JsonResponse {
         $authority = $this->authorize($request, $event, $department, $access);
 
@@ -176,6 +178,10 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         $now = Carbon::now();
+        // When this event's correction window closes (ORG-017), computed once
+        // for the whole desk so every card names the same moment the command
+        // would refuse at.
+        $correctionClosesAt = $correctionWindow->closesAt($event);
         $staff = $this->departmentStaff($department);
         $staffIds = $staff->map(fn (Staff $member): string => (string) $member->id)->all();
         $shifts = $this->deskShifts($event, $department, $now);
@@ -233,6 +239,7 @@ final class DepartmentOperationsReadController extends Controller
                     $hours,
                     (string) ($event->timezone ?: config('app.timezone')),
                     $now,
+                    $correctionClosesAt,
                 ),
                 'open_equipment' => $held
                     ->map(fn (EquipmentCheckout $checkout): array => [
@@ -758,13 +765,15 @@ final class DepartmentOperationsReadController extends Controller
         array $hours,
         string $timeZone,
         Carbon $now,
+        ?Carbon $correctionClosesAt = null,
     ): array {
         $records = $attendance->get($staffId, new Collection)
             ->keyBy(fn (AttendanceRecord $record): string => (string) $record->shift_id);
         $onSite = $presenceState === EventDepartmentPresence::STATE_ON_SITE;
+        $correctionClosed = $correctionClosesAt !== null && $now->greaterThanOrEqualTo($correctionClosesAt);
 
         return $shifts
-            ->map(function (Shift $shift) use ($staffId, $assignments, $records, $onSite, $eligibleTeamMembers, $hours, $timeZone, $now): ?array {
+            ->map(function (Shift $shift) use ($staffId, $assignments, $records, $onSite, $eligibleTeamMembers, $hours, $timeZone, $now, $correctionClosesAt, $correctionClosed): ?array {
                 $shiftId = (string) $shift->id;
                 $assignment = $assignments->get($staffId.':'.$shiftId, new Collection)->first();
                 $record = $records->get($shiftId);
@@ -832,12 +841,15 @@ final class DepartmentOperationsReadController extends Controller
                     'actual_started_at' => $hoursWorked?->actual_started_at?->toIso8601String(),
                     'actual_ended_at' => $hoursWorked?->actual_ended_at?->toIso8601String(),
                     'minutes_worked' => $hoursWorked?->minutes_worked,
-                    'can_correct_hours' => $hoursWorked !== null && $hoursWorked->frozen_at === null,
+                    'can_correct_hours' => $hoursWorked !== null
+                        && $hoursWorked->frozen_at === null
+                        && ! $correctionClosed,
                     'correct_hours_blocked_reason' => $this->correctHoursBlockedReason(
                         $hoursWorked,
                         $assignment !== null,
                         $ended,
                         $timeZone,
+                        $correctionClosed ? $correctionClosesAt : null,
                     ),
                 ];
             })
@@ -905,11 +917,20 @@ final class DepartmentOperationsReadController extends Controller
         bool $assigned,
         bool $ended,
         string $timeZone,
+        ?Carbon $correctionClosedAt = null,
     ): ?string {
         if ($hoursWorked !== null) {
-            return $hoursWorked->frozen_at === null
+            if ($hoursWorked->frozen_at !== null) {
+                return HoursCorrectionException::frozenHours($hoursWorked->frozen_at, $timeZone)->getMessage();
+            }
+
+            // The configured window has elapsed but nothing stamped this record
+            // yet (ORG-017): the desk names the same closed grace period the
+            // command would refuse with, dated at the window rather than at a
+            // marker nobody wrote.
+            return $correctionClosedAt === null
                 ? null
-                : HoursCorrectionException::frozenHours($hoursWorked->frozen_at, $timeZone)->getMessage();
+                : HoursCorrectionException::frozenHours($correctionClosedAt, $timeZone)->getMessage();
         }
 
         return $assigned && $ended

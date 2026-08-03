@@ -32,6 +32,7 @@ use App\Http\Controllers\Incidents\IncidentTypeAdminController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
+use App\Http\Controllers\Organizations\OrganizationConfigurationController;
 use App\Http\Controllers\Presence\DepartmentPresenceCommandController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Session\SessionController;
@@ -424,6 +425,14 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/remove-staff-coordinator-team', [OrganizationDesignationController::class, 'removeStaffCoordinator'])
         ->name('api.commands.remove-staff-coordinator-team');
 
+    /*
+     * Organization configuration (M18.14; ORG-018, ORG-020, ORG-021). One
+     * partial-update command rather than one command per field: the fields are
+     * one governance record, edited by one authority, audited as one change.
+     */
+    Route::post('/commands/update-organization-configuration', [OrganizationConfigurationController::class, 'update'])
+        ->name('api.commands.update-organization-configuration');
+
     Route::post('/commands/create-shift', [ShiftAdminCommandController::class, 'create'])
         ->name('api.commands.create-shift');
 
@@ -539,6 +548,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/designations', [OrganizationDesignationController::class, 'index'])
         ->name('api.organizations.designations.index');
+
+    Route::get('/organizations/{organization}/configuration', [OrganizationConfigurationController::class, 'show'])
+        ->name('api.organizations.configuration.show');
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');

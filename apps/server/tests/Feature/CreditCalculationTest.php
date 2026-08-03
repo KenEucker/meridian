@@ -125,6 +125,40 @@ class CreditCalculationTest extends TestCase
         $this->assertSame(0, AuditEvent::query()->where('action', 'event_credits.calculated')->count());
     }
 
+    /**
+     * The other gate (M18.14; ORG-017; CREDIT-001): a run may not begin before
+     * the configured grace period has elapsed, even when every hours record
+     * has already been frozen by hand. An early freeze does not close the
+     * window — an attendance manager may still be owed the rest of it.
+     */
+    public function test_calculation_is_refused_before_the_configured_grace_period_closes(): void
+    {
+        // Event ends 1 Jul 16:00 UTC; the 14-day default closes 15 Jul 16:00.
+        Carbon::setTestNow('2026-07-10 12:00:00 UTC');
+
+        $scenario = $this->scenario();
+        $this->hours($scenario['shift'], $scenario['staff'], minutes: 240, frozenAt: '2026-07-05 12:00:00');
+
+        try {
+            $this->calculate($scenario['event'], $scenario['organizer']);
+            $this->fail('Calculation should refuse an event whose grace period has not closed.');
+        } catch (CreditCalculationException $exception) {
+            $this->assertStringContainsString(
+                'before the correction grace period closes on',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertSame(0, CreditLedgerEntry::query()->count());
+
+        // The same run passes once the configured period has elapsed.
+        Carbon::setTestNow('2026-07-15 17:00:00 UTC');
+
+        $result = $this->calculate($scenario['event'], $scenario['organizer']);
+
+        $this->assertSame(1, $result->createdCount());
+    }
+
     public function test_entries_freeze_at_calculation_and_a_second_run_leaves_them_alone(): void
     {
         $scenario = $this->scenario();
@@ -403,7 +437,13 @@ class CreditCalculationTest extends TestCase
     private function scenario(bool $withDefaultPolicy = true, string $multiplier = '1.500'): array
     {
         $organization = Organization::factory()->create(['name' => 'Signal Camp']);
-        $event = Event::factory()->for($organization)->create(['name' => 'Emberfall 2026']);
+        // The event ends with its worked shift, so the ORG-017 grace period —
+        // 14 days after event end — has just closed at the fixed test clock.
+        $event = Event::factory()->for($organization)->create([
+            'name' => 'Emberfall 2026',
+            'starts_at' => Carbon::parse('2026-06-28 09:00:00 UTC'),
+            'ends_at' => Carbon::parse('2026-07-01 16:00:00 UTC'),
+        ]);
         $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
 
         $defaultPolicy = null;

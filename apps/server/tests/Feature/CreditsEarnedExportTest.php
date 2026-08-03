@@ -375,9 +375,14 @@ class CreditsEarnedExportTest extends TestCase
     private function scenario(bool $configureCreditPolicies = true): array
     {
         $organization = Organization::factory()->create(['name' => 'Northwood Collective', 'slug' => 'northwood-collective']);
+        // The event ends with its worked shifts, so the ORG-017 grace period
+        // — 14 days after event end — closed before the fixed test clock,
+        // which is the story the frozen dates below already told.
         $event = Event::factory()->for($organization)->create([
             'name' => 'Emberfall 2026',
             'slug' => 'emberfall-2026',
+            'starts_at' => Carbon::parse('2026-06-17 09:00:00 UTC'),
+            'ends_at' => Carbon::parse('2026-06-20 18:00:00 UTC'),
         ]);
 
         [$rangers, $rangersTeam] = $this->department($organization, 'Rangers', 'RANGERS', 'Dirt');
@@ -451,6 +456,8 @@ class CreditsEarnedExportTest extends TestCase
         $priorEvent = Event::factory()->for($organization)->create([
             'name' => 'Emberfall 2025',
             'slug' => 'emberfall-2025',
+            'starts_at' => Carbon::parse('2025-06-17 09:00:00 UTC'),
+            'ends_at' => Carbon::parse('2025-06-20 18:00:00 UTC'),
         ]);
         $priorStaff = $this->staff($organization, 'Perry Prior', 'Perry', 'pprior', [$rangers]);
         $priorShift = $this->shift($priorEvent, $rangers, $rangersTeam, 'Rangers Dirt Day', '2025-06-19 19:00:00');

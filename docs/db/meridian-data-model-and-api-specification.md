@@ -1572,9 +1572,14 @@ Key fields:
 - `prospective_inactive_threshold_years`
 - `calendar_year_start_month`
 - `calendar_year_start_day`
+- `hours_correction_grace_period_days`
 - `created_at`
 - `updated_at`
 - `archived_at`
+
+Configuration fields (ORG-017, ORG-018):
+
+- `hours_correction_grace_period_days` is the ORG-017 hours correction window, expressed in days after event end. It defaults to 14 and is never null: an organization that has not configured one still has the documented default.
 
 Branding fields (BRAND-001, BRAND-004, BRAND-006, BRAND-013):
 

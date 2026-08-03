@@ -251,6 +251,20 @@ class PermissionCatalogTest extends TestCase
         $this->assertContains('organization.applications.review', $this->permissionCodesFor('lead_organizer'));
     }
 
+    public function test_organization_configuration_is_organizer_governance_only(): void
+    {
+        // M18.14 / ORG-020: only organizers and Lead Organizers edit
+        // organization configuration. In particular the Staff Coordinator does
+        // not — reviewing applications is not setting the values that govern
+        // the organization's lifecycle and timing.
+        $this->assertContains('organization.configuration.manage', $this->permissionCodesFor('organizer'));
+        $this->assertContains('organization.configuration.manage', $this->permissionCodesFor('lead_organizer'));
+
+        foreach (['staff_coordinator', 'department_lead', 'department_administration', 'ic_lead'] as $role) {
+            $this->assertNotContains('organization.configuration.manage', $this->permissionCodesFor($role));
+        }
+    }
+
     public function test_seeder_is_idempotent(): void
     {
         $roleCount = PermissionRole::query()->count();

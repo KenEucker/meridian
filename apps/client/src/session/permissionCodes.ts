@@ -40,6 +40,17 @@ export const CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE =
  */
 export const CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE =
   "organization.designations.manage";
+/**
+ * Editing organization configuration (ORG-018, ORG-020): the lifecycle
+ * inactivity thresholds, the hours correction grace period, the calendar year
+ * start, the default credit policy, and the Organizers, default Incident
+ * Command, and default Placement department designations. Organizers and Lead
+ * Organizers only, and a separate code from incident types and designations
+ * because each featureset on the configuration surface carries its own
+ * authority.
+ */
+export const CAPABILITY_ORGANIZATION_CONFIGURATION_MANAGE =
+  "organization.configuration.manage";
 export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";
