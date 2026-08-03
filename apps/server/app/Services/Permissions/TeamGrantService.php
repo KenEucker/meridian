@@ -57,7 +57,14 @@ class TeamGrantService
             $this->assertTeamIsInEventIncidentCommandDepartment($team, $event);
         }
 
-        if (in_array($role->code, [PermissionCatalog::ROLE_ORGANIZER, PermissionCatalog::ROLE_LEAD_ORGANIZER], true)) {
+        // Staff Coordinator authority lives on a team within the configured
+        // Organizers Department (TEAM-014), so it shares the organizer roles'
+        // department restriction.
+        if (in_array($role->code, [
+            PermissionCatalog::ROLE_ORGANIZER,
+            PermissionCatalog::ROLE_LEAD_ORGANIZER,
+            PermissionCatalog::ROLE_STAFF_COORDINATOR,
+        ], true)) {
             $this->assertTeamIsInOrganizersDepartment($team);
         }
     }

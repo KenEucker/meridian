@@ -34,6 +34,8 @@ final class PermissionCatalog
 
     public const ROLE_DEPARTMENT_PLANNING = 'department_planning';
 
+    public const ROLE_DEPARTMENT_OPERATOR = 'department_operator';
+
     public const ROLE_IC_LEAD = 'ic_lead';
 
     public const ROLE_IC_OPERATOR = 'ic_operator';
@@ -43,6 +45,8 @@ final class PermissionCatalog
     public const ROLE_ORGANIZER = 'organizer';
 
     public const ROLE_LEAD_ORGANIZER = 'lead_organizer';
+
+    public const ROLE_STAFF_COORDINATOR = 'staff_coordinator';
 
     public const ROLE_GOD_MODE = 'god_mode';
 
@@ -110,6 +114,13 @@ final class PermissionCatalog
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
      *
+     * `department_operator` and `staff_coordinator` enter the catalog with
+     * M18.10 so the TEAM-012 Operator and TEAM-014 Staff Coordinator team
+     * designations have a role to attach a grant to. Their capability sets are
+     * owned by M18.10A (section 4.8A Operator capabilities and the derived
+     * `ic_operator` elevation) and M18.11 (application review authority), so
+     * neither role carries a catalog permission here.
+     *
      * @return array<string, array{name: string, scope_type: string}>
      */
     public static function roles(): array
@@ -122,11 +133,13 @@ final class PermissionCatalog
             self::ROLE_DEPARTMENT_OPERATIONS => ['name' => 'Department Operations', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
             self::ROLE_DEPARTMENT_ADMINISTRATION => ['name' => 'Department Administration', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
             self::ROLE_DEPARTMENT_PLANNING => ['name' => 'Department Planning', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
+            self::ROLE_DEPARTMENT_OPERATOR => ['name' => 'Department Operator', 'scope_type' => PermissionRole::SCOPE_DEPARTMENT],
             self::ROLE_IC_LEAD => ['name' => 'Incident Command Lead', 'scope_type' => PermissionRole::SCOPE_EVENT],
             self::ROLE_IC_OPERATOR => ['name' => 'Incident Command Operator', 'scope_type' => PermissionRole::SCOPE_EVENT],
             self::ROLE_IC_VIEWER => ['name' => 'Incident Command Viewer', 'scope_type' => PermissionRole::SCOPE_EVENT],
             self::ROLE_ORGANIZER => ['name' => 'Organizer', 'scope_type' => PermissionRole::SCOPE_ORGANIZATION],
             self::ROLE_LEAD_ORGANIZER => ['name' => 'Lead Organizer', 'scope_type' => PermissionRole::SCOPE_ORGANIZATION],
+            self::ROLE_STAFF_COORDINATOR => ['name' => 'Staff Coordinator', 'scope_type' => PermissionRole::SCOPE_ORGANIZATION],
             self::ROLE_GOD_MODE => ['name' => 'God Mode', 'scope_type' => PermissionRole::SCOPE_NODE],
         ];
     }

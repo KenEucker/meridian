@@ -24,11 +24,13 @@ class PermissionCatalogTest extends TestCase
             'department_operations' => PermissionRole::SCOPE_DEPARTMENT,
             'department_administration' => PermissionRole::SCOPE_DEPARTMENT,
             'department_planning' => PermissionRole::SCOPE_DEPARTMENT,
+            'department_operator' => PermissionRole::SCOPE_DEPARTMENT,
             'ic_lead' => PermissionRole::SCOPE_EVENT,
             'ic_operator' => PermissionRole::SCOPE_EVENT,
             'ic_viewer' => PermissionRole::SCOPE_EVENT,
             'organizer' => PermissionRole::SCOPE_ORGANIZATION,
             'lead_organizer' => PermissionRole::SCOPE_ORGANIZATION,
+            'staff_coordinator' => PermissionRole::SCOPE_ORGANIZATION,
             'god_mode' => PermissionRole::SCOPE_NODE,
         ];
 
@@ -207,6 +209,16 @@ class PermissionCatalogTest extends TestCase
         $this->assertSame([
             'department.schedule.manage',
         ], $this->permissionCodesFor('department_planning'));
+    }
+
+    public function test_designation_only_roles_carry_no_capabilities_until_their_owning_milestones(): void
+    {
+        // M18.10 registers these roles so the Operator and Staff Coordinator
+        // team designations have a role to attach a grant to. Their capability
+        // sets are owned by M18.10A (section 4.8A) and M18.11 (requirements
+        // 4.4), so holding either grants nothing yet.
+        $this->assertSame([], $this->permissionCodesFor('department_operator'));
+        $this->assertSame([], $this->permissionCodesFor('staff_coordinator'));
     }
 
     public function test_seeder_is_idempotent(): void
