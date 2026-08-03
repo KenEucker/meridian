@@ -1096,11 +1096,13 @@ department_logistics
 department_operations
 department_administration
 department_planning
+department_operator
 ic_lead
 ic_operator
 ic_viewer
 organizer
 lead_organizer
+staff_coordinator
 god_mode
 ```
 
@@ -1111,6 +1113,13 @@ teams:
 - `department_operations` opens the Operations Center and manages current deployment/location assignment. The shell does not grant incident or equipment module access.
 - `department_planning` views identity-free Planning Table aggregates comparing plan versus actual by shift/team window.
 - `department_administration` manages department/team administrative settings as permitted.
+- `department_operator` is the department dispatch/console function (requirements 4.8A). It enters the catalog with the team designation model (TEAM-012); its capability set and the derived event-scoped `ic_operator` elevation are owned by M18.10A.
+- `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It enters the catalog with the team designation model; its application review capability set is owned by M18.11.
+
+Department team designations (TEAM-011 through TEAM-013) attach these grants to
+a named team per function through `team_designations` (section 10.6); the
+designation creates and owns a `team_grants` row rather than becoming a second
+authority path.
 
 Permission decisions should be explainable in the UI.
 
@@ -2125,6 +2134,34 @@ Rules:
 - team membership may grant shift eligibility
 - team membership may impose training/waiver requirements
 - team membership may grant system authority
+
+#### `team_designations`
+
+Represents a designation attaching an operational grant to a named team
+(TEAM-011 through TEAM-014, TEAM-017). Department rows carry the section 4.8A
+functions (`logistics`, `operations`, `planning`, `administration`,
+`operator`); the organization row carries `staff_coordinator` on a team within
+the configured Organizers Department.
+
+Key fields:
+
+- `id`
+- `organization_id`
+- `department_id`, null for the organization-level Staff Coordinator designation
+- `function_code`
+- `team_id`
+- `team_grant_id`, the grant this designation created and owns
+- `created_at`
+- `updated_at`
+- `removed_at`
+
+Rules:
+
+- a department designates zero or one team per function; the same team may hold more than one designation
+- an active designation owns exactly one active `team_grants` row, so authority resolves through team membership and grants, not through a second path
+- removing a designation revokes only the grant the designation created; direct team grants remain available and untouched (TEAM-013)
+- removed designations keep their row for history
+- creation, change, and removal are audited with the department or organization, the function, and the team recorded (TEAM-017)
 
 #### `event_department_assignments`
 

@@ -6,7 +6,7 @@ import App from "@/App.vue";
 import { resetNodeReachability } from "@/offline/nodeReachability";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
-import { installLocalFieldSession } from "@/session/localFieldSession";
+import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 
 /*
  * Device diagnostics reports one device's standing against one node, and it was

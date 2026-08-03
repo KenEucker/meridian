@@ -66,6 +66,31 @@ class TeamGrantPolicyTest extends TestCase
         (new TeamGrantService)->grant($team, $this->role('organizer'));
     }
 
+    public function test_staff_coordinator_grant_is_rejected_for_team_outside_organizers_department(): void
+    {
+        $organization = Organization::factory()->create();
+        $organizersDepartment = Department::factory()->for($organization)->create();
+        $organization->forceFill(['organizers_department_id' => $organizersDepartment->id])->save();
+
+        $otherDepartment = Department::factory()->for($organization)->create();
+        $team = Team::factory()->for($otherDepartment)->create();
+
+        // TEAM-014: Staff Coordinator lives on a team within the configured
+        // Organizers Department.
+        $this->expectException(InvalidArgumentException::class);
+
+        (new TeamGrantService)->grant($team, $this->role('staff_coordinator'));
+    }
+
+    public function test_staff_coordinator_grant_succeeds_for_team_in_configured_organizers_department(): void
+    {
+        $team = $this->teamInOrganizersDepartment();
+
+        $grant = (new TeamGrantService)->grant($team, $this->role('staff_coordinator'));
+
+        $this->assertNull($grant->revoked_at);
+    }
+
     public function test_god_mode_cannot_be_granted_through_a_team(): void
     {
         $team = Team::factory()->create();
