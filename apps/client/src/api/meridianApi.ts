@@ -199,12 +199,23 @@ export function meridianErrorMessage(error: unknown, fallback: string): string {
  * Anything else — a request that never completed — is the unreachable node this
  * exists for.
  *
+ * `fallbackPath` is for a read that narrows: a search term, a state filter, a
+ * team. Those go to the node, because the node searches everything the caller
+ * may see and the browser only holds what it happened to ask for. But the
+ * narrowed request is its own cache key, so the first search typed with no node
+ * in reach is always a miss — and answering "unable to load" while the whole
+ * list is sitting on screen is the behaviour this whole change exists to stop.
+ * A caller passes the unnarrowed path, gets the broad copy back when its own is
+ * missing, and narrows it itself. `freshness.narrowed` says that happened, so a
+ * surface can say what its results actually cover.
+ *
  * Reads only. A command is not cached and never falls back: what may be held on
  * this device is decided by the outbox and the offline write scope
  * (technical spec 9.4, CLIENT-018), not here.
  */
 export async function meridianCachedJson<T>(
   path: string,
+  options: { readonly fallbackPath?: string } = {},
 ): Promise<CachedRead<T>> {
   try {
     const data = await meridianJson<T>(path);
@@ -220,15 +231,29 @@ export async function meridianCachedJson<T>(
 
     const stored = readCache.read(path);
 
-    if (stored === null) {
+    if (stored !== null) {
+      noteStoredRead();
+
+      return {
+        data: stored.payload as T,
+        freshness: { source: "cache", cachedAt: stored.cachedAt, narrowed: false },
+      };
+    }
+
+    const fallback =
+      options.fallbackPath === undefined || options.fallbackPath === path
+        ? null
+        : readCache.read(options.fallbackPath);
+
+    if (fallback === null) {
       throw error;
     }
 
     noteStoredRead();
 
     return {
-      data: stored.payload as T,
-      freshness: { source: "cache", cachedAt: stored.cachedAt },
+      data: fallback.payload as T,
+      freshness: { source: "cache", cachedAt: fallback.cachedAt, narrowed: true },
     };
   }
 }

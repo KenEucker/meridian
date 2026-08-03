@@ -55,6 +55,15 @@ export type ReadSource = "node" | "cache";
 export interface ReadFreshness {
   readonly source: ReadSource;
   /**
+   * Whether this copy is broader than what was asked for, and the caller has to
+   * narrow it itself.
+   *
+   * True when a filtered or searched read fell back to the unfiltered copy this
+   * device holds. The results are then only as complete as that copy, which is a
+   * different claim from "these are the matches", and the surface says so.
+   */
+  readonly narrowed?: boolean;
+  /**
    * When this device stored the copy, for a cached read; null for a live one.
    *
    * The disclosure hangs off this: a surface showing a stored copy names the
@@ -66,6 +75,7 @@ export interface ReadFreshness {
 export const LIVE_READ: ReadFreshness = Object.freeze({
   source: "node",
   cachedAt: null,
+  narrowed: false,
 });
 
 export interface CachedRead<T> {
