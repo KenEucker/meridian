@@ -1114,7 +1114,15 @@ teams:
 - `department_planning` views identity-free Planning Table aggregates comparing plan versus actual by shift/team window.
 - `department_administration` manages department/team administrative settings as permitted.
 - `department_operator` is the department dispatch/console function (requirements 4.8A). It enters the catalog with the team designation model (TEAM-012); its capability set and the derived event-scoped `ic_operator` elevation are owned by M18.10A.
-- `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It enters the catalog with the team designation model; its application review capability set is owned by M18.11.
+- `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It carries `organization.applications.review` — application review, approval, rejection, and deferral, plus assigning approved applicants to departments (requirements 4.4) — and no other organizer governance capability. Organizers and Lead Organizers hold the same capability, so one policy answers for the whole reviewer population.
+
+Authorized attendance managers (TEAM-015) are the holders of
+`department_logistics` for the department together with department leads and
+shift leads for that department, so `department.attendance.manage` is carried
+by all three roles — for `shift_lead`, through its own lead-designated-membership
+scoping — and check-in, check-out, mark-no-show, and hours correction all
+answer to that one capability (SLB-007, SLB-029; HOURS-007). Presence and
+equipment stay with `department_logistics`.
 
 Department team designations (TEAM-011 through TEAM-013) attach these grants to
 a named team per function through `team_designations` (section 10.6); the
@@ -2162,6 +2170,12 @@ Rules:
 - removing a designation revokes only the grant the designation created; direct team grants remain available and untouched (TEAM-013)
 - removed designations keep their row for history
 - creation, change, and removal are audited with the department or organization, the function, and the team recorded (TEAM-017)
+
+Administration (M18.12; TEAM-016, TEAM-018):
+
+- department designations are maintained from the department administration surface by `department.administer` holders: the `GET /api/departments/{department}/teams` workspace read carries one designation row per function (undesignated functions included with a null team), and `POST /api/commands/designate-department-team` / `POST /api/commands/remove-department-team-designation` change them
+- the organization-level Staff Coordinator designation is maintained from the organization configuration surface by `organization.designations.manage` holders (organizer, lead_organizer): `GET /api/organizations/{organization}/designations` answers with the current designation and the eligible teams — active teams of the configured Organizers Department — and `POST /api/commands/designate-staff-coordinator-team` / `POST /api/commands/remove-staff-coordinator-team` change it
+- a permission explanation for a designation-owned grant names the designation (TEAM-018), e.g. "You have the Department Logistics role because your team, Gate Crew, is the department's designated Logistics team."
 
 #### `event_department_assignments`
 

@@ -303,7 +303,7 @@ final class TeamDesignationService
 
     private function functionLabel(string $functionCode): string
     {
-        return str_replace('_', ' ', ucwords($functionCode, '_'));
+        return TeamDesignation::functionLabel($functionCode);
     }
 
     /**

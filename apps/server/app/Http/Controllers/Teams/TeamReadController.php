@@ -84,6 +84,11 @@ final class TeamReadController extends Controller
             'teams' => $teams->values()->all(),
             'team_staff' => $this->teamStaffPayload($staffTeamIds),
             'department_staff' => $this->departmentStaffPayload($department),
+            // Which team carries each department operational function
+            // (M18.12; TEAM-011, TEAM-016), one row per function whether or
+            // not a team is designated, so the Admin surface renders the
+            // whole frame from this one read like everything else on it.
+            'designations' => TeamDesignationPayload::forDepartment($department),
         ]);
     }
 

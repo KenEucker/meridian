@@ -97,6 +97,20 @@ export interface DepartmentTeamDetail {
   readonly access: DepartmentTeamDetailAccess;
 }
 
+/**
+ * One department operational function and the team designated to carry it
+ * (M18.12; TEAM-011, TEAM-016), or no team where nothing is designated. The
+ * node answers with one row per designatable function, so the panel renders
+ * the whole frame without knowing the function list itself.
+ */
+export interface DepartmentTeamDesignation {
+  readonly functionCode: string;
+  readonly functionLabel: string;
+  readonly roleCode: string;
+  readonly teamId: string | null;
+  readonly teamName: string | null;
+}
+
 /** Everything the Admin surface renders, from one read. */
 export interface DepartmentTeamAdminWorkspace {
   readonly department: DepartmentSelfAdminDepartment | null;
@@ -104,6 +118,7 @@ export interface DepartmentTeamAdminWorkspace {
   readonly teams: readonly DepartmentTeam[];
   readonly teamStaff: readonly DepartmentTeamStaffMember[];
   readonly departmentStaff: readonly DepartmentRosterMember[];
+  readonly designations: readonly DepartmentTeamDesignation[];
 }
 
 /** The editable department fields, as held by the details form. */
@@ -168,12 +183,21 @@ interface TeamAccessPayload {
   readonly can_view_led_team?: boolean;
 }
 
+interface DesignationPayload {
+  readonly function_code: string;
+  readonly function_label: string;
+  readonly role_code: string;
+  readonly team_id: string | null;
+  readonly team_name: string | null;
+}
+
 interface TeamIndexPayload {
   readonly department?: DepartmentPayload | null;
   readonly access?: AccessPayload;
   readonly teams?: TeamPayload[];
   readonly team_staff?: TeamStaffPayload[];
   readonly department_staff?: DepartmentStaffPayload[];
+  readonly designations?: DesignationPayload[];
 }
 
 function toDepartment(payload: DepartmentPayload): DepartmentSelfAdminDepartment {
@@ -226,6 +250,16 @@ function toRosterMember(payload: DepartmentStaffPayload): DepartmentRosterMember
   };
 }
 
+function toDesignation(payload: DesignationPayload): DepartmentTeamDesignation {
+  return {
+    functionCode: payload.function_code,
+    functionLabel: payload.function_label,
+    roleCode: payload.role_code,
+    teamId: payload.team_id,
+    teamName: payload.team_name,
+  };
+}
+
 /**
  * The submitted form, trimmed.
  *
@@ -273,6 +307,7 @@ export async function getDepartmentTeamAdminWorkspace(
     teams: (result.teams ?? []).map(toTeam),
     teamStaff: (result.team_staff ?? []).map(toTeamStaffMember),
     departmentStaff: (result.department_staff ?? []).map(toRosterMember),
+    designations: (result.designations ?? []).map(toDesignation),
   };
 }
 
@@ -411,6 +446,38 @@ export async function removeTeamLead(
   await meridianJson("/api/commands/remove-team-lead", {
     method: "POST",
     body: JSON.stringify({ team_id: teamId, staff_id: staffId }),
+  });
+}
+
+/**
+ * Designate the team carrying a department operational function (TEAM-016),
+ * replacing the function's current designation when one exists.
+ */
+export async function designateDepartmentTeam(
+  departmentId: string,
+  functionCode: string,
+  teamId: string,
+): Promise<void> {
+  await meridianJson("/api/commands/designate-department-team", {
+    method: "POST",
+    body: JSON.stringify({
+      department_id: departmentId,
+      function_code: functionCode,
+      team_id: teamId,
+    }),
+  });
+}
+
+export async function removeDepartmentTeamDesignation(
+  departmentId: string,
+  functionCode: string,
+): Promise<void> {
+  await meridianJson("/api/commands/remove-department-team-designation", {
+    method: "POST",
+    body: JSON.stringify({
+      department_id: departmentId,
+      function_code: functionCode,
+    }),
   });
 }
 

@@ -319,17 +319,75 @@ class TeamDesignationTest extends TestCase
             (new EffectiveRoleResolver)->resolveForStaff($staff)->pluck('roleCode')->all(),
         );
 
-        // The review capability set is owned by M18.11; the designation grants
-        // the role and the role carries nothing until then.
-        $this->assertArrayNotHasKey(
-            PermissionCatalog::ROLE_STAFF_COORDINATOR,
-            PermissionCatalog::rolePermissions(),
+        // M18.11 gives the role its application review capability, and only
+        // that (TEAM-014; requirements 4.4).
+        $this->assertSame(
+            [PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW],
+            PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_STAFF_COORDINATOR],
         );
 
         $removed = $this->service()->removeStaffCoordinatorTeam($organization, $this->actor());
 
         $this->assertTrue($removed->isRemoved());
         $this->assertCount(0, (new EffectiveRoleResolver)->resolveForStaff($staff));
+    }
+
+    public function test_the_permission_explanation_names_the_designation_that_granted_the_capability(): void
+    {
+        // TEAM-018 / M18.12: a permission explanation names the designation
+        // that granted the authority where one exists.
+        $department = Department::factory()->create();
+        $team = Team::factory()->for($department)->create(['name' => 'Gate Crew']);
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        $this->service()->designateDepartmentTeam(
+            $department,
+            TeamDesignation::FUNCTION_LOGISTICS,
+            $team,
+            $this->actor(),
+        );
+
+        $role = (new EffectiveRoleResolver)->resolveForStaff($staff)->sole();
+
+        $this->assertSame(
+            "You have the Department Logistics role because your team, Gate Crew, is the department's designated Logistics team.",
+            $role->reason,
+        );
+
+        // A direct grant of the same role on the same team keeps the plain
+        // membership explanation: it was granted, not designated (TEAM-013).
+        $this->service()->removeDepartmentTeam($department, TeamDesignation::FUNCTION_LOGISTICS, $this->actor());
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'permission_role_id' => $this->role(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS)->id,
+        ]);
+
+        $direct = (new EffectiveRoleResolver)->resolveForStaff($staff)->sole();
+
+        $this->assertSame(
+            'You have the Department Logistics role because you are a member of the Gate Crew team.',
+            $direct->reason,
+        );
+    }
+
+    public function test_the_staff_coordinator_explanation_names_the_organization_designation(): void
+    {
+        $organization = Organization::factory()->create();
+        $organizersDepartment = Department::factory()->for($organization)->create();
+        $organization->forceFill(['organizers_department_id' => $organizersDepartment->id])->save();
+        $team = Team::factory()->for($organizersDepartment)->create(['name' => 'Intake Desk']);
+        $staff = Staff::factory()->create();
+        $this->addStaffToTeam($staff, $team);
+
+        $this->service()->designateStaffCoordinatorTeam($organization, $team, $this->actor());
+
+        $role = (new EffectiveRoleResolver)->resolveForStaff($staff)->sole();
+
+        $this->assertSame(
+            "You have the Staff Coordinator role because your team, Intake Desk, is the organization's designated Staff Coordinator team.",
+            $role->reason,
+        );
     }
 
     public function test_designation_lifecycle_is_audited_with_scope_function_and_team(): void

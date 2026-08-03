@@ -31,6 +31,15 @@ export const CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE =
 export const CAPABILITY_ORGANIZATION_STAFF_MANAGE = "organization.staff.manage";
 export const CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE =
   "organization.incident_types.manage";
+/**
+ * Maintaining organization-level team designations (TEAM-016) — today, which
+ * team within the configured Organizers Department carries Staff Coordinator
+ * authority. Department team designations answer to `department.administer`
+ * on the department administration surface instead, so no code exists for
+ * them here.
+ */
+export const CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE =
+  "organization.designations.manage";
 export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";
@@ -66,15 +75,17 @@ export const CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW =
   "documents.acknowledgments.review";
 
 /**
- * Role codes, for the two surfaces the catalog registers no capability for.
+ * Role codes, for the two surfaces that answer to standing rather than to a
+ * capability.
  *
  * Department Overview belongs to the department lead and Team Overview belongs
- * to a designated team lead, and neither `department_lead`'s standing as lead
- * nor `shift_lead` currently carries a capability code of its own. Both codes
- * still come from the session response — they are what CLIENT-002 calls the
- * effective role codes — so nothing here reintroduces fixture-driven authority.
- * When the catalog grows capabilities for these, the two entries move onto them
- * and these constants go.
+ * to a designated team lead. Both roles now carry
+ * `department.attendance.manage` (M18.13; TEAM-015) — that is what opens the
+ * Logistics Desk attendance work to them — but their overview surfaces are
+ * theirs because of who they are, not because of a capability, so the role
+ * codes stay the gate here. Both codes still come from the session response —
+ * they are what CLIENT-002 calls the effective role codes — so nothing here
+ * reintroduces fixture-driven authority.
  */
 export const ROLE_DEPARTMENT_LEAD = "department_lead";
 export const ROLE_SHIFT_LEAD = "shift_lead";

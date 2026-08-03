@@ -175,7 +175,31 @@ function workspacePayload(
       { staff_id: VERA_STAFF_ID, display_name: "Vera Staff", handle: "vera" },
       { staff_id: RILEY_STAFF_ID, display_name: "Riley Reserve", handle: null },
     ],
+    // One row per designatable function, undesignated functions included
+    // (M18.12; TEAM-016), exactly as TeamDesignationPayload publishes it.
+    designations: [
+      designationRow("logistics", "Logistics", DIRT_TEAM_ID, "Dirt"),
+      designationRow("operations", "Operations"),
+      designationRow("planning", "Planning"),
+      designationRow("administration", "Administration"),
+      designationRow("operator", "Operator"),
+    ],
     ...overrides,
+  };
+}
+
+function designationRow(
+  functionCode: string,
+  functionLabel: string,
+  teamId: string | null = null,
+  teamName: string | null = null,
+): Record<string, unknown> {
+  return {
+    function_code: functionCode,
+    function_label: functionLabel,
+    role_code: `department_${functionCode}`,
+    team_id: teamId,
+    team_name: teamName,
   };
 }
 
@@ -269,6 +293,86 @@ describe("department self-administration", () => {
     expect(wrapper.text()).toContain("Dirt");
     expect(wrapper.text()).toContain("Vera Staff");
     expect(wrapper.text()).toContain("Riley Reserve");
+  });
+
+  it("renders the designation frame and designates a team through its command", async () => {
+    const calls = stubNode((call) =>
+      call.url.endsWith("/commands/designate-department-team")
+        ? {
+            body: {
+              department_id: DEPARTMENT_ID,
+              designations: [
+                designationRow("logistics", "Logistics", DIRT_TEAM_ID, "Dirt"),
+                designationRow("operations", "Operations", DIRT_TEAM_ID, "Dirt"),
+                designationRow("planning", "Planning"),
+                designationRow("administration", "Administration"),
+                designationRow("operator", "Operator"),
+              ],
+            },
+          }
+        : { body: workspacePayload() },
+    );
+
+    const wrapper = await mountAdmin();
+
+    // The whole frame renders: every function, designated or not.
+    expect(wrapper.text()).toContain("Team designations");
+    for (const label of [
+      "Logistics",
+      "Operations",
+      "Planning",
+      "Administration",
+      "Operator",
+    ]) {
+      expect(wrapper.text()).toContain(label);
+    }
+    expect(wrapper.text()).toContain("No team designated");
+
+    const readsBefore = workspaceReads(calls).length;
+
+    await wrapper
+      .get("select[aria-label='Team to designate for Operations']")
+      .setValue(DIRT_TEAM_ID);
+    await wrapper
+      .get("form[aria-label='Designate the Operations team']")
+      .trigger("submit");
+    await flushPromises();
+
+    expect(
+      calls.find((call) =>
+        call.url.endsWith("/commands/designate-department-team"),
+      )?.body,
+    ).toEqual({
+      department_id: DEPARTMENT_ID,
+      function_code: "operations",
+      team_id: DIRT_TEAM_ID,
+    });
+    // Designating changes what the whole page is about, so it re-reads.
+    expect(workspaceReads(calls).length).toBeGreaterThan(readsBefore);
+  });
+
+  it("removes a designation through its command", async () => {
+    const calls = stubNode((call) =>
+      call.url.endsWith("/commands/remove-department-team-designation")
+        ? { body: { department_id: DEPARTMENT_ID, designations: [] } }
+        : { body: workspacePayload() },
+    );
+
+    const wrapper = await mountAdmin();
+
+    await wrapper
+      .get("button[aria-label='Remove the Logistics designation']")
+      .trigger("click");
+    await flushPromises();
+
+    expect(
+      calls.find((call) =>
+        call.url.endsWith("/commands/remove-department-team-designation"),
+      )?.body,
+    ).toEqual({
+      department_id: DEPARTMENT_ID,
+      function_code: "logistics",
+    });
   });
 
   it("saves department details through the command and re-reads", async () => {

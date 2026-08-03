@@ -35,6 +35,8 @@ const ORGANIZATION_ID = LOCAL_FIELD_ORGANIZATION_ID;
 const ORGANIZER_DEPARTMENT = LOCAL_FIELD_DEPARTMENT_IDS.organizer;
 const MEDICAL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01";
 const RETIRED_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02";
+const INTAKE_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03";
+const WELCOME_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04";
 
 interface NodeCall {
   readonly url: string;
@@ -103,13 +105,49 @@ function defaultTypes(): Record<string, unknown>[] {
   ];
 }
 
-/** Answers the read, and accepts every command. */
-function stubAdminNode(types?: Record<string, unknown>[]): NodeCall[] {
-  return stubNode((call) =>
-    call.method === "POST"
+function designationsPayload(
+  staffCoordinator: { team_id: string; team_name: string } | null = null,
+): Record<string, unknown> {
+  return {
+    organization_id: ORGANIZATION_ID,
+    organizers_department: { id: ORGANIZER_DEPARTMENT, name: "Organizers" },
+    staff_coordinator:
+      staffCoordinator === null
+        ? null
+        : {
+            function_code: "staff_coordinator",
+            function_label: "Staff Coordinator",
+            ...staffCoordinator,
+          },
+    eligible_teams: [
+      { id: INTAKE_TEAM_ID, name: "Intake Desk" },
+      { id: WELCOME_TEAM_ID, name: "Welcome Crew" },
+    ],
+  };
+}
+
+/** Answers both featureset reads, and accepts every command. */
+function stubAdminNode(
+  types?: Record<string, unknown>[],
+  staffCoordinator: { team_id: string; team_name: string } | null = null,
+): NodeCall[] {
+  return stubNode((call) => {
+    if (call.url.includes("/designations") || call.url.includes("staff-coordinator-team")) {
+      return {
+        body: designationsPayload(
+          call.url.includes("designate-staff-coordinator-team")
+            ? { team_id: INTAKE_TEAM_ID, team_name: "Intake Desk" }
+            : call.url.includes("remove-staff-coordinator-team")
+              ? null
+              : staffCoordinator,
+        ),
+      };
+    }
+
+    return call.method === "POST"
       ? { body: { id: MEDICAL_ID } }
-      : { body: listPayload(types) },
-  );
+      : { body: listPayload(types) };
+  });
 }
 
 async function mountAt(path: string) {
@@ -310,6 +348,72 @@ describe("the organization configuration surface", () => {
     expect(wrapper.text()).toContain(
       "Incident Command cannot categorize an incident until one is added.",
     );
+  });
+
+  it("carries the staff coordinator designation featureset (M18.12)", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(
+      calls.some((call) =>
+        call.url.endsWith(`/api/organizations/${ORGANIZATION_ID}/designations`),
+      ),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Team designations");
+    expect(wrapper.text()).toContain("Staff Coordinator");
+    expect(wrapper.text()).toContain("No team designated");
+    // Eligible teams are the node's answer: Organizers Department teams only.
+    expect(wrapper.text()).toContain("Intake Desk");
+  });
+
+  it("designates and removes the staff coordinator team through its commands", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#staff-coordinator-team").setValue(INTAKE_TEAM_ID);
+    await wrapper
+      .get("form[aria-label='Designate the Staff Coordinator team']")
+      .trigger("submit");
+    await flushPromises();
+
+    expect(
+      commandCalls(calls, "designate-staff-coordinator-team").at(0)?.body,
+    ).toEqual({
+      organization_id: ORGANIZATION_ID,
+      team_id: INTAKE_TEAM_ID,
+    });
+
+    // The command answered with the new designation, so the section now shows
+    // the designated team and offers its removal.
+    expect(wrapper.text()).toContain("Intake Desk");
+
+    await buttonByLabel(
+      wrapper,
+      "Remove the Staff Coordinator designation",
+    ).trigger("click");
+    await flushPromises();
+
+    expect(
+      commandCalls(calls, "remove-staff-coordinator-team").at(0)?.body,
+    ).toEqual({ organization_id: ORGANIZATION_ID });
+  });
+
+  it("keeps each featureset behind its own capability", async () => {
+    // Incident types only: the page renders, and the designation read is
+    // never made, because a person admitted to one featureset is not thereby
+    // entitled to the rest.
+    installSession(["organization.incident_types.manage"]);
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.text()).toContain("Incident types");
+    expect(wrapper.text()).not.toContain("Team designations");
+    expect(calls.some((call) => call.url.includes("/designations"))).toBe(false);
   });
 
   it("is refused, and unlisted, without the capability", async () => {
