@@ -11,6 +11,10 @@
 // registers its session key, and this module knows nothing about either.
 
 import { resolveNodeUrl } from "@/app/nodeConnection";
+import {
+  recordNodeAnswered,
+  recordNodeUnreachable,
+} from "@/offline/nodeReachability";
 import { LIVE_READ, readCache, type CachedRead } from "@/offline/readCache";
 
 export class MeridianApiError extends Error {
@@ -137,10 +141,35 @@ export async function meridianFetch(
     }
   }
 
-  return fetch(`${config.baseUrl}${path}`, {
-    ...init,
-    headers,
-  });
+  /*
+   * Every request this client makes passes through here, which makes it the one
+   * place that learns whether the node is there.
+   *
+   * A `Response` of any status is an answer: a 401 from a revoked token proves
+   * there is a Meridian at that address as surely as a 200 does. A throw is a
+   * request that never completed — the node is stopped, the address is wrong, or
+   * the network does not reach it — and none of those are distinguishable from a
+   * browser, nor do they need to be. An abort counts as unreachable too: the
+   * only aborts the client issues are its own request timeouts.
+   *
+   * Recorded rather than probed. Nothing polls the node to keep this fresh; a
+   * client that makes no requests learns nothing and reports Unknown, which is
+   * the truth about it.
+   */
+  try {
+    const response = await fetch(`${config.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+
+    recordNodeAnswered();
+
+    return response;
+  } catch (error) {
+    recordNodeUnreachable();
+
+    throw error;
+  }
 }
 
 /**

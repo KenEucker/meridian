@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetNodeReachability } from "@/offline/nodeReachability";
 import { clearReadCache } from "@/offline/readCache";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
@@ -90,6 +91,13 @@ beforeEach(() => {
    * holding nothing.
    */
   clearReadCache();
+  /*
+   * And what this device observed about its node, for the same reason. A case
+   * whose stubbed node refuses a read leaves the client holding "no node
+   * reachable", which is correct for that case and is a claim about a stub the
+   * next one never made.
+   */
+  resetNodeReachability();
   setDeviceOnLine(true);
   installLocalFieldSession();
   configureMeridianApi({

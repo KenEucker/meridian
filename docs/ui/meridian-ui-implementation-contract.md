@@ -1776,9 +1776,14 @@ Rules:
   canonical 16.1 label as text or accessible name, per the accessibility
   checklist;
 - Unknown is startup only, and is reachable only once a connection signal exists
-  that has an indeterminate period. The current device-network signal resolves
-  synchronously, so today Unknown is defined and testable but not reached at
-  runtime. Do not manufacture a gray flash to make it visible.
+  that has an indeterminate period. That signal now exists: the client observes
+  whether its node answers, and the period is the moment between boot and the
+  first answer. Do not manufacture a gray flash to make it longer;
+- a device's own network being down and its node being silent are different
+  situations and take different steps. No network is Degraded — local work
+  continues and the user can see why. A working network with no node answering is
+  Failing, and it is the row "no node reachable" above covers: nothing on the
+  device explains it, and it is the case a client must never report as Connected.
 
 ### 16.2 Offline UI Rules
 

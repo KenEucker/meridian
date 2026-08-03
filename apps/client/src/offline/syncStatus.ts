@@ -139,3 +139,82 @@ export function describeConnectivityState(
 export function shouldShowOfflineBanner(state: ConnectivityState): boolean {
   return DESCRIPTORS[state].affectsWork;
 }
+
+/** One of contract 16.1A's four steps of notice, with the words to say. */
+export interface NodeConnectionStatus {
+  readonly label: string;
+  readonly meaning: string;
+  readonly tone: "unknown" | "failing" | "degraded" | "connected";
+}
+
+/**
+ * How this device is doing against the node it syncs with (contract 16.1A).
+ *
+ * The four steps are a scale of notice, not a restatement of the seven states:
+ * the canonical 16.1 meaning is carried as text alongside, because the contract
+ * forbids colour carrying a state on its own.
+ *
+ * Both arguments are needed and neither is enough, which is the point. `state`
+ * is one of the seven and cannot express "the node is not answering" — there is
+ * no such state, and 16.1A lists that condition against the Failing step
+ * anyway. `nodeIsUnreachable` supplies it, and it is deliberately narrower than
+ * "nothing is reachable": true only where this device has a network and the node
+ * on the other end of it says nothing.
+ *
+ * That narrowness is what separates the two ways to arrive at `offline_usable`.
+ * A device with no network is Degraded — local work continues, the user can see
+ * why, and reconnecting fixes it. A device whose network is fine and whose node
+ * is silent is Failing, because that is the surprising case and the one somebody
+ * has to act on.
+ *
+ * `null` is the Unknown step: no result yet. Startup only, and it exists so the
+ * moment before the first answer is not spent claiming one.
+ *
+ * Lives here rather than in the shell because two surfaces report this — the
+ * user button and its dropdown, and Device diagnostics — and they disagreed once
+ * already.
+ */
+export function describeNodeConnection(
+  state: ConnectivityState | null,
+  nodeIsUnreachable: boolean,
+): NodeConnectionStatus {
+  if (state === null) {
+    return {
+      label: "Checking node connection",
+      meaning: "This device has not heard from its node yet.",
+      tone: "unknown",
+    };
+  }
+
+  const descriptor = DESCRIPTORS[state];
+
+  if (state === "sync_conflict" || state === "sync_failed") {
+    return {
+      label: "Node connection failing",
+      meaning: descriptor.meaning,
+      tone: "failing",
+    };
+  }
+
+  if (nodeIsUnreachable) {
+    return {
+      label: "No node reachable",
+      meaning: `This device cannot reach its node. ${descriptor.meaning}`,
+      tone: "failing",
+    };
+  }
+
+  if (state === "online") {
+    return {
+      label: "Connected and fully capable",
+      meaning: descriptor.meaning,
+      tone: "connected",
+    };
+  }
+
+  return {
+    label: "Node connection degraded",
+    meaning: descriptor.meaning,
+    tone: "degraded",
+  };
+}
