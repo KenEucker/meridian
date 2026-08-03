@@ -114,6 +114,8 @@ final class PermissionCatalog
 
     public const PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE = 'organization.designations.manage';
 
+    public const PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE = 'organization.configuration.manage';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -193,6 +195,7 @@ final class PermissionCatalog
             self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT => 'Export credits earned with the calculation basis each number was frozen at; organizers export the whole event, department roles export their own department.',
             self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW => 'Review event applications for the organization: approve, reject, and defer, and assign approved applicants to departments.',
             self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE => 'Maintain organization-level team designations: which team within the configured Organizers Department carries Staff Coordinator authority.',
+            self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE => 'Edit organization configuration: lifecycle inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.',
         ];
     }
 
@@ -278,6 +281,14 @@ final class PermissionCatalog
      * Organizers from the organization configuration surface, while department
      * team designations answer to department.administer on the department
      * administration surface and need no capability of their own.
+     * M18.14 adds organization.configuration.manage to the two organizer roles
+     * and to nobody else, which is ORG-020 verbatim: only organizers and Lead
+     * Organizers edit organization configuration. It deliberately does not
+     * reach staff_coordinator — reviewing applications is not setting the
+     * values that govern the organization's lifecycle and timing — and it is
+     * a separate capability from incident_types.manage and designations.manage
+     * because each featureset on the configuration surface carries its own
+     * authority rather than inheriting one from the page.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -367,6 +378,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
+                self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -384,6 +396,7 @@ final class PermissionCatalog
                 self::PERMISSION_REPORTS_CREDITS_EARNED_EXPORT,
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
+                self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
             ],
         ];
     }

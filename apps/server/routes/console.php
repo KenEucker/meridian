@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Diagnostics\Checks\SchedulerHeartbeatCheck;
 use App\Services\NameReferences\NameReferenceIndexService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -33,7 +34,7 @@ if ((bool) config('meridian.node.sync.schedule_enabled', true)) {
 // every minute, read by the scheduler-heartbeat diagnostic check.
 Schedule::call(function (): void {
     Cache::put(
-        \App\Services\Diagnostics\Checks\SchedulerHeartbeatCheck::CACHE_KEY,
+        SchedulerHeartbeatCheck::CACHE_KEY,
         now()->toIso8601String(),
         now()->addHour(),
     );
@@ -44,4 +45,15 @@ Schedule::call(function (): void {
 // report, so scheduling it unconditionally is safe.
 Schedule::command('meridian:health-report')
     ->everyTenMinutes()
+    ->withoutOverlapping();
+
+// The organization staff lifecycle thresholds are applied on a schedule
+// (M18.15; ORG-019): Prospective staff past the configured threshold become
+// Inactive (STAT-011), and Active staff past theirs do too, without a person
+// performing the transition. The thresholds are measured in years, so daily is
+// dense enough; the command refuses quietly on nodes that do not own
+// organization status and is idempotent, so scheduling it unconditionally is
+// safe.
+Schedule::command('meridian:evaluate-lifecycle-thresholds')
+    ->daily()
     ->withoutOverlapping();

@@ -34,6 +34,7 @@ class HoursCorrectionService
 {
     public function __construct(
         private readonly AttendanceCheckInAccess $access,
+        private readonly HoursCorrectionWindow $window,
         private readonly AuditService $audit,
     ) {}
 
@@ -91,6 +92,21 @@ class HoursCorrectionService
                 throw HoursCorrectionException::frozenHours(
                     $hoursWorked->frozen_at,
                     $hoursWorked->event?->timezone,
+                );
+            }
+
+            /*
+             * The configured window is authoritative even before anything has
+             * stamped `frozen_at` on this record (ORG-017; HOURS-008). The
+             * grace period closing is what freezes hours; the column is the
+             * receipt, and a record nobody got around to stamping is not an
+             * open correction window.
+             */
+            if ($hoursWorked->event !== null
+                && $this->window->hasClosed($hoursWorked->event, $serverReceivedAt)) {
+                throw HoursCorrectionException::frozenHours(
+                    $this->window->closesAt($hoursWorked->event),
+                    $hoursWorked->event->timezone,
                 );
             }
 

@@ -42,11 +42,13 @@ class Organization extends Model
         'branding_updated_at',
         'organizers_department_id',
         'default_ic_department_id',
+        'default_placement_department_id',
         'default_credit_policy_id',
         'active_inactive_threshold_years',
         'prospective_inactive_threshold_years',
         'calendar_year_start_month',
         'calendar_year_start_day',
+        'hours_correction_grace_period_days',
         'archived_at',
     ];
 
@@ -82,6 +84,7 @@ class Organization extends Model
             'prospective_inactive_threshold_years' => 'integer',
             'calendar_year_start_month' => 'integer',
             'calendar_year_start_day' => 'integer',
+            'hours_correction_grace_period_days' => 'integer',
             'archived_at' => 'datetime',
             'branding_palette_json' => 'array',
             'department_branding_enabled' => 'boolean',
@@ -165,6 +168,22 @@ class Organization extends Model
     public function defaultIcDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'default_ic_department_id');
+    }
+
+    public function defaultPlacementDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'default_placement_department_id');
+    }
+
+    /**
+     * The ORG-017 hours correction window in days after event end, during
+     * which authorized attendance managers may correct hours (HOURS-007) and
+     * after which hours freeze (HOURS-008). Falls back to the documented
+     * default of 14 for a row hydrated without the column.
+     */
+    public function hoursCorrectionGracePeriodDays(): int
+    {
+        return (int) ($this->hours_correction_grace_period_days ?? 14);
     }
 
     /**

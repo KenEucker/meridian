@@ -9,6 +9,7 @@ use App\Models\CreditLedgerEntry;
 use App\Models\Event;
 use App\Models\HoursWorked;
 use App\Models\User;
+use App\Services\Attendance\HoursCorrectionWindow;
 use App\Services\Audit\AuditService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -25,9 +26,9 @@ use Illuminate\Support\Str;
  * record. This service therefore refuses to run for an event that still holds
  * an unfrozen hours record: a partially frozen event is one where an authorized
  * attendance manager may still change a total (HOURS-007), and crediting it
- * would freeze a number that the domain has not finished producing. When
- * M18.14 adds the configured grace-period duration to the organization, that
- * date joins this check rather than replacing it — a run may not begin before
+ * would freeze a number that the domain has not finished producing. M18.14
+ * added the configured grace-period duration to the organization, and that
+ * date joined this check rather than replacing it — a run may not begin before
  * the configured period closes, and may not begin while any hours record is
  * still open either.
  *
@@ -47,6 +48,7 @@ final class CreditCalculationService
 {
     public function __construct(
         private readonly CreditPolicyResolver $policyResolver,
+        private readonly HoursCorrectionWindow $correctionWindow,
         private readonly AuditService $audit,
     ) {}
 
@@ -62,7 +64,7 @@ final class CreditCalculationService
         $calculatedAt ??= Carbon::now();
 
         return DB::transaction(function () use ($event, $actor, $calculatedAt, $sourceContext): CreditCalculationResult {
-            $this->assertGracePeriodClosed($event);
+            $this->assertGracePeriodClosed($event, $calculatedAt);
 
             $records = $this->finalizedHours($event);
             $alreadyCalculated = $this->hoursIdsAlreadyCalculated($records);
@@ -123,10 +125,23 @@ final class CreditCalculationService
     }
 
     /**
+     * Two gates, and a run needs both open — this is the shape the class
+     * comment promised when M18.14 was still a plan. The configured grace
+     * period (ORG-017) must have elapsed, because CREDIT-001 says credits are
+     * not calculated for an event before its grace period closes; and no hours
+     * record may still be unfrozen, because a record an attendance manager may
+     * still change is a number the domain has not finished producing.
+     *
      * @throws CreditCalculationException
      */
-    private function assertGracePeriodClosed(Event $event): void
+    private function assertGracePeriodClosed(Event $event, ?Carbon $asOf = null): void
     {
+        $closesAt = $this->correctionWindow->closesAt($event);
+
+        if ($closesAt !== null && ($asOf ?? Carbon::now())->lessThan($closesAt)) {
+            throw CreditCalculationException::gracePeriodStillOpen($closesAt, $event->timezone);
+        }
+
         $openRecordCount = HoursWorked::query()
             ->where('event_id', $event->id)
             ->whereNull('frozen_at')

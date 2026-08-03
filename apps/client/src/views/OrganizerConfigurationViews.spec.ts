@@ -1,14 +1,13 @@
-// The organization configuration surface, and its incident type featureset,
-// against a stubbed node (M18.14A; ORG-018, ORG-020; CLIENT-023, CLIENT-024).
+// The organization configuration surface and its three featuresets — the
+// operational settings, the incident type list, and the organization team
+// designations — against a stubbed node (M18.14, M18.14A, M18.12; ORG-017,
+// ORG-018, ORG-020, ORG-021; CLIENT-023, CLIENT-024).
 //
 // This is the surface ORG-018 requires and Meridian never had. Until it existed
 // the incident form created a type whenever somebody typed a name it did not
-// recognize, which is how an organization's vocabulary came to be whatever had
-// been entered into an incident.
-//
-// The page is a hub: incident types is the featureset it carries today, and the
-// rest of ORG-018's values land beside it in M18.14. These tests address it
-// through the page, because that is how a person reaches it.
+// recognize, and the lifecycle thresholds, grace period, calendar year start,
+// and designations could only be set from a tinker session. These tests
+// address it through the page, because that is how a person reaches it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearReadCache } from "@/offline/readCache";
@@ -37,6 +36,7 @@ const MEDICAL_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01";
 const RETIRED_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02";
 const INTAKE_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03";
 const WELCOME_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04";
+const CREDIT_POLICY_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05";
 
 interface NodeCall {
   readonly url: string;
@@ -105,6 +105,37 @@ function defaultTypes(): Record<string, unknown>[] {
   ];
 }
 
+function configurationPayload(
+  governance: Record<string, unknown> = {
+    editable: true,
+    holds_authority: true,
+    frozen_by_event: null,
+  },
+): Record<string, unknown> {
+  return {
+    organization_id: ORGANIZATION_ID,
+    configuration: {
+      active_inactive_threshold_years: 2,
+      prospective_inactive_threshold_years: 1,
+      calendar_year_start_month: 3,
+      calendar_year_start_day: 1,
+      hours_correction_grace_period_days: 14,
+      default_credit_policy_id: null,
+      organizers_department_id: ORGANIZER_DEPARTMENT,
+      default_ic_department_id: null,
+      default_placement_department_id: null,
+    },
+    options: {
+      departments: [
+        { id: ORGANIZER_DEPARTMENT, name: "Organizers" },
+        { id: LOCAL_FIELD_DEPARTMENT_IDS.rangers, name: "Rangers" },
+      ],
+      credit_policies: [{ id: CREDIT_POLICY_ID, name: "Standard credit" }],
+    },
+    governance,
+  };
+}
+
 function designationsPayload(
   staffCoordinator: { team_id: string; team_name: string } | null = null,
 ): Record<string, unknown> {
@@ -126,12 +157,20 @@ function designationsPayload(
   };
 }
 
-/** Answers both featureset reads, and accepts every command. */
+/** Answers every featureset read, and accepts every command. */
 function stubAdminNode(
   types?: Record<string, unknown>[],
   staffCoordinator: { team_id: string; team_name: string } | null = null,
+  configurationGovernance?: Record<string, unknown>,
 ): NodeCall[] {
   return stubNode((call) => {
+    if (
+      call.url.includes("/configuration") ||
+      call.url.includes("update-organization-configuration")
+    ) {
+      return { body: configurationPayload(configurationGovernance) };
+    }
+
     if (call.url.includes("/designations") || call.url.includes("staff-coordinator-team")) {
       return {
         body: designationsPayload(
@@ -225,9 +264,13 @@ describe("the organization configuration surface", () => {
 
     const { wrapper } = await mountAt("/organizer/configuration");
 
-    expect(calls[0]?.url).toBe(
-      `http://node.test/api/organizations/${ORGANIZATION_ID}/incident-types`,
-    );
+    expect(
+      calls.some(
+        (call) =>
+          call.url ===
+          `http://node.test/api/organizations/${ORGANIZATION_ID}/incident-types`,
+      ),
+    ).toBe(true);
     expect(wrapper.text()).toContain("Medical");
     expect(wrapper.text()).toContain("On 3 incidents");
     // Archived types are shown here and nowhere else, because restoring one is
@@ -413,7 +456,124 @@ describe("the organization configuration surface", () => {
 
     expect(wrapper.text()).toContain("Incident types");
     expect(wrapper.text()).not.toContain("Team designations");
+    // The settings form is absent — the page lede mentions "Operational
+    // settings" either way, so the check is for the controls themselves.
+    expect(wrapper.find("#config-grace-days").exists()).toBe(false);
     expect(calls.some((call) => call.url.includes("/designations"))).toBe(false);
+    expect(calls.some((call) => call.url.includes("/configuration"))).toBe(false);
+  });
+
+  it("carries the operational settings featureset (M18.14)", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(
+      calls.some((call) =>
+        call.url.endsWith(`/api/organizations/${ORGANIZATION_ID}/configuration`),
+      ),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Operational settings");
+
+    // The node's current values are on the form, not a blank slate.
+    expect(
+      (wrapper.get("#config-prospective-years").element as HTMLInputElement).value,
+    ).toBe("1");
+    expect(
+      (wrapper.get("#config-grace-days").element as HTMLInputElement).value,
+    ).toBe("14");
+    expect(
+      (wrapper.get("#config-organizers-department").element as HTMLSelectElement)
+        .value,
+    ).toBe(ORGANIZER_DEPARTMENT);
+  });
+
+  it("saves the settings through the update command", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#config-grace-days").setValue("21");
+    await wrapper.get("#config-active-years").setValue("3");
+    await wrapper
+      .get("form[aria-label='Organization operational settings']")
+      .trigger("submit");
+    await flushPromises();
+
+    const command = commandCalls(calls, "update-organization-configuration").at(0);
+
+    expect(command?.body).toMatchObject({
+      organization_id: ORGANIZATION_ID,
+      hours_correction_grace_period_days: 21,
+      active_inactive_threshold_years: 3,
+      prospective_inactive_threshold_years: 1,
+      organizers_department_id: ORGANIZER_DEPARTMENT,
+    });
+    expect(wrapper.text()).toContain("Configuration saved.");
+  });
+
+  it("reads only, with the node's reason, while governance freezes edits", async () => {
+    installSession();
+    const calls = stubAdminNode(undefined, null, {
+      editable: false,
+      holds_authority: true,
+      frozen_by_event: { id: LOCAL_FIELD_FIXTURE.eventId, name: "Emberfall 2026" },
+    });
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.text()).toContain(
+      "Configuration is frozen while Emberfall 2026 is inside its active event window",
+    );
+    expect(
+      wrapper.get("#config-grace-days").attributes("disabled"),
+    ).toBeDefined();
+
+    await wrapper
+      .get("form[aria-label='Organization operational settings']")
+      .trigger("submit");
+    await flushPromises();
+
+    // A disabled form submits nothing: the refusal is explained, not tripped.
+    expect(commandCalls(calls, "update-organization-configuration")).toHaveLength(0);
+  });
+
+  it("shows the node's refusal when a save is rejected", async () => {
+    installSession();
+    stubNode((call) => {
+      if (call.url.includes("update-organization-configuration")) {
+        return {
+          status: 422,
+          body: {
+            message: "The calendar year start needs both a month and a day, or neither.",
+          },
+        };
+      }
+
+      if (call.url.includes("/configuration")) {
+        return { body: configurationPayload() };
+      }
+
+      if (call.url.includes("/designations")) {
+        return { body: designationsPayload() };
+      }
+
+      return { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#config-calendar-day").setValue("");
+    await wrapper
+      .get("form[aria-label='Organization operational settings']")
+      .trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "The calendar year start needs both a month and a day, or neither.",
+    );
   });
 
   it("is refused, and unlisted, without the capability", async () => {

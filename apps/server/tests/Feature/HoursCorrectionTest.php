@@ -178,6 +178,67 @@ class HoursCorrectionTest extends TestCase
         $this->assertSame(0, AuditEvent::query()->where('action', 'hours.corrected')->count());
     }
 
+    public function test_the_configured_grace_period_refuses_correction_once_elapsed(): void
+    {
+        // ORG-017 / M18.14: the window is the rule and `frozen_at` is the
+        // receipt. Nothing has stamped this record, but the event ended longer
+        // ago than the organization's configured grace period, so the
+        // correction is refused with the same closed-grace-period sentence.
+        [$hours, $shiftLead] = $this->checkedOutHoursScenario();
+
+        $hours->event->forceFill([
+            'ends_at' => Carbon::parse('2026-07-01 18:00:00 UTC'),
+        ])->save();
+
+        try {
+            app(HoursCorrectionService::class)->correctHours(
+                hoursWorked: $hours->refresh(),
+                actor: $shiftLead,
+                operationUuid: (string) Str::uuid(),
+                actualStartedAt: Carbon::parse('2026-07-01 08:00:00'),
+                actualEndedAt: Carbon::parse('2026-07-01 11:00:00'),
+                serverReceivedAt: Carbon::parse('2026-07-20 12:00:00 UTC'),
+            );
+
+            $this->fail('A closed grace period should reject correction.');
+        } catch (HoursCorrectionException $exception) {
+            // Event end 1 Jul 18:00 UTC + the 14-day default = 15 Jul 18:00
+            // UTC, read in the event's own zone.
+            $this->assertSame(
+                'The correction grace period closed on 15 Jul 2026 11:00 PDT, so these hours are frozen and can no longer be corrected.',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertSame(240, $hours->refresh()->minutes_worked);
+    }
+
+    public function test_a_longer_configured_grace_period_keeps_the_window_open(): void
+    {
+        // The configured value governs, not the documented default: the same
+        // correction the 14-day default refuses is accepted while the
+        // organization's 30-day period is still open.
+        [$hours, $shiftLead] = $this->checkedOutHoursScenario();
+
+        $hours->event->forceFill([
+            'ends_at' => Carbon::parse('2026-07-01 18:00:00 UTC'),
+        ])->save();
+        $hours->event->organization
+            ->forceFill(['hours_correction_grace_period_days' => 30])
+            ->save();
+
+        $result = app(HoursCorrectionService::class)->correctHours(
+            hoursWorked: $hours->refresh(),
+            actor: $shiftLead,
+            operationUuid: (string) Str::uuid(),
+            actualStartedAt: Carbon::parse('2026-07-01 08:00:00'),
+            actualEndedAt: Carbon::parse('2026-07-01 11:00:00'),
+            serverReceivedAt: Carbon::parse('2026-07-20 12:00:00 UTC'),
+        );
+
+        $this->assertSame(180, $result->hoursWorked->minutes_worked);
+    }
+
     /**
      * A correction adds to the history rather than replacing it (SLB-032).
      *
