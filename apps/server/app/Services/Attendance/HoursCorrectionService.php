@@ -83,7 +83,7 @@ class HoursCorrectionService
 
             $shift = $hoursWorked->shift;
 
-            if ($shift === null || ! $this->access->canCheckOutForShift($actor, $shift)) {
+            if ($shift === null || ! $this->access->canCorrectHoursForShift($actor, $shift)) {
                 throw HoursCorrectionException::unauthorized();
             }
 
@@ -186,7 +186,7 @@ class HoursCorrectionService
 
             $shift = $hoursWorked->shift;
 
-            if ($shift === null || ! $this->access->canCheckOutForShift($actor, $shift)) {
+            if ($shift === null || ! $this->access->canCorrectHoursForShift($actor, $shift)) {
                 throw HoursCorrectionException::unauthorized();
             }
 

@@ -250,6 +250,16 @@ final class PermissionCatalog
      * department_administration, which is exactly the split BRAND-019 draws:
      * organizers own the organization palette, departments own only their own
      * logo, accent, and surface background.
+     * M18.13 resolves "authorized attendance manager" (TEAM-015): the holders
+     * of department_logistics for the department, together with department
+     * leads and shift leads for that department, so department.attendance.manage
+     * is carried by all three. It is the one department_logistics capability
+     * the two lead roles share — presence and equipment stay with Logistics —
+     * and for shift_lead it follows the role's own scoping: only a
+     * lead-designated membership resolves the role at all (M11.17).
+     * check-in, check-out, mark-no-show, and hours correction all answer to
+     * this one capability (SLB-007, SLB-029; HOURS-007), which is what keeps
+     * the four operations agreeing on who is authorized.
      * M18.11 adds organization.applications.review to the two organizer roles
      * and to staff_coordinator, and to staff_coordinator nothing else. That
      * asymmetry is the role (TEAM-014; requirements 4.4): a Staff Coordinator
@@ -267,7 +277,11 @@ final class PermissionCatalog
     public static function rolePermissions(): array
     {
         return [
+            self::ROLE_SHIFT_LEAD => [
+                self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE,
+            ],
             self::ROLE_DEPARTMENT_LEAD => [
+                self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE,
                 self::PERMISSION_DEPARTMENT_ADMINISTER,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
                 self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,

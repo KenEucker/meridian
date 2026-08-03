@@ -195,7 +195,11 @@ class PermissionCatalogTest extends TestCase
         ], $this->permissionCodesFor('department_administration'));
 
         // M11.13: department leads share department.administer for self-admin.
+        // M18.13 / TEAM-015: department leads are authorized attendance
+        // managers alongside department_logistics, so they carry
+        // department.attendance.manage — and only that — of the Logistics set.
         $this->assertSame([
+            'department.attendance.manage',
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',
@@ -209,6 +213,15 @@ class PermissionCatalogTest extends TestCase
         $this->assertSame([
             'department.schedule.manage',
         ], $this->permissionCodesFor('department_planning'));
+
+        // M18.13 / TEAM-015: shift leads are attendance managers for their
+        // department. The capability is the whole of the role's catalog entry,
+        // and the role itself still resolves only for lead-designated
+        // memberships (M11.17), so a plain member of a grant-bearing team
+        // holds nothing.
+        $this->assertSame([
+            'department.attendance.manage',
+        ], $this->permissionCodesFor('shift_lead'));
     }
 
     public function test_department_operator_carries_no_capabilities_until_its_owning_milestone(): void

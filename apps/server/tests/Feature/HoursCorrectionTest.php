@@ -321,14 +321,17 @@ class HoursCorrectionTest extends TestCase
             ->for($team->department)
             ->for($staff)
             ->create();
+        // A designated shift lead (M11.17): lead membership in the team the
+        // shift_lead grant is scoped to, which is what TEAM-015 admits.
         TeamMembership::factory()->create([
             'team_id' => $team->id,
             'staff_id' => $staff->id,
             'department_membership_id' => $departmentMembership->id,
+            'membership_role' => 'lead',
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('department_logistics')->id,
+            'permission_role_id' => $this->role('shift_lead')->id,
         ]);
 
         return $user;
@@ -351,7 +354,7 @@ class HoursCorrectionTest extends TestCase
         ]);
         TeamGrant::factory()->create([
             'team_id' => $team->id,
-            'permission_role_id' => $this->role('department_logistics')->id,
+            'permission_role_id' => $this->role('department_lead')->id,
         ]);
 
         return $user;

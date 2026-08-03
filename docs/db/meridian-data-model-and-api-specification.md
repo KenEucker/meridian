@@ -1116,6 +1116,14 @@ teams:
 - `department_operator` is the department dispatch/console function (requirements 4.8A). It enters the catalog with the team designation model (TEAM-012); its capability set and the derived event-scoped `ic_operator` elevation are owned by M18.10A.
 - `staff_coordinator` is organization-scoped through a designated team within the configured Organizers Department (TEAM-014). It carries `organization.applications.review` — application review, approval, rejection, and deferral, plus assigning approved applicants to departments (requirements 4.4) — and no other organizer governance capability. Organizers and Lead Organizers hold the same capability, so one policy answers for the whole reviewer population.
 
+Authorized attendance managers (TEAM-015) are the holders of
+`department_logistics` for the department together with department leads and
+shift leads for that department, so `department.attendance.manage` is carried
+by all three roles — for `shift_lead`, through its own lead-designated-membership
+scoping — and check-in, check-out, mark-no-show, and hours correction all
+answer to that one capability (SLB-007, SLB-029; HOURS-007). Presence and
+equipment stay with `department_logistics`.
+
 Department team designations (TEAM-011 through TEAM-013) attach these grants to
 a named team per function through `team_designations` (section 10.6); the
 designation creates and owns a `team_grants` row rather than becoming a second
