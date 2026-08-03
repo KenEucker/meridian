@@ -985,6 +985,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
     <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
+
     <!--
       Cached-permission state is not here. It lives on Settings, next to the
       other facts about this device's standing with its node, and the shell says

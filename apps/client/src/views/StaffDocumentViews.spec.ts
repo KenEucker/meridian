@@ -14,6 +14,7 @@
 // No server runs for any of it, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearReadCache } from "@/offline/readCache";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory, type Router } from "vue-router";
 
@@ -168,6 +169,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
+  /*
+   * Reads are durable from M18.9 (technical spec 9.3), so a successful read in
+   * one case would be served to the next one from the store. Cleared between
+   * cases, and the unreachable-node cases below are about a device that is
+   * holding nothing.
+   */
+  clearReadCache();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -353,6 +361,70 @@ describe("the staff document library", () => {
     expect(calls).toHaveLength(0);
     expect(wrapper.text()).toContain(
       "Your document library opens once this device is working in an organization",
+    );
+  });
+});
+
+/*
+ * Search when the node cannot be reached (M18.9).
+ *
+ * The library is one of the pages technical spec 9.3 asks a device to hold, and
+ * a held library that answers a typed word with "unable to load" is the failure
+ * this whole change is about. The narrowed request is its own cache key, so the
+ * first search typed offline is always a miss on its own key and falls back to
+ * the broad copy, which the browser then filters.
+ */
+describe("searching the staff document library offline", () => {
+  it("matches against the copy this device holds instead of failing", async () => {
+    stubNode();
+    await mountLibrary();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { wrapper } = await mountLibrary({ q: "radio" });
+
+    expect(wrapper.find(".staff-documents__error").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Radio Procedure");
+    expect(wrapper.text()).not.toContain("Getting To Signal Camp");
+    expect(wrapper.get(".staff-documents__narrowed").text()).toContain(
+      "matched against the documents this device had already read",
+    );
+  });
+
+  it("says a stored search found nothing rather than that nothing matches", async () => {
+    stubNode();
+    await mountLibrary();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { wrapper } = await mountLibrary({ q: "nothing-like-this" });
+
+    expect(wrapper.find(".staff-documents__error").exists()).toBe(false);
+    expect(wrapper.find(".staff-documents__narrowed").exists()).toBe(true);
+  });
+
+  it("still states an unreachable node when the device holds no library", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { wrapper } = await mountLibrary({ q: "radio" });
+
+    expect(wrapper.get(".staff-documents__error").text()).toContain(
+      "Unable to load documents",
     );
   });
 });

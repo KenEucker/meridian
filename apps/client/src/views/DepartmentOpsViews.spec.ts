@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
-import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
+import { clearReadCache } from "@/offline/readCache";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -16,8 +18,21 @@ import {
   selectSessionDepartment,
 } from "@/session/sessionAccess";
 
-const EVENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.eventId;
-const DEPARTMENT_ID = LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId;
+/*
+ * The event and department these tests work in.
+ *
+ * Declared here rather than imported from a fixture module (M18.9). They are the
+ * ids the local development session document carries, which is what the client
+ * under test is holding; a shared constants module would make them look like
+ * product data rather than what one test file is standing on.
+ */
+const LOCAL_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+const LOCAL_EVENT_LABEL = "Local Field Event";
+const LOCAL_DEPARTMENT_ID = "66666666-6666-4666-8666-666666666666";
+
+
+const EVENT_ID = LOCAL_EVENT_ID;
+const DEPARTMENT_ID = LOCAL_DEPARTMENT_ID;
 const DAY_SHIFT_ID = "99999999-9999-4999-8999-999999999999";
 const SWING_SHIFT_ID = "99999999-9999-4999-8999-999999999998";
 // Two shifts that have ended, one still inside the correction grace period and
@@ -84,7 +99,7 @@ function homeCardByHeading(wrapper: VueWrapper, heading: string) {
 function context() {
   return {
     event_id: EVENT_ID,
-    event_label: LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
+    event_label: LOCAL_EVENT_LABEL,
     department_id: DEPARTMENT_ID,
     department_label: "Rangers",
     time_zone: "America/Los_Angeles",
@@ -644,8 +659,12 @@ beforeEach(() => {
   heldCommand = null;
   ariHoldsEquipment = false;
   commandOutbox.clear();
+  // The desk's index is durable from M18.8, so it outlives a test unless a test
+  // says otherwise. Cleared on both sides: a leftover index would let a test that
+  // means to open on an unreachable node open on a roster instead.
+  clearReadCache();
   installLocalFieldSession();
-  selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+  selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
   stubDepartmentOpsNode();
 });
 
@@ -653,6 +672,7 @@ afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
   commandOutbox.clear();
+  clearReadCache();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
 });
@@ -671,12 +691,18 @@ describe("department operations surfaces", () => {
 
     const { wrapper } = await mountAt("/");
     expect(wrapper.get("#home-heading").text()).toBe(
-      LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
+      LOCAL_EVENT_LABEL,
     );
     const eventCard = wrapper.get(".home__event-card");
     expect(eventCard.find(".home__eyebrow").exists()).toBe(false);
     expect(eventCard.text()).not.toContain("Admin");
-    expect(eventCard.get(".home__status").text()).toBe("ongoing");
+    /*
+     * The badge follows the session's own event window now rather than the
+     * planning fixture's shift bounds (M18.9). This session's event carries no
+     * window, and an unknown window is reported as unknown instead of being
+     * guessed at.
+     */
+    expect(eventCard.get(".home__status").text()).toBe("unscheduled");
     expect(eventCard.text()).toContain("Operations");
     expect(eventCard.text()).toContain("Location");
     expect(eventCard.text()).toContain("Description");
@@ -706,15 +732,24 @@ describe("department operations surfaces", () => {
     expect(wrapper.get(".me__photo").attributes("aria-label")).toContain(
       "Local Field Author profile photo",
     );
-    expect(wrapper.text()).toContain("Years of service");
-    expect(wrapper.text()).toContain("Events worked");
+    /*
+     * Department, team, and role come from the session document now (M18.9).
+     * Years of service, handle, and presence are gone rather than rebound: none
+     * of the three has a read behind it, and the fixture's answers were
+     * arithmetic over invented shift dates. M18.20 builds the profile surface
+     * that carries them.
+     */
+    expect(wrapper.text()).toContain("Department");
+    expect(wrapper.text()).toContain("Role");
+    expect(wrapper.text()).not.toContain("Years of service");
     expect(wrapper.text()).toContain("My Field Reports");
     expect(
       wrapper
         .findAll(".me__links a")
         .some((link) => link.attributes("href") === "/staff/field-reports"),
     ).toBe(true);
-    expect(wrapper.text()).toContain("Schedule for ongoing event");
+    // This session's event carries no window, so the heading is the neutral one.
+    expect(wrapper.text()).toContain("Schedule for next event");
     expect(wrapper.get(".me__event").attributes("href")).toBe(overviewPath());
   });
 
@@ -1380,5 +1415,66 @@ describe("department operations surfaces", () => {
       "Unable to load this department's logistics desk",
     );
     expect(wrapper.find(".logistics__on-shift-list").exists()).toBe(false);
+  });
+
+  /*
+   * SLB-021's offline half (M18.8). The desk that has read its department once
+   * opens on that index with the node unreachable, searches it, and says it is
+   * doing so — a desk out of coverage that could look nobody up is a service
+   * station that has stopped serving.
+   */
+  it("searches the stored department index when the node is unreachable", async () => {
+    await mountAt(logisticsPath());
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    expect(wrapper.find(".logistics__error").exists()).toBe(false);
+
+    const scope = wrapper.get(".logistics__cache");
+    expect(scope.attributes("data-source")).toBe("cache");
+    expect(scope.text()).toContain("This node could not be reached");
+    expect(scope.text()).toContain("the copy this device stored");
+
+    await openWorkspace(wrapper, "Vera Staff");
+
+    expect(wrapper.get(".logistics__workspace").text()).toContain("Vera Staff");
+  });
+
+  it("says the desk is live when the node answered", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    const scope = wrapper.get(".logistics__cache");
+    expect(scope.attributes("data-source")).toBe("node");
+    expect(scope.text()).not.toContain("This node could not be reached");
+  });
+
+  /*
+   * A refusal is not unreachability. The desk that is told no shows the node's
+   * sentence rather than reopening the roster it happens to be holding
+   * (CLIENT-006, CLIENT-010).
+   */
+  it("shows a refusal rather than the stored index when the node answers no", async () => {
+    await mountAt(logisticsPath());
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({ message: "You may no longer work this department." }, 403),
+      ),
+    );
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    expect(wrapper.get(".logistics__error").text()).toContain(
+      "You may no longer work this department.",
+    );
+    expect(wrapper.find(".logistics__cache").exists()).toBe(false);
   });
 });

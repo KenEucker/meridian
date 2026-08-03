@@ -11,6 +11,7 @@
 // registers its session key, and this module knows nothing about either.
 
 import { resolveNodeUrl } from "@/app/nodeConnection";
+import { LIVE_READ, readCache, type CachedRead } from "@/offline/readCache";
 
 export class MeridianApiError extends Error {
   readonly status: number;
@@ -173,6 +174,77 @@ export function meridianErrorMessage(error: unknown, fallback: string): string {
   return typeof body?.message === "string" && body.message !== ""
     ? body.message
     : fallback;
+}
+
+/**
+ * Read JSON, falling back to what this device stored last time (M18.9;
+ * technical spec 9.3).
+ *
+ * "The device should cache as much authorized data as possible. Offline data may
+ * be stale, but stale authorized data is better than no data." A read surface
+ * joins that policy by calling this instead of {@link meridianJson}, and gets
+ * back the freshness of what it is holding so it can say which copy is on screen.
+ *
+ * The fallback turns on whether the node *answered*, not on whether it said yes.
+ * A `MeridianApiError` carries a status, which means the node spoke: a refusal, a
+ * revoked token, a department this user may no longer work. Serving a stored copy
+ * there would be a client re-granting access the node had just withdrawn
+ * (CLIENT-006, CLIENT-010), so a refusal is rethrown and the surface shows it.
+ * Anything else — a request that never completed — is the unreachable node this
+ * exists for.
+ *
+ * `fallbackPath` is for a read that narrows: a search term, a state filter, a
+ * team. Those go to the node, because the node searches everything the caller
+ * may see and the browser only holds what it happened to ask for. But the
+ * narrowed request is its own cache key, so the first search typed with no node
+ * in reach is always a miss — and answering "unable to load" while the whole
+ * list is sitting on screen is the behaviour this whole change exists to stop.
+ * A caller passes the unnarrowed path, gets the broad copy back when its own is
+ * missing, and narrows it itself. `freshness.narrowed` says that happened, so a
+ * surface can say what its results actually cover.
+ *
+ * Reads only. A command is not cached and never falls back: what may be held on
+ * this device is decided by the outbox and the offline write scope
+ * (technical spec 9.4, CLIENT-018), not here.
+ */
+export async function meridianCachedJson<T>(
+  path: string,
+  options: { readonly fallbackPath?: string } = {},
+): Promise<CachedRead<T>> {
+  try {
+    const data = await meridianJson<T>(path);
+
+    readCache.write(path, data, new Date().toISOString());
+
+    return { data, freshness: LIVE_READ };
+  } catch (error) {
+    if (error instanceof MeridianApiError) {
+      throw error;
+    }
+
+    const stored = readCache.read(path);
+
+    if (stored !== null) {
+      return {
+        data: stored.payload as T,
+        freshness: { source: "cache", cachedAt: stored.cachedAt, narrowed: false },
+      };
+    }
+
+    const fallback =
+      options.fallbackPath === undefined || options.fallbackPath === path
+        ? null
+        : readCache.read(options.fallbackPath);
+
+    if (fallback === null) {
+      throw error;
+    }
+
+    return {
+      data: fallback.payload as T,
+      freshness: { source: "cache", cachedAt: fallback.cachedAt, narrowed: true },
+    };
+  }
 }
 
 export async function meridianJson<T>(

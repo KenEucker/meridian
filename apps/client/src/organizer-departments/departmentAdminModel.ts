@@ -24,7 +24,7 @@
 // closed set of offline-writable work (data/API 7.2), so a request made with no
 // node reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
 
 /** One department, as the administration surfaces render it. */
 export interface OrganizerDepartment {
@@ -89,9 +89,9 @@ export async function listOrganizerDepartments(
   organizationId: string,
   status: OrganizerDepartmentStatus = "all",
 ): Promise<readonly OrganizerDepartment[]> {
-  const result = await meridianJson<{ departments?: DepartmentPayload[] }>(
+  const result = (await meridianCachedJson<{ departments?: DepartmentPayload[] }>(
     `/api/organizations/${organizationId}/departments?status=${status}`,
-  );
+  )).data;
 
   return (result.departments ?? []).map(toDepartment);
 }
@@ -101,9 +101,9 @@ export async function getOrganizerDepartment(
   departmentId: string,
 ): Promise<OrganizerDepartment> {
   return toDepartment(
-    await meridianJson<DepartmentPayload>(
+    (await meridianCachedJson<DepartmentPayload>(
       `/api/organizations/${organizationId}/departments/${departmentId}`,
-    ),
+    )).data,
   );
 }
 

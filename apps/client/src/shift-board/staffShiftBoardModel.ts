@@ -19,7 +19,8 @@
 // waivers, department status, and a capacity count that changes under you, so a
 // signup held on a device is a shift somebody thinks they hold.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
+import type { ReadFreshness } from "@/offline/readCache";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 
 /** An advisory that came back with a shift, or with a signup (SHIFT-014). */
@@ -62,6 +63,8 @@ export interface ShiftBoard {
   readonly eventId: string;
   readonly eventName: string | null;
   readonly shifts: readonly ShiftBoardEntry[];
+  /** Whether this board came from the node or from what the device stored. */
+  readonly freshness: ReadFreshness;
 }
 
 interface ShiftBoardEntryPayload {
@@ -128,16 +131,26 @@ function toEntry(payload: ShiftBoardEntryPayload): ShiftBoardEntry {
   };
 }
 
-/** Read the whole board for one event. */
-export async function getShiftBoard(eventId: string): Promise<ShiftBoard> {
-  const result = await meridianJson<ShiftBoardPayload>(
+/**
+ * Read the whole board for one event.
+ *
+ * Cached, because "their own shifts" is the first thing technical spec 9.3 asks a
+ * regular staff member's device to hold. A volunteer standing where there is no
+ * signal still needs to know when they are due and where; a board that answers
+ * "check the connection to this node" is the failure that rule exists against.
+ */
+export async function getShiftBoard(
+  eventId: string,
+): Promise<ShiftBoard> {
+  const { data, freshness } = await meridianCachedJson<ShiftBoardPayload>(
     `/api/events/${eventId}/shift-board`,
   );
 
   return {
-    eventId: result.event?.id ?? eventId,
-    eventName: result.event?.name ?? null,
-    shifts: (result.shifts ?? []).map(toEntry),
+    eventId: data.event?.id ?? eventId,
+    eventName: data.event?.name ?? null,
+    shifts: (data.shifts ?? []).map(toEntry),
+    freshness,
   };
 }
 

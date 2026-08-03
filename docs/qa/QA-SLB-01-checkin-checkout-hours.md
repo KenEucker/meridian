@@ -11,6 +11,11 @@ freeze blocking after the correction grace period. Since M18.4 the correction is
 performed from the Logistics Desk staff workspace as well as from the domain, so
 section F now walks both.
 
+Since M18.8 the desk's department index is durable, so section E also walks
+SLB-021's offline half: a desk that has read its department once still searches
+staff, equipment, and shifts with the node unreachable, says which copy it is
+searching, and holds nothing for a department this device has not read.
+
 This script covers the Alpha 1 human QA gate for check-in/check-out/hours. It
 does not add or require staff self-service check-in, credit calculation,
 PowerSync conflict repair UI, signed node-operation envelopes, or new product
@@ -33,9 +38,10 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - `SLB-008`
 - `SLB-015` through `SLB-018`
 - `SLB-019`
+- `SLB-021`
 - `SLB-031`
 - `SLB-032`
-- `CLIENT-015`, `CLIENT-018`, `CLIENT-023`
+- `CLIENT-014`, `CLIENT-015`, `CLIENT-018`, `CLIENT-023`
 - `HOURS-001` through `HOURS-008`
 - `REPORT-004`
 - `REPORT-006`
@@ -46,8 +52,8 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - Data/API spec sections 7.2 and 10.10
 - UI Implementation Contract sections 12.5 and 16.2
 - Kiosk and Field Hardware UX Guide section 5
-- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, M16.21, M18.3, and
-  M18.4
+- Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, M16.21, M18.3,
+  M18.4, and M18.8
 
 ## Environment
 
@@ -291,6 +297,27 @@ rows, unauthorized actors are refused, and each successful export is audited.
 28. Record the queued operation UUID from the UI, local pending queue, or
     browser storage evidence before reconnecting.
 29. Reload the page while still offline.
+29a. Confirm the Logistics Desk still opens on this department rather than on the
+     unreachable-node message, and that the **Search scope** panel says the node
+     could not be reached and names the moment this device stored the copy it is
+     searching (M18.8, SLB-021).
+29b. Still offline, search the reloaded desk for a staff member, a piece of
+     equipment by asset tag, and a shift by title. Confirm each is found and that
+     opening the staff member's workspace shows their shift cards, presence, and
+     open equipment as of the stored read.
+29c. Switch the department in the shell to one this device has not opened while
+     online, and confirm that desk states the unreachable node rather than
+     showing the first department's staff under the second department's heading
+     (CLIENT-014).
+29d. Still offline, walk the other pages this persona can reach — Me, the shift
+     board, Event Info, Documents, Acknowledgments, Department Overview, the
+     department's Admin, Shifts and Documents pages, and Team Overview. Confirm
+     each renders the data this device read earlier rather than "Unable to load
+     … check the connection to this node", and that the shell states it is
+     showing stored data (technical spec 9.3, M18.9).
+29e. Confirm that signing up for or withdrawing from a shift is still refused
+     where it stands with its own sentence. Reads are held on the device; that
+     write is not, and the two are different answers (technical spec 9.4).
 30. Confirm the queued attendance action remains visible enough for the
     Department Logistics operator to trust that it was captured.
 31. Restore the browser network condition to Online.
@@ -489,6 +516,16 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Check-in, check-out, and no-show can queue offline when the surface and synced
   data are available, remain visible as queued/pending, and sync once with
   operation UUID/device/node provenance.
+- A Logistics Desk that has read its department once still searches staff,
+  equipment, and shifts with the node unreachable, states that it is searching a
+  stored copy and when that copy was taken, and offers no index at all for a
+  department this device has not read.
+- Every read-only surface this persona can reach renders what the device stored
+  when the node is unreachable, and none of them reports "Unable to load". The
+  shell states that stored data is on screen, and stops saying so as soon as the
+  node answers again.
+- Shift signup and withdrawal are still refused where they stand while offline.
+  A read held on the device does not make a write that is not held.
 - Authorized attendance managers can correct unfrozen hours with before/after
   audit evidence, from the Logistics Desk staff workspace as well as from the
   domain, and the dialog opens on the recorded times rather than on now or on

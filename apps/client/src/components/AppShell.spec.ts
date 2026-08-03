@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { mount } from "@vue/test-utils";
 
 import { appConfigForUiMode, type UiMode } from "@/app/appConfig";
@@ -8,10 +11,6 @@ import {
   resetToMeridian,
 } from "@/branding/brandingProfile";
 import AppShell from "@/components/AppShell.vue";
-import {
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-} from "@/department-teams/fixtureDepartmentAccess";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { adoptHeldApiToken } from "@/session/apiLogin";
 import { clearApiToken, storeApiToken } from "@/session/apiToken";
@@ -61,7 +60,7 @@ function setDeviceOnLine(value: boolean): void {
  */
 beforeEach(() => {
   installLocalFieldSession();
-  selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+  selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
 });
 
 afterEach(() => {
@@ -312,7 +311,7 @@ describe("AppShell fixed UI mode display", () => {
       localFieldSessionDocument({
         departments: [
           {
-            id: FIXTURE_RANGERS_DEPARTMENT_ID,
+            id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
             organization_id: "88888888-8888-4888-8888-888888888888",
             name: "Rangers",
             code: "RANGERS",
@@ -959,7 +958,7 @@ describe("AppShell department marks", () => {
       organization_id: "org-1",
       departments: [
         {
-          department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+          department_id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
           name: "Rangers",
           accent: "#1f5f4b",
           surface: null,
@@ -1025,7 +1024,7 @@ describe("AppShell department marks", () => {
     // Two generated letters need an edge to read as something clickable, so
     // the outline is drawn there and only there.
     installDepartmentLogos();
-    selectSessionDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
     const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
     const byTitle = (title: string) =>
@@ -1048,13 +1047,13 @@ describe("AppShell department marks", () => {
     const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
 
     expect(selectedSessionDepartment.value?.departmentId).toBe(
-      FIXTURE_RANGERS_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.rangers,
     );
 
     await wrapper.findAll(".app-shell__department-mark")[1]!.trigger("click");
 
     expect(selectedSessionDepartment.value?.departmentId).toBe(
-      FIXTURE_GATE_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.gate,
     );
     expect(wrapper.get(".app-shell__context-text p").text()).toBe("Gate");
 

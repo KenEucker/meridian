@@ -18,20 +18,25 @@
 // No server runs for any of this, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearReadCache } from "@/offline/readCache";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { FIXTURE_RANGERS_DEPARTMENT_ID } from "@/department-teams/fixtureDepartmentAccess";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
-import { selectSessionDepartment } from "@/session/sessionAccess";
+import {
+  selectSessionDepartment,
+} from "@/session/sessionAccess";
 import { routes } from "@/router";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 
 const EVENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ORGANIZATION_ID = "11111111-1111-4111-8111-111111111111";
-const DEPARTMENT_ID = FIXTURE_RANGERS_DEPARTMENT_ID;
+const DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.rangers;
 const RADIO_12_ID = "88888888-8888-4888-8888-888888888801";
 const RADIO_13_ID = "88888888-8888-4888-8888-888888888802";
 const RETIRED_VEST_ID = "88888888-8888-4888-8888-888888888803";
@@ -201,6 +206,13 @@ function buildRouter() {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
+  /*
+   * Reads are durable from M18.9 (technical spec 9.3), so a successful read in
+   * one case would be served to the next one from the store. Cleared between
+   * cases, and the unreachable-node cases below are about a device that is
+   * holding nothing.
+   */
+  clearReadCache();
   installLocalFieldSession();
   selectSessionDepartment(DEPARTMENT_ID);
   configureMeridianApi({

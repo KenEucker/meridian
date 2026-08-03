@@ -134,27 +134,27 @@ describe("dictated Field Report visibility", () => {
 
 describe("dictation staff directory", () => {
   it("returns the head of the directory before anything is typed", () => {
-    expect(searchDictationStaff("", 2, DIRECTORY).map((o) => o.displayName)).toEqual([
+    expect(searchDictationStaff("", DIRECTORY, 2).map((o) => o.displayName)).toEqual([
       "Vera Staff",
       "Sam Shiftlead",
     ]);
   });
 
   it("matches on name and on the disambiguating detail, case-insensitively", () => {
-    expect(searchDictationStaff("vera", 8, DIRECTORY).map((o) => o.staffId)).toEqual([
+    expect(searchDictationStaff("vera", DIRECTORY).map((o) => o.staffId)).toEqual([
       "staff-1",
     ]);
-    expect(searchDictationStaff("command", 8, DIRECTORY).map((o) => o.staffId)).toEqual([
+    expect(searchDictationStaff("command", DIRECTORY).map((o) => o.staffId)).toEqual([
       "staff-3",
     ]);
   });
 
   it("caps the result list", () => {
-    expect(searchDictationStaff("", 1, DIRECTORY)).toHaveLength(1);
+    expect(searchDictationStaff("", DIRECTORY, 1)).toHaveLength(1);
   });
 
   it("returns no matches rather than the whole roster for an unknown name", () => {
-    expect(searchDictationStaff("nobody", 8, DIRECTORY)).toEqual([]);
+    expect(searchDictationStaff("nobody", DIRECTORY)).toEqual([]);
   });
 
   it("resolves and misses staff by id", () => {

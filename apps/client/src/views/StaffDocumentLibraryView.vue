@@ -188,6 +188,22 @@ function documentTypeLabel(document: ProductDocument): string {
         A refusal is the node's own sentence, and an unreachable node is stated
         rather than shown as an organization with no documents (data/API 7.2).
       -->
+      <!--
+        A search the browser answered from its own copy covers only that copy
+        (M18.9). Saying so is the difference between "no document matches" and
+        "no document this device is holding matches", and only one of those is
+        a reason to stop looking.
+      -->
+      <p
+        v-if="library && library.freshness.narrowed"
+        class="staff-documents__narrowed"
+        role="status"
+      >
+        This node could not be reached, so these results were matched against
+        the documents this device had already read. Something published since
+        will not be here.
+      </p>
+
       <p v-if="loadError" class="staff-documents__error" role="alert">
         {{ loadError }}
         <button type="button" @click="loadLibrary">Try again</button>
@@ -241,6 +257,16 @@ function documentTypeLabel(document: ProductDocument): string {
 
 <style scoped>
 .staff-documents__notice,
+.staff-documents__narrowed {
+  margin: 0 0 var(--m-space-3);
+  padding: var(--m-space-3);
+  border-inline-start: 3px solid var(--m-status-warning);
+  border-radius: 4px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+}
+
 .staff-documents__error {
   display: flex;
   flex-wrap: wrap;

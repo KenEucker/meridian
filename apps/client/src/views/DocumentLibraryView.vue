@@ -122,6 +122,21 @@ void loadLibrary();
       A refusal is the node's own sentence, and an unreachable node is stated
       rather than shown as an organization with no documents (data/API 7.2).
     -->
+    <!--
+      A search the browser answered from its own copy covers only that copy
+      (M18.9). "No document matches" and "no document this device is holding
+      matches" are different answers, and only one is a reason to stop looking.
+    -->
+    <p
+      v-if="library && library.freshness.narrowed"
+      class="documents-page__narrowed"
+      role="status"
+    >
+      This node could not be reached, so these results were matched against the
+      documents this device had already read. Something published since will not
+      be here.
+    </p>
+
     <p v-if="loadError" class="documents-page__error" role="alert">
       {{ loadError }}
       <button type="button" @click="loadLibrary">Try again</button>
@@ -155,6 +170,16 @@ void loadLibrary();
 </template>
 
 <style scoped>
+.documents-page__narrowed {
+  margin: 0 0 var(--m-space-3);
+  padding: var(--m-space-3);
+  border-inline-start: 3px solid var(--m-status-warning);
+  border-radius: 4px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+}
+
 .documents-page__error {
   display: flex;
   flex-wrap: wrap;

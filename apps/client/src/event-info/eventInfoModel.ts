@@ -27,7 +27,7 @@
 // offline-writable work (data/API 7.2), and a request made with no node
 // reachable fails and says so rather than showing an event with no guidance.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
 
 export interface EventInfoDocument {
   readonly id: string;
@@ -123,9 +123,9 @@ function toDocument(payload: EventInfoDocumentPayload): EventInfoDocument {
  * client a second chance to disagree with the order it was handed (11.4A).
  */
 export async function getEventInfo(eventId: string): Promise<EventInfoView> {
-  const result = await meridianJson<EventInfoPayload>(
+  const result = (await meridianCachedJson<EventInfoPayload>(
     `/api/events/${encodeURIComponent(eventId)}/info`,
-  );
+  )).data;
 
   const sections = (result.sections ?? []).map<EventInfoSectionView>(
     (section) => ({

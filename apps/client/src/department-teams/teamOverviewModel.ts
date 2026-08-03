@@ -1,35 +1,43 @@
-import {
-  LOCAL_DEPARTMENT_OPS_CONTEXT,
-  LOCAL_DEPARTMENT_OVERVIEW,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
-import type {
-  ShiftAttendanceState,
-  ShiftLifecycle,
-} from "@/department-ops/types";
-import {
-  canAdministerDepartment,
-  canLeadDepartmentTeam,
-  listManagedTeamStaff,
-  listDepartmentTeams,
-  listTeamLeadTeams,
-  resolveDepartmentSelfAdminSession,
-  type DepartmentSelfAdminSession,
-  type DepartmentTeam,
-} from "@/department-teams/fixtureDepartmentSession";
+// Team Overview: the team-lead handoff Staff Me routes to (M11.20; bound to the
+// node in M18.9; CLIENT-023).
+//
+// Staff Me routes an ongoing event by role. Department leads have had Department
+// Overview since M10; team leads had nowhere role-appropriate to land, so the
+// interim routing dropped them on the Admin page, which answers "who is on my
+// team" but not "what is my team doing right now". This model answers the second
+// question at team scope.
+//
+// It used to answer it out of `department-ops/fixtures.ts` and a fixture session,
+// which meant the authority test ran against a compiled-in list of who leads
+// what. A real department lead opening a team in their own department was
+// refused, because they were not in the fixture — the page failed closed on a
+// question it had no business answering locally.
+//
+// Two reads now, and each is one the surface's own authority justifies:
+//
+//   `GET /api/departments/{department}/teams`  the teams, the roster, and the
+//                                              `access` block naming who may
+//                                              open what — the same answer the
+//                                              Admin surface is shaped by.
+//   the department planning read                per-shift aggregates for the
+//                                              team, computed by the node.
+//
+// Authority is the node's `access` block and nothing else. Administer authority
+// reaches every team in the department, a team lead reaches only teams they
+// lead, and a caller with neither gets no teams to open rather than a narrower
+// version of the page.
 
-/**
- * Team Overview: the team-lead handoff Staff Me routes to (M11.20).
- *
- * Staff Me routes an ongoing event by role. Department leads have had
- * Department Overview since M10; team leads had nowhere role-appropriate to
- * land, so the interim routing dropped them on the Admin page, which answers
- * "who is on my team" but not "what is my team doing right now". This model
- * answers the second question at team scope, using the same authority that
- * governs the Admin page: department administer authority reaches every team in
- * the department, a team lead reaches only teams they lead, and everyone else
- * fails closed rather than seeing a narrower version of the page.
- */
+import {
+  getPlanningTable,
+  type PlanningRow,
+} from "@/department-ops/departmentOpsReadModel";
+import type { ShiftLifecycle } from "@/department-ops/types";
+import {
+  getDepartmentTeamAdminWorkspace,
+  type DepartmentTeam,
+  type DepartmentTeamStaffMember,
+} from "@/department-teams/teamAdminModel";
+
 export interface TeamOverviewShift {
   readonly shiftId: string;
   readonly title: string;
@@ -48,7 +56,6 @@ export interface TeamOverviewMember {
   readonly displayName: string;
   readonly handle: string | null;
   readonly roleLabel: string;
-  readonly attendanceState: ShiftAttendanceState | null;
 }
 
 export interface TeamOverviewModel {
@@ -70,108 +77,120 @@ export interface TeamOverviewModel {
   };
 }
 
-export function resolveTeamOverview(
+/**
+ * Read one team's overview, or null when this caller may not open that team.
+ *
+ * Null is the honest answer for both "no authority here" and "no such team in
+ * the teams you may open". A named team the caller may not open is a miss
+ * rather than a redirect to one they may: silently swapping teams would show
+ * one team's roster under another team's URL.
+ *
+ * A failed read throws rather than returning null, because a node that could not
+ * be reached is not a refusal and the surface says so differently.
+ */
+export async function resolveTeamOverview(
+  eventId: string,
+  departmentId: string,
   teamId: string | null | undefined,
-  current: DepartmentSelfAdminSession | null = resolveDepartmentSelfAdminSession(),
-): TeamOverviewModel | null {
-  if (current === null) {
+): Promise<TeamOverviewModel | null> {
+  if (eventId === "" || departmentId === "" || !teamId) {
     return null;
   }
 
-  const availableTeams = openableTeams(current);
-  // A named team the session may not open is a miss, not a redirect to a team
-  // it may: silently swapping teams would show one team's roster under another
-  // team's URL.
-  const team =
-    availableTeams.find((candidate) => candidate.id === teamId) ?? null;
+  const workspace = await getDepartmentTeamAdminWorkspace(departmentId);
+  const availableTeams = openableTeams(workspace);
+  const team = availableTeams.find((candidate) => candidate.id === teamId) ?? null;
 
-  if (team === null) {
+  if (team === null || workspace.department === null) {
     return null;
   }
 
-  const members = teamMembers(current, team);
-  const shifts = teamShifts(team);
+  const planning = await getPlanningTable(eventId, departmentId, {
+    teamId: team.id,
+    date: null,
+  });
+  const shifts = planning.rows.map(toShift);
+  const members = workspace.teamStaff
+    .filter((member) => member.teamId === team.id)
+    .map(toMember);
 
   return {
-    eventId: current.eventId,
-    eventLabel: current.eventLabel,
-    departmentId: current.departmentId,
-    departmentLabel: current.departmentLabel,
-    timeZone: LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone,
+    eventId,
+    eventLabel: planning.context.eventLabel,
+    departmentId,
+    departmentLabel: workspace.department.name,
+    timeZone: planning.context.timeZone,
     team,
-    roleLabel: current.teamLeadTeamIds.includes(team.id)
+    roleLabel: workspace.access.ledTeamIds.includes(team.id)
       ? "Team lead"
-      : current.roleLabel,
+      : "Department lead",
     availableTeams,
     members,
     shifts,
     summary: {
       memberCount: members.length,
-      checkedInCount: members.filter(
-        (member) => member.attendanceState === "checked_in",
-      ).length,
-      activeShiftCount: shifts.filter((shift) => shift.lifecycle === "active")
+      /*
+       * The node's count for this team's shifts, not a tally of roster rows.
+       * Attendance belongs to a shift rather than to a membership, and somebody
+       * on two of this team's shifts is one member and two check-ins.
+       */
+      checkedInCount: shifts.reduce((total, shift) => total + shift.checkedInCount, 0),
+      activeShiftCount: shifts.filter((shift) => shift.lifecycle === "active").length,
+      upcomingShiftCount: shifts.filter((shift) => shift.lifecycle === "upcoming")
         .length,
-      upcomingShiftCount: shifts.filter(
-        (shift) => shift.lifecycle === "upcoming",
-      ).length,
     },
   };
 }
 
 /**
- * Teams the current session may open a team overview for: every active
- * department team under department administer authority, otherwise only the
- * active teams the session leads.
+ * The teams this caller may open a team overview for.
+ *
+ * Administer authority is the wider of the two and is asked first, because an
+ * administrator may also lead teams and would otherwise be narrowed to the ones
+ * they personally lead. Archived teams are out either way: a team that no longer
+ * takes anybody has no "right now" to show.
  */
-function openableTeams(current: DepartmentSelfAdminSession): DepartmentTeam[] {
-  if (canAdministerDepartment(current)) {
-    return listDepartmentTeams(current, "active");
+function openableTeams(workspace: {
+  readonly access: {
+    readonly canAdminister: boolean;
+    readonly canViewLedTeams: boolean;
+    readonly ledTeamIds: readonly string[];
+  };
+  readonly teams: readonly DepartmentTeam[];
+}): readonly DepartmentTeam[] {
+  const active = workspace.teams.filter((team) => team.archivedAt === null);
+
+  if (workspace.access.canAdminister) {
+    return active;
   }
 
-  if (canLeadDepartmentTeam(current)) {
-    return listTeamLeadTeams(current).filter((team) => team.archivedAt === null);
+  if (workspace.access.canViewLedTeams) {
+    return active.filter((team) => workspace.access.ledTeamIds.includes(team.id));
   }
 
   return [];
 }
 
-function teamMembers(
-  current: DepartmentSelfAdminSession,
-  team: DepartmentTeam,
-): TeamOverviewMember[] {
-  const attendanceByStaffId = new Map(
-    LOCAL_DEPARTMENT_OVERVIEW.assignments
-      .filter((assignment) => assignment.teamLabel === team.name)
-      .map((assignment) => [assignment.staffId, assignment.attendanceState]),
-  );
-
-  return listManagedTeamStaff(current)
-    .filter((member) => member.teamId === team.id)
-    .map((member) => ({
-      staffId: member.staffId,
-      displayName: member.displayName,
-      handle: member.handle,
-      roleLabel: member.roleLabel,
-      attendanceState: attendanceByStaffId.get(member.staffId) ?? null,
-    }));
+function toMember(member: DepartmentTeamStaffMember): TeamOverviewMember {
+  return {
+    staffId: member.staffId,
+    displayName: member.displayName,
+    handle: member.handle,
+    roleLabel: member.roleLabel,
+  };
 }
 
-function teamShifts(team: DepartmentTeam): TeamOverviewShift[] {
-  return LOCAL_PLANNING_TABLE.rows
-    .filter((row) => row.teamId === team.id)
-    .map((row) => ({
-      shiftId: row.shiftId,
-      title: row.title,
-      startsAt: row.startsAt,
-      endsAt: row.endsAt,
-      lifecycle: row.lifecycle,
-      capacity: row.capacity,
-      signedUpOrAssignedCount: row.signedUpOrAssignedCount,
-      checkedInCount: row.checkedInCount,
-      noShowCount: row.noShowCount,
-      statusLabel: row.statusLabel,
-    }))
-    .slice()
-    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+function toShift(row: PlanningRow): TeamOverviewShift {
+  return {
+    shiftId: row.shiftId,
+    title: row.title,
+    startsAt: row.startsAt,
+    endsAt: row.endsAt,
+    lifecycle: row.lifecycle,
+    capacity: row.capacity,
+    signedUpOrAssignedCount: row.signedUpOrAssignedCount,
+    checkedInCount: row.checkedInCount,
+    noShowCount: row.noShowCount,
+    statusLabel: row.statusLabel,
+  };
 }

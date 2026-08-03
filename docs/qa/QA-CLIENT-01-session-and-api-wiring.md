@@ -141,9 +141,10 @@ capabilities rather than from authentication.
    php apps/server/artisan migrate:fresh --seed
    ```
 
-2. Set `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=false` in
-   `apps/client/.env.meridian-admin.local`, then start the client in Admin mode
-   with `corepack pnpm run client:dev:admin`.
+2. Confirm `VITE_MERIDIAN_INSTALL_LOCAL_FIELD_SESSION=false` in
+   `apps/client/.env.meridian-admin.local` — it is the default since M18.9, but a
+   file generated before then still says `true`. Then start the client in Admin
+   mode with `corepack pnpm run client:dev:admin`.
 3. In the browser, clear `meridian.api-token.v1` and `meridian.session.v1` from
    Local Storage, then open the client at `/`.
 4. Note where the client lands and what the shell shows.
@@ -157,6 +158,16 @@ capabilities rather than from authentication.
 7. With the Network panel open, watch the requests the client makes immediately
    after the code is accepted. Note which one establishes the session, whether
    it carries a bearer token, and what came back.
+7a. Confirm that `GET /api/me` carries **no** `event_id` parameter and answers
+    200 rather than 409 (M18.9). Without reloading, confirm the shell, Home, and
+    Me name Vera and the event she holds, and that every workflow link points at
+    that event's id. A sign-in that resolves at the previous occupant's event is
+    the defect this step exists for: it leaves the client rendering somebody
+    else's event until the page is reloaded.
+7b. Repeat step 6 in the same tab as a different persona — Dana Departmentlead —
+    without signing out first if the client offers it, and confirm the session,
+    the navigation, and the department selection are hers and carry nothing of
+    Vera's.
 8. Read `meridian.api-token.v1` and `meridian.session.v1` out of Local Storage.
 9. Fetch the same document from the command line for a closer read — the token
    is the `token` field of the storage entry:

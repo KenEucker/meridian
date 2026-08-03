@@ -19,6 +19,7 @@
 // No server runs for any of this, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearReadCache } from "@/offline/readCache";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -401,6 +402,13 @@ function setNavigatorOnline(onLine: boolean): void {
 }
 
 beforeEach(() => {
+  /*
+   * Reads are durable from M18.9 (technical spec 9.3), so a successful read in
+   * one case would be served to the next one from the store. Cleared between
+   * cases, and the unreachable-node cases below are about a device that is
+   * holding nothing.
+   */
+  clearReadCache();
   configureMeridianApi({
     baseUrl: "http://node.test",
     bearerToken: "device-token",

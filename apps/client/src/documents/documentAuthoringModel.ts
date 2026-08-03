@@ -42,7 +42,8 @@
 // of offline-writable work (data/API 7.2), so a request made with no node
 // reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
+import type { ReadFreshness } from "@/offline/readCache";
 import {
   downloadThroughShortLivedUrl,
   shortLivedDownloadEndpoints,
@@ -154,6 +155,8 @@ export interface DocumentLibrary {
   readonly eventInfoSections: readonly EventInfoSectionOption[];
   readonly documents: readonly ProductDocument[];
   readonly fragments: readonly ProductDocumentFragment[];
+  /** Where this library came from, and whether the browser narrowed it. */
+  readonly freshness: ReadFreshness;
 }
 
 /**
@@ -354,12 +357,17 @@ function documentPath(documentType: DocumentType, id: string): string {
 /**
  * Read the whole document surface for one organization.
  *
- * The state filter and the title search both go to the node rather than
- * narrowing what came back: the list is the answer to the question that was
- * asked, not a view of a wider one. Which documents a caller may see at all —
- * published in their scopes, plus anything they maintain — is the node's
- * decision and not a case handled here, and searching a list the browser holds
- * would only search the part of it that happened to arrive (POL-055).
+ * The state filter and the title search go to the node whenever there is one.
+ * The list is then the answer to the question that was asked rather than a view
+ * of a wider one, and which documents a caller may see at all — published in
+ * their scopes, plus anything they maintain — stays the node's decision
+ * (POL-055).
+ *
+ * With no node in reach, the browser narrows the copy it holds and says so
+ * (M18.9). Searching a stored list finds only what is in it, which is why this
+ * is the fallback rather than the mechanism; but a library sitting complete on
+ * the screen that answers a typed word with "unable to load" is worse than one
+ * that answers from what it has and admits what that covers.
  */
 export async function getOrganizationDocuments(
   organizationId: string,
@@ -376,12 +384,30 @@ export async function getOrganizationDocuments(
     parameters.set("q", search);
   }
 
-  const query = parameters.toString();
-  const result = await meridianJson<DocumentIndexPayload>(
-    `/api/organizations/${encodeURIComponent(organizationId)}/documents${
-      query === "" ? "" : `?${query}`
-    }`,
+  const endpoint = `/api/organizations/${encodeURIComponent(organizationId)}/documents`;
+  const withPath = (values: URLSearchParams): string => {
+    const query = values.toString();
+
+    return query === "" ? endpoint : `${endpoint}?${query}`;
+  };
+
+  /*
+   * The fallback drops the search and keeps every other filter (M18.9).
+   *
+   * A surface that always asks for one state — the staff library asks for
+   * published and nothing else — has that state in every copy it stored, so the
+   * broad copy to fall back on is "the same question without the search term"
+   * rather than the bare endpoint, which this device may never have read.
+   */
+  const unsearched = new URLSearchParams(parameters);
+
+  unsearched.delete("q");
+
+  const read = await meridianCachedJson<DocumentIndexPayload>(
+    withPath(parameters),
+    { fallbackPath: withPath(unsearched) },
   );
+  const result = read.data;
 
   const scopes = (result.access?.scopes ?? []).map((scope) => ({
     scopeType: scope.scope_type,
@@ -390,15 +416,41 @@ export async function getOrganizationDocuments(
   }));
 
   return {
+    freshness: read.freshness,
     organizationId: result.organization_id ?? organizationId,
     access: {
       canMaintain: result.access?.can_maintain ?? false,
       scopes,
     },
     eventInfoSections: result.event_info_sections ?? [],
-    documents: (result.documents ?? []).map(toDocument),
+    documents: narrowDocuments(
+      (result.documents ?? []).map(toDocument),
+      read.freshness.narrowed === true ? search : "",
+    ),
     fragments: (result.fragments ?? []).map(toFragment),
   };
+}
+
+/**
+ * Apply the title search the node would have applied.
+ *
+ * Only reached when a searched read fell back to the stored copy of the same
+ * question without the search term. A case-insensitive substring, which is what
+ * the node's `q` does for a title; nothing here tries to reproduce a fuller
+ * server-side search, because a browser guessing at ranking would make the
+ * offline answer differ from the online one in ways nobody could predict.
+ */
+function narrowDocuments(
+  documents: readonly ProductDocument[],
+  search: string,
+): readonly ProductDocument[] {
+  const needle = search.trim().toLowerCase();
+
+  return needle === ""
+    ? documents
+    : documents.filter((document) =>
+        document.title.toLowerCase().includes(needle),
+      );
 }
 
 /**
@@ -413,7 +465,7 @@ export async function getDocument(
   documentId: string,
 ): Promise<ProductDocument> {
   return toDocument(
-    await meridianJson<DocumentPayload>(documentPath(documentType, documentId)),
+    (await meridianCachedJson<DocumentPayload>(documentPath(documentType, documentId))).data,
   );
 }
 
@@ -422,9 +474,9 @@ export async function getDocumentFragment(
   fragmentId: string,
 ): Promise<ProductDocumentFragment> {
   return toFragment(
-    await meridianJson<FragmentPayload>(
+    (await meridianCachedJson<FragmentPayload>(
       `/api/document-fragments/${encodeURIComponent(fragmentId)}`,
-    ),
+    )).data,
   );
 }
 

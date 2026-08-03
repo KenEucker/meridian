@@ -38,7 +38,7 @@
 // set of offline-writable work (data/API 7.2), so a request made with no node
 // reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
 
 /** A team a shift may be assigned to, as the node offers them to this caller. */
 export interface ShiftTeamOption {
@@ -225,9 +225,9 @@ export async function getDepartmentShifts(
   status: ShiftStatusFilter = "all",
 ): Promise<ShiftWorkspace> {
   const query = status === "all" ? "" : `?status=${status}`;
-  const result = await meridianJson<ShiftIndexPayload>(
+  const result = (await meridianCachedJson<ShiftIndexPayload>(
     `/api/departments/${departmentId}/shifts${query}`,
-  );
+  )).data;
 
   return {
     departmentId: result.department?.id ?? result.department_id ?? departmentId,
@@ -259,9 +259,9 @@ export async function getShift(
   shiftId: string,
 ): Promise<ProductShift> {
   return toShift(
-    await meridianJson<ShiftPayload>(
+    (await meridianCachedJson<ShiftPayload>(
       `/api/departments/${departmentId}/shifts/${shiftId}`,
-    ),
+    )).data,
   );
 }
 

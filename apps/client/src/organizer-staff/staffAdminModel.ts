@@ -21,7 +21,7 @@
 // Connected-only, for the same reason as department administration: staff intake
 // is not offline-writable work (data/API 7.2).
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
 
 /** One of a staff member's department memberships, within this organization. */
 export interface OrganizerStaffDepartment {
@@ -103,9 +103,9 @@ function nullableTrim(value: string): string | null {
 export async function listOrganizerStaff(
   organizationId: string,
 ): Promise<readonly OrganizerStaffMember[]> {
-  const result = await meridianJson<{ staff?: StaffPayload[] }>(
+  const result = (await meridianCachedJson<{ staff?: StaffPayload[] }>(
     `/api/organizations/${organizationId}/staff`,
-  );
+  )).data;
 
   return (result.staff ?? []).map(toStaffMember);
 }

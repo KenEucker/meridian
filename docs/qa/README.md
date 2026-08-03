@@ -161,7 +161,7 @@ attendance, check-out, and hours QA script.
 
 | ID | Coverage | Owning task |
 |---|---|---|
-| [`QA-SLB-01-checkin-checkout-hours.md`](QA-SLB-01-checkin-checkout-hours.md) | Staff-mediated on-site/check-in/check-out, actual hours creation, no-show, offline queued attendance writes, hours correction, freeze, audit/history, and self-service non-goals | M10.11 |
+| [`QA-SLB-01-checkin-checkout-hours.md`](QA-SLB-01-checkin-checkout-hours.md) | Staff-mediated on-site/check-in/check-out, actual hours creation, no-show, offline queued attendance writes, department-scoped offline search over the desk's stored index, hours correction, freeze, audit/history, and self-service non-goals | M10.11 |
 
 1. Start the shared client in development mode.
 2. Confirm the shared shell header shows the Meridian wordmark image, with the

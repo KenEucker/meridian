@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+
+import { meridianErrorMessage } from "@/api/meridianApi";
 
 import {
   findDictationStaff,
+  loadDictationStaffDirectory,
   searchDictationStaff,
   type DictationStaffOption,
 } from "@/field-reports/dictationStaffDirectory";
+import { selectedSessionDepartmentRouteParams } from "@/session/sessionAccess";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { incidentAccess } from "@/ims/incidentReadModel";
 import {
@@ -55,7 +59,47 @@ const dictationMode = computed(() => dictationRoute.value && canDictate.value);
 
 const staffQuery = ref("");
 const selectedStaffId = ref<string | null>(null);
-const staffMatches = computed(() => searchDictationStaff(staffQuery.value));
+
+/**
+ * The staff an operator may name, read from the node (M18.9; FR-016).
+ *
+ * Loaded only in dictation mode. A staff member filing their own report names
+ * nobody, so asking the node for a department roster to satisfy a picker they
+ * will never open would be a read taken for nothing — and one the node would
+ * refuse for most of the people who file reports.
+ */
+const staffDirectory = ref<readonly DictationStaffOption[]>([]);
+const staffDirectoryError = ref<string | null>(null);
+const staffMatches = computed(() =>
+  searchDictationStaff(staffQuery.value, staffDirectory.value),
+);
+
+async function loadStaffDirectory(): Promise<void> {
+  const params = selectedSessionDepartmentRouteParams.value;
+
+  if (!dictationMode.value || params === null) {
+    staffDirectory.value = [];
+
+    return;
+  }
+
+  staffDirectoryError.value = null;
+
+  try {
+    staffDirectory.value = await loadDictationStaffDirectory(
+      params.eventId,
+      params.departmentId,
+    );
+  } catch (error) {
+    staffDirectory.value = [];
+    staffDirectoryError.value = meridianErrorMessage(
+      error,
+      "Unable to read the staff directory for this department. Check the connection to this node and try again.",
+    );
+  }
+}
+
+watch(dictationMode, () => void loadStaffDirectory(), { immediate: true });
 
 /**
  * Who the report is about. Defaults to the signed-in user, so an operator who
@@ -67,11 +111,16 @@ const reportingStaff = computed<DictationStaffOption | null>(() => {
     return null;
   }
 
-  return findDictationStaff(selectedStaffId.value ?? current.staffId);
+  return findDictationStaff(
+    selectedStaffId.value ?? current.staffId,
+    staffDirectory.value,
+  );
 });
 
 const ownStaff = computed<DictationStaffOption | null>(() =>
-  session.value ? findDictationStaff(session.value.staffId) : null,
+  session.value
+    ? findDictationStaff(session.value.staffId, staffDirectory.value)
+    : null,
 );
 
 /** True only when the operator picked somebody other than themselves. */
@@ -355,6 +404,20 @@ async function onSubmit(): Promise<void> {
           report they gave you; it files to their My Field Reports.
         </p>
 
+        <!--
+          A directory that could not be read is stated. An empty picker with no
+          explanation reads as a department with nobody in it, and an operator
+          would go looking for the person rather than for the network.
+        -->
+        <p
+          v-if="staffDirectoryError"
+          class="fr-create__on-behalf-error"
+          role="alert"
+        >
+          {{ staffDirectoryError }}
+          <button type="button" @click="loadStaffDirectory()">Try again</button>
+        </p>
+
         <p class="fr-create__on-behalf-selected">
           <strong>{{ reportingStaff?.displayName ?? "You" }}</strong>
           <template v-if="reportingStaff?.detail">
@@ -617,6 +680,16 @@ async function onSubmit(): Promise<void> {
   align-items: center;
   gap: var(--m-space-2);
   margin: 0 0 var(--m-space-3);
+}
+
+.fr-create__on-behalf-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-3);
+  color: var(--m-status-danger, #cc792f);
+  font-size: var(--m-text-sm);
 }
 
 .fr-create__on-behalf-selected span {

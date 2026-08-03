@@ -68,10 +68,6 @@ import ReadinessView from "@/views/ReadinessView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
-import {
-  installDevelopmentDepartmentSelfAdminSession,
-  resolveDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
 
 /**
  * Until auth and event selection land, author Field Report surfaces install a
@@ -85,26 +81,25 @@ function ensureFieldSession(): void {
 }
 
 /**
- * Development department self-admin session until auth owns the real
- * department-lead context. Screens still fail closed without administer
- * authority (M11.13).
+ * Work the department named in the URL (M16.6).
  *
  * The department in the route is also what the client is working in, so it is
- * recorded as the session's department selection (M16.6). Following the URL
- * rather than the other way round is what makes a deep link land in the right
- * department: the shell, the navigation, and the surface then all read the same
- * selection, and the capabilities that apply are the ones the session response
- * carries for it.
+ * recorded as the session's department selection. Following the URL rather than
+ * the other way round is what makes a deep link land in the right department:
+ * the shell, the navigation, and the surface then all read the same selection,
+ * and the capabilities that apply are the ones the session response carries
+ * for it.
+ *
+ * It used to install a development department-lead session alongside, which is
+ * gone with the rest of the fixtures (M18.9). Nothing is granted here. A
+ * department-scoped surface is reachable on the capabilities the session
+ * document carries and refused by the node regardless (CLIENT-006).
  */
-function ensureDepartmentSelfAdminSession(to: {
+function selectDepartmentFromRoute(to: {
   params: Record<string, string | string[]>;
 }): void {
   if (typeof to.params.departmentId === "string") {
     selectSessionDepartment(to.params.departmentId);
-  }
-
-  if (!resolveDepartmentSelfAdminSession()) {
-    installDevelopmentDepartmentSelfAdminSession();
   }
 }
 
@@ -235,49 +230,49 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/admin",
     name: "events.departments.teams.index",
     component: DepartmentTeamsListView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/documents",
     name: "events.departments.documents.index",
     component: DocumentLibraryView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/documents/:artifactKind/create",
     name: "events.departments.documents.create",
     component: DocumentEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/documents/:artifactKind/:artifactId/edit",
     name: "events.departments.documents.edit",
     component: DocumentEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/trainings",
     name: "events.departments.trainings.index",
     component: DepartmentTrainingListView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/trainings/create",
     name: "events.departments.trainings.create",
     component: DepartmentTrainingEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/trainings/:trainingId/edit",
     name: "events.departments.trainings.edit",
     component: DepartmentTrainingEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/trainings/:trainingId",
     name: "events.departments.trainings.show",
     component: DepartmentTrainingDetailView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams",
@@ -293,50 +288,50 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/shifts",
     name: "events.departments.shifts.index",
     component: DepartmentShiftListView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/shifts/create",
     name: "events.departments.shifts.create",
     component: DepartmentShiftEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/shifts/:shiftId/edit",
     name: "events.departments.shifts.edit",
     component: DepartmentShiftEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/equipment",
     name: "events.departments.equipment.index",
     component: DepartmentEquipmentView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/branding",
     name: "events.departments.branding",
     component: DepartmentBrandingView,
     props: departmentBrandingRouteProps,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams/create",
     name: "events.departments.teams.create",
     component: DepartmentTeamEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams/:teamId/edit",
     name: "events.departments.teams.edit",
     component: DepartmentTeamEditView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   {
     path: "/events/:eventId/departments/:departmentId/teams/:teamId",
     name: "events.departments.teams.show",
     component: TeamOverviewView,
-    beforeEnter: ensureDepartmentSelfAdminSession,
+    beforeEnter: selectDepartmentFromRoute,
   },
   legacyShiftBoardRedirect("current"),
   legacyShiftBoardRedirect("logistics"),

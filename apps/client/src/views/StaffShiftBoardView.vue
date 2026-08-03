@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import { useConnectivity } from "@/offline/useConnectivity";
-import { sessionEventContext } from "@/session/sessionAccess";
+import {
+  sessionEventContext,
+  sessionEventTimeZone,
+} from "@/session/sessionAccess";
 import {
   getShiftBoard,
   shiftBoardCapacityLabel,
@@ -42,6 +46,7 @@ const connectivity = useConnectivity();
 const eventContext = computed(() => sessionEventContext.value);
 
 const board = ref<ShiftBoard | null>(null);
+const timeZone = computed(() => sessionEventTimeZone.value);
 const loadError = ref<string | null>(null);
 const status = ref<string | null>(null);
 const busyShiftId = ref<string | null>(null);
@@ -190,6 +195,18 @@ void loadBoard();
         {{ loadError }}
         <button type="button" @click="loadBoard">Try again</button>
       </p>
+
+      <!--
+        The board renders from what this device stored when the node cannot be
+        reached (technical spec 9.3), and says so. A volunteer with no signal
+        still needs to know when they are due.
+      -->
+      <StaleReadNotice
+        v-if="board"
+        :freshness="board.freshness"
+        :time-zone="timeZone"
+        label="This board"
+      />
 
       <p v-if="isOfflineBlocked" class="shift-board__notice" role="status">
         Signing up and withdrawing need a connection to the node. They are not

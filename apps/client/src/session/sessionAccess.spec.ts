@@ -1,15 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 
 import {
   departmentBrandingRouteProps,
   organizationBrandingRouteProps,
 } from "@/branding/brandingRouteProps";
-import {
-  FIXTURE_DPW_DEPARTMENT_ID,
-  FIXTURE_GATE_DEPARTMENT_ID,
-  FIXTURE_ORGANIZER_DEPARTMENT_ID,
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-} from "@/department-teams/fixtureDepartmentAccess";
 import { clearClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
@@ -50,14 +47,14 @@ describe("session department access", () => {
   it("scopes capabilities and roles to the department they were resolved at", () => {
     installLocalFieldSession();
 
-    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     const rangers = selectedSessionDepartment.value;
 
     expect(departmentHasRole(rangers, "department_lead")).toBe(true);
     expect(departmentHasCapability(rangers, "department.administer")).toBe(true);
     expect(departmentHasCapability(rangers, "incidents.view")).toBe(true);
 
-    selectSessionDepartment(FIXTURE_GATE_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
     const gate = selectedSessionDepartment.value;
 
     // The same signed-in person, one department over. A flat capability list
@@ -79,7 +76,7 @@ describe("session department access", () => {
     });
 
     expect(selectedSessionDepartment.value?.departmentId).toBe(
-      FIXTURE_ORGANIZER_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.organizer,
     );
   });
 
@@ -88,7 +85,7 @@ describe("session department access", () => {
       context: {
         organization_id: "88888888-8888-4888-8888-888888888888",
         event_id: "11111111-1111-4111-8111-111111111111",
-        department_id: FIXTURE_GATE_DEPARTMENT_ID,
+        department_id: LOCAL_FIELD_DEPARTMENT_IDS.gate,
         node_locked: true,
         node_locked_event_id: "11111111-1111-4111-8111-111111111111",
         switching_available: false,
@@ -96,7 +93,7 @@ describe("session department access", () => {
     });
 
     expect(selectedSessionDepartment.value?.departmentId).toBe(
-      FIXTURE_GATE_DEPARTMENT_ID,
+      LOCAL_FIELD_DEPARTMENT_IDS.gate,
     );
   });
 
@@ -106,7 +103,7 @@ describe("session department access", () => {
     installLocalFieldSession({
       context: { ...document.context, event_id: null },
     });
-    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
 
     expect(selectedSessionDepartment.value).not.toBeNull();
     expect(selectedSessionDepartmentRouteParams.value).toBeNull();
@@ -120,13 +117,13 @@ describe("session department access", () => {
         (department) => department.departmentId === id,
       )!;
 
-    expect(sessionDepartmentRoleSummary(byId(FIXTURE_RANGERS_DEPARTMENT_ID))).toBe(
+    expect(sessionDepartmentRoleSummary(byId(LOCAL_FIELD_DEPARTMENT_IDS.rangers))).toBe(
       "Department lead; team lead for Dirt",
     );
-    expect(sessionDepartmentRoleSummary(byId(FIXTURE_DPW_DEPARTMENT_ID))).toBe(
+    expect(sessionDepartmentRoleSummary(byId(LOCAL_FIELD_DEPARTMENT_IDS.dpw))).toBe(
       "Team lead for Bikes",
     );
-    expect(sessionDepartmentRoleSummary(byId(FIXTURE_GATE_DEPARTMENT_ID))).toBe(
+    expect(sessionDepartmentRoleSummary(byId(LOCAL_FIELD_DEPARTMENT_IDS.gate))).toBe(
       "Staff",
     );
   });
@@ -143,26 +140,26 @@ describe("branding surface authority", () => {
   it("permits organization branding from the organizer capability only", () => {
     installLocalFieldSession();
 
-    selectSessionDepartment(FIXTURE_ORGANIZER_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
     expect(organizationBrandingRouteProps().canManage).toBe(true);
 
-    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     expect(organizationBrandingRouteProps().canManage).toBe(false);
   });
 
   it("permits department branding from the department capability only", () => {
     installLocalFieldSession();
 
-    selectSessionDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     expect(departmentBrandingRouteProps()).toMatchObject({
-      departmentId: FIXTURE_RANGERS_DEPARTMENT_ID,
+      departmentId: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
       departmentName: "Rangers",
       canManage: true,
     });
 
     // A designated team lead administers shifts and their own team, and has no
     // say over the department's identity.
-    selectSessionDepartment(FIXTURE_DPW_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.dpw);
     expect(departmentBrandingRouteProps().canManage).toBe(false);
   });
 

@@ -3,17 +3,9 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { LOCAL_DEPARTMENT_OPS_CONTEXT } from "@/department-ops/fixtures";
 import {
-  FIXTURE_RANGERS_DEPARTMENT_ID,
-  resetSelectedFixtureDepartment,
-  selectFixtureDepartment,
-} from "@/department-teams/fixtureDepartmentAccess";
-import {
-  clearDepartmentSelfAdminSession,
-  installDevelopmentDepartmentSelfAdminSession,
-} from "@/department-teams/fixtureDepartmentSession";
-import { LOCAL_FIELD_DEPARTMENT_IDS } from "@/field-reports/localFieldFixture";
+  LOCAL_FIELD_DEPARTMENT_IDS,
+} from "@/field-reports/localFieldFixture";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSession";
@@ -25,6 +17,17 @@ import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
+
+/*
+ * The event and department these tests work in.
+ *
+ * Declared here rather than imported from a fixture module (M18.9). They are the
+ * ids the local development session document carries, which is what the client
+ * under test is holding; a shared constants module would make them look like
+ * product data rather than what one test file is standing on.
+ */
+const LOCAL_EVENT_ID = "11111111-1111-4111-8111-111111111111";
+
 
 async function mountAt(component: unknown, path: string) {
   const router = createRouter({ history: createWebHistory(), routes });
@@ -40,7 +43,7 @@ async function mountAt(component: unknown, path: string) {
 }
 
 function departmentPath(suffix: string): string {
-  return `/events/${LOCAL_DEPARTMENT_OPS_CONTEXT.eventId}/departments/${FIXTURE_RANGERS_DEPARTMENT_ID}/${suffix}`;
+  return `/events/${LOCAL_EVENT_ID}/departments/${LOCAL_FIELD_DEPARTMENT_IDS.rangers}/${suffix}`;
 }
 
 /**
@@ -78,7 +81,7 @@ function stubTeamAdminNode(): void {
       return new Response(
           JSON.stringify({
             department: {
-              id: FIXTURE_RANGERS_DEPARTMENT_ID,
+              id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
               organization_id: "11111111-1111-4111-8111-111111111111",
               name: "Rangers",
               code: "RANGERS",
@@ -94,7 +97,7 @@ function stubTeamAdminNode(): void {
             teams: [
               {
                 id: "77777777-7777-4777-8777-777777777771",
-                department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+                department_id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
                 name: "Dirt",
                 code: "DIRT",
                 description: null,
@@ -190,9 +193,9 @@ function stubDepartmentOverviewNode(): void {
         new Response(
           JSON.stringify({
             context: {
-              event_id: LOCAL_DEPARTMENT_OPS_CONTEXT.eventId,
+              event_id: LOCAL_EVENT_ID,
               event_label: "Emberfall",
-              department_id: FIXTURE_RANGERS_DEPARTMENT_ID,
+              department_id: LOCAL_FIELD_DEPARTMENT_IDS.rangers,
               department_label: "Rangers",
               time_zone: "America/Los_Angeles",
               as_of: "2027-07-04T18:00:00+00:00",
@@ -231,17 +234,16 @@ function installIncidentSession(): void {
 }
 
 afterEach(() => {
-  clearDepartmentSelfAdminSession();
   clearClientSession();
   resetSelectedSessionDepartment();
   configureMeridianApi(null);
-  resetSelectedFixtureDepartment();
+  resetSelectedSessionDepartment();
   vi.unstubAllGlobals();
 });
 
 describe("workflow control bands", () => {
   it("keeps incident search on the band and collapses filters and presets", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     installIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
@@ -264,7 +266,7 @@ describe("workflow control bands", () => {
   });
 
   it("opens the filter panel and counts the filters when the list arrives narrowed", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     installIncidentSession();
 
     const wrapper = await mountAt(
@@ -278,7 +280,7 @@ describe("workflow control bands", () => {
   });
 
   it("gives incident filters the roomier label-above-control shape", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     installIncidentSession();
 
     const wrapper = await mountAt(IncidentListView, "/ims/incidents");
@@ -302,8 +304,7 @@ describe("workflow control bands", () => {
   });
 
   it("puts department filter toolbars on the shared band", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubTeamAdminNode();
 
     const admin = await mountAt(DepartmentTeamsListView, departmentPath("admin"));
@@ -316,7 +317,7 @@ describe("workflow control bands", () => {
 
 describe("workflow page regions", () => {
   it("pairs Overview sections while keeping the documented content order", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubDepartmentOverviewNode();
 
     const wrapper = await mountAt(
@@ -336,8 +337,7 @@ describe("workflow page regions", () => {
   });
 
   it("pairs the Planning chart with the detail it drives", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
 
     const wrapper = await mountAt(PlanningTableView, departmentPath("planning"));
     const grids = wrapper.findAll(".content-grid--region");
@@ -348,8 +348,7 @@ describe("workflow page regions", () => {
   });
 
   it("pairs the Admin setup panels", async () => {
-    selectFixtureDepartment(FIXTURE_RANGERS_DEPARTMENT_ID);
-    installDevelopmentDepartmentSelfAdminSession();
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
     stubTeamAdminNode();
 
     const wrapper = await mountAt(DepartmentTeamsListView, departmentPath("admin"));

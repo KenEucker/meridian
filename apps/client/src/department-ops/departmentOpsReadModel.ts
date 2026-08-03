@@ -39,8 +39,23 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
+//  5. **All four reads are held on the device** (M18.8, M18.9; SLB-021;
+//     technical spec 9.3). "The device should cache as much authorized data as
+//     possible. Offline data may be stale, but stale authorized data is better
+//     than no data." Section 9.3 then names these very payloads: the desk's
+//     staff, equipment, and shift indexes; the Overview's selected-shift
+//     summaries, assignments, and equipment; the deployment options and current
+//     assignments; the identity-free plan-versus-actual rows.
+//
+//     M18.8 held only the desk, on the grounds that SLB-021 named it and the
+//     other three were "worth nothing stale". That was wrong, and it is the
+//     reason a lead out of coverage got four pages of "check the connection to
+//     this node" instead of the department they were standing in. Each read now
+//     carries the freshness of what it returned, so a surface showing a stored
+//     copy says which copy it is showing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson } from "@/api/meridianApi";
+import type { ReadFreshness } from "@/offline/readCache";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
 import { clientSessionState } from "@/session/clientSession";
@@ -129,6 +144,8 @@ export interface DeploymentOption {
 }
 
 export interface DepartmentOverviewRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly shifts: readonly DepartmentOpsShift[];
@@ -256,6 +273,8 @@ export interface LogisticsEquipmentRow {
 }
 
 export interface LogisticsDeskRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly searchableStaff: readonly LogisticsStaffRow[];
@@ -275,6 +294,8 @@ export interface OperationsDeploymentRow {
 }
 
 export interface OperationsCenterRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly deployments: readonly DeploymentOption[];
@@ -312,6 +333,8 @@ export interface PlanningFilters {
 }
 
 export interface PlanningTableRead {
+  /** Whether this came from the node or from what the device stored (spec 9.3). */
+  readonly freshness: ReadFreshness;
   readonly context: DepartmentOpsContext;
   readonly access: DepartmentOpsAccess;
   readonly teams: readonly PlanningTeamOption[];
@@ -401,7 +424,7 @@ export async function getDepartmentOverview(
   shiftId: string | null = null,
 ): Promise<DepartmentOverviewRead> {
   const query = shiftId === null ? "" : `?shift_id=${encodeURIComponent(shiftId)}`;
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly shifts?: ShiftPayload[];
       readonly selected_shift_id?: string | null;
@@ -428,8 +451,10 @@ export async function getDepartmentOverview(
       readonly on_site_count?: number;
     }
   >(base("overview", eventId, departmentId) + query);
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     shifts: (payload.shifts ?? []).map(toShift),
@@ -543,7 +568,7 @@ export async function getLogisticsDesk(
   eventId: string,
   departmentId: string,
 ): Promise<LogisticsDeskRead> {
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly searchable_staff?: {
         readonly staff_id: string;
@@ -565,6 +590,7 @@ export async function getLogisticsDesk(
       readonly staff_workspaces?: Record<string, WorkspacePayload>;
     }
   >(base("logistics", eventId, departmentId));
+  const payload = read.data;
 
   const workspaces: Record<string, LogisticsStaffWorkspace> = {};
 
@@ -615,6 +641,7 @@ export async function getLogisticsDesk(
   }
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     searchableStaff: (payload.searchable_staff ?? []).map((row) => ({
@@ -643,7 +670,7 @@ export async function getOperationsCenter(
   eventId: string,
   departmentId: string,
 ): Promise<OperationsCenterRead> {
-  const payload = await meridianJson<
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly deployments?: DeploymentPayload[];
       readonly rows?: {
@@ -658,8 +685,10 @@ export async function getOperationsCenter(
       readonly equipment_out_count?: number;
     }
   >(base("operations", eventId, departmentId));
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     deployments: (payload.deployments ?? []).map(toDeployment),
@@ -698,8 +727,16 @@ export async function getPlanningTable(
     query.set("date", filters.date);
   }
 
+  const endpoint = base("planning", eventId, departmentId);
   const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
-  const payload = await meridianJson<
+  /*
+   * With no node in reach, fall back to the unfiltered table this device holds
+   * and narrow it here (M18.9). The filters go to the node whenever there is
+   * one — the counts on a filtered row are that view's counts, computed by the
+   * node — but a lead who has read the table and then loses the node should be
+   * able to pick a team without the page going blank.
+   */
+  const read = await meridianCachedJson<
     EnvelopePayload & {
       readonly teams?: { readonly team_id: string; readonly team_label: string }[];
       readonly filters?: {
@@ -725,9 +762,11 @@ export async function getPlanningTable(
         readonly status_label: string;
       }[];
     }
-  >(base("planning", eventId, departmentId) + suffix);
+  >(endpoint + suffix, { fallbackPath: endpoint });
+  const payload = read.data;
 
   return {
+    freshness: read.freshness,
     context: toContext(payload.context),
     access: toAccess(payload.access),
     teams: (payload.teams ?? []).map((team) => ({
@@ -738,25 +777,54 @@ export async function getPlanningTable(
       teamId: payload.filters?.team_id ?? null,
       date: payload.filters?.date ?? null,
     },
-    rows: (payload.rows ?? []).map((row) => ({
-      shiftId: row.shift_id,
-      title: row.title,
-      teamId: row.team_id,
-      teamLabel: row.team_label ?? "",
-      startsAt: row.starts_at ?? "",
-      endsAt: row.ends_at ?? "",
-      lifecycle: row.lifecycle,
-      capacity: row.capacity,
-      signedUpOrAssignedCount: row.signed_up_or_assigned_count,
-      checkedInCount: row.checked_in_count,
-      noShowCount: row.no_show_count,
-      unscheduledCount: row.unscheduled_count,
-      plannedHours: row.planned_hours,
-      actualHours: row.actual_hours,
-      varianceHours: row.variance_hours,
-      statusLabel: row.status_label,
-    })),
+    rows: narrowPlanningRows(
+      (payload.rows ?? []).map((row) => ({
+        shiftId: row.shift_id,
+        title: row.title,
+        teamId: row.team_id,
+        teamLabel: row.team_label ?? "",
+        startsAt: row.starts_at ?? "",
+        endsAt: row.ends_at ?? "",
+        lifecycle: row.lifecycle,
+        capacity: row.capacity,
+        signedUpOrAssignedCount: row.signed_up_or_assigned_count,
+        checkedInCount: row.checked_in_count,
+        noShowCount: row.no_show_count,
+        unscheduledCount: row.unscheduled_count,
+        plannedHours: row.planned_hours,
+        actualHours: row.actual_hours,
+        varianceHours: row.variance_hours,
+        statusLabel: row.status_label,
+      })),
+      read.freshness.narrowed === true ? filters : { teamId: null, date: null },
+      toContext(payload.context).timeZone,
+    ),
   };
+}
+
+/**
+ * Apply the team and date filters the node would have applied.
+ *
+ * Only reached when a filtered read fell back to the unfiltered copy this device
+ * holds. The counts on each row are the node's and are not recomputed here: a
+ * row's checked-in count is that shift's, whatever set of rows it is shown in,
+ * so narrowing the list never has to touch the arithmetic on it.
+ */
+function narrowPlanningRows(
+  rows: readonly PlanningRow[],
+  filters: PlanningFilters,
+  timeZone: string,
+): readonly PlanningRow[] {
+  return rows.filter((row) => {
+    if (filters.teamId !== null && row.teamId !== filters.teamId) {
+      return false;
+    }
+
+    return (
+      filters.date === null ||
+      dateKeyForTimestamp(row.startsAt, timeZone) === filters.date
+    );
+  });
 }
 
 /** The signed-in user, for the attendance operations they record. */

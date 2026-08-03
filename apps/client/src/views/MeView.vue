@@ -1,31 +1,50 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { formatTimestamp } from "@/department-ops/labels";
+import { clientSessionState } from "@/session/clientSession";
 import {
-  LOCAL_DEPARTMENT_OPS_CONTEXT,
-  LOCAL_LOGISTICS_DESK,
-  LOCAL_PLANNING_TABLE,
-} from "@/department-ops/fixtures";
+  selectedSessionDepartment,
+  selectedSessionDepartmentRouteParams,
+  sessionDepartmentRoleSummary,
+  sessionEventContext,
+  sessionEventTimeZone,
+  sessionEventWindow,
+  sessionLedTeams,
+} from "@/session/sessionAccess";
 import {
-  attendanceStateLabel,
-  formatTimestamp,
-  lifecycleLabel,
-  presenceStateLabel,
-} from "@/department-ops/labels";
-import {
-  selectedFixtureDepartment,
-  selectedFixtureDepartmentRouteParams,
-} from "@/department-teams/fixtureDepartmentAccess";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
-import { resolveFieldSession } from "@/field-reports/fieldSession";
+  getShiftBoard,
+  shiftBoardWindowLabel,
+  type ShiftBoardEntry,
+} from "@/shift-board/staffShiftBoardModel";
 
-const session = computed(() => resolveFieldSession());
-const staffId = computed(() => session.value?.staffId ?? LOCAL_FIELD_FIXTURE.staffId);
-const workspace = computed(
-  () => LOCAL_LOGISTICS_DESK.staffWorkspaces[staffId.value] ?? null,
+/**
+ * The staff member's own page (UI contract 12.3; bound to the session in M18.9).
+ *
+ * Every fact on it used to come from `department-ops/fixtures.ts`: the name, the
+ * event, the department, the schedule, and a years-of-service figure computed
+ * from the fixture's shift dates. So a signed-in staff member opened their own
+ * profile and was shown somebody else's — "Local Field Author", at "Local Field
+ * Event" — with no indication that any of it was invented.
+ *
+ * Identity, department, team, and role now come from the session document, which
+ * is the same answer the server enforces (CLIENT-001 through CLIENT-004). The
+ * schedule is the staff shift board (M18.2), filtered to the shifts this person
+ * actually holds.
+ *
+ * Two rows the fixture carried are gone rather than rebound: handle and
+ * presence. Neither is in the session document and neither has a read behind it
+ * yet, and printing "Not set" against a real staff member is a claim about their
+ * record rather than an admission about this page. M18.20 builds the profile
+ * surface that carries them.
+ */
+const ROLE_SHIFT_LEAD = "shift_lead";
+
+const displayName = computed(
+  () => clientSessionState.document?.user.name ?? "Not signed in",
 );
-const displayName = computed(() => workspace.value?.displayName ?? "Local Field Author");
 const initials = computed(() =>
   displayName.value
     .split(/\s+/u)
@@ -34,116 +53,121 @@ const initials = computed(() =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join(""),
 );
-const eventWindow = computed(() => {
-  const starts = LOCAL_PLANNING_TABLE.rows.map((row) => row.startsAt).sort();
-  const ends = LOCAL_PLANNING_TABLE.rows.map((row) => row.endsAt).sort();
+const department = computed(() => selectedSessionDepartment.value);
+const eventId = computed(() => sessionEventContext.value?.eventId ?? null);
+const eventLabel = computed(
+  () => sessionEventContext.value?.eventLabel ?? "No event selected",
+);
+const timeZone = computed(() => sessionEventTimeZone.value);
+const eventStatus = computed<"ongoing" | "upcoming" | "ended" | "unscheduled">(
+  () => {
+    const startsAt = sessionEventWindow.value?.startsAt ?? null;
+    const endsAt = sessionEventWindow.value?.endsAt ?? null;
+    const now = Date.now();
 
-  return {
-    startsAt: starts[0] ?? null,
-    endsAt: ends.at(-1) ?? null,
-  };
-});
-const eventStatus = computed<"ongoing" | "upcoming" | "ended">(() => {
-  const startsAt = eventWindow.value.startsAt;
-  const endsAt = eventWindow.value.endsAt;
-  const asOf = Date.parse(LOCAL_DEPARTMENT_OPS_CONTEXT.asOf);
+    if (startsAt !== null && now < Date.parse(startsAt)) {
+      return "upcoming";
+    }
 
-  if (!startsAt || !endsAt || Number.isNaN(asOf)) {
-    return "upcoming";
-  }
+    if (endsAt !== null && now > Date.parse(endsAt)) {
+      return "ended";
+    }
 
-  if (asOf < Date.parse(startsAt)) {
-    return "upcoming";
-  }
-
-  if (asOf > Date.parse(endsAt)) {
-    return "ended";
-  }
-
-  return "ongoing";
-});
-const eventCards = computed(() => [
-  {
-    id: selectedFixtureDepartment.value.eventId,
-    label: LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel,
-    department: selectedFixtureDepartment.value.departmentLabel,
-    status: eventStatus.value,
-    startsAt: eventWindow.value.startsAt,
-    endsAt: eventWindow.value.endsAt,
+    return startsAt === null && endsAt === null ? "unscheduled" : "ongoing";
   },
-]);
-const selectedMemberTeams = computed(() =>
-  selectedFixtureDepartment.value.teams.filter((team) => team.isMember),
 );
-const selectedTeamLabels = computed(() =>
-  selectedMemberTeams.value.map((team) => team.teamLabel),
+const eventCards = computed(() => {
+  const id = eventId.value;
+
+  return id === null
+    ? []
+    : [
+        {
+          id,
+          label: eventLabel.value,
+          department: department.value?.departmentLabel ?? "No department",
+          status: eventStatus.value,
+          startsAt: sessionEventWindow.value?.startsAt ?? null,
+          endsAt: sessionEventWindow.value?.endsAt ?? null,
+        },
+      ];
+});
+const memberTeamLabels = computed(() =>
+  (department.value?.teams ?? []).map((team) => team.teamLabel),
 );
-const isSelectedTeamLead = computed(() =>
-  selectedFixtureDepartment.value.teams.some((team) => team.isTeamLead),
+const ledTeams = computed(() =>
+  sessionLedTeams(department.value, ROLE_SHIFT_LEAD),
 );
-const leadTeamId = computed(
-  () =>
-    selectedFixtureDepartment.value.teams.find((team) => team.isTeamLead)
-      ?.teamId ?? null,
-);
+const leadTeamId = computed(() => ledTeams.value[0]?.teamId ?? null);
+
+/**
+ * The shifts this person holds on the context event, soonest first.
+ *
+ * Read from the board rather than from a page of its own, because "the shifts I
+ * am on" is the same question the board answers and a second endpoint would be a
+ * second answer to disagree with it. Cancelled shifts drop out; a shift somebody
+ * is signed up for that was then cancelled is not a shift they are working.
+ */
+const board = ref<readonly ShiftBoardEntry[]>([]);
+const scheduleError = ref<string | null>(null);
+const scheduleLoading = ref(false);
+
 const scheduleRows = computed(() =>
-  (workspace.value?.shiftCards ?? [])
-    .filter(
-      (card) =>
-        card.lifecycle === "active" ||
-        card.lifecycle === "upcoming" ||
-        card.attendanceState === "checked_in",
-    )
+  board.value
+    .filter((shift) => shift.signedUp && shift.cancelledAt === null)
     .slice()
-    .sort((left, right) => left.startsAt.localeCompare(right.startsAt)),
+    .sort((left, right) => (left.startsAt ?? "").localeCompare(right.startsAt ?? "")),
 );
-const firstServiceYear = computed(() => {
-  const years = (workspace.value?.shiftCards ?? [])
-    .map((card) => new Date(card.startsAt).getUTCFullYear())
-    .filter((year) => Number.isFinite(year));
 
-  return years.length > 0
-    ? Math.min(...years)
-    : new Date(LOCAL_DEPARTMENT_OPS_CONTEXT.asOf).getUTCFullYear();
-});
-const yearsOfService = computed(() => {
-  const asOfYear = new Date(LOCAL_DEPARTMENT_OPS_CONTEXT.asOf).getUTCFullYear();
+async function loadSchedule(): Promise<void> {
+  const id = eventId.value;
 
-  return Math.max(1, asOfYear - firstServiceYear.value + 1);
-});
+  if (id === null) {
+    board.value = [];
+
+    return;
+  }
+
+  scheduleLoading.value = true;
+  scheduleError.value = null;
+
+  try {
+    board.value = (await getShiftBoard(id)).shifts;
+  } catch (error) {
+    board.value = [];
+    scheduleError.value = meridianErrorMessage(
+      error,
+      "Unable to read your schedule. Check the connection to this node and try again.",
+    );
+  } finally {
+    scheduleLoading.value = false;
+  }
+}
+
+watch(eventId, () => void loadSchedule(), { immediate: true });
+
 const personalDetails = computed(() => [
   {
     label: "Department",
-    value: selectedFixtureDepartment.value.departmentLabel,
+    value: department.value?.departmentLabel ?? "Not set",
   },
   {
     label: "Team",
     value:
-      selectedTeamLabels.value.length > 0
-        ? selectedTeamLabels.value.join(", ")
+      memberTeamLabels.value.length > 0
+        ? memberTeamLabels.value.join(", ")
         : "Not set",
   },
   {
     label: "Role",
-    value: selectedFixtureDepartment.value.roleLabel,
+    value:
+      department.value === null
+        ? "Not set"
+        : sessionDepartmentRoleSummary(department.value),
   },
   {
-    label: "Handle",
-    value: workspace.value?.handle ? `@${workspace.value.handle}` : "Not set",
-  },
-  {
-    label: "Presence",
-    value: workspace.value
-      ? presenceStateLabel(workspace.value.presenceState)
-      : "Not available",
-  },
-  {
-    label: "Years of service",
-    value: `${yearsOfService.value}`,
-  },
-  {
-    label: "Events worked",
-    value: `${eventCards.value.length}`,
+    label: "Events",
+    value: `${clientSessionState.document?.events.length ?? 0}`,
   },
 ]);
 /**
@@ -153,37 +177,34 @@ const personalDetails = computed(() => [
  * to the Admin page as an interim, which answered who is on the team but not
  * what the team is doing.
  */
+const isDepartmentLead = computed(() =>
+  (department.value?.roleCodes ?? []).includes("department_lead"),
+);
+const departmentRouteParams = computed(
+  () => selectedSessionDepartmentRouteParams.value,
+);
 const currentEventTarget = computed(() => {
-  if (selectedFixtureDepartment.value.isDepartmentLead) {
-    return {
-      name: "events.departments.overview",
-      params: selectedFixtureDepartmentRouteParams.value,
-    };
+  const params = departmentRouteParams.value;
+
+  if (params !== null && isDepartmentLead.value) {
+    return { name: "events.departments.overview", params };
   }
 
-  if (isSelectedTeamLead.value && leadTeamId.value !== null) {
+  if (params !== null && leadTeamId.value !== null) {
     return {
       name: "events.departments.teams.show",
-      params: {
-        ...selectedFixtureDepartmentRouteParams.value,
-        teamId: leadTeamId.value,
-      },
+      params: { ...params, teamId: leadTeamId.value },
     };
   }
 
-  return {
-    name: "events.info",
-    params: {
-      eventId: selectedFixtureDepartment.value.eventId,
-    },
-  };
+  return { name: "events.info", params: { eventId: eventId.value ?? "" } };
 });
 const currentEventTargetLabel = computed(() => {
-  if (selectedFixtureDepartment.value.isDepartmentLead) {
+  if (departmentRouteParams.value !== null && isDepartmentLead.value) {
     return "Opens Department Overview";
   }
 
-  return isSelectedTeamLead.value && leadTeamId.value !== null
+  return departmentRouteParams.value !== null && leadTeamId.value !== null
     ? "Opens Team Overview"
     : "Opens Event Info";
 });
@@ -206,10 +227,7 @@ const currentEventTargetLabel = computed(() => {
       <div class="me__identity">
         <p class="me__eyebrow">Staff profile</p>
         <h1 id="me-heading">{{ displayName }}</h1>
-        <p>
-          {{ LOCAL_DEPARTMENT_OPS_CONTEXT.eventLabel }} -
-          {{ selectedFixtureDepartment.departmentLabel }}
-        </p>
+        <p>{{ eventLabel }} - {{ department?.departmentLabel ?? "No department" }}</p>
       </div>
       <dl class="me__details" aria-label="Personal details">
         <div v-for="detail in personalDetails" :key="detail.label">
@@ -221,10 +239,8 @@ const currentEventTargetLabel = computed(() => {
 
     <nav class="me__links" aria-label="Me links">
       <RouterLink
-        :to="{
-          name: 'events.info',
-          params: { eventId: selectedFixtureDepartment.eventId },
-        }"
+        v-if="eventId"
+        :to="{ name: 'events.info', params: { eventId } }"
       >
         Event Info
       </RouterLink>
@@ -254,9 +270,9 @@ const currentEventTargetLabel = computed(() => {
           <strong>{{ event.label }}</strong>
           <span>{{ event.department }}</span>
           <small v-if="event.startsAt && event.endsAt">
-            {{ formatTimestamp(event.startsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone) }}
+            {{ formatTimestamp(event.startsAt, timeZone) }}
             to
-            {{ formatTimestamp(event.endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone) }}
+            {{ formatTimestamp(event.endsAt, timeZone) }}
           </small>
           <small>{{ currentEventTargetLabel }}</small>
         </RouterLink>
@@ -273,36 +289,36 @@ const currentEventTargetLabel = computed(() => {
               : "Schedule for next event"
           }}
         </h3>
-        <p v-if="scheduleRows.length === 0" role="status">
-          No upcoming assignments are available in the local fixture.
+        <!--
+          A read that failed is stated as a failed read. It used to be reported
+          as "no upcoming assignments", which tells somebody they are on no
+          shifts when what happened is that nobody asked.
+        -->
+        <p v-if="scheduleError" class="me__schedule-error" role="alert">
+          {{ scheduleError }}
+          <button type="button" @click="loadSchedule()">Try again</button>
+        </p>
+        <p v-else-if="scheduleLoading" role="status">Reading your schedule.</p>
+        <p v-else-if="scheduleRows.length === 0" role="status">
+          You are not signed up for any shifts on this event.
         </p>
         <ul v-else class="me__schedule-list">
-          <li v-for="shift in scheduleRows" :key="shift.shiftId">
+          <li v-for="shift in scheduleRows" :key="shift.id">
             <div>
               <strong>{{ shift.title }}</strong>
               <span>
-                {{ shift.teamLabel }} -
-                {{ lifecycleLabel(shift.lifecycle) }}
+                {{ shift.departmentName ?? "Department" }} -
+                {{ shift.eligibleTeamName ?? "Team" }}
               </span>
             </div>
             <dl>
               <div>
                 <dt>When</dt>
-                <dd>
-                  {{ formatTimestamp(shift.startsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone) }}
-                  to
-                  {{ formatTimestamp(shift.endsAt, LOCAL_DEPARTMENT_OPS_CONTEXT.timeZone) }}
-                </dd>
+                <dd>{{ shiftBoardWindowLabel(shift) }}</dd>
               </div>
               <div>
                 <dt>Status</dt>
-                <dd>
-                  {{
-                    shift.attendanceState
-                      ? attendanceStateLabel(shift.attendanceState)
-                      : "Not assigned"
-                  }}
-                </dd>
+                <dd>{{ shift.assignmentStatus ?? "Signed up" }}</dd>
               </div>
             </dl>
           </li>
@@ -317,6 +333,15 @@ const currentEventTargetLabel = computed(() => {
   display: grid;
   gap: var(--m-space-5);
   width: var(--m-content-workflow);
+}
+
+.me__schedule-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--m-space-3);
+  margin: 0;
+  color: var(--m-status-danger, #cc792f);
 }
 
 .me__hero,

@@ -36,7 +36,7 @@
 // offline-writable work (data/API 7.2), so a request made with no node
 // reachable fails and says so rather than queueing.
 
-import { meridianJson } from "@/api/meridianApi";
+import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
 
 /**
  * The checkout holding an item, when Logistics has one open.
@@ -229,9 +229,9 @@ function emptyToNull(value: string): string | null {
 export async function getDepartmentEquipment(
   departmentId: string,
 ): Promise<EquipmentInventory> {
-  const result = await meridianJson<EquipmentIndexPayload>(
+  const result = (await meridianCachedJson<EquipmentIndexPayload>(
     `/api/departments/${departmentId}/equipment`,
-  );
+  )).data;
 
   const statusLabels = result.status_labels ?? {};
 

@@ -1,42 +1,35 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { FIXTURE_RANGERS_DIRT_TEAM_ID } from "@/department-teams/fixtureDepartmentAccess";
 import {
   installFieldShiftResolver,
   resetFieldShiftResolver,
   resolveCurrentFieldShift,
 } from "@/field-reports/fieldShiftAssignment";
-import { LOCAL_FIELD_FIXTURE } from "@/field-reports/localFieldFixture";
 
 afterEach(() => {
   resetFieldShiftResolver();
 });
 
+/*
+ * The fixture resolver is gone (M18.9).
+ *
+ * It matched the author's staff id against four compiled-in workspaces, so for
+ * every real staff member it missed and answered null — which is the answer that
+ * remains. What the tests below hold is the contract the seam has to keep: an
+ * honest "not on shift" by default, and a resolver that can be replaced when
+ * attendance state becomes readable by the author.
+ */
 describe("resolveCurrentFieldShift", () => {
-  it("returns the shift a staff member is checked into", () => {
-    expect(resolveCurrentFieldShift(LOCAL_FIELD_FIXTURE.staffId)).toMatchObject({
-      teamId: FIXTURE_RANGERS_DIRT_TEAM_ID,
-      teamLabel: "Dirt",
-      departmentLabel: "Rangers",
-    });
+  it("reports nobody as on shift until a resolver can say otherwise", () => {
+    expect(resolveCurrentFieldShift("staff-anyone")).toBeNull();
   });
 
-  it("does not count a running shift the staff member has not checked into", () => {
-    // Vera is assigned to the active day shift and still `scheduled`. Being on
-    // the roster is not the same as working, and a report filed now is not
-    // that shift's.
-    expect(
-      resolveCurrentFieldShift("33333333-3333-4333-8333-333333333334"),
-    ).toBeNull();
-  });
-
-  it("does not count a shift with no attendance record at all", () => {
-    expect(
-      resolveCurrentFieldShift("33333333-3333-4333-8333-333333333336"),
-    ).toBeNull();
-  });
-
-  it("returns null for a staff member with no workspace", () => {
+  /*
+   * The report is immutable once filed, so a wrong department and team on it are
+   * permanent. Off-shift is the answer that can be corrected by context; a
+   * guessed team is not.
+   */
+  it("guesses no department or team for an author it knows nothing about", () => {
     expect(resolveCurrentFieldShift("staff-unknown")).toBeNull();
   });
 
@@ -53,5 +46,19 @@ describe("resolveCurrentFieldShift", () => {
     expect(resolveCurrentFieldShift("anyone")).toMatchObject({
       teamLabel: "Replaced Team",
     });
+  });
+
+  it("goes back to reporting off-shift when the resolver is removed", () => {
+    installFieldShiftResolver(() => ({
+      shiftId: "shift-1",
+      shiftTitle: "Replaced",
+      departmentId: "department-1",
+      departmentLabel: "Replaced Department",
+      teamId: "team-1",
+      teamLabel: "Replaced Team",
+    }));
+    resetFieldShiftResolver();
+
+    expect(resolveCurrentFieldShift("anyone")).toBeNull();
   });
 });

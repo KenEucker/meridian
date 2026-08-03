@@ -10,6 +10,7 @@
 // No server runs for any of it, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearReadCache } from "@/offline/readCache";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -123,6 +124,13 @@ function setNavigatorOnline(onLine: boolean): void {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
+  /*
+   * Reads are durable from M18.9 (technical spec 9.3), so a successful read in
+   * one case would be served to the next one from the store. Cleared between
+   * cases, and the unreachable-node cases below are about a device that is
+   * holding nothing.
+   */
+  clearReadCache();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -485,6 +493,53 @@ describe("the staff shift board", () => {
     );
     expect(wrapper.text()).not.toContain(
       "No shifts are scheduled for your departments",
+    );
+  });
+
+  /*
+   * Technical spec 9.3: "The device should cache as much authorized data as
+   * possible. Offline data may be stale, but stale authorized data is better
+   * than no data." A staff member's own shifts are the first thing on that
+   * list, and a board that answers "check the connection to this node" is the
+   * failure the rule is written against (M18.9).
+   */
+  it("renders the shifts it stored when the node cannot be reached", async () => {
+    stubNode(() => ({
+      body: {
+        event: { id: EVENT_ID, name: "Local Field Event" },
+        shifts: [shiftPayload()],
+      },
+    }));
+    await mountView();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const wrapper = await mountView();
+
+    expect(wrapper.find(".shift-board__error").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Gate Swing");
+    expect(wrapper.get(".stale-read").text()).toContain(
+      "This node could not be reached",
+    );
+  });
+
+  it("states an unreachable node when the device stored no board", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const wrapper = await mountView();
+
+    expect(wrapper.get(".shift-board__error").text()).toContain(
+      "Unable to load the shift board",
     );
   });
 });

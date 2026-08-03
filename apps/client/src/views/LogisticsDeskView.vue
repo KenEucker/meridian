@@ -24,13 +24,13 @@ import {
   checkoutEquipment,
   correctHours,
   currentLogisticsShifts,
-  getLogisticsDesk,
   logisticsShiftSections,
   logisticsStaffOnShift,
   logisticsStaffStates,
   logisticsStatePills,
   queueCheckIn,
   queueCheckOut,
+  getLogisticsDesk,
   queueMarkNoShow,
   returnEquipment,
   searchLogisticsDesk,
@@ -57,6 +57,13 @@ import type { EquipmentReturnCondition } from "@/department-ops/types";
  * Alpha 1 offline writes (data/API 7.2) and go into the command outbox, so a
  * desk with no node keeps working; presence, shift additions, and equipment
  * handoff are refused where they stand rather than held (CLIENT-018).
+ *
+ * The index behind the search is durable from M18.8, which is the other half of
+ * "a desk with no node keeps working": the read is stored on the device and the
+ * desk opens on it when the node cannot be reached, so somebody can still be
+ * looked up and checked in (SLB-021). It says which it is showing. A stale index
+ * presented as current would have an operator reading yesterday's presence off a
+ * screen that gave them no reason to doubt it.
  */
 /**
  * A `datetime-local` value for a moment, in the reader's own clock.
@@ -92,6 +99,8 @@ const eventId = computed(() => String(route.params.eventId ?? ""));
 const departmentId = computed(() => String(route.params.departmentId ?? ""));
 
 const desk = ref<LogisticsDeskRead | null>(null);
+/** Null while the desk is live; the storage timestamp while it is the stored index. */
+const deskCachedAt = ref<string | null>(null);
 const loadError = ref<string | null>(null);
 const selectedStaffId = ref<string | null>(null);
 const selectedShiftContextId = ref<string | null>(null);
@@ -230,16 +239,18 @@ const shiftSectionGroups = computed(() => [
 ]);
 
 /**
- * Read the desk.
+ * Read the desk, from the node or from the index this device is holding.
  *
- * A failed read clears it rather than leaving the last index on screen: a
- * department whose roster could not be read must not look like an empty one.
- * The open workspace survives a re-read when that staff member is still in the
- * response, so a write does not close the person the operator is serving.
+ * A read that produces neither clears the desk rather than leaving the last
+ * index on screen: a department whose roster could not be read must not look
+ * like an empty one. The open workspace survives a re-read when that staff
+ * member is still in the response, so a write does not close the person the
+ * operator is serving.
  */
 async function loadDesk(): Promise<void> {
   if (eventId.value === "" || departmentId.value === "") {
     desk.value = null;
+    deskCachedAt.value = null;
 
     return;
   }
@@ -250,6 +261,7 @@ async function loadDesk(): Promise<void> {
     const read = await getLogisticsDesk(eventId.value, departmentId.value);
 
     desk.value = read;
+    deskCachedAt.value = read.freshness.cachedAt;
 
     if (
       selectedStaffId.value !== null &&
@@ -259,6 +271,7 @@ async function loadDesk(): Promise<void> {
     }
   } catch (error) {
     desk.value = null;
+    deskCachedAt.value = null;
     loadError.value = meridianErrorMessage(
       error,
       "Unable to load this department's logistics desk. Check the connection to this node and try again.",
@@ -818,6 +831,7 @@ void loadDesk();
       <section
         v-if="desk"
         class="logistics__cache"
+        :data-source="deskCachedAt === null ? 'node' : 'cache'"
         aria-labelledby="search-scope-heading"
       >
         <h2 id="search-scope-heading">Search scope</h2>
@@ -825,6 +839,18 @@ void loadDesk();
         <p>
           Department staff, equipment, and shifts, read
           {{ formatTimestamp(desk.context.asOf, timeZone) }}.
+        </p>
+        <!--
+          Stated, not implied. The line above already carries the moment the
+          index was read, and on a stored copy that moment is the only thing
+          separating it from a live one — a reader who has not been watching the
+          clock cannot tell those apart, so the desk says which it is showing
+          rather than leaving them to work it out (contract 16.2).
+        -->
+        <p v-if="deskCachedAt !== null" class="logistics__cache-stale" role="status">
+          This node could not be reached. Searching the copy this device stored
+          {{ formatTimestamp(deskCachedAt, timeZone) }}; presence, equipment, and
+          shift state may have moved on since.
         </p>
       </section>
     </div>
@@ -1664,6 +1690,26 @@ void loadDesk();
 .logistics__search-context p {
   margin: 0;
   color: var(--m-text-muted);
+}
+
+/*
+ * The stored-index notice carries the warning colour and a rule beside it,
+ * because it qualifies every result underneath it rather than describing the
+ * panel it sits in. Colour is not carrying the message on its own — the sentence
+ * says what happened and when the copy was taken.
+ */
+.logistics__cache[data-source="cache"] {
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-warning) 55%,
+    var(--m-border-default)
+  );
+}
+
+.logistics__cache .logistics__cache-stale {
+  padding-inline-start: var(--m-space-3);
+  border-inline-start: 3px solid var(--m-status-warning);
+  color: var(--m-text-secondary);
 }
 
 .logistics__shift-drilldown {

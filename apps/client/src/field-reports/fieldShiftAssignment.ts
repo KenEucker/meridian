@@ -15,14 +15,21 @@
 // that is running but that the staff member has not checked into is not being
 // worked, and a completed shift they checked out of is over. Both are case B.
 //
-// Real shift and attendance state arrives with auth and event selection; this
-// module reads the local development fixtures until then, and is the seam that
-// gets replaced rather than rewritten.
-
-import {
-  LOCAL_DEPARTMENT_OPS_CONTEXT,
-  LOCAL_LOGISTICS_DESK,
-} from "@/department-ops/fixtures";
+// The default answer is case B, and stays that way until something installs a
+// resolver that can answer case A (M18.9).
+//
+// Until then this module read `department-ops/fixtures.ts` and matched the
+// author's staff id against the fixture's four workspaces. For every real staff
+// member that lookup missed and returned null, so case B is what real reports
+// were already attributed with — the fixture only ever answered for fixture
+// people. Removing it changes nothing about a report a real author files and
+// stops the client holding a second, invented copy of who is on shift.
+//
+// Case A needs attendance state, which is not the same question as "which shifts
+// am I signed up for". The staff shift board answers the second and an ordinary
+// staff member may read it; the first lives on the attendance records behind the
+// Logistics Desk, which they may not. `installFieldShiftResolver` is the seam
+// that closes the gap when a staff-readable attendance read exists.
 
 /** The team label recorded when a report is filed outside any shift. */
 export const OFF_SHIFT_TEAM_LABEL = "Off-shift";
@@ -40,43 +47,25 @@ export type FieldShiftResolver = (
   staffId: string,
 ) => FieldShiftAssignment | null;
 
-const fixtureShiftResolver: FieldShiftResolver = (staffId) => {
-  const workspace = LOCAL_LOGISTICS_DESK.staffWorkspaces[staffId];
+/**
+ * The resolver in force until attendance state is readable by the author.
+ *
+ * "Not on shift" rather than a guess. A wrong department and team on an
+ * immutable report is worse than an honest off-shift one: the report cannot be
+ * edited afterwards, so a bad attribution is permanent.
+ */
+const offShiftResolver: FieldShiftResolver = () => null;
 
-  if (workspace === undefined) {
-    return null;
-  }
-
-  const card = workspace.shiftCards.find(
-    (candidate) =>
-      candidate.lifecycle === "active" &&
-      candidate.attendanceState === "checked_in",
-  );
-
-  if (card === undefined) {
-    return null;
-  }
-
-  return {
-    shiftId: card.shiftId,
-    shiftTitle: card.title,
-    departmentId: LOCAL_DEPARTMENT_OPS_CONTEXT.departmentId,
-    departmentLabel: LOCAL_DEPARTMENT_OPS_CONTEXT.departmentLabel,
-    teamId: card.teamId,
-    teamLabel: card.teamLabel,
-  };
-};
-
-let installedResolver: FieldShiftResolver = fixtureShiftResolver;
+let installedResolver: FieldShiftResolver = offShiftResolver;
 
 /** Replace the shift resolver (real attendance state, or a test). */
 export function installFieldShiftResolver(resolver: FieldShiftResolver): void {
   installedResolver = resolver;
 }
 
-/** Restore the local development fixture resolver. */
+/** Restore the default off-shift resolver. */
 export function resetFieldShiftResolver(): void {
-  installedResolver = fixtureShiftResolver;
+  installedResolver = offShiftResolver;
 }
 
 /**

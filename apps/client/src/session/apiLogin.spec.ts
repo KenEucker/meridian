@@ -22,7 +22,7 @@ import {
   refreshClientSession,
 } from "@/session/clientSession";
 import { configureDeviceIdentity, type DeviceKeyStore } from "@/session/deviceIdentity";
-import { localFieldSessionDocument } from "@/session/localFieldSession";
+import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 
 /*
  * Signing in to a node from a client application (M16.11; AUTH-018, AUTH-019,
@@ -38,9 +38,14 @@ const EMAIL = "dana@example.test";
 const CODE = "K3M7PQRS";
 const TOKEN = "mrdn_at_issued";
 
+/** The one session this node knows how to resolve, and the event it belongs to. */
+const SERVED_DOCUMENT = fixtureSessionDocument();
+
 interface RecordedRequest {
   readonly method: string;
   readonly path: string;
+  /** The query the client sent, which is where `GET /api/me` carries its scope. */
+  readonly query: URLSearchParams;
   readonly authorization: string | null;
   readonly body: Record<string, unknown> | null;
 }
@@ -80,10 +85,37 @@ function answer(request: RecordedRequest): Response {
       );
     case "/api/auth/session":
       return json({ status: "revoked" });
-    case "/api/me":
-      return request.authorization === `Bearer ${TOKEN}`
-        ? json(localFieldSessionDocument())
-        : json({ message: "Unauthenticated." }, 401);
+    case "/api/me": {
+      if (request.authorization !== `Bearer ${TOKEN}`) {
+        return json({ message: "Unauthenticated." }, 401);
+      }
+
+      /*
+       * The node resolves roles at the event it was asked about, and refuses
+       * when the caller holds no association with it — `SessionResolver` raises
+       * a `SessionContextException` and `SessionController` answers its status,
+       * which for an unassociated event is 409.
+       *
+       * Modelled here because it is the whole of the bug this fake exists to
+       * catch: a 409 is neither a bad credential nor an unreachable node, so a
+       * client that asks about the wrong event installs no document at all and
+       * silently keeps the one it had.
+       */
+      const scope = request.query.get("event_id");
+
+      if (scope !== null && scope !== SERVED_DOCUMENT.context.event_id) {
+        return json(
+          {
+            message: "You hold no association with that event.",
+            reason_code: "event_not_associated",
+            node_locked_event_id: null,
+          },
+          409,
+        );
+      }
+
+      return json(SERVED_DOCUMENT);
+    }
     default:
       return json({ message: "No route." }, 404);
   }
@@ -98,6 +130,7 @@ function stubNode(): void {
       const request: RecordedRequest = {
         method: (init?.method ?? "GET").toUpperCase(),
         path: url.pathname,
+        query: url.searchParams,
         authorization: headers.get("Authorization"),
         body:
           typeof init?.body === "string"
@@ -178,6 +211,44 @@ async function signIn(): Promise<void> {
   expect(await submitLoginCode(CODE)).toBe("signed_in");
 }
 
+/**
+ * Leave the client holding somebody else's session, the way a boot does.
+ *
+ * Resolved from a node that answers a different document rather than installed
+ * by hand, so what the client ends up holding is a document it accepted through
+ * its own path — including the context event that is the whole point of the
+ * test. The real node is restored before the sign-in under test runs.
+ */
+async function refreshWithHeldSession(): Promise<void> {
+  const foreign = fixtureSessionDocument({
+    user: {
+      id: "user-somebody-else",
+      name: "Somebody Else",
+      email: "somebody@example.test",
+      staff_ids: ["staff-somebody-else"],
+    },
+    context: {
+      ...SERVED_DOCUMENT.context,
+      event_id: "event-somebody-else",
+      node_locked_event_id: "event-somebody-else",
+    },
+  });
+
+  storeApiToken({
+    token: TOKEN,
+    expiresAt: null,
+    user: { id: "user-somebody-else", name: "Somebody Else", email: "somebody@example.test" },
+  });
+
+  vi.stubGlobal("fetch", vi.fn(async () => json(foreign)));
+
+  expect(await refreshClientSession()).toBe("refreshed");
+
+  clearApiToken();
+  resetApiLoginForTests();
+  stubNode();
+}
+
 describe("signing in with a login code", () => {
   it("asks the node for a code and waits for it to be entered", async () => {
     expect(await requestLoginCode(EMAIL)).toBe("sent");
@@ -226,7 +297,41 @@ describe("signing in with a login code", () => {
 
     expect(me?.authorization).toBe(`Bearer ${TOKEN}`);
     expect(clientSessionState.status).toBe("live");
-    expect(clientSessionState.document?.user.name).toBe("Local Field Author");
+    expect(clientSessionState.document?.user.name).toBe("Dana Departmentlead");
+  });
+
+  /*
+   * The bug this branch was reported for (M18.8 follow-up; CLIENT-014).
+   *
+   * `refreshClientSession` scopes `GET /api/me` to the context event it is
+   * already holding, which is right for a reconnect and wrong for a sign-in.
+   * A client holding somebody else's session — in development, the local field
+   * session installed at boot; in the field, whoever used the device last —
+   * asked the node to resolve this user at an event they hold no association
+   * with. The node answered 409, which is neither a refused credential nor an
+   * unreachable node, so nothing installed and every surface kept rendering the
+   * previous occupant's event and department until the page was reloaded.
+   */
+  it("resolves at the new user's own event rather than the previous occupant's", async () => {
+    await refreshWithHeldSession();
+
+    expect(clientSessionState.document?.context.event_id).toBe(
+      "event-somebody-else",
+    );
+
+    requests = [];
+
+    expect(await requestLoginCode(EMAIL)).toBe("sent");
+    expect(await submitLoginCode(CODE)).toBe("signed_in");
+
+    const me = requests.find((request) => request.path === "/api/me");
+
+    expect(me?.query.get("event_id")).toBeNull();
+    expect(clientSessionState.status).toBe("live");
+    expect(clientSessionState.document?.context.event_id).toBe(
+      SERVED_DOCUMENT.context.event_id,
+    );
+    expect(clientSessionState.document?.user.name).toBe("Dana Departmentlead");
   });
 
   it("carries the token on every later request", async () => {
