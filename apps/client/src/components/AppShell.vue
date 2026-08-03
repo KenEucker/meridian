@@ -22,12 +22,11 @@ import {
   useWorkflowLinks,
 } from "@/components/workflowLinks";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
-import { useConnectivity } from "@/offline/useConnectivity";
-import CommandOutboxNotice from "@/outbox/CommandOutboxNotice.vue";
 import {
-  describeConnectivityState,
-  type ConnectivityState,
-} from "@/offline/syncStatus";
+  useConnectivity,
+  useNodeConnectionStatus,
+} from "@/offline/useConnectivity";
+import CommandOutboxNotice from "@/outbox/CommandOutboxNotice.vue";
 import { signedIn, signOut } from "@/session/apiLogin";
 import {
   clientSessionState,
@@ -200,9 +199,7 @@ const staffMenuElement = ref<HTMLElement | null>(null);
 const userLabel = computed(
   () => clientSessionState.document?.user.name ?? "Not signed in",
 );
-const connectionStatus = computed(() =>
-  connectionStatusFor(connectivity.value),
-);
+const connectionStatus = useNodeConnectionStatus();
 
 /*
  * Context switching in the user menu (M16.7; CLIENT-012, CLIENT-013).
@@ -354,64 +351,19 @@ function handleStaffMenuOutsideClick(event: Event): void {
   closeStaffMenu();
 }
 
-/**
- * Node connection scale shown on the user button and the dropdown dot.
- *
- * UI implementation contract section 16.3 defines four steps, worst to best:
- * unknown, failing, degraded, connected. The steps are a scale of notice, not a
- * restatement of the seven connectivity states in 16.1 — those stay the text
- * label, because state is never carried by colour alone.
- *
- * `unknown` is startup only: before the first connectivity result there is
- * nothing to claim, and claiming "connected" would be a lie the shell cannot
- * back up.
- */
-function connectionStatusFor(state: ConnectivityState | null): {
-  readonly label: string;
-  readonly meaning: string;
-  readonly tone: "unknown" | "failing" | "degraded" | "connected";
-} {
-  if (state === null) {
-    return {
-      label: "Checking node connection",
-      meaning: "Connection state has not been determined yet.",
-      tone: "unknown",
-    };
-  }
-
-  const descriptor = describeConnectivityState(state);
-
-  if (state === "sync_conflict" || state === "sync_failed") {
-    return {
-      label: "Node connection failing",
-      meaning: descriptor.meaning,
-      tone: "failing",
-    };
-  }
-
-  if (state === "online") {
-    return {
-      label: "Connected and fully capable",
-      meaning: descriptor.meaning,
-      tone: "connected",
-    };
-  }
-
-  return {
-    label: "Node connection degraded",
-    meaning: descriptor.meaning,
-    tone: "degraded",
-  };
-}
-
 // Shared offline/sync status display for the shared client surfaces (M8.6). The
-// banner is driven by the coarse device-connectivity view-model and is silent
-// while online, so it appears only where offline state affects current work
-// (UI implementation contract section 16.2). Richer sync states are fed through
-// the same OfflineBanner view-model by later Alpha 1 milestones.
+// banner is driven by the device-connectivity view-model and is silent while
+// online, so it appears only where offline state affects current work (UI
+// implementation contract section 16.2). Richer sync states are fed through the
+// same OfflineBanner view-model by later Alpha 1 milestones.
 //
-// When the device reports online, drain the command outbox to the node. One
-// call for every command the device holds (M16.10; technical spec 11A.5) —
+// `online` means the node has answered this device, not merely that the device
+// has a network, so the drain below fires on a transition that can actually
+// send. It used to fire on the platform's `online` event, which says nothing
+// about whether there is a Meridian on the other end.
+//
+// When the node answers, drain the command outbox to it. One call for every
+// command the device holds (M16.10; technical spec 11A.5) —
 // Field Report photo uploads ride along behind it, because a photo can only be
 // attached to a report the node has already accepted (technical spec 18.2).
 const connectivity = useConnectivity();

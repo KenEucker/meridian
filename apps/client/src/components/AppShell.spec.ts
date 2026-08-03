@@ -11,6 +11,11 @@ import {
   resetToMeridian,
 } from "@/branding/brandingProfile";
 import AppShell from "@/components/AppShell.vue";
+import {
+  recordNodeAnswered,
+  recordNodeUnreachable,
+  resetNodeReachability,
+} from "@/offline/nodeReachability";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { adoptHeldApiToken } from "@/session/apiLogin";
 import { clearApiToken, storeApiToken } from "@/session/apiToken";
@@ -61,11 +66,19 @@ function setDeviceOnLine(value: boolean): void {
 beforeEach(() => {
   installLocalFieldSession();
   selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+  /*
+   * And the node has answered this device, which is the state every test that
+   * is not about connectivity is standing in. It is not implied by the session:
+   * a session can be restored from the durable copy without the node saying
+   * anything, and the shell reports those differently on purpose.
+   */
+  recordNodeAnswered();
 });
 
 afterEach(() => {
   resetToMeridian();
   resetSelectedSessionDepartment();
+  resetNodeReachability();
   setDeviceOnLine(true);
   clearClientSession();
   clearApiToken();
@@ -151,6 +164,63 @@ describe("AppShell offline/sync display", () => {
         .get(".app-shell__connection-note")
         .attributes("data-connection-status"),
     ).toBe("degraded");
+  });
+
+  /*
+   * The step contract 16.1A names and nothing could produce.
+   *
+   * Its Failing row covers "no node reachable", and until the client observed
+   * its node there was no signal that could land there: connectivity came from
+   * `navigator.onLine`, so a laptop on working wifi with the node stopped
+   * reported Connected. That is the defect this pair of tests exists for, and
+   * the device stays online throughout both — a network is exactly what the
+   * failing case has.
+   */
+  it("reports a node that is not answering as failing, not connected", async () => {
+    setDeviceOnLine(true);
+    recordNodeUnreachable();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(
+      wrapper.get(".app-shell__user-button").attributes("data-connection-status"),
+    ).toBe("failing");
+    expect(
+      wrapper.get(".app-shell__user-button").attributes("aria-label"),
+    ).toContain("No node reachable");
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+    expect(wrapper.get(".app-shell__connection-note").text()).toContain(
+      "This device cannot reach its node.",
+    );
+  });
+
+  it("claims nothing before the node has answered", async () => {
+    // Contract 16.1A's Unknown step, which that section says becomes reachable
+    // "once a connection signal exists that has an indeterminate period". This
+    // is that period: a client that has made no request knows nothing, and
+    // "Connected and fully capable" was the answer it used to give.
+    setDeviceOnLine(true);
+    resetNodeReachability();
+
+    const wrapper = mount(AppShell, { global: { stubs: routerLinkStub } });
+
+    expect(
+      wrapper.get(".app-shell__user-button").attributes("data-connection-status"),
+    ).toBe("unknown");
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+    expect(wrapper.get(".app-shell__connection-note").text()).toContain(
+      "Checking node connection",
+    );
+
+    // And it resolves the moment the node says anything.
+    recordNodeAnswered();
+    await wrapper.vm.$nextTick();
+
+    expect(
+      wrapper.get(".app-shell__user-button").attributes("data-connection-status"),
+    ).toBe("connected");
   });
 
   it("carries no permission state, cached or otherwise", () => {

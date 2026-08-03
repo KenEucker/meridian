@@ -15,14 +15,13 @@ import {
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
-import { describeConnectivityState } from "@/offline/syncStatus";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import { clientSessionState } from "@/session/clientSession";
 import {
   resolveReadinessChecklist,
   summarizeReadiness,
 } from "@/readiness/checklist";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useNodeConnectionStatus } from "@/offline/useConnectivity";
 import { describeCommand } from "@/outbox/commandCatalog";
 import {
   commandOutbox,
@@ -43,7 +42,7 @@ type ThemeChoice = "light" | "dark";
 
 const themeStorageKey = "meridian.ui.theme";
 
-const connectivity = useConnectivity();
+const nodeConnection = useNodeConnectionStatus();
 const theme = ref<ThemeChoice>(readPreferredTheme());
 const serverHealthState = ref<ServerHealthState>("checking");
 const serverHealth = ref<ServerHealth | null>(null);
@@ -55,9 +54,6 @@ const refreshing = ref(false);
 
 const apiConfig = computed(() => meridianApiConfig());
 const healthUrl = computed(() => `${apiConfig.value.baseUrl}/api/health`);
-const connectivityDescription = computed(() =>
-  describeConnectivityState(connectivity.value),
-);
 /*
  * Resolved here rather than passed from the readiness screen, and reactively
  * rather than once: signing in, pointing this device at a node, and switching
@@ -419,11 +415,8 @@ watch(
 
       <dl class="about__meta" aria-label="Operational health">
         <div>
-          <dt>Browser network</dt>
-          <dd>
-            {{ connectivityDescription.label }} -
-            {{ connectivityDescription.meaning }}
-          </dd>
+          <dt>Node connection</dt>
+          <dd>{{ nodeConnection.label }} - {{ nodeConnection.meaning }}</dd>
         </div>
         <div>
           <dt>API base URL</dt>
