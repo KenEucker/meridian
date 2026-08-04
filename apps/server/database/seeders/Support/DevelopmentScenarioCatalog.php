@@ -102,6 +102,33 @@ final class DevelopmentScenarioCatalog
                 ],
             ],
             [
+                /*
+                 * The narrow team lead (M18.16 QA): leads the Dirt crew and
+                 * holds nothing else, so she is what the team-lead permission
+                 * boundary is tested *with*. Sam cannot prove that path — his
+                 * department_administration opens every team's shifts before
+                 * shift_lead gets a say. Tess edits Dirt's shifts and assigns
+                 * their credit policy, and is refused everywhere else.
+                 *
+                 * Her grant hangs on DIRT itself, which the header warns
+                 * against for every other role — but shift_lead is the
+                 * exception the warning notes: it elevates only memberships
+                 * designated `membership_role = 'lead'` (M11.17), so Vera and
+                 * the other Dirt members stay exactly as ordinary as this
+                 * catalog says they are.
+                 */
+                'key' => 'tess',
+                'user_name' => 'Tess Teamlead',
+                'email' => 'tess.teamlead@northwood-collective.test',
+                'org_status' => 'active',
+                'department_code' => 'RANGERS',
+                'team_code' => 'DIRT',
+                'department_status' => null,
+                'grants' => [
+                    ['role' => 'shift_lead', 'event_scoped' => false],
+                ],
+            ],
+            [
                 'key' => 'dana',
                 'user_name' => 'Dana Departmentlead',
                 'email' => 'dana.departmentlead@northwood-collective.test',
