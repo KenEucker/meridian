@@ -4,6 +4,8 @@
 
 Verify that a staff member reads their own profile on **Me**; edits their own preferred name, phone, and city/state from **Edit profile** with the change applying immediately and without review; changes their handle directly twice and by review after that; submits a profile picture that waits for a reviewer while their current picture stays in force; and cannot change legal name, email, or date of birth at all — with the server refusing a submitted identity field rather than silently dropping it, and every applied change audited with before and after values.
 
+It also verifies the two ends of the review exchange: an organizer or Staff Coordinator decides handle and picture requests from **Profile requests**, reading the previous and requested handle side by side and the current and submitted picture side by side, with a handle collision named rather than blocking and a rejection unable to go out without a reason; and the submitter reads the state of their own requests, and that reason, on **My Requests**.
+
 ## Requirements covered
 
 - `VOL-009`: the staff profile field set the surface reads.
@@ -23,8 +25,9 @@ Verify that a staff member reads their own profile on **Me**; edits their own pr
 - `VOL-029`: the state and rejection reason of the most recent submission of each kind are visible, replaceable, and dismissable.
 - Data/API spec sections 5.2 and 10.4: `GET /api/me/profile`, `GET /api/staff-profile-change-requests`, the seven profile commands, `staff_profile_change_requests`, and the staff self-service field rules.
 - Technical spec section 18A: profile picture ownership, eligibility, limits, and processing.
-- UI implementation contract section 12.3: `staff.me`, `staff.profile-edit`.
-- Meridian Alpha 1 tasks M18.20, M18.20A, M18.20B, M18.20C, M18.20E.
+- UI implementation contract section 12.3: `staff.me`, `staff.profile-edit`, `staff.profile-requests`.
+- UI implementation contract section 12.6: `organizer.profile-change-requests`.
+- Meridian Alpha 1 tasks M18.20, M18.20A, M18.20B, M18.20C, M18.20D, M18.20E.
 
 ## Environment
 
@@ -76,33 +79,41 @@ Verify that a staff member reads their own profile on **Me**; edits their own pr
 18. Attempt the oversized or unsupported file. Confirm it is refused with a message naming the limit or the accepted formats.
 19. Sign in as Sam Shiftlead and, using the submitted picture's URL from step 16, attempt to open it. Confirm it is refused.
 
+### The submitter's own view
+
+20. Still as Vera Staff, open **My Requests** from **Me** or from **Edit profile** (`/staff/me/requests`).
+21. Confirm the handle row and the picture row each show what was asked for and that both read **Waiting for review**, that each offers **Withdraw** and no **Clear**, and that the handle row states how many direct changes remain.
+
 ### Review
 
-20. Sign in as Olive Organizer and open the profile change request queue.
-21. Confirm both of Vera's requests appear, the handle request shows the previous and requested handle side by side, and the picture request shows the current and submitted pictures side by side.
-22. If another active staff member already holds the requested handle, confirm the queue names them and still allows the decision.
-23. Approve the picture request. Reject the handle request with a reason.
-24. Sign back in as Vera Staff and confirm the approved picture is now the one on **Me**, and that the rejected handle request left the handle unchanged with the reviewer's reason readable.
-25. Sign in to the God Mode console as Gwen Godmode and open the audit log.
+22. Sign in as Olive Organizer and open **Profile requests** from the Home organization pages (`/organizer/profile-change-requests`).
+23. Confirm both of Vera's requests appear, the handle request shows the previous and requested handle side by side, and the picture request shows the current and submitted pictures side by side.
+24. If another active staff member already holds the requested handle, confirm the queue names them, marks the row **Handle in use**, and leaves **Approve** available.
+25. With the reason box empty, confirm **Reject** is unavailable. Type a reason and confirm it becomes available.
+26. Approve the picture request. Reject the handle request with the reason.
+27. Sign in as Sam Shiftlead, who holds neither organizer nor Staff Coordinator authority, and open `/organizer/profile-change-requests`. Confirm the page states the authority required rather than showing an empty queue or an error with a retry button.
+28. Sign back in as Vera Staff and confirm on **My Requests** that the picture row reads **Approved**, the handle row reads **Not approved** with the reviewer's reason printed, that each now offers **Clear** and no **Withdraw**, and that the approved picture is the one on **Me** while the handle is unchanged.
+29. Press **Clear** on the rejected handle row and confirm the row's notice goes but the handle allowance does not move.
+30. Sign in to the God Mode console as Gwen Godmode and open the audit log.
 
 ### Removal
 
-26. Back as Vera Staff, remove the current picture from **Edit profile** and confirm it disappears immediately with no review step and no pending request.
+31. Back as Vera Staff, remove the current picture from **Edit profile** and confirm it disappears immediately with no review step and no pending request.
 
 ### Approval policy and rejection visibility
 
-27. As Vera Staff, submit a handle change and have Olive Organizer reject it with a reason. Confirm Vera's **Edit profile** shows the rejection and the reason, that the handle is unchanged, and that **Clear** removes the notice without changing anything else.
-28. Submit a replacement handle change immediately after the rejection, without clearing it first, and confirm it is accepted.
-29. As Olive Organizer, open **Staff profile approval** on the configuration surface. Confirm handle and profile picture each offer four policies with a sentence describing the selected one, and that the handle allowance field is present.
-30. Set the handle allowance to 1, save, and confirm the saved values read back.
-31. As Vera Staff, change the handle once and confirm it applies immediately; change it again and confirm the second becomes a request.
-32. As Olive Organizer, set the handle policy back to **Approved by organizers** and confirm Vera's **Edit profile** now says handle changes are reviewed and offers no allowance.
-33. As Olive Organizer, set the picture policy to **Organizer sets the first one**, and confirm a staff member with no picture is told to ask an organizer rather than being offered the uploader.
-34. Open the God Mode console as Gwen Godmode, edit the same organization, and confirm the same three settings are present and reflect what Olive set.
+32. As Vera Staff, submit a handle change and have Olive Organizer reject it with a reason. Confirm Vera's **Edit profile** shows the rejection and the reason, that the handle is unchanged, and that **Clear** removes the notice without changing anything else.
+33. Submit a replacement handle change immediately after the rejection, without clearing it first, and confirm it is accepted.
+34. As Olive Organizer, open **Staff profile approval** on the configuration surface. Confirm handle and profile picture each offer four policies with a sentence describing the selected one, and that the handle allowance field is present.
+35. Set the handle allowance to 1, save, and confirm the saved values read back.
+36. As Vera Staff, change the handle once and confirm it applies immediately; change it again and confirm the second becomes a request.
+37. As Olive Organizer, set the handle policy back to **Approved by organizers** and confirm Vera's **Edit profile** now says handle changes are reviewed and offers no allowance.
+38. As Olive Organizer, set the picture policy to **Organizer sets the first one**, and confirm a staff member with no picture is told to ask an organizer rather than being offered the uploader.
+39. Open the God Mode console as Gwen Godmode, edit the same organization, and confirm the same three settings are present and reflect what Olive set.
 
 ### Handle-first display
 
-35. With a handle set on Vera's record, confirm the handle is the name shown first on **Me**, in the Logistics Window staff workspace, and on the organizer staff roster, and that her legal name is still readable on **Me** and on the roster row.
+40. With a handle set on Vera's record, confirm the handle is the name shown first on **Me**, in the Logistics Window staff workspace, and on the organizer staff roster, and that her legal name is still readable on **Me** and on the roster row.
 
 ## Expected results
 
@@ -114,24 +125,30 @@ Verify that a staff member reads their own profile on **Me**; edits their own pr
 - Step 14's withdrawal restores nothing, because it consumed nothing — the allowance stays at zero.
 - Step 17 is the VOL-021 property: the current picture stays in force everywhere while a submission is pending.
 - Step 19 is refused; a pending picture is readable only by its submitter and its reviewers.
-- Step 22's collision is named to the reviewer and does not block the decision.
-- Step 23's approval makes the submitted picture current and deletes the previous one; the rejection leaves the handle alone and stores the reason.
+- Step 21 shows both outstanding requests on one page with the allowance stated, so a submitter can answer "where does this stand" without opening the edit form.
+- Step 24's collision is named to the reviewer and does not block the decision. A row that names a collision and disables Approve is a refusal however it is worded; stop and file.
+- Step 25 is VOL-025 at the reviewer's end: a rejection nobody explained is exactly what the requirement prevents, so the control is unavailable until there is something to tell the submitter.
+- Step 26's approval makes the submitted picture current and deletes the previous one; the rejection leaves the handle alone and stores the reason.
+- Step 27 states the authority the page needs. An empty queue would say the same thing as "nothing is waiting", which is a different fact.
+- Step 28 is VOL-025 at the submitter's end: the sentence Olive typed is the sentence Vera reads.
 - The audit log holds `staff.profile.self_updated` for step 6, `staff.profile_change_request.*` entries for creation, decision, and withdrawal, and `staff.profile.picture_changed` / `staff.profile.handle_changed` against the staff record where a change actually applied — each with the actor and before/after values.
 - No audit entry exists for the refused submissions in steps 8, 9, and 18.
-- Step 26 removes the picture with no request row created.
-- Step 27's rejection and reason are readable by the submitter, and clearing it destroys nothing: the request is still visible to a reviewer and in the audit log.
-- Step 28 is accepted, because a decided request is not outstanding.
-- Steps 30 and 31 show the configured allowance in force: one change applies, the next is reviewed.
-- Step 33 refuses the first picture and says to ask an organizer, rather than accepting a submission nobody may approve into place.
-- Step 34's God Mode values match the organizer's, because both write through the same configuration service.
-- Step 35 shows the handle leading everywhere, with the other names still present rather than hidden.
+- Step 29 clears the notice and nothing else: the request is still visible in the audit log, and the allowance is unchanged because clearing consumes and restores nothing.
+- Step 31 removes the picture with no request row created.
+- Step 32's rejection and reason are readable by the submitter, and clearing it destroys nothing: the request is still visible to a reviewer and in the audit log.
+- Step 33 is accepted, because a decided request is not outstanding.
+- Steps 35 and 36 show the configured allowance in force: one change applies, the next is reviewed.
+- Step 38 refuses the first picture and says to ask an organizer, rather than accepting a submission nobody may approve into place.
+- Step 39's God Mode values match the organizer's, because both write through the same configuration service.
+- Step 40 shows the handle leading everywhere, with the other names still present rather than hidden.
 
 ## Evidence to capture
 
 - Screenshot of **Me** showing the profile rows, picture, and the Edit Profile link
 - Screenshot of **Edit profile** showing the editable set and the read-only identity block
 - Screenshot of the pending picture state with current and submitted side by side
-- Screenshot of the reviewer's queue showing the handle pair and any named collision
+- Screenshot of the reviewer's queue showing the handle pair, the picture pair, and any named collision
+- Screenshot of **My Requests** showing a rejection with the reviewer's reason
 - Screenshot or API transcript of the 422 refusal for a submitted legal name and for the oversized upload
 - Screenshot of the audit entries with their before/after values
 
@@ -144,5 +161,7 @@ Verify that a staff member reads their own profile on **Me**; edits their own pr
 - If the edit applies but no audit entry exists, VOL-026 is unmet even though the surface looks correct.
 - If **Me** prints "Not set" for every profile row while `GET /api/me/profile` fails, the read is down rather than the record empty; check the node connection first.
 - If a rejected submission leaves no trace on the staff member's surface, VOL-029 is unmet: they submitted something, nothing visibly happened, and they have no way to learn why.
+- If a request from an organization the reviewer holds no review authority in appears in their queue, stop and file — that is the VOL-019 scope rule, and the client asks for one queue rather than one per organization precisely so it cannot widen it.
+- Email delivery of a decision is not part of this script. VOL-025 is met in the product and not yet by mail; the notification path is M18.21.
 - If clearing a rejection or an approval gives back a self-service handle change, the allowance is being read from something other than the applied rows; stop and file.
 - If the organizer surface and God Mode disagree about a policy, one of them is writing the column directly instead of going through the configuration service.

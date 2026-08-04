@@ -311,6 +311,13 @@ const currentEventTargetLabel = computed(() => {
 
     <nav class="me__links" aria-label="Me links">
       <RouterLink :to="{ name: 'staff.profile.edit' }">Edit Profile</RouterLink>
+      <!--
+        Where a handle change or a submitted picture stands (M18.20D; VOL-024,
+        VOL-029). Beside Edit Profile rather than in the Staff menu: a request
+        is something you already made, so the place you go looking for it is
+        your own page, not a list of every page you can reach.
+      -->
+      <RouterLink :to="{ name: 'staff.profile.requests' }">My Requests</RouterLink>
       <RouterLink
         v-if="eventId"
         :to="{ name: 'events.info', params: { eventId } }"

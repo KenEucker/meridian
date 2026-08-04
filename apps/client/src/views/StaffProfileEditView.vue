@@ -482,6 +482,12 @@ async function onWithdrawHandle(): Promise<void> {
   <section class="profile-edit" aria-labelledby="profile-edit-heading">
     <p class="profile-edit__nav">
       <RouterLink :to="{ name: 'staff.me' }">Back To Me</RouterLink>
+      <!--
+        The tracking surface (M18.20D; UI contract 12.3 `staff.profile-requests`).
+        This page is where a change is made; that one is where a change already
+        made is followed.
+      -->
+      <RouterLink :to="{ name: 'staff.profile.requests' }">My Requests</RouterLink>
     </p>
 
     <p class="profile-edit__eyebrow">Staff profile</p>
@@ -807,6 +813,9 @@ async function onWithdrawHandle(): Promise<void> {
 }
 
 .profile-edit__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-3);
   margin: 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
