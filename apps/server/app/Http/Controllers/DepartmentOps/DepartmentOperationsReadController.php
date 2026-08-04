@@ -219,6 +219,13 @@ final class DepartmentOperationsReadController extends Controller
                 'staff_id' => $staffId,
                 'display_name' => $this->staffName($member),
                 'handle' => $member->handle,
+                /*
+                 * The current profile picture, so the desk can check the face
+                 * in front of it against the record (M18.20; VOL-013). The
+                 * operator already reads this staff member's whole workspace,
+                 * so the picture follows the profile visibility they hold.
+                 */
+                'profile_picture_url' => $member->profilePictureUrl(),
                 'team_label' => $teamLabels[$staffId] ?? $department->name,
                 'presence_state' => $presence[$staffId] ?? EventDepartmentPresence::STATE_OFF_SITE,
                 // The same two blocks `DepartmentPresenceService` enforces, in

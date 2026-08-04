@@ -118,6 +118,8 @@ final class PermissionCatalog
 
     public const PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE = 'organization.credit_policies.manage';
 
+    public const PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW = 'staff.profile-change-requests.review';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -199,6 +201,7 @@ final class PermissionCatalog
             self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE => 'Maintain organization-level team designations: which team within the configured Organizers Department carries Staff Coordinator authority.',
             self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE => 'Edit organization configuration: lifecycle inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.',
             self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE => 'Maintain the organization credit policies — create, rename, re-rate, archive, and restore — and start credit calculation runs for events whose grace period has closed.',
+            self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW => 'Review staff profile change requests for the organization: approve or reject a requested handle or a submitted profile picture, with a reason.',
         ];
     }
 
@@ -292,6 +295,14 @@ final class PermissionCatalog
      * a separate capability from incident_types.manage and designations.manage
      * because each featureset on the configuration surface carries its own
      * authority rather than inheriting one from the page.
+     * M18.20A adds staff.profile-change-requests.review to the two organizer
+     * roles and to staff_coordinator, and to nobody else (VOL-019). It is the
+     * second capability the Staff Coordinator holds and it is the same kind of
+     * work as the first: deciding a person's standing with the organization,
+     * here whether a requested handle or a submitted picture becomes theirs.
+     * Department and team leads are deliberately outside it — a handle is
+     * organization-wide and a lead deciding one for their own department's
+     * members would be four departments deciding four different answers.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -364,6 +375,7 @@ final class PermissionCatalog
             ],
             self::ROLE_STAFF_COORDINATOR => [
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+                self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
             ],
             self::ROLE_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -383,6 +395,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
                 self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
+                self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -402,6 +415,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
                 self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
+                self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
             ],
         ];
     }

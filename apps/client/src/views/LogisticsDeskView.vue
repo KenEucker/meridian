@@ -935,6 +935,26 @@ void loadDesk();
       aria-labelledby="staff-workspace-heading"
     >
       <header class="logistics__staff-header">
+        <!--
+          The record's picture, beside the person standing at the desk (M18.20;
+          VOL-013). It exists to be compared with a face, so an absent picture
+          says so instead of showing a decorative placeholder an operator might
+          take for a match.
+        -->
+        <img
+          v-if="workspace.profilePictureUrl"
+          class="logistics__staff-photo"
+          :src="workspace.profilePictureUrl"
+          :alt="`${workspace.displayName} profile photo on record`"
+        />
+        <div
+          v-else
+          class="logistics__staff-photo logistics__staff-photo--none"
+          role="img"
+          :aria-label="`${workspace.displayName} has no profile photo on record`"
+        >
+          <span aria-hidden="true">No photo</span>
+        </div>
         <div>
           <h2 id="staff-workspace-heading">{{ workspace.displayName }}</h2>
           <p>
@@ -1793,6 +1813,37 @@ void loadDesk();
 .logistics__workspace h3,
 .logistics__workspace h4 {
   margin: 0 0 var(--m-space-2);
+}
+
+/*
+ * Sized to be compared with a face at arm's length, not as an avatar chip. It
+ * sits beside the name like an ID card on a phone, and moves to the right edge
+ * of the header once the row is wide enough to give it back its space.
+ */
+.logistics__staff-photo {
+  width: 4.5rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  object-fit: cover;
+  background: var(--m-surface-base);
+}
+
+.logistics__staff-photo--none {
+  display: grid;
+  place-items: center;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+@media (min-width: 64rem) {
+  .logistics__staff-photo {
+    width: 6.5rem;
+    order: 9;
+    margin-inline-start: auto;
+  }
 }
 
 .logistics__workspace h4 {

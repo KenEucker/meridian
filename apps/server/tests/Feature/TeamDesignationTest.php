@@ -319,10 +319,14 @@ class TeamDesignationTest extends TestCase
             (new EffectiveRoleResolver)->resolveForStaff($staff)->pluck('roleCode')->all(),
         );
 
-        // M18.11 gives the role its application review capability, and only
-        // that (TEAM-014; requirements 4.4).
+        // The designation carries the role's review authority and nothing
+        // wider: application review (M18.11; TEAM-014, requirements 4.4) and
+        // profile change request review (M18.20A; VOL-019).
         $this->assertSame(
-            [PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW],
+            [
+                PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+                PermissionCatalog::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
+            ],
             PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_STAFF_COORDINATOR],
         );
 

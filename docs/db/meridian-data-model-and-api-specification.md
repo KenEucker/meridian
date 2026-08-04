@@ -576,6 +576,13 @@ POST /api/commands/mark-staff-off-site
 POST /api/commands/add-staff-to-shift
 POST /api/commands/sign-up-for-shift
 POST /api/commands/withdraw-from-shift
+POST /api/commands/update-my-profile
+POST /api/commands/request-handle-change
+POST /api/commands/submit-profile-picture
+POST /api/commands/remove-profile-picture
+POST /api/commands/withdraw-profile-change-request
+POST /api/commands/approve-profile-change-request
+POST /api/commands/reject-profile-change-request
 POST /api/commands/revoke-credential
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
@@ -800,6 +807,77 @@ schedule locks, which is where staff self-service ends and lead removal
 (`remove-staff-from-shift`) continues. Both are connected-only: they are not in
 the 7.2 offline-writable set, because eligibility and capacity are answers a
 device cannot hold.
+
+The staff profile self-service pair (`GET /api/me/profile`,
+`POST /api/commands/update-my-profile`) is the staff profile surface's read and
+write (VOL-009, VOL-014 through VOL-016, VOL-026; section 10.4; UI contract
+12.3). The read answers with the staff records the caller's login speaks for and
+needs no authority beyond a credential, carrying the VOL-009 field set and
+`self_editable_fields` so the edit form renders the boundary the server
+enforces. The command is self-scoped the way the two shift commands above are:
+`staff_id` is optional with one linked record, required when the login speaks
+for several, and a `staff_id` outside the caller's own is refused with 403. It
+accepts exactly the VOL-015 set — `preferred_name`, `phone`, `city`, `state`,
+each nullable — and applies immediately with no review. A submitted
+`legal_name`, `email`, or `date_of_birth` is refused with 422 naming the
+assisted path rather than silently dropped (VOL-016), and `handle`,
+`formerly_known_as`, and the emergency contact fields are refused the same way:
+handle changes travel through `staff_profile_change_requests` below, and nothing
+in VOL-015 makes the rest self-service. The edit is audited
+as `staff.profile.self_updated` with the previous and new value of each changed
+field and only the changed fields (VOL-026); an edit that changes nothing writes
+no audit entry. `update-my-profile` is not in the 7.2 offline-writable set, so a
+client sends it connected or is refused where it stands.
+
+The profile change request commands are the handle and picture halves of the
+same surface (VOL-017 through VOL-025; section 10.4).
+
+`request-handle-change` records every handle change as a request row. The first
+two applied changes on a staff record are written `approved` with `self_service`
+true and applied in the same transaction; each one after that is written
+`pending` and applies only on approval. Setting a first handle is not a change
+and consumes nothing. The allowance is the count of approved handle rows
+carrying a `previous_handle`, so a rejected or withdrawn request restores
+nothing because it consumed nothing, and the response says which of the two
+outcomes happened rather than leaving the client to predict it.
+
+`submit-profile-picture` is multipart rather than JSON, because its body is an
+image. It refuses a staff member who is not `active` in any organization
+(technical spec 18A.1), applies the 18A.2 limits — JPEG, PNG, or WebP, 10 MB
+before processing, resized within 1024 x 1024, EXIF stripped by re-encoding —
+and stores the processed image on the private attachments disk rather than the
+public one the current picture uses, because a pending picture is readable only
+by its submitter and its reviewers (VOL-021). The staff record's current picture
+columns are untouched while the request is pending. A short-lived scoped URL
+(`GET /staff-profile-pictures/{changeRequest}/pending`, technical spec 11A.6)
+serves the submitted image to those two audiences and to nobody else,
+re-checking authority at stream time rather than trusting issuance.
+
+`remove-profile-picture` clears the current picture immediately, creates no
+request row, and deletes the stored blob (VOL-023). Alpha 1 preserves no
+previous pictures.
+
+`withdraw-profile-change-request` withdraws the caller's own pending request of
+either kind and discards a submitted image with it (VOL-024). A request that is
+not the caller's own is refused with 403 in the same words a missing one is, so
+the refusal discloses neither whose it was nor whether it exists.
+
+`approve-profile-change-request` and `reject-profile-change-request` answer to
+`staff.profile-change-requests.review`, resolved for the organization the
+request belongs to — organizers, Lead Organizers, and Staff Coordinators hold
+it and no other role does (VOL-019). A reviewer never decides their own request
+even where they hold the capability. Approval applies the handle or promotes the
+submitted image to the staff record's current picture and clears the pending
+columns; rejection requires a reason, which reaches the submitter (VOL-025), and
+discards the submitted image (VOL-022). A requested handle already held by
+another active staff member in the organization is named to the reviewer on
+`GET /api/staff-profile-change-requests` and does not block the decision
+(VOL-020), resolved at read time rather than stored. Creation, decision, and
+withdrawal are all audited, and an applied handle or promoted picture writes a
+second audit entry against the staff record itself, because "a decision
+happened" and "this person's handle is now different" are different questions.
+None of these are in the 7.2 offline-writable set; VOL-014 and technical spec
+18A.3 additionally make the picture path online-only by requirement.
 
 Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 

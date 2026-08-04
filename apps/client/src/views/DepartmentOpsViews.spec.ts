@@ -268,6 +268,7 @@ function logisticsPayload() {
         staff_id: AUTHOR_STAFF_ID,
         display_name: "Local Field Author",
         handle: "local-field-author",
+        profile_picture_url: "http://node.test/storage/avatars/author.webp",
         team_label: "Dirt",
         presence_state: "on_site",
         can_go_off_site: false,
@@ -855,6 +856,27 @@ describe("department operations surfaces", () => {
         .findAll("button")
         .map((button) => button.text()),
     ).toContain("Mark no-show");
+  });
+
+  it("shows the record's photo in the workspace, and says when there is none", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    // The record carries a picture: the desk shows it, so the operator can
+    // check the face in front of them against it (M18.20; VOL-013).
+    await openWorkspace(wrapper, "Local Field Author");
+
+    expect(
+      wrapper.get(".logistics__staff-photo").attributes("src"),
+    ).toBe("http://node.test/storage/avatars/author.webp");
+
+    // No picture on record is stated, not decorated: a placeholder an operator
+    // could mistake for a match would defeat the comparison.
+    await openWorkspace(wrapper, "Vera Staff");
+
+    const placeholder = wrapper.get(".logistics__staff-photo--none");
+    expect(placeholder.attributes("aria-label")).toBe(
+      "Vera Staff has no profile photo on record",
+    );
   });
 
   it("sends presence to the node and reads the desk again", async () => {

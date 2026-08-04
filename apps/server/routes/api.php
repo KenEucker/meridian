@@ -42,8 +42,10 @@ use App\Http\Controllers\Shifts\ShiftAdminReadController;
 use App\Http\Controllers\Shifts\ShiftAssignmentCommandController;
 use App\Http\Controllers\Shifts\ShiftBoardReadController;
 use App\Http\Controllers\Shifts\ShiftSignupCommandController;
+use App\Http\Controllers\Staffing\MyProfileController;
 use App\Http\Controllers\Staffing\OrganizerStaffCommandController;
 use App\Http\Controllers\Staffing\OrganizerStaffReadController;
+use App\Http\Controllers\Staffing\StaffProfileChangeRequestController;
 use App\Http\Controllers\Teams\OrganizationDesignationController;
 use App\Http\Controllers\Teams\TeamCommandController;
 use App\Http\Controllers\Teams\TeamDesignationCommandController;
@@ -271,6 +273,51 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/withdraw-from-shift', [ShiftSignupCommandController::class, 'withdraw'])
         ->name('api.commands.withdraw-from-shift');
+
+    /*
+     * Staff self-service on their own profile (M18.20; VOL-015, VOL-016,
+     * VOL-026). Self-scoped like the two shift commands above: the record
+     * written is one the caller's login speaks for, and no role is checked
+     * because none is relevant. Preferred name, phone, and city/state apply
+     * immediately; a submitted legal name, email, or date of birth is refused
+     * with the assisted path named, never silently dropped.
+     */
+    Route::post('/commands/update-my-profile', [MyProfileController::class, 'update'])
+        ->name('api.commands.update-my-profile');
+
+    /*
+     * The staff member's own handle and picture (M18.20B, M18.20C; VOL-017,
+     * VOL-021, VOL-023, VOL-024).
+     *
+     * Self-scoped like the profile update above. Each of these acts on a staff
+     * record the caller's login speaks for, and what happens next is the
+     * domain's answer rather than the caller's: a handle applies now or waits
+     * for review depending on the allowance, a picture always waits, and a
+     * removal never does.
+     */
+    Route::post('/commands/request-handle-change', [MyProfileController::class, 'requestHandle'])
+        ->name('api.commands.request-handle-change');
+
+    Route::post('/commands/submit-profile-picture', [MyProfileController::class, 'submitPicture'])
+        ->name('api.commands.submit-profile-picture');
+
+    Route::post('/commands/remove-profile-picture', [MyProfileController::class, 'removePicture'])
+        ->name('api.commands.remove-profile-picture');
+
+    Route::post('/commands/withdraw-profile-change-request', [MyProfileController::class, 'withdrawRequest'])
+        ->name('api.commands.withdraw-profile-change-request');
+
+    /*
+     * The reviewer's two decisions (M18.20A, M18.20D; VOL-019, VOL-022,
+     * VOL-025). Authorized by `staff.profile-change-requests.review` resolved
+     * for the organization the request belongs to, which organizers, Lead
+     * Organizers, and Staff Coordinators hold and nobody else does.
+     */
+    Route::post('/commands/approve-profile-change-request', [StaffProfileChangeRequestController::class, 'approve'])
+        ->name('api.commands.approve-profile-change-request');
+
+    Route::post('/commands/reject-profile-change-request', [StaffProfileChangeRequestController::class, 'reject'])
+        ->name('api.commands.reject-profile-change-request');
 
     Route::post('/commands/checkout-equipment', [EquipmentCommandController::class, 'checkout'])
         ->name('api.commands.checkout-equipment');
@@ -620,6 +667,25 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::get('/document-acknowledgments/me', [DocumentAcknowledgmentController::class, 'mine'])
         ->name('api.document-acknowledgments.me');
+
+    /*
+     * The caller's own staff profile (M18.20; VOL-009, VOL-014; UI contract
+     * 12.3). A fact about the caller, like the acknowledgment read above, so it
+     * needs no authority beyond a credential: it answers with the staff records
+     * this login speaks for and nobody else's.
+     */
+    Route::get('/me/profile', [MyProfileController::class, 'show'])
+        ->name('api.me.profile');
+
+    /*
+     * The reviewer's queue (M18.20D; VOL-019, VOL-020; UI contract 12.6). The
+     * counterpart of the read above: that one is a fact about the caller, this
+     * one is other people's requests and answers to the review capability. A
+     * caller holding it in no organization is refused rather than shown an
+     * empty list, because those are different answers.
+     */
+    Route::get('/staff-profile-change-requests', [StaffProfileChangeRequestController::class, 'index'])
+        ->name('api.staff-profile-change-requests.index');
 
     Route::get('/organizations/{organization}/document-acknowledgments', [DocumentAcknowledgmentController::class, 'review'])
         ->name('api.organizations.document-acknowledgments.index');

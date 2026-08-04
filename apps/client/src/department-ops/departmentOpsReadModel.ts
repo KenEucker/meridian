@@ -244,6 +244,8 @@ export interface LogisticsStaffWorkspace {
   readonly staffId: string;
   readonly displayName: string;
   readonly handle: string | null;
+  /** The current profile picture, for checking a face against the record (VOL-013). */
+  readonly profilePictureUrl: string | null;
   readonly teamLabel: string;
   readonly presenceState: DepartmentPresenceState;
   readonly canGoOffSite: boolean;
@@ -503,6 +505,7 @@ interface WorkspacePayload {
   readonly staff_id: string;
   readonly display_name: string;
   readonly handle: string | null;
+  readonly profile_picture_url?: string | null;
   readonly team_label: string | null;
   readonly presence_state: DepartmentPresenceState;
   readonly can_go_off_site: boolean;
@@ -601,6 +604,7 @@ export async function getLogisticsDesk(
       staffId: workspace.staff_id,
       displayName: workspace.display_name,
       handle: workspace.handle,
+      profilePictureUrl: workspace.profile_picture_url ?? null,
       teamLabel: workspace.team_label ?? "",
       presenceState: workspace.presence_state,
       canGoOffSite: workspace.can_go_off_site,

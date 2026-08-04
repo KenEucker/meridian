@@ -61,6 +61,7 @@ import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import WaiverAdministrationView from "@/views/WaiverAdministrationView.vue";
@@ -336,6 +337,16 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/me",
     name: "staff.me",
     component: MeView,
+  },
+  /*
+   * Edit your own profile (M18.20; VOL-014 through VOL-016; UI contract 12.3
+   * `staff.profile-edit`). Self-scoped like Me above: whose profile it edits
+   * is the session's answer, never the route's.
+   */
+  {
+    path: "/staff/me/edit",
+    name: "staff.profile.edit",
+    component: StaffProfileEditView,
   },
   /*
    * The staff shift board (M18.2; SHIFT-018; UI contract 12.3 `staff.shifts`).

@@ -78,6 +78,12 @@ class DepartmentOperationsReadHttpTest extends TestCase
     {
         $scenario = $this->scenario();
 
+        // One staff member holds a current picture, so the workspace can be
+        // checked for carrying it (M18.20; VOL-013).
+        $scenario['checkedIn']->forceFill([
+            'profile_picture_path' => 'avatars/vera-checked-in.webp',
+        ])->save();
+
         $response = $this->actingAsClient($scenario['logistics'])
             ->getJson($this->path($scenario, 'logistics'))
             ->assertOk();
@@ -94,6 +100,12 @@ class DepartmentOperationsReadHttpTest extends TestCase
         $this->assertNull($equipment->firstWhere('name', 'Radio 13')['holder_name']);
 
         $checkedIn = $response->json('staff_workspaces.'.(string) $scenario['checkedIn']->id);
+        // The workspace carries the record's picture so the desk can compare a
+        // face against it, and no URL at all when there is none to compare.
+        $this->assertStringEndsWith(
+            '/storage/avatars/vera-checked-in.webp',
+            $checkedIn['profile_picture_url'],
+        );
         $this->assertFalse($checkedIn['can_go_off_site']);
         $this->assertSame(
             'Staff must be checked out from department shifts before being marked off-site.',
@@ -123,6 +135,7 @@ class DepartmentOperationsReadHttpTest extends TestCase
         $offSite = $response->json('staff_workspaces.'.(string) $scenario['offSite']->id);
         $this->assertSame([], $offSite['shift_cards']);
         $this->assertTrue($offSite['can_go_off_site']);
+        $this->assertNull($offSite['profile_picture_url']);
     }
 
     /**
