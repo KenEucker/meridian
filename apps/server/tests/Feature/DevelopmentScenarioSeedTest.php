@@ -74,11 +74,11 @@ class DevelopmentScenarioSeedTest extends TestCase
             ->where('event_id', $event->id)
             ->count());
 
-        // Eleven personas carry authority, one per documented role. The rest
+        // Twelve personas carry authority, one per documented role. The rest
         // are the bodies the operational scenario needs in order to have
         // somebody standing in each of the desk's states at the same time.
-        $this->assertCount(17, User::query()->where('email', 'like', '%@northwood-collective.test')->get());
-        $this->assertCount(17, Staff::query()->where('email', 'like', '%@northwood-collective.test')->get());
+        $this->assertCount(18, User::query()->where('email', 'like', '%@northwood-collective.test')->get());
+        $this->assertCount(18, Staff::query()->where('email', 'like', '%@northwood-collective.test')->get());
     }
 
     public function test_seeded_personas_have_expected_statuses_memberships_and_permission_grants(): void
@@ -141,9 +141,29 @@ class DevelopmentScenarioSeedTest extends TestCase
                 ->where('code', 'RANGERS'))
             ->firstOrFail();
 
-        $this->assertFalse(
-            TeamGrant::query()->active()->where('team_id', $dirtTeam->id)->exists(),
-            'The crew team carries no grants, or the ordinary-staff personas are not ordinary.',
+        /*
+         * The crew team carries no grants — with one exception the mechanism
+         * makes safe. Tess Teamlead's shift_lead grant hangs on DIRT itself
+         * (M18.16), because a shift lead's led team *is* the grant-bearing
+         * team; shift_lead is also the one role that elevates only
+         * memberships designated `membership_role = 'lead'` (M11.17), so it
+         * is the only role a crew team may carry without making the
+         * ordinary-staff personas something other than ordinary. Vera's
+         * floor assertion below is what proves that holds.
+         */
+        $dirtGrantRoles = TeamGrant::query()
+            ->active()
+            ->where('team_id', $dirtTeam->id)
+            ->with('permissionRole')
+            ->get()
+            ->map(fn (TeamGrant $grant): string => (string) $grant->permissionRole?->code)
+            ->unique()
+            ->values()
+            ->all();
+        $this->assertSame(
+            ['shift_lead'],
+            $dirtGrantRoles,
+            'The crew team carries no grants beyond the lead-designated shift_lead, or the ordinary-staff personas are not ordinary.',
         );
 
         $vera = Staff::query()->where('email', 'vera.staff@northwood-collective.test')->firstOrFail();
@@ -152,6 +172,13 @@ class DevelopmentScenarioSeedTest extends TestCase
             (new EffectiveRoleResolver)->resolveForStaff($vera)->pluck('roleCode')->all(),
             'Vera Staff is the permission floor and must hold no roles at all.',
         );
+
+        // Tess is the reason for the exception: a designated lead of the crew
+        // team resolving exactly shift_lead and nothing wider.
+        $tess = Staff::query()->where('email', 'tess.teamlead@northwood-collective.test')->firstOrFail();
+        $tessRoles = (new EffectiveRoleResolver)->resolveForStaff($tess);
+        $this->assertSame(['shift_lead'], $tessRoles->pluck('roleCode')->unique()->values()->all());
+        $this->assertSame([(string) $dirtTeam->id], $tessRoles->pluck('teamId')->unique()->values()->all());
 
         $defaultTeam = Team::query()
             ->where('code', 'DEFAULT')
@@ -236,7 +263,7 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $this->assertSame(
-            17,
+            18,
             User::query()->where('email', 'like', '%@northwood-collective.test')->count(),
         );
 

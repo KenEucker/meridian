@@ -1,7 +1,8 @@
-// The organization configuration surface and its three featuresets — the
-// operational settings, the incident type list, and the organization team
-// designations — against a stubbed node (M18.14, M18.14A, M18.12; ORG-017,
-// ORG-018, ORG-020, ORG-021; CLIENT-023, CLIENT-024).
+// The organization configuration surface and its four featuresets — the
+// operational settings, the credit policies and their calculation runs, the
+// incident type list, and the organization team designations — against a
+// stubbed node (M18.14, M18.16, M18.14A, M18.12; ORG-017, ORG-018, ORG-020,
+// ORG-021; CREDIT-001 through CREDIT-003; CLIENT-023, CLIENT-024).
 //
 // This is the surface ORG-018 requires and Meridian never had. Until it existed
 // the incident form created a type whenever somebody typed a name it did not
@@ -37,6 +38,8 @@ const RETIRED_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa02";
 const INTAKE_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa03";
 const WELCOME_TEAM_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa04";
 const CREDIT_POLICY_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa05";
+const RETIRED_POLICY_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa06";
+const SETTLED_EVENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa07";
 
 interface NodeCall {
   readonly url: string;
@@ -136,6 +139,52 @@ function configurationPayload(
   };
 }
 
+function creditPoliciesPayload(
+  governance: Record<string, unknown> = {
+    editable: true,
+    holds_authority: true,
+    frozen_by_event: null,
+  },
+): Record<string, unknown> {
+  return {
+    organization_id: ORGANIZATION_ID,
+    credit_policies: [
+      {
+        id: RETIRED_POLICY_ID,
+        name: "Retired rate",
+        credit_multiplier: "1.000",
+        archived: true,
+        archived_at: "2026-06-01T00:00:00+00:00",
+        is_default: false,
+        shift_count: 1,
+      },
+      {
+        id: CREDIT_POLICY_ID,
+        name: "Standard credit",
+        credit_multiplier: "1.500",
+        archived: false,
+        archived_at: null,
+        is_default: true,
+        shift_count: 2,
+      },
+    ],
+    events: [
+      {
+        id: SETTLED_EVENT_ID,
+        name: "Emberfall 2026",
+        ends_at: "2026-07-01T16:00:00+00:00",
+        grace_closes_at: "2026-07-15T16:00:00+00:00",
+        grace_closed: true,
+        open_hours_count: 0,
+        uncredited_hours_count: 4,
+        credited_hours_count: 0,
+        can_calculate: true,
+      },
+    ],
+    governance,
+  };
+}
+
 function designationsPayload(
   staffCoordinator: { team_id: string; team_name: string } | null = null,
 ): Record<string, unknown> {
@@ -169,6 +218,25 @@ function stubAdminNode(
       call.url.includes("update-organization-configuration")
     ) {
       return { body: configurationPayload(configurationGovernance) };
+    }
+
+    if (call.url.includes("calculate-event-credits")) {
+      return {
+        body: {
+          event_id: SETTLED_EVENT_ID,
+          entries_created: 4,
+          entries_already_calculated: 0,
+          hours_without_credit_policy: 0,
+          total_hours: "16.00",
+          total_credits: "24.00",
+        },
+      };
+    }
+
+    if (call.url.includes("credit-polic")) {
+      return call.method === "POST"
+        ? { body: { id: CREDIT_POLICY_ID } }
+        : { body: creditPoliciesPayload(configurationGovernance) };
     }
 
     if (call.url.includes("/designations") || call.url.includes("staff-coordinator-team")) {
@@ -461,6 +529,7 @@ describe("the organization configuration surface", () => {
     expect(wrapper.find("#config-grace-days").exists()).toBe(false);
     expect(calls.some((call) => call.url.includes("/designations"))).toBe(false);
     expect(calls.some((call) => call.url.includes("/configuration"))).toBe(false);
+    expect(calls.some((call) => call.url.includes("/credit-policies"))).toBe(false);
   });
 
   it("carries the operational settings featureset (M18.14)", async () => {
@@ -512,6 +581,136 @@ describe("the organization configuration surface", () => {
       organizers_department_id: ORGANIZER_DEPARTMENT,
     });
     expect(wrapper.text()).toContain("Configuration saved.");
+  });
+
+  it("carries the credit policy featureset (M18.16)", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(
+      calls.some((call) =>
+        call.url.endsWith(
+          `/api/organizations/${ORGANIZATION_ID}/credit-policies`,
+        ),
+      ),
+    ).toBe(true);
+
+    // The rates, said in words, with the default and the usage on each row.
+    expect(wrapper.text()).toContain("Standard credit");
+    expect(wrapper.text()).toContain("1.500 credits per hour");
+    expect(wrapper.text()).toContain("Organization default");
+    expect(wrapper.text()).toContain("Named by 2 shifts");
+    // Archived policies are shown: a shift may still name one (CREDIT-002).
+    expect(wrapper.text()).toContain("Retired rate");
+    // The settled event is offered for a run with the node's counts.
+    expect(wrapper.text()).toContain(
+      "4 settled hours record(s) waiting to be credited",
+    );
+  });
+
+  it("adds a credit policy through its command and re-reads the list", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    const readsBefore = calls.filter(
+      (call) => call.method === "GET" && call.url.includes("/credit-policies"),
+    ).length;
+
+    await wrapper.get("#credit-policy-name").setValue("Overnight Gate");
+    await wrapper.get("#credit-policy-multiplier").setValue("2");
+    await wrapper
+      .get("form[aria-label='Add a credit policy']")
+      .trigger("submit");
+    await flushPromises();
+
+    expect(commandCalls(calls, "create-credit-policy").at(0)?.body).toEqual({
+      organization_id: ORGANIZATION_ID,
+      name: "Overnight Gate",
+      credit_multiplier: "2",
+    });
+    expect(
+      calls.filter(
+        (call) => call.method === "GET" && call.url.includes("/credit-policies"),
+      ).length,
+    ).toBeGreaterThan(readsBefore);
+  });
+
+  it("edits a credit policy in place", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    const editButtons = wrapper
+      .findAll("button")
+      .filter((button) => button.text() === "Edit");
+    await editButtons.at(0)?.trigger("click");
+
+    await wrapper
+      .get("input[aria-label='New name for Standard credit']")
+      .setValue("Standard credit 2027");
+    await wrapper
+      .get("input[aria-label='Credits per hour for Standard credit']")
+      .setValue("1.75");
+    await wrapper
+      .get("form[aria-label='Edit Standard credit']")
+      .trigger("submit");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-credit-policy").at(0)?.body).toEqual({
+      credit_policy_id: CREDIT_POLICY_ID,
+      name: "Standard credit 2027",
+      credit_multiplier: "1.75",
+    });
+  });
+
+  it("starts a calculation run and reports what it wrote", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await buttonByLabel(wrapper, "Calculate credits for Emberfall 2026").trigger(
+      "click",
+    );
+    await flushPromises();
+
+    expect(commandCalls(calls, "calculate-event-credits").at(0)?.body).toEqual({
+      event_id: SETTLED_EVENT_ID,
+    });
+    expect(wrapper.text()).toContain(
+      "Emberfall 2026: 4 ledger entries written for 24.00 credits.",
+    );
+  });
+
+  it("disables credit policy edits, with the node's reason, while governance freezes them", async () => {
+    installSession();
+    const calls = stubAdminNode(undefined, null, {
+      editable: false,
+      holds_authority: true,
+      frozen_by_event: { id: LOCAL_FIELD_FIXTURE.eventId, name: "Emberfall 2026" },
+    });
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.text()).toContain(
+      "Credit policies are frozen while Emberfall 2026 is inside its active event window",
+    );
+    expect(
+      wrapper.get("#credit-policy-name").attributes("disabled"),
+    ).toBeDefined();
+
+    await wrapper
+      .get("form[aria-label='Add a credit policy']")
+      .trigger("submit");
+    await flushPromises();
+
+    // A disabled form submits nothing: the refusal is explained, not tripped.
+    expect(commandCalls(calls, "create-credit-policy")).toHaveLength(0);
   });
 
   it("reads only, with the node's reason, while governance freezes edits", async () => {

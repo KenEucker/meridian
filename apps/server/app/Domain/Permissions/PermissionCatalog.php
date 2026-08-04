@@ -116,6 +116,8 @@ final class PermissionCatalog
 
     public const PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE = 'organization.configuration.manage';
 
+    public const PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE = 'organization.credit_policies.manage';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -196,6 +198,7 @@ final class PermissionCatalog
             self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW => 'Review event applications for the organization: approve, reject, and defer, and assign approved applicants to departments.',
             self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE => 'Maintain organization-level team designations: which team within the configured Organizers Department carries Staff Coordinator authority.',
             self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE => 'Edit organization configuration: lifecycle inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.',
+            self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE => 'Maintain the organization credit policies — create, rename, re-rate, archive, and restore — and start credit calculation runs for events whose grace period has closed.',
         ];
     }
 
@@ -379,6 +382,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
+                self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -397,6 +401,7 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
                 self::PERMISSION_ORGANIZATION_DESIGNATIONS_MANAGE,
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
+                self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
             ],
         ];
     }

@@ -2730,6 +2730,36 @@ Rules:
 - shift-specific credit policy overrides organization default
 - there is no department default credit policy
 
+`GET /api/organizations/{organization}/credit-policies` is the administration
+read behind the `organizer.configuration` surface, and `create-credit-policy`,
+`update-credit-policy`, `archive-credit-policy`, and `restore-credit-policy`
+are its commands; `calculate-event-credits` starts a CREDIT-001 calculation
+run for one event from the same surface. All six require
+`organization.credit_policies.manage` (organizers and Lead Organizers,
+ORG-020) and are audited. Policy edits answer to the ORG-021 configuration
+governance — central-owned, frozen during the active event window — and the
+read returns archived rows alongside active ones, because a shift may still
+name one and restoring one is half of what the surface is for. The
+organization default cannot be archived while it holds that job, and a shift
+names a policy through `create-shift` / `update-shift` (`credit_policy_id`),
+where an archived policy cannot be newly chosen but a shift already naming
+one keeps it.
+
+Alternatively a shift carries a custom rate through the same commands
+(`custom_credit_multiplier`, 0 to 2 credits per hour, three decimal places,
+mutually exclusive with `credit_policy_id`). The rate is stored as one
+shift-scoped `credit_policies` row per shift — created on first use, re-rated
+in place after — that the shift's `credit_policy_id` points at, so the
+resolver, ledger, and export read it exactly like a named policy. Shift-scoped
+rows stay out of the named catalog: the administration read and the shift
+form's options exclude them, and another shift naming one is refused, because
+a re-rate of one shift must never reprice a second. God Mode carries the same
+configuration: Orchid credit policy screens route through the same admin
+service (audited `SOURCE_ORCHID`, same governance freeze), the Orchid
+organization screen routes the ORG-017/ORG-018 configuration fields through
+`OrganizationConfigurationService`, and the Orchid shift screen sets
+`credit_policy_id` and the custom rate.
+
 #### `credit_ledger_entries`
 
 Represents calculated or adjusted credits.

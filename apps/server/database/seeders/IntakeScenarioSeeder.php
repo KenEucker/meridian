@@ -144,7 +144,14 @@ class IntakeScenarioSeeder extends Seeder
             $overnight->forceFill(['credit_policy_id' => $nightPolicy->id])->save();
         }
 
-        unset($default);
+        // Standard Hour is the organization default (ORG-009), not just a row:
+        // without the pointer, every shift except Overnight Patrol resolved to
+        // no policy at all, so the CREDIT-003 fallback the resolver exists for
+        // never fired in the scenario — and the M18.16 shift edit form showed
+        // "Organization default" meaning nothing.
+        if ($organization->default_credit_policy_id === null) {
+            $organization->forceFill(['default_credit_policy_id' => $default->id])->save();
+        }
     }
 
     /**

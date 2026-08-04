@@ -112,6 +112,7 @@ once.
 | Login | Roles | Use it to test |
 |---|---|---|
 | `sam.shiftlead` | `shift_lead`, `department_logistics`, `department_operations`, `department_administration`, `department_planning` | The whole Logistics Desk, the Operations Center, the Planning Table, department self-administration. **The default choice for operational testing.** Also checked in and holding a shift-scoped radio, so his own workspace shows the equipment off-site block |
+| `tess.teamlead` | `shift_lead` (Dirt) | **The narrow team-lead path** (M18.16): creating and editing Dirt's shifts and assigning their credit policy, with only Dirt offered as the eligible team. Sam cannot prove this — his `department_administration` opens every team's shifts before `shift_lead` gets a say. Also the refusal side: department administration, other teams' shifts, and organizer surfaces all stay closed to her |
 | `dana.departmentlead` | `department_lead` | Department Overview, and what a lead sees that a shift lead does not. The actor behind most seeded history, so audit trails name her |
 | `gabe.gatekeeper` | `department_lead`, `department_logistics` (Gate) | That department scope is real — Gate's desk holds Gate's staff, shifts, and scanners, and nothing of Rangers' |
 | `dex.dpw` | `department_lead`, `department_logistics` (DPW) | The department switcher, and a third department that is not a copy of the first two |
@@ -175,6 +176,7 @@ That creates `admin@example.com` with the password `password`.
 | Whether an ordinary staff member is correctly refused | `vera.staff` |
 | Adding somebody to a *running* shift (unscheduled addition) | `sam.shiftlead`, acting on `nora.newstaff` |
 | Rostering somebody onto a shift ahead of time | `dana.departmentlead` — assignment is lead authority (SHIFT-015), which Sam does not hold |
+| Editing one team's shifts and assigning their credit policy, as a team lead | `tess.teamlead` — the Dirt-only path; "Standard Hour" is the organization default and "Overnight Multiplier" is the rate worth choosing over it |
 | A refusal with a reason on it | `sam.shiftlead`, acting on `felix.fieldhand` or `quinn.quartermaster` |
 | Department Overview and planning | `dana.departmentlead` |
 | Shift signup and its four refusals | `vera.staff` or `felix.fieldhand`, on the upcoming event |
@@ -199,6 +201,9 @@ you know what you do not have to create by hand:
   event, written off while still out, damaged, and archived.
 - **Trainings and waivers** with completions, a prerequisite chain, a pending
   signup, an archived training, and one lapsed waiver.
+- **Credit policies**: "Standard Hour" (1.000) as the organization default and
+  "Overnight Multiplier" (1.5) carried by Overnight Patrol, so the SHIFT-010
+  override and the CREDIT-003 fallback both resolve.
 - **Documents** in every state at two scopes, a shared fragment, filled Event
   Info sections, and a half-satisfied acknowledgment requirement.
 - **Six incidents** spread across status and priority, three Field Reports, a
@@ -231,7 +236,30 @@ afternoon on it.
 
 ---
 
-## 9. Related documents
+## 9. The other seed: the local field fixture
+
+`php artisan meridian:seed-local-field-fixture` is **not** part of this
+process. It is the M9.8 offline Field Report QA fixture — one organization
+("Local Field Organization"), one event, and `local-field@meridian.test` with a
+pre-trusted device — kept for the QA scripts that need a pinned node and
+device-trust state (`QA-FR-01`, `QA-AUTH-01`) and for the server tests that
+seed it. The client's spec-only session helper
+(`apps/client/src/session/localFieldSessionFixture.ts`) mirrors its identities
+so component tests run without a live server.
+
+It wants a database of its own. An install has one local node, and whichever
+row is local decides which event the install is locked to; the fixture's node
+is locked to the fixture event, and the scenario's node to Emberfall. The
+fixture therefore refuses to write its node when another seed's local node
+already exists, so running it against a scenario database no longer breaks the
+Northwood logins — but the fixture accounts will not resolve a session there
+either. For offline Field Report QA, start from a fresh database, seed the
+fixture alone, and come back to `migrate:fresh --seed` for everything in this
+document.
+
+---
+
+## 10. Related documents
 
 - `docs/process/meridian-development-process.md` — section 13.3, the seed data
   strategy this implements

@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\Department;
+use App\Models\Node;
 use App\Models\Organization;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\Branding\BrandingAccess;
 use App\Support\LocalFieldFixture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -131,6 +133,37 @@ class LocalFieldFixtureBrandingTest extends TestCase
             $user,
             Organization::query()->findOrFail(LocalFieldFixture::ORGANIZATION_ID),
         ));
+    }
+
+    public function test_the_fixture_never_replaces_another_seeds_local_node(): void
+    {
+        // An install has one local node, and whichever row is local decides
+        // which event the install is locked to. A database seeded by the
+        // development scenario already has its node; the fixture landing a
+        // second one locked to the fixture event broke session resolution for
+        // every scenario account. The fixture yields: its rows still seed, the
+        // other seed's node stands, and no fixture node appears beside it.
+        $existing = Node::query()->create([
+            'id' => (string) Str::uuid(),
+            'node_name' => 'Northwood Development Node',
+            'node_role' => Node::ROLE_DEVELOPMENT,
+            'is_local' => true,
+            'public_key' => base64_encode(str_repeat('N', 32)),
+        ]);
+
+        $this->artisan('meridian:seed-local-field-fixture')->assertSuccessful();
+
+        $this->assertNull(Node::query()->find(LocalFieldFixture::NODE_ID));
+        $this->assertSame(
+            [(string) $existing->id],
+            Node::query()->where('is_local', true)->pluck('id')->map(fn ($id) => (string) $id)->all(),
+        );
+
+        // On a database of its own — the fixture's intended home — the node
+        // seeds exactly as before.
+        $existing->delete();
+        $this->artisan('meridian:seed-local-field-fixture')->assertSuccessful();
+        $this->assertNotNull(Node::query()->find(LocalFieldFixture::NODE_ID));
     }
 
     public function test_the_seeder_is_idempotent(): void

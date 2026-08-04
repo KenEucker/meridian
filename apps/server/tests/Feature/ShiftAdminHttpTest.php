@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
@@ -515,6 +516,256 @@ class ShiftAdminHttpTest extends TestCase
     /**
      * @return array{0: Department, 1: User, 2: Event}
      */
+    public function test_a_shift_names_and_clears_its_own_credit_policy(): void
+    {
+        // SHIFT-010 / M18.16: the shift override the resolver prefers over the
+        // organization default (CREDIT-002).
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $policy = CreditPolicy::factory()->create([
+            'organization_id' => $department->organization_id,
+            'name' => 'Overnight Gate',
+            'credit_multiplier' => '2.000',
+        ]);
+
+        $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
+
+        $shiftId = (string) $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [
+                'department_id' => $department->id,
+                'event_id' => $event->id,
+                'eligible_team_id' => $team->id,
+                'title' => 'Gate Watch',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'credit_policy_id' => $policy->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('credit_policy_id', $policy->id)
+            ->json('id');
+
+        // The edit read offers the organization's active policies.
+        $optionIds = array_column(
+            $this->actingAsClient($actor)
+                ->getJson("/api/departments/{$department->id}/shifts/{$shiftId}")
+                ->assertOk()
+                ->assertJsonPath('credit_policy_id', $policy->id)
+                ->json('credit_policy_options'),
+            'id',
+        );
+        $this->assertContains($policy->id, $optionIds);
+
+        // Clearing the override sends the shift back to the organization
+        // default (CREDIT-003).
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shiftId,
+                'eligible_team_id' => $team->id,
+                'title' => 'Gate Watch',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'credit_policy_id' => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('credit_policy_id', null);
+
+        $this->assertNull(Shift::query()->findOrFail($shiftId)->credit_policy_id);
+    }
+
+    public function test_a_foreign_or_newly_archived_credit_policy_is_refused_and_a_kept_one_is_not(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
+
+        $base = [
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Gate Watch',
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+        ];
+
+        // Another organization's policy would price this organization's work
+        // at somebody else's rate.
+        $foreign = CreditPolicy::factory()->create(['credit_multiplier' => '1.000']);
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [...$base, 'credit_policy_id' => $foreign->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The credit policy must belong to the department organization.');
+
+        // An archived policy cannot be newly chosen…
+        $archived = CreditPolicy::factory()->create([
+            'organization_id' => $department->organization_id,
+            'name' => 'Retired Rate',
+            'credit_multiplier' => '1.000',
+            'archived_at' => Carbon::now()->subDay(),
+        ]);
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [...$base, 'credit_policy_id' => $archived->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Archived credit policies cannot be selected for a shift.');
+
+        // …but a shift already naming one keeps it through an unrelated edit:
+        // archiving withdraws a policy from future selection, it does not
+        // restate what scheduled work will be priced at (CREDIT-002).
+        $shift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Night Watch',
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->copy()->addHours(6),
+            'credit_policy_id' => $archived->id,
+        ]);
+
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shift->id,
+                'eligible_team_id' => $team->id,
+                'title' => 'Night Watch (renamed)',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'credit_policy_id' => $archived->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('credit_policy_id', $archived->id);
+
+        // The edit read still renders the kept policy, flagged archived.
+        $options = $this->actingAsClient($actor)
+            ->getJson("/api/departments/{$department->id}/shifts/{$shift->id}")
+            ->assertOk()
+            ->json('credit_policy_options');
+        $kept = collect($options)->firstWhere('id', $archived->id);
+        $this->assertNotNull($kept);
+        $this->assertTrue((bool) $kept['archived']);
+    }
+
+    public function test_a_shift_carries_a_custom_rate_as_its_own_shift_scoped_policy(): void
+    {
+        // M18.16: pre- and post-event work is typically priced below the
+        // standard hour, so a shift may carry its own rate between 0 and 2
+        // without the organization publishing a named policy for it.
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
+
+        $base = [
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Early Build',
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+        ];
+
+        $shiftId = (string) $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [...$base, 'custom_credit_multiplier' => 0.5])
+            ->assertCreated()
+            ->assertJsonPath('custom_credit_multiplier', '0.500')
+            ->json('id');
+
+        // The rate is a real shift-scoped policy row, so the resolver, the
+        // ledger, and the export read it exactly like a named policy.
+        $policy = CreditPolicy::query()->where('shift_id', $shiftId)->firstOrFail();
+        $this->assertSame('0.500', (string) $policy->credit_multiplier);
+        $this->assertSame($policy->id, Shift::query()->findOrFail($shiftId)->credit_policy_id);
+
+        // Re-rating updates the same row rather than minting a second one.
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shiftId,
+                'eligible_team_id' => $team->id,
+                'title' => 'Early Build',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'custom_credit_multiplier' => '1.25',
+            ])
+            ->assertOk()
+            ->assertJsonPath('custom_credit_multiplier', '1.250');
+
+        $this->assertSame(1, CreditPolicy::query()->where('shift_id', $shiftId)->count());
+        $this->assertSame('1.250', (string) $policy->refresh()->credit_multiplier);
+
+        // Switching back to the organization default leaves the row behind
+        // unpointed-at — hours may already have been credited against it.
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/update-shift', [
+                'shift_id' => $shiftId,
+                'eligible_team_id' => $team->id,
+                'title' => 'Early Build',
+                'starts_at' => $startsAt->toIso8601String(),
+                'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+                'credit_policy_id' => null,
+                'custom_credit_multiplier' => null,
+            ])
+            ->assertOk()
+            ->assertJsonPath('credit_policy_id', null)
+            ->assertJsonPath('custom_credit_multiplier', null);
+
+        $this->assertSame(1, CreditPolicy::query()->where('shift_id', $shiftId)->count());
+    }
+
+    public function test_a_custom_rate_outside_zero_to_two_or_beside_a_named_policy_is_refused(): void
+    {
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $policy = CreditPolicy::factory()->create([
+            'organization_id' => $department->organization_id,
+            'credit_multiplier' => '1.000',
+        ]);
+        $startsAt = Carbon::now()->addWeek()->setTime(8, 0);
+
+        $base = [
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Early Build',
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->copy()->addHours(6)->toIso8601String(),
+        ];
+
+        foreach ([-0.5, 2.5, 0.1234] as $rate) {
+            $this->actingAsClient($actor)
+                ->postJson('/api/commands/create-shift', [...$base, 'custom_credit_multiplier' => $rate])
+                ->assertUnprocessable();
+        }
+
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'credit_policy_id' => $policy->id,
+                'custom_credit_multiplier' => 1.5,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'A shift takes a named credit policy or a custom rate, not both.');
+
+        $this->assertSame(0, Shift::query()->where('title', 'Early Build')->count());
+
+        // Another shift's custom rate is not a catalog entry a second shift
+        // may point at: a re-rate of one shift must never reprice another.
+        $other = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Other Shift',
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->copy()->addHours(2),
+        ]);
+        $otherCustom = CreditPolicy::factory()->create([
+            'organization_id' => $department->organization_id,
+            'shift_id' => $other->id,
+            'name' => 'Custom shift rate',
+            'credit_multiplier' => '0.500',
+        ]);
+
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [...$base, 'credit_policy_id' => $otherCustom->id])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Another shift\'s custom rate cannot be chosen as this shift\'s policy.');
+    }
+
     private function departmentWithLead(): array
     {
         $organization = Organization::factory()->create();

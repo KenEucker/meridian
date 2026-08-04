@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+
+/** The select value that means "this shift carries its own custom rate". */
+const CUSTOM_RATE = "__custom__";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
@@ -11,6 +14,7 @@ import {
   createShift,
   getDepartmentShifts,
   getShift,
+  shiftCreditPolicyOptions,
   shiftTeamOptions,
   updateShift,
   type ProductShift,
@@ -66,6 +70,12 @@ const teams = computed(() =>
 );
 const trainingOptions = computed(() => workspace.value?.trainingOptions ?? []);
 const waiverOptions = computed(() => workspace.value?.waiverOptions ?? []);
+const creditPolicyOptions = computed(() =>
+  shiftCreditPolicyOptions(
+    workspace.value?.creditPolicyOptions ?? [],
+    existing.value,
+  ),
+);
 
 const departmentLabel = computed(
   () =>
@@ -107,10 +117,21 @@ function emptyDraft(): ShiftDraft {
     signupOpensAt: null,
     signupClosesAt: null,
     scheduleLockAt: null,
+    creditPolicyId: null,
+    customCreditMultiplier: null,
     requiredTrainingIds: [],
     requiredWaiverIds: [],
   };
 }
+
+/*
+ * The credit choice as the select holds it: "" for the organization default, a
+ * policy id for a named policy, or the custom sentinel with its rate in the
+ * number input beside it. Folded back into the draft's two exclusive fields on
+ * submit.
+ */
+const creditSelection = ref("");
+const customRate = ref<string | number>("");
 
 function toLocalInput(iso: string | null): string {
   if (iso === null || iso === "") {
@@ -170,6 +191,8 @@ function applyShift(shift: ProductShift | null): void {
       eligibleTeamId: workspace.value?.teams[0]?.id ?? "",
     });
     defaultSchedule();
+    creditSelection.value = "";
+    customRate.value = "";
 
     return;
   }
@@ -183,9 +206,18 @@ function applyShift(shift: ProductShift | null): void {
     signupOpensAt: shift.signupOpensAt,
     signupClosesAt: shift.signupClosesAt,
     scheduleLockAt: shift.scheduleLockAt,
+    creditPolicyId: shift.creditPolicyId,
+    customCreditMultiplier: shift.customCreditMultiplier,
     requiredTrainingIds: [...shift.requiredTrainingIds],
     requiredWaiverIds: [...shift.requiredWaiverIds],
   });
+  if (shift.customCreditMultiplier !== null) {
+    creditSelection.value = CUSTOM_RATE;
+    customRate.value = shift.customCreditMultiplier;
+  } else {
+    creditSelection.value = shift.creditPolicyId ?? "";
+    customRate.value = "";
+  }
   schedule.startsAt = toLocalInput(shift.startsAt);
   schedule.endsAt = toLocalInput(shift.endsAt);
   schedule.signupOpensAt = toLocalInput(shift.signupOpensAt);
@@ -260,6 +292,8 @@ async function onSubmit(): Promise<void> {
   const lockedStart = started.value ? existing.value?.startsAt : null;
   const lockedEnd = started.value ? existing.value?.endsAt : null;
 
+  const isCustomRate = creditSelection.value === CUSTOM_RATE;
+
   const payload: ShiftDraft = {
     ...draft,
     requiredTrainingIds: [...draft.requiredTrainingIds],
@@ -269,6 +303,10 @@ async function onSubmit(): Promise<void> {
     signupOpensAt: fromLocalInput(schedule.signupOpensAt),
     signupClosesAt: fromLocalInput(schedule.signupClosesAt),
     scheduleLockAt: fromLocalInput(schedule.scheduleLockAt),
+    creditPolicyId: isCustomRate ? null : creditSelection.value || null,
+    customCreditMultiplier: isCustomRate
+      ? String(customRate.value).trim() || null
+      : null,
   };
 
   const id = shiftId.value;
@@ -400,6 +438,49 @@ async function onSubmit(): Promise<void> {
         <label class="shift-edit__field">
           Schedule lock / cutoff
           <input v-model="schedule.scheduleLockAt" type="datetime-local" />
+        </label>
+
+        <!--
+          The shift override the credit resolver prefers over the organization
+          default (SHIFT-010, CREDIT-002; M18.16). Blank means the shift is
+          credited at whatever the organization default is when credits run;
+          a custom rate gives the shift its own price between 0 and 2 credits
+          per hour — the usual shape of pre- and post-event work.
+        -->
+        <label class="shift-edit__field">
+          Credit policy
+          <select v-model="creditSelection">
+            <option value="">Organization default</option>
+            <option
+              v-for="option in creditPolicyOptions"
+              :key="option.id"
+              :value="option.id"
+            >
+              {{ option.name
+              }}{{
+                option.creditMultiplier
+                  ? ` — ${option.creditMultiplier} credits/hour`
+                  : ""
+              }}{{ option.archived ? " (archived)" : "" }}
+            </option>
+            <option :value="CUSTOM_RATE">Custom rate for this shift…</option>
+          </select>
+        </label>
+
+        <label
+          v-if="creditSelection === CUSTOM_RATE"
+          class="shift-edit__field"
+        >
+          Custom credits per hour (0–2)
+          <input
+            v-model="customRate"
+            type="number"
+            min="0"
+            max="2"
+            step="0.001"
+            required
+            aria-label="Custom credits per hour"
+          />
         </label>
 
         <fieldset v-if="trainingOptions.length > 0" class="shift-edit__group">

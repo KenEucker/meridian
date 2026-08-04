@@ -18,6 +18,8 @@ use App\Models\Shift;
 use App\Models\ShiftAssignment;
 use App\Models\Staff;
 use App\Models\Team;
+use App\Models\User;
+use App\Services\Shift\ShiftAdminAccess;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\Support\DevelopmentScenarioCatalog;
 use Database\Seeders\Support\ScenarioClock;
@@ -332,6 +334,53 @@ class OperationalScenarioSeedTest extends TestCase
      * seed twice against one database has to leave the same scenario rather than
      * two overlapping copies of it.
      */
+    public function test_the_team_lead_leads_exactly_the_dirt_crew_and_credits_resolve_both_ways(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        // Tess is the narrow team-lead path (M18.16): Dirt's shifts and their
+        // credit policy, and nothing wider. Sam cannot prove this boundary —
+        // his department_administration opens every team before shift_lead
+        // gets a say.
+        $tess = User::query()
+            ->where('email', 'tess.teamlead@northwood-collective.test')
+            ->firstOrFail();
+        $rangers = Department::query()->where('code', 'RANGERS')->firstOrFail();
+        $dirt = Team::query()
+            ->where('department_id', $rangers->id)
+            ->where('code', 'DIRT')
+            ->firstOrFail();
+
+        $access = app(ShiftAdminAccess::class);
+
+        $this->assertSame([(string) $dirt->id], $access->manageableTeamIds($tess, $rangers));
+        $this->assertFalse($access->canAdministerDepartment($tess, $rangers));
+
+        // Her lead designation elevates nobody else on the crew: Vera stays
+        // exactly as ordinary as the catalog says she is.
+        $vera = User::query()
+            ->where('email', 'vera.staff@northwood-collective.test')
+            ->firstOrFail();
+        $this->assertSame([], $access->manageableTeamIds($vera, $rangers));
+
+        // Both credit resolutions exist in the scenario: the shift override on
+        // Overnight Patrol (SHIFT-010) and the organization default behind
+        // every other shift (CREDIT-003).
+        $organization = $rangers->organization;
+        $this->assertNotNull($organization->default_credit_policy_id, 'Standard Hour should be the organization default.');
+
+        $overnight = Shift::query()
+            ->where('event_id', $this->runningEvent()->id)
+            ->where('title', 'Overnight Patrol')
+            ->firstOrFail();
+        $this->assertNotNull($overnight->credit_policy_id);
+        $this->assertNotSame(
+            (string) $organization->default_credit_policy_id,
+            (string) $overnight->credit_policy_id,
+            'The override has to differ from the default for either to be provable.',
+        );
+    }
+
     public function test_reseeding_does_not_duplicate_the_scenario(): void
     {
         $this->seed(DatabaseSeeder::class);

@@ -8,6 +8,8 @@ use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
 use App\Orchid\Screens\Console\ChangelogScreen;
 use App\Orchid\Screens\Console\DocumentationScreen;
+use App\Orchid\Screens\Credit\CreditPolicyEditScreen;
+use App\Orchid\Screens\Credit\CreditPolicyListScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
 use App\Orchid\Screens\Department\DepartmentListScreen;
 use App\Orchid\Screens\Document\DocumentFragmentEditScreen;
@@ -17,8 +19,6 @@ use App\Orchid\Screens\Document\PolicyDocumentListScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentEditScreen;
 use App\Orchid\Screens\Document\ProcedureDocumentListScreen;
 use App\Orchid\Screens\Equipment\EquipmentEditScreen;
-use App\Orchid\Screens\Incident\IncidentTypeEditScreen;
-use App\Orchid\Screens\Incident\IncidentTypeListScreen;
 use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
@@ -26,10 +26,12 @@ use App\Orchid\Screens\Import\AssignmentImportScreen;
 use App\Orchid\Screens\Import\ShiftImportScreen;
 use App\Orchid\Screens\Import\TeamImportScreen;
 use App\Orchid\Screens\Import\UserImportScreen;
+use App\Orchid\Screens\Incident\IncidentTypeEditScreen;
+use App\Orchid\Screens\Incident\IncidentTypeListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
-use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\Organization\OrganizationEditScreen;
 use App\Orchid\Screens\Organization\OrganizationListScreen;
+use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
 use App\Orchid\Screens\Role\RoleListScreen;
@@ -309,6 +311,27 @@ Route::screen('incident-types', IncidentTypeListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Incident types'), route('platform.incident-types')));
+
+// Platform > Operations > Credit policies > Credit policy
+Route::screen('credit-policies/{creditPolicy}/edit', CreditPolicyEditScreen::class)
+    ->name('platform.credit-policies.edit')
+    ->breadcrumbs(fn (Trail $trail, $creditPolicy) => $trail
+        ->parent('platform.credit-policies')
+        ->push($creditPolicy->name, route('platform.credit-policies.edit', $creditPolicy)));
+
+// Platform > Operations > Credit policies > Create
+Route::screen('credit-policies/create', CreditPolicyEditScreen::class)
+    ->name('platform.credit-policies.create')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.credit-policies')
+        ->push(__('Create'), route('platform.credit-policies.create')));
+
+// Platform > Operations > Credit policies
+Route::screen('credit-policies', CreditPolicyListScreen::class)
+    ->name('platform.credit-policies')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Credit policies'), route('platform.credit-policies')));
 
 // Platform > Operations > Equipment > Equipment
 Route::screen('equipment/{equipmentItem}/edit', EquipmentEditScreen::class)

@@ -57,3 +57,13 @@ Schedule::command('meridian:health-report')
 Schedule::command('meridian:evaluate-lifecycle-thresholds')
     ->daily()
     ->withoutOverlapping();
+
+// Event credits are written on a schedule once the correction grace period
+// closes (M18.16; CREDIT-001), so a configured organization gets its ledger
+// without anyone pressing the button on the credit policy surface. The command
+// only visits events holding frozen hours no calculated entry covers, refuses
+// quietly on nodes that do not own the ledger, and the calculation itself is
+// idempotent (CREDIT-004), so scheduling it unconditionally is safe.
+Schedule::command('meridian:calculate-event-credits')
+    ->daily()
+    ->withoutOverlapping();

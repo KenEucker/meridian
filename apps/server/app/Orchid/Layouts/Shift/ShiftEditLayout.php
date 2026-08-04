@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Layouts\Shift;
 
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\Team;
@@ -83,6 +84,20 @@ class ShiftEditLayout extends Rows
                 ->title(__('Schedule lock / cutoff'))
                 ->help(__('Blocks staff self-service schedule changes from this moment (SHIFT-009).')),
 
+            Select::make('shift.credit_policy_id')
+                ->options($this->creditPolicyOptions())
+                ->empty(__('Organization default'), '')
+                ->title(__('Credit policy'))
+                ->help(__('The rate hours on this shift are credited at (SHIFT-010). Blank falls back to the organization default; must belong to the shift department\'s organization.')),
+
+            Input::make('shift.custom_credit_multiplier')
+                ->type('number')
+                ->min(0)
+                ->max(2)
+                ->step(0.001)
+                ->title(__('Custom credits per hour (0–2)'))
+                ->help(__('A rate for this shift alone, instead of a named policy — the usual shape of pre/post-event work. Leave blank when a policy is chosen; the two are mutually exclusive.')),
+
             Select::make('shift.required_training_ids')
                 ->fromModel(Training::class, 'name')
                 ->multiple()
@@ -95,5 +110,33 @@ class ShiftEditLayout extends Rows
                 ->title(__('Required waivers'))
                 ->help(__('Enforced for scheduled and unscheduled additions (SHIFT-006, SHIFT-016).')),
         ];
+    }
+
+    /**
+     * Named organization-level policies across every organization, labeled so
+     * a console operator working outside one organization's context can tell
+     * whose rate they are choosing. Save-time validation refuses one from
+     * outside the shift department's organization; shift-scoped custom rates
+     * are carried by the custom field rather than offered here.
+     *
+     * @return array<string, string>
+     */
+    private function creditPolicyOptions(): array
+    {
+        return CreditPolicy::query()
+            ->whereNull('shift_id')
+            ->with('organization')
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(fn (CreditPolicy $policy): array => [
+                (string) $policy->id => sprintf(
+                    '%s — %s (%s/hr)%s',
+                    $policy->organization?->name ?? __('Unknown organization'),
+                    $policy->name,
+                    $policy->credit_multiplier,
+                    $policy->archived_at !== null ? ' '.__('(archived)') : '',
+                ),
+            ])
+            ->all();
     }
 }

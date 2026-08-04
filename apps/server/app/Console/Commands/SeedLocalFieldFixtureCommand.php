@@ -217,34 +217,65 @@ class SeedLocalFieldFixtureCommand extends Command
                 ],
             );
 
-            $this->upsert(
-                Node::class,
-                LocalFieldFixture::NODE_ID,
-                [
-                    'node_name' => 'local-field-node',
-                    'node_role' => Node::ROLE_DEVELOPMENT,
-                    /*
-                     * This row is the install's *own* node, not a peer learned
-                     * through pairing, and `is_local` is what says so.
-                     *
-                     * The column defaults to false, so omitting it here left
-                     * the fixture with no resolvable local node at all —
-                     * `NodeSetupService::activeNode()` filters on it. Nothing
-                     * failed loudly: `GET /api/health` simply reported a null
-                     * node role, organization, and event; the desktop wrapper
-                     * never branded its window; and an install that names an
-                     * event in this very row behaved as though it were locked
-                     * to none.
-                     */
-                    'is_local' => true,
-                    'public_key' => base64_encode(str_repeat('L', 32)),
-                    'organization_id' => LocalFieldFixture::ORGANIZATION_ID,
-                    'event_id' => LocalFieldFixture::EVENT_ID,
-                    'central_node_url' => null,
-                    'revoked_at' => null,
-                ],
-                uniqueBy: ['node_name' => 'local-field-node'],
-            );
+            /*
+             * The fixture's node, but never at another seed's expense.
+             *
+             * An install has one local node, and whichever row is local decides
+             * which event the whole install is locked to. The operational
+             * scenario (`migrate:fresh --seed`) seeds its own — "Northwood
+             * Development Node", locked to its running event — and running this
+             * fixture on top of that database used to upsert a second local
+             * node locked to the fixture event, which broke session resolution
+             * for every Northwood account with a 409 the moment it landed. The
+             * two seeds are different universes: this one exists for offline
+             * Field Report and device-trust QA on a database of its own
+             * (QA-FR-01, QA-AUTH-01), and it does not commandeer a database
+             * some other seed already owns.
+             */
+            $foreignLocalNode = Node::query()
+                ->where('is_local', true)
+                ->whereKeyNot(LocalFieldFixture::NODE_ID)
+                ->where('node_name', '!=', 'local-field-node')
+                ->exists();
+
+            if ($foreignLocalNode) {
+                $this->warn(
+                    'Another local node already exists, so the fixture node was not written: this database '
+                    .'belongs to a different seed (probably the development scenario). Fixture accounts and '
+                    .'rows were still seeded, but signing in as them needs the fixture node — use a fresh '
+                    .'database for offline Field Report QA.',
+                );
+            } else {
+                $this->upsert(
+                    Node::class,
+                    LocalFieldFixture::NODE_ID,
+                    [
+                        'node_name' => 'local-field-node',
+                        'node_role' => Node::ROLE_DEVELOPMENT,
+                        /*
+                         * This row is the install's *own* node, not a peer
+                         * learned through pairing, and `is_local` is what says
+                         * so.
+                         *
+                         * The column defaults to false, so omitting it here
+                         * left the fixture with no resolvable local node at all
+                         * — `NodeSetupService::activeNode()` filters on it.
+                         * Nothing failed loudly: `GET /api/health` simply
+                         * reported a null node role, organization, and event;
+                         * the desktop wrapper never branded its window; and an
+                         * install that names an event in this very row behaved
+                         * as though it were locked to none.
+                         */
+                        'is_local' => true,
+                        'public_key' => base64_encode(str_repeat('L', 32)),
+                        'organization_id' => LocalFieldFixture::ORGANIZATION_ID,
+                        'event_id' => LocalFieldFixture::EVENT_ID,
+                        'central_node_url' => null,
+                        'revoked_at' => null,
+                    ],
+                    uniqueBy: ['node_name' => 'local-field-node'],
+                );
+            }
         });
 
         $this->info('Local Field fixture seeded.');

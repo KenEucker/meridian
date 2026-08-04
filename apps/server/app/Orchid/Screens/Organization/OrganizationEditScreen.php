@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Organization;
 
+use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\Organization;
 use App\Models\User;
-use App\Models\Attachment;
 use App\Orchid\Layouts\Organization\OrganizationBrandingLayout;
 use App\Orchid\Layouts\Organization\OrganizationEditLayout;
 use App\Orchid\Support\BrandingScreenSupport;
@@ -17,6 +17,9 @@ use App\Services\Branding\BrandingPalette;
 use App\Services\Branding\Lettermark;
 use App\Services\Events\IncidentCommandDepartmentSelectionService;
 use App\Services\Incidents\IncidentTypeProvisioner;
+use App\Services\Node\EventAuthorityException;
+use App\Services\Organizations\OrganizationConfigurationException;
+use App\Services\Organizations\OrganizationConfigurationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -172,10 +175,14 @@ class OrganizationEditScreen extends Screen
                 Rule::unique(Organization::class, 'slug')->ignore($organization),
             ],
             'organization.default_ic_department_id' => ['nullable', 'uuid', Rule::exists(Department::class, 'id')],
-            'organization.active_inactive_threshold_years' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'organization.prospective_inactive_threshold_years' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'organization.active_inactive_threshold_years' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'organization.prospective_inactive_threshold_years' => ['nullable', 'integer', 'min:1', 'max:100'],
             'organization.calendar_year_start_month' => ['nullable', 'integer', 'between:1,12'],
             'organization.calendar_year_start_day' => ['nullable', 'integer', 'between:1,31'],
+            'organization.hours_correction_grace_period_days' => ['nullable', 'integer', 'between:0,365'],
+            'organization.default_credit_policy_id' => ['nullable', 'uuid'],
+            'organization.organizers_department_id' => ['nullable', 'uuid'],
+            'organization.default_placement_department_id' => ['nullable', 'uuid'],
             'branding.display_name' => ['nullable', 'string', 'max:255'],
             'branding.department_branding_enabled' => ['nullable', 'boolean'],
             'branding.palette' => ['nullable', 'array'],
@@ -218,9 +225,76 @@ class OrganizationEditScreen extends Screen
         $defaultIcDepartmentId = $attributes['default_ic_department_id'] ?? null;
         unset($attributes['default_ic_department_id']);
 
+        /*
+         * The M18.14 configuration fields split off and route through
+         * OrganizationConfigurationService below, so the Orchid path and the
+         * organizer product surface write the same audit rows and answer to
+         * the same governance — the ORG-021 active-window freeze included.
+         * Identity (name, slug) stays a direct fill: it predates the
+         * configuration record and is not part of it.
+         */
+        $configuration = [];
+        foreach ([
+            'active_inactive_threshold_years',
+            'prospective_inactive_threshold_years',
+            'calendar_year_start_month',
+            'calendar_year_start_day',
+            'default_credit_policy_id',
+            'organizers_department_id',
+            'default_placement_department_id',
+        ] as $key) {
+            if (array_key_exists($key, $attributes)) {
+                $configuration[$key] = blank($attributes[$key]) ? null : $attributes[$key];
+            }
+
+            unset($attributes[$key]);
+        }
+
+        // The grace period cannot be cleared (ORG-017: an organization always
+        // has one), so a blank input means "leave it alone", not null.
+        if (filled($attributes['hours_correction_grace_period_days'] ?? null)) {
+            $configuration['hours_correction_grace_period_days'] = $attributes['hours_correction_grace_period_days'];
+        }
+        unset($attributes['hours_correction_grace_period_days']);
+
         $wasNew = ! $organization->exists;
 
         $organization->fill($attributes)->save();
+
+        /*
+         * Only values that actually moved go to the service: an unchanged save
+         * must not trip the ORG-021 governance freeze on its way to the
+         * branding block below, and the service's own audit entry should exist
+         * only when configuration changed.
+         */
+        $configuration = array_filter(
+            $configuration,
+            function (mixed $value, string $key) use ($organization): bool {
+                $current = $key === 'hours_correction_grace_period_days'
+                    ? $organization->hoursCorrectionGracePeriodDays()
+                    : $organization->getAttribute($key);
+
+                $normalize = fn (mixed $side): ?string => $side === null ? null : (string) $side;
+
+                return $normalize($value) !== $normalize($current);
+            },
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        if ($configuration !== []) {
+            try {
+                app(OrganizationConfigurationService::class)->update(
+                    $organization,
+                    $configuration,
+                    $this->configurationActor($request),
+                    AuditEvent::SOURCE_ORCHID,
+                );
+            } catch (EventAuthorityException|OrganizationConfigurationException $exception) {
+                throw ValidationException::withMessages([
+                    'organization.hours_correction_grace_period_days' => $exception->getMessage(),
+                ]);
+            }
+        }
 
         // A new organization starts with the default incident types, so its
         // first incident has something to choose from. Only on creation: these
@@ -252,6 +326,15 @@ class OrganizationEditScreen extends Screen
         Toast::info(__('Organization was saved.'));
 
         return redirect()->route('platform.organizations');
+    }
+
+    private function configurationActor(Request $request): User
+    {
+        $user = $request->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user;
     }
 
     /**

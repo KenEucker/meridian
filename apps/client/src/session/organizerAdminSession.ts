@@ -31,6 +31,7 @@ import { computed } from "vue";
 import { clientSessionState } from "@/session/clientSession";
 import {
   CAPABILITY_ORGANIZATION_CONFIGURATION_MANAGE,
+  CAPABILITY_ORGANIZATION_CREDIT_POLICIES_MANAGE,
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
   CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE,
   CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
@@ -106,4 +107,9 @@ export const organizerDesignationAdminSession = computed(() =>
 /** The organization whose configuration this client may edit, or null. */
 export const organizerConfigurationAdminSession = computed(() =>
   resolveOrganizerAdminSession(CAPABILITY_ORGANIZATION_CONFIGURATION_MANAGE),
+);
+
+/** The organization whose credit policies this client may maintain, or null. */
+export const organizerCreditPolicyAdminSession = computed(() =>
+  resolveOrganizerAdminSession(CAPABILITY_ORGANIZATION_CREDIT_POLICIES_MANAGE),
 );
