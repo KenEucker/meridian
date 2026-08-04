@@ -82,7 +82,7 @@ class StaffStatusDomainTest extends TestCase
             ->for($staff)
             ->active()
             ->create();
-        (new DepartmentMembershipService)->createWithTeams($staff, $department, [$department->defaultTeam]);
+        app(DepartmentMembershipService::class)->createWithTeams($staff, $department, [$department->defaultTeam]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Active department work prevents organization-level inactive status.');
@@ -108,7 +108,7 @@ class StaffStatusDomainTest extends TestCase
                 'status_changed_by_user_id' => null,
             ]);
 
-        (new DepartmentMembershipService)->createWithTeams(
+        app(DepartmentMembershipService::class)->createWithTeams(
             $staff,
             $department,
             [$department->defaultTeam],
@@ -134,7 +134,7 @@ class StaffStatusDomainTest extends TestCase
         $secondDepartment = Department::factory()
             ->for($firstDepartment->organization)
             ->create(['code' => 'SECOND']);
-        $service = new DepartmentMembershipService;
+        $service = app(DepartmentMembershipService::class);
         $statusService = new StaffStatusService;
 
         $firstMembership = $service->createWithTeams($staff, $firstDepartment, [$firstDepartment->defaultTeam]);
@@ -159,7 +159,7 @@ class StaffStatusDomainTest extends TestCase
             ->for($staff)
             ->active()
             ->create();
-        $departmentMembership = (new DepartmentMembershipService)->createWithTeams(
+        $departmentMembership = app(DepartmentMembershipService::class)->createWithTeams(
             $staff,
             $department,
             [$department->defaultTeam],
@@ -231,7 +231,7 @@ class StaffStatusDomainTest extends TestCase
             ->for($staff)
             ->active()
             ->create();
-        $departmentMembership = (new DepartmentMembershipService)->createWithTeams(
+        $departmentMembership = app(DepartmentMembershipService::class)->createWithTeams(
             $staff,
             $department,
             [$department->defaultTeam],

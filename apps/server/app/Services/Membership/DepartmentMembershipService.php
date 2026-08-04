@@ -7,6 +7,9 @@ use App\Models\DepartmentMembership;
 use App\Models\Staff;
 use App\Models\Team;
 use App\Models\User;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +17,11 @@ use InvalidArgumentException;
 
 class DepartmentMembershipService
 {
+    public function __construct(
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
+    ) {}
+
     /**
      * Assign staff to a department using the department default team only.
      *
@@ -93,7 +101,46 @@ class DepartmentMembershipService
                 );
             }
 
-            return $departmentMembership->refresh()->load('teamMemberships.team');
+            $departmentMembership = $departmentMembership->refresh()->load('teamMemberships.team');
+
+            if ($status === DepartmentMembership::STATUS_ACTIVE) {
+                $this->notifyAddition($departmentMembership, $department, $staff, $changedBy);
+            }
+
+            return $departmentMembership;
         });
+    }
+
+    /**
+     * One notification for the department and the teams it came with
+     * (NOTIFY-001, NOTIFY-001A).
+     *
+     * The collapse the requirement asks for falls out of where this call sits.
+     * A staff member cannot belong to a department without belonging to a team
+     * (VOL-006), so department assignment creates both here in one transaction
+     * and sends one message naming both. The separate team-addition path
+     * refuses to run without an existing department membership, so it can only
+     * ever be the later addition NOTIFY-001A says gets its own notification.
+     *
+     * Only an active membership notifies. An Ineligible or Inactive membership
+     * created for record-keeping has not changed what the staff member may do,
+     * which is the whole test NOTIFY-001 applies.
+     */
+    private function notifyAddition(
+        DepartmentMembership $membership,
+        Department $department,
+        Staff $staff,
+        ?User $changedBy,
+    ): void {
+        $department->loadMissing('organization');
+
+        $this->notifications->dispatch(
+            type: NotificationType::DepartmentMembershipAdded,
+            subject: $membership,
+            recipient: $this->notificationRecipients->forStaff($staff),
+            organization: $department->organization,
+            department: $department,
+            actor: $changedBy,
+        );
     }
 }

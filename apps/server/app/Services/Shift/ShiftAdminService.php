@@ -9,11 +9,15 @@ use App\Models\Event;
 use App\Models\Shift;
 use App\Models\ShiftTrainingRequirement;
 use App\Models\ShiftWaiverRequirement;
+use App\Models\Staff;
 use App\Models\Team;
 use App\Models\Training;
 use App\Models\User;
 use App\Models\Waiver;
 use App\Services\Audit\AuditService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -44,7 +48,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class ShiftAdminService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
+    ) {}
 
     /**
      * @param array{
@@ -357,8 +365,49 @@ final class ShiftAdminService
                 sourceContext: $sourceContext,
             );
 
+            if ($cancelledAt !== null) {
+                $this->notifyCancellation($shift, $actor);
+            }
+
             return $shift;
         });
+    }
+
+    /**
+     * Tell everyone signed up that the shift is off (NOTIFY-001).
+     *
+     * One notification per staff member on an active assignment, and none for
+     * a restore: a restored shift is the state the recipients were already
+     * planning for, so telling them again would be telling them nothing.
+     *
+     * A shift with a large roster produces a delivery record and a queued job
+     * each. That is the intended shape — the queue is what NOTIFY-006 asks
+     * cancellation not to wait on, and one record per person is what NOTIFY-007
+     * asks in order to answer whether a given person was told.
+     */
+    private function notifyCancellation(Shift $shift, User $actor): void
+    {
+        $shift->loadMissing(['event.organization', 'department']);
+
+        $assignments = $shift->activeAssignments()->with('staff')->get();
+
+        foreach ($assignments as $assignment) {
+            $staff = $assignment->staff;
+
+            if (! $staff instanceof Staff) {
+                continue;
+            }
+
+            $this->notifications->dispatch(
+                type: NotificationType::ShiftCancelled,
+                subject: $shift,
+                recipient: $this->notificationRecipients->forStaff($staff),
+                organization: $shift->event?->organization ?? $shift->department?->organization,
+                event: $shift->event,
+                department: $shift->department,
+                actor: $actor,
+            );
+        }
     }
 
     /**

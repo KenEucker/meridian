@@ -59,6 +59,8 @@ class Organization extends Model
         'handle_change_policy',
         'profile_picture_change_policy',
         'handle_self_service_change_limit',
+        'notifications_suppressed_at',
+        'accepts_organization_applications',
         'archived_at',
     ];
 
@@ -95,11 +97,54 @@ class Organization extends Model
             'calendar_year_start_month' => 'integer',
             'calendar_year_start_day' => 'integer',
             'hours_correction_grace_period_days' => 'integer',
+            'notifications_suppressed_at' => 'datetime',
+            'accepts_organization_applications' => 'boolean',
             'archived_at' => 'datetime',
             'branding_palette_json' => 'array',
             'department_branding_enabled' => 'boolean',
             'branding_updated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether this organization's notification email is switched off
+     * (NOTIFY-009).
+     *
+     * The switch is per organization rather than per node because the reason
+     * to use it is per organization: an organization rehearsing an event on a
+     * shared node must not mail its staff while the organization beside it
+     * does. The global development suppression is separate and either alone
+     * stops a send.
+     */
+    /**
+     * Whether this organization takes applications that name no event
+     * (APP-018).
+     *
+     * Off unless somebody turned it on. An organization that runs events
+     * recruits into them, and an intake queue nobody agreed to review is a
+     * queue that goes unread — so the public organization surface offers its
+     * open events and no form of its own until this is set.
+     */
+    public function acceptsOrganizationApplications(): bool
+    {
+        return (bool) $this->accepts_organization_applications;
+    }
+
+    public function notificationsSuppressed(): bool
+    {
+        return $this->notifications_suppressed_at !== null;
+    }
+
+    /**
+     * The same fact as a boolean, for form binding.
+     *
+     * The column is a timestamp because "suppressed since" is what an operator
+     * wants when a restored backup stops mailing; a checkbox has no room for
+     * that, so it reads the presence of the timestamp and writes it back.
+     */
+    public function getNotificationsSuppressedAttribute(): bool
+    {
+        return $this->notificationsSuppressed();
     }
 
     /**

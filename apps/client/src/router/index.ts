@@ -41,6 +41,8 @@ import MeView from "@/views/MeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
+import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
+import ParticipationView from "@/views/ParticipationView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerConfigurationView from "@/views/OrganizerConfigurationView.vue";
@@ -179,6 +181,27 @@ export const routes: RouteRecordRaw[] = [
    * arrives without a token — so these are the way in rather than a wall around
    * everything else.
    */
+  /*
+   * The public participation surfaces (M18.21A; APP-016, APP-017; UI contract
+   * 12.1).
+   *
+   * `/apply/:organizationSlug` is the address an organizer, a department lead,
+   * or anybody else hands out. `/apply/:organizationSlug/:eventSlug` is the
+   * same page with the event already chosen, for a link shared about one event.
+   * Both are the shareable form APP-017 asks for: readable, repeatable, and
+   * carrying no token, because the page is public and a token would imply a
+   * gate that is not there.
+   */
+  {
+    path: "/apply/:organizationSlug",
+    name: "public.participate",
+    component: ParticipationView,
+  },
+  {
+    path: "/apply/:organizationSlug/:eventSlug",
+    name: "public.apply",
+    component: ParticipationView,
+  },
   {
     path: "/login",
     name: "login",
@@ -534,6 +557,19 @@ export const routes: RouteRecordRaw[] = [
     component: OrganizerDocumentAcknowledgmentsView,
   },
   /*
+   * Application review (M18.21A; APP-005, APP-011, APP-019; UI contract 12.6).
+   *
+   * Organization-scoped rather than event-scoped, because an application may
+   * name the organization and no event at all (APP-001), and because approval
+   * has always been an organization-level decision (APP-005). Department leads
+   * reach the same route for the read-only visibility APP-011 grants them.
+   */
+  {
+    path: "/organizer/applications",
+    name: "organizer.applications.index",
+    component: OrganizerApplicationsView,
+  },
+  /*
    * Handle and profile picture change request review (M18.20D; VOL-019 through
    * VOL-022; UI contract 12.6). Organization-scoped and not event-scoped: a
    * handle is a fact about a person's standing with the organization, and it
@@ -619,10 +655,18 @@ export const routes: RouteRecordRaw[] = [
  * token and signs in by typed code on its own screen (AUTH-030) — sending it to
  * the personal sign-in screen would be sending it somewhere it cannot use. And
  * not-found, which is not a surface anybody was denied.
+ *
+ * The participation surfaces are public in the strongest sense of the word
+ * (APP-016): their whole purpose is to be reachable by somebody who has no
+ * account and is not going to make one until an organization approves them.
+ * Sending an applicant to a sign-in screen would be asking them to already be
+ * what they are applying to become.
  */
 const PUBLIC_ROUTE_NAMES: readonly string[] = [
   "login",
   "auth.code.entry",
+  "public.participate",
+  "public.apply",
   "not-found",
 ];
 

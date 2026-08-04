@@ -37,6 +37,7 @@ import {
   CAPABILITY_EVENT_CREDENTIALS_REVOKE,
   CAPABILITY_INCIDENTS_VIEW,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
+  CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW,
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
   CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE,
   CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
@@ -693,6 +694,30 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         description:
           "Staff handle changes and profile pictures waiting on a decision.",
         to: { name: "organizer.profile-change-requests.index" },
+      });
+    }
+
+    /*
+     * Application review (M18.21A; APP-005, APP-019).
+     *
+     * Capability-permitted here, and only here. The department-lead read-only
+     * visibility APP-011 grants is standing rather than a capability — it
+     * depends on which applications named which department — so it is the
+     * node's answer on the read, not a navigation entry this module can derive.
+     * A lead reaches the page through a link or an address; the entry is for
+     * the people whose job it is.
+     */
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW,
+      )
+    ) {
+      organizationPages.push({
+        label: "Applications",
+        description:
+          "People offering to join or to staff an event, and the link that invites them.",
+        to: { name: "organizer.applications.index" },
       });
     }
 

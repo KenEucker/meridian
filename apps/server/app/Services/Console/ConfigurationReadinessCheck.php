@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Console;
 
 use App\Models\Node;
+use App\Models\Organization;
 use App\Services\EventMode\EventModeCheck;
 use App\Services\EventMode\EventModeGuard;
 use App\Services\Node\NodeConfigResolver;
@@ -46,6 +47,10 @@ final class ConfigurationReadinessCheck
     public const SECURE_CONNECTION = 'configuration.secure_connection';
 
     public const POWERSYNC = 'configuration.powersync';
+
+    public const NOTIFICATIONS_SUPPRESSED = 'configuration.notifications_suppressed';
+
+    public const ORGANIZATION_NOTIFICATIONS_SUPPRESSED = 'configuration.organization_notifications_suppressed';
 
     public function __construct(
         private readonly NodeSetupService $nodes,
@@ -91,7 +96,58 @@ final class ConfigurationReadinessCheck
             ...$this->pairingItems($node),
             ...$this->secretItems($node),
             ...$this->eventModeItems(),
+            ...$this->notificationSuppressionItems(),
         ];
+    }
+
+    /**
+     * Notification sending that is switched off (NOTIFY-009).
+     *
+     * The requirement asks for suppression to be visible here, and this is the
+     * one item in the group that is not a fault. That is deliberate: a
+     * deployment that will not mail anybody is a state an operator has to know
+     * about before they conclude that notifications are broken, and it is
+     * exactly the state a restored production backup is in the moment it boots.
+     * A switched-off deployment is far more often correct than not, so the item
+     * states the fact and names the setting rather than asking for a fix.
+     *
+     * @return list<AttentionItem>
+     */
+    private function notificationSuppressionItems(): array
+    {
+        $items = [];
+
+        if ((bool) config('meridian.notifications.suppressed', false)) {
+            $items[] = new AttentionItem(
+                key: self::NOTIFICATIONS_SUPPRESSED,
+                label: 'Notification email is suppressed on this deployment',
+                detail: 'MERIDIAN_NOTIFICATIONS_SUPPRESSED is on. Notifications are still recorded with their recipient, type, and subject record, and none are handed to a mail transport. This is the expected state on a development, staging, or restored deployment.',
+                resolveRoute: 'platform.system.configuration',
+                resolveLabel: 'System Configuration',
+            );
+        }
+
+        $suppressedOrganizations = Organization::query()
+            ->whereNotNull('notifications_suppressed_at')
+            ->whereNull('archived_at')
+            ->orderBy('name')
+            ->get();
+
+        foreach ($suppressedOrganizations as $organization) {
+            $items[] = new AttentionItem(
+                key: self::ORGANIZATION_NOTIFICATIONS_SUPPRESSED.'.'.$organization->getKey(),
+                label: sprintf('%s is not sending notification email', $organization->name),
+                detail: sprintf(
+                    'Notification sending has been switched off for this organization since %s. Its staff receive no application decisions, membership additions, or shift cancellations by email until it is switched back on.',
+                    $organization->notifications_suppressed_at?->toDayDateTimeString() ?? 'an unrecorded time',
+                ),
+                resolveRoute: 'platform.organizations.edit',
+                resolveRouteParameters: ['organization' => $organization->getKey()],
+                resolveLabel: 'Organization',
+            );
+        }
+
+        return $items;
     }
 
     /**

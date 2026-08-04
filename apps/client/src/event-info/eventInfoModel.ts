@@ -54,6 +54,8 @@ export interface EventInfoSectionView {
 export interface EventInfoEvent {
   readonly id: string;
   readonly organizationId: string | null;
+  /** The event's own slug, for the addresses built from one (APP-017). */
+  readonly slug: string | null;
   readonly name: string;
   readonly timezone: string | null;
   readonly startsAt: string | null;
@@ -91,6 +93,7 @@ interface EventInfoPayload {
   readonly event?: {
     readonly id: string;
     readonly organization_id?: string | null;
+    readonly slug?: string | null;
     readonly name?: string;
     readonly timezone?: string | null;
     readonly starts_at?: string | null;
@@ -123,9 +126,11 @@ function toDocument(payload: EventInfoDocumentPayload): EventInfoDocument {
  * client a second chance to disagree with the order it was handed (11.4A).
  */
 export async function getEventInfo(eventId: string): Promise<EventInfoView> {
-  const result = (await meridianCachedJson<EventInfoPayload>(
-    `/api/events/${encodeURIComponent(eventId)}/info`,
-  )).data;
+  const result = (
+    await meridianCachedJson<EventInfoPayload>(
+      `/api/events/${encodeURIComponent(eventId)}/info`,
+    )
+  ).data;
 
   const sections = (result.sections ?? []).map<EventInfoSectionView>(
     (section) => ({
@@ -140,6 +145,7 @@ export async function getEventInfo(eventId: string): Promise<EventInfoView> {
     event: {
       id: result.event?.id ?? eventId,
       organizationId: result.event?.organization_id ?? null,
+      slug: result.event?.slug ?? null,
       name: result.event?.name ?? "",
       timezone: result.event?.timezone ?? null,
       startsAt: result.event?.starts_at ?? null,

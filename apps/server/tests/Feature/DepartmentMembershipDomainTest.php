@@ -52,7 +52,7 @@ class DepartmentMembershipDomainTest extends TestCase
         $secondDepartment = Department::factory()->create();
         $firstExtraTeam = Team::factory()->for($firstDepartment)->create(['code' => 'OPERATORS']);
         $secondExtraTeam = Team::factory()->for($secondDepartment)->create(['code' => 'LOGISTICS']);
-        $service = new DepartmentMembershipService;
+        $service = app(DepartmentMembershipService::class);
 
         $firstMembership = $service->createWithTeams($staff, $firstDepartment, [
             $firstDepartment->defaultTeam,
@@ -76,7 +76,7 @@ class DepartmentMembershipDomainTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Department membership requires at least one team.');
 
-        (new DepartmentMembershipService)->createWithTeams(
+        app(DepartmentMembershipService::class)->createWithTeams(
             Staff::factory()->create(),
             Department::factory()->create(),
             [],
@@ -91,7 +91,7 @@ class DepartmentMembershipDomainTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('All team memberships must belong to the assigned department.');
 
-        (new DepartmentMembershipService)->createWithTeams(
+        app(DepartmentMembershipService::class)->createWithTeams(
             Staff::factory()->create(),
             $department,
             [$otherDepartment->defaultTeam],
@@ -118,7 +118,7 @@ class DepartmentMembershipDomainTest extends TestCase
         $department = Department::factory()->create();
         $staff = Staff::factory()->create();
         $extraTeam = Team::factory()->for($department)->create(['code' => 'EXTRA']);
-        $departmentMembership = (new DepartmentMembershipService)->createWithTeams($staff, $department, [
+        $departmentMembership = app(DepartmentMembershipService::class)->createWithTeams($staff, $department, [
             $department->defaultTeam,
             $extraTeam,
         ]);

@@ -132,7 +132,8 @@ function eventInfoPayload(
         section: key,
         label,
         documents,
-        empty_description: documents.length === 0 ? emptyDescriptions[key] : null,
+        empty_description:
+          documents.length === 0 ? emptyDescriptions[key] : null,
       };
     }),
   };
@@ -170,7 +171,11 @@ function meSessionDocument(
   teamIsLead: boolean,
 ): SessionDocument {
   const base = fixtureSessionDocument();
-  const event = { ...base.events[0]!, id: SESSION_EVENT_ID, name: "Emberfall 2026" };
+  const event = {
+    ...base.events[0]!,
+    id: SESSION_EVENT_ID,
+    name: "Emberfall 2026",
+  };
 
   return {
     ...base,
@@ -275,7 +280,10 @@ afterEach(() => {
  */
 describe("Staff Me role-aware event routing", () => {
   beforeEach(() => {
-    stubJson({ event: { id: SESSION_EVENT_ID, name: "Emberfall 2026" }, shifts: [] });
+    stubJson({
+      event: { id: SESSION_EVENT_ID, name: "Emberfall 2026" },
+      shifts: [],
+    });
   });
 
   it("registers the team overview route", () => {
@@ -305,7 +313,9 @@ describe("Staff Me role-aware event routing", () => {
     await wrapper.get(".me__event").trigger("click");
     await flushPromises();
 
-    expect(router.currentRoute.value.name).toBe("events.departments.teams.show");
+    expect(router.currentRoute.value.name).toBe(
+      "events.departments.teams.show",
+    );
     expect(router.currentRoute.value.params.teamId).toBe(SESSION_TEAM_ID);
   });
 
@@ -536,7 +546,11 @@ describe("team overview handoff", () => {
   }
 
   it("shows the led team's roster, shifts, and current staffing", async () => {
-    stubTeamNode({ can_administer: true, can_view_led_teams: false, led_team_ids: [] });
+    stubTeamNode({
+      can_administer: true,
+      can_view_led_teams: false,
+      led_team_ids: [],
+    });
 
     const { wrapper } = await mountAt(
       TeamOverviewView,
@@ -553,7 +567,11 @@ describe("team overview handoff", () => {
   });
 
   it("fails closed for a staff member without department or team lead authority", async () => {
-    stubTeamNode({ can_administer: false, can_view_led_teams: false, led_team_ids: [] });
+    stubTeamNode({
+      can_administer: false,
+      can_view_led_teams: false,
+      led_team_ids: [],
+    });
 
     const { wrapper } = await mountAt(
       TeamOverviewView,
@@ -585,7 +603,11 @@ describe("team overview handoff", () => {
   });
 
   it("lets a department lead switch between the department's teams", async () => {
-    stubTeamNode({ can_administer: true, can_view_led_teams: false, led_team_ids: [] });
+    stubTeamNode({
+      can_administer: true,
+      can_view_led_teams: false,
+      led_team_ids: [],
+    });
 
     const { router, wrapper } = await mountAt(
       TeamOverviewView,
@@ -731,5 +753,39 @@ describe("event info document resolution", () => {
     expect(wrapper.text()).toContain(
       "Event information requires staff standing in this event organization.",
     );
+  });
+
+  it("invites staff to share the event's public application link (APP-016, APP-017)", async () => {
+    // The payload's organization must be one the session knows, because the
+    // link's organization slug is resolved from the event the page is about
+    // rather than from whatever context the viewer happens to have selected.
+    installSession(ordinaryStaffDocument());
+    const payload = eventInfoPayload();
+    (payload.event as Record<string, unknown>).organization_id =
+      "org-northwood-collective";
+    stubEventInfoNode(payload);
+
+    const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
+
+    const invite = wrapper.get(".event-info__invite");
+    expect(invite.text()).toContain("Invite your friends!");
+    expect(invite.text()).toContain("do not need a Meridian account");
+
+    const link = invite.get("a");
+    expect(link.attributes("href")).toContain(
+      "/apply/northwood-collective/signal-camp-2026",
+    );
+  });
+
+  it("hides the invitation rather than rendering it with a broken link", async () => {
+    // The default payload names an organization the session does not know, so
+    // no slug resolves and no address can be built.
+    installSession(ordinaryStaffDocument());
+    stubEventInfoNode(eventInfoPayload());
+
+    const { wrapper } = await mountAt(EventInfoView, eventInfoPath());
+
+    expect(wrapper.find(".event-info__invite").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Invite your friends!");
   });
 });

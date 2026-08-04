@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Application\ApplicationReviewController;
+use App\Http\Controllers\Application\PublicParticipationController;
 use App\Http\Controllers\Attendance\AttendanceCommandController;
 use App\Http\Controllers\Auth\ApiAuthController;
 use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
@@ -201,6 +203,32 @@ Route::get('/me', [SessionController::class, 'show'])
 // credential at all.
 Route::get('/organizations/{organization}/branding', [BrandingReadController::class, 'show'])
     ->name('api.organizations.branding.show');
+
+/*
+ * The public participation surface (M18.21A; APP-016, APP-017, APP-018).
+ *
+ * Unauthenticated, because an application is made by somebody who has no
+ * account yet — a credential cannot be the gate on the one surface whose whole
+ * purpose is to reach people who hold none. What bounds it instead is what the
+ * reads publish: an organization's own identity and the events it is recruiting
+ * for, and nothing about staff, departments, teams, or how many people have
+ * applied.
+ *
+ * Submission is throttled per client, matching the Blade form it sits beside.
+ * The throttle bounds submission volume rather than enumeration, which is
+ * handled by the responses being identical whatever Meridian already knows
+ * about the address (STAT-006).
+ */
+Route::get('/public/organizations/{organization:slug}', [PublicParticipationController::class, 'organization'])
+    ->name('api.public.organizations.show');
+
+Route::get('/public/organizations/{organization:slug}/events/{event:slug}', [PublicParticipationController::class, 'event'])
+    ->scopeBindings()
+    ->name('api.public.organizations.events.show');
+
+Route::post('/public/organizations/{organization:slug}/applications', [PublicParticipationController::class, 'submit'])
+    ->middleware('throttle:10,1')
+    ->name('api.public.organizations.applications.store');
 
 /*
  * Everything a client application reads and writes (AUTH-018; technical spec
@@ -422,6 +450,28 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::get('/organizations/{organization}/branding/events', [BrandingCommandController::class, 'events'])
         ->name('api.organizations.branding.events');
+
+    /*
+     * Application review as a product surface (M18.21A; APP-005, APP-011,
+     * APP-019). One list read for both populations the access rules resolve —
+     * reviewers and the department leads APP-011 grants read-only visibility —
+     * because a client that asked for "all applications" and filtered would be
+     * a client deciding scope.
+     */
+    Route::get('/applications', [ApplicationReviewController::class, 'index'])
+        ->name('api.applications.index');
+
+    Route::get('/applications/{application}', [ApplicationReviewController::class, 'show'])
+        ->name('api.applications.show');
+
+    Route::post('/commands/approve-application', [ApplicationReviewController::class, 'approve'])
+        ->name('api.commands.approve-application');
+
+    Route::post('/commands/reject-application', [ApplicationReviewController::class, 'reject'])
+        ->name('api.commands.reject-application');
+
+    Route::post('/commands/defer-application', [ApplicationReviewController::class, 'defer'])
+        ->name('api.commands.defer-application');
 
     Route::post('/commands/create-department', [DepartmentCommandController::class, 'create'])
         ->name('api.commands.create-department');

@@ -258,7 +258,7 @@ class StaffTeamAssignmentTest extends TestCase
         $extraTeam = Team::factory()->for($department)->create(['code' => 'OPERATORS', 'name' => 'Gate Operators']);
         $staff = Staff::factory()->create();
 
-        (new DepartmentMembershipService)->assignStaffWithDefaultTeam(
+        app(DepartmentMembershipService::class)->assignStaffWithDefaultTeam(
             $staff,
             $department,
         );
