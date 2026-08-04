@@ -16,6 +16,7 @@
 **Additive Update:** System Configuration and Diagnostics requirements (SYS-001-SYS-041, section 7.26) added for the environment/configuration catalogue, node-local database overrides, the diagnostics framework, sanitized exports, and node health reporting.
 **Additive Update:** Pooled and individually tracked equipment requirements (EQUIP-010–EQUIP-017) added for equipment lookup by asset tag, serial number, or search at checkout, quantity-based pooled equipment, and derived pooled availability, replacing the unit-by-unit checklist as the way equipment is handed out.
 **Additive Update:** Staff self-service profile maintenance requirements (VOL-015–VOL-026) added for direct editing of preferred name, phone, and city/state, a two-change allowance on self-service handle changes with reviewed handle change requests beyond it, reviewed profile picture change requests, and the audit and notification of both.
+**Additive Update:** Organization addressing requirements (ORG-022–ORG-025) added for organization subdomain resolution beside the existing root-path form, and platform landing page requirements (PUBLIC-007–PUBLIC-009) added for the feature tour with example-organization screenshots and the description of the platform offerings. Dedicated per-organization infrastructure recorded as deferred scope.
 
 ---
 
@@ -2629,6 +2630,24 @@ Only organizers and Lead Organizers shall edit organization configuration. Confi
 ### ORG-021
 
 Organization configuration shall be organization governance data. The central node shall be authoritative for it, and configuration edits shall be blocked during the active event window under the same governance edit rules that apply to policy and procedure documents (BRAND-021).
+
+### ORG-022
+
+Meridian shall serve each organization at a path from the deployment root formed from the organization slug (for example `https://<deployment-domain>/<organization-slug>/...`).
+
+### ORG-023
+
+Meridian shall also serve each organization at an organization subdomain of the deployment domain formed from the organization slug (for example `https://<organization-slug>.<deployment-domain>/...`).
+
+A request to an organization subdomain shall resolve the same organization, content, and branding profile (BRAND-003) that the path form resolves, with the organization slug segment omitted from paths under the subdomain.
+
+### ORG-024
+
+A request to an organization subdomain shall be scoped to that organization: it shall not serve another organization's content, and it shall not serve the platform marketing surface (PUBLIC-001), which remains at the deployment root. A request to a subdomain that matches no active organization slug shall receive a not-found response.
+
+### ORG-025
+
+Organization subdomain addressing shall not assume that an organization subdomain is served by the same infrastructure as the deployment root, so that an organization subdomain can later be served by dedicated, isolated infrastructure (section 8, Dedicated Organization Infrastructure) without changing how clients address the organization.
 
 ---
 
@@ -5380,6 +5399,26 @@ The organization interest form shall be rate limited and shall be protected agai
 
 The marketing surface shall not be served by an on-site node, and shall not be reachable when the node is locked to an event.
 
+### PUBLIC-007
+
+The marketing surface shall include a platform landing page that explains what the Meridian platform is and introduces each major feature area of the platform.
+
+### PUBLIC-008
+
+Feature introductions on the landing page shall be illustrated with screenshots captured from the seeded example organization (the Northwood development scenario). No screenshot on the marketing surface shall show a real organization's data.
+
+Landing page screenshots shall be static assets committed to the repository, not live reads of operational data.
+
+### PUBLIC-009
+
+The landing page shall describe the platform offerings:
+
+- free and open-source self-hosting;
+- hosted self-starter: the platform hosted for the organization without support, at a lowered fee;
+- fully hosted and managed: full support, including an on-site technician.
+
+The landing page shall present these offerings descriptively. Payment, billing, and self-service signup for an offering are out of scope for Alpha 1, and organization creation remains a God Mode action (PUBLIC-004).
+
 ---
 
 ## 7.26 System Configuration and Diagnostics Requirements
@@ -5661,6 +5700,12 @@ Post–Alpha 1 implementation shall deliver:
 - Directions deep links and targeting
 - Action Plan sections and allowlisted banners
 - Notices and per-user dismissible alerts
+
+## Dedicated Organization Infrastructure
+
+Alpha 1 serves every organization from the same deployment, addressed by root path and by organization subdomain (ORG-022 through ORG-025). In the future, an entire organization subdomain may be served by dedicated hardware, isolated from other organizations for security and performance, as the highest tier of hosted offering with S-tier support.
+
+Alpha 1 only keeps the addressing model compatible with that future: because an organization is already addressed by its subdomain, moving the subdomain to dedicated infrastructure is a DNS and deployment change, not an application or client change. No Alpha 1 task provisions, schedules, or bills for dedicated infrastructure.
 
 ---
 
