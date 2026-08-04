@@ -121,7 +121,7 @@ Meridian account at all.
 
 | ID | Coverage | Owning task |
 |---|---|---|
-| [`QA-PUBLIC-02-marketing-surface-and-organization-interest.md`](QA-PUBLIC-02-marketing-surface-and-organization-interest.md) | The public marketing surface at the deployment root: Meridian identity with no organization branding profile resolved, the client application still served at the root to a signed-in browser, the organization interest form and the inquiry it creates, no organization/user/staff record created by it, God Mode review with no create-organization path, the per-address and per-client submission limits, the hidden-field and timing traps with no challenge presented, the submission/discard/review audit trail, and the on-site and event-locked nodes that serve none of it | M18.23 |
+| [`QA-PUBLIC-02-marketing-surface-and-organization-interest.md`](QA-PUBLIC-02-marketing-surface-and-organization-interest.md) | The public marketing surface at the client root: Meridian identity with no organization branding profile resolved, the home directory still rendered there for a client holding a session, the organization interest form and the inquiry it creates, no organization/user/staff record created by it, God Mode review with no create-organization path, the per-address and per-client submission limits, the hidden-field and form-token traps with no challenge presented, the submission/discard/review audit trail, and the on-site and event-locked nodes that serve none of it | M18.23 |
 
 The landing page itself — the feature tour, the Northwood screenshots, and the
 three platform offerings (PUBLIC-007 through PUBLIC-009) — is Milestone 20's,

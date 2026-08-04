@@ -32,6 +32,7 @@ use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Incidents\IncidentTypeAdminController;
+use App\Http\Controllers\Marketing\OrganizationInterestController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
@@ -242,6 +243,31 @@ Route::post('/public/organizations/{organization:slug}/applications', [PublicPar
 Route::post('/public/applicant-portal/link-requests', [PublicParticipationController::class, 'requestPortalLink'])
     ->middleware('throttle:10,1')
     ->name('api.public.applicant-portal.link-requests.store');
+
+/*
+ * The public marketing surface's server side (M18.23; PUBLIC-002 through
+ * PUBLIC-006).
+ *
+ * The surface is a client application view; these are the two things a client
+ * cannot decide for itself. The read says whether this node serves the surface
+ * at all — it is a 404 on an on-site node and on a node locked to an event
+ * (PUBLIC-006) — and hands out the form token a submission has to carry. The
+ * write creates one inquiry row and nothing else (PUBLIC-003).
+ *
+ * Unauthenticated, like the participation surface above, because the person
+ * filling this in has no account and is writing in to ask whether they should.
+ *
+ * The route throttle is the cheap ceiling. The limits PUBLIC-005 actually asks
+ * for — per contact address and per submitting client, per hour — are counted
+ * in `OrganizationInterestThrottle`, so they stay the same limits whatever
+ * calls this.
+ */
+Route::get('/public/marketing-surface', [OrganizationInterestController::class, 'show'])
+    ->name('api.public.marketing-surface.show');
+
+Route::post('/public/organization-inquiries', [OrganizationInterestController::class, 'store'])
+    ->middleware('throttle:20,1')
+    ->name('api.public.organization-inquiries.store');
 
 /*
  * Everything a client application reads and writes (AUTH-018; technical spec

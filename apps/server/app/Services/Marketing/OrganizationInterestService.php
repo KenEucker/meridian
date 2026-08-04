@@ -7,12 +7,15 @@ use App\Models\AuditEvent;
 use App\Models\OrganizationInquiry;
 use App\Models\User;
 use App\Services\Audit\AuditService;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
  * Organization interest submitted from the public marketing surface (M18.23;
  * PUBLIC-002 through PUBLIC-005).
+ *
+ * The surface itself is a client application view. What lives here is the part
+ * a client cannot be trusted with: what a submission is allowed to create, how
+ * often it may be made, and what is written down about it.
  *
  * The form collects four things and creates one row (PUBLIC-002, PUBLIC-003).
  * That constraint is the interesting part of this service rather than an
@@ -28,11 +31,12 @@ use Illuminate\Support\Str;
  *
  *  - two rate limits, in {@see OrganizationInterestThrottle};
  *  - a hidden field no human fills in, whose submissions are discarded;
- *  - a minimum time on the form, whose submissions are returned for a second
- *    press rather than discarded.
+ *  - a node-issued form token, in {@see OrganizationInterestFormToken}, which
+ *    is missing entirely from a client that never opened the page and too
+ *    young on one that submitted faster than a person types.
  *
- * The two traps are answered differently on purpose, and the reasoning is in
- * {@see OrganizationInterestOutcome}.
+ * The hidden field is answered with silence and the token is answered honestly,
+ * and the reasoning for the difference is in {@see OrganizationInterestOutcome}.
  */
 class OrganizationInterestService
 {
@@ -41,26 +45,27 @@ class OrganizationInterestService
     public function __construct(
         private readonly AuditService $audit,
         private readonly OrganizationInterestThrottle $throttle,
+        private readonly OrganizationInterestFormToken $formTokens,
     ) {}
 
     /**
      * Record an organization's interest, or decide not to.
      *
-     * The throttle is consulted before either trap, so how many submissions a
+     * The throttle is consulted before any trap, so how many submissions a
      * client may make never depends on how many of them were believed.
      *
      * @param  array{organization_name: string, contact_name: string, contact_email: string, description: string}  $fields
      * @param  string|null  $clientKey  the submitting client, normally its IP address
+     * @param  string|null  $formToken  the token issued when the surface was opened
      * @param  bool  $trapFieldFilled  whether the hidden field carried a value
-     * @param  Carbon|null  $formRenderedAt  when this visitor was given the form
      *
      * @throws OrganizationInterestRateLimitException
      */
     public function submit(
         array $fields,
         ?string $clientKey = null,
+        ?string $formToken = null,
         bool $trapFieldFilled = false,
-        ?Carbon $formRenderedAt = null,
     ): OrganizationInterestSubmission {
         $contactEmail = $this->normalizeEmail($fields['contact_email']);
 
@@ -82,7 +87,13 @@ class OrganizationInterestService
             return new OrganizationInterestSubmission(OrganizationInterestOutcome::Discarded);
         }
 
-        if ($this->isImplausiblyFast($formRenderedAt)) {
+        $age = $this->formTokens->ageInSeconds($formToken);
+
+        if ($age === null) {
+            return new OrganizationInterestSubmission(OrganizationInterestOutcome::StaleForm);
+        }
+
+        if ($age < $this->minimumSecondsOnForm()) {
             return new OrganizationInterestSubmission(OrganizationInterestOutcome::TooFast);
         }
 
@@ -167,9 +178,9 @@ class OrganizationInterestService
      * The floor a submission has to clear, in seconds on the form.
      *
      * Configurable, and settable to zero: a deployment behind its own bot
-     * filtering may not want a timing rule at all, and unlike the rate limits
-     * this one has a way of catching a real person. Zero switches it off; a
-     * missing or non-numeric setting falls back to the documented default.
+     * filtering may not want a timing rule at all. Zero leaves the token itself
+     * still required, so a client that never opened the page is still refused;
+     * a missing or non-numeric setting falls back to the documented default.
      */
     public function minimumSecondsOnForm(): int
     {
@@ -186,22 +197,6 @@ class OrganizationInterestService
     }
 
     /**
-     * A submission with no known render time is not treated as fast. The
-     * session that carried it may simply have expired, and holding that against
-     * the visitor would punish the slowest submissions rather than the quickest.
-     */
-    private function isImplausiblyFast(?Carbon $formRenderedAt): bool
-    {
-        $minimum = $this->minimumSecondsOnForm();
-
-        if ($minimum === 0 || ! $formRenderedAt instanceof Carbon) {
-            return false;
-        }
-
-        return $formRenderedAt->diffInSeconds(now(), absolute: true) < $minimum;
-    }
-
-    /**
      * @param  array<string, mixed>|null  $before
      * @param  array<string, mixed>|null  $after
      */
@@ -212,7 +207,7 @@ class OrganizationInterestService
         ?array $before = null,
         ?array $after = null,
         ?string $reason = null,
-        string $sourceContext = AuditEvent::SOURCE_WEB,
+        string $sourceContext = AuditEvent::SOURCE_API,
     ): void {
         $this->audit->record(
             action: $action,

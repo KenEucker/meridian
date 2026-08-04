@@ -3986,23 +3986,25 @@ No IP address is stored. Rate limiting bounds submission and does it in the cach
 
 #### Surfaces
 
-- `GET /` — the marketing surface, for a request holding no Meridian session. A request that holds one is served the client application, because PUBLIC-001 describes the surface as being for organizations that do not yet use Meridian.
-- `GET /platform` — the same surface at an address of its own, so it is reachable by a signed-in user and so the interest form has a stable place to return a validation error to.
-- `POST /platform/interest` — an organization interest submission.
-- `GET /platform/interest/received` — the confirmation, flashed for one render.
+The marketing surface itself is a client application view, not a server-rendered page. The node owns two endpoints and the review screens; everything a visitor reads and fills in is rendered by the client.
+
+- `GET /api/public/marketing-surface` — whether this node serves the surface, and the form token a submission has to carry. Unauthenticated. A 404 on an on-site node and on a node locked to an event (PUBLIC-006).
+- `POST /api/public/organization-inquiries` — an organization interest submission. Unauthenticated, and the second unauthenticated write in the API after the participation surface's.
+- `public.marketing` (client route `/platform`) and the client's root route — the surface as the visitor sees it. The root renders the marketing surface for a client holding nothing and the home directory for a client holding a session, because PUBLIC-001 describes the surface as being for organizations that do not yet use Meridian. A client holding nothing on a node that does not serve the surface goes to sign in.
 - `platform.organization-inquiries` and `platform.organization-inquiries.show` — God Mode review (PUBLIC-004), behind the `platform.organization-inquiries` capability. There is no create-organization action on either screen.
 
-Server-rendered rather than an API surface, for the same reason the applicant portal is: the reader holds no bearer token and has no account to issue one against. The pages carry Meridian identity and resolve no organization branding profile (PUBLIC-001, BRAND-003).
+The surface carries Meridian identity and resolves no organization branding profile (PUBLIC-001, BRAND-003). This is the one public client surface that does not: the participation page deliberately wears an organization's colours, and this one has no organization in the request to resolve any from.
 
 #### Node scope (PUBLIC-006)
 
-The marketing surface is not served by an on-site node, and is not served by any node locked to an event. On those nodes the root address serves the client application and the marketing routes are a 404 — there, the page is not there rather than withheld.
+The marketing surface is not served by an on-site node, and is not served by any node locked to an event. Both endpoints answer 404 there — the page is not there rather than withheld — and the client asks before it renders, so the surface never appears on a node that would refuse its submissions.
 
 #### Automated-submission protection and audit (PUBLIC-005)
 
 - Two rate limits, per contact address and per submitting client, per hour, configurable and falling back to documented defaults rather than to no limit. Both are counted around every submission, including the ones the traps discard.
-- A hidden field no visitor can see. A submission that fills it is discarded, and the response is the one a real submission gets.
-- A floor on how fast the form can come back. A submission that trips it is returned to the visitor with what they wrote still in it, rather than discarded: timing catches real people occasionally, and PUBLIC-005 asks for protection that does not block legitimate use. Configurable to zero.
+- A hidden field no visitor can see. A submission that fills it is discarded, and the response is byte-for-byte the one a real submission gets.
+- A form token, issued by the node with the availability read and encrypted with the application key. It carries an issue time the client can neither read nor move. A submission with no token never opened the page, which is the shape almost every automated submission takes; a token younger than the configured floor arrived faster than a person types. Both are refused with a message rather than silently, and both are recoverable — the client still holds everything the visitor wrote, so asking again costs a button press rather than the message. Tokens expire after a day.
+- The timing floor is configurable to zero. The token itself stays required, so turning the timing rule down does not turn the mechanism off.
 - No challenge of any kind is presented to the submitter.
 - Submission is audited as `organization_inquiry.submitted` against the entity type `organization_inquiry`, with no organization scope and no actor, recording the organization name, contact name, contact address, and status. The free-text description is not copied into the audit payload; it lives on the row the entry names.
 - A discarded submission is audited as `organization_inquiry.discarded` with the reason and nothing else, so an operator can tell a trap that is misfiring from a quiet week.

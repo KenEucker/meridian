@@ -208,42 +208,6 @@ dd {
     padding: 0;
 }
 
-/* The marketing surface (M18.23; PUBLIC-001). It is longer than the other
-   surfaces in this file — a page somebody reads rather than a form somebody
-   completes — so its sections need the separation a single-form page does not.
-   Milestone 20 adds the feature tour and offerings sections into this same
-   rhythm. */
-.marketing-section {
-    margin-block: var(--m-space-6);
-}
-
-.marketing-section h2 {
-    margin-bottom: var(--m-space-2);
-}
-
-textarea {
-    background: var(--m-surface-base);
-    border: 1px solid var(--m-border-default);
-    border-radius: var(--m-radius-sm);
-    color: var(--m-text-primary);
-    font: inherit;
-    font-size: var(--m-text-sm);
-    padding: var(--m-space-2) var(--m-space-3);
-    resize: vertical;
-}
-
-/* The PUBLIC-005 hidden field. Taken out of the layout and out of the
-   accessibility tree rather than hidden with `display: none`, which some
-   automated clients check for and skip. A reader who reaches it anyway meets a
-   label telling them to leave it alone. */
-.trap {
-    block-size: 0;
-    inline-size: 0;
-    left: -9999px;
-    overflow: hidden;
-    position: absolute;
-}
-
 .meridian-footer {
     color: var(--m-text-muted);
     font-size: var(--m-text-xs);

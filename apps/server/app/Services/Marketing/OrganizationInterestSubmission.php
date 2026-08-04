@@ -21,9 +21,17 @@ final readonly class OrganizationInterestSubmission
         public ?OrganizationInquiry $inquiry = null,
     ) {}
 
-    /** Whether the visitor should be shown the confirmation page. */
+    /**
+     * Whether the surface should show the visitor the confirmation.
+     *
+     * True for a discarded submission as well as a recorded one: the hidden
+     * field is only a trap while the two are indistinguishable.
+     */
     public function isAccepted(): bool
     {
-        return $this->outcome !== OrganizationInterestOutcome::TooFast;
+        return in_array($this->outcome, [
+            OrganizationInterestOutcome::Recorded,
+            OrganizationInterestOutcome::Discarded,
+        ], true);
     }
 }

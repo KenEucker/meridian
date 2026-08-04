@@ -7,7 +7,7 @@ namespace App\Domain\Marketing;
 /**
  * What became of an organization interest submission (PUBLIC-003, PUBLIC-005).
  *
- * Three outcomes, and only one of them writes a row.
+ * Four outcomes, and only one of them writes a row.
  */
 enum OrganizationInterestOutcome: string
 {
@@ -25,14 +25,27 @@ enum OrganizationInterestOutcome: string
     case Discarded = 'discarded';
 
     /**
-     * The submission arrived faster than a person could have typed it.
+     * The submission carried a form token younger than a person could have
+     * typed the form in.
      *
-     * Unlike the hidden-field trap this is answered honestly, by returning the
-     * visitor to their own form with what they wrote still in it. Timing is a
-     * weaker signal than a hidden field — a fast typist pasting prepared text
-     * is a real person — and PUBLIC-005 asks for protection that does not block
-     * legitimate use. Asking somebody to press the button again costs them a
-     * second; silently dropping what they wrote costs them the conversation.
+     * Answered honestly, with a message asking the visitor to look it over and
+     * send it again. Timing is a weaker signal than a hidden field — a fast
+     * typist pasting prepared text is a real person — and PUBLIC-005 asks for
+     * protection that does not block legitimate use. In a client application
+     * nothing is lost by asking: the form is still on screen with everything
+     * in it.
      */
     case TooFast = 'too_fast';
+
+    /**
+     * The submission carried no usable form token: absent, tampered with, or
+     * issued so long ago that the page has been open since before the last
+     * deploy.
+     *
+     * Also answered honestly. A bot posting straight at the endpoint has never
+     * asked for a token and meets this, which is the more valuable half of the
+     * mechanism; a real visitor meets it only after leaving a tab open for a
+     * day, and is told to reload rather than left wondering.
+     */
+    case StaleForm = 'stale_form';
 }
