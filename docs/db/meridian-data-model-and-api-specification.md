@@ -1127,6 +1127,33 @@ Sheet and placement commands require `insights.sheets.manage` and validate place
 
 Insights are read-compiled and have no offline write path, so no Insights command enters the outbox in 5.6.
 
+### 5.8A Event Horizon API
+
+Reads:
+
+```text
+GET /api/events/{event}/event-horizon
+```
+
+Returns the calling staff member's readiness list for one event: the registered item kinds (HORIZON-003) with their items, each carrying a stable identity for the underlying record, `state` (`outstanding` or `complete`), the evaluation behind that state, what would complete it, an optional `due_at`, and an action link.
+
+The response is ordered by the server (HORIZON-006), so two clients render the same list in the same order and ordering is not a presentation decision.
+
+The response also carries whether the surface applies at all: the resolved event, whether the caller is inside the lead-up window (10.1), and whether the caller has hidden it. A caller outside the window receives the same shape with the surface reported as not applicable rather than a `404`, so a client can distinguish "not yet" from "no such event".
+
+Authorization is event access alone. The endpoint requires no capability of its own (HORIZON-002). Each kind is evaluated under the caller's existing authorization for the domain it reads, and a kind whose records the caller cannot read is omitted from the response rather than returned empty or as inaccessible.
+
+Commands:
+
+```text
+POST /api/commands/hide-event-horizon
+POST /api/commands/show-event-horizon
+```
+
+`hide-event-horizon` is refused while any item is outstanding (HORIZON-013). The refusal is server-side rather than a hidden control, so a client that offers the action early does not succeed. Both commands write personal view state, are not audited, and act only on the caller's own preference — neither accepts a subject staff member.
+
+The Event Horizon compiles on read and stores no result, so no read enters the outbox in 5.6. The two preference commands may be queued offline like any other command.
+
 ### 5.9 Module Gating
 
 Every endpoint in this specification belongs either to a product module (MOD-002) or to core (MOD-004). The owning module is declared once per route group rather than checked per controller.
@@ -1165,6 +1192,8 @@ Gate behavior:
 - Exports owned by a module are unavailable when it is inactive; the short-lived download URL (5.7) is not issued.
 
 Departments operations read models (Overview, Logistics, Operations, Planning) are core endpoints that compose module-owned data. They omit the sections whose modules are inactive and return the rest (MOD-019). They never refuse on module state.
+
+The Event Horizon read (5.8A) is core on the same footing. Each item kind declares its owning module, a kind owned by an inactive module is omitted, and the endpoint returns the rest. Where no kind remains available to the caller it reports the surface as not applicable rather than returning an empty list, so an organization running none of the owning modules does not present a staff member with a readiness page that reads as "you are ready" (HORIZON-017).
 
 ---
 
@@ -1734,6 +1763,7 @@ Key fields:
 - `calendar_year_start_month`
 - `calendar_year_start_day`
 - `hours_correction_grace_period_days`
+- `event_horizon_lead_days`
 - `handle_change_policy`, nullable
 - `profile_picture_change_policy`, nullable
 - `handle_self_service_change_limit`, nullable
@@ -1741,9 +1771,10 @@ Key fields:
 - `updated_at`
 - `archived_at`
 
-Configuration fields (ORG-017, ORG-018, VOL-027, VOL-028):
+Configuration fields (ORG-017, ORG-018, VOL-027, VOL-028, HORIZON-011):
 
 - `hours_correction_grace_period_days` is the ORG-017 hours correction window, expressed in days after event end. It defaults to 14 and is never null: an organization that has not configured one still has the documented default.
+- `event_horizon_lead_days` is the HORIZON-011 lead-up window, expressed in days before the event's active window start. It defaults to 30 and is never null. It is held in days rather than as a date so that moving an event's dates moves the window with it, on the same reasoning as the SHIFT-017 relative schedule cutoff.
 - `handle_change_policy` and `profile_picture_change_policy` each hold one of `organizer_only`, `organizer_sets_first`, `auto_approved`, or `staff_sets_first` (VOL-027). Null reads as `organizer_only`, the documented default. The value is stored null rather than defaulted in the schema so an organization that never chose stays distinguishable from one that chose the default deliberately, and so a later change of default reaches the first of them.
 - `handle_self_service_change_limit` is the VOL-028 allowance, and null reads as two. It is consulted only while `handle_change_policy` is `auto_approved`; zero switches the allowance off without changing the policy. Profile pictures have no equivalent column because pictures applied without review are not rationed.
 
@@ -3823,6 +3854,47 @@ A viewer's filter selections are held for the session and are not persisted acro
 - no table stores a computed metric value; Insights compile on read
 - no snapshot, export, or PDF entity exists; a PDF is generated in the browser and downloaded
 - no saved Insight result, trend history, or cross-event aggregate is stored
+
+---
+
+### 10.21 Event Horizon
+
+The Event Horizon compiles one staff member's readiness for one event out of records the other domains already own. Nothing here stores an item, an outstanding count, or a readiness state; the only row the feature owns is one person's preference about whether to keep seeing it.
+
+#### `event_horizon_dismissals`
+
+Represents one staff member having hidden the Event Horizon for one event (HORIZON-012).
+
+Key fields:
+
+- `id`
+- `staff_id`
+- `event_id`
+- `dismissed_at`
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- one row per staff member per event; restoring the surface deletes the row rather than adding a second state, because "not hidden" is the absence of a decision and needs no record
+- writing a row is refused while any item is outstanding for that staff member and event (HORIZON-013), enforced server-side rather than by withholding the control
+- the row is personal view state on the footing of `insight_sheet_favorites`: it is invisible to every other user, it is not audited, and no other feature reads it
+- it replicates to the staff member's own devices so that hiding on one device does not leave the surface showing on another
+- the row does not survive a new outstanding item: an item becoming outstanding again returns the surface (HORIZON-015), and the row is discarded when that happens rather than suppressing a list that now has work on it
+- no `hidden_by_user_id` is stored. A staff member is the only person who can create or remove their own row, so the column would record the same fact as `staff_id` and imply that someone else could
+
+#### Item kind registration
+
+Item kinds are code-defined and registered in the application rather than stored as configuration (HORIZON-003). There is no `event_horizon_item_kinds` table, no organization-owned threshold, and no per-organization ordering: an organization configures the lead-up window in 10.1 and nothing else about the catalogue.
+
+This deliberately differs from `insight_metric_definitions` in 10.19, which is registered *as data* so Orchid can display and administer registration metadata. The Event Horizon catalogue has five members fixed by requirement, no administrable metadata, and no Orchid surface, so a table would carry rows nobody may edit.
+
+#### What is deliberately absent
+
+- no table stores a compiled item, an evaluation, an outstanding count, or a readiness state; the view compiles on read
+- no per-item dismissal, snooze, or acknowledgement entity exists (HORIZON-007); the only dismissal is the whole-surface preference above
+- no notification entity is added; the Event Horizon sends nothing of its own (HORIZON-018)
+- no lead-facing or organizer-facing readiness table exists; the surface is one person's own list
 
 ---
 
