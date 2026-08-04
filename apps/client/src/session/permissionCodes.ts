@@ -106,6 +106,18 @@ export const CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW =
   "staff.profile-change-requests.review";
 
 /**
+ * Application review (APP-005, APP-019).
+ *
+ * Organizers, Lead Organizers, and the Staff Coordinator hold it. Department
+ * leads do not, and reach the same surface through the read-only visibility
+ * APP-011 grants them over applications naming their department — which is
+ * standing rather than a capability, and so is resolved by the node on the read
+ * rather than by a code here.
+ */
+export const CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW =
+  "organization.applications.review";
+
+/**
  * Role codes, for the two surfaces that answer to standing rather than to a
  * capability.
  *

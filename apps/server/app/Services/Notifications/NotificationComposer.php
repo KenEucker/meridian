@@ -92,12 +92,25 @@ class NotificationComposer
         $application->loadMissing(['event', 'organization']);
         $organization ??= $application->organization;
         $organizationName = $this->organizationName($organization);
-        $eventName = (string) ($application->event?->name ?? 'the event');
 
         $facts = [
             'Organization' => $organizationName,
-            'Event' => $eventName,
         ];
+
+        /*
+         * An organization-scoped application names no event (APP-001), so the
+         * message says what the application was actually about rather than
+         * printing "the event" over an absence. `%s` below is therefore either
+         * "staff Autumn Gathering" or "join Northwood" — one sentence shape,
+         * two truthful readings, instead of two near-identical message sets.
+         */
+        if ($application->isOrganizationScoped()) {
+            $offer = sprintf('join %s', $organizationName);
+        } else {
+            $eventName = (string) ($application->event?->name ?? 'the event');
+            $facts['Event'] = $eventName;
+            $offer = sprintf('staff %s', $eventName);
+        }
 
         $reason = trim((string) $application->decision_reason);
 
@@ -109,21 +122,21 @@ class NotificationComposer
             NotificationType::ApplicationApproved => [
                 'Your application was approved',
                 [
-                    sprintf('%s has approved your application to staff %s.', $organizationName, $eventName),
+                    sprintf('%s has approved your application to %s.', $organizationName, $offer),
                     'Sign in to Meridian to complete anything still outstanding — document acknowledgments, waivers, and shift signups all live on your staff record.',
                 ],
             ],
             NotificationType::ApplicationRejected => [
                 'Your application was not approved',
                 [
-                    sprintf('%s has reviewed your application to staff %s and has not approved it.', $organizationName, $eventName),
+                    sprintf('%s has reviewed your application to %s and has not approved it.', $organizationName, $offer),
                     'No further action is needed. Contact the organization directly if you want to discuss the decision.',
                 ],
             ],
             default => [
                 'Your application was deferred',
                 [
-                    sprintf('%s has deferred a decision on your application to staff %s.', $organizationName, $eventName),
+                    sprintf('%s has deferred a decision on your application to %s.', $organizationName, $offer),
                     'Your application stays open. You will hear again when the organization reaches a decision.',
                 ],
             ],

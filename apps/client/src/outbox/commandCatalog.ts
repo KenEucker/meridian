@@ -52,6 +52,10 @@ export type MeridianCommandType =
   // Profile change request review (M18.20A, M18.20D).
   | "approve-profile-change-request"
   | "reject-profile-change-request"
+  // Application review (M18.21A).
+  | "approve-application"
+  | "reject-application"
+  | "defer-application"
   | "set-current-deployment"
   | "checkout-equipment"
   | "return-equipment"
@@ -335,6 +339,30 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/reject-profile-change-request",
       "Change request rejection",
       "Rejecting a request needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Application review (M18.21A; APP-005, APP-019). Connected-only: an
+     * approval creates a staff record and an organization status, and holding
+     * that on a device would let two reviewers decide the same application
+     * offline with no way to reconcile which decision stood.
+     */
+    "approve-application": connectedOnly(
+      "approve-application",
+      "/api/commands/approve-application",
+      "Application approval",
+      "Approving an application needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "reject-application": connectedOnly(
+      "reject-application",
+      "/api/commands/reject-application",
+      "Application rejection",
+      "Rejecting an application needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "defer-application": connectedOnly(
+      "defer-application",
+      "/api/commands/defer-application",
+      "Application deferral",
+      "Deferring an application needs a connection to the node. It cannot be held on this device for later.",
     ),
     "set-current-deployment": connectedOnly(
       "set-current-deployment",

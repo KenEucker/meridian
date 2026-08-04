@@ -1187,7 +1187,9 @@ Route names are implementation targets and may be adapted to Laravel conventions
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
-| `public.apply` | `public.events.apply` | Staff event application | Public or authenticated applicant |
+| `public.participate` | `public.participate` | Organization participation page: who the organization is, what it is recruiting for, and the application form | Public |
+| `public.apply` | `public.apply` | Event application form reached from a shared link | Public |
+| `public.apply` (server-rendered) | `public.events.apply` | Staff event application, Blade form | Public or authenticated applicant |
 | `auth.login` | `login` | Provider/magic-link login entry | Public |
 | `auth.magic-link-sent` | `auth.magic-link.sent` | Login code sent confirmation | Public |
 | `auth.code-entry` | `auth.code.entry` | In-application magic-link code entry, so a client completes login without leaving the application | Public |
@@ -1470,6 +1472,24 @@ Department interest UI rules:
 - applicants cannot edit department interest after submit in Alpha 1
 
 Available to public and authenticated applicants.
+
+### 12.10.1A `public.participate`
+
+The organization participation page is the address an organization hands out (APP-016, APP-017). It carries the organization's identity (BRAND-002) and states, in order:
+
+- who the organization is, by display name and mark, falling back to the generated lettermark (BRAND-005)
+- the events currently accepting applications, each with its name and dates
+- an offer to apply to the organization itself, **only** where the organization accepts organization-scoped applications (APP-018)
+
+Rules:
+
+- the page is public in the strongest sense: it is reachable with no session and no account, and the client must not send an unauthenticated visitor to sign in
+- nothing operational appears. Staff, departments, teams, documents, shifts, and counts of applications are absent — the department interest checklist of 12.10.1 is the only place departments are named, and only for a chosen event
+- an organization with no open events and no organization-scoped intake says so, rather than rendering an empty list under a heading that promises one
+- choosing an event moves to the same form 12.10.1 describes, without leaving the page
+- the address is `/apply/{organization-slug}` and `/apply/{organization-slug}/{event-slug}`, readable and carrying no token (APP-017)
+
+The link is offered for copying wherever a signed-in user can already see the organization or event it names. Copying it is not an authority and grants nothing; the page it opens is identical for every visitor however they arrived.
 
 ### 12.10.2 `organizer.applications` and `organizer.application-detail`
 

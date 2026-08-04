@@ -200,6 +200,24 @@ class EventApplication extends Model
             ->where('departments.id', $departmentId));
     }
 
+    /**
+     * Whether this application names the organization rather than an event
+     * (APP-001).
+     *
+     * The absence of an event is the whole of the distinction. Everything else
+     * — statuses, reviewers, Do Not Staff auto-rejection, withdrawal, approval
+     * into Prospective organization status — is the same for both scopes.
+     */
+    public function isOrganizationScoped(): bool
+    {
+        return $this->event_id === null;
+    }
+
+    public function scopeLabel(): string
+    {
+        return $this->isOrganizationScoped() ? 'Organization' : 'Event';
+    }
+
     public function isSubmitted(): bool
     {
         return $this->status === self::STATUS_SUBMITTED;

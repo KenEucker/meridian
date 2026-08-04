@@ -8,6 +8,7 @@ use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\EventApplication;
 use App\Models\EventApplicationDepartmentInterest;
+use App\Models\Organization;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\TeamMembership;
@@ -54,7 +55,7 @@ class EventApplicationService
     ) {}
 
     /**
-     * Create an application for the given event.
+     * Create an application for the given event (APP-001, event scope).
      *
      * @throws EventNotOpenForApplicationsException when the event cannot accept applications
      * @throws DuplicateApplicationException when a Submitted application already exists for this event/email
@@ -70,22 +71,95 @@ class EventApplicationService
             throw new EventNotOpenForApplicationsException('This event is not accepting applications.');
         }
 
-        $legalName = trim($applicantLegalName);
-        $email = $this->normalizeEmail($applicantEmail);
-        $departmentInterestIds = $this->validateDepartmentInterestIds($event, $departmentInterestIds);
+        $event->loadMissing('organization');
 
-        if ($this->hasOpenApplication($event, $email)) {
-            throw new DuplicateApplicationException('An application for this event has already been submitted with this email address.');
+        return $this->create(
+            organization: $event->organization,
+            event: $event,
+            applicantLegalName: $applicantLegalName,
+            applicantEmail: $applicantEmail,
+            departmentInterestIds: $departmentInterestIds,
+        );
+    }
+
+    /**
+     * Create an application to the organization itself (APP-001, organization
+     * scope; APP-016, APP-018).
+     *
+     * The same record, the same statuses, the same reviewers, the same
+     * approval outcome. What differs is only what the application is about: a
+     * person offering to join the organization rather than to staff one of its
+     * events. Approval already creates organization-level Prospective status
+     * (APP-006), so an application with no event reaches exactly the state an
+     * approved event application reaches — which is why this is one nullable
+     * column rather than a second intake.
+     *
+     * Department interest is not collected here. APP-011 scopes eligible
+     * departments to the ones participating in an event, and an organization
+     * has no such list; asking somebody to choose from every department the
+     * organization has ever had would be a different question with the same
+     * label.
+     *
+     * @throws EventNotOpenForApplicationsException when the organization does not accept them
+     * @throws DuplicateApplicationException when a Submitted organization application already exists for this email
+     */
+    public function submitToOrganization(
+        Organization $organization,
+        string $applicantLegalName,
+        string $applicantEmail,
+        ?User $applicant = null,
+    ): EventApplication {
+        if (! $organization->acceptsOrganizationApplications()) {
+            throw new EventNotOpenForApplicationsException('This organization is not accepting applications.');
         }
 
-        $matchesDns = $this->matchesDnsEmail($event, $email);
+        if ($organization->archived_at !== null) {
+            throw new EventNotOpenForApplicationsException('This organization is not accepting applications.');
+        }
 
-        return DB::transaction(function () use ($event, $legalName, $email, $departmentInterestIds, $matchesDns): EventApplication {
+        return $this->create(
+            organization: $organization,
+            event: null,
+            applicantLegalName: $applicantLegalName,
+            applicantEmail: $applicantEmail,
+            departmentInterestIds: [],
+        );
+    }
+
+    /**
+     * @throws DuplicateApplicationException
+     */
+    private function create(
+        ?Organization $organization,
+        ?Event $event,
+        string $applicantLegalName,
+        string $applicantEmail,
+        iterable $departmentInterestIds,
+    ): EventApplication {
+        if (! $organization instanceof Organization) {
+            throw new EventNotOpenForApplicationsException('This application has no organization to belong to.');
+        }
+
+        $legalName = trim($applicantLegalName);
+        $email = $this->normalizeEmail($applicantEmail);
+        $departmentInterestIds = $event instanceof Event
+            ? $this->validateDepartmentInterestIds($event, $departmentInterestIds)
+            : [];
+
+        if ($this->hasOpenApplicationInScope($organization, $event, $email)) {
+            throw new DuplicateApplicationException($event instanceof Event
+                ? 'An application for this event has already been submitted with this email address.'
+                : 'An application to this organization has already been submitted with this email address.');
+        }
+
+        $matchesDns = $this->matchesDnsEmailForOrganization($organization, $email);
+
+        return DB::transaction(function () use ($organization, $event, $legalName, $email, $departmentInterestIds, $matchesDns): EventApplication {
             $submittedAt = now();
 
             $application = EventApplication::query()->create([
-                'event_id' => $event->id,
-                'organization_id' => $event->organization_id,
+                'event_id' => $event?->id,
+                'organization_id' => $organization->id,
                 'staff_id' => null,
                 'applicant_email' => $email,
                 'applicant_legal_name' => $legalName,
@@ -433,11 +507,39 @@ class EventApplicationService
 
     public function hasOpenApplication(Event $event, string $applicantEmail): bool
     {
-        return EventApplication::query()
-            ->where('event_id', $event->id)
+        $event->loadMissing('organization');
+
+        return $this->hasOpenApplicationInScope($event->organization, $event, $applicantEmail);
+    }
+
+    /**
+     * Whether this address already has an application open in the same scope
+     * (APP-001).
+     *
+     * Scope-by-scope rather than per organization, because an event
+     * application and an organization application are different offers and a
+     * person may legitimately have both outstanding: "I want to work Emberfall"
+     * and "I want to join Northwood" are not the same sentence, and refusing
+     * the second because the first exists would make the organization surface
+     * unusable to exactly the people already engaged with it.
+     */
+    public function hasOpenApplicationInScope(
+        ?Organization $organization,
+        ?Event $event,
+        string $applicantEmail,
+    ): bool {
+        $query = EventApplication::query()
             ->where('applicant_email', $this->normalizeEmail($applicantEmail))
-            ->submitted()
-            ->exists();
+            ->submitted();
+
+        if ($event instanceof Event) {
+            $query->where('event_id', $event->id);
+        } else {
+            $query->whereNull('event_id')
+                ->where('organization_id', $organization?->id);
+        }
+
+        return $query->exists();
     }
 
     public function normalizeEmail(string $email): string
@@ -447,8 +549,27 @@ class EventApplicationService
 
     public function matchesDnsEmail(Event $event, string $applicantEmail): bool
     {
+        $event->loadMissing('organization');
+
+        return $this->matchesDnsEmailForOrganization($event->organization, $applicantEmail);
+    }
+
+    /**
+     * STAT-006, asked of the organization rather than the event.
+     *
+     * Do Not Staff has always been organization-level status, so the event was
+     * only ever a way of naming the organization. An organization-scoped
+     * application auto-rejects on exactly the same match, and sends exactly the
+     * same nothing (NOTIFY-002).
+     */
+    public function matchesDnsEmailForOrganization(?Organization $organization, string $applicantEmail): bool
+    {
+        if (! $organization instanceof Organization) {
+            return false;
+        }
+
         return StaffOrganizationStatus::query()
-            ->where('organization_id', $event->organization_id)
+            ->where('organization_id', $organization->id)
             ->where('status', StaffOrganizationStatus::STATUS_DO_NOT_STAFF)
             ->whereHas('staff', fn ($query) => $query
                 ->whereRaw('LOWER(email) = ?', [$this->normalizeEmail($applicantEmail)]))
@@ -489,7 +610,12 @@ class EventApplicationService
             throw new ApplicationApprovalException('Applications for Do Not Staff records cannot be approved.');
         }
 
-        $reason = 'Approved application for '.$application->event?->name.'.';
+        // Named by scope rather than by event, because an organization-scoped
+        // application has no event and "Approved application for ." is the
+        // sentence a reader would otherwise find in the status history.
+        $reason = $application->isOrganizationScoped()
+            ? 'Approved application to join the organization.'
+            : 'Approved application for '.$application->event?->name.'.';
 
         if ($statusRecord === null) {
             $statusRecord = StaffOrganizationStatus::query()->create([

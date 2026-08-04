@@ -60,6 +60,7 @@ class Organization extends Model
         'profile_picture_change_policy',
         'handle_self_service_change_limit',
         'notifications_suppressed_at',
+        'accepts_organization_applications',
         'archived_at',
     ];
 
@@ -97,6 +98,7 @@ class Organization extends Model
             'calendar_year_start_day' => 'integer',
             'hours_correction_grace_period_days' => 'integer',
             'notifications_suppressed_at' => 'datetime',
+            'accepts_organization_applications' => 'boolean',
             'archived_at' => 'datetime',
             'branding_palette_json' => 'array',
             'department_branding_enabled' => 'boolean',
@@ -114,6 +116,20 @@ class Organization extends Model
      * does. The global development suppression is separate and either alone
      * stops a send.
      */
+    /**
+     * Whether this organization takes applications that name no event
+     * (APP-018).
+     *
+     * Off unless somebody turned it on. An organization that runs events
+     * recruits into them, and an intake queue nobody agreed to review is a
+     * queue that goes unread — so the public organization surface offers its
+     * open events and no form of its own until this is set.
+     */
+    public function acceptsOrganizationApplications(): bool
+    {
+        return (bool) $this->accepts_organization_applications;
+    }
+
     public function notificationsSuppressed(): bool
     {
         return $this->notifications_suppressed_at !== null;

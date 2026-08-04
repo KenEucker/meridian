@@ -152,6 +152,29 @@ export const sessionOrganizationId = computed<string | null>(
   () => grantedDocument.value?.context.organization_id ?? null,
 );
 
+/**
+ * The resolved organization's slug, for the addresses that are built from one
+ * rather than from an identifier (APP-017).
+ *
+ * The participation link is meant to be read, said aloud, and pasted into a
+ * message somebody else will act on, so it carries the slug an organization
+ * chose rather than the UUID Meridian minted.
+ */
+export const sessionOrganizationSlug = computed<string | null>(() => {
+  const document = grantedDocument.value;
+  const organizationId = document?.context.organization_id ?? null;
+
+  if (document === null || organizationId === null) {
+    return null;
+  }
+
+  return (
+    document.organizations.find(
+      (organization) => organization.id === organizationId,
+    )?.slug ?? null
+  );
+});
+
 export const sessionOrganizationLabel = computed<string | null>(() => {
   const document = grantedDocument.value;
   const organizationId = document?.context.organization_id ?? null;

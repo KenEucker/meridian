@@ -2138,6 +2138,14 @@ Rules:
 
 ### 10.5 Applications
 
+Applications name the scope they were made to (APP-001): an event, or the organization itself. `event_applications.event_id` is nullable, and a null event is the whole of what an organization-scoped application is.
+
+One nullable column rather than a second table, because the two intakes differ in what the application is *about* and in nothing else. They share the status set (APP-003), the reviewers (APP-005), Do Not Staff auto-rejection (STAT-006), applicant-only withdrawal (APP-004), and the approval outcome — approval has always created organization-level Prospective status (APP-006), so an application naming no event already lands exactly where an approved event application lands.
+
+Uniqueness of an open application is per scope, not per organization: one address may hold an open event application and an open organization application at once, because "I want to work Emberfall" and "I want to join Northwood" are different offers.
+
+`organizations.accepts_organization_applications` (APP-018) decides whether the organization scope is offered at all. It defaults to false.
+
 #### `event_applications`
 
 Represents event-specific intake.

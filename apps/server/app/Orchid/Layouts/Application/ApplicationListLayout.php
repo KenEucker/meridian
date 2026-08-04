@@ -36,8 +36,12 @@ class ApplicationListLayout extends Table
                 ->sort()
                 ->filter(Input::make()),
 
-            TD::make('event.name', __('Event'))
-                ->render(fn (EventApplication $application) => $application->event?->name ?? __('Not configured')),
+            // An organization-scoped application names no event (APP-001), and
+            // says so rather than reading as an event row with a missing name.
+            TD::make('event.name', __('Applied to'))
+                ->render(fn (EventApplication $application) => $application->isOrganizationScoped()
+                    ? __('The organization')
+                    : ($application->event?->name ?? __('Not configured'))),
 
             TD::make('organization.name', __('Organization'))
                 ->render(fn (EventApplication $application) => $application->organization?->name ?? __('Not configured')),
