@@ -27,6 +27,8 @@ class WaiverSchemaTest extends TestCase
             'name',
             'description',
             'expires_after_days',
+            'document_type',
+            'document_id',
             'created_at',
             'updated_at',
             'archived_at',
@@ -55,6 +57,10 @@ class WaiverSchemaTest extends TestCase
             'completed_at',
             'expires_at',
             'recorded_by_user_id',
+            'document_type',
+            'document_id',
+            'document_revision',
+            'fragment_revision',
             'created_at',
         ] as $column) {
             $this->assertTrue(Schema::hasColumn('waiver_completions', $column), "waiver_completions.{$column} missing");

@@ -519,6 +519,26 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         );
       }
 
+      /*
+       * Waiver administration for department and team leads (M18.18;
+       * WAIVER-010). Role-permitted rather than capability-permitted, the way
+       * Team Overview is: waiver authority follows the waiver's scope, which
+       * department leads and team leads hold as roles. The surface itself is
+       * shared with organizers, and the node answers each caller with the
+       * scopes they actually maintain.
+       */
+      if (
+        departmentHasRole(department, ROLE_DEPARTMENT_LEAD) ||
+        departmentHasRole(department, ROLE_SHIFT_LEAD)
+      ) {
+        departmentPages.push({
+          label: "Waivers",
+          description:
+            "Waivers for your department and teams, and completion recording.",
+          to: { name: "organizer.waivers.index" },
+        });
+      }
+
       // Equipment inventory setup is department logistics/administration work
       // that feeds the Logistics checkout/check-in workflow (M11.18), and the
       // capability that permits it is the one the checkout desk uses.
@@ -651,6 +671,25 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         description:
           "What must be acknowledged at signup and training, and who has.",
         to: { name: "organizer.document-acknowledgments.index" },
+      });
+    }
+
+    /*
+     * Waiver administration (M18.18; WAIVER-010). Waiver authority follows
+     * the waiver's scope — no single capability carries it — so this entry is
+     * a nav approximation gated on the organizer-held departments capability;
+     * the node resolves each caller's real maintainable scopes when the page
+     * loads, and department and team leads reach the same surface from their
+     * department pages below (CLIENT-006).
+     */
+    if (
+      departmentHasCapability(department, CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE)
+    ) {
+      organizationPages.push({
+        label: "Waivers",
+        description:
+          "Waivers, their scope and expiration, and completion recording.",
+        to: { name: "organizer.waivers.index" },
       });
     }
 

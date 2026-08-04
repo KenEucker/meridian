@@ -36,6 +36,8 @@ class Waiver extends Model
         'name',
         'description',
         'expires_after_days',
+        'document_type',
+        'document_id',
         'archived_at',
     ];
 
@@ -78,6 +80,40 @@ class Waiver extends Model
     public function expires(): bool
     {
         return $this->expires_after_days !== null;
+    }
+
+    /**
+     * Whether the waiver references a published policy/procedure document as
+     * the text being agreed to (WAIVER-007). A waiver with no reference
+     * behaves exactly as one never could carry one (WAIVER-009).
+     */
+    public function isDocumentBacked(): bool
+    {
+        return $this->document_type !== null && $this->document_id !== null;
+    }
+
+    /**
+     * The referenced policy/procedure document, when one is configured.
+     *
+     * Not an Eloquent relation: the reference spans two document models keyed
+     * by `document_type`, the same split `document_acknowledgments` carries.
+     */
+    public function document(): PolicyDocument|ProcedureDocument|null
+    {
+        if (! $this->isDocumentBacked()) {
+            return null;
+        }
+
+        $documentModel = DocumentAcknowledgment::documentModelForType((string) $this->document_type);
+
+        if ($documentModel === null) {
+            return null;
+        }
+
+        /** @var PolicyDocument|ProcedureDocument|null $document */
+        $document = $documentModel::query()->find((string) $this->document_id);
+
+        return $document;
     }
 
     /**

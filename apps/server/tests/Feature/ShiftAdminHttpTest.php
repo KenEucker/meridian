@@ -191,6 +191,53 @@ class ShiftAdminHttpTest extends TestCase
             ->assertJsonPath('message', 'Shifts must belong to an event in the department organization.');
     }
 
+    public function test_a_relative_schedule_cutoff_is_stored_and_resolved(): void
+    {
+        // SHIFT-017: a cutoff expressed as an offset before the active event
+        // window start is stored as the offset and answered with the node's
+        // own resolution, so a moved event window moves the cutoff without the
+        // shift being edited.
+        [$department, $actor, $event] = $this->departmentWithLead();
+        $team = Team::factory()->for($department)->create(['code' => 'DIRT']);
+        $startsAt = Carbon::now()->addWeek();
+
+        $base = [
+            'department_id' => $department->id,
+            'event_id' => $event->id,
+            'eligible_team_id' => $team->id,
+            'title' => 'Watch',
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->copy()->addHours(4)->toIso8601String(),
+        ];
+
+        $create = $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'schedule_lock_offset_minutes' => 24 * 60,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('schedule_lock_at', null)
+            ->assertJsonPath('schedule_lock_offset_minutes', 24 * 60);
+
+        $expected = $event->refresh()->active_event_window_starts_at
+            ->copy()
+            ->subMinutes(24 * 60)
+            ->toIso8601String();
+
+        $this->assertSame($expected, $create->json('schedule_lock_resolves_to'));
+
+        // One form at a time: an absolute time and an offset together are two
+        // answers to when the schedule locks.
+        $this->actingAsClient($actor)
+            ->postJson('/api/commands/create-shift', [
+                ...$base,
+                'schedule_lock_at' => $startsAt->copy()->subDay()->toIso8601String(),
+                'schedule_lock_offset_minutes' => 60,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'A schedule cutoff is either an absolute time or an offset before the event window, not both.');
+    }
+
     public function test_started_shifts_lock_schedule_team_and_cancellation(): void
     {
         [$department, $actor, $event] = $this->departmentWithLead();

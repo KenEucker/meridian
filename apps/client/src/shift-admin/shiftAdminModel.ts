@@ -81,6 +81,18 @@ export interface ProductShift {
   readonly signupOpensAt: string | null;
   readonly signupClosesAt: string | null;
   readonly scheduleLockAt: string | null;
+  /**
+   * The cutoff as an offset in minutes before the event's active event window
+   * start (SHIFT-017). One form at a time: a shift carries this or an
+   * absolute `scheduleLockAt`, never both.
+   */
+  readonly scheduleLockOffsetMinutes: number | null;
+  /**
+   * The relative cutoff as the node resolves it right now — window start
+   * minus offset — or null while the event window is not set. Display only;
+   * the node recomputes it whenever the window moves.
+   */
+  readonly scheduleLockResolvesTo: string | null;
   /** The shift's own credit policy, or null for the organization default. */
   readonly creditPolicyId: string | null;
   /**
@@ -137,6 +149,7 @@ export interface ShiftDraft {
   signupOpensAt: string | null;
   signupClosesAt: string | null;
   scheduleLockAt: string | null;
+  scheduleLockOffsetMinutes: number | null;
   creditPolicyId: string | null;
   /** A custom rate instead of a named policy; the two are mutually exclusive. */
   customCreditMultiplier: string | null;
@@ -161,6 +174,8 @@ interface ShiftPayload {
   readonly signup_opens_at: string | null;
   readonly signup_closes_at: string | null;
   readonly schedule_lock_at: string | null;
+  readonly schedule_lock_offset_minutes?: number | null;
+  readonly schedule_lock_resolves_to?: string | null;
   readonly credit_policy_id?: string | null;
   readonly custom_credit_multiplier?: string | null;
   readonly cancelled_at: string | null;
@@ -210,6 +225,8 @@ function toShift(payload: ShiftPayload): ProductShift {
     signupOpensAt: payload.signup_opens_at,
     signupClosesAt: payload.signup_closes_at,
     scheduleLockAt: payload.schedule_lock_at,
+    scheduleLockOffsetMinutes: payload.schedule_lock_offset_minutes ?? null,
+    scheduleLockResolvesTo: payload.schedule_lock_resolves_to ?? null,
     creditPolicyId: payload.credit_policy_id ?? null,
     customCreditMultiplier: payload.custom_credit_multiplier ?? null,
     requiredTrainingIds: payload.required_training_ids ?? [],
@@ -242,6 +259,7 @@ function toAttributes(draft: ShiftDraft): Record<string, unknown> {
     signup_opens_at: draft.signupOpensAt,
     signup_closes_at: draft.signupClosesAt,
     schedule_lock_at: draft.scheduleLockAt,
+    schedule_lock_offset_minutes: draft.scheduleLockOffsetMinutes,
     credit_policy_id: draft.customCreditMultiplier
       ? null
       : draft.creditPolicyId || null,

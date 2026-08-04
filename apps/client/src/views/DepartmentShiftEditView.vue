@@ -107,6 +107,28 @@ const schedule = reactive({
   scheduleLockAt: "",
 });
 
+/*
+ * The cutoff's two forms (SHIFT-009, SHIFT-017): an absolute moment, or an
+ * offset before the event's active event window start. One at a time — the
+ * node refuses both together — so the form holds a mode and shows one input.
+ * A relative cutoff is entered in hours and sent in minutes; the node answers
+ * with its own resolution (`scheduleLockResolvesTo`), shown as a hint rather
+ * than recomputed here, so a moved event window is the node's news to break.
+ */
+const lockMode = ref<"none" | "absolute" | "relative">("none");
+const lockOffsetHours = ref("");
+
+const lockResolvesTo = computed(() => {
+  const resolved = existing.value?.scheduleLockResolvesTo ?? null;
+
+  return existing.value?.scheduleLockOffsetMinutes !== null && resolved !== null
+    ? new Date(resolved).toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : null;
+});
+
 function emptyDraft(): ShiftDraft {
   return {
     eligibleTeamId: "",
@@ -117,6 +139,7 @@ function emptyDraft(): ShiftDraft {
     signupOpensAt: null,
     signupClosesAt: null,
     scheduleLockAt: null,
+    scheduleLockOffsetMinutes: null,
     creditPolicyId: null,
     customCreditMultiplier: null,
     requiredTrainingIds: [],
@@ -183,6 +206,18 @@ function defaultSchedule(): void {
   schedule.signupOpensAt = toLocalInput(new Date().toISOString());
   schedule.signupClosesAt = toLocalInput(window?.startsAt ?? null);
   schedule.scheduleLockAt = toLocalInput(window?.startsAt ?? null);
+  lockMode.value = schedule.scheduleLockAt === "" ? "none" : "absolute";
+  lockOffsetHours.value = "";
+}
+
+function parsedLockOffsetMinutes(): number | null {
+  const hours = Number.parseFloat(String(lockOffsetHours.value).trim());
+
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return null;
+  }
+
+  return Math.round(hours * 60);
 }
 
 function applyShift(shift: ProductShift | null): void {
@@ -223,6 +258,17 @@ function applyShift(shift: ProductShift | null): void {
   schedule.signupOpensAt = toLocalInput(shift.signupOpensAt);
   schedule.signupClosesAt = toLocalInput(shift.signupClosesAt);
   schedule.scheduleLockAt = toLocalInput(shift.scheduleLockAt);
+
+  if (shift.scheduleLockOffsetMinutes !== null) {
+    lockMode.value = "relative";
+    lockOffsetHours.value = String(shift.scheduleLockOffsetMinutes / 60);
+  } else if (shift.scheduleLockAt !== null) {
+    lockMode.value = "absolute";
+    lockOffsetHours.value = "";
+  } else {
+    lockMode.value = "none";
+    lockOffsetHours.value = "";
+  }
 }
 
 async function loadWorkspace(): Promise<void> {
@@ -302,7 +348,12 @@ async function onSubmit(): Promise<void> {
     endsAt: lockedEnd ?? fromLocalInput(schedule.endsAt) ?? "",
     signupOpensAt: fromLocalInput(schedule.signupOpensAt),
     signupClosesAt: fromLocalInput(schedule.signupClosesAt),
-    scheduleLockAt: fromLocalInput(schedule.scheduleLockAt),
+    scheduleLockAt:
+      lockMode.value === "absolute"
+        ? fromLocalInput(schedule.scheduleLockAt)
+        : null,
+    scheduleLockOffsetMinutes:
+      lockMode.value === "relative" ? parsedLockOffsetMinutes() : null,
     creditPolicyId: isCustomRate ? null : creditSelection.value || null,
     customCreditMultiplier: isCustomRate
       ? String(customRate.value).trim() || null
@@ -435,10 +486,41 @@ async function onSubmit(): Promise<void> {
           </label>
         </div>
 
-        <label class="shift-edit__field">
-          Schedule lock / cutoff
-          <input v-model="schedule.scheduleLockAt" type="datetime-local" />
-        </label>
+        <div class="shift-edit__row">
+          <label class="shift-edit__field">
+            Schedule lock / cutoff
+            <select v-model="lockMode" data-testid="lock-mode">
+              <option value="none">No cutoff</option>
+              <option value="absolute">At a fixed time</option>
+              <option value="relative">Before the event window starts</option>
+            </select>
+          </label>
+          <label v-if="lockMode === 'absolute'" class="shift-edit__field">
+            Locks at
+            <input v-model="schedule.scheduleLockAt" type="datetime-local" />
+          </label>
+          <label v-if="lockMode === 'relative'" class="shift-edit__field">
+            Hours before the window start
+            <input
+              v-model="lockOffsetHours"
+              type="number"
+              min="1"
+              step="1"
+              data-testid="lock-offset-hours"
+            />
+          </label>
+        </div>
+
+        <!-- SHIFT-017: the node's own resolution of a relative cutoff, so a
+             moved event window is reflected without this form doing math. -->
+        <p
+          v-if="lockMode === 'relative' && lockResolvesTo !== null"
+          class="shift-edit__hint"
+          data-testid="lock-resolves-to"
+        >
+          With the event window as recorded, this schedule locks
+          {{ lockResolvesTo }}.
+        </p>
 
         <!--
           The shift override the credit resolver prefers over the organization

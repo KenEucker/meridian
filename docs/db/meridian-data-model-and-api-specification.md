@@ -2407,6 +2407,8 @@ Key fields:
 - `name`
 - `description`
 - `expires_after_days`, nullable
+- `document_type`, nullable (`policy` or `procedure`; WAIVER-007)
+- `document_id`, nullable
 - `created_at`
 - `updated_at`
 - `archived_at`
@@ -2415,6 +2417,7 @@ Rules:
 
 - Meridian tracks completion as complete/incomplete
 - signed document contents are not stored in MVP
+- a waiver may reference a published policy/procedure document in its organization as the text being agreed to (WAIVER-007); the reference is optional, and a waiver with no reference behaves exactly as before (WAIVER-009)
 
 #### `waiver_completions`
 
@@ -2428,7 +2431,25 @@ Key fields:
 - `completed_at`
 - `expires_at`
 - `recorded_by_user_id`
+- `document_type`, nullable
+- `document_id`, nullable
+- `document_revision`, nullable
+- `fragment_revision`, nullable
 - `created_at`
+
+Rules:
+
+- completing a document-backed waiver records the acknowledged document and document version alongside the completion, using the same version-recording rule as policy/procedure acknowledgments (WAIVER-008; POL-043), and retains the acknowledged version's source and resolved text as a `document_version_snapshots` row
+- a completion of a waiver with no document reference records no document columns (WAIVER-009)
+
+#### Waiver administration endpoints
+
+Waiver administration authority follows the scope of the waiver, matching the policy/procedure maintenance rule (WAIVER-010): organization-scoped waivers by organizers, department-scoped by department leads, team-scoped by team leads. No separate capability code carries it; every endpoint resolves the caller's maintainable scopes.
+
+- `GET /api/organizations/{organization}/waivers` answers with the waivers in the caller's maintainable scopes, the scope options a new waiver may be assigned to, and the organization's published documents a waiver may reference (WAIVER-007). A caller maintaining no scope is refused.
+- `GET /api/organizations/{organization}/waivers/{waiver}` answers with one waiver, its referenced document rendered with fragment text inline (POL-022) when one is configured, and the completion roster: everybody the waiver's scope asks, with complete, lapsed, and incomplete distinguished — lapsed is the state WAIVER-006 turns into a credential block.
+- `POST /api/commands/create-waiver`, `update-waiver`, `archive-waiver`, and `restore-waiver` administer waivers within the caller's scope authority. Scope is fixed at creation; archiving keeps every recorded completion. All are audited.
+- `POST /api/commands/record-waiver-completion` records a completion for a staff member the waiver's scope asks; a staff member outside the scope, or an archived waiver, is refused. Recording is audited and connected-only, because a document-backed completion names the document version shown (WAIVER-008).
 
 ---
 
@@ -2453,6 +2474,7 @@ Key fields:
 - `signup_opens_at`
 - `signup_closes_at`
 - `schedule_lock_at`
+- `schedule_lock_offset_minutes`, nullable (SHIFT-017)
 - `credit_policy_id`, nullable
 - `meeting_map_location_id`, nullable
 - `created_at`
@@ -2468,6 +2490,7 @@ Rules:
 - required trainings and waivers must be enforced for scheduled and unscheduled additions
 - overlap warnings are shown by default rather than hard-blocking
 - elevated leads may assign overlapping shifts
+- a schedule lock/cutoff (SHIFT-009) is expressed either as an absolute `schedule_lock_at` or as `schedule_lock_offset_minutes` before the event's active event window start, never both (SHIFT-017); a relative cutoff resolves to an absolute moment whenever the window is known, so it moves when event dates move, and resolves to nothing — leaving self-service changes governed by other rules — while the window is unset
 - `meeting_map_location_id` is optional; a shift may reference an operational map meeting/check-in location but is not required to have one
 
 #### `shift_training_requirements`

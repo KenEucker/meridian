@@ -45,6 +45,7 @@ class Shift extends Model
         'signup_opens_at',
         'signup_closes_at',
         'schedule_lock_at',
+        'schedule_lock_offset_minutes',
         'credit_policy_id',
         'cancelled_at',
     ];
@@ -92,6 +93,7 @@ class Shift extends Model
             'signup_opens_at' => 'datetime',
             'signup_closes_at' => 'datetime',
             'schedule_lock_at' => 'datetime',
+            'schedule_lock_offset_minutes' => 'integer',
             'cancelled_at' => 'datetime',
         ];
     }
@@ -271,27 +273,58 @@ class Shift extends Model
     }
 
     /**
-     * Whether the shift configures a schedule lock/cutoff (SHIFT-009).
+     * Whether the shift configures a schedule lock/cutoff (SHIFT-009), in
+     * either of its two forms (SHIFT-017).
      */
     public function hasScheduleLock(): bool
     {
-        return $this->schedule_lock_at !== null;
+        return $this->schedule_lock_at !== null
+            || $this->schedule_lock_offset_minutes !== null;
+    }
+
+    /**
+     * The cutoff as an absolute moment (SHIFT-009, SHIFT-017).
+     *
+     * An absolute lock is its own answer. A relative lock resolves against the
+     * event's active event window start whenever the window is known — which
+     * is what keeps a cutoff configured once correct when event dates move —
+     * and resolves to nothing while the window is not set: an offset from a
+     * moment nobody has named is not a moment.
+     */
+    public function resolvedScheduleLockAt(): ?Carbon
+    {
+        if ($this->schedule_lock_at !== null) {
+            return $this->schedule_lock_at;
+        }
+
+        if ($this->schedule_lock_offset_minutes === null) {
+            return null;
+        }
+
+        $this->loadMissing('event');
+        $windowStart = $this->event?->active_event_window_starts_at;
+
+        return $windowStart?->copy()->subMinutes($this->schedule_lock_offset_minutes);
     }
 
     /**
      * Whether staff self-service schedule changes are locked at the given moment (SHIFT-009).
      *
-     * When no schedule lock is configured, self-service changes remain allowed subject to other rules.
+     * When no schedule lock is configured — or a relative one cannot resolve
+     * because the event window is not set — self-service changes remain
+     * allowed subject to other rules.
      */
     public function isScheduleLockedAt(?Carbon $moment = null): bool
     {
-        if (! $this->hasScheduleLock()) {
+        $lockAt = $this->resolvedScheduleLockAt();
+
+        if ($lockAt === null) {
             return false;
         }
 
         $moment ??= Carbon::now();
 
-        return $moment->greaterThanOrEqualTo($this->schedule_lock_at);
+        return $moment->greaterThanOrEqualTo($lockAt);
     }
 
     /**

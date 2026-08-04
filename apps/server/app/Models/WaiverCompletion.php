@@ -30,6 +30,10 @@ class WaiverCompletion extends Model
         'completed_at',
         'expires_at',
         'recorded_by_user_id',
+        'document_type',
+        'document_id',
+        'document_revision',
+        'fragment_revision',
     ];
 
     /**
@@ -41,6 +45,8 @@ class WaiverCompletion extends Model
             'completed_at' => 'datetime',
             'expires_at' => 'datetime',
             'created_at' => 'datetime',
+            'document_revision' => 'integer',
+            'fragment_revision' => 'integer',
         ];
     }
 

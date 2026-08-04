@@ -25,4 +25,14 @@ class ShiftRequirementException extends RuntimeException
     {
         return new self('Signup close must be after signup open when both dates are configured.');
     }
+
+    public static function conflictingScheduleLock(): self
+    {
+        return new self('A schedule cutoff is either an absolute time or an offset before the event window, not both.');
+    }
+
+    public static function invalidScheduleLockOffset(): self
+    {
+        return new self('A relative schedule cutoff must be at least one minute before the event window start.');
+    }
 }
