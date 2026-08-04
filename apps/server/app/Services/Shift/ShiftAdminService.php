@@ -57,6 +57,7 @@ final class ShiftAdminService
      *     signup_opens_at?: Carbon|null,
      *     signup_closes_at?: Carbon|null,
      *     schedule_lock_at?: Carbon|null,
+     *     schedule_lock_offset_minutes?: int|null,
      *     credit_policy_id?: string|null,
      *     custom_credit_multiplier?: string|float|null,
      *     required_training_ids?: list<string>,
@@ -94,6 +95,10 @@ final class ShiftAdminService
             $attributes['signup_opens_at'] ?? null,
             $attributes['signup_closes_at'] ?? null,
         );
+        $this->assertScheduleLockValid(
+            $attributes['schedule_lock_at'] ?? null,
+            $attributes['schedule_lock_offset_minutes'] ?? null,
+        );
         $capacity = $this->normalizedCapacity($attributes['capacity'] ?? null);
 
         $trainings = $this->requiredTrainings($department, $attributes['required_training_ids'] ?? []);
@@ -118,6 +123,7 @@ final class ShiftAdminService
                 'signup_opens_at' => $attributes['signup_opens_at'] ?? null,
                 'signup_closes_at' => $attributes['signup_closes_at'] ?? null,
                 'schedule_lock_at' => $attributes['schedule_lock_at'] ?? null,
+                'schedule_lock_offset_minutes' => $attributes['schedule_lock_offset_minutes'] ?? null,
                 'credit_policy_id' => $creditPolicyId,
             ]);
 
@@ -166,6 +172,7 @@ final class ShiftAdminService
      *     signup_opens_at?: Carbon|null,
      *     signup_closes_at?: Carbon|null,
      *     schedule_lock_at?: Carbon|null,
+     *     schedule_lock_offset_minutes?: int|null,
      *     credit_policy_id?: string|null,
      *     custom_credit_multiplier?: string|float|null,
      *     required_training_ids?: list<string>,
@@ -201,6 +208,10 @@ final class ShiftAdminService
         $this->assertSignupWindowValid(
             $attributes['signup_opens_at'] ?? null,
             $attributes['signup_closes_at'] ?? null,
+        );
+        $this->assertScheduleLockValid(
+            $attributes['schedule_lock_at'] ?? null,
+            $attributes['schedule_lock_offset_minutes'] ?? null,
         );
         $capacity = $this->normalizedCapacity($attributes['capacity'] ?? null);
 
@@ -249,6 +260,7 @@ final class ShiftAdminService
                 'signup_opens_at' => $attributes['signup_opens_at'] ?? null,
                 'signup_closes_at' => $attributes['signup_closes_at'] ?? null,
                 'schedule_lock_at' => $attributes['schedule_lock_at'] ?? null,
+                'schedule_lock_offset_minutes' => $attributes['schedule_lock_offset_minutes'] ?? null,
                 'credit_policy_id' => $creditPolicyId,
             ])->save();
 
@@ -513,6 +525,23 @@ final class ShiftAdminService
     }
 
     /**
+     * One cutoff form at a time (SHIFT-017): an absolute timestamp or an
+     * offset before the active event window start, never both.
+     *
+     * @throws ShiftAdminException
+     */
+    private function assertScheduleLockValid(?Carbon $lockAt, ?int $offsetMinutes): void
+    {
+        if ($lockAt !== null && $offsetMinutes !== null) {
+            throw new ShiftAdminException('A schedule cutoff is either an absolute time or an offset before the event window, not both.');
+        }
+
+        if ($offsetMinutes !== null && $offsetMinutes < 1) {
+            throw new ShiftAdminException('A relative schedule cutoff must be at least one minute before the event window start.');
+        }
+    }
+
+    /**
      * @throws ShiftAdminException
      */
     private function normalizedCapacity(int|string|null $capacity): ?int
@@ -649,6 +678,7 @@ final class ShiftAdminService
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'schedule_lock_offset_minutes' => $shift->schedule_lock_offset_minutes,
             'credit_policy_id' => $shift->credit_policy_id !== null
                 ? (string) $shift->credit_policy_id
                 : null,

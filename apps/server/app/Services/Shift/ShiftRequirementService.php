@@ -77,13 +77,30 @@ class ShiftRequirementService
     }
 
     /**
-     * Configure schedule lock/cutoff for a shift (SHIFT-009).
+     * Configure schedule lock/cutoff for a shift (SHIFT-009, SHIFT-017).
      *
-     * A null lock clears the cutoff and leaves self-service schedule changes governed by other rules.
+     * The cutoff takes one of two forms: an absolute timestamp, or an offset
+     * in minutes before the event's active event window start, which resolves
+     * to an absolute moment whenever the window is known. One form at a time —
+     * a shift carrying both would have two answers to when it locks. Null for
+     * both clears the cutoff and leaves self-service schedule changes governed
+     * by other rules.
      */
-    public function setScheduleLock(Shift $shift, ?Carbon $lockAt = null): Shift
-    {
+    public function setScheduleLock(
+        Shift $shift,
+        ?Carbon $lockAt = null,
+        ?int $offsetMinutes = null,
+    ): Shift {
+        if ($lockAt !== null && $offsetMinutes !== null) {
+            throw ShiftRequirementException::conflictingScheduleLock();
+        }
+
+        if ($offsetMinutes !== null && $offsetMinutes < 1) {
+            throw ShiftRequirementException::invalidScheduleLockOffset();
+        }
+
         $shift->schedule_lock_at = $lockAt;
+        $shift->schedule_lock_offset_minutes = $offsetMinutes;
         $shift->save();
 
         return $shift->refresh();

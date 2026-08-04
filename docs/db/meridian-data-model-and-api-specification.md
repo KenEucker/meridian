@@ -2474,6 +2474,7 @@ Key fields:
 - `signup_opens_at`
 - `signup_closes_at`
 - `schedule_lock_at`
+- `schedule_lock_offset_minutes`, nullable (SHIFT-017)
 - `credit_policy_id`, nullable
 - `meeting_map_location_id`, nullable
 - `created_at`
@@ -2489,6 +2490,7 @@ Rules:
 - required trainings and waivers must be enforced for scheduled and unscheduled additions
 - overlap warnings are shown by default rather than hard-blocking
 - elevated leads may assign overlapping shifts
+- a schedule lock/cutoff (SHIFT-009) is expressed either as an absolute `schedule_lock_at` or as `schedule_lock_offset_minutes` before the event's active event window start, never both (SHIFT-017); a relative cutoff resolves to an absolute moment whenever the window is known, so it moves when event dates move, and resolves to nothing — leaving self-service changes governed by other rules — while the window is unset
 - `meeting_map_location_id` is optional; a shift may reference an operational map meeting/check-in location but is not required to have one
 
 #### `shift_training_requirements`

@@ -173,6 +173,15 @@ final class ShiftAdminReadController extends Controller
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'schedule_lock_offset_minutes' => $shift->schedule_lock_offset_minutes,
+            /*
+             * The relative cutoff as the node resolves it right now
+             * (SHIFT-017): the event window start minus the offset, or null
+             * while the window is not set. The form shows this rather than
+             * computing its own, so a moved event window is reflected without
+             * the client holding a second copy of the rule.
+             */
+            'schedule_lock_resolves_to' => $shift->resolvedScheduleLockAt()?->toIso8601String(),
             'credit_policy_id' => $shift->credit_policy_id !== null
                 ? (string) $shift->credit_policy_id
                 : null,

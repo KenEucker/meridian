@@ -649,6 +649,38 @@ describe("shift create and edit", () => {
     });
   });
 
+  it("expresses the cutoff as an offset before the event window (SHIFT-017)", async () => {
+    // A relative cutoff is entered in hours and sent in minutes, with no
+    // absolute time beside it: the node refuses a shift carrying both forms,
+    // and it resolves the offset itself whenever the event window is known.
+    const calls = stubNode((call) => {
+      if (call.url.endsWith("/commands/update-shift")) {
+        return {
+          body: shiftPayload({ schedule_lock_offset_minutes: 24 * 60 }),
+        };
+      }
+
+      if (call.url.includes(`/shifts/${DAY_SHIFT_ID}`)) {
+        return { body: shiftPayload() };
+      }
+
+      return { body: workspacePayload() };
+    });
+
+    const { wrapper } = await mountShiftEdit(DAY_SHIFT_ID);
+
+    await wrapper.get('[data-testid="lock-mode"]').setValue("relative");
+    await wrapper.get('[data-testid="lock-offset-hours"]').setValue("24");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-shift")[0]?.body).toMatchObject({
+      shift_id: DAY_SHIFT_ID,
+      schedule_lock_at: null,
+      schedule_lock_offset_minutes: 24 * 60,
+    });
+  });
+
   it("gives a shift a custom rate between 0 and 2 instead of a named policy (M18.16)", async () => {
     // Pre- and post-event work is typically priced below the standard hour,
     // so the select offers a custom rate beside the named policies. The two
@@ -743,12 +775,16 @@ describe("shift create and edit", () => {
       .findAll('input[type="datetime-local"]')
       .map((input) => (input.element as HTMLInputElement).value);
 
-    expect([values[0], values[1], values[3], values[4]]).toEqual([
-      "",
-      "",
-      "",
-      "",
-    ]);
+    expect([values[0], values[1], values[3]]).toEqual(["", "", ""]);
+
+    // With no window to default a cutoff from, the cutoff starts at "none"
+    // and offers no time input at all (SHIFT-009, SHIFT-017).
+    expect(
+      (
+        wrapper.find('[data-testid="lock-mode"]')
+          .element as HTMLSelectElement
+      ).value,
+    ).toBe("none");
   });
 
   it("quotes the node's refusal of a backwards schedule", async () => {
