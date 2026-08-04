@@ -71,29 +71,4 @@ final class LocalFieldFixture
     public const USER_EMAIL = 'local-field@meridian.test';
 
     public const USER_NAME = 'Local Field Author';
-
-    /*
-     * A second sign-in whose whole authority is leading the Rangers Dirt team
-     * (M18.16 QA). The author account above holds department lead, organizer,
-     * and IC roles at once, which makes it useless for proving what a *team
-     * lead alone* can reach: this account edits Dirt shifts and assigns their
-     * credit policy, and can administer nothing else.
-     */
-    public const TEAM_LEAD_USER_ID = '22222222-2222-4222-8222-222222222212';
-
-    public const TEAM_LEAD_STAFF_ID = '33333333-3333-4333-8333-333333333313';
-
-    public const TEAM_LEAD_USER_EMAIL = 'local-team-lead@meridian.test';
-
-    public const TEAM_LEAD_USER_NAME = 'Local Team Lead';
-
-    /*
-     * Two credit policies, so the shift edit surface has ratios to assign the
-     * moment the fixture lands (SHIFT-010; M18.16): the organization default
-     * every uncommitted shift falls back to, and a second rate worth choosing
-     * over it.
-     */
-    public const CREDIT_POLICY_STANDARD_ID = '99999999-9999-4999-8999-999999999901';
-
-    public const CREDIT_POLICY_OVERNIGHT_ID = '99999999-9999-4999-8999-999999999902';
 }
