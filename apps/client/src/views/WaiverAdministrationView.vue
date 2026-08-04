@@ -857,7 +857,7 @@ function rosterState(row: {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-base);
-  color: var(--m-text-default);
+  color: var(--m-text-primary);
   font: inherit;
 }
 
@@ -894,7 +894,7 @@ function rosterState(row: {
   border: 1px solid var(--m-border-default);
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-base);
-  color: var(--m-text-default);
+  color: var(--m-text-primary);
   font: inherit;
   cursor: pointer;
 }
