@@ -17,6 +17,7 @@
 **Additive Update:** Pooled and individually tracked equipment requirements (EQUIP-010–EQUIP-017) added for equipment lookup by asset tag, serial number, or search at checkout, quantity-based pooled equipment, and derived pooled availability, replacing the unit-by-unit checklist as the way equipment is handed out.
 **Additive Update:** Staff self-service profile maintenance requirements (VOL-015–VOL-026) added for direct editing of preferred name, phone, and city/state, a two-change allowance on self-service handle changes with reviewed handle change requests beyond it, reviewed profile picture change requests, and the audit and notification of both.
 **Additive Update:** Per-organization staff profile approval policy requirements (VOL-027–VOL-029) added for configuring how handle and profile picture changes are approved, making the self-service handle change allowance a configurable number defaulting to two, and showing a staff member the state and rejection reason of their most recent submission. VOL-027 changes the default behavior of VOL-017: an organization now opts into the two-change allowance by selecting the "applied without review" handle policy, and the shipped default reviews every change.
+**Additive Update:** Event Horizon requirements (HORIZON-001–HORIZON-018, sections 3.46 and 7.28) added for the event-scoped personal readiness surface that lists what a staff member still has outstanding in preparation for one event, links each item to the surface that resolves it, and can be hidden from a member's workflow menu once nothing is outstanding.
 **Additive Update:** Organization addressing requirements (ORG-022–ORG-025) added for organization subdomain resolution beside the existing root-path form, and platform landing page requirements (PUBLIC-007–PUBLIC-009) added for the feature tour with example-organization screenshots and the description of the platform offerings. Dedicated per-organization infrastructure recorded as deferred scope.
 
 ---
@@ -1614,6 +1615,29 @@ Capability that every organization needs in order to be an organization on Merid
 A module has two independent states. It is **entitled** when the platform makes it available to the organization, which is a God Mode decision. It is **enabled** when the organization has chosen to use it, which is an organizer decision. A module is **active** only when it is both entitled and enabled; otherwise it is **inactive**.
 
 An inactive module is absent from the product rather than merely hidden: its surfaces do not render, its API refuses, and its records do not replicate to devices. Its data is retained, so activating a module returns the organization to what it had.
+
+---
+
+## 3.46 The Event Horizon
+
+The Event Horizon is an event-scoped personal readiness surface: the page a staff member lands on while an event approaches, listing what they still have to do to be ready for it.
+
+The Event Horizon answers:
+
+> Am I ready for this event, and what is left?
+
+It compiles from records that already exist — acknowledgments, waivers, trainings, shift signups, and the coverage of teams the member leads — orders them, and links each one to the surface that resolves it. It states what each item is, how it currently evaluates, and what would complete it.
+
+The Event Horizon is not a task system. It creates no work item, assigns nothing to anyone, and holds no state of its own beyond one personal preference: whether the member still wants to see it.
+
+The Event Horizon enforces nothing. Every item it reports is enforced, or not enforced, by the rule that already governs it.
+
+The Event Horizon is distinct from:
+
+- The Briefing, which is Command's operational communication hub during the event
+- Insights, which are authorized aggregate views of operations rather than one person's readiness
+- dashboards, whose widgets are entry points into work rather than an ordered list of what is outstanding
+- notifications, which tell a person when something changed rather than what remains
 
 ---
 
@@ -5774,6 +5798,110 @@ On a node bound to a single organization (technical spec 7.3), the God Mode cons
 ### MOD-022
 
 Module names presented to users shall be Meridian's own terms as listed in MOD-002. Module keys shall not be presented as user-facing labels.
+
+---
+
+## 7.28 Event Horizon Requirements
+
+The Event Horizon (section 3.46) is the staff-facing answer to "what do I still have to do before this event?" It compiles what one staff member has outstanding for one event out of records that already exist, orders them, and links each to the surface that resolves it.
+
+### Surface and authorization
+
+#### HORIZON-001
+
+Meridian shall provide the Event Horizon: an event-scoped personal readiness surface listing, in a deterministic order, what the signed-in staff member still has outstanding in preparation for one event, and what they have already completed.
+
+#### HORIZON-002
+
+The Event Horizon shall be available to every authenticated staff member with access to the event and shall require no additional permission.
+
+It shall read only records the viewer is already authorized to read, and shall introduce no new authority path. Where a viewer cannot read the records behind an item kind, that kind shall be absent rather than reported as unknown.
+
+#### HORIZON-003
+
+The Alpha 1 Event Horizon item catalogue shall be exactly:
+
+| Item kind | Outstanding when | Governing requirements |
+|---|---|---|
+| Document acknowledgment | a required acknowledgment in the member's scope is unrecorded | POL-043 through POL-047 |
+| Waiver | a required waiver is incomplete or expired for the event | WAIVER-003 through WAIVER-006, CRED-005 |
+| Training | a training required by a department or team the member belongs to, or by a shift they hold, is incomplete or expired | TRAIN-002, TRAIN-008, SHIFT-005 |
+| Shift signup | a shift open to a team the member is on has capacity remaining, or its signup window is closing | SHIFT-004, SHIFT-007, SHIFT-008, SHIFT-011, SHIFT-018 |
+| Coverage gap | a shift for a team the member leads is below capacity | SHIFT-007, section 4.7 |
+
+Item kinds shall be defined in Meridian's own code. An organization shall not author item kinds, add them, remove them, reorder them, or configure their thresholds.
+
+#### HORIZON-004
+
+Each item shall state what it is, how it currently evaluates, and what would complete it, and shall link to the surface where the member resolves it.
+
+Following that link shall enter the linked surface under that surface's own authorization.
+
+#### HORIZON-005
+
+A completed item shall remain listed, visually de-emphasized and marked complete, rather than disappearing when it is satisfied.
+
+#### HORIZON-006
+
+Outstanding items shall be ordered before completed ones. Within each group, items shall be ordered by the soonest deadline that applies to them, then by the catalogue order in HORIZON-003. Items carrying no deadline shall order after items that carry one.
+
+Ordering shall not vary by viewer.
+
+#### HORIZON-007
+
+The Event Horizon shall carry no dismissal, snooze, acknowledgment, or resolution path of its own. An item shall become complete only because the record behind it changed.
+
+#### HORIZON-008
+
+The Event Horizon shall gate nothing. Every condition it reports is enforced, or not enforced, by the requirement that already governs it, and the Event Horizon shall refuse no operation of its own.
+
+#### HORIZON-009
+
+A coverage gap item shall report the shortfall against the shift's capacity and shall carry no staff names. The linked shift surface remains where a lead reads who is assigned.
+
+### Presentation window
+
+#### HORIZON-010
+
+The Event Horizon shall be presented only while the interface is resolved to a single event, whether because the node is locked to that event (CLIENT-002) or because the viewer's context has narrowed to one. It shall be absent from organization-level context and from any context in which no single event applies.
+
+#### HORIZON-011
+
+The Event Horizon shall be presented only within a lead-up window before the start of the event's active event window, and shall stop being presented when the event's operations window closes.
+
+The lead-up window length shall be organization configuration (ORG-018) with a documented default of 30 days.
+
+### Personal dismissal
+
+#### HORIZON-012
+
+A staff member with no outstanding items for an event may hide the Event Horizon from their workflow menu for that event.
+
+#### HORIZON-013
+
+Hiding shall not be offered while any item is outstanding.
+
+#### HORIZON-014
+
+Hiding shall be personal view state held per staff member per event. It shall not be visible to anyone else, shall not be audited, and shall not change any record the items read.
+
+#### HORIZON-015
+
+A hidden Event Horizon shall return when an item becomes outstanding again for that member and event, and the member shall be able to restore it themselves from their own profile surface at any time.
+
+### Compilation and interaction with other features
+
+#### HORIZON-016
+
+The Event Horizon shall compile from the permission-scoped data the device already holds when no node is reachable, shall disclose that it is incomplete rather than reaching past the sync boundary, and shall persist no compiled result.
+
+#### HORIZON-017
+
+An item kind owned by an inactive module shall be omitted entirely, and the Event Horizon shall render with any subset of modules active (MOD-018, MOD-019). Where no item kind is available to a viewer, the Event Horizon shall not be presented at all.
+
+#### HORIZON-018
+
+The Event Horizon shall send no notification of its own. The NOTIFY-001 set already notifies on the conditions it reports, and NOTIFY-001A limits one operational action to one notification.
 
 ---
 
