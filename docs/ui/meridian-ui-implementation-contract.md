@@ -1219,6 +1219,7 @@ Organization and event selection are connected-only. A client resolves its conte
 | `staff.me` | `staff.me` | Staff profile, personal links, and current event/schedule entry points | Authenticated staff |
 | `staff.profile-edit` | `staff.profile.edit` | Edit own preferred name, phone, and city/state; change own handle; submit or remove own profile picture | Authenticated staff |
 | `staff.profile-requests` | `staff.profile.requests` | State of own handle and profile picture change requests, remaining self-service handle changes, and decisions already made | Authenticated staff |
+| `staff.event-horizon` | `events.horizon` | The Event Horizon: what this staff member still has outstanding in preparation for this event, what they have completed, and where each is resolved (HORIZON-001) | Staff with event access, inside the lead-up window |
 | `staff.shifts` | `staff.shifts.index` | Shift board: the shifts in this event a staff member may take, the ones they are on, and why an unavailable one is unavailable (SHIFT-018) | Staff with event access |
 | `staff.shift-detail` | `staff.shifts.show` | Shift details | Assigned/eligible staff |
 | `event.info` | `events.info` | Staff-safe event information assembled from visible published documents for directions, arrival requirements, packing, food, housing, and event requirements | Staff with event access |
@@ -2087,6 +2088,78 @@ Meridian stores nothing. There is no snapshot library, history, or retrieval sur
 ### 19B.9 Responsive Behavior
 
 Metrics use the existing card conventions on touch and narrow viewports and the existing table conventions where a metric's presentation is tabular. Insights introduce no new layout primitives.
+
+---
+
+## 19C. Event Horizon Contract
+
+### 19C.1 What This Surface Is
+
+The Event Horizon is one staff member's readiness list for one event (HORIZON-001). It is a report, not a workflow: it lists, it explains, and it links out. It performs no operation of its own, and no control on it changes an operational record.
+
+It is not a dashboard. A dashboard offers entry points into work a user might do; the Event Horizon states what is outstanding and in what order. Surfaces must not label one as the other, and dashboard widgets must not be reused here to fill space.
+
+### 19C.2 Presence and Navigation
+
+The Event Horizon appears in the workflow menu, and is the staff landing destination inside its window.
+
+It is present only where the interface resolves to exactly one event and only inside the organization's lead-up window (HORIZON-010, HORIZON-011). Outside either condition it is absent: no menu entry, no route, no empty state explaining that it would have been here. A staff member in organization context has no event to be ready for, and an empty readiness page reads as "you are ready."
+
+Its absence is never presented as permission denial. It is not gated by a capability and section 19's denial copy does not apply to it.
+
+### 19C.3 Item Rendering
+
+Each item states, in this order: what it is, how it currently evaluates, and what would complete it. All three are always present. An item that names a requirement without saying what satisfies it has told the reader nothing they can act on.
+
+Each item carries one action link to the surface that resolves it. Following it enters that surface under that surface's own authorization (HORIZON-004), the same rule 19B.6 applies to metric links.
+
+Items are grouped by kind, and kinds render in the fixed catalogue order (HORIZON-003). Grouping is presentation; it never reorders items across the ordering rule below.
+
+### 19C.4 Order
+
+Outstanding items come before complete ones. Within each group, items order by soonest applicable deadline, then by catalogue order, with undated items after dated ones (HORIZON-006).
+
+The server returns the list in order. The client renders that order and does not sort, filter, or re-rank. There is no user-facing sort control, no filter, and no search: a readiness list short enough to act on does not need them, and one long enough to need them has a different problem.
+
+### 19C.5 Completed Items
+
+A completed item stays on the list, de-emphasized and marked complete (HORIZON-005). It does not disappear.
+
+Completion is communicated by a state marker and accessible text, not by color or dimming alone — section 20's non-color-only rule applies directly. A completed item's action link remains followable; a staff member re-reading a policy they already acknowledged is not an error.
+
+### 19C.6 No Dismissal on Items
+
+Individual items carry no dismiss, snooze, hide, or mark-as-done control (HORIZON-007). An item completes only because the record behind it changed.
+
+The only exception is the whole-surface preference in 19C.7, and it is not a dismissal of anything outstanding.
+
+### 19C.7 Hiding the Surface
+
+When nothing is outstanding, the surface offers a checkbox to hide the Event Horizon from the workflow menu for that event.
+
+Rules:
+
+- the control is offered only at zero outstanding items (HORIZON-013). While anything is outstanding it is absent, not disabled — a disabled control invites a user to look for how to enable it, and the answer is "finish your items", which the page already says;
+- the control's label states its scope: it hides the surface for this event, and it is a personal preference nobody else sees;
+- hiding takes effect immediately in the menu and does not sign anything off;
+- a staff member restores it from `staff.me` (HORIZON-015), and that entry point is named on the page beside the checkbox, so hiding is not a one-way door;
+- the surface returns on its own when something becomes outstanding again, and the copy says so before the box is ticked.
+
+### 19C.8 Coverage Gaps for Leads
+
+A team lead's coverage gap items report a shortfall against a shift's capacity and name no staff (HORIZON-009). Who is assigned is read on the shift surface the item links to.
+
+Gap items sit in the same list as the lead's own outstanding items rather than in a separate lead pane. A lead's own outstanding training is as much a part of their readiness as their team's staffing.
+
+### 19C.9 Offline and Incomplete
+
+The surface renders from cached data with no node reachable, using the existing connectivity and freshness conventions in section 16 (HORIZON-016).
+
+Where a kind could not be evaluated locally, the surface says which kind and why. It never presents a partial list as complete, and it never renders "nothing outstanding" it has not established — an unestablished empty list is reported as unknown, because a staff member who reads "you are ready" and is not has been actively misled.
+
+### 19C.10 Responsive Behavior
+
+The Event Horizon uses the existing list and card conventions on narrow and touch viewports. It introduces no new layout primitives, no new state vocabulary, and no new colors.
 
 ---
 
