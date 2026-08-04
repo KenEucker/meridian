@@ -1187,6 +1187,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
+| `public.marketing` | `public.marketing`, and the client root route | Platform marketing surface with the organization interest form (PUBLIC-001 through PUBLIC-006) | Public |
 | `public.participate` | `public.participate` | Organization participation page: who the organization is, what it is recruiting for, and the application form | Public |
 | `public.apply` | `public.apply` | Event application form reached from a shared link | Public |
 | `public.apply` (server-rendered) | `public.events.apply` | Staff event application, Blade form | Public or authenticated applicant |
@@ -1195,6 +1196,12 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `auth.code-entry` | `auth.code.entry` | In-application magic-link code entry, so a client completes login without leaving the application | Public |
 | `auth.provider-callback` | framework route | External provider callback | Public/system |
 | `signup.policy-acknowledgment` | `signup.documents.acknowledge` | Required policy/procedure acknowledgment during signup | Applicant/authenticated user with server connection |
+
+`public.marketing` is a client surface, and the client root route is where PUBLIC-001 puts it. The root answers two visitors: a client holding nothing renders the marketing surface, and a client holding a session renders the home directory it came for, since PUBLIC-001 describes the surface as being for organizations that do not yet use Meridian. `/platform` renders the same surface at an address of its own, for a signed-in reader who followed a link to it.
+
+The surface asks the node whether it may render, because only the node knows: it is not served by an on-site node or by a node locked to an event (PUBLIC-006), and a client holding nothing on such a node goes to sign in instead. It carries Meridian identity and resolves no organization branding profile (PUBLIC-001, BRAND-003) — the one public surface here that does not, since `public.participate` deliberately wears the organization's identity and this page has no organization in the request at all.
+
+The landing page's feature tour, screenshots, and offerings sections (PUBLIC-007 through PUBLIC-009) arrive with Milestone 20.
 
 In a client application, `auth.magic-link-sent` is a state of `auth.code-entry` rather than a screen of its own. Both belong to one exchange the person completes in a single sitting, and what the confirmation has to say — which address the code went to, and how long it lasts — is the heading of the screen where the code is typed. The screen stands separately in the browser flow, where the code is not entered in the application at all.
 

@@ -69,6 +69,15 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.organizations')
                 ->title(__('Operations')),
 
+            // Organizations that wrote in from the public marketing surface
+            // (PUBLIC-004). Beside Organizations because that is the screen an
+            // operator moves to if they decide to go ahead, and separate from
+            // it because an inquiry is a message rather than a tenant.
+            Menu::make(__('Organization Inquiries'))
+                ->icon('bs.envelope')
+                ->route('platform.organization-inquiries')
+                ->permission('platform.organization-inquiries'),
+
             Menu::make(__('Events'))
                 ->icon('bs.calendar-event')
                 ->route('platform.events')
@@ -258,6 +267,11 @@ class PlatformProvider extends OrchidServiceProvider
 
             ItemPermission::group(__('Operations'))
                 ->addPermission('platform.organizations', __('Organizations'))
+                // Reading organization interest submissions (PUBLIC-004). It
+                // grants no organization creation of its own: an operator who
+                // may read inquiries and may not create organizations can
+                // triage the queue and nothing more.
+                ->addPermission('platform.organization-inquiries', __('Organization inquiries'))
                 ->addPermission('platform.events', __('Events'))
                 ->addPermission('platform.applications', __('Applications'))
                 ->addPermission('platform.departments', __('Departments'))

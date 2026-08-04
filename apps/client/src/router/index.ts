@@ -24,12 +24,12 @@ import FieldReportCreateView from "@/views/FieldReportCreateView.vue";
 import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
-import HomeView from "@/views/HomeView.vue";
 import KioskHomeView from "@/views/KioskHomeView.vue";
 import KioskSafeTimeoutView from "@/views/KioskSafeTimeoutView.vue";
 import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
+import MarketingView from "@/views/MarketingView.vue";
 import { workstationSessionState } from "@/session/workstationSession";
 import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
@@ -43,6 +43,7 @@ import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
 import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
 import ParticipationView from "@/views/ParticipationView.vue";
+import RootView from "@/views/RootView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
 import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue";
 import OrganizerConfigurationView from "@/views/OrganizerConfigurationView.vue";
@@ -151,10 +152,29 @@ function legacyShiftBoardRedirect(surface: string) {
 
 // Domain routes use UI Implementation Contract section 12 route names.
 export const routes: RouteRecordRaw[] = [
+  /*
+   * The deployment root (M18.23; PUBLIC-001, PUBLIC-006).
+   *
+   * `RootView` decides which of two surfaces this address is: the public
+   * marketing page for a client holding nothing, and the home directory for one
+   * holding a session. It is public in the router because the marketing half
+   * has to render for somebody with no credential; `RootView` sends a client
+   * holding nothing to sign in when the node does not serve the surface.
+   */
   {
     path: "/",
     name: "home",
-    component: HomeView,
+    component: RootView,
+  },
+  /*
+   * The marketing surface at an address of its own, so it is reachable by a
+   * signed-in reader who followed a link to it and by anybody who wants to
+   * point at it directly.
+   */
+  {
+    path: "/platform",
+    name: "public.marketing",
+    component: MarketingView,
   },
   /*
    * The two context-switching surfaces (UI contract 12.2; M16.7). Both are
@@ -667,6 +687,17 @@ const PUBLIC_ROUTE_NAMES: readonly string[] = [
   "auth.code.entry",
   "public.participate",
   "public.apply",
+  /*
+   * The marketing surface and the deployment root it lives at (M18.23;
+   * PUBLIC-001). Public for the same reason the participation surfaces are:
+   * the visitor it is written for has no account and has not decided whether
+   * to want one. `home` is public because `RootView` is the marketing surface
+   * for a client holding nothing — it sends that client to sign in itself when
+   * the node does not serve the surface, which is a decision only the node can
+   * make (PUBLIC-006).
+   */
+  "public.marketing",
+  "home",
   "not-found",
 ];
 
@@ -736,9 +767,25 @@ export function redirectWhenSignedOut(target: Router = router): () => void {
   return watch(
     () => clientSessionState.document,
     (document) => {
-      if (document === null && requiresSignIn(target.currentRoute.value.name)) {
+      if (document === null && movesToSignInOnSessionLoss(target.currentRoute.value.name)) {
         void target.replace({ name: "login" });
       }
     },
   );
+}
+
+/**
+ * Whether losing a session should move a client off the surface it is standing
+ * on (AUTH-023).
+ *
+ * Almost always the same question as `requiresSignIn`, and `home` is the
+ * exception. The root is a public route since M18.23 because it is the
+ * marketing surface for a client holding nothing (PUBLIC-001) — but somebody
+ * whose token was just revoked mid-shift is not that visitor. Left alone they
+ * would watch the home directory turn into a page explaining what Meridian is,
+ * which answers a question they were not asking and hides the one thing they
+ * need, which is the way back in.
+ */
+function movesToSignInOnSessionLoss(name: unknown): boolean {
+  return requiresSignIn(name) || name === "home";
 }
