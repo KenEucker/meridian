@@ -236,7 +236,30 @@ afternoon on it.
 
 ---
 
-## 9. Related documents
+## 9. The other seed: the local field fixture
+
+`php artisan meridian:seed-local-field-fixture` is **not** part of this
+process. It is the M9.8 offline Field Report QA fixture — one organization
+("Local Field Organization"), one event, and `local-field@meridian.test` with a
+pre-trusted device — kept for the QA scripts that need a pinned node and
+device-trust state (`QA-FR-01`, `QA-AUTH-01`) and for the server tests that
+seed it. The client's spec-only session helper
+(`apps/client/src/session/localFieldSessionFixture.ts`) mirrors its identities
+so component tests run without a live server.
+
+It wants a database of its own. An install has one local node, and whichever
+row is local decides which event the install is locked to; the fixture's node
+is locked to the fixture event, and the scenario's node to Emberfall. The
+fixture therefore refuses to write its node when another seed's local node
+already exists, so running it against a scenario database no longer breaks the
+Northwood logins — but the fixture accounts will not resolve a session there
+either. For offline Field Report QA, start from a fresh database, seed the
+fixture alone, and come back to `migrate:fresh --seed` for everything in this
+document.
+
+---
+
+## 10. Related documents
 
 - `docs/process/meridian-development-process.md` — section 13.3, the seed data
   strategy this implements
