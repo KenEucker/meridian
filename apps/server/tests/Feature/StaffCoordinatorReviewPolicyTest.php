@@ -39,10 +39,16 @@ class StaffCoordinatorReviewPolicyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_staff_coordinator_role_carries_exactly_the_application_review_capability(): void
+    public function test_the_staff_coordinator_role_carries_exactly_its_two_review_capabilities(): void
     {
+        // Application review (M18.11; TEAM-014) and profile change request
+        // review (M18.20A; VOL-019), and no other organizer governance
+        // authority — which the rest of this file asserts one power at a time.
         $this->assertSame(
-            [PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW],
+            [
+                PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+                PermissionCatalog::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
+            ],
             PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_STAFF_COORDINATOR],
         );
     }

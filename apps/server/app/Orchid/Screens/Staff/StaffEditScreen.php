@@ -89,7 +89,19 @@ class StaffEditScreen extends Screen
      */
     public function layout(): iterable
     {
+        $layouts = [];
+
+        // The stored picture, above the uploader that replaces it (M18.20;
+        // VOL-013). Only for an existing record: a new staff member has no
+        // picture for the block to answer about.
+        if ($this->staff->exists) {
+            $layouts[] = Layout::block(Layout::view('orchid.staff.current-picture'))
+                ->title(__('Profile picture on record'))
+                ->description(__('What the product surfaces show for this staff member today.'));
+        }
+
         return [
+            ...$layouts,
             Layout::block(StaffEditLayout::class)
                 ->title(__('Staff profile'))
                 ->description(__('Profile fields for this staff member.')),

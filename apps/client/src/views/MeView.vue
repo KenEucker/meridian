@@ -19,6 +19,11 @@ import {
   shiftBoardWindowLabel,
   type ShiftBoardEntry,
 } from "@/shift-board/staffShiftBoardModel";
+import {
+  getMyProfile,
+  profileDisplayName,
+  type MyStaffProfile,
+} from "@/staff-profile/myProfileModel";
 
 /**
  * The staff member's own page (UI contract 12.3; bound to the session in M18.9).
@@ -34,16 +39,49 @@ import {
  * schedule is the staff shift board (M18.2), filtered to the shifts this person
  * actually holds.
  *
- * Two rows the fixture carried are gone rather than rebound: handle and
- * presence. Neither is in the session document and neither has a read behind it
- * yet, and printing "Not set" against a real staff member is a claim about their
- * record rather than an admission about this page. M18.20 builds the profile
- * surface that carries them.
+ * The profile rows — handle, phone, city/state, and the picture — come from the
+ * profile read M18.20 added (`GET /api/me/profile`), the same read the edit
+ * page writes back through. When that read has not answered, the rows are
+ * simply absent rather than printed as "Not set": a claim about somebody's
+ * record needs the record. Presence remains the one fixture row still gone,
+ * because nothing reads it yet.
  */
 const ROLE_SHIFT_LEAD = "shift_lead";
 
-const displayName = computed(
-  () => clientSessionState.document?.user.name ?? "Not signed in",
+/**
+ * The caller's own staff record (M18.20; VOL-009). The first when a login
+ * speaks for several: this page is a summary, and the edit page is where the
+ * choice of record is made explicit.
+ */
+const profile = ref<MyStaffProfile | null>(null);
+
+async function loadProfile(): Promise<void> {
+  try {
+    profile.value = (await getMyProfile()).profiles[0] ?? null;
+  } catch {
+    // The page still stands on the session document; the profile rows are
+    // absent rather than invented, and the edit page reports its own reads.
+    profile.value = null;
+  }
+}
+
+void loadProfile();
+
+/**
+ * The name that leads: the handle where there is one (VOL-010), because that
+ * is what people at the event call each other.
+ */
+const displayName = computed(() => {
+  if (profile.value !== null) {
+    return profileDisplayName(profile.value);
+  }
+
+  return clientSessionState.document?.user.name ?? "Not signed in";
+});
+
+/** The name on the record, shown under the handle rather than replaced by it. */
+const recordName = computed(
+  () => profile.value?.preferredName ?? profile.value?.legalName ?? null,
 );
 const initials = computed(() =>
   displayName.value
@@ -146,30 +184,50 @@ async function loadSchedule(): Promise<void> {
 
 watch(eventId, () => void loadSchedule(), { immediate: true });
 
-const personalDetails = computed(() => [
-  {
-    label: "Department",
-    value: department.value?.departmentLabel ?? "Not set",
-  },
-  {
-    label: "Team",
-    value:
-      memberTeamLabels.value.length > 0
-        ? memberTeamLabels.value.join(", ")
-        : "Not set",
-  },
-  {
-    label: "Role",
-    value:
-      department.value === null
-        ? "Not set"
-        : sessionDepartmentRoleSummary(department.value),
-  },
-  {
-    label: "Events",
-    value: `${clientSessionState.document?.events.length ?? 0}`,
-  },
-]);
+const personalDetails = computed(() => {
+  const details = [
+    {
+      label: "Department",
+      value: department.value?.departmentLabel ?? "Not set",
+    },
+    {
+      label: "Team",
+      value:
+        memberTeamLabels.value.length > 0
+          ? memberTeamLabels.value.join(", ")
+          : "Not set",
+    },
+    {
+      label: "Role",
+      value:
+        department.value === null
+          ? "Not set"
+          : sessionDepartmentRoleSummary(department.value),
+    },
+    {
+      label: "Events",
+      value: `${clientSessionState.document?.events.length ?? 0}`,
+    },
+  ];
+
+  // Profile rows appear once the profile read answered (M18.20; VOL-009,
+  // VOL-010). "Not set" is only printed against the record itself.
+  const current = profile.value;
+
+  if (current !== null) {
+    details.push(
+      { label: "Handle", value: current.handle ?? "Not set" },
+      { label: "Phone", value: current.phone ?? "Not set" },
+      {
+        label: "City/State",
+        value:
+          [current.city, current.state].filter(Boolean).join(", ") || "Not set",
+      },
+    );
+  }
+
+  return details;
+});
 /**
  * Role-aware event routing (M11.20, UI contract 12.3). Department leads land on
  * Department Overview, team leads on the team overview for a team they lead,
@@ -217,7 +275,14 @@ const currentEventTargetLabel = computed(() => {
     </p>
 
     <header class="me__hero">
+      <img
+        v-if="profile?.profilePictureUrl"
+        class="me__photo me__photo--picture"
+        :src="profile.profilePictureUrl"
+        :alt="`${displayName} profile photo`"
+      />
       <div
+        v-else
         class="me__photo"
         role="img"
         :aria-label="`${displayName} profile photo`"
@@ -227,6 +292,13 @@ const currentEventTargetLabel = computed(() => {
       <div class="me__identity">
         <p class="me__eyebrow">Staff profile</p>
         <h1 id="me-heading">{{ displayName }}</h1>
+        <!--
+          The name on the record, under the handle that leads (VOL-010).
+          Absent when they are the same, so nobody reads their own name twice.
+        -->
+        <p v-if="recordName && recordName !== displayName" class="me__record-name">
+          {{ recordName }}
+        </p>
         <p>{{ eventLabel }} - {{ department?.departmentLabel ?? "No department" }}</p>
       </div>
       <dl class="me__details" aria-label="Personal details">
@@ -238,6 +310,7 @@ const currentEventTargetLabel = computed(() => {
     </header>
 
     <nav class="me__links" aria-label="Me links">
+      <RouterLink :to="{ name: 'staff.profile.edit' }">Edit Profile</RouterLink>
       <RouterLink
         v-if="eventId"
         :to="{ name: 'events.info', params: { eventId } }"
@@ -391,6 +464,10 @@ const currentEventTargetLabel = computed(() => {
   font-weight: 900;
 }
 
+.me__photo--picture {
+  object-fit: cover;
+}
+
 .me__photo span {
   display: grid;
   place-items: center;
@@ -421,6 +498,11 @@ const currentEventTargetLabel = computed(() => {
 .me__schedule p {
   margin: 0;
   color: var(--m-text-muted);
+}
+
+.me__record-name {
+  color: var(--m-text-secondary);
+  font-weight: 700;
 }
 
 .me__eyebrow {
@@ -572,7 +654,7 @@ const currentEventTargetLabel = computed(() => {
   }
 
   .me__links {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   }
 
   .me__schedule-list dl {

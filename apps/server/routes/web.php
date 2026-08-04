@@ -14,6 +14,7 @@ use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Setup\NodeSetupController;
+use App\Http\Controllers\Staffing\StaffProfileChangeRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', ClientAppController::class)->name('client.app');
@@ -127,6 +128,16 @@ Route::middleware('signed:relative')->group(function (): void {
         ->name('field-report-photos.preview');
     Route::get('field-report-photos/{attachment}/download', [FieldReportPhotoController::class, 'download'])
         ->name('field-report-photos.download');
+
+    /*
+     * A submitted profile picture awaiting review (M18.20C; VOL-021). It lives
+     * on the private disk rather than the public one the approved picture uses,
+     * precisely so that reaching it requires this route — readable by the
+     * staff member who submitted it and the users who may review it, and by
+     * nobody else.
+     */
+    Route::get('staff-profile-pictures/{changeRequest}/pending', [StaffProfileChangeRequestController::class, 'pendingPicture'])
+        ->name('staff-profile-pictures.pending');
 });
 
 Route::get('{clientPath}', ClientAppController::class)

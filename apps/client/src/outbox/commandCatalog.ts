@@ -42,6 +42,16 @@ export type MeridianCommandType =
   // Staff self-service on their own schedule (M18.2).
   | "sign-up-for-shift"
   | "withdraw-from-shift"
+  // Staff self-service on their own profile (M18.20, M18.20B, M18.20C).
+  | "update-my-profile"
+  | "request-handle-change"
+  | "submit-profile-picture"
+  | "remove-profile-picture"
+  | "withdraw-profile-change-request"
+  | "dismiss-profile-change-request"
+  // Profile change request review (M18.20A, M18.20D).
+  | "approve-profile-change-request"
+  | "reject-profile-change-request"
   | "set-current-deployment"
   | "checkout-equipment"
   | "return-equipment"
@@ -250,6 +260,81 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/withdraw-from-shift",
       "Shift withdrawal",
       "Withdrawing from a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The staff member's own profile (M18.20; VOL-015). Connected-only for the
+     * ordinary reason: data/API 7.2 closes the offline write list and a
+     * profile edit is not in it. The stakes are low — preferred name, phone,
+     * city/state — but a queued edit is still a person told their record says
+     * one thing while every roster the node prints says another.
+     */
+    "update-my-profile": connectedOnly(
+      "update-my-profile",
+      "/api/commands/update-my-profile",
+      "Profile update",
+      "Updating your profile needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The handle and picture paths (M18.20B, M18.20C; VOL-014, VOL-017,
+     * VOL-021, VOL-023).
+     *
+     * Picture submission, replacement, and removal are online-only by
+     * requirement rather than by inference — VOL-014 says so outright, and
+     * technical spec 18A.3 repeats it — which is the rare case where the
+     * catalog's default-deny agrees with a rule written down elsewhere.
+     *
+     * The handle commands are here for the ordinary reason. Whether a change
+     * applies now or waits for review turns on how many the staff record has
+     * already spent, which is a count the node holds; a request queued against
+     * this device's guess would be a person told their handle changed when it
+     * is sitting in somebody's review queue, or the reverse.
+     */
+    "request-handle-change": connectedOnly(
+      "request-handle-change",
+      "/api/commands/request-handle-change",
+      "Handle change",
+      "Changing your handle needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "submit-profile-picture": connectedOnly(
+      "submit-profile-picture",
+      "/api/commands/submit-profile-picture",
+      "Profile picture",
+      "Submitting a profile picture needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "remove-profile-picture": connectedOnly(
+      "remove-profile-picture",
+      "/api/commands/remove-profile-picture",
+      "Profile picture removal",
+      "Removing your profile picture needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "withdraw-profile-change-request": connectedOnly(
+      "withdraw-profile-change-request",
+      "/api/commands/withdraw-profile-change-request",
+      "Change request withdrawal",
+      "Withdrawing a request needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "dismiss-profile-change-request": connectedOnly(
+      "dismiss-profile-change-request",
+      "/api/commands/dismiss-profile-change-request",
+      "Change request dismissal",
+      "Clearing a decided request needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The reviewer's two decisions (M18.20D; VOL-019, VOL-022). Desk work with
+     * no urgent case, and a decision held on a device is a staff member left
+     * waiting on an answer that has already been given.
+     */
+    "approve-profile-change-request": connectedOnly(
+      "approve-profile-change-request",
+      "/api/commands/approve-profile-change-request",
+      "Change request approval",
+      "Approving a request needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "reject-profile-change-request": connectedOnly(
+      "reject-profile-change-request",
+      "/api/commands/reject-profile-change-request",
+      "Change request rejection",
+      "Rejecting a request needs a connection to the node. It cannot be held on this device for later.",
     ),
     "set-current-deployment": connectedOnly(
       "set-current-deployment",

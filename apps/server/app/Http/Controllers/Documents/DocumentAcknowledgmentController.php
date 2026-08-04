@@ -466,7 +466,7 @@ final class DocumentAcknowledgmentController extends Controller
 
                 return [
                     'staff_id' => (string) $staff->getKey(),
-                    'display_name' => $staff->preferred_name ?: ($staff->legal_name ?? 'Unknown staff member'),
+                    'display_name' => $staff->displayName(),
                     'handle' => $staff->handle,
                     'acknowledged' => $acknowledgment !== null,
                     'acknowledged_at' => $acknowledgment?->acknowledged_at?->toIso8601String(),

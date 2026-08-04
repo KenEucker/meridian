@@ -576,6 +576,14 @@ POST /api/commands/mark-staff-off-site
 POST /api/commands/add-staff-to-shift
 POST /api/commands/sign-up-for-shift
 POST /api/commands/withdraw-from-shift
+POST /api/commands/update-my-profile
+POST /api/commands/request-handle-change
+POST /api/commands/submit-profile-picture
+POST /api/commands/remove-profile-picture
+POST /api/commands/withdraw-profile-change-request
+POST /api/commands/dismiss-profile-change-request
+POST /api/commands/approve-profile-change-request
+POST /api/commands/reject-profile-change-request
 POST /api/commands/revoke-credential
 POST /api/commands/set-current-deployment
 POST /api/commands/checkout-equipment
@@ -800,6 +808,98 @@ schedule locks, which is where staff self-service ends and lead removal
 (`remove-staff-from-shift`) continues. Both are connected-only: they are not in
 the 7.2 offline-writable set, because eligibility and capacity are answers a
 device cannot hold.
+
+The staff profile self-service pair (`GET /api/me/profile`,
+`POST /api/commands/update-my-profile`) is the staff profile surface's read and
+write (VOL-009, VOL-014 through VOL-016, VOL-026; section 10.4; UI contract
+12.3). The read answers with the staff records the caller's login speaks for and
+needs no authority beyond a credential, carrying the VOL-009 field set and
+`self_editable_fields` so the edit form renders the boundary the server
+enforces. The command is self-scoped the way the two shift commands above are:
+`staff_id` is optional with one linked record, required when the login speaks
+for several, and a `staff_id` outside the caller's own is refused with 403. It
+accepts exactly the VOL-015 set — `preferred_name`, `phone`, `city`, `state`,
+each nullable — and applies immediately with no review. A submitted
+`legal_name`, `email`, or `date_of_birth` is refused with 422 naming the
+assisted path rather than silently dropped (VOL-016), and `handle`,
+`formerly_known_as`, and the emergency contact fields are refused the same way:
+handle changes travel through `staff_profile_change_requests` below, and nothing
+in VOL-015 makes the rest self-service. The edit is audited
+as `staff.profile.self_updated` with the previous and new value of each changed
+field and only the changed fields (VOL-026); an edit that changes nothing writes
+no audit entry. `update-my-profile` is not in the 7.2 offline-writable set, so a
+client sends it connected or is refused where it stands.
+
+The profile change request commands are the handle and picture halves of the
+same surface (VOL-017 through VOL-025; section 10.4).
+
+`request-handle-change` records every handle change as a request row. The first
+two applied changes on a staff record are written `approved` with `self_service`
+true and applied in the same transaction; each one after that is written
+`pending` and applies only on approval. Setting a first handle is not a change
+and consumes nothing. The allowance is the count of approved handle rows
+carrying a `previous_handle`, so a rejected or withdrawn request restores
+nothing because it consumed nothing, and the response says which of the two
+outcomes happened rather than leaving the client to predict it.
+
+`submit-profile-picture` is multipart rather than JSON, because its body is an
+image. It refuses a staff member who is not `active` in any organization
+(technical spec 18A.1), applies the 18A.2 limits — JPEG, PNG, or WebP, 10 MB
+before processing, resized within 1024 x 1024, EXIF stripped by re-encoding —
+and stores the processed image on the private attachments disk rather than the
+public one the current picture uses, because a pending picture is readable only
+by its submitter and its reviewers (VOL-021). The staff record's current picture
+columns are untouched while the request is pending. A short-lived scoped URL
+(`GET /staff-profile-pictures/{changeRequest}/pending`, technical spec 11A.6)
+serves the submitted image to those two audiences and to nobody else,
+re-checking authority at stream time rather than trusting issuance.
+
+`remove-profile-picture` clears the current picture immediately, creates no
+request row, and deletes the stored blob (VOL-023). Alpha 1 preserves no
+previous pictures.
+
+`withdraw-profile-change-request` withdraws the caller's own pending request of
+either kind and discards a submitted image with it (VOL-024). A request that is
+not the caller's own is refused with 403 in the same words a missing one is, so
+the refusal discloses neither whose it was nor whether it exists.
+
+`dismiss-profile-change-request` is withdrawal's counterpart for a request
+nobody is deciding any more (VOL-029): a rejection the staff member has read, or
+an approval they no longer need announced. It sets `dismissed_at` rather than
+deleting the row, because the row is audit history and an approved handle change
+is one of the facts the VOL-018 allowance is counted from — "I have read this"
+must not be able to give somebody a change back. A pending request is refused
+with a message naming withdrawal instead, and another staff member's request is
+refused with the same 403 withdrawal gives.
+
+`GET /api/me/profile` carries `latest_handle_request` and
+`latest_picture_request`: the most recent request of each kind that the staff
+member has not dismissed, in whatever state it reached. A pending one is
+something to withdraw and blocks a second submission; a decided one is a notice
+to read and clear, and does not stand in the way of trying again. The read also
+carries `handle_change_policy`, `profile_picture_change_policy`,
+`can_submit_picture`, and `remaining_self_service_handle_changes`, so the
+surface words its controls for the outcome the node will actually produce rather
+than promising one and reporting another. `remaining_self_service_handle_changes`
+is zero under any policy that reviews every change, because an allowance nobody
+may spend is not an allowance.
+
+`approve-profile-change-request` and `reject-profile-change-request` answer to
+`staff.profile-change-requests.review`, resolved for the organization the
+request belongs to — organizers, Lead Organizers, and Staff Coordinators hold
+it and no other role does (VOL-019). A reviewer never decides their own request
+even where they hold the capability. Approval applies the handle or promotes the
+submitted image to the staff record's current picture and clears the pending
+columns; rejection requires a reason, which reaches the submitter (VOL-025), and
+discards the submitted image (VOL-022). A requested handle already held by
+another active staff member in the organization is named to the reviewer on
+`GET /api/staff-profile-change-requests` and does not block the decision
+(VOL-020), resolved at read time rather than stored. Creation, decision, and
+withdrawal are all audited, and an applied handle or promoted picture writes a
+second audit entry against the staff record itself, because "a decision
+happened" and "this person's handle is now different" are different questions.
+None of these are in the 7.2 offline-writable set; VOL-014 and technical spec
+18A.3 additionally make the picture path online-only by requirement.
 
 Shift administration commands (`create-shift`, `update-shift`, `cancel-shift`, `restore-shift`) are open to department `department.administer` authority for any department team and to designated team leads for shifts whose eligible team they lead. They enforce the documented eligibility and time-window rules: the event must belong to the department organization; exactly one eligible team from the same department; end after start; signup close after signup open; capacity at least 1 when set and never below current active assignments; once a shift has started its scheduled times and eligible team are locked and it can no longer be cancelled or restored; cancelled shifts must be restored before editing. Cancellation is a soft transition on `cancelled_at`.
 
@@ -1027,6 +1127,45 @@ Sheet and placement commands require `insights.sheets.manage` and validate place
 
 Insights are read-compiled and have no offline write path, so no Insights command enters the outbox in 5.6.
 
+### 5.9 Module Gating
+
+Every endpoint in this specification belongs either to a product module (MOD-002) or to core (MOD-004). The owning module is declared once per route group rather than checked per controller.
+
+Module-owned endpoint groups:
+
+```text
+scheduling      /api/departments/{department}/shifts*
+                /api/events/{event}/shifts*
+                /api/events/{event}/shift-board
+                /api/commands/*-shift*, *-signup*
+ims             /api/events/{event}/field-reports*
+                /api/events/{event}/incidents*
+                /api/commands/*-field-report*, *-incident*
+documents       /api/organizations/{organization}/documents
+                /api/policy-documents*, /api/procedure-documents*
+                /api/document-fragments*, /api/document-acknowledgments*
+                /api/commands/*-document*, *-acknowledg*, *-waiver*
+qualifications  /api/trainings*, /api/events/{event}/credentials*
+                /api/commands/*-training*, *-credential*
+equipment       /api/commands/*-equipment*
+geography       /api/events/{event}/maps*, /api/events/{event}/camps*
+                /api/commands/*-map*, *-camp*, *-deployment*
+briefing        /api/events/{event}/briefing*, /api/notes*
+                /api/commands/*-note*, *-briefing*
+insights        /api/insights/* (5.8)
+```
+
+Gate behavior:
+
+- The gate runs after organization resolution and before authorization, so the response does not vary by caller.
+- An inactive module answers `404` with `{"error": {"code": "module_inactive", "module": "<key>"}}`.
+- Command endpoints are gated by the module that owns the command, using the same rule. A gated command never reaches its handler and never writes an audit event for an attempted domain change.
+- A command replayed from the outbox against an inactive module is refused the same way, and the refusal is recorded as a sync conflict (MOD-017) rather than returned as a plain client error, because the submitting device may be long gone.
+- Session resolution (5.5) returns the organization's active module set. It is core and is never gated.
+- Exports owned by a module are unavailable when it is inactive; the short-lived download URL (5.7) is not issued.
+
+Departments operations read models (Overview, Logistics, Operations, Planning) are core endpoints that compose module-owned data. They omit the sections whose modules are inactive and return the rest (MOD-019). They never refuse on module state.
+
 ---
 
 ## 6. Permission Model
@@ -1224,6 +1363,17 @@ Scoping rules:
 - `department_planning` and `department_logistics` see only their own department unless another capability independently grants more
 - incident- and Field-Report-derived metrics require the corresponding IC capabilities from 6.5
 - an aggregate covering fewer than 5 people is suppressed, and suppression is applied server-side rather than by the rendering client
+
+### 6.8 Module Gating and Permissions
+
+Module state and permissions are separate boundaries evaluated in a fixed order: module gate first, permission check second (technical spec 15A.4).
+
+- A capability an organization does not run is unreachable to everyone in it, God Mode included, through the product API. God Mode changes module state from the console; it does not bypass the gate.
+- Role grants for an inactive module are retained, not revoked (MOD-014). `PermissionCatalog` keeps every permission constant regardless of module state, and the effective-permission resolver is unchanged by it.
+- A permission a user holds for an inactive module is simply never consulted. It becomes effective again the moment the module is active.
+- Permission-explaining UI (technical spec 15.1) does not explain module absence as a permission denial. "Your organization does not use Scheduling" is a different sentence from "you cannot manage shifts", and the client renders the one the refusal reason names.
+
+Module entitlement administration requires God Mode. Module enablement requires `organization.configuration.manage`, the same capability that governs the rest of ORG-018 configuration.
 
 ---
 
@@ -1443,6 +1593,16 @@ Offline server rejections and conflicts are deferred to the God Mode conflict
 queue. Until that queue exists, product surfaces may fail silently after
 recording enough queued/sync-failed local state for later repair.
 
+### 7.6 Module-Scoped Replication
+
+Sync rules are scoped by the organization's active modules in addition to the user's effective roles (MOD-016, technical spec 9.5 and 11A.7).
+
+- Every synced table declares its owning module, or declares itself core. A table with no declaration is core, so an undeclared table stays replicating rather than silently disappearing from devices.
+- A device receives a module's records only when the module is active for the organization *and* the user's effective roles permit them. Both conditions are evaluated server-side in the sync rules; neither is a client filter.
+- Deactivating a module removes its records from devices at the next sync. Activating one replicates the permitted records back. No local purge is required beyond the normal rule-change behavior.
+- Module state itself replicates to devices as part of the organization record, so an offline client gates navigation on the last known state.
+- Node-to-node sync is not module-scoped. An on-site node holds its organization's event records as it does today, and module state syncs with the rest of organization governance data from the authoritative central node.
+
 ---
 
 ## 8. Audit Model
@@ -1511,6 +1671,7 @@ Automatic document version bumps caused by fragment changes do not need separate
 Meridian's Alpha 1 data model is organized into these domains:
 
 1. Organizations
+1A. Organization modules
 2. Events
 3. Users and authentication
 4. Staff
@@ -1573,13 +1734,18 @@ Key fields:
 - `calendar_year_start_month`
 - `calendar_year_start_day`
 - `hours_correction_grace_period_days`
+- `handle_change_policy`, nullable
+- `profile_picture_change_policy`, nullable
+- `handle_self_service_change_limit`, nullable
 - `created_at`
 - `updated_at`
 - `archived_at`
 
-Configuration fields (ORG-017, ORG-018):
+Configuration fields (ORG-017, ORG-018, VOL-027, VOL-028):
 
 - `hours_correction_grace_period_days` is the ORG-017 hours correction window, expressed in days after event end. It defaults to 14 and is never null: an organization that has not configured one still has the documented default.
+- `handle_change_policy` and `profile_picture_change_policy` each hold one of `organizer_only`, `organizer_sets_first`, `auto_approved`, or `staff_sets_first` (VOL-027). Null reads as `organizer_only`, the documented default. The value is stored null rather than defaulted in the schema so an organization that never chose stays distinguishable from one that chose the default deliberately, and so a later change of default reaches the first of them.
+- `handle_self_service_change_limit` is the VOL-028 allowance, and null reads as two. It is consulted only while `handle_change_policy` is `auto_approved`; zero switches the allowance off without changing the policy. Profile pictures have no equivalent column because pictures applied without review are not rationed.
 
 Branding fields (BRAND-001, BRAND-004, BRAND-006, BRAND-013):
 
@@ -1599,6 +1765,53 @@ Relationships:
 - has many document fragments
 - has many credit policies
 - has current full-lockup and compact-mark branding attachments
+- has many organization modules
+
+---
+
+### 10.1A Organization Modules
+
+#### `organization_modules`
+
+Records one organization's state for one module in the fixed catalogue (MOD-002). One row per organization per module.
+
+Key fields:
+
+- `id`
+- `organization_id`
+- `module_key`
+- `entitled`
+- `enabled`
+- `entitlement_changed_at`
+- `entitlement_changed_by_user_id`
+- `enablement_changed_at`
+- `enablement_changed_by_user_id`
+- `created_at`
+- `updated_at`
+
+Field notes:
+
+- `module_key` is one of `scheduling`, `ims`, `documents`, `qualifications`, `equipment`, `geography`, `briefing`, `insights`. It is validated against the code-defined catalogue on write; an unknown key is rejected rather than stored. The catalogue is not a table, because it is Meridian's own build-time constant and a database row must never be able to invent a module the code does not implement.
+- `entitled` is the God Mode decision (MOD-006). `enabled` is the organization's decision (MOD-008). Both are non-null booleans.
+- The two are stored separately and never collapsed into one effective column. Revoking entitlement must not destroy the organization's own choice, so `enabled` survives an entitlement revoke and is honored again when entitlement returns (MOD-007).
+- Active is computed as `entitled AND enabled`. It is not stored.
+- A missing row means entitled and enabled, so an organization created before this table existed and a module added to the catalogue in a later build both default to available rather than silently absent. Rows are written for every module at organization creation (MOD-009), making the missing-row case a migration and upgrade safety net rather than a normal state.
+- The `*_changed_at` / `*_changed_by_user_id` pairs record the last transition of each state for display. They do not replace the audit trail; every transition writes an audit event with previous and new state, actor, and any supplied reason (MOD-011).
+
+Constraints:
+
+- unique on (`organization_id`, `module_key`)
+- `module_key` validated against the code catalogue on write
+- writes are refused during the organization's active event window (MOD-010), on the same governance rule as organization configuration and published documents
+- the central node is authoritative; an on-site node does not originate module state changes
+
+Relationships:
+
+- belongs to organization
+
+Replication:
+
+- replicates to devices as organization-scoped governance data, so an offline client can gate navigation on the last known state (7.6)
 
 ---
 
@@ -1811,6 +2024,7 @@ Key fields:
 - `decided_by_user_id`, nullable
 - `decided_at`, nullable
 - `decision_reason`, nullable
+- `dismissed_at`, nullable
 - `created_at`
 - `updated_at`
 
@@ -1833,7 +2047,8 @@ withdrawn
 Rules:
 
 - every handle change is recorded here, including the two self-service changes VOL-017 allows. A self-service change is written `approved` with `self_service` true, no `decided_by_user_id`, and `decided_at` set to when it applied.
-- the VOL-017 allowance is the count of applied handle changes for the staff record, so no separate counter column exists and the history is the accounting.
+- the VOL-017 allowance is the count of applied handle changes for the staff record, so no separate counter column exists and the history is the accounting. How many changes the allowance grants, and whether it applies at all, come from the reviewing organization's `handle_self_service_change_limit` and `handle_change_policy` (VOL-027, VOL-028).
+- `dismissed_at` marks a decided request the staff member has cleared from their own surface (VOL-029). It hides the notice and nothing else: the row stays readable to reviewers and audit, and an approved handle row keeps counting against the allowance.
 - setting a handle where the staff record holds none is not a change and is written with `previous_handle` null and `self_service` true without consuming the allowance (VOL-017).
 - only `approved` rows count against the allowance. `rejected` and `withdrawn` rows do not (VOL-018).
 - a staff member holds at most one `pending` row per kind (VOL-024).

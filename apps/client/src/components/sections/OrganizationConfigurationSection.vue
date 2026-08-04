@@ -69,12 +69,41 @@ const form = reactive({
   organizersDepartmentId: "",
   defaultIcDepartmentId: "",
   defaultPlacementDepartmentId: "",
+  handleChangePolicy: "organizer_only",
+  profilePictureChangePolicy: "organizer_only",
+  handleChangeLimit: "2",
 });
 
 const governance = computed(() => configuration.value?.governance ?? null);
 const editable = computed(() => governance.value?.editable ?? false);
 const departments = computed(() => configuration.value?.departments ?? []);
 const creditPolicies = computed(() => configuration.value?.creditPolicies ?? []);
+/*
+ * The four staff profile approval policies (VOL-027), as the node named and
+ * described them. An empty list means an older node that does not carry the
+ * setting, and the two selects below are absent rather than offering choices
+ * it would refuse.
+ */
+const changePolicies = computed(() => configuration.value?.changePolicies ?? []);
+
+/**
+ * What the selected policy means, in the node's own words, beside the choice
+ * that produces it. Selecting is the moment somebody needs the explanation;
+ * describing all four at once would be a wall of text describing three rules
+ * nobody chose.
+ */
+const handlePolicyNote = computed(
+  () =>
+    changePolicies.value.find(
+      (policy) => policy.value === form.handleChangePolicy,
+    )?.handleDescription ?? "",
+);
+const picturePolicyNote = computed(
+  () =>
+    changePolicies.value.find(
+      (policy) => policy.value === form.profilePictureChangePolicy,
+    )?.pictureDescription ?? "",
+);
 
 /** The node's sentence for why the form is read-only right now, or null. */
 const frozenReason = computed(() => {
@@ -134,6 +163,9 @@ function fillForm(current: OrganizationConfiguration): void {
   form.organizersDepartmentId = values.organizersDepartmentId ?? "";
   form.defaultIcDepartmentId = values.defaultIcDepartmentId ?? "";
   form.defaultPlacementDepartmentId = values.defaultPlacementDepartmentId ?? "";
+  form.handleChangePolicy = values.handleChangePolicy;
+  form.profilePictureChangePolicy = values.profilePictureChangePolicy;
+  form.handleChangeLimit = values.handleSelfServiceChangeLimit.toString();
 }
 
 /*
@@ -174,6 +206,9 @@ async function onSave(): Promise<void> {
       organizers_department_id: form.organizersDepartmentId || null,
       default_ic_department_id: form.defaultIcDepartmentId || null,
       default_placement_department_id: form.defaultPlacementDepartmentId || null,
+      handle_change_policy: form.handleChangePolicy,
+      profile_picture_change_policy: form.profilePictureChangePolicy,
+      handle_self_service_change_limit: numberOrNull(form.handleChangeLimit),
     });
     fillForm(configuration.value);
     saved.value = true;
@@ -412,6 +447,86 @@ async function onSave(): Promise<void> {
             The Organizers Department is where organizer authority resolves;
             the default Incident Command and Placement departments seed new
             events with those functions.
+          </p>
+        </fieldset>
+
+        <!--
+          Staff profile approval (VOL-027, VOL-028). Handles and pictures are
+          set separately because they are different kinds of fact about a
+          person: a handle is spoken on a radio and has to be unambiguous, a
+          picture is how a desk recognises somebody.
+
+          The choices and the words describing them come from the node, so the
+          option an organizer reads is the rule the server will apply. A node
+          that carries no policies is an older one, and this whole featureset
+          is absent rather than offering settings it would refuse.
+        -->
+        <fieldset
+          v-if="changePolicies.length > 0"
+          class="org-configuration-settings__group"
+        >
+          <legend>Staff profile approval</legend>
+          <div class="org-configuration-settings__fields">
+            <ControlField
+              label="Handle changes"
+              control-id="config-handle-policy"
+            >
+              <select
+                id="config-handle-policy"
+                v-model="form.handleChangePolicy"
+                :disabled="!editable"
+              >
+                <option
+                  v-for="policy in changePolicies"
+                  :key="policy.value"
+                  :value="policy.value"
+                >
+                  {{ policy.label }}
+                </option>
+              </select>
+            </ControlField>
+            <ControlField
+              label="Handle changes applied without review"
+              control-id="config-handle-limit"
+            >
+              <input
+                id="config-handle-limit"
+                v-model="form.handleChangeLimit"
+                type="number"
+                min="0"
+                max="50"
+                :disabled="!editable"
+              />
+            </ControlField>
+            <ControlField
+              label="Profile pictures"
+              control-id="config-picture-policy"
+            >
+              <select
+                id="config-picture-policy"
+                v-model="form.profilePictureChangePolicy"
+                :disabled="!editable"
+              >
+                <option
+                  v-for="policy in changePolicies"
+                  :key="policy.value"
+                  :value="policy.value"
+                >
+                  {{ policy.label }}
+                </option>
+              </select>
+            </ControlField>
+          </div>
+          <p class="org-configuration-settings__note">
+            {{ handlePolicyNote }}
+          </p>
+          <p class="org-configuration-settings__note">
+            {{ picturePolicyNote }}
+          </p>
+          <p class="org-configuration-settings__note">
+            The allowance applies only while handle changes are applied without
+            review, and 0 switches it off without changing the policy. Pictures
+            applied without review are not rationed.
           </p>
         </fieldset>
 

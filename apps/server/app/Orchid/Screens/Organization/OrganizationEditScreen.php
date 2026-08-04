@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\Organization;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\Attachment;
 use App\Models\AuditEvent;
 use App\Models\Department;
@@ -183,6 +184,9 @@ class OrganizationEditScreen extends Screen
             'organization.default_credit_policy_id' => ['nullable', 'uuid'],
             'organization.organizers_department_id' => ['nullable', 'uuid'],
             'organization.default_placement_department_id' => ['nullable', 'uuid'],
+            'organization.handle_change_policy' => ['nullable', 'string', Rule::in(ProfileChangePolicy::values())],
+            'organization.profile_picture_change_policy' => ['nullable', 'string', Rule::in(ProfileChangePolicy::values())],
+            'organization.handle_self_service_change_limit' => ['nullable', 'integer', 'between:0,50'],
             'branding.display_name' => ['nullable', 'string', 'max:255'],
             'branding.department_branding_enabled' => ['nullable', 'boolean'],
             'branding.palette' => ['nullable', 'array'],
@@ -242,6 +246,9 @@ class OrganizationEditScreen extends Screen
             'default_credit_policy_id',
             'organizers_department_id',
             'default_placement_department_id',
+            'handle_change_policy',
+            'profile_picture_change_policy',
+            'handle_self_service_change_limit',
         ] as $key) {
             if (array_key_exists($key, $attributes)) {
                 $configuration[$key] = blank($attributes[$key]) ? null : $attributes[$key];

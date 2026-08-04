@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -18,6 +19,12 @@ use Orchid\Screen\AsSource;
 
 class Organization extends Model
 {
+    /**
+     * The documented VOL-028 default: two handle changes apply without review
+     * before an organization's reviewers see one.
+     */
+    public const DEFAULT_HANDLE_SELF_SERVICE_CHANGE_LIMIT = 2;
+
     use AsSource;
     use Filterable;
 
@@ -49,6 +56,9 @@ class Organization extends Model
         'calendar_year_start_month',
         'calendar_year_start_day',
         'hours_correction_grace_period_days',
+        'handle_change_policy',
+        'profile_picture_change_policy',
+        'handle_self_service_change_limit',
         'archived_at',
     ];
 
@@ -184,6 +194,31 @@ class Organization extends Model
     public function hoursCorrectionGracePeriodDays(): int
     {
         return (int) ($this->hours_correction_grace_period_days ?? 14);
+    }
+
+    /**
+     * How handle changes are decided here (VOL-027). An organization that has
+     * never chosen reads as the documented default.
+     */
+    public function handleChangePolicy(): ProfileChangePolicy
+    {
+        return ProfileChangePolicy::resolve($this->handle_change_policy);
+    }
+
+    /** How profile picture submissions are decided here (VOL-027). */
+    public function profilePictureChangePolicy(): ProfileChangePolicy
+    {
+        return ProfileChangePolicy::resolve($this->profile_picture_change_policy);
+    }
+
+    /**
+     * How many handle changes apply without review while the policy allows any
+     * (VOL-028). Zero is a legitimate setting and means the policy's
+     * self-service allowance is switched off without changing the policy.
+     */
+    public function handleSelfServiceChangeLimit(): int
+    {
+        return max(0, (int) ($this->handle_self_service_change_limit ?? self::DEFAULT_HANDLE_SELF_SERVICE_CHANGE_LIMIT));
     }
 
     /**

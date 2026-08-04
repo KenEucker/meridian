@@ -232,17 +232,45 @@ class PermissionCatalogTest extends TestCase
         $this->assertSame([], $this->permissionCodesFor('department_operator'));
     }
 
-    public function test_staff_coordinator_carries_application_review_and_nothing_else(): void
+    public function test_staff_coordinator_carries_review_authority_and_no_other_governance(): void
     {
-        // M18.11 / TEAM-014 / requirements 4.4: application review, approval,
-        // rejection, and deferral, and no other organizer governance
-        // capability. The single-permission list is the requirement, not an
-        // implementation detail — anything added here widens a role that
-        // exists precisely because it is narrower than organizer.
+        /*
+         * M18.11 / TEAM-014 / requirements 4.4, and M18.20A / VOL-019.
+         *
+         * Two capabilities, both of them review of a person's standing with
+         * the organization: their application, and their requested handle or
+         * submitted picture. The exact list is the requirement rather than an
+         * implementation detail — anything else added here widens a role that
+         * exists precisely because it is narrower than organizer, and the
+         * absences below are the ones that define it.
+         */
         $this->assertSame(
-            ['organization.applications.review'],
+            [
+                'organization.applications.review',
+                'staff.profile-change-requests.review',
+            ],
             $this->permissionCodesFor('staff_coordinator'),
         );
+
+        foreach ([
+            'organization.departments.manage',
+            'organization.staff.manage',
+            'organization.configuration.manage',
+            'event.credentials.revoke',
+        ] as $withheld) {
+            $this->assertNotContains(
+                $withheld,
+                $this->permissionCodesFor('staff_coordinator'),
+                "A Staff Coordinator must not hold {$withheld}.",
+            );
+        }
+
+        // The profile change request capability reaches the two organizer
+        // roles and this one, and no other role at all (VOL-019).
+        $this->assertContains('staff.profile-change-requests.review', $this->permissionCodesFor('organizer'));
+        $this->assertContains('staff.profile-change-requests.review', $this->permissionCodesFor('lead_organizer'));
+        $this->assertNotContains('staff.profile-change-requests.review', $this->permissionCodesFor('department_lead'));
+        $this->assertNotContains('staff.profile-change-requests.review', $this->permissionCodesFor('ic_lead'));
 
         // Organizers and Lead Organizers review through the same capability,
         // which is what lets one policy answer for the whole reviewer

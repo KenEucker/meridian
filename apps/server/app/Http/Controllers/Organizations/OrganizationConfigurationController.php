@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Organizations;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\CreditPolicy;
@@ -67,6 +68,12 @@ final class OrganizationConfigurationController extends Controller
             'organizers_department_id' => ['sometimes', 'nullable', 'uuid'],
             'default_ic_department_id' => ['sometimes', 'nullable', 'uuid'],
             'default_placement_department_id' => ['sometimes', 'nullable', 'uuid'],
+            // The VOL-027 policies and the VOL-028 allowance. Values are
+            // checked in the service, which is where the refusal naming the
+            // four accepted policies is worded.
+            'handle_change_policy' => ['sometimes', 'nullable', 'string'],
+            'profile_picture_change_policy' => ['sometimes', 'nullable', 'string'],
+            'handle_self_service_change_limit' => ['sometimes', 'nullable', 'integer'],
         ]);
 
         $user = $request->user();
@@ -145,6 +152,16 @@ final class OrganizationConfigurationController extends Controller
                 'default_placement_department_id' => $organization->default_placement_department_id !== null
                     ? (string) $organization->default_placement_department_id
                     : null,
+                /*
+                 * The resolved values rather than the stored ones (VOL-027,
+                 * VOL-028). An organization that never chose reads as the
+                 * documented default here, which is what it behaves as; the
+                 * surface should show the rule in force, not a blank that
+                 * makes a person guess what happens.
+                 */
+                'handle_change_policy' => $organization->handleChangePolicy()->value,
+                'profile_picture_change_policy' => $organization->profilePictureChangePolicy()->value,
+                'handle_self_service_change_limit' => $organization->handleSelfServiceChangeLimit(),
             ],
             'options' => [
                 'departments' => $departments
@@ -161,6 +178,22 @@ final class OrganizationConfigurationController extends Controller
                     ])
                     ->values()
                     ->all(),
+                /*
+                 * The four approval policies with the words that explain them
+                 * (VOL-027). Sent by the node rather than written into the
+                 * client, so the choice an organizer reads and the rule the
+                 * server enforces cannot drift apart, and so a policy added
+                 * later reaches every surface at once.
+                 */
+                'change_policies' => array_map(
+                    fn (ProfileChangePolicy $policy): array => [
+                        'value' => $policy->value,
+                        'label' => $policy->label(),
+                        'handle_description' => $policy->description('handle'),
+                        'picture_description' => $policy->description('profile picture'),
+                    ],
+                    ProfileChangePolicy::cases(),
+                ),
             ],
             'governance' => [
                 'editable' => $governance->isEditable($organizationId),

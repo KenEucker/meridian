@@ -373,7 +373,7 @@ final class WaiverAdminController extends Controller
 
                 return [
                     'staff_id' => (string) $staff->getKey(),
-                    'display_name' => $staff->preferred_name ?: ($staff->legal_name ?? 'Unknown staff member'),
+                    'display_name' => $staff->displayName(),
                     'handle' => $staff->handle,
                     'complete' => $current !== null,
                     'lapsed' => $current === null && $latest !== null,

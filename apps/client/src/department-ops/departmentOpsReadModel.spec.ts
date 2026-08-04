@@ -44,6 +44,7 @@ function workspace(
     staffId: "staff-1",
     displayName: "Vera Staff",
     handle: "vera",
+    profilePictureUrl: null,
     teamLabel: "Dirt",
     presenceState: "on_site",
     canGoOffSite: true,

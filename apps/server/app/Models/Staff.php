@@ -218,6 +218,30 @@ class Staff extends Model
             ->whereNull('archived_at'));
     }
 
+    /**
+     * What to call this person on a surface that shows one name (VOL-010).
+     *
+     * Handle first, because that is how people at an event know each other: a
+     * radio call, a shift board, and a desk all use the operational handle,
+     * and the legal name on the record is frequently one nobody present would
+     * recognise. Preferred name is the fallback for somebody who has no handle
+     * yet, and legal name the last resort, because every staff record has one.
+     *
+     * This is the display rule and not a privacy rule. Surfaces that already
+     * show legal or preferred name alongside keep doing so; what this decides
+     * is which single name leads.
+     */
+    public function displayName(): string
+    {
+        foreach ([$this->handle, $this->preferred_name, $this->legal_name] as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+        }
+
+        return 'Unknown staff member';
+    }
+
     public function profilePictureUrl(): ?string
     {
         if ($this->profile_picture_path === null || $this->profile_picture_path === '') {
