@@ -93,6 +93,17 @@ export const CAPABILITY_EVENT_CREDENTIALS_REVOKE = "event.credentials.revoke";
  */
 export const CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW =
   "documents.acknowledgments.review";
+/**
+ * Deciding staff handle and profile picture change requests (VOL-019; M18.20A,
+ * M18.20D).
+ *
+ * Organizers, Lead Organizers, and the Staff Coordinator hold it and no other
+ * role does. It gates the reviewer's queue and nothing a staff member does with
+ * their own record: submitting, withdrawing, and clearing your own request need
+ * no capability at all, because they are acts on yourself.
+ */
+export const CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW =
+  "staff.profile-change-requests.review";
 
 /**
  * Role codes, for the two surfaces that answer to standing rather than to a

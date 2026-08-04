@@ -43,6 +43,7 @@ import {
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
   CAPABILITY_POLICIES_VIEW_PUBLISHED,
   CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
+  CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
   ROLE_DEPARTMENT_LEAD,
   ROLE_SHIFT_LEAD,
 } from "@/session/permissionCodes";
@@ -671,6 +672,27 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         description:
           "What must be acknowledged at signup and training, and who has.",
         to: { name: "organizer.document-acknowledgments.index" },
+      });
+    }
+
+    /*
+     * Handle and profile picture change request review (M18.20D; VOL-019).
+     * Its own capability rather than the staff one beside it: the Staff
+     * Coordinator decides these and administers no staff record, so gating this
+     * on `organization.staff.manage` would have hidden the page from half of
+     * who it is for.
+     */
+    if (
+      departmentHasCapability(
+        department,
+        CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
+      )
+    ) {
+      organizationPages.push({
+        label: "Profile requests",
+        description:
+          "Staff handle changes and profile pictures waiting on a decision.",
+        to: { name: "organizer.profile-change-requests.index" },
       });
     }
 

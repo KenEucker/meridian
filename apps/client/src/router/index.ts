@@ -46,6 +46,7 @@ import OrganizerDepartmentListView from "@/views/OrganizerDepartmentListView.vue
 import OrganizerConfigurationView from "@/views/OrganizerConfigurationView.vue";
 import OrganizerCredentialsView from "@/views/OrganizerCredentialsView.vue";
 import OrganizerDocumentAcknowledgmentsView from "@/views/OrganizerDocumentAcknowledgmentsView.vue";
+import OrganizerProfileChangeRequestsView from "@/views/OrganizerProfileChangeRequestsView.vue";
 import SignupAcknowledgmentView from "@/views/SignupAcknowledgmentView.vue";
 import StaffDocumentAcknowledgmentsView from "@/views/StaffDocumentAcknowledgmentsView.vue";
 import StaffDocumentDetailView from "@/views/StaffDocumentDetailView.vue";
@@ -62,6 +63,7 @@ import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
+import StaffProfileRequestsView from "@/views/StaffProfileRequestsView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import WaiverAdministrationView from "@/views/WaiverAdministrationView.vue";
@@ -349,6 +351,20 @@ export const routes: RouteRecordRaw[] = [
     component: StaffProfileEditView,
   },
   /*
+   * Where your own requests stand (M18.20D; VOL-024, VOL-025, VOL-029; UI
+   * contract 12.3 `staff.profile-requests`). Self-scoped for the same reason
+   * the two above are: whose requests these are is the session's answer.
+   *
+   * Under `/staff/me` rather than beside it, because that is what it is about —
+   * the requests a person has made against their own record, not a queue of
+   * anything. The reviewer's queue is `organizer.profile-change-requests`.
+   */
+  {
+    path: "/staff/me/requests",
+    name: "staff.profile.requests",
+    component: StaffProfileRequestsView,
+  },
+  /*
    * The staff shift board (M18.2; SHIFT-018; UI contract 12.3 `staff.shifts`).
    *
    * Not department-scoped in its path, unlike the department shift list it sits
@@ -516,6 +532,17 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/acknowledgments",
     name: "organizer.document-acknowledgments.index",
     component: OrganizerDocumentAcknowledgmentsView,
+  },
+  /*
+   * Handle and profile picture change request review (M18.20D; VOL-019 through
+   * VOL-022; UI contract 12.6). Organization-scoped and not event-scoped: a
+   * handle is a fact about a person's standing with the organization, and it
+   * outlives any one event.
+   */
+  {
+    path: "/organizer/profile-change-requests",
+    name: "organizer.profile-change-requests.index",
+    component: OrganizerProfileChangeRequestsView,
   },
   /*
    * Waiver administration and completion recording (M18.18; WAIVER-001
