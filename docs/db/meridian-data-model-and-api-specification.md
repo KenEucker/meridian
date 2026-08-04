@@ -2407,6 +2407,8 @@ Key fields:
 - `name`
 - `description`
 - `expires_after_days`, nullable
+- `document_type`, nullable (`policy` or `procedure`; WAIVER-007)
+- `document_id`, nullable
 - `created_at`
 - `updated_at`
 - `archived_at`
@@ -2415,6 +2417,7 @@ Rules:
 
 - Meridian tracks completion as complete/incomplete
 - signed document contents are not stored in MVP
+- a waiver may reference a published policy/procedure document in its organization as the text being agreed to (WAIVER-007); the reference is optional, and a waiver with no reference behaves exactly as before (WAIVER-009)
 
 #### `waiver_completions`
 
@@ -2428,7 +2431,16 @@ Key fields:
 - `completed_at`
 - `expires_at`
 - `recorded_by_user_id`
+- `document_type`, nullable
+- `document_id`, nullable
+- `document_revision`, nullable
+- `fragment_revision`, nullable
 - `created_at`
+
+Rules:
+
+- completing a document-backed waiver records the acknowledged document and document version alongside the completion, using the same version-recording rule as policy/procedure acknowledgments (WAIVER-008; POL-043), and retains the acknowledged version's source and resolved text as a `document_version_snapshots` row
+- a completion of a waiver with no document reference records no document columns (WAIVER-009)
 
 ---
 
