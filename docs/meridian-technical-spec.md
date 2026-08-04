@@ -542,8 +542,11 @@ Resolution rules:
 
 - The server resolves the organization from the request host when the host is an organization-slug subdomain of the configured platform domain, and from the leading path segment otherwise.
 - Under an organization subdomain, paths omit the organization slug segment; both forms resolve the same organization, content, and branding profile.
+- Every surface the deployment serves for an organization resolves under its subdomain: the public surfaces (today the event application flow), the organization-branded signed-in clients, and the `/api` endpoints they call — so an organization lives entirely on its subdomain, which is the same shape the dedicated-infrastructure tier later serves in isolation.
+- The platform domain is derived from the configured application URL's host; no separate configuration key exists. A request host of the form `<organization-slug>.<application host>` is organization addressing, and any other host falls through to path resolution. Development derives the same way from an application URL on `localhost`, giving `<slug>.localhost`.
+- No subdomain labels are reserved. Any active organization slug resolves, and operational hostnames (`www`, `api`, `mail`, and the like) are the deployment's own DNS concern rather than the application's.
 - The deployment-root marketing surface never renders on an organization subdomain (ORG-024), and an organization subdomain never serves another organization's content.
-- A subdomain that matches no active organization slug is a not-found response.
+- A subdomain that matches no active organization slug is a not-found response. An archived organization's slug is not an active slug: archiving takes the organization's subdomain and its root path out of resolution.
 
 Deployment implications:
 
