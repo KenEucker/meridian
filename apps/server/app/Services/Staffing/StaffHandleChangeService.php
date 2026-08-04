@@ -2,6 +2,7 @@
 
 namespace App\Services\Staffing;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\AuditEvent;
 use App\Models\Staff;
 use App\Models\StaffProfileChangeRequest;
@@ -9,16 +10,23 @@ use App\Models\User;
 use App\Services\Audit\AuditService;
 
 /**
- * Handle changes and the self-service allowance (M18.20B; VOL-017, VOL-018,
- * VOL-020, VOL-026).
+ * Handle changes, the self-service allowance, and the organization's policy
+ * (M18.20B; VOL-017, VOL-018, VOL-020, VOL-026, VOL-027, VOL-028).
  *
  * Every handle change is a request row, including the ones that apply without
- * review. That is what makes the allowance countable: the first two applied
- * changes on a staff record go through immediately, each one after that waits
- * for a reviewer, and the number spent is read from the history rather than
- * from a counter that could disagree with it.
+ * review. That is what makes the allowance countable: the number spent is read
+ * from the history rather than from a counter that could disagree with it.
  *
- * Setting a first handle is not a change (VOL-017). A staff record created
+ * What happens to a given change is the organization's decision (VOL-027).
+ * Under the default policy every change is reviewed. Under `auto_approved` a
+ * change applies immediately until the allowance runs out and is reviewed
+ * after that, which is the behaviour VOL-017 describes and which an
+ * organization now opts into rather than receiving. Under `staff_sets_first`
+ * only the first handle is free. Under `organizer_sets_first` a staff member
+ * with no handle cannot propose one at all — they are waiting on an organizer,
+ * not being refused, and the message says so.
+ *
+ * Setting a first handle is never a change (VOL-017). A staff record created
  * with no handle has not used a handle yet, so choosing one is completing the
  * profile rather than replacing something other people already know somebody
  * by — which is the thing the allowance exists to ration.
@@ -28,6 +36,7 @@ final class StaffHandleChangeService
     public function __construct(
         private readonly AuditService $audit,
         private readonly StaffProfileChangeRequestService $requests,
+        private readonly StaffProfileChangeRequestAccess $access,
     ) {}
 
     /**
@@ -54,11 +63,25 @@ final class StaffHandleChangeService
             throw new StaffProfileSelfException('That is already your handle.');
         }
 
-        // A first handle costs nothing; a change costs one of the two, and the
-        // third onward is reviewed.
         $isFirstHandle = $previous === null || $previous === '';
+        $policy = $this->access->reviewingOrganization($staff)?->handleChangePolicy()
+            ?? ProfileChangePolicy::default();
+
+        if ($isFirstHandle && ! $policy->allowsStaffFirstValue()) {
+            throw new StaffProfileSelfException(
+                'Your organization issues first handles. Ask an organizer to set yours, and you can request changes to it after that.',
+            );
+        }
+
+        /*
+         * A first handle applies now where the policy says so; a change to an
+         * existing handle applies now only while the allowance holds. Both
+         * fall through to a reviewed request otherwise, which is what every
+         * mode except `auto_approved` does with a change.
+         */
         $selfService = $isFirstHandle
-            || $this->requests->remainingSelfServiceHandleChanges($staff) > 0;
+            ? $policy->appliesFirstValueWithoutReview()
+            : $this->requests->remainingSelfServiceHandleChanges($staff) > 0;
 
         return $this->requests->open(
             staff: $staff,

@@ -70,9 +70,13 @@ class OrganizerStaffHttpTest extends TestCase
             ->getJson("/api/organizations/{$organization->id}/staff")
             ->assertOk()
             ->assertJsonPath('organization_id', $organization->id)
+            // The handle leads (VOL-010): a roster names people the way the
+            // event does. The other names are on the row, not replaced by it.
             ->assertJsonFragment([
                 'id' => $staffId,
-                'display_name' => 'Avery',
+                'display_name' => 'avery-radio',
+                'preferred_name' => 'Avery',
+                'legal_name' => 'Avery Staff',
                 'organization_status' => StaffOrganizationStatus::STATUS_ACTIVE,
             ]);
 

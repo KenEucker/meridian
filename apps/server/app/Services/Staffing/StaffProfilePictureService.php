@@ -66,6 +66,29 @@ final class StaffProfilePictureService
             );
         }
 
+        /*
+         * What happens to this submission is the organization's decision
+         * (VOL-027). A first picture may be refused outright under
+         * `organizer_sets_first`, applied outright under `auto_approved` and
+         * `staff_sets_first`, or reviewed. A replacement applies outright only
+         * under `auto_approved` — and unlike a handle it is not rationed,
+         * because nobody memorises a photograph the way they memorise a
+         * call sign.
+         */
+        $policy = $this->access->reviewingOrganization($staff)?->profilePictureChangePolicy()
+            ?? ProfileChangePolicy::default();
+        $hasPicture = $staff->profile_picture_path !== null && $staff->profile_picture_path !== '';
+
+        if (! $hasPicture && ! $policy->allowsStaffFirstValue()) {
+            throw new StaffProfileSelfException(
+                'Your organization sets first profile pictures. Ask an organizer to add yours, and you can submit a replacement after that.',
+            );
+        }
+
+        $selfService = $hasPicture
+            ? $policy->allowsSelfServiceChanges()
+            : $policy->appliesFirstValueWithoutReview();
+
         $processed = $this->processor->process($bytes, $declaredMimeType);
         $disk = $this->pendingDisk();
         $path = 'staff-profile-pictures/pending/'.$staff->id.'/'.Str::uuid()->toString().$this->extension($processed['mime_type']);
@@ -84,9 +107,15 @@ final class StaffProfilePictureService
                     'pending_picture_width' => $processed['width'],
                     'pending_picture_height' => $processed['height'],
                 ],
-                // Never self-service: every picture submission is reviewed
-                // (VOL-021), unlike the first two handle changes.
-                selfService: false,
+                selfService: $selfService,
+                // A self-service submission is promoted in the same
+                // transaction that records it, so a picture the person was
+                // told applied is a picture that applied (VOL-021, VOL-027).
+                apply: fn (StaffProfileChangeRequest $request) => $this->promote(
+                    $request,
+                    $actor,
+                    $sourceContext,
+                ),
                 sourceContext: $sourceContext,
             );
         } catch (StaffProfileSelfException $exception) {
@@ -208,12 +237,17 @@ final class StaffProfilePictureService
     /**
      * Move a submitted image onto the staff record as its current picture.
      *
-     * Copied to the public disk and deleted from the pending one, so the
-     * approved picture lives exactly where an unreviewed one never did.
+     * Copied to the public disk and deleted from the pending one, so a picture
+     * awaiting a decision never sits where an approved one does.
+     *
+     * `$actor` is the reviewer who approved it, or the staff member themselves
+     * where the organization's policy applies a submission without review
+     * (VOL-027). The audit entry names whichever it was, which is the thing
+     * somebody reading the trail later wants to know.
      */
     private function promote(
         StaffProfileChangeRequest $request,
-        User $reviewer,
+        User $actor,
         string $sourceContext,
     ): void {
         $staff = Staff::query()->whereKey($request->staff_id)->lockForUpdate()->firstOrFail();
@@ -258,7 +292,7 @@ final class StaffProfilePictureService
         $this->audit->recordForEntity(
             entity: $staff,
             action: 'staff.profile.picture_changed',
-            actorUser: $reviewer,
+            actorUser: $actor,
             organizationId: (string) $request->organization_id,
             before: ['profile_picture_path' => $previousPath],
             after: ['profile_picture_path' => $currentPath],

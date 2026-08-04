@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Organizations;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\AuditEvent;
 use App\Models\CreditPolicy;
 use App\Models\Department;
@@ -60,6 +61,9 @@ final class OrganizationConfigurationService
         'organizers_department_id',
         'default_ic_department_id',
         'default_placement_department_id',
+        'handle_change_policy',
+        'profile_picture_change_policy',
+        'handle_self_service_change_limit',
     ];
 
     public function __construct(
@@ -155,7 +159,69 @@ final class OrganizationConfigurationService
             }
         }
 
+        foreach ([
+            'handle_change_policy' => 'handle changes',
+            'profile_picture_change_policy' => 'profile picture changes',
+        ] as $key => $label) {
+            if (array_key_exists($key, $changes)) {
+                $values[$key] = $this->changePolicy($changes[$key], $label);
+            }
+        }
+
+        if (array_key_exists('handle_self_service_change_limit', $changes)) {
+            $values['handle_self_service_change_limit'] = $this->handleChangeLimit(
+                $changes['handle_self_service_change_limit'],
+            );
+        }
+
         return $values;
+    }
+
+    /**
+     * One of the four VOL-027 approval policies, or null to return to the
+     * default. An unrecognised value is refused rather than silently becoming
+     * the default: an organizer who mistypes a policy should be told, not
+     * quietly given the strictest one.
+     */
+    private function changePolicy(mixed $value, string $label): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $policy = ProfileChangePolicy::tryFrom((string) $value);
+
+        if ($policy === null) {
+            throw OrganizationConfigurationException::invalid(sprintf(
+                'The approval policy for %s must be one of: %s.',
+                $label,
+                implode(', ', ProfileChangePolicy::values()),
+            ));
+        }
+
+        return $policy->value;
+    }
+
+    /**
+     * The VOL-028 allowance. Zero is legitimate — it switches self-service
+     * changes off without changing the policy — and the ceiling exists because
+     * a handle nobody can rely on is not a handle.
+     */
+    private function handleChangeLimit(mixed $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $limit = (int) $value;
+
+        if ($limit < 0 || $limit > 50) {
+            throw OrganizationConfigurationException::invalid(
+                'The self-service handle change allowance must be between 0 and 50, or cleared to use the default of two.',
+            );
+        }
+
+        return $limit;
     }
 
     private function positiveYearsOrNull(mixed $value, string $key): ?int
@@ -332,6 +398,9 @@ final class OrganizationConfigurationService
             'default_placement_department_id' => $organization->default_placement_department_id !== null
                 ? (string) $organization->default_placement_department_id
                 : null,
+            'handle_change_policy' => $organization->handle_change_policy,
+            'profile_picture_change_policy' => $organization->profile_picture_change_policy,
+            'handle_self_service_change_limit' => $organization->handle_self_service_change_limit,
         ];
     }
 }

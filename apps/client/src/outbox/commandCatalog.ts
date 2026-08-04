@@ -48,6 +48,7 @@ export type MeridianCommandType =
   | "submit-profile-picture"
   | "remove-profile-picture"
   | "withdraw-profile-change-request"
+  | "dismiss-profile-change-request"
   // Profile change request review (M18.20A, M18.20D).
   | "approve-profile-change-request"
   | "reject-profile-change-request"
@@ -311,6 +312,12 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/withdraw-profile-change-request",
       "Change request withdrawal",
       "Withdrawing a request needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "dismiss-profile-change-request": connectedOnly(
+      "dismiss-profile-change-request",
+      "/api/commands/dismiss-profile-change-request",
+      "Change request dismissal",
+      "Clearing a decided request needs a connection to the node. It cannot be held on this device for later.",
     ),
     /*
      * The reviewer's two decisions (M18.20D; VOL-019, VOL-022). Desk work with

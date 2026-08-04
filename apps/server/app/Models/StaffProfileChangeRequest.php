@@ -59,6 +59,7 @@ class StaffProfileChangeRequest extends Model
         'decided_by_user_id',
         'decided_at',
         'decision_reason',
+        'dismissed_at',
     ];
 
     /**
@@ -69,6 +70,7 @@ class StaffProfileChangeRequest extends Model
         return [
             'self_service' => 'boolean',
             'decided_at' => 'datetime',
+            'dismissed_at' => 'datetime',
         ];
     }
 

@@ -1444,13 +1444,9 @@ final class DepartmentOperationsReadController extends Controller
 
     private function staffName(?Staff $staff): string
     {
-        if ($staff === null) {
-            return 'Staff member';
-        }
-
-        return $staff->preferred_name !== null && $staff->preferred_name !== ''
-            ? $staff->preferred_name
-            : $staff->legal_name;
+        // Handle first (VOL-010): a desk calls people by the name they answer
+        // to on the radio, which is rarely the one on their record.
+        return $staff?->displayName() ?? 'Staff member';
     }
 
     private function nullableQuery(Request $request, string $key): ?string

@@ -26,6 +26,22 @@ export interface ConfigurationCreditPolicyOption {
   readonly name: string;
 }
 
+/**
+ * One of the four staff profile approval policies, with the words that explain
+ * it (VOL-027).
+ *
+ * The list and its wording come from the node rather than being written into
+ * this client, so the choice an organizer reads and the rule the server
+ * enforces cannot drift, and a policy added later reaches this surface without
+ * a client release.
+ */
+export interface ProfileChangePolicyOption {
+  readonly value: string;
+  readonly label: string;
+  readonly handleDescription: string;
+  readonly pictureDescription: string;
+}
+
 /** The configured values as the node holds them. */
 export interface OrganizationConfigurationValues {
   readonly activeInactiveThresholdYears: number | null;
@@ -37,6 +53,11 @@ export interface OrganizationConfigurationValues {
   readonly organizersDepartmentId: string | null;
   readonly defaultIcDepartmentId: string | null;
   readonly defaultPlacementDepartmentId: string | null;
+  /** How handle and picture changes are decided here (VOL-027). */
+  readonly handleChangePolicy: string;
+  readonly profilePictureChangePolicy: string;
+  /** Handle changes applied without review while the policy allows any (VOL-028). */
+  readonly handleSelfServiceChangeLimit: number;
 }
 
 /** Whether edits are possible here and now, and why not when they are not. */
@@ -52,6 +73,7 @@ export interface OrganizationConfiguration {
   readonly values: OrganizationConfigurationValues;
   readonly departments: readonly ConfigurationDepartmentOption[];
   readonly creditPolicies: readonly ConfigurationCreditPolicyOption[];
+  readonly changePolicies: readonly ProfileChangePolicyOption[];
   readonly governance: OrganizationConfigurationGovernance;
 }
 
@@ -66,6 +88,9 @@ export interface OrganizationConfigurationUpdate {
   readonly organizers_department_id?: string | null;
   readonly default_ic_department_id?: string | null;
   readonly default_placement_department_id?: string | null;
+  readonly handle_change_policy?: string | null;
+  readonly profile_picture_change_policy?: string | null;
+  readonly handle_self_service_change_limit?: number | null;
 }
 
 interface ConfigurationPayload {
@@ -80,10 +105,19 @@ interface ConfigurationPayload {
     readonly organizers_department_id?: string | null;
     readonly default_ic_department_id?: string | null;
     readonly default_placement_department_id?: string | null;
+    readonly handle_change_policy?: string;
+    readonly profile_picture_change_policy?: string;
+    readonly handle_self_service_change_limit?: number;
   };
   readonly options?: {
     readonly departments?: { id: string; name: string }[];
     readonly credit_policies?: { id: string; name: string }[];
+    readonly change_policies?: {
+      value: string;
+      label: string;
+      handle_description: string;
+      picture_description: string;
+    }[];
   };
   readonly governance?: {
     readonly editable?: boolean;
@@ -113,9 +147,20 @@ function toConfiguration(
       defaultIcDepartmentId: values.default_ic_department_id ?? null,
       defaultPlacementDepartmentId:
         values.default_placement_department_id ?? null,
+      handleChangePolicy: values.handle_change_policy ?? "organizer_only",
+      profilePictureChangePolicy:
+        values.profile_picture_change_policy ?? "organizer_only",
+      handleSelfServiceChangeLimit:
+        values.handle_self_service_change_limit ?? 2,
     },
     departments: payload.options?.departments ?? [],
     creditPolicies: payload.options?.credit_policies ?? [],
+    changePolicies: (payload.options?.change_policies ?? []).map((option) => ({
+      value: option.value,
+      label: option.label,
+      handleDescription: option.handle_description,
+      pictureDescription: option.picture_description,
+    })),
     governance: {
       editable: payload.governance?.editable ?? true,
       holdsAuthority: payload.governance?.holds_authority ?? true,

@@ -3,6 +3,7 @@
 namespace App\Services\Staffing;
 
 use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Organization;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\StaffProfileChangeRequest;
@@ -105,6 +106,19 @@ final class StaffProfileChangeRequestAccess
             ->first();
 
         return $status === null ? null : (string) $status->organization_id;
+    }
+
+    /**
+     * The reviewing organization itself, for the callers that need its
+     * configured approval policy rather than only its id (VOL-027, VOL-028).
+     */
+    public function reviewingOrganization(Staff $staff): ?Organization
+    {
+        $organizationId = $this->reviewingOrganizationId($staff);
+
+        return $organizationId === null
+            ? null
+            : Organization::query()->find($organizationId);
     }
 
     /**

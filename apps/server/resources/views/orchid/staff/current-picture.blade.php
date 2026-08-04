@@ -19,7 +19,7 @@
         @if ($pictureUrl)
             <img
                 src="{{ $pictureUrl }}"
-                alt="{{ __('Current profile picture for :name', ['name' => $staff->preferred_name ?: $staff->legal_name]) }}"
+                alt="{{ __('Current profile picture for :name', ['name' => $staff->displayName()]) }}"
                 style="width: 100%; height: 100%; object-fit: cover;"
             >
         @else

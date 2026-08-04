@@ -2,7 +2,9 @@
 
 namespace App\Services\Staffing;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\AuditEvent;
+use App\Models\Organization;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\StaffProfileChangeRequest;
@@ -31,9 +33,6 @@ use Illuminate\Support\Facades\DB;
  */
 final class StaffProfileChangeRequestService
 {
-    /** Applied handle changes a staff record gets before review begins (VOL-017). */
-    public const SELF_SERVICE_HANDLE_CHANGES = 2;
-
     public function __construct(
         private readonly AuditService $audit,
         private readonly StaffProfileChangeRequestAccess $access,
@@ -258,16 +257,32 @@ final class StaffProfileChangeRequestService
 
     /**
      * How many self-service handle changes this staff record has left
-     * (VOL-017, VOL-018).
+     * (VOL-017, VOL-018, VOL-028).
      *
      * Counted from applied changes: `approved` handle rows that actually moved
      * a handle. Setting a first handle is not a change and is stored with a
      * null `previous_handle`, so it is not counted here either — which is the
      * rule rather than an implementation detail worth restating at each call
      * site.
+     *
+     * The limit comes from the reviewing organization (VOL-028). Under a policy
+     * that reviews every change the number is zero regardless of the limit,
+     * because an allowance nobody may spend is not an allowance; reporting the
+     * organization's limit there would tell a staff member they have changes in
+     * hand that the next save will refuse.
      */
     public function remainingSelfServiceHandleChanges(Staff $staff): int
     {
+        $organization = $this->access->reviewingOrganization($staff);
+        $policy = $organization?->handleChangePolicy() ?? ProfileChangePolicy::default();
+
+        if (! $policy->allowsSelfServiceChanges()) {
+            return 0;
+        }
+
+        $limit = $organization?->handleSelfServiceChangeLimit()
+            ?? Organization::DEFAULT_HANDLE_SELF_SERVICE_CHANGE_LIMIT;
+
         $applied = StaffProfileChangeRequest::query()
             ->where('staff_id', $staff->id)
             ->where('kind', StaffProfileChangeRequest::KIND_HANDLE)
@@ -275,7 +290,55 @@ final class StaffProfileChangeRequestService
             ->whereNotNull('previous_handle')
             ->count();
 
-        return max(0, self::SELF_SERVICE_HANDLE_CHANGES - $applied);
+        return max(0, $limit - $applied);
+    }
+
+    /**
+     * The most recent request of this kind the staff member has not dismissed,
+     * whatever state it reached (VOL-029).
+     *
+     * Distinct from {@see pendingRequest}, which answers whether something is
+     * outstanding. This one answers what happened last, so a rejection and its
+     * reason stay on the staff member's own surface until they clear it.
+     */
+    public function latestRequest(Staff $staff, string $kind): ?StaffProfileChangeRequest
+    {
+        return StaffProfileChangeRequest::query()
+            ->where('staff_id', $staff->id)
+            ->where('kind', $kind)
+            ->whereNull('dismissed_at')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Clear a decided request from the submitter's own surface (VOL-029).
+     *
+     * A flag rather than a delete. The row is the audit trail and, for an
+     * approved handle change, one of the allowance's countable facts — so
+     * "I have read this" must not be able to give somebody a change back.
+     */
+    public function dismiss(
+        StaffProfileChangeRequest $request,
+        User $actor,
+        string $sourceContext = AuditEvent::SOURCE_API,
+    ): StaffProfileChangeRequest {
+        if (! $this->access->isOwnProfile($actor, (string) $request->staff_id)) {
+            throw new StaffProfileSelfException(
+                'You can only dismiss your own profile change request.',
+            );
+        }
+
+        if ($request->isPending()) {
+            throw new StaffProfileSelfException(
+                'This request is still waiting for a decision. Withdraw it instead.',
+            );
+        }
+
+        $request->forceFill(['dismissed_at' => now()])->save();
+
+        return $request->refresh();
     }
 
     /** The staff member's outstanding request of this kind, if any (VOL-024). */
@@ -313,6 +376,13 @@ final class StaffProfileChangeRequestService
                 ->where('organization_id', $request->organization_id)
                 ->where('status', StaffOrganizationStatus::STATUS_ACTIVE))
             ->get()
+            /*
+             * The one place that deliberately does not use the handle-first
+             * display name (VOL-010): these people are named *because* they
+             * hold the requested handle, so answering "dispatch is taken by
+             * dispatch" would tell the reviewer nothing. The person behind it
+             * is what they need.
+             */
             ->map(fn (Staff $staff): string => $staff->preferred_name ?: $staff->legal_name)
             ->values()
             ->all();

@@ -16,6 +16,7 @@
 **Additive Update:** System Configuration and Diagnostics requirements (SYS-001-SYS-041, section 7.26) added for the environment/configuration catalogue, node-local database overrides, the diagnostics framework, sanitized exports, and node health reporting.
 **Additive Update:** Pooled and individually tracked equipment requirements (EQUIP-010–EQUIP-017) added for equipment lookup by asset tag, serial number, or search at checkout, quantity-based pooled equipment, and derived pooled availability, replacing the unit-by-unit checklist as the way equipment is handed out.
 **Additive Update:** Staff self-service profile maintenance requirements (VOL-015–VOL-026) added for direct editing of preferred name, phone, and city/state, a two-change allowance on self-service handle changes with reviewed handle change requests beyond it, reviewed profile picture change requests, and the audit and notification of both.
+**Additive Update:** Per-organization staff profile approval policy requirements (VOL-027–VOL-029) added for configuring how handle and profile picture changes are approved, making the self-service handle change allowance a configurable number defaulting to two, and showing a staff member the state and rejection reason of their most recent submission. VOL-027 changes the default behavior of VOL-017: an organization now opts into the two-change allowance by selecting the "applied without review" handle policy, and the shipped default reviews every change.
 **Additive Update:** Organization addressing requirements (ORG-022–ORG-025) added for organization subdomain resolution beside the existing root-path form, and platform landing page requirements (PUBLIC-007–PUBLIC-009) added for the feature tour with example-organization screenshots and the description of the platform offerings. Dedicated per-organization infrastructure recorded as deferred scope.
 
 ---
@@ -2790,6 +2791,35 @@ Do Not Staff shall prevent system access.
 Do Not Staff shall be permanent unless changed by organizers.
 
 ### STAT-006
+### VOL-027
+
+An organization shall configure how staff handle changes and how staff profile picture changes are approved, choosing each independently from:
+
+1. **Approved by organizers.** A staff member may submit at any time and an organizer decides every submission, including their first. This is the default.
+2. **Organizer sets the first one.** An organizer sets a staff member's first handle or picture; the staff member may not propose an initial one. Changes after that are submitted by the staff member and decided by an organizer.
+3. **Applied without review.** A staff member sets their own handle or picture and it takes effect immediately, bounded for handles by VOL-028.
+4. **Staff set the first one.** A staff member sets their own first handle or picture with no review. Every change after that is decided by an organizer.
+
+The two are configured separately because they are different kinds of fact about a person: a handle is spoken on a radio and must be unambiguous across the organization, while a picture is how a desk recognises somebody.
+
+Organizers shall configure these from the organization configuration surface (ORG-018), and God mode shall configure the same values.
+
+### VOL-028
+
+The number of handle changes that apply without review shall be configurable per organization, defaulting to two.
+
+The allowance applies only while the VOL-027 handle policy applies changes without review, and shall be countable from applied changes under VOL-018 rather than from a stored counter. Zero shall be a valid setting and shall switch the allowance off without changing the policy.
+
+Profile pictures applied without review shall not be rationed. The reason a handle is rationed is that other people memorise it and must be able to rely on it; nothing about a picture works that way.
+
+### VOL-029
+
+A staff member shall see the state of their most recent handle change and their most recent profile picture submission, including a rejection and the reason the reviewer gave.
+
+A rejected or otherwise decided submission shall be replaceable by a new submission without further action, and shall be dismissable by the staff member so it no longer appears on their profile surface. Dismissing shall not destroy the record, which remains audit history and the basis of the VOL-018 count.
+
+A history of past decisions is not required for Alpha 1; only the most recent submission of each kind need be visible.
+
 
 Applications from DNS email addresses shall be auto-rejected without automatic notice.
 

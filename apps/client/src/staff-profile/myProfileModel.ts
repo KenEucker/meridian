@@ -23,14 +23,34 @@ import type { ReadFreshness } from "@/offline/readCache";
 import { describeCommand } from "@/outbox/commandCatalog";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 
-/** A handle or picture change waiting for a reviewer (VOL-021, VOL-024). */
+/**
+ * How this organization decides handle and picture changes (VOL-027).
+ *
+ * The value is the node's answer, not this client's guess: the surface words
+ * its controls from whichever policy the read carried, and the node enforces
+ * the same rule when the command arrives (CLIENT-006).
+ */
+export type ProfileChangePolicy =
+  | "organizer_only"
+  | "organizer_sets_first"
+  | "auto_approved"
+  | "staff_sets_first";
+
+/**
+ * A handle or picture change and what became of it (VOL-021, VOL-024,
+ * VOL-029).
+ *
+ * The most recent of each kind stays on the surface whatever state it reached,
+ * so a rejection and its reason are readable until the staff member clears
+ * them.
+ */
 export interface ProfileChangeRequest {
   readonly id: string;
   readonly kind: "handle" | "profile_picture";
   readonly status: "pending" | "approved" | "rejected" | "withdrawn";
   readonly previousHandle: string | null;
   readonly requestedHandle: string | null;
-  /** Applied without review under the VOL-017 allowance. */
+  /** Applied without review under the organization's policy (VOL-027). */
   readonly selfService: boolean;
   readonly decisionReason: string | null;
   readonly decidedAt: string | null;
@@ -57,12 +77,23 @@ export interface MyStaffProfile {
   readonly profilePictureUrl: string | null;
   /** The fields the node will accept from `update-my-profile` (VOL-015). */
   readonly selfEditableFields: readonly string[];
-  /** Whether this staff member is active somewhere, which 18A.1 requires to submit. */
+  /**
+   * Whether this staff member may submit a picture at all: active somewhere
+   * (18A.1), and not held back by a policy that reserves the first one for an
+   * organizer (VOL-027).
+   */
   readonly canSubmitPicture: boolean;
-  /** Handle changes left before one needs review (VOL-017, VOL-018). */
+  /**
+   * Handle changes left before one needs review (VOL-017, VOL-018, VOL-028).
+   * Zero under any policy that reviews every change, so this is never a
+   * promise the next save will break.
+   */
   readonly remainingSelfServiceHandleChanges: number;
-  readonly pendingHandleRequest: ProfileChangeRequest | null;
-  readonly pendingPictureRequest: ProfileChangeRequest | null;
+  readonly handleChangePolicy: ProfileChangePolicy;
+  readonly profilePictureChangePolicy: ProfileChangePolicy;
+  /** The most recent request of each kind, in whatever state (VOL-029). */
+  readonly latestHandleRequest: ProfileChangeRequest | null;
+  readonly latestPictureRequest: ProfileChangeRequest | null;
 }
 
 export interface MyProfileRead {
@@ -87,8 +118,10 @@ interface ProfilePayload {
   readonly self_editable_fields?: readonly string[];
   readonly can_submit_picture?: boolean;
   readonly remaining_self_service_handle_changes?: number;
-  readonly pending_handle_request?: RequestPayload | null;
-  readonly pending_picture_request?: RequestPayload | null;
+  readonly handle_change_policy?: string;
+  readonly profile_picture_change_policy?: string;
+  readonly latest_handle_request?: RequestPayload | null;
+  readonly latest_picture_request?: RequestPayload | null;
 }
 
 interface RequestPayload {
@@ -153,9 +186,27 @@ function toProfile(payload: ProfilePayload): MyStaffProfile {
     canSubmitPicture: payload.can_submit_picture ?? false,
     remainingSelfServiceHandleChanges:
       payload.remaining_self_service_handle_changes ?? 0,
-    pendingHandleRequest: toChangeRequest(payload.pending_handle_request),
-    pendingPictureRequest: toChangeRequest(payload.pending_picture_request),
+    handleChangePolicy: toPolicy(payload.handle_change_policy),
+    profilePictureChangePolicy: toPolicy(payload.profile_picture_change_policy),
+    latestHandleRequest: toChangeRequest(payload.latest_handle_request),
+    latestPictureRequest: toChangeRequest(payload.latest_picture_request),
   };
+}
+
+/**
+ * A policy the node named, or the documented default for a node that named
+ * none — the same fallback the server applies, so an older node and this
+ * client agree about what is in force.
+ */
+function toPolicy(value: string | undefined): ProfileChangePolicy {
+  const known: readonly ProfileChangePolicy[] = [
+    "organizer_only",
+    "organizer_sets_first",
+    "auto_approved",
+    "staff_sets_first",
+  ];
+
+  return known.find((policy) => policy === value) ?? "organizer_only";
 }
 
 export async function getMyProfile(): Promise<MyProfileRead> {
@@ -277,9 +328,36 @@ export async function withdrawProfileChangeRequest(
   });
 }
 
-/** The name a profile is shown under: preferred first, legal as the fallback. */
+/**
+ * Clear a decided request from your own surface (VOL-029).
+ *
+ * Withdrawal's counterpart, for a request nobody is deciding any more. The row
+ * survives on the node; what this removes is the notice.
+ */
+export async function dismissProfileChangeRequest(
+  requestId: string,
+): Promise<void> {
+  await sendConnectedCommand({
+    commandType: "dismiss-profile-change-request",
+    idempotencyKey: commandIdempotencyKey("dismiss-profile-change-request"),
+    payload: { request_id: requestId },
+  });
+}
+
+/**
+ * The name a profile is shown under (VOL-010).
+ *
+ * Handle first, because that is how people at an event know each other: a
+ * radio call, a shift board, and a desk all use the operational handle, and
+ * the legal name on the record is frequently one nobody present would
+ * recognise. Preferred name is the fallback for somebody with no handle yet,
+ * and the legal name the last resort, because every record has one.
+ *
+ * The same order the node applies in `Staff::displayName()`. Nothing is hidden
+ * by this — surfaces showing legal or preferred name alongside keep doing so.
+ */
 export function profileDisplayName(profile: MyStaffProfile): string {
-  return profile.preferredName ?? profile.legalName;
+  return profile.handle ?? profile.preferredName ?? profile.legalName;
 }
 
 function commandIdempotencyKey(commandType: string): string {

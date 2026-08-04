@@ -83,8 +83,10 @@ function profilePayload(
     self_editable_fields: ["preferred_name", "phone", "city", "state"],
     can_submit_picture: true,
     remaining_self_service_handle_changes: 2,
-    pending_handle_request: null,
-    pending_picture_request: null,
+    handle_change_policy: "organizer_only",
+    profile_picture_change_policy: "organizer_only",
+    latest_handle_request: null,
+    latest_picture_request: null,
     ...overrides,
   };
 }
@@ -235,7 +237,7 @@ describe("staff profile picture submission", () => {
         profiles: [
           profilePayload({
             profile_picture_url: "http://node.test/storage/avatars/current.webp",
-            pending_picture_request: pendingPicturePayload({
+            latest_picture_request: pendingPicturePayload({
               submitted_picture_url: "http://node.test/pending/submitted.webp",
             }),
           }),
@@ -367,13 +369,37 @@ describe("staff handle changes", () => {
     expect(wrapper.text()).toContain("Submitted for review");
   });
 
+  it("names the outcome the policy will produce rather than promising a change", async () => {
+    stubNode(() => ({
+      body: {
+        profiles: [
+          profilePayload({
+            // The default: every change reviewed, so no allowance is offered.
+            handle_change_policy: "organizer_only",
+            remaining_self_service_handle_changes: 0,
+          }),
+        ],
+      },
+    }));
+
+    const wrapper = await mountView(StaffProfileEditView, "staff.profile.edit");
+
+    expect(wrapper.text()).toContain("Handle changes are reviewed by an organizer.");
+    expect(
+      wrapper.findAll("button").map((button) => button.text()),
+    ).toContain("Request handle change");
+    expect(
+      wrapper.findAll("button").map((button) => button.text()),
+    ).not.toContain("Change handle");
+  });
+
   it("shows a pending handle request with the handle still in force", async () => {
     stubNode(() => ({
       body: {
         profiles: [
           profilePayload({
             remaining_self_service_handle_changes: 0,
-            pending_handle_request: {
+            latest_handle_request: {
               id: "req-handle-2",
               kind: "handle",
               status: "pending",
@@ -503,5 +529,89 @@ describe("staff me profile rows", () => {
 
     expect(wrapper.text()).not.toContain("Handle");
     expect(wrapper.text()).not.toContain("City/State");
+  });
+});
+
+/*
+ * The decided-request notice (VOL-029). A rejection is the state this exists
+ * for: without it a staff member submits something, nothing visibly happens,
+ * and they have no way to learn why.
+ */
+describe("staff profile decision notices", () => {
+  it("shows a rejection with its reason and clears it through dismiss", async () => {
+    const calls = stubNode((call) =>
+      call.url.endsWith("/commands/dismiss-profile-change-request")
+        ? { body: { request: { id: "req-handle-9", status: "rejected" } } }
+        : {
+            body: {
+              profiles: [
+                profilePayload({
+                  latest_handle_request: {
+                    id: "req-handle-9",
+                    kind: "handle",
+                    status: "rejected",
+                    previous_handle: "vera-radio",
+                    requested_handle: "dispatch",
+                    self_service: false,
+                    decision_reason: "Dispatch is the desk, not a person.",
+                  },
+                }),
+              ],
+            },
+          },
+    );
+
+    const wrapper = await mountView(StaffProfileEditView, "staff.profile.edit");
+
+    expect(wrapper.text()).toContain("was not approved");
+    expect(wrapper.text()).toContain("Dispatch is the desk, not a person.");
+
+    // A decided request does not block trying again: the form is still there.
+    expect(wrapper.find("form.profile-edit__form + section form").exists()).toBe(
+      false,
+    );
+    expect(
+      wrapper.findAll("button").map((button) => button.text()),
+    ).not.toContain("Withdraw request");
+
+    const clear = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Clear");
+
+    await clear!.trigger("click");
+    await flushPromises();
+
+    const dismissed = calls.find((call) =>
+      call.url.endsWith("/commands/dismiss-profile-change-request"),
+    );
+
+    expect(dismissed?.body).toMatchObject({ request_id: "req-handle-9" });
+  });
+
+  it("shows a rejected picture submission with its reason", async () => {
+    stubNode(() => ({
+      body: {
+        profiles: [
+          profilePayload({
+            profile_picture_url: "http://node.test/storage/avatars/vera.webp",
+            latest_picture_request: pendingPicturePayload({
+              status: "rejected",
+              decision_reason: "Please submit a photo showing your face.",
+            }),
+          }),
+        ],
+      },
+    }));
+
+    const wrapper = await mountView(StaffProfileEditView, "staff.profile.edit");
+
+    expect(wrapper.text()).toContain(
+      "Your profile picture was not approved: Please submit a photo showing your face.",
+    );
+
+    // The current picture is still the only one shown, and the uploader is
+    // offered again so the rejection can be answered with a new submission.
+    expect(wrapper.findAll(".profile-edit__picture")).toHaveLength(1);
+    expect(wrapper.find("input[type='file']").exists()).toBe(true);
   });
 });

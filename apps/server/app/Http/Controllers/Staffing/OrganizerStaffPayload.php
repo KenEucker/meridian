@@ -47,7 +47,7 @@ final class OrganizerStaffPayload
             'id' => (string) $staff->id,
             'legal_name' => $staff->legal_name,
             'preferred_name' => $staff->preferred_name,
-            'display_name' => $staff->preferred_name ?: $staff->legal_name,
+            'display_name' => $staff->displayName(),
             'handle' => $staff->handle,
             'email' => $staff->email,
             'phone' => $staff->phone,

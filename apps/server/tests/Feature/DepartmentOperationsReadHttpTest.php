@@ -93,8 +93,10 @@ class DepartmentOperationsReadHttpTest extends TestCase
         $this->assertTrue($staffIds->contains((string) $scenario['scheduled']->id));
 
         $equipment = collect($response->json('searchable_equipment'));
+        // The handle, not the legal name (VOL-010): a desk chasing a radio
+        // asks for it by the name it would call over the air.
         $this->assertSame(
-            'Vera Checked-In',
+            'vera',
             $equipment->firstWhere('name', 'Radio 12')['holder_name'],
         );
         $this->assertNull($equipment->firstWhere('name', 'Radio 13')['holder_name']);

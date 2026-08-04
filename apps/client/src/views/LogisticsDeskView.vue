@@ -957,9 +957,16 @@ void loadDesk();
         </div>
         <div>
           <h2 id="staff-workspace-heading">{{ workspace.displayName }}</h2>
+          <!--
+            The heading is the handle where there is one (VOL-010), so the
+            handle is only repeated here when the heading is something else —
+            a staff member with no handle yet.
+          -->
           <p>
             {{ workspace.teamLabel }}
-            <template v-if="workspace.handle"> / @{{ workspace.handle }}</template>
+            <template v-if="workspace.handle && workspace.handle !== workspace.displayName">
+              / @{{ workspace.handle }}
+            </template>
           </p>
         </div>
         <!--

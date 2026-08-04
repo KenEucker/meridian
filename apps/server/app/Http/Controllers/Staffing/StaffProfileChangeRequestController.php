@@ -196,7 +196,7 @@ final class StaffProfileChangeRequestController extends Controller
             'organization_name' => $row->organization?->name,
             'staff_id' => (string) $row->staff_id,
             'staff_name' => $staff instanceof Staff
-                ? ($staff->preferred_name ?: $staff->legal_name)
+                ? $staff->displayName()
                 : 'Unknown staff member',
             'previous_handle' => $row->previous_handle,
             'requested_handle' => $row->requested_handle,

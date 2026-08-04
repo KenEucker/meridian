@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Layouts\Organization;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Organization;
@@ -94,7 +95,50 @@ class OrganizationEditLayout extends Rows
                 ->max(31)
                 ->title(__('Calendar year start day'))
                 ->help(__('Use 1 through 31.')),
+
+            /*
+             * Staff profile approval policy (VOL-027, VOL-028). Handles and
+             * pictures are configured separately because they are different
+             * kinds of fact about a person: a handle is spoken on a radio and
+             * has to be unambiguous, a picture is how a desk recognises
+             * somebody. Organizers reach the same settings from the product
+             * configuration surface (ORG-018); this is the God Mode copy.
+             */
+            Select::make('organization.handle_change_policy')
+                ->options($this->changePolicyOptions('handle'))
+                ->empty(__('Use the default (approved by organizers)'), '')
+                ->title(__('Handle change approval'))
+                ->help(__('How a staff member\'s handle change is decided (VOL-027).')),
+
+            Input::make('organization.handle_self_service_change_limit')
+                ->type('number')
+                ->min(0)
+                ->max(50)
+                ->title(__('Handle changes applied without review'))
+                ->help(__('How many handle changes apply immediately while the policy above allows any (VOL-028). Blank uses the default of two; 0 turns the allowance off without changing the policy.')),
+
+            Select::make('organization.profile_picture_change_policy')
+                ->options($this->changePolicyOptions('profile picture'))
+                ->empty(__('Use the default (approved by organizers)'), '')
+                ->title(__('Profile picture approval'))
+                ->help(__('How a submitted profile picture is decided (VOL-027). Pictures applied without review are not rationed the way handles are.')),
         ];
+    }
+
+    /**
+     * The four VOL-027 policies, labelled with what each means for this kind.
+     *
+     * @return array<string, string>
+     */
+    private function changePolicyOptions(string $noun): array
+    {
+        $options = [];
+
+        foreach (ProfileChangePolicy::cases() as $policy) {
+            $options[$policy->value] = $policy->label().' — '.$policy->description($noun);
+        }
+
+        return $options;
     }
 
     /**

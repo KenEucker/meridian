@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
+  dismissProfileChangeRequest,
   getMyProfile,
   profileDisplayName,
   removeProfilePicture,
@@ -12,6 +13,7 @@ import {
   updateMyProfile,
   withdrawProfileChangeRequest,
   type MyStaffProfile,
+  type ProfileChangeRequest,
 } from "@/staff-profile/myProfileModel";
 
 /**
@@ -143,6 +145,61 @@ const pictureError = ref<string | null>(null);
 const pictureNotice = ref<string | null>(null);
 const pictureBusy = ref(false);
 
+/**
+ * A request still waiting on somebody, as against one already decided
+ * (VOL-024, VOL-029).
+ *
+ * The surface treats the two differently: a pending request offers Withdraw
+ * and blocks a second submission, while a decided one is a notice to read and
+ * clear, and does not stand in the way of trying again.
+ */
+function pendingOnly(
+  request: ProfileChangeRequest | null,
+): ProfileChangeRequest | null {
+  return request?.status === "pending" ? request : null;
+}
+
+/** A decision the staff member has not cleared yet (VOL-029). */
+function decidedOnly(
+  request: ProfileChangeRequest | null,
+): ProfileChangeRequest | null {
+  return request !== null && request.status !== "pending" ? request : null;
+}
+
+const pendingPicture = computed(() =>
+  pendingOnly(profile.value?.latestPictureRequest ?? null),
+);
+const decidedPicture = computed(() =>
+  decidedOnly(profile.value?.latestPictureRequest ?? null),
+);
+const pendingHandle = computed(() =>
+  pendingOnly(profile.value?.latestHandleRequest ?? null),
+);
+const decidedHandle = computed(() =>
+  decidedOnly(profile.value?.latestHandleRequest ?? null),
+);
+
+/**
+ * What a decided request should say to the person who made it.
+ *
+ * A rejection carries the reviewer's reason, because that is the whole point
+ * of showing it; the other two states are stated plainly and briefly, since
+ * nothing is being asked of the reader.
+ */
+function decisionNotice(request: ProfileChangeRequest, noun: string): string {
+  if (request.status === "rejected") {
+    const reason = request.decisionReason;
+
+    return reason === null || reason === ""
+      ? `Your ${noun} was not approved.`
+      : `Your ${noun} was not approved: ${reason}`;
+  }
+
+  return request.status === "approved"
+    ? `Your ${noun} was approved.`
+    : `You withdrew your ${noun}.`;
+}
+
 async function onPictureChosen(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
@@ -157,10 +214,14 @@ async function onPictureChosen(event: Event): Promise<void> {
   pictureBusy.value = true;
 
   try {
-    await submitProfilePicture(current.id, file);
+    const result = await submitProfilePicture(current.id, file);
     await loadProfile();
+    // The node decided whether this applied or is waiting; the page reports
+    // its answer rather than predicting one from the policy it last read.
     pictureNotice.value =
-      "Submitted. Your current picture stays in place until an organizer reviews this one.";
+      result?.status === "pending"
+        ? "Submitted. Your current picture stays in place until an organizer reviews this one."
+        : "Your new picture is on your record.";
   } catch (error) {
     pictureError.value = meridianErrorMessage(
       error,
@@ -174,7 +235,7 @@ async function onPictureChosen(event: Event): Promise<void> {
 }
 
 async function onWithdrawPicture(): Promise<void> {
-  const pending = profile.value?.pendingPictureRequest ?? null;
+  const pending = pendingPicture.value;
 
   if (pending === null) {
     return;
@@ -223,6 +284,46 @@ async function onRemovePicture(): Promise<void> {
   }
 }
 
+/** Clear a decision from the surface once it has been read (VOL-029). */
+async function onDismiss(
+  request: ProfileChangeRequest,
+  busy: { value: boolean },
+  error: { value: string | null },
+): Promise<void> {
+  error.value = null;
+  busy.value = true;
+
+  try {
+    await dismissProfileChangeRequest(request.id);
+    await loadProfile();
+  } catch (caught) {
+    error.value = meridianErrorMessage(
+      caught,
+      "Unable to clear that. Check the connection to this node and try again.",
+    );
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function onDismissPicture(): Promise<void> {
+  const decided = decidedPicture.value;
+
+  if (decided !== null) {
+    pictureNotice.value = null;
+    await onDismiss(decided, pictureBusy, pictureError);
+  }
+}
+
+async function onDismissHandle(): Promise<void> {
+  const decided = decidedHandle.value;
+
+  if (decided !== null) {
+    handleNotice.value = null;
+    await onDismiss(decided, handleBusy, handleError);
+  }
+}
+
 const handleDraft = ref("");
 const handleError = ref<string | null>(null);
 const handleNotice = ref<string | null>(null);
@@ -237,8 +338,12 @@ watch(
 );
 
 /**
- * What the next handle change will cost, in the words the person needs before
- * they spend one (VOL-017).
+ * What the next handle change will do, in the words the person needs before
+ * they make it (VOL-017, VOL-027, VOL-028).
+ *
+ * Written from the node's policy and count rather than from a rule compiled
+ * into this client, so an organization that reviews everything and one that
+ * reviews nothing each get an accurate sentence.
  */
 const handleAllowanceNote = computed(() => {
   const current = profile.value;
@@ -247,19 +352,73 @@ const handleAllowanceNote = computed(() => {
     return "";
   }
 
-  if (current.handle === null || current.handle === "") {
-    return "Setting your first handle does not count as a change.";
+  const hasHandle = current.handle !== null && current.handle !== "";
+
+  if (!hasHandle) {
+    return current.handleChangePolicy === "auto_approved" ||
+      current.handleChangePolicy === "staff_sets_first"
+      ? "Setting your first handle takes effect immediately and does not count as a change."
+      : "Your first handle goes to an organizer to approve.";
   }
 
   const remaining = current.remainingSelfServiceHandleChanges;
 
   if (remaining === 0) {
-    return "You have used both of your direct handle changes. Another one goes to an organizer for review.";
+    return current.handleChangePolicy === "auto_approved"
+      ? "You have used all of your direct handle changes. Another one goes to an organizer for review."
+      : "Handle changes are reviewed by an organizer.";
   }
 
   return remaining === 1
     ? "One more handle change takes effect immediately. After that, changes are reviewed."
     : `${remaining} handle changes take effect immediately. After that, changes are reviewed.`;
+});
+
+/** Whether the next handle change applies outright or goes for review. */
+const handleAppliesImmediately = computed(() => {
+  const current = profile.value;
+
+  if (current === null) {
+    return false;
+  }
+
+  const hasHandle = current.handle !== null && current.handle !== "";
+
+  if (!hasHandle) {
+    return (
+      current.handleChangePolicy === "auto_approved" ||
+      current.handleChangePolicy === "staff_sets_first"
+    );
+  }
+
+  return current.remainingSelfServiceHandleChanges > 0;
+});
+
+/** What the picture control should say it will do (VOL-027). */
+const pictureSubmitNote = computed(() => {
+  const current = profile.value;
+
+  if (current === null) {
+    return "";
+  }
+
+  if (current.profilePictureChangePolicy === "organizer_sets_first" &&
+    current.profilePictureUrl === null) {
+    return "Your organization sets first profile pictures. Ask an organizer to add yours, and you can submit a replacement after that.";
+  }
+
+  if (!current.canSubmitPicture) {
+    return "You can submit a picture once you are an active staff member in an organization.";
+  }
+
+  const appliesNow =
+    current.profilePictureChangePolicy === "auto_approved" ||
+    (current.profilePictureChangePolicy === "staff_sets_first" &&
+      current.profilePictureUrl === null);
+
+  return appliesNow
+    ? "JPEG, PNG, or WebP, up to 10 MB. Your picture takes effect as soon as it uploads."
+    : "JPEG, PNG, or WebP, up to 10 MB. A new picture is reviewed before it replaces the one on your record. Removing yours needs no review.";
 });
 
 async function onSubmitHandle(): Promise<void> {
@@ -294,7 +453,7 @@ async function onSubmitHandle(): Promise<void> {
 }
 
 async function onWithdrawHandle(): Promise<void> {
-  const pending = profile.value?.pendingHandleRequest ?? null;
+  const pending = pendingHandle.value;
 
   if (pending === null) {
     return;
@@ -464,6 +623,23 @@ async function onWithdrawHandle(): Promise<void> {
           {{ pictureNotice }}
         </p>
 
+        <!--
+          A decision that has not been cleared yet (VOL-029). A rejection
+          carries the reviewer's reason, which is the whole reason to show it;
+          Clear dismisses the notice without touching the record behind it.
+        -->
+        <div
+          v-if="decidedPicture"
+          class="profile-edit__decision"
+          :data-status="decidedPicture.status"
+          role="status"
+        >
+          <p>{{ decisionNotice(decidedPicture, "profile picture") }}</p>
+          <button type="button" :disabled="pictureBusy" @click="onDismissPicture">
+            Clear
+          </button>
+        </div>
+
         <div class="profile-edit__pictures">
           <figure class="profile-edit__picture">
             <img
@@ -482,13 +658,10 @@ async function onWithdrawHandle(): Promise<void> {
             <figcaption>On your record now</figcaption>
           </figure>
 
-          <figure
-            v-if="profile.pendingPictureRequest"
-            class="profile-edit__picture"
-          >
+          <figure v-if="pendingPicture" class="profile-edit__picture">
             <img
-              v-if="profile.pendingPictureRequest.submittedPictureUrl"
-              :src="profile.pendingPictureRequest.submittedPictureUrl"
+              v-if="pendingPicture.submittedPictureUrl"
+              :src="pendingPicture.submittedPictureUrl"
               alt="The profile picture you submitted, awaiting review"
             />
             <div
@@ -503,22 +676,15 @@ async function onWithdrawHandle(): Promise<void> {
           </figure>
         </div>
 
-        <p v-if="profile.pendingPictureRequest" class="profile-edit__hint">
+        <p v-if="pendingPicture" class="profile-edit__hint">
           An organizer or Staff Coordinator reviews this. Until they do, the
           picture on your record is the one above, and only you and your
           reviewers can see the one you submitted.
         </p>
-        <p v-else-if="!profile.canSubmitPicture" class="profile-edit__hint">
-          You can submit a picture once you are an active staff member in an
-          organization.
-        </p>
-        <p v-else class="profile-edit__hint">
-          JPEG, PNG, or WebP, up to 10 MB. A new picture is reviewed before it
-          replaces the one on your record. Removing yours needs no review.
-        </p>
+        <p v-else class="profile-edit__hint">{{ pictureSubmitNote }}</p>
 
         <div class="profile-edit__actions">
-          <template v-if="profile.pendingPictureRequest">
+          <template v-if="pendingPicture">
             <button
               type="button"
               :disabled="pictureBusy"
@@ -571,10 +737,24 @@ async function onWithdrawHandle(): Promise<void> {
           {{ handleNotice }}
         </p>
 
-        <template v-if="profile.pendingHandleRequest">
+        <div
+          v-if="decidedHandle"
+          class="profile-edit__decision"
+          :data-status="decidedHandle.status"
+          role="status"
+        >
+          <p>
+            {{ decisionNotice(decidedHandle, `request for ${decidedHandle.requestedHandle}`) }}
+          </p>
+          <button type="button" :disabled="handleBusy" @click="onDismissHandle">
+            Clear
+          </button>
+        </div>
+
+        <template v-if="pendingHandle">
           <p class="profile-edit__hint">
             You asked for
-            <strong>{{ profile.pendingHandleRequest.requestedHandle }}</strong
+            <strong>{{ pendingHandle.requestedHandle }}</strong
             >. Until an organizer decides, your handle stays
             <strong>{{ profile.handle ?? "unset" }}</strong
             >.
@@ -601,16 +781,15 @@ async function onWithdrawHandle(): Promise<void> {
               <input v-model="handleDraft" type="text" maxlength="255" />
             </label>
             <div class="profile-edit__actions">
+              <!--
+                The button names the outcome the node's policy will actually
+                produce, so nobody presses "Change handle" and gets a review.
+              -->
               <button
                 type="submit"
                 :disabled="handleBusy || handleDraft.trim() === '' || handleDraft.trim() === (profile.handle ?? '')"
               >
-                {{
-                  profile.remainingSelfServiceHandleChanges > 0 ||
-                  profile.handle === null
-                    ? "Change handle"
-                    : "Request handle change"
-                }}
+                {{ handleAppliesImmediately ? "Change handle" : "Request handle change" }}
               </button>
             </div>
           </form>
@@ -732,6 +911,48 @@ async function onWithdrawHandle(): Promise<void> {
   .profile-edit__row {
     grid-template-columns: 2fr 1fr;
   }
+}
+
+/*
+ * A decision waiting to be read. A rejection is the one somebody has to act
+ * on, so it is the one that carries a colour; the rest state themselves and
+ * get out of the way.
+ */
+.profile-edit__decision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+}
+
+.profile-edit__decision[data-status="rejected"] {
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-danger, #cc792f) 40%,
+    var(--m-border-default)
+  );
+}
+
+.profile-edit__decision p {
+  margin: 0;
+  flex: 1 1 14rem;
+}
+
+.profile-edit__decision button {
+  min-height: 2.25rem;
+  padding: 0 var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .profile-edit__legend {

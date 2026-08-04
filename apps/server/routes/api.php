@@ -307,6 +307,11 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/withdraw-profile-change-request', [MyProfileController::class, 'withdrawRequest'])
         ->name('api.commands.withdraw-profile-change-request');
 
+    // Clearing a decided request from your own surface (VOL-029). Withdrawal's
+    // counterpart, for a request nobody is deciding any more.
+    Route::post('/commands/dismiss-profile-change-request', [MyProfileController::class, 'dismissRequest'])
+        ->name('api.commands.dismiss-profile-change-request');
+
     /*
      * The reviewer's two decisions (M18.20A, M18.20D; VOL-019, VOL-022,
      * VOL-025). Authorized by `staff.profile-change-requests.review` resolved

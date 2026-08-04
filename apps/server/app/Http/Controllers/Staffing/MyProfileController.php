@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staffing;
 
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Http\Controllers\Controller;
 use App\Models\Staff;
 use App\Models\StaffProfileChangeRequest;
@@ -61,16 +62,32 @@ final class MyProfileController extends Controller
                      * (VOL-017, VOL-021, VOL-024). The surface renders the
                      * node's answer rather than deriving one (CLIENT-006).
                      */
-                    'can_submit_picture' => $access->isActiveSomewhere($staff),
+                    'can_submit_picture' => $access->isActiveSomewhere($staff)
+                        && $this->picturePolicyFor($staff, $access)->allowsStaffFirstValue(),
                     'remaining_self_service_handle_changes' =>
                         $requests->remainingSelfServiceHandleChanges($staff),
-                    'pending_handle_request' => $this->pendingRequest(
-                        $requests->pendingRequest($staff, StaffProfileChangeRequest::KIND_HANDLE),
+                    /*
+                     * The organization's policies, so the surface can word the
+                     * control for the outcome it will actually produce rather
+                     * than promising one and reporting another (VOL-027;
+                     * CLIENT-006).
+                     */
+                    'handle_change_policy' => $this->handlePolicyFor($staff, $access)->value,
+                    'profile_picture_change_policy' => $this->picturePolicyFor($staff, $access)->value,
+                    /*
+                     * The most recent request of each kind in whatever state it
+                     * reached, so a rejection and its reason stay visible until
+                     * the staff member clears them (VOL-029). `status` tells the
+                     * surface whether it is looking at something outstanding or
+                     * something already decided.
+                     */
+                    'latest_handle_request' => $this->requestForSubmitter(
+                        $requests->latestRequest($staff, StaffProfileChangeRequest::KIND_HANDLE),
                         $user,
                         $pictureUrls,
                     ),
-                    'pending_picture_request' => $this->pendingRequest(
-                        $requests->pendingRequest($staff, StaffProfileChangeRequest::KIND_PROFILE_PICTURE),
+                    'latest_picture_request' => $this->requestForSubmitter(
+                        $requests->latestRequest($staff, StaffProfileChangeRequest::KIND_PROFILE_PICTURE),
                         $user,
                         $pictureUrls,
                     ),
@@ -226,6 +243,44 @@ final class MyProfileController extends Controller
         return response()->json(['request' => $this->requestPayload($withdrawn)]);
     }
 
+    /**
+     * Clear a decided request from your own surface (VOL-029).
+     *
+     * The counterpart of withdrawal, for a request nobody is deciding any
+     * more: a rejection you have read, or an approval you no longer need
+     * announced. The row survives — it is audit history, and an approved
+     * handle change is one of the facts the allowance is counted from.
+     */
+    public function dismissRequest(
+        Request $request,
+        StaffProfileChangeRequestService $requests,
+        StaffProfileChangeRequestAccess $access,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
+
+        $validated = $request->validate([
+            'request_id' => ['required', 'uuid'],
+        ]);
+
+        $changeRequest = StaffProfileChangeRequest::query()->find((string) $validated['request_id']);
+
+        if ($changeRequest === null
+            || ! $access->isOwnProfile($user, (string) $changeRequest->staff_id)) {
+            return response()->json([
+                'message' => 'You can only dismiss your own profile change request.',
+            ], 403);
+        }
+
+        try {
+            $dismissed = $requests->dismiss($changeRequest, $user);
+        } catch (StaffProfileSelfException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json(['request' => $this->requestPayload($dismissed)]);
+    }
+
     public function update(Request $request, StaffProfileSelfService $profiles): JsonResponse
     {
         $user = $request->user();
@@ -348,14 +403,26 @@ final class MyProfileController extends Controller
         ];
     }
 
+    private function handlePolicyFor(Staff $staff, StaffProfileChangeRequestAccess $access): ProfileChangePolicy
+    {
+        return $access->reviewingOrganization($staff)?->handleChangePolicy()
+            ?? ProfileChangePolicy::default();
+    }
+
+    private function picturePolicyFor(Staff $staff, StaffProfileChangeRequestAccess $access): ProfileChangePolicy
+    {
+        return $access->reviewingOrganization($staff)?->profilePictureChangePolicy()
+            ?? ProfileChangePolicy::default();
+    }
+
     /**
-     * A pending request as the submitter's own surface reads it, with a
-     * short-lived URL for the submitted image where there is one (VOL-021,
-     * VOL-024).
+     * A request as its own submitter reads it, with a short-lived URL for the
+     * submitted image where the request still holds one (VOL-021, VOL-024,
+     * VOL-029).
      *
      * @return array<string, mixed>|null
      */
-    private function pendingRequest(
+    private function requestForSubmitter(
         ?StaffProfileChangeRequest $request,
         User $user,
         StaffProfilePictureUrlService $pictureUrls,
@@ -395,6 +462,7 @@ final class MyProfileController extends Controller
             'self_service' => $request->self_service,
             'decision_reason' => $request->decision_reason,
             'decided_at' => $request->decided_at?->toIso8601String(),
+            'dismissed_at' => $request->dismissed_at?->toIso8601String(),
             'created_at' => $request->created_at?->toIso8601String(),
         ];
     }

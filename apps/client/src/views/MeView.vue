@@ -67,6 +67,10 @@ async function loadProfile(): Promise<void> {
 
 void loadProfile();
 
+/**
+ * The name that leads: the handle where there is one (VOL-010), because that
+ * is what people at the event call each other.
+ */
 const displayName = computed(() => {
   if (profile.value !== null) {
     return profileDisplayName(profile.value);
@@ -74,6 +78,11 @@ const displayName = computed(() => {
 
   return clientSessionState.document?.user.name ?? "Not signed in";
 });
+
+/** The name on the record, shown under the handle rather than replaced by it. */
+const recordName = computed(
+  () => profile.value?.preferredName ?? profile.value?.legalName ?? null,
+);
 const initials = computed(() =>
   displayName.value
     .split(/\s+/u)
@@ -283,6 +292,13 @@ const currentEventTargetLabel = computed(() => {
       <div class="me__identity">
         <p class="me__eyebrow">Staff profile</p>
         <h1 id="me-heading">{{ displayName }}</h1>
+        <!--
+          The name on the record, under the handle that leads (VOL-010).
+          Absent when they are the same, so nobody reads their own name twice.
+        -->
+        <p v-if="recordName && recordName !== displayName" class="me__record-name">
+          {{ recordName }}
+        </p>
         <p>{{ eventLabel }} - {{ department?.departmentLabel ?? "No department" }}</p>
       </div>
       <dl class="me__details" aria-label="Personal details">
@@ -482,6 +498,11 @@ const currentEventTargetLabel = computed(() => {
 .me__schedule p {
   margin: 0;
   color: var(--m-text-muted);
+}
+
+.me__record-name {
+  color: var(--m-text-secondary);
+  font-weight: 700;
 }
 
 .me__eyebrow {

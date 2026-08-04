@@ -230,7 +230,7 @@ final class EventCredentialAdminController extends Controller
             'staff_id' => $staffId,
             'legal_name' => $staff?->legal_name,
             'preferred_name' => $staff?->preferred_name,
-            'display_name' => $staff?->preferred_name ?: ($staff?->legal_name ?? 'Unknown staff member'),
+            'display_name' => $staff?->displayName() ?? 'Unknown staff member',
             'handle' => $staff?->handle,
             'departments' => $departments,
             // Null where the domain has recorded nothing yet, which is not the

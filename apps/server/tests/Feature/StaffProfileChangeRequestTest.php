@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domain\Permissions\PermissionCatalog;
+use App\Domain\Staffing\ProfileChangePolicy;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -166,11 +167,20 @@ class StaffProfileChangeRequestTest extends TestCase
         $this->assertFalse($ids->contains($theirs));
     }
 
-    // ---- M18.20B: handle changes and the allowance ---------------------
+    /*
+     * ---- M18.20B: handle changes and the allowance ---------------------
+     *
+     * The VOL-017 allowance is what the `auto_approved` policy provides
+     * (VOL-027), so these configure it rather than relying on the default —
+     * which reviews every change. The rules under test are unchanged: two
+     * applied changes, a first handle costing nothing, and only applied
+     * changes consuming anything.
+     */
 
     public function test_a_first_handle_does_not_consume_the_allowance(): void
     {
-        [, $staff, $user] = $this->activeStaff(handle: null);
+        [$organization, $staff, $user] = $this->activeStaff(handle: null);
+        $this->autoApproveHandles($organization);
 
         $this->actingAsClient($user)
             ->postJson('/api/commands/request-handle-change', ['handle' => 'first-handle'])
@@ -189,7 +199,8 @@ class StaffProfileChangeRequestTest extends TestCase
 
     public function test_the_first_two_changes_apply_and_the_third_becomes_a_request(): void
     {
-        [, $staff, $user] = $this->activeStaff(handle: 'original');
+        [$organization, $staff, $user] = $this->activeStaff(handle: 'original');
+        $this->autoApproveHandles($organization);
 
         foreach (['second', 'third'] as $handle) {
             $this->actingAsClient($user)
@@ -214,6 +225,7 @@ class StaffProfileChangeRequestTest extends TestCase
     public function test_a_rejected_and_a_withdrawn_request_leave_the_allowance_unchanged(): void
     {
         [$organization, $staff, $user] = $this->activeStaff(handle: 'original');
+        $this->autoApproveHandles($organization);
         $coordinator = $this->staffCoordinatorIn($organization);
 
         $this->spendAllowance($user);
@@ -256,6 +268,7 @@ class StaffProfileChangeRequestTest extends TestCase
     public function test_an_approved_request_applies_the_handle_and_audits_it(): void
     {
         [$organization, $staff, $user] = $this->activeStaff(handle: 'original');
+        $this->autoApproveHandles($organization);
         $coordinator = $this->staffCoordinatorIn($organization);
 
         $this->spendAllowance($user);
@@ -285,6 +298,7 @@ class StaffProfileChangeRequestTest extends TestCase
     public function test_a_handle_collision_is_named_to_the_reviewer_and_does_not_block_the_decision(): void
     {
         [$organization, $staff, $user] = $this->activeStaff(handle: 'original');
+        $this->autoApproveHandles($organization);
         $this->activeStaff($organization, handle: 'taken-handle', legalName: 'Wren Incumbent');
         $coordinator = $this->staffCoordinatorIn($organization);
 
@@ -357,11 +371,12 @@ class StaffProfileChangeRequestTest extends TestCase
         ));
         $this->assertFalse($pictures->canReadPendingPicture($stranger, $pending));
 
-        // And the stranger's own read carries no URL for it.
+        // The stranger's own read is about their own record and carries
+        // nothing of this one — not the request, and so not its URL either.
         $this->actingAsClient($stranger)
             ->getJson('/api/me/profile')
             ->assertOk()
-            ->assertJsonPath('profiles.0.pending_picture_request', null);
+            ->assertJsonPath('profiles.0.latest_picture_request', null);
     }
 
     public function test_approval_promotes_the_submitted_picture_to_the_current_one(): void
@@ -520,6 +535,18 @@ class StaffProfileChangeRequestTest extends TestCase
     }
 
     // ---- helpers -------------------------------------------------------
+
+    /**
+     * Put this organization on the policy that grants the VOL-017 allowance
+     * (VOL-027). The default reviews every change, so a test about the
+     * allowance has to say which policy it is testing.
+     */
+    private function autoApproveHandles(Organization $organization): void
+    {
+        $organization->forceFill([
+            'handle_change_policy' => ProfileChangePolicy::AutoApproved->value,
+        ])->save();
+    }
 
     /**
      * Spend both self-service handle changes, leaving the allowance at zero.
