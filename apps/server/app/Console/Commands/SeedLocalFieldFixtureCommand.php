@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\Permissions\PermissionCatalog;
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Device;
@@ -193,6 +194,8 @@ class SeedLocalFieldFixtureCommand extends Command
             $this->ensureDepartmentTeamMembership($staff, $department, $team, $user);
             $this->ensureIncidentCommandGrant($team, $event);
             $this->seedSwitchableDepartments($organization, $department, $staff, $user);
+            $this->seedCreditPolicies($organization);
+            $this->seedTeamLead($organization, $department, $user);
 
             $device = $this->upsert(Device::class, LocalFieldFixture::DEVICE_ID, [
                 'device_label' => 'Local Field Device',
@@ -249,6 +252,10 @@ class SeedLocalFieldFixtureCommand extends Command
 
         $this->info('Local Field fixture seeded.');
         $this->line('User: '.LocalFieldFixture::USER_EMAIL.' / password');
+        // The narrow account: leads the Rangers Dirt team and nothing more, so
+        // shift editing and credit policy assignment can be tested as a team
+        // lead rather than as an account every door already opens for.
+        $this->line('Team lead: '.LocalFieldFixture::TEAM_LEAD_USER_EMAIL.' / password (leads Rangers Dirt; edits its shifts and assigns credit policies)');
         $this->line('Event ID: '.LocalFieldFixture::EVENT_ID);
         // The fixture is seed data, not a credential (M16.11). A client reaches
         // it by signing in as this user: ask for a login code from the client's
@@ -374,6 +381,127 @@ class SeedLocalFieldFixtureCommand extends Command
         $this->ensureDepartmentTeamMembership($staff, $organizers, $organizersDefault, $user);
         $this->ensureDepartmentTeamMembership($staff, $gate, $this->defaultTeamFor($gate), $user);
         $this->ensureDepartmentTeamMembership($staff, $dpw, $dpwDefault, $user);
+    }
+
+    /**
+     * Two credit policies, so the shift edit surface has ratios to assign the
+     * moment the fixture lands (SHIFT-010; CREDIT-002, CREDIT-003; M18.16).
+     *
+     * "Standard Hour" becomes the organization default every shift falls back
+     * to, and "Overnight Gate" is the rate worth choosing over it — assigning
+     * the second to a shift is exactly the override path a team lead tests.
+     */
+    private function seedCreditPolicies(Organization $organization): void
+    {
+        $standard = $this->upsert(
+            CreditPolicy::class,
+            LocalFieldFixture::CREDIT_POLICY_STANDARD_ID,
+            [
+                'organization_id' => $organization->id,
+                'event_id' => null,
+                'shift_id' => null,
+                'name' => 'Standard Hour',
+                'credit_multiplier' => '1.000',
+                'archived_at' => null,
+            ],
+            uniqueBy: ['organization_id' => $organization->id, 'name' => 'Standard Hour'],
+        );
+
+        $this->upsert(
+            CreditPolicy::class,
+            LocalFieldFixture::CREDIT_POLICY_OVERNIGHT_ID,
+            [
+                'organization_id' => $organization->id,
+                'event_id' => null,
+                'shift_id' => null,
+                'name' => 'Overnight Gate',
+                'credit_multiplier' => '2.000',
+                'archived_at' => null,
+            ],
+            uniqueBy: ['organization_id' => $organization->id, 'name' => 'Overnight Gate'],
+        );
+
+        $organization->forceFill(['default_credit_policy_id' => $standard->id])->save();
+    }
+
+    /**
+     * The team lead sign-in (M18.16 QA).
+     *
+     * A second user whose whole authority is a `shift_lead` grant on the
+     * Rangers Dirt team: they create and edit Dirt shifts and assign their
+     * credit policy, and administer nothing else. The author account cannot
+     * prove that path — it holds department lead, organizer, and IC roles at
+     * once, so every door is already open when it walks up.
+     *
+     * The grant hangs on the Dirt team itself, the same shape the DPW default
+     * team already carries, so leading Dirt is a property of the team rather
+     * than of this account.
+     */
+    private function seedTeamLead(
+        Organization $organization,
+        Department $rangers,
+        User $changedBy,
+    ): void {
+        $user = $this->upsert(
+            User::class,
+            LocalFieldFixture::TEAM_LEAD_USER_ID,
+            [
+                'name' => LocalFieldFixture::TEAM_LEAD_USER_NAME,
+                'email' => LocalFieldFixture::TEAM_LEAD_USER_EMAIL,
+                'password' => Hash::make('password'),
+            ],
+            uniqueBy: ['email' => LocalFieldFixture::TEAM_LEAD_USER_EMAIL],
+        );
+
+        $staff = $this->upsert(
+            Staff::class,
+            LocalFieldFixture::TEAM_LEAD_STAFF_ID,
+            [
+                'legal_name' => LocalFieldFixture::TEAM_LEAD_USER_NAME,
+                'preferred_name' => 'Team Lead',
+                'handle' => 'local-team-lead',
+                'formerly_known_as' => null,
+                'email' => LocalFieldFixture::TEAM_LEAD_USER_EMAIL,
+                'phone' => null,
+                'city' => null,
+                'state' => null,
+                'date_of_birth' => '1990-01-01',
+                'emergency_contact_name' => null,
+                'emergency_contact_phone' => null,
+                'archived_at' => null,
+            ],
+            uniqueBy: ['handle' => 'local-team-lead'],
+        );
+        if (! $staff->users()->whereKey($user->id)->exists()) {
+            $staff->users()->attach($user->id);
+        }
+
+        StaffOrganizationStatus::query()->updateOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'staff_id' => $staff->id,
+            ],
+            [
+                'status' => StaffOrganizationStatus::STATUS_ACTIVE,
+                'status_reason' => 'Local fixture team lead test account.',
+                'status_changed_at' => now(),
+                'status_changed_by_user_id' => $changedBy->id,
+            ],
+        );
+
+        $dirt = Team::query()->findOrFail(LocalFieldFixture::RANGERS_DIRT_TEAM_ID);
+
+        $this->ensureDepartmentTeamMembership($staff, $rangers, $dirt, $changedBy);
+        $this->grantRole($dirt, PermissionCatalog::ROLE_SHIFT_LEAD);
+
+        // The grant alone is not the role: `shift_lead` applies only to
+        // memberships designated `membership_role = 'lead'` in the
+        // grant-bearing team (technical spec 15.2), so a department lead can
+        // name individual leads without every Dirt member gaining lead
+        // authority. This account is one of the named ones.
+        $staff->teamMemberships()
+            ->where('team_id', $dirt->id)
+            ->update(['membership_role' => 'lead']);
     }
 
     private function upsertDepartment(
