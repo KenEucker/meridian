@@ -231,6 +231,19 @@ Route::post('/public/organizations/{organization:slug}/applications', [PublicPar
     ->name('api.public.organizations.applications.store');
 
 /*
+ * The applicant portal link request (M18.22; APP-012, APP-014, APP-015).
+ *
+ * Outside the organization scope the reads above sit in, because an address may
+ * hold applications to more than one organization and the link opens all of
+ * them. The APP-015 limits are counted in the domain service, which is what
+ * makes them the same limits the server-rendered request form is bound by; the
+ * route throttle here bounds request volume the way it does for submission.
+ */
+Route::post('/public/applicant-portal/link-requests', [PublicParticipationController::class, 'requestPortalLink'])
+    ->middleware('throttle:10,1')
+    ->name('api.public.applicant-portal.link-requests.store');
+
+/*
  * Everything a client application reads and writes (AUTH-018; technical spec
  * 11.4; M16.11).
  *

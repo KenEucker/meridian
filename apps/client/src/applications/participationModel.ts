@@ -196,6 +196,28 @@ export async function submitApplication(
 }
 
 /**
+ * Ask for a link to the applications made with an address (APP-012).
+ *
+ * Resolves whether or not the address has ever applied. The node answers the
+ * same way in both cases and the surface says the same sentence, because
+ * anything else would make this the account-enumeration oracle the public
+ * surface is built not to be (APP-014). The one answer that differs is a
+ * refusal by the rate limit, which is about the requester rather than the
+ * address and therefore discloses nothing (APP-015) — it surfaces as a thrown
+ * error like any other refusal.
+ */
+export async function requestApplicantPortalLink(email: string): Promise<void> {
+  await meridianJson<{ requested?: boolean }>(
+    "/api/public/applicant-portal/link-requests",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    },
+  );
+}
+
+/**
  * The shareable address for a participation surface (APP-017).
  *
  * Built from the browser's own origin so a link copied from a node is a link

@@ -8,6 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\Organization;
+use App\Services\Application\ApplicantPortalRateLimitException;
+use App\Services\Application\ApplicantPortalService;
+use App\Services\Application\ApplicantPortalThrottle;
 use App\Services\Application\DuplicateApplicationException;
 use App\Services\Application\EventApplicationService;
 use App\Services\Application\EventNotOpenForApplicationsException;
@@ -180,6 +183,47 @@ class PublicParticipationController extends Controller
             'application_id' => (string) $application->id,
             'scope' => $application->isOrganizationScoped() ? 'organization' : 'event',
         ], 201);
+    }
+
+    /**
+     * Ask for an applicant portal link (M18.22; APP-012, APP-014, APP-015).
+     *
+     * The public participation surface's second write, and the only one that is
+     * not an application. It belongs here because APP-012 puts the request on
+     * the public application surface: somebody who applied last month and heard
+     * nothing comes back to the page they applied on, not to a sign-in screen
+     * for an account they do not have.
+     *
+     * Organization-independent on purpose. An address may hold applications to
+     * several organizations, and a link scoped to the one whose page it was
+     * asked from would show the applicant part of their own record.
+     *
+     * The response is fixed. It is the same object for an address with
+     * applications, an address with none, and an address whose only application
+     * was auto-rejected for Do Not Staff, because a response that varied would
+     * make this endpoint the enumeration oracle the whole surface avoids being.
+     * Rate limiting lives in {@see ApplicantPortalThrottle} rather than on the
+     * route, so this and the server-rendered form share one set of counters
+     * instead of each holding half a limit.
+     */
+    public function requestPortalLink(Request $request, ApplicantPortalService $portal): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'string', 'email:rfc', 'max:255'],
+        ]);
+
+        try {
+            $portal->requestLink($validated['email'], $request->ip());
+        } catch (ApplicantPortalRateLimitException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'retry_after_seconds' => $exception->availableInSeconds,
+            ], 429);
+        }
+
+        return response()->json([
+            'requested' => true,
+        ], 202);
     }
 
     /**

@@ -4,6 +4,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { MeridianApiError } from "@/api/meridianApi";
 import { participationLink } from "@/applications/participationModel";
 import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
 import ParticipationView from "@/views/ParticipationView.vue";
@@ -21,6 +22,7 @@ vi.mock("vue-router", () => ({
 const getOrganizationParticipation = vi.fn();
 const getEventParticipation = vi.fn();
 const submitApplication = vi.fn();
+const requestApplicantPortalLink = vi.fn();
 
 vi.mock("@/applications/participationModel", async () => {
   const actual = await vi.importActual<
@@ -34,6 +36,8 @@ vi.mock("@/applications/participationModel", async () => {
     getEventParticipation: (...args: unknown[]) =>
       getEventParticipation(...args),
     submitApplication: (...args: unknown[]) => submitApplication(...args),
+    requestApplicantPortalLink: (...args: unknown[]) =>
+      requestApplicantPortalLink(...args),
   };
 });
 
@@ -185,7 +189,80 @@ describe("ParticipationView", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("no longer accepting applications");
-    expect(wrapper.find("form").exists()).toBe(false);
+    // The application form, specifically: the portal request form below it is
+    // offered in every state of the page (APP-012).
+    expect(wrapper.find(".participate__form").exists()).toBe(false);
+  });
+
+  // M18.22: APP-012 puts the way back to an existing application on the public
+  // application surface.
+  it("asks for an applicant portal link and says the same thing either way", async () => {
+    getOrganizationParticipation.mockResolvedValue(organizationPayload());
+    requestApplicantPortalLink.mockResolvedValue(undefined);
+
+    const wrapper = mount(ParticipationView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Applied already?");
+
+    await wrapper
+      .find(".participate__portal-form input[type='email']")
+      .setValue("robin@example.test");
+    await wrapper.find(".participate__portal-form").trigger("submit");
+    await flushPromises();
+
+    expect(requestApplicantPortalLink).toHaveBeenCalledWith(
+      "robin@example.test",
+    );
+    // APP-014: the confirmation is conditional wording, not a report of what
+    // the node found.
+    expect(wrapper.text()).toContain(
+      "If that address has any applications, a link to them is on its way",
+    );
+  });
+
+  it("offers the portal on a closed event, which is where an old applicant lands", async () => {
+    routeParams.eventSlug = "emberfall-2026";
+    getEventParticipation.mockResolvedValue({
+      organizationSlug: "northwood-collective",
+      organizationName: "Northwood",
+      branding,
+      event: {
+        slug: "emberfall-2026",
+        name: "Emberfall 2026",
+        startsAt: null,
+        endsAt: null,
+        timezone: null,
+        acceptingApplications: false,
+      },
+      departmentInterests: [],
+    });
+
+    const wrapper = mount(ParticipationView);
+    await flushPromises();
+
+    expect(wrapper.find(".participate__portal-form").exists()).toBe(true);
+  });
+
+  it("reports a refused portal link request without claiming mail was sent", async () => {
+    getOrganizationParticipation.mockResolvedValue(organizationPayload());
+    requestApplicantPortalLink.mockRejectedValue(
+      new MeridianApiError("Too many requests", 429, {
+        message: "Too many link requests from here. Try again later.",
+      }),
+    );
+
+    const wrapper = mount(ParticipationView);
+    await flushPromises();
+
+    await wrapper
+      .find(".participate__portal-form input[type='email']")
+      .setValue("robin@example.test");
+    await wrapper.find(".participate__portal-form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Too many link requests");
+    expect(wrapper.text()).not.toContain("on its way");
   });
 });
 
