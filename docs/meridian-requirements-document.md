@@ -2874,11 +2874,15 @@ Prospective status shall last for a configurable number of years before becoming
 
 ### APP-001
 
-Applications shall be event-specific.
+An application shall name the scope it is made to: a specific event, or the organization itself.
+
+An event-scoped application is an offer to staff that event. An organization-scoped application is an offer to join the organization without naming an event, and is what a person submits when they want to be part of the organization and has no particular event in mind, or when the organization is not currently running one.
+
+Both scopes are the same record, the same status set (APP-003), the same review authority (APP-005), and the same approval outcome (APP-006). Scope changes what an application is *about* and changes nothing about how it is decided.
 
 ### APP-002
 
-Applicants shall apply to events, not directly to departments.
+Applicants shall apply to events or to organizations, and never directly to departments.
 
 Optional department interest (APP-011) collected during application submission is a non-binding intake signal. It does not constitute applying to a department, department assignment, department membership, approval, access, or team selection.
 
@@ -2953,6 +2957,34 @@ The applicant portal shall not disclose whether an email address has any applica
 ### APP-015
 
 Requesting an applicant portal link shall be rate limited per email address and per requesting client. Portal link issuance and applicant withdrawal shall be audited.
+
+### APP-016
+
+Meridian shall serve a public participation surface for an organization and for each of its events, reachable without a session and without a Meridian account.
+
+The organization surface shall introduce the organization in its own identity (BRAND-002), list the events currently accepting applications, and offer to apply to the organization itself where the organization accepts organization-scoped applications. The event surface shall present the application form for that event.
+
+Neither surface shall disclose anything about the organization beyond what it has chosen to publish: its branding profile, its display name, and the names and dates of the events it is currently recruiting for. Staff, departments, teams, documents, shifts, and application counts shall not appear.
+
+### APP-017
+
+Each participation surface shall have a stable, shareable address derived from the organization slug and, for an event, the event slug. The address shall be readable and repeatable, so it can be handed on by whatever means an organization already uses.
+
+Meridian shall present that address for copying to any signed-in user who can already see the organization or event it names, including organizers, Staff Coordinators, department leads, and team leads. Sharing the link is not an authority: the address is public, following it grants nothing, and the surface it opens is the same one for every visitor however they arrived.
+
+Meridian shall not issue per-sharer tokens, record who shared a link, or attribute an application to the person whose link produced it. A tracked link would make a public page look like a gated one, and would attach a person to an application they had no part in deciding.
+
+### APP-018
+
+An organization shall be able to say whether it accepts organization-scoped applications.
+
+The default shall be that it does not: an organization already running events recruits into them, and an open-ended intake queue nobody has agreed to review is a queue that goes unread. Where the setting is off, the organization participation surface shall present the organization's open events and no application form of its own.
+
+### APP-019
+
+Application review shall be reachable from a normal product surface, and shall not require the God Mode console.
+
+Reviewers shall see the applications they hold review authority for (APP-005), read what the applicant submitted including department interest (APP-011), and approve, reject, or defer with a reason. Department leads shall reach the read-only visibility APP-011 grants them from the same surface, without review controls.
 
 ---
 
