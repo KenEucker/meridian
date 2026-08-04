@@ -1601,6 +1601,20 @@ Filters are configured at the sheet level and apply to the whole sheet.
 
 An Insight Sheet is not a Report. Reports are fixed, formal, or historical outputs; Insight Sheets are live compiled views. A PDF taken from a sheet is a snapshot of what the viewer was looking at and does not make the sheet a Report.
 
+## 3.45 Module
+
+A Module is a named group of optional Meridian capability that an organization may run without or run with.
+
+Modules exist so that an organization whose needs are narrow is not made to carry surfaces it will never use, and so that the same organization can widen its use of the platform later without changing deployments or migrating data.
+
+The module catalogue is fixed by Meridian and defined in code. Modules are not plugins: an organization cannot add a module Meridian does not ship, and a module is not a unit of distribution, licensing, or third-party extension.
+
+Capability that every organization needs in order to be an organization on Meridian is not a module. Organizations, events, departments, teams, staff, status, applications, memberships, roles and permissions, authentication, devices, attendance and hours, credits, branding, audit, node configuration, and God Mode are core.
+
+A module has two independent states. It is **entitled** when the platform makes it available to the organization, which is a God Mode decision. It is **enabled** when the organization has chosen to use it, which is an organizer decision. A module is **active** only when it is both entitled and enabled; otherwise it is **inactive**.
+
+An inactive module is absent from the product rather than merely hidden: its surfaces do not render, its API refuses, and its records do not replicate to devices. Its data is retained, so activating a module returns the organization to what it had.
+
 ---
 
 # 4. User Roles
@@ -2240,6 +2254,17 @@ Generic admin CRUD screens may exist to support missing workflows during MVP dev
 
 ## 6.3 MVP In Scope
 
+### Modules
+
+- fixed catalogue of eight modules: Scheduling, Incident Management, Documents, Qualifications, Equipment, Event Geography, The Briefing, and Insights
+- core capability that is never a module and never disableable
+- God Mode entitlement per organization on a multi-organization node
+- organizer enable/disable within entitlement, from the organization configuration surface
+- module selection at organization creation, defaulting to everything entitled and enabled
+- inactive modules absent from navigation, API, sync, and exports
+- requirements owned by an inactive module treated as satisfied rather than blocking
+- data retained across disable and restored on enable
+
 ### Staff Intake
 
 - event applications
@@ -2614,7 +2639,7 @@ The grace period shall default to 14 days after event end. Credits shall not be 
 
 ### ORG-018
 
-Organizations shall provide a configuration surface in Meridian Admin covering the organization values that govern staff lifecycle and operational timing, including the Prospective and Active inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.
+Organizations shall provide a configuration surface in Meridian Admin covering the organization values that govern staff lifecycle and operational timing, including the Prospective and Active inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, the Organizers, default Incident Command, and default Placement department designations, and the organization's enabled modules (MOD-008).
 
 Organization configuration shall not be reachable only through God Mode.
 
@@ -5616,6 +5641,139 @@ Node health reports older than the staleness window shall be labelled stale rath
 ### SYS-041
 
 CLI diagnostics (`meridian:diagnostics`) shall exit non-zero when any required check is critical so container health checks and deployment tooling can gate on it, and shall apply the same redaction rules as every other surface. CLI commands shall also list the configuration catalogue and validate stored overrides.
+
+---
+
+## 7.27 Module Requirements
+
+### MOD-001
+
+Meridian shall group optional product capability into modules (section 3.45), so that an organization can run a narrower Meridian than the platform offers and widen it later without changing deployments or migrating data.
+
+### MOD-002
+
+The Alpha 1 module catalogue shall be exactly:
+
+| Module | Key | Covers |
+|---|---|---|
+| Scheduling | `scheduling` | Shifts, shift signups, the shift board, shift training and waiver requirements, the Schedule Desk, and the Planning Table's plan-versus-actual comparison |
+| Incident Management | `ims` | Incidents, incident types, IMS numbers, incident timeline and links, incident print/PDF, and Field Reports |
+| Documents | `documents` | Policy documents, procedure documents, fragments, acknowledgments and acknowledgment requirements, document exports, and waivers |
+| Qualifications | `qualifications` | Trainings, training prerequisites, training signups and completions, and event credential eligibility |
+| Equipment | `equipment` | Equipment items and equipment checkout/check-in |
+| Event Geography | `geography` | Event maps, camps, map locations and features, the Placement department designation, and deployment/location assignment |
+| The Briefing | `briefing` | Notes, the Briefing hub and Briefing note inclusions, and the deferred AAR, Directions, Action Plan, and Notices surfaces |
+| Insights | `insights` | Insight metrics and Insight Sheets |
+
+### MOD-003
+
+The module catalogue shall be defined in Meridian's own code and shall be fixed for a given build. An organization shall not be able to define, install, or extend a module, and module state shall not be a distribution, licensing, or third-party extension mechanism. A generic plugin system remains out of scope (section 8, technical spec 5.2).
+
+### MOD-004
+
+The following shall be core and shall have no module toggle: organizations, events, departments, teams, staff records and profiles, organization and department status, event applications, memberships, roles and permissions, authentication and sessions, devices and trust, shared workstations, attendance and hours, credits, reporting, branding, notifications, audit, node configuration and diagnostics, and God Mode.
+
+A Meridian organization with every module inactive shall remain a working organization: it can intake staff, run status, hold departments and teams, check people in and out, record hours, and calculate credits.
+
+### MOD-005
+
+Each module shall carry two independent states per organization:
+
+- **entitled**, meaning the platform makes the module available to that organization;
+- **enabled**, meaning the organization has chosen to use it.
+
+A module shall be **active** for an organization only when it is both entitled and enabled, and **inactive** otherwise.
+
+### MOD-006
+
+Entitlement shall be a God Mode decision, settable per organization from the God Mode console.
+
+Entitlement is the mechanism by which a hosted platform offering (PUBLIC-009) may make a narrower Meridian available to an organization. Payment, billing, and self-service signup remain out of scope for Alpha 1, and entitlement shall not imply any of them.
+
+### MOD-007
+
+Revoking entitlement for a module shall make it inactive regardless of its enabled state, and shall not clear the organization's enabled choice. Restoring entitlement shall restore the organization's previous enabled choice rather than defaulting it.
+
+### MOD-008
+
+Enablement shall be an organization decision, settable from the organization configuration surface (ORG-018) for modules the organization is entitled to. A module the organization is not entitled to shall not be presented as an organizer choice.
+
+Only organizers and Lead Organizers shall change enablement (ORG-020).
+
+### MOD-009
+
+The module catalogue selection shall be made when an organization is created. Every module shall be entitled and enabled by default, and the creating God Mode operator may narrow that selection before the organization exists.
+
+An organization created before this requirement shall be entitled to and enabled for every module, so no existing organization loses capability.
+
+### MOD-010
+
+Module state shall be organization governance data. The central node shall be authoritative for it, and entitlement and enablement edits shall be blocked during the active event window under the same governance edit rules that apply to organization configuration and to policy and procedure documents (ORG-021, BRAND-021).
+
+### MOD-011
+
+Entitlement and enablement changes shall be audited, recording the module, the previous and new state, the actor, and the reason where one is supplied.
+
+### MOD-012
+
+An inactive module shall be absent from the product rather than visually hidden:
+
+- its navigation entries, routes, and screens shall not be presented;
+- its API endpoints shall refuse requests;
+- its records shall not replicate to devices;
+- its exports and reports shall not be offered or generated;
+- its scheduled and background work shall not run for that organization.
+
+Hiding a surface while leaving its endpoint reachable shall not satisfy this requirement.
+
+### MOD-013
+
+A request to an endpoint owned by an inactive module shall be refused with a not-found response carrying a machine-readable reason identifying the module, so a client can explain the absence to a member of that organization. The refusal shall not depend on the caller's permissions and shall be evaluated before permission checks.
+
+### MOD-014
+
+A user's role grants for an inactive module shall be retained and shall become effective again when the module becomes active. Disabling a module shall not revoke, rewrite, or delete permission grants.
+
+### MOD-015
+
+An organization's active module set shall be delivered to the client with session and context resolution (CLIENT-001 through CLIENT-004) and cached alongside the offline permission cache, so an offline client presents the same module set the server enforces.
+
+### MOD-016
+
+Device replication shall be scoped by active modules in addition to effective permissions: a device shall not hold records belonging to a module that is inactive for the organization. When a module becomes active, its permitted records shall replicate; when it becomes inactive, they shall be removed from the device.
+
+### MOD-017
+
+A queued offline write against a module that is inactive when the write reaches the server shall be refused and recorded as a sync conflict for God Mode resolution, rather than silently dropped or silently applied.
+
+### MOD-018
+
+A requirement that an inactive module owns shall be treated as satisfied rather than as blocking, and shall not be presented:
+
+- a shift's waiver requirements shall not gate signup or credential eligibility when Documents is inactive;
+- a shift's training requirements shall not gate signup when Qualifications is inactive;
+- credential eligibility shall not require a shift signup when Scheduling is inactive (5.6);
+- a policy/procedure acknowledgment requirement shall not be presented during staff signup or training when Documents is inactive, consistent with POL-046 limiting acknowledgments to those two points and POL-026 and POL-027 keeping them out of shift signup and credential eligibility entirely.
+
+Requirement records shall be retained so activating the module restores the gate exactly as it stood.
+
+### MOD-019
+
+A surface that aggregates other modules' contributions shall omit contributions from inactive modules and shall continue to function. The Briefing, Insights, the Department Overview, the Logistics Desk, the Operations Center, the Planning Table, and The Briefing's event information surfaces shall not fail, blank, or error because a module they read from is inactive.
+
+### MOD-020
+
+Deactivating a module shall never delete, archive, or anonymize its records. Activating a module shall restore access to the records the organization already had, in the state they were left.
+
+### MOD-021
+
+The God Mode console on the central node serves many organizations at once and shall present every module for every organization regardless of module state, so an operator can always see and change what an organization is entitled to.
+
+On a node bound to a single organization (technical spec 7.3), the God Mode console shall hide that organization's inactive modules from operational navigation while retaining the ability to change module state.
+
+### MOD-022
+
+Module names presented to users shall be Meridian's own terms as listed in MOD-002. Module keys shall not be presented as user-facing labels.
 
 ---
 

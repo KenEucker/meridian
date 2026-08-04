@@ -946,11 +946,13 @@ Two dependencies run against the task numbering rather than with it. M18.20A nee
 
 ---
 
-### Milestone 19: Packaging, Organization Addressing, Event-Mode Safeguards, and Release Candidate QA
+### Milestone 19: Packaging, Organization Addressing, Modules, Event-Mode Safeguards, and Release Candidate QA
 
-**Goal:** Produce versioned Alpha 1 builds, make organizations reachable at organization subdomains beside their root paths, and verify release readiness.
+**Goal:** Produce versioned Alpha 1 builds, make organizations reachable at organization subdomains beside their root paths, let an organization run only the modules it needs, and verify release readiness.
 
-**Primary source docs:** Technical spec sections 8, 25, 26, 27, 28, 29; requirements 7.1 (ORG-022 through ORG-025); process release checklist; QA README; UI/kiosk docs.
+**Primary source docs:** Technical spec sections 8, 15A, 25, 26, 27, 28, 29; requirements 7.1 (ORG-018, ORG-022 through ORG-025), 7.27 (MOD-001 through MOD-022); data/API spec 5.9, 6.8, 7.6, 10.1A; process release checklist; QA README; UI/kiosk docs.
+
+**Module sequencing note:** M19.11 through M19.19 build the module system. They land before the release candidate QA tasks (M19.6, M19.7) so that RC QA exercises a build in which modules can be turned off, and M19.19's QA script is part of the RC QA index M19.6 assembles.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
@@ -964,10 +966,24 @@ Two dependencies run against the task numbering rather than with it. M18.20A nee
 | M19.8 Organization subdomain resolution | Resolve the organization from an organization-slug subdomain of the configured platform domain, serving the same content the root-path form serves with the slug segment omitted; an unknown subdomain is not found, and the marketing surface renders only at the deployment root. | ORG-022 through ORG-025; PUBLIC-001; Technical spec 8.7 | Feature tests driving requests by `Host` header (for example `northwood.localhost`); a test asserting the path form keeps working unchanged; a test asserting an unknown subdomain is not found; a test asserting the marketing surface does not render on an organization subdomain |
 | M19.9 Subdomain sessions, links, and branding | Generate organization links host-aware so a visitor on a subdomain stays on it, scope session cookies so organization subdomains stay isolated from one another, and resolve the organization branding profile on subdomain hosts. | ORG-023, ORG-024; BRAND-003; Technical spec 8.7 | Feature tests; a test asserting a session cookie issued on one organization subdomain is not presented to another; a branding resolution test by host |
 | M19.10 Wildcard host deployment config | Extend the deployment bundle (M19.2) with wildcard DNS/TLS host handling for organization subdomains (`*.<deployment-domain>`) and document `*.localhost` development use. | Technical spec 8, 8.7, 26 | Build smoke test; deployment doc check |
+| M19.11 Module catalogue and state | Add the code-defined eight-module catalogue, the `organization_modules` table with separate entitled/enabled state, and a resolver that answers whether a module is active for an organization. Declare each domain namespace's owning module, defaulting an undeclared namespace to core. | MOD-001 through MOD-005, MOD-007, MOD-009; Technical spec 15A.2, 15A.3; Data/API 10.1A | Unit tests for the resolver; a test asserting an unknown module key is rejected; a test asserting a missing row resolves as entitled and enabled; a test asserting every domain namespace declares an owner or is core |
+| M19.12 Module gate middleware | Add route-group module middleware that runs after organization resolution and before authorization, refusing inactive modules with `404` and a `module_inactive` reason. Declare the owning module for every module-owned route group, including commands. | MOD-012, MOD-013; Technical spec 15A.4, 15A.5; Data/API 5.9, 6.8 | Feature tests per module asserting refusal; a test asserting the refusal is identical for a permitted user, an unpermitted user, and God Mode; a test asserting the gate precedes the permission check; a route-coverage test asserting no module-owned route is ungated |
+| M19.13 God Mode entitlement screen | Add the Orchid Organization modules screen for per-organization entitlement, always presenting all modules for all organizations on the central node, with audited transitions and reason capture. | MOD-006, MOD-011, MOD-021; Technical spec 15A.6, 22.2 | Feature tests; a test asserting the central-node console lists every module for an organization that has them all disabled; a test asserting entitlement changes are audited with previous and new state |
+| M19.14 Node-bound console visibility | Hide an organization's inactive modules from operational console navigation on a node whose config binds it to a single organization, keeping the Organization modules screen reachable. | MOD-021; Technical spec 7.3, 15A.6 | Feature tests driving both node bindings; a test asserting an operator on a bound node can still activate a hidden module |
+| M19.15 Organizer module configuration | Add module enable/disable to the ORG-018 organization configuration surface, offering only entitled modules, requiring `organization.configuration.manage`, blocked during the active event window, audited. | ORG-018, ORG-020, ORG-021; MOD-008, MOD-010, MOD-011; Data/API 6.8 | Feature tests; a test asserting an unentitled module is not offered; a test asserting an edit during the active event window is refused; a test asserting a non-organizer cannot change enablement |
+| M19.16 Client module gating | Return the active module set from session resolution, cache it with the offline permission cache, and gate the client router and navigation on it. Distinguish module absence from permission denial in user-facing copy. | MOD-015, CLIENT-001 through CLIENT-004; Technical spec 11A.3, 11A.4, 15A.8 | Client unit tests; a test asserting a disabled module has no nav entry and no reachable route; a test asserting the offline client gates on the cached set; a test asserting module absence renders different copy than permission denial |
+| M19.17 Module-scoped replication | Scope sync rules by active modules in addition to effective roles, declare each synced table's owning module, and refuse outbox replays against inactive modules as sync conflicts. | MOD-016, MOD-017; Technical spec 9.5, 11A.7, 15A.8; Data/API 7.6 | Sync rule tests asserting an inactive module's records do not replicate to a permitted user's device; a test asserting reactivation replicates them back; a test asserting a queued write against a now-inactive module becomes a sync conflict rather than a silent drop |
+| M19.18 Vacuous requirements and aggregator degradation | Make gates owned by an inactive module evaluate as satisfied and unpresented, and make composing surfaces omit inactive modules' contributions. Covers shift waiver and training requirements, credential eligibility's signed-up-shift condition, acknowledgment requirements, the department operations read models, The Briefing, Insights, and exports. | MOD-018, MOD-019; Requirements 5.6, 5.8; Technical spec 15A.7; Data/API 5.9 | Feature tests per gate asserting satisfaction rather than blocking, and asserting the requirement records survive; a test asserting credential eligibility works with Scheduling inactive; tests asserting each department operations read model, The Briefing, and Insights render with each module inactive in turn |
+| M19.19 Organization creation module selection and QA script | Let organization creation choose the module set, defaulting to everything entitled and enabled; backfill existing organizations and the Northwood seed to all-on; add `QA-MOD-01-organization-modules.md`. | MOD-009, MOD-020; QA README; developer testing process | Feature tests for creation defaults and narrowing; a migration test asserting existing organizations keep every module; a test asserting the Northwood scenario seeds all modules active; human QA script |
 
-**QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness — and an organization resolves at both its root path and its organization subdomain, with the marketing surface only at the deployment root.
+**QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness — an organization resolves at both its root path and its organization subdomain, with the marketing surface only at the deployment root — and an organization with Scheduling, Incident Management, and Documents disabled still intakes staff, runs status, checks people in and out, records hours, and calculates credits, with no navigation entry, API route, replicated record, or export for a disabled module anywhere in the product.
 
-**Explicitly out of scope for this milestone:** dedicated per-organization infrastructure. ORG-025 requires only that subdomain addressing not preclude a future S-tier offering where an entire organization subdomain runs on dedicated, isolated hardware; no Alpha 1 task provisions it (requirements section 8, Dedicated Organization Infrastructure).
+**Explicitly out of scope for this milestone:**
+
+- dedicated per-organization infrastructure. ORG-025 requires only that subdomain addressing not preclude a future S-tier offering where an entire organization subdomain runs on dedicated, isolated hardware; no Alpha 1 task provisions it (requirements section 8, Dedicated Organization Infrastructure);
+- a generic or third-party plugin system. The module catalogue is fixed in Meridian's own code (MOD-003, technical spec 5.2), and no task makes it extensible, installable, or data-defined;
+- sub-module feature toggles. Modules are the only unit of enablement in Alpha 1;
+- billing, pricing, or offering enforcement built on entitlement. Entitlement is the mechanism a hosted offering may later use (MOD-006), and no task connects it to payment.
 
 ---
 
@@ -1022,8 +1038,9 @@ QA should run in this order:
 17. Client session and API wiring QA.
 18. Insights framework and initial metrics QA.
 19. Gap closure QA.
-20. Platform landing page QA.
-21. Release candidate QA.
+20. `QA-MOD-01`: organization modules QA.
+21. Platform landing page QA.
+22. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 
@@ -1059,7 +1076,8 @@ The following are acknowledged only as exclusions because the source documents d
 - Full-text policy/procedure search.
 - Team-scoped acknowledgment requirements.
 - Full multi-on-site-node implementation.
-- Generic plugin system.
+- Generic plugin system. The organization module system (M19.11 through M19.19) is a fixed catalogue defined in Meridian's own code; it does not make capability installable, extensible, or data-defined, and no PR may treat it as the beginning of one.
+- Sub-module feature toggles. Modules are the only unit of enablement.
 - Full inventory custody chains and department-to-department allotments.
 - Provision inventory and provision eligibility export for Alpha 1.
 - Incident spreadsheet export for Alpha 1.

@@ -266,6 +266,8 @@ Files
 
 This should be a lightweight modular monolith using folders and namespaces, not a heavy plugin system.
 
+These are code organization boundaries. They are related to but not the same as the product modules an organization turns on and off (section 15A): a product module owns one or more of these namespaces, and several namespaces are core and belong to no product module.
+
 Each domain module may own:
 
 - Migrations.
@@ -684,6 +686,8 @@ The cache lists in section 9.3 describe what each role should receive. They are 
 
 Sync rules are scoped by the user's effective roles, as defined in section 11A.7. A device does not receive records its user could not retrieve through the API, and a change to a user's effective roles changes what subsequently replicates to that user's devices.
 
+Sync rules are also scoped by the organization's active modules (section 15A.5). A device does not receive records belonging to a module the organization does not run, and a change to module state changes what subsequently replicates.
+
 ---
 
 # 10. Node-to-Node Sync
@@ -921,7 +925,9 @@ Where the node has no lock and the user is associated with exactly one event, th
 
 A client without connectivity is locked to the context the node provides and does not offer switching.
 
-Switching re-resolves permissions, navigation, branding, and cached context. Data from the previous context is not left visible.
+The session response also carries the resolved organization's active module set (MOD-015), so navigation is built from capability the organization runs rather than filtered after the fact.
+
+Switching re-resolves permissions, navigation, branding, modules, and cached context. Data from the previous context is not left visible.
 
 ## 11A.4 Offline permission cache
 
@@ -962,6 +968,8 @@ Offline data replicated to a device is limited to what the device's user is perm
 The cache expectations in section 9.3 describe what a role *should* receive. This section states the boundary: sync rules are scoped by the user's effective roles, so a device cannot hold data its user has no capability to read. UI hiding is not sufficient, consistent with the existing rule for sensitive map layers.
 
 A change to a user's effective roles changes what subsequently replicates to that user's devices.
+
+Module state is a second, organization-level boundary applied the same way: a device does not hold records belonging to a module that is inactive for the organization, regardless of what its user is permitted to read (MOD-016). Deactivating a module removes its records from devices; activating one replicates the permitted records back.
 
 ---
 
@@ -1332,6 +1340,105 @@ You can edit this map because you lead the event's Placement department and the 
 Sensitive map reads (for example incident, DNS, restricted-area, medical, staff-only, or security-sensitive locations) should follow existing sensitive-read audit principles where appropriate. Sensitive map layers/features must not sync to users/devices without permission; UI hiding is not sufficient.
 
 The exact effective-permission-level role codes for the Placement department (whether to mint placement-specific role codes mirroring `ic_lead`/`ic_operator`/`ic_viewer`, or to reuse `department_lead` plus map-management grants) are left to the implementing milestone; see Open Questions.
+
+---
+
+# 15A. Organization Modules
+
+## 15A.1 Purpose
+
+An organization should be able to run a narrower Meridian than the platform offers, and to widen it later, without a different build, a different deployment, or a data migration.
+
+Modules are that mechanism. They answer "does this organization use this capability at all", which is a different question from "may this user do this thing". Permissions stay the permission model's job.
+
+## 15A.2 Module catalogue
+
+The catalogue is a code-defined constant, not data. Alpha 1 ships exactly the eight modules listed in requirements MOD-002: `scheduling`, `ims`, `documents`, `qualifications`, `equipment`, `geography`, `briefing`, `insights`.
+
+This is not the plugin system deferred in section 5.2. A module is a compile-time grouping of Meridian's own domain namespaces, and nothing outside Meridian's source can add to the catalogue.
+
+Modules group the domain namespaces of section 5.2. That section lists the initial namespaces only; several domains below were added to the product after it was written, and the mapping covers the domains as they now stand:
+
+```text
+scheduling      Shifts, shift signups and requirements
+ims             Incidents, FieldReports
+documents       PolicyDocuments, ProcedureDocuments, DocumentFragments,
+                DocumentAcknowledgments, DocumentExports, Waivers
+qualifications  Trainings, Credentials
+equipment       Equipment
+geography       Event maps, Camps, Map locations, Deployments,
+                Placement designation
+briefing        Notes, BriefingNoteInclusions, AfterActionReports,
+                BriefingDirections, ActionPlans, BriefingNotices
+insights        Insights
+```
+
+Every remaining namespace is core (MOD-004) and has no module gate. Attendance, hours, and credits are core: check-in does not require a shift (requirements 5.8), so they survive Scheduling being inactive.
+
+Each domain namespace declares which product module owns it, or declares itself core. A namespace with no declaration is core, so the failure mode of forgetting to declare one is a capability that stays reachable, not one that silently disappears.
+
+## 15A.3 Entitlement and enablement
+
+Module state is two booleans per organization per module:
+
+- `entitled` — the platform makes it available. God Mode owns this.
+- `enabled` — the organization uses it. Organizers own this, within entitlement.
+
+Active is `entitled && enabled`. The two are stored separately and never collapsed, because revoking and restoring entitlement must not destroy the organization's own choice (MOD-007).
+
+Module state is organization governance data: the central node is authoritative, and edits are blocked during the active event window on the same rule as organization configuration (MOD-010).
+
+## 15A.4 Evaluation order
+
+The module gate runs before the permission check, not after it:
+
+```text
+resolve organization
+  -> module gate      (is the module active for this organization?)
+    -> permission check (may this user do this?)
+      -> handler
+```
+
+An inactive module answers not-found before authorization is consulted, so the response does not depend on who is asking and a permission decision is never made about capability that is not present.
+
+The refusal carries a machine-readable reason naming the module (MOD-013). Module state is an organization's own configuration, not a secret from its members, so naming it is safe and lets the client say why a surface is gone.
+
+## 15A.5 Enforcement points
+
+A module is enforced in five places. Any one of them alone is insufficient.
+
+- **HTTP.** Route middleware resolves the organization and the route's owning module and refuses inactive ones. Route groups declare their module once rather than each controller checking.
+- **Client.** The router guard and navigation read the active module set from session/context resolution (section 11A.3), so a disabled module has no nav entry and no reachable route.
+- **Sync.** PowerSync rules are scoped by active modules as well as by effective roles (section 9.5, 11A.7). Devices do not hold inactive modules' records.
+- **Admin console.** Orchid screens follow section 15A.6.
+- **Background work.** Scheduled jobs, export generation, and notification producers skip organizations for which their module is inactive.
+
+## 15A.6 Admin console behavior by node binding
+
+The central node serves many organizations. Hiding a module in the God Mode console there would hide it for organizations that do use it, and would remove the surface an operator needs in order to turn a module on. So the central console presents every module for every organization, always (MOD-021).
+
+A node bound to a single organization — `organization_id` set in node config (section 7.3) — hides that organization's inactive modules from operational console navigation, because on that node the console has exactly one organization's context and the clutter is real. Module state administration itself stays reachable, so an operator on-site can still activate a module.
+
+The rule is therefore: **enforcement is by organization; console visibility is by node binding.**
+
+## 15A.7 Cross-module dependencies
+
+Modules do not have hard dependencies on one another. Where one module's records reference another's, the reference degrades rather than blocks (MOD-018, MOD-019).
+
+Two shapes cover every case in Alpha 1:
+
+- **Gates go vacuous.** A requirement owned by an inactive module is treated as satisfied and is not presented. Shift waiver requirements with Documents inactive, shift training requirements with Qualifications inactive, and the signed-up-shift condition of credential eligibility with Scheduling inactive all evaluate as satisfied. The requirement records are retained, so activating the module restores the gate as it stood.
+- **Aggregators omit.** A surface that composes other modules' contributions drops the inactive ones and renders the rest. The Briefing, Insights, the Department Overview, the Logistics Desk, the Operations Center, and the Planning Table each read from several modules and none of them may fail because one is off.
+
+The rule to implement against: a module's absence is never an error condition in another module.
+
+## 15A.8 Client delivery and offline behavior
+
+Session/context resolution returns the organization's active module set alongside effective permissions, and the client caches it with the offline permission cache (section 11A.4). An offline client therefore gates navigation on the same set the server enforces.
+
+A write queued offline against a module that is inactive by the time it reaches the server is refused and recorded as a sync conflict (MOD-017). It is not silently dropped, because the person who wrote it deserves to know, and not silently applied, because the organization has said it does not run that capability.
+
+The event-window rule (MOD-010) makes this rare by construction: module state cannot change during an active event, which is when offline queues are deepest.
 
 ---
 
@@ -2819,9 +2926,12 @@ Node pairing
 Node sync status
 Audit log
 Sync conflicts
+Organization modules (entitlement)
 ```
 
 List screens should have search/filtering in Alpha 1.
+
+Console navigation for these screens follows section 15A.6: the central node presents all of them for all organizations, and a node bound to a single organization hides that organization's inactive modules while keeping the Organization modules screen reachable.
 
 CSV import/export is included in Alpha 1.
 
