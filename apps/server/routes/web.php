@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Application\ApplicantPortalController;
 use App\Http\Controllers\Application\EventApplicationController;
 use App\Http\Controllers\Auth\DiscordOAuthController;
 use App\Http\Controllers\Auth\GoogleOAuthController;
@@ -54,6 +55,42 @@ Route::post('{organization:slug}/{event:slug}/apply/{application}/withdraw', [Ev
     ->middleware('throttle:10,1')
     ->scopeBindings()
     ->name('public.events.apply.withdraw');
+
+/*
+ * The applicant portal (M18.22; APP-004, APP-012 through APP-015; AUTH-010).
+ *
+ * Unauthenticated, and named for what it holds rather than for who is looking:
+ * an applicant has no account, so there is no user these applications hang off.
+ * Reaching them takes a signed link mailed to the address they were submitted
+ * with, which is the magic-link mechanism proving control of an address without
+ * signing anybody in.
+ *
+ * These routes are declared above the client fallback so the portal is served
+ * by the node rather than by the Vue shell, which has no way to hold a portal
+ * session.
+ *
+ * Rate limiting is APP-015's two limits, applied inside
+ * `ApplicantPortalThrottle` rather than by route middleware, so the API entry
+ * point beside this one is bound by the same counters. `open` carries an
+ * ordinary route throttle as well: it is the one route here that is not behind
+ * those counters, and a signature is checked before anything else it does.
+ */
+Route::get('applications/link', [ApplicantPortalController::class, 'requestForm'])
+    ->name('applicant-portal.request');
+Route::post('applications/link', [ApplicantPortalController::class, 'requestLink'])
+    ->name('applicant-portal.request.store');
+Route::get('applications/link/sent', [ApplicantPortalController::class, 'sent'])
+    ->name('applicant-portal.request.sent');
+Route::get('applications/open', [ApplicantPortalController::class, 'open'])
+    ->middleware(['signed:relative', 'throttle:20,1'])
+    ->name('applicant-portal.open');
+Route::get('applications', [ApplicantPortalController::class, 'show'])
+    ->name('applicant-portal.show');
+Route::post('applications/{application}/withdraw', [ApplicantPortalController::class, 'withdraw'])
+    ->middleware('throttle:10,1')
+    ->name('applicant-portal.withdraw');
+Route::post('applications/close', [ApplicantPortalController::class, 'close'])
+    ->name('applicant-portal.close');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('login', [MagicLinkController::class, 'create'])->name('login');

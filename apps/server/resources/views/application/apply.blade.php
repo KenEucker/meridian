@@ -68,6 +68,16 @@
 
             <button type="submit">Submit application</button>
         </form>
+
+        {{--
+            APP-012 puts the request for a portal link on the public application
+            surface, which is where somebody wondering what became of an earlier
+            application comes back to.
+        --}}
+        <p>
+            Applied already?
+            <a href="{{ route('applicant-portal.request') }}">Find your applications</a>.
+        </p>
     </main>
 </body>
 </html>

@@ -6,6 +6,7 @@ import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   getEventParticipation,
   getOrganizationParticipation,
+  requestApplicantPortalLink,
   submitApplication,
   type DepartmentInterestOption,
   type EventParticipation,
@@ -247,6 +248,41 @@ async function submit(): Promise<void> {
   }
 }
 
+/*
+ * "Applied already?" (M18.22; APP-012, APP-014).
+ *
+ * On this page rather than on a sign-in screen, because the person asking has
+ * no account — the whole point of the portal is that an applicant is not a user
+ * yet. It is offered in every state of the page, including after a submission
+ * and on an organization that is not currently recruiting, since somebody who
+ * applied last month arrives at exactly those pages.
+ *
+ * The confirmation is fixed wording and appears whatever the node found. What
+ * the applicant is told here is that mail is on its way if there is anything to
+ * send, and the mailbox is where the answer is.
+ */
+const portalEmail = ref("");
+const portalRequesting = ref(false);
+const portalRequested = ref(false);
+const portalError = ref<string | null>(null);
+
+async function requestPortalLink(): Promise<void> {
+  portalRequesting.value = true;
+  portalError.value = null;
+
+  try {
+    await requestApplicantPortalLink(portalEmail.value);
+    portalRequested.value = true;
+  } catch (error) {
+    portalError.value = meridianErrorMessage(
+      error,
+      "That link could not be requested. Try again in a little while.",
+    );
+  } finally {
+    portalRequesting.value = false;
+  }
+}
+
 watch(
   () => [organizationSlug.value, routeEventSlug.value],
   () => {
@@ -433,6 +469,51 @@ watch(
         </button>
       </form>
     </template>
+
+    <!--
+      APP-012: the way back to an application already made, offered from the
+      surface it was made on. Nothing here depends on the page's load state,
+      because somebody chasing an old application arrives at whichever state the
+      organization happens to be in.
+    -->
+    <section class="participate__portal" aria-labelledby="participate-portal">
+      <h2 id="participate-portal" class="participate__portal-heading">
+        Applied already?
+      </h2>
+
+      <p v-if="portalRequested" class="participate__body" role="status">
+        If that address has any applications, a link to them is on its way. It
+        expires shortly, so open it when it arrives.
+      </p>
+
+      <template v-else>
+        <p class="participate__body participate__body--quiet">
+          We will email you a link to the applications you have made. You do not
+          need an account, and the link signs you in to nothing.
+        </p>
+
+        <p v-if="portalError" class="participate__error" role="alert">
+          {{ portalError }}
+        </p>
+
+        <form
+          class="participate__portal-form"
+          @submit.prevent="requestPortalLink()"
+        >
+          <label class="participate__field">
+            Email address you applied with
+            <input v-model="portalEmail" type="email" required maxlength="255" />
+          </label>
+          <button
+            type="submit"
+            class="participate__submit"
+            :disabled="portalRequesting"
+          >
+            {{ portalRequesting ? "Sending…" : "Email me a link" }}
+          </button>
+        </form>
+      </template>
+    </section>
   </main>
 </template>
 
@@ -574,6 +655,26 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.participate__portal {
+  border-top: 1px solid var(--m-color-border, #d5ddda);
+  padding-top: var(--m-space-4, 1rem);
+  margin-top: var(--m-space-4, 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-3, 0.75rem);
+}
+
+.participate__portal-heading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.participate__portal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-3, 0.75rem);
 }
 
 .participate__submit {

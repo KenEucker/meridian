@@ -25,6 +25,16 @@
         @error('withdraw')
             <p>{{ $message }}</p>
         @enderror
+
+        {{--
+            The session that lets this page offer a withdrawal is this browser's
+            alone and does not survive it (APP-004). The portal is how the same
+            applicant reaches the same application from anywhere else (APP-012).
+        --}}
+        <p>
+            You can come back to this and any other application later:
+            <a href="{{ route('applicant-portal.request') }}">find your applications</a>.
+        </p>
     </main>
 </body>
 </html>

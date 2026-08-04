@@ -2261,6 +2261,33 @@ Example response (abbreviated):
 }
 ```
 
+#### Applicant portal (APP-012 through APP-015)
+
+An applicant reaches their own applications through a signed link mailed to the address the application was submitted with. The link uses the same signed-URL mechanism as primary email verification (AUTH-010) and establishes no user session: the person following it may hold no user record, which is the situation the portal exists for.
+
+Server-rendered and session-scoped rather than an API surface, because the reader holds no bearer token and has no account to issue one against. Following the link opens a bounded portal session naming one verified address; every read and write afterwards takes the address from that session and never from the request.
+
+Endpoints:
+
+- `GET /applications/link` and `POST /applications/link` — request a link for an address.
+- `POST /api/public/applicant-portal/link-requests` — the same request from the public participation surface. Organization-independent, because an address may hold applications to more than one organization and one link covers all of them.
+- `GET /applications/open` — the signed link's landing. Validates signature and expiry, opens the portal session, and redirects to an address carrying no credential.
+- `GET /applications` — the applicant's own applications: scope applied to, submission date, current status, and a withdraw control where the application is still Submitted (APP-004, APP-013).
+- `POST /applications/{application}/withdraw` — applicant withdrawal, recorded through the same domain path as every other withdrawal.
+- `POST /applications/close` — end the portal session, for a browser that is not the applicant's own.
+
+Disclosure rules (APP-014):
+
+- The request response is identical for an address with applications, an address with none, and an address whose only application was auto-rejected for Do Not Staff. A link is mailed only where there is something to show, so the mailbox does not answer the question the response refuses to.
+- An auto-rejected Do Not Staff application is absent from the portal, is not counted when deciding whether to issue a link, and cannot be withdrawn through it.
+- An application that does not exist, one belonging to another address, and one auto-rejected are the same 404.
+
+Rate limiting and audit (APP-015):
+
+- Link requests are limited per email address and per requesting client, per hour, counted in the domain service so both entry points share one set of counters. Requests for unknown addresses are counted too — a limit that only counted known addresses would itself disclose which are known.
+- Link issuance is audited as `applicant_portal.link_issued` against the pseudo-entity `applicant_portal_link`, recording the address and how many applications the link covers, with no organization scope because a link may cross several.
+- Portal withdrawal is audited as `event_application.withdrawn`, with a reason naming the portal.
+
 ---
 
 ### 10.6 Departments and Teams

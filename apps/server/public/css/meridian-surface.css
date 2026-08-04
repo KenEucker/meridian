@@ -189,6 +189,25 @@ dd {
     overflow-wrap: anywhere;
 }
 
+/* The applicant portal's list of applications (M18.22; APP-013). Each entry is
+   a panel, and the withdraw control inside it is a form — which would otherwise
+   pick up the card chrome above and draw a card inside a card. Stripping it
+   there rather than adding a new control style keeps one button treatment
+   across every surface in this file. */
+.applications {
+    display: grid;
+    gap: var(--m-space-4);
+    margin-bottom: var(--m-space-4);
+}
+
+.application form,
+.applications__close {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
 .meridian-footer {
     color: var(--m-text-muted);
     font-size: var(--m-text-xs);

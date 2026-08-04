@@ -238,6 +238,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Applicant Portal
+    |--------------------------------------------------------------------------
+    |
+    | The signed link an applicant reaches their own applications through
+    | (APP-012 through APP-015). It is the magic-link mechanism pointed at a
+    | page rather than at a session, because the person following it may hold no
+    | Meridian account at all.
+    |
+    | `link_expires_minutes` is longer than the login link's fifteen. A login
+    | link is followed within a minute of asking for it; this one is often
+    | opened later, on the phone the mail arrived on, and an expired link means
+    | asking again for something the person already proved they control.
+    |
+    | `session_minutes` bounds how long the portal stays open after the link is
+    | followed, because the browser it opens in may not be the applicant's own.
+    |
+    | The two request limits are APP-015 taken literally: per email address, so
+    | one address cannot be used to mail-bomb its owner, and per requesting
+    | client, so one client cannot walk a list of addresses. Both are per hour.
+    |
+    */
+
+    'applicant_portal' => [
+        'link_expires_minutes' => (int) env('MERIDIAN_APPLICANT_PORTAL_LINK_EXPIRES_MINUTES', 60),
+        'session_minutes' => (int) env('MERIDIAN_APPLICANT_PORTAL_SESSION_MINUTES', 60),
+        'link_requests_per_email_per_hour' => (int) env('MERIDIAN_APPLICANT_PORTAL_REQUESTS_PER_EMAIL_PER_HOUR', 5),
+        'link_requests_per_client_per_hour' => (int) env('MERIDIAN_APPLICANT_PORTAL_REQUESTS_PER_CLIENT_PER_HOUR', 20),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | API Bearer Tokens
     |--------------------------------------------------------------------------
     |

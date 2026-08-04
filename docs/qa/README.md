@@ -106,6 +106,17 @@ produces it (`QA-CRED-01` section G, `QA-SHIFT-01`, `QA-STAFF-01`, `QA-SLB-01`
 section H); `QA-EXPORT-01` is the consolidated script that answers the milestone
 QA gate.
 
+## Alpha 1 Applicant portal script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-APPLY-02-applicant-portal.md`](QA-APPLY-02-applicant-portal.md) | Applicant self-service for somebody holding no account: a signed link requested from both public application surfaces and mailed only where there is something to show, an identical response for known and unknown addresses, a tampered or expired link refused, the applicant's own applications with scope, submission date, and status, applicant-only withdrawal of a still-Submitted application, a Do Not Staff auto-rejection absent rather than labelled, the bounded portal session and its closing, the per-address and per-client request limits, and audit of issuance and withdrawal | M18.22 |
+
+The review side of the same records — organizer and Staff Coordinator approval,
+rejection, deferral, and rescind — stays in `QA-APPLY-01`. This script is the
+applicant's half, and it is the only one where the person under test has no
+Meridian account at all.
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |
