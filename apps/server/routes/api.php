@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\SharedWorkstationSessionController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Credentials\EventCredentialAdminController;
+use App\Http\Controllers\Credits\CreditPolicyAdminController;
 use App\Http\Controllers\DepartmentOps\DepartmentOperationsReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
@@ -433,6 +434,27 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/update-organization-configuration', [OrganizationConfigurationController::class, 'update'])
         ->name('api.commands.update-organization-configuration');
 
+    /*
+     * Credit policies and calculation runs (M18.16; ORG-009, ORG-020;
+     * CREDIT-001 through CREDIT-003). Policy edits answer to configuration
+     * governance — central-owned, frozen during the active event window — and
+     * the calculation run is the CREDIT-001 product entry point.
+     */
+    Route::post('/commands/create-credit-policy', [CreditPolicyAdminController::class, 'create'])
+        ->name('api.commands.create-credit-policy');
+
+    Route::post('/commands/update-credit-policy', [CreditPolicyAdminController::class, 'update'])
+        ->name('api.commands.update-credit-policy');
+
+    Route::post('/commands/archive-credit-policy', [CreditPolicyAdminController::class, 'archive'])
+        ->name('api.commands.archive-credit-policy');
+
+    Route::post('/commands/restore-credit-policy', [CreditPolicyAdminController::class, 'restore'])
+        ->name('api.commands.restore-credit-policy');
+
+    Route::post('/commands/calculate-event-credits', [CreditPolicyAdminController::class, 'calculate'])
+        ->name('api.commands.calculate-event-credits');
+
     Route::post('/commands/create-shift', [ShiftAdminCommandController::class, 'create'])
         ->name('api.commands.create-shift');
 
@@ -551,6 +573,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/configuration', [OrganizationConfigurationController::class, 'show'])
         ->name('api.organizations.configuration.show');
+
+    Route::get('/organizations/{organization}/credit-policies', [CreditPolicyAdminController::class, 'index'])
+        ->name('api.organizations.credit-policies.index');
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');

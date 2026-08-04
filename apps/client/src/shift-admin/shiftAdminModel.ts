@@ -53,6 +53,18 @@ export interface ShiftRequirementOption {
   readonly name: string;
 }
 
+/**
+ * A credit policy a shift may name as its own rate (SHIFT-010; M18.16), as the
+ * node offers them: the organization's active policies, plus the one this
+ * shift already names when that policy has since been archived.
+ */
+export interface ShiftCreditPolicyOption {
+  readonly id: string;
+  readonly name: string;
+  readonly creditMultiplier: string;
+  readonly archived: boolean;
+}
+
 export interface ProductShift {
   readonly id: string;
   readonly departmentId: string;
@@ -69,6 +81,8 @@ export interface ProductShift {
   readonly signupOpensAt: string | null;
   readonly signupClosesAt: string | null;
   readonly scheduleLockAt: string | null;
+  /** The shift's own credit policy, or null for the organization default. */
+  readonly creditPolicyId: string | null;
   readonly requiredTrainingIds: readonly string[];
   readonly requiredWaiverIds: readonly string[];
   readonly cancelledAt: string | null;
@@ -102,6 +116,7 @@ export interface ShiftWorkspace {
   readonly teams: readonly ShiftTeamOption[];
   readonly trainingOptions: readonly ShiftRequirementOption[];
   readonly waiverOptions: readonly ShiftRequirementOption[];
+  readonly creditPolicyOptions: readonly ShiftCreditPolicyOption[];
   readonly shifts: readonly ProductShift[];
 }
 
@@ -115,6 +130,7 @@ export interface ShiftDraft {
   signupOpensAt: string | null;
   signupClosesAt: string | null;
   scheduleLockAt: string | null;
+  creditPolicyId: string | null;
   requiredTrainingIds: string[];
   requiredWaiverIds: string[];
 }
@@ -136,6 +152,7 @@ interface ShiftPayload {
   readonly signup_opens_at: string | null;
   readonly signup_closes_at: string | null;
   readonly schedule_lock_at: string | null;
+  readonly credit_policy_id?: string | null;
   readonly cancelled_at: string | null;
   readonly has_started?: boolean;
   readonly can_manage?: boolean;
@@ -158,6 +175,12 @@ interface ShiftIndexPayload {
   }[];
   readonly training_options?: ShiftRequirementOption[];
   readonly waiver_options?: ShiftRequirementOption[];
+  readonly credit_policy_options?: {
+    readonly id: string;
+    readonly name: string;
+    readonly credit_multiplier?: string;
+    readonly archived?: boolean;
+  }[];
   readonly shifts?: ShiftPayload[];
 }
 
@@ -177,6 +200,7 @@ function toShift(payload: ShiftPayload): ProductShift {
     signupOpensAt: payload.signup_opens_at,
     signupClosesAt: payload.signup_closes_at,
     scheduleLockAt: payload.schedule_lock_at,
+    creditPolicyId: payload.credit_policy_id ?? null,
     requiredTrainingIds: payload.required_training_ids ?? [],
     requiredWaiverIds: payload.required_waiver_ids ?? [],
     cancelledAt: payload.cancelled_at,
@@ -207,6 +231,7 @@ function toAttributes(draft: ShiftDraft): Record<string, unknown> {
     signup_opens_at: draft.signupOpensAt,
     signup_closes_at: draft.signupClosesAt,
     schedule_lock_at: draft.scheduleLockAt,
+    credit_policy_id: draft.creditPolicyId || null,
     required_training_ids: [...draft.requiredTrainingIds],
     required_waiver_ids: [...draft.requiredWaiverIds],
   };
@@ -243,6 +268,12 @@ export async function getDepartmentShifts(
     })),
     trainingOptions: result.training_options ?? [],
     waiverOptions: result.waiver_options ?? [],
+    creditPolicyOptions: (result.credit_policy_options ?? []).map((option) => ({
+      id: option.id,
+      name: option.name,
+      creditMultiplier: option.credit_multiplier ?? "",
+      archived: option.archived ?? false,
+    })),
     shifts: (result.shifts ?? []).map(toShift),
   };
 }
@@ -374,6 +405,34 @@ export function shiftTeamOptions(
       id: shift.eligibleTeamId,
       name: shiftTeamLabel(shift),
       isDefault: false,
+    },
+  ];
+}
+
+/**
+ * The credit-policy options for one shift's form, on the same terms as
+ * {@link shiftTeamOptions}: the node offers the organization's active
+ * policies, and a shift already naming one archived since still has to render
+ * with its own policy selectable rather than with a blank select that would
+ * silently reprice it on save (CREDIT-002).
+ */
+export function shiftCreditPolicyOptions(
+  options: readonly ShiftCreditPolicyOption[],
+  shift: ProductShift | null,
+): readonly ShiftCreditPolicyOption[] {
+  const currentId = shift?.creditPolicyId ?? null;
+
+  if (currentId === null || options.some((option) => option.id === currentId)) {
+    return options;
+  }
+
+  return [
+    ...options,
+    {
+      id: currentId,
+      name: "Current policy (no longer offered)",
+      creditMultiplier: "",
+      archived: true,
     },
   ];
 }

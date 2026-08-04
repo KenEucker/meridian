@@ -11,6 +11,7 @@ import {
   createShift,
   getDepartmentShifts,
   getShift,
+  shiftCreditPolicyOptions,
   shiftTeamOptions,
   updateShift,
   type ProductShift,
@@ -66,6 +67,12 @@ const teams = computed(() =>
 );
 const trainingOptions = computed(() => workspace.value?.trainingOptions ?? []);
 const waiverOptions = computed(() => workspace.value?.waiverOptions ?? []);
+const creditPolicyOptions = computed(() =>
+  shiftCreditPolicyOptions(
+    workspace.value?.creditPolicyOptions ?? [],
+    existing.value,
+  ),
+);
 
 const departmentLabel = computed(
   () =>
@@ -107,6 +114,7 @@ function emptyDraft(): ShiftDraft {
     signupOpensAt: null,
     signupClosesAt: null,
     scheduleLockAt: null,
+    creditPolicyId: null,
     requiredTrainingIds: [],
     requiredWaiverIds: [],
   };
@@ -183,6 +191,7 @@ function applyShift(shift: ProductShift | null): void {
     signupOpensAt: shift.signupOpensAt,
     signupClosesAt: shift.signupClosesAt,
     scheduleLockAt: shift.scheduleLockAt,
+    creditPolicyId: shift.creditPolicyId,
     requiredTrainingIds: [...shift.requiredTrainingIds],
     requiredWaiverIds: [...shift.requiredWaiverIds],
   });
@@ -400,6 +409,30 @@ async function onSubmit(): Promise<void> {
         <label class="shift-edit__field">
           Schedule lock / cutoff
           <input v-model="schedule.scheduleLockAt" type="datetime-local" />
+        </label>
+
+        <!--
+          The shift override the credit resolver prefers over the organization
+          default (SHIFT-010, CREDIT-002; M18.16). Blank means the shift is
+          credited at whatever the organization default is when credits run.
+        -->
+        <label v-if="creditPolicyOptions.length > 0" class="shift-edit__field">
+          Credit policy
+          <select v-model="draft.creditPolicyId">
+            <option :value="null">Organization default</option>
+            <option
+              v-for="option in creditPolicyOptions"
+              :key="option.id"
+              :value="option.id"
+            >
+              {{ option.name
+              }}{{
+                option.creditMultiplier
+                  ? ` — ${option.creditMultiplier} credits/hour`
+                  : ""
+              }}{{ option.archived ? " (archived)" : "" }}
+            </option>
+          </select>
         </label>
 
         <fieldset v-if="trainingOptions.length > 0" class="shift-edit__group">

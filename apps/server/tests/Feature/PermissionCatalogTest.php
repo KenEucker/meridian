@@ -265,6 +265,21 @@ class PermissionCatalogTest extends TestCase
         }
     }
 
+    public function test_credit_policies_are_organizer_governance_only(): void
+    {
+        // M18.16 / ORG-020: only organizers and Lead Organizers maintain the
+        // credit policies and start calculation runs. In particular no
+        // department role does — ORG-010 rules out a department default policy
+        // precisely so a department cannot reprice its own work, and handing a
+        // lead the policy list would reopen that door one rename at a time.
+        $this->assertContains('organization.credit_policies.manage', $this->permissionCodesFor('organizer'));
+        $this->assertContains('organization.credit_policies.manage', $this->permissionCodesFor('lead_organizer'));
+
+        foreach (['staff_coordinator', 'department_lead', 'department_administration', 'ic_lead'] as $role) {
+            $this->assertNotContains('organization.credit_policies.manage', $this->permissionCodesFor($role));
+        }
+    }
+
     public function test_seeder_is_idempotent(): void
     {
         $roleCount = PermissionRole::query()->count();

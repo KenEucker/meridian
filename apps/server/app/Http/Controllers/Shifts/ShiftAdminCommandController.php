@@ -41,6 +41,7 @@ final class ShiftAdminCommandController extends Controller
             'signup_opens_at' => ['nullable', 'date'],
             'signup_closes_at' => ['nullable', 'date'],
             'schedule_lock_at' => ['nullable', 'date'],
+            'credit_policy_id' => ['nullable', 'uuid'],
             'required_training_ids' => ['array'],
             'required_training_ids.*' => ['uuid'],
             'required_waiver_ids' => ['array'],
@@ -88,6 +89,7 @@ final class ShiftAdminCommandController extends Controller
             'signup_opens_at' => ['nullable', 'date'],
             'signup_closes_at' => ['nullable', 'date'],
             'schedule_lock_at' => ['nullable', 'date'],
+            'credit_policy_id' => ['nullable', 'uuid'],
             'required_training_ids' => ['array'],
             'required_training_ids.*' => ['uuid'],
             'required_waiver_ids' => ['array'],
@@ -198,6 +200,9 @@ final class ShiftAdminCommandController extends Controller
             'schedule_lock_at' => isset($validated['schedule_lock_at']) && $validated['schedule_lock_at'] !== null
                 ? Carbon::parse((string) $validated['schedule_lock_at'])
                 : null,
+            'credit_policy_id' => isset($validated['credit_policy_id']) && $validated['credit_policy_id'] !== null
+                ? (string) $validated['credit_policy_id']
+                : null,
             'required_training_ids' => array_map(
                 fn ($id): string => (string) $id,
                 $validated['required_training_ids'] ?? [],
@@ -226,6 +231,9 @@ final class ShiftAdminCommandController extends Controller
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'credit_policy_id' => $shift->credit_policy_id !== null
+                ? (string) $shift->credit_policy_id
+                : null,
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'required_training_ids' => $shift->trainingRequirements()
                 ->pluck('training_id')

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Shifts;
 
 use App\Http\Controllers\Controller;
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\Shift;
@@ -114,6 +115,7 @@ final class ShiftAdminReadController extends Controller
             'events' => $canManage ? $this->eventOptions($department) : [],
             'training_options' => $canManage ? $this->trainingOptions($department) : [],
             'waiver_options' => $canManage ? $this->waiverOptions($department) : [],
+            'credit_policy_options' => $canManage ? $this->creditPolicyOptions($department) : [],
             'shifts' => $shifts->values()->all(),
         ]);
     }
@@ -147,6 +149,7 @@ final class ShiftAdminReadController extends Controller
                 'can_administer' => $access->canAdministerDepartment($user, $department),
                 'can_manage' => true,
             ],
+            'credit_policy_options' => $this->creditPolicyOptions($department, $shift),
         ]);
     }
 
@@ -170,6 +173,9 @@ final class ShiftAdminReadController extends Controller
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'credit_policy_id' => $shift->credit_policy_id !== null
+                ? (string) $shift->credit_policy_id
+                : null,
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'has_started' => $shift->starts_at !== null && now()->greaterThanOrEqualTo($shift->starts_at),
             /*
@@ -261,6 +267,38 @@ final class ShiftAdminReadController extends Controller
             ->map(fn (Training $training): array => [
                 'id' => (string) $training->id,
                 'name' => $training->name,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The credit policies a shift may name as its own rate (SHIFT-010;
+     * M18.16): the organization's active policies, plus the one this shift
+     * already names when that policy has since been archived — the select has
+     * to be able to render the current choice, and keeping an archived policy
+     * is allowed where newly choosing one is not.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function creditPolicyOptions(Department $department, ?Shift $shift = null): array
+    {
+        $query = CreditPolicy::query()
+            ->where('organization_id', $department->organization_id)
+            ->where(fn ($constraint) => $constraint
+                ->whereNull('archived_at')
+                ->when(
+                    $shift?->credit_policy_id !== null,
+                    fn ($archived) => $archived->orWhere('id', (string) $shift?->credit_policy_id),
+                ))
+            ->orderBy('name');
+
+        return $query->get()
+            ->map(fn (CreditPolicy $policy): array => [
+                'id' => (string) $policy->id,
+                'name' => $policy->name,
+                'credit_multiplier' => (string) $policy->credit_multiplier,
+                'archived' => $policy->isArchived(),
             ])
             ->values()
             ->all();

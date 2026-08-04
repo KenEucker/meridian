@@ -3,6 +3,7 @@
 namespace App\Services\Shift;
 
 use App\Models\AuditEvent;
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\Shift;
@@ -29,7 +30,12 @@ use Illuminate\Support\Facades\DB;
  * - once a shift has started, its scheduled times and eligible team are locked
  *   and the shift can no longer be cancelled, preserving worked history
  *   (TEAM-007; UI contract 12.4 `department.shift-edit` time restrictions);
- * - cancel/restore are soft state changes on `cancelled_at`.
+ * - cancel/restore are soft state changes on `cancelled_at`;
+ * - a shift may name one of its organization's credit policies as its own
+ *   rate (SHIFT-010; M18.16), taking precedence over the organization default
+ *   (CREDIT-002). An archived policy cannot be newly chosen, but a shift
+ *   already naming one keeps it, because archiving withdraws a policy from
+ *   future selection rather than repricing scheduled work.
  */
 final class ShiftAdminService
 {
@@ -46,6 +52,7 @@ final class ShiftAdminService
      *     signup_opens_at?: Carbon|null,
      *     signup_closes_at?: Carbon|null,
      *     schedule_lock_at?: Carbon|null,
+     *     credit_policy_id?: string|null,
      *     required_training_ids?: list<string>,
      *     required_waiver_ids?: list<string>
      * } $attributes
@@ -85,8 +92,9 @@ final class ShiftAdminService
 
         $trainings = $this->requiredTrainings($department, $attributes['required_training_ids'] ?? []);
         $waivers = $this->requiredWaivers($department, $attributes['required_waiver_ids'] ?? []);
+        $creditPolicyId = $this->creditPolicyId($department, $attributes['credit_policy_id'] ?? null);
 
-        return DB::transaction(function () use ($department, $event, $team, $title, $attributes, $capacity, $trainings, $waivers, $actor, $sourceContext): Shift {
+        return DB::transaction(function () use ($department, $event, $team, $title, $attributes, $capacity, $trainings, $waivers, $creditPolicyId, $actor, $sourceContext): Shift {
             $shift = Shift::query()->create([
                 'event_id' => $event->id,
                 'department_id' => $department->id,
@@ -98,6 +106,7 @@ final class ShiftAdminService
                 'signup_opens_at' => $attributes['signup_opens_at'] ?? null,
                 'signup_closes_at' => $attributes['signup_closes_at'] ?? null,
                 'schedule_lock_at' => $attributes['schedule_lock_at'] ?? null,
+                'credit_policy_id' => $creditPolicyId,
             ]);
 
             foreach ($trainings as $training) {
@@ -141,6 +150,7 @@ final class ShiftAdminService
      *     signup_opens_at?: Carbon|null,
      *     signup_closes_at?: Carbon|null,
      *     schedule_lock_at?: Carbon|null,
+     *     credit_policy_id?: string|null,
      *     required_training_ids?: list<string>,
      *     required_waiver_ids?: list<string>
      * } $attributes
@@ -202,8 +212,9 @@ final class ShiftAdminService
 
         $trainings = $this->requiredTrainings($department, $attributes['required_training_ids'] ?? []);
         $waivers = $this->requiredWaivers($department, $attributes['required_waiver_ids'] ?? []);
+        $creditPolicyId = $this->creditPolicyId($department, $attributes['credit_policy_id'] ?? null, $shift);
 
-        return DB::transaction(function () use ($shift, $department, $team, $title, $attributes, $capacity, $trainings, $waivers, $actor, $sourceContext): Shift {
+        return DB::transaction(function () use ($shift, $department, $team, $title, $attributes, $capacity, $trainings, $waivers, $creditPolicyId, $actor, $sourceContext): Shift {
             $before = $this->snapshot($shift);
 
             $shift->forceFill([
@@ -215,6 +226,7 @@ final class ShiftAdminService
                 'signup_opens_at' => $attributes['signup_opens_at'] ?? null,
                 'signup_closes_at' => $attributes['signup_closes_at'] ?? null,
                 'schedule_lock_at' => $attributes['schedule_lock_at'] ?? null,
+                'credit_policy_id' => $creditPolicyId,
             ])->save();
 
             $this->syncTrainingRequirements($shift, $trainings);
@@ -329,6 +341,43 @@ final class ShiftAdminService
         }
 
         return $team;
+    }
+
+    /**
+     * The credit policy a shift may name as its own rate (SHIFT-010).
+     *
+     * It must be one of the department organization's policies — the resolver
+     * reads exactly one pointer, and a policy from another organization would
+     * price this organization's work at somebody else's rate. An archived
+     * policy cannot be newly chosen, but a shift already naming one keeps it
+     * (CREDIT-002): archiving withdraws a policy from future selection, it
+     * does not restate what scheduled work will be priced at.
+     *
+     * @throws ShiftAdminException
+     */
+    private function creditPolicyId(
+        Department $department,
+        ?string $creditPolicyId,
+        ?Shift $shift = null,
+    ): ?string {
+        if ($creditPolicyId === null || $creditPolicyId === '') {
+            return null;
+        }
+
+        $policy = CreditPolicy::query()->find($creditPolicyId);
+
+        if ($policy === null || (string) $policy->organization_id !== (string) $department->organization_id) {
+            throw new ShiftAdminException('The credit policy must belong to the department organization.');
+        }
+
+        $keepingExistingPolicy = $shift !== null
+            && (string) $shift->credit_policy_id === (string) $policy->id;
+
+        if ($policy->isArchived() && ! $keepingExistingPolicy) {
+            throw new ShiftAdminException('Archived credit policies cannot be selected for a shift.');
+        }
+
+        return (string) $policy->id;
     }
 
     /**
@@ -488,6 +537,9 @@ final class ShiftAdminService
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'credit_policy_id' => $shift->credit_policy_id !== null
+                ? (string) $shift->credit_policy_id
+                : null,
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'required_training_ids' => $shift->trainingRequirements()
                 ->pluck('training_id')

@@ -61,6 +61,11 @@ export type MeridianCommandType =
   | "rename-incident-type"
   | "archive-incident-type"
   | "restore-incident-type"
+  // Credit policy administration (M18.16).
+  | "create-credit-policy"
+  | "update-credit-policy"
+  | "archive-credit-policy"
+  | "restore-credit-policy"
   | "acknowledge-document"
   // Acknowledgment requirement administration (M18.6).
   | "create-document-acknowledgment-requirement"
@@ -365,6 +370,36 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/restore-incident-type",
       "Incident type",
       "Restoring an incident type needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Credit policy administration (M18.16; ORG-009, ORG-020). Governance
+     * data central is authoritative for, edited from a desk with a
+     * connection; an on-site node refuses these outright (ORG-021), so a
+     * device holding one for later would be holding a write nobody may make.
+     */
+    "create-credit-policy": connectedOnly(
+      "create-credit-policy",
+      "/api/commands/create-credit-policy",
+      "Credit policy",
+      "Adding a credit policy needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "update-credit-policy": connectedOnly(
+      "update-credit-policy",
+      "/api/commands/update-credit-policy",
+      "Credit policy",
+      "Editing a credit policy needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "archive-credit-policy": connectedOnly(
+      "archive-credit-policy",
+      "/api/commands/archive-credit-policy",
+      "Credit policy",
+      "Archiving a credit policy needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "restore-credit-policy": connectedOnly(
+      "restore-credit-policy",
+      "/api/commands/restore-credit-policy",
+      "Credit policy",
+      "Restoring a credit policy needs a connection to the node. It cannot be held on this device for later.",
     ),
     /*
      * The acknowledgment path's three writes (M18.6; POL-023, POL-043,

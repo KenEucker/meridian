@@ -603,6 +603,52 @@ describe("shift create and edit", () => {
     expect(router.currentRoute.value.params.shiftId).toBe(PEER_SHIFT_ID);
   });
 
+  it("names a credit policy on the shift and sends it with the save (SHIFT-010)", async () => {
+    // The override the credit resolver prefers over the organization default
+    // (CREDIT-002; M18.16). The options are the node's offer, and blank means
+    // the organization default rather than a policy of the department's own —
+    // ORG-010 rules that out.
+    const policyId = "cccccccc-cccc-4ccc-8ccc-cccccccccc01";
+    const policyOptions = [
+      {
+        id: policyId,
+        name: "Overnight Gate",
+        credit_multiplier: "2.000",
+        archived: false,
+      },
+    ];
+    const calls = stubNode((call) => {
+      if (call.url.endsWith("/commands/update-shift")) {
+        return { body: shiftPayload({ credit_policy_id: policyId }) };
+      }
+
+      if (call.url.includes(`/shifts/${DAY_SHIFT_ID}`)) {
+        return { body: shiftPayload() };
+      }
+
+      return {
+        body: workspacePayload({ credit_policy_options: policyOptions }),
+      };
+    });
+
+    const { wrapper } = await mountShiftEdit(DAY_SHIFT_ID);
+
+    const policySelect = wrapper
+      .findAll("select")
+      .find((candidate) => candidate.text().includes("Organization default"));
+    expect(policySelect).toBeDefined();
+    expect(policySelect!.text()).toContain("Overnight Gate — 2.000 credits/hour");
+
+    await policySelect!.setValue(policyId);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-shift")[0]?.body).toMatchObject({
+      shift_id: DAY_SHIFT_ID,
+      credit_policy_id: policyId,
+    });
+  });
+
   /*
    * Five fields that were blank and were being typed to the same values every
    * time. The window is the operational one, which is what setup and teardown

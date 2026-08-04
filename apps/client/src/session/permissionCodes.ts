@@ -51,6 +51,15 @@ export const CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE =
  */
 export const CAPABILITY_ORGANIZATION_CONFIGURATION_MANAGE =
   "organization.configuration.manage";
+/**
+ * Maintaining the organization's credit policies and starting credit
+ * calculation runs (ORG-009, ORG-020; CREDIT-001; M18.16). Organizers and
+ * Lead Organizers only: ORG-010 rules out a department default policy so a
+ * department cannot reprice its own work, and this capability is where that
+ * rule lives on the client.
+ */
+export const CAPABILITY_ORGANIZATION_CREDIT_POLICIES_MANAGE =
+  "organization.credit_policies.manage";
 export const CAPABILITY_ORGANIZATION_BRANDING_MANAGE =
   "organization.branding.manage";
 export const CAPABILITY_POLICIES_VIEW_PUBLISHED = "policies.view_published";
