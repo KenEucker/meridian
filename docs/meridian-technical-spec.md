@@ -2877,6 +2877,101 @@ Audit payloads reference staff and users by identifier. They do not carry volunt
 
 ---
 
+# 21D. The Event Horizon
+
+## 21D.1 Purpose and boundary
+
+The Event Horizon is one staff member's readiness list for one event: what they still have to do before it, what they have already done, and where each of those is resolved.
+
+It compiles from domains that already own their records — acknowledgments, waivers, trainings, shifts — and adds no source of truth. It stores no item, computes no state that outlives a request, and owns no data beyond one personal preference per staff member per event.
+
+It enforces nothing. Every condition it reports is enforced, or deliberately not enforced, by the rule that already governs it: required training already blocks shift signup (TRAIN-008), an incomplete waiver already blocks credential eligibility (CRED-005). The Event Horizon is a second reader of those rules, never a second decider. A refusal that exists only here would be a rule with two implementations, and the one the staff member reads would not be the one that decides.
+
+It is not a task system. Nothing on it is created by hand, assigned, delegated, or completed directly; an item changes only because the record behind it changed.
+
+## 21D.2 Item kind registration
+
+An item kind is defined in code and registered, on the same footing as an Insight Metric type in 21C.2. Registration carries the kind's identity, the domain it draws on, the module that owns it, the capability or membership required to evaluate it, and its fixed evaluation rules.
+
+The registration contract is: given an event and a staff member, return that kind's items. Each item carries
+
+- a stable identity for the underlying record;
+- a state, `outstanding` or `complete`;
+- the evaluation behind that state, in operational language;
+- what would complete it;
+- a deadline, where the kind has one;
+- an action link to the surface that resolves it.
+
+Organizations do not author item kinds, thresholds, ordering, or wording. There is no configuration surface for the catalogue, and the only organization-configurable value the feature has is the lead-up window in 21D.4. A configurable catalogue would let an organization describe readiness differently from what Meridian enforces, which is the disagreement 21D.1 exists to prevent.
+
+The Alpha 1 catalogue is the five kinds fixed in HORIZON-003. A sixth kind is a code change and a requirements change, in that order.
+
+## 21D.3 Compilation
+
+The readiness view compiles on read. No table holds a compiled item, an outstanding count, or a readiness state, for the same reason 21C.8 keeps compiled metric values out of the database: a stored answer to a question the source data can answer is a second copy that goes wrong quietly.
+
+A kind that cannot compile within sync rules, local data rules, and authorization policies reports that it is incomplete rather than reaching past them.
+
+## 21D.4 Presentation window and event resolution
+
+The Event Horizon is presented only where the interface resolves to exactly one event. That resolution is the one already described in 11A.3: the node's event lock where there is one, narrowed by the session response. Where the viewer's context is the organization rather than an event, the surface is absent — not empty, and not showing the next event by guess.
+
+It is presented from a lead-up window before the event's active window start through the close of the operations window. The window length is organization configuration (ORG-018), defaulting to 30 days, and is stored in days rather than as a date so that moving an event moves the window with it, on the same reasoning as the relative schedule cutoff in SHIFT-017.
+
+Outside that window the surface is absent and its navigation entry is not rendered. An event that has ended has no readiness left to report.
+
+## 21D.5 Authorization
+
+The Event Horizon introduces no capability, no role, and no new authority path. It is available to any authenticated staff member with access to the event.
+
+Each item kind is evaluated under the viewer's existing authorization for the domain it reads. A kind whose records the viewer cannot read is omitted entirely rather than reported as unknown, because "there is something here you cannot see" is itself a disclosure.
+
+Action links carry no authority. Following one enters the linked surface under that surface's own authorization, exactly as 21C.7 requires of metric links.
+
+The coverage gap kind is the only one that reads beyond the viewer's own records, and it reads only teams the viewer leads. It reports a shortfall against capacity and carries no staff names; a lead who wants to know who is on the shift follows the link to the shift, where that authority already lives.
+
+## 21D.6 Ordering and item state
+
+Ordering is deterministic and does not vary by viewer: outstanding items before complete ones, then by soonest applicable deadline, then by the fixed catalogue order, with undated items after dated ones.
+
+A complete item stays on the list, marked complete and de-emphasized. Removing it on completion would make the list shorter as a staff member works through it and give them no way to confirm that what they did registered.
+
+There is no dismissal, snooze, acknowledgement, or resolution on an item — the same rule 21C.7 applies to metric state, and for the same reason: a surface that reports a condition and also lets a user silence it stops being a report.
+
+## 21D.7 Offline behavior
+
+The Event Horizon compiles on the device from data already synchronized there, under the permission-scoped rules in 11A.7, so it works on a device with no node reachable.
+
+Where a kind cannot be evaluated from local data, that kind reports incomplete and says so. The surface never presents a partial list as a complete one, and it never presents "nothing outstanding" that it has not actually established.
+
+Nothing on the surface writes, so it needs no place in the command outbox.
+
+## 21D.8 Personal dismissal
+
+A staff member with nothing outstanding may hide the Event Horizon from their workflow menu for that event.
+
+The condition is enforced server-side, not only in the interface: a hide request while an item is outstanding is refused. A dismissal available while work is outstanding is an opt-out of the preparation the surface exists to drive.
+
+The preference is personal view state, held per staff member per event, on the footing of `insight_sheet_favorites`: invisible to anyone else, not audited, and not a record any other feature reads. It replicates to the staff member's own devices so that hiding on one does not leave it showing on another.
+
+A hidden Event Horizon returns when an item becomes outstanding again for that member and event, and the member can restore it themselves from `staff.me` before then. A dismissal that never returned would leave someone unaware of an item that appeared after they hid it, which is the failure the surface exists to prevent.
+
+## 21D.9 Modules
+
+An item kind declares its owning module. A kind owned by an inactive module is omitted, and the surface renders on whatever remains, under the aggregator rule in 15A.7.
+
+Where no kind is available to a viewer — every owning module inactive, or no domain the viewer can read — the Event Horizon is not presented at all, rather than rendered as an empty list that reads as "you are ready."
+
+## 21D.10 Audit and notifications
+
+Reading the Event Horizon is not audited: it composes reads the viewer is already authorized and already audited for where those domains audit reads.
+
+Hiding and restoring are not audited, because personal view state is not a record of anything operational.
+
+The Event Horizon sends no notification of its own. NOTIFY-001 already sends on the conditions it reports, and NOTIFY-001A limits one operational action to one notification; a surface that also notified would double every one of them.
+
+---
+
 # 22. Admin, Orchid, and God Mode
 
 ## 22.1 Orchid purpose
