@@ -142,7 +142,6 @@ async function onDone(): Promise<void> {
 const pictureError = ref<string | null>(null);
 const pictureNotice = ref<string | null>(null);
 const pictureBusy = ref(false);
-const pictureInput = ref<HTMLInputElement | null>(null);
 
 async function onPictureChosen(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement;
@@ -534,7 +533,6 @@ async function onWithdrawHandle(): Promise<void> {
                 profile.profilePictureUrl ? "Submit a new picture" : "Submit a picture"
               }}</span>
               <input
-                ref="pictureInput"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 :disabled="pictureBusy"
