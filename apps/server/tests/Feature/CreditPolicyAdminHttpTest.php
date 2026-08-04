@@ -167,7 +167,7 @@ class CreditPolicyAdminHttpTest extends TestCase
         $organization = Organization::factory()->create();
         $organizer = $this->organizerFor($organization);
 
-        foreach ([0, -1, 1001, 1.2345] as $multiplier) {
+        foreach ([-1, 1001, 1.2345] as $multiplier) {
             $this->actingAsClient($organizer)
                 ->postJson('/api/commands/create-credit-policy', [
                     'organization_id' => $organization->id,
@@ -178,6 +178,18 @@ class CreditPolicyAdminHttpTest extends TestCase
         }
 
         $this->assertSame(0, CreditPolicy::query()->count());
+
+        // Below one is the ordinary pre/post-event shape, and zero is a
+        // deliberate price rather than an absence — both are accepted.
+        foreach ([['Half Rate', 0.5], ['Zero Rate', 0]] as [$name, $multiplier]) {
+            $this->actingAsClient($organizer)
+                ->postJson('/api/commands/create-credit-policy', [
+                    'organization_id' => $organization->id,
+                    'name' => $name,
+                    'credit_multiplier' => $multiplier,
+                ])
+                ->assertCreated();
+        }
     }
 
     public function test_the_organization_default_cannot_be_archived_while_it_holds_that_job(): void

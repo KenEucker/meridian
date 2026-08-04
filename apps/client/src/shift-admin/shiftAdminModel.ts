@@ -83,6 +83,13 @@ export interface ProductShift {
   readonly scheduleLockAt: string | null;
   /** The shift's own credit policy, or null for the organization default. */
   readonly creditPolicyId: string | null;
+  /**
+   * The shift's custom rate (0–2 credits per hour, M18.16), when its policy
+   * is its own shift-scoped row rather than a named one. The node derives
+   * this, so the form can tell "Custom rate 0.5" from a named policy without
+   * comparing ids itself.
+   */
+  readonly customCreditMultiplier: string | null;
   readonly requiredTrainingIds: readonly string[];
   readonly requiredWaiverIds: readonly string[];
   readonly cancelledAt: string | null;
@@ -131,6 +138,8 @@ export interface ShiftDraft {
   signupClosesAt: string | null;
   scheduleLockAt: string | null;
   creditPolicyId: string | null;
+  /** A custom rate instead of a named policy; the two are mutually exclusive. */
+  customCreditMultiplier: string | null;
   requiredTrainingIds: string[];
   requiredWaiverIds: string[];
 }
@@ -153,6 +162,7 @@ interface ShiftPayload {
   readonly signup_closes_at: string | null;
   readonly schedule_lock_at: string | null;
   readonly credit_policy_id?: string | null;
+  readonly custom_credit_multiplier?: string | null;
   readonly cancelled_at: string | null;
   readonly has_started?: boolean;
   readonly can_manage?: boolean;
@@ -201,6 +211,7 @@ function toShift(payload: ShiftPayload): ProductShift {
     signupClosesAt: payload.signup_closes_at,
     scheduleLockAt: payload.schedule_lock_at,
     creditPolicyId: payload.credit_policy_id ?? null,
+    customCreditMultiplier: payload.custom_credit_multiplier ?? null,
     requiredTrainingIds: payload.required_training_ids ?? [],
     requiredWaiverIds: payload.required_waiver_ids ?? [],
     cancelledAt: payload.cancelled_at,
@@ -231,7 +242,10 @@ function toAttributes(draft: ShiftDraft): Record<string, unknown> {
     signup_opens_at: draft.signupOpensAt,
     signup_closes_at: draft.signupClosesAt,
     schedule_lock_at: draft.scheduleLockAt,
-    credit_policy_id: draft.creditPolicyId || null,
+    credit_policy_id: draft.customCreditMultiplier
+      ? null
+      : draft.creditPolicyId || null,
+    custom_credit_multiplier: draft.customCreditMultiplier || null,
     required_training_ids: [...draft.requiredTrainingIds],
     required_waiver_ids: [...draft.requiredWaiverIds],
   };

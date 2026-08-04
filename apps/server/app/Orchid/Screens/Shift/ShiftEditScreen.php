@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid\Screens\Shift;
 
 use App\Models\AuditEvent;
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\Shift;
@@ -60,6 +61,15 @@ class ShiftEditScreen extends Screen
             'required_waiver_ids',
             $shift->exists ? $shift->waiverRequirements()->pluck('waiver_id')->all() : [],
         );
+
+        // A custom rate renders in its own field, and the policy select stays
+        // on "Organization default" rather than pointing at the shift-scoped
+        // row the select deliberately does not offer.
+        $custom = $shift->exists ? $shift->customCreditMultiplier() : null;
+        $shift->setAttribute('custom_credit_multiplier', $custom);
+        if ($custom !== null) {
+            $shift->setAttribute('credit_policy_id', null);
+        }
 
         return [
             'shift' => $shift,
@@ -137,6 +147,8 @@ class ShiftEditScreen extends Screen
             'shift.signup_opens_at' => ['nullable', 'date'],
             'shift.signup_closes_at' => ['nullable', 'date'],
             'shift.schedule_lock_at' => ['nullable', 'date'],
+            'shift.credit_policy_id' => ['nullable', 'uuid', Rule::exists(CreditPolicy::class, 'id')],
+            'shift.custom_credit_multiplier' => ['nullable', 'numeric', 'between:0,2'],
             'shift.required_training_ids' => ['array'],
             'shift.required_training_ids.*' => ['uuid', Rule::exists(Training::class, 'id')],
             'shift.required_waiver_ids' => ['array'],
@@ -150,10 +162,17 @@ class ShiftEditScreen extends Screen
 
         $this->validateStructure($attributes, $trainingIds, $waiverIds);
 
+        $customMultiplier = filled($attributes['custom_credit_multiplier'] ?? null)
+            ? number_format((float) $attributes['custom_credit_multiplier'], 3, '.', '')
+            : null;
+        $creditPolicyId = $customMultiplier !== null
+            ? null
+            : (filled($attributes['credit_policy_id'] ?? null) ? (string) $attributes['credit_policy_id'] : null);
+
         $existed = $shift->exists;
         $before = $existed ? $this->snapshot($shift) : null;
 
-        DB::transaction(function () use ($shift, $attributes, $trainingIds, $waiverIds): void {
+        DB::transaction(function () use ($shift, $attributes, $trainingIds, $waiverIds, $creditPolicyId, $customMultiplier): void {
             $shift->fill([
                 'event_id' => $attributes['event_id'],
                 'department_id' => $attributes['department_id'],
@@ -165,9 +184,20 @@ class ShiftEditScreen extends Screen
                 'signup_opens_at' => $this->nullableDate($attributes['signup_opens_at'] ?? null),
                 'signup_closes_at' => $this->nullableDate($attributes['signup_closes_at'] ?? null),
                 'schedule_lock_at' => $this->nullableDate($attributes['schedule_lock_at'] ?? null),
+                'credit_policy_id' => $creditPolicyId,
             ])->save();
 
             $this->syncRequirements($shift, $trainingIds, $waiverIds);
+
+            // The same shift-scoped upsert the product path performs, so the
+            // one-row-per-shift rule holds whichever door the rate came in by.
+            if ($customMultiplier !== null) {
+                app(ShiftAdminService::class)->applyCustomRate(
+                    $shift,
+                    Department::query()->findOrFail((string) $shift->department_id),
+                    $customMultiplier,
+                );
+            }
         });
 
         $shift->refresh();
@@ -298,6 +328,37 @@ class ShiftEditScreen extends Screen
                 'shift.required_waiver_ids' => __('Required waivers must belong to the department organization.'),
             ]);
         }
+
+        if (filled($attributes['credit_policy_id'] ?? null) && filled($attributes['custom_credit_multiplier'] ?? null)) {
+            throw ValidationException::withMessages([
+                'shift.custom_credit_multiplier' => __('A shift takes a named credit policy or a custom rate, not both.'),
+            ]);
+        }
+
+        if (filled($attributes['custom_credit_multiplier'] ?? null)
+            && round((float) $attributes['custom_credit_multiplier'], 3) !== (float) $attributes['custom_credit_multiplier']) {
+            throw ValidationException::withMessages([
+                'shift.custom_credit_multiplier' => __('The custom credit rate holds at most three decimal places.'),
+            ]);
+        }
+
+        if (filled($attributes['credit_policy_id'] ?? null)) {
+            $policy = CreditPolicy::query()->findOrFail((string) $attributes['credit_policy_id']);
+
+            if ((string) $policy->organization_id !== $organizationId) {
+                throw ValidationException::withMessages([
+                    'shift.credit_policy_id' => __('The credit policy must belong to the department organization.'),
+                ]);
+            }
+
+            // A shift-scoped row is one shift's custom rate: another shift
+            // naming it would let a re-rate of one shift reprice a second.
+            if ($policy->shift_id !== null) {
+                throw ValidationException::withMessages([
+                    'shift.credit_policy_id' => __('Another shift\'s custom rate cannot be chosen as this shift\'s policy.'),
+                ]);
+            }
+        }
     }
 
     /**
@@ -373,6 +434,10 @@ class ShiftEditScreen extends Screen
             'signup_opens_at' => $shift->signup_opens_at?->toIso8601String(),
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
+            'credit_policy_id' => $shift->credit_policy_id !== null
+                ? (string) $shift->credit_policy_id
+                : null,
+            'custom_credit_multiplier' => $shift->customCreditMultiplier(),
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'required_training_ids' => $shift->trainingRequirements()
                 ->pluck('training_id')

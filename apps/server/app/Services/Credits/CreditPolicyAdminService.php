@@ -247,6 +247,10 @@ final class CreditPolicyAdminService
     /**
      * Credits per hour worked, to at most three decimal places — the precision
      * the column holds, refused rather than silently rounded away.
+     *
+     * Zero is allowed: a pre- or post-event rate below one is ordinary, and a
+     * deliberate zero-credit policy is a statement — the hours were priced at
+     * nothing — which is different from hours no policy governs at all.
      */
     private function validMultiplier(mixed $multiplier): string
     {
@@ -256,9 +260,9 @@ final class CreditPolicyAdminService
 
         $value = (float) $multiplier;
 
-        if ($value <= 0 || $value > 1000) {
+        if ($value < 0 || $value > 1000) {
             throw CreditPolicyAdminException::invalid(
-                'The credit multiplier must be greater than 0 and at most 1000 credits per hour.',
+                'The credit multiplier must be between 0 and 1000 credits per hour.',
             );
         }
 
@@ -275,7 +279,9 @@ final class CreditPolicyAdminService
      * Refuse a name the organization already uses, whatever its casing.
      *
      * Archived policies are included: the row still holds the name, and
-     * restoring one later has to land somewhere.
+     * restoring one later has to land somewhere. Shift-scoped custom rates
+     * are not: they live on their shifts rather than in the organization's
+     * named catalog, and every one of them shares the same label.
      */
     private function assertNameAvailable(
         Organization $organization,
@@ -284,6 +290,7 @@ final class CreditPolicyAdminService
     ): void {
         $query = CreditPolicy::query()
             ->where('organization_id', (string) $organization->getKey())
+            ->whereNull('shift_id')
             ->whereRaw('lower(name) = ?', [mb_strtolower($name)]);
 
         if ($ignore !== null) {

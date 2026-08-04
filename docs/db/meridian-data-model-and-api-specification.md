@@ -2745,6 +2745,21 @@ names a policy through `create-shift` / `update-shift` (`credit_policy_id`),
 where an archived policy cannot be newly chosen but a shift already naming
 one keeps it.
 
+Alternatively a shift carries a custom rate through the same commands
+(`custom_credit_multiplier`, 0 to 2 credits per hour, three decimal places,
+mutually exclusive with `credit_policy_id`). The rate is stored as one
+shift-scoped `credit_policies` row per shift — created on first use, re-rated
+in place after — that the shift's `credit_policy_id` points at, so the
+resolver, ledger, and export read it exactly like a named policy. Shift-scoped
+rows stay out of the named catalog: the administration read and the shift
+form's options exclude them, and another shift naming one is refused, because
+a re-rate of one shift must never reprice a second. God Mode carries the same
+configuration: Orchid credit policy screens route through the same admin
+service (audited `SOURCE_ORCHID`, same governance freeze), the Orchid
+organization screen routes the ORG-017/ORG-018 configuration fields through
+`OrganizationConfigurationService`, and the Orchid shift screen sets
+`credit_policy_id` and the custom rate.
+
 #### `credit_ledger_entries`
 
 Represents calculated or adjusted credits.

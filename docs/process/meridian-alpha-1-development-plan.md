@@ -945,11 +945,11 @@ Two dependencies run against the task numbering rather than with it. M18.20A nee
 
 ---
 
-### Milestone 19: Packaging, Event-Mode Safeguards, and Release Candidate QA
+### Milestone 19: Packaging, Organization Addressing, Event-Mode Safeguards, and Release Candidate QA
 
-**Goal:** Produce versioned Alpha 1 builds and verify release readiness.
+**Goal:** Produce versioned Alpha 1 builds, make organizations reachable at organization subdomains beside their root paths, and verify release readiness.
 
-**Primary source docs:** Technical spec sections 8, 25, 26, 27, 28, 29; process release checklist; QA README; UI/kiosk docs.
+**Primary source docs:** Technical spec sections 8, 25, 26, 27, 28, 29; requirements 7.1 (ORG-022 through ORG-025); process release checklist; QA README; UI/kiosk docs.
 
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
@@ -960,8 +960,41 @@ Two dependencies run against the task numbering rather than with it. M18.20A nee
 | M19.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |
 | M19.6 Release candidate QA index | Add a release-candidate QA checklist that links milestone QA scripts. | Development process section 20 | Human QA script |
 | M19.7 Install/deployment dry run | Document second-person install/deployment evidence requirement. | Development process section 20 | Human QA evidence |
+| M19.8 Organization subdomain resolution | Resolve the organization from an organization-slug subdomain of the configured platform domain, serving the same content the root-path form serves with the slug segment omitted; an unknown subdomain is not found, and the marketing surface renders only at the deployment root. | ORG-022 through ORG-025; PUBLIC-001; Technical spec 8.7 | Feature tests driving requests by `Host` header (for example `northwood.localhost`); a test asserting the path form keeps working unchanged; a test asserting an unknown subdomain is not found; a test asserting the marketing surface does not render on an organization subdomain |
+| M19.9 Subdomain sessions, links, and branding | Generate organization links host-aware so a visitor on a subdomain stays on it, scope session cookies so organization subdomains stay isolated from one another, and resolve the organization branding profile on subdomain hosts. | ORG-023, ORG-024; BRAND-003; Technical spec 8.7 | Feature tests; a test asserting a session cookie issued on one organization subdomain is not presented to another; a branding resolution test by host |
+| M19.10 Wildcard host deployment config | Extend the deployment bundle (M19.2) with wildcard DNS/TLS host handling for organization subdomains (`*.<deployment-domain>`) and document `*.localhost` development use. | Technical spec 8, 8.7, 26 | Build smoke test; deployment doc check |
 
-**QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness.
+**QA gate:** A second human can follow install/deployment instructions, run critical QA scripts, and verify release candidate readiness — and an organization resolves at both its root path and its organization subdomain, with the marketing surface only at the deployment root.
+
+**Explicitly out of scope for this milestone:** dedicated per-organization infrastructure. ORG-025 requires only that subdomain addressing not preclude a future S-tier offering where an entire organization subdomain runs on dedicated, isolated hardware; no Alpha 1 task provisions it (requirements section 8, Dedicated Organization Infrastructure).
+
+---
+
+### Milestone 20: Platform Landing Page
+
+**Goal:** Build the public landing page that explains the Meridian platform, introduces each major feature with screenshots from the Northwood example organization, and describes the platform offerings.
+
+**Primary source docs:** Requirements 7.25 (PUBLIC-001 through PUBLIC-009) and BRAND-003; technical spec 8.7; UI style guide; accessibility checklist; `docs/process/developer-testing-process.md` (Northwood development scenario).
+
+**Inputs:** A landing page prompt supplied by the product owner will guide copy, structure, and visual direction for these tasks. Where the prompt and the governing documents disagree, the documents win until they are amended through the normal process (planning rule 8).
+
+| Task | PR-sized outcome | Source references | Test/QA expectation |
+|---|---|---|---|
+| M20.1 Landing page structure and copy | Build the landing page at the deployment root: what Meridian is, who it serves, and the section skeleton for the feature tour and offerings, carrying Meridian identity and no organization branding. | PUBLIC-001, PUBLIC-007; BRAND-003 | Feature/UI tests; a test asserting no organization branding profile resolves on the marketing surface |
+| M20.2 Northwood screenshot assets | Capture curated screenshots of each featured surface from the seeded Northwood development scenario, commit them as static assets, and document the recapture process so they can be refreshed after UI changes. | PUBLIC-008; developer testing process | Asset presence check; documented recapture steps; human review confirming no real organization's data appears |
+| M20.3 Feature tour | Build the feature introduction sections, one per major feature area, each with its Northwood screenshot and a short description of what the feature does for an organization. | PUBLIC-007, PUBLIC-008 | UI tests; accessibility checks, including alt text for every screenshot |
+| M20.4 Offerings section | Describe the three platform offerings: free and open-source self-hosting; hosted self-starter without support, at a lowered fee; fully hosted and managed with full support, including an on-site technician. Descriptive only — no payment, billing, or signup path. | PUBLIC-009 | UI tests; a test asserting no payment or self-service signup path exists |
+| M20.5 Interest form placement | Surface the existing organization interest form from the landing page sections so a prospective organization can act on what it just read. | PUBLIC-002 through PUBLIC-005 | Feature tests reusing the existing interest form coverage |
+| M20.6 Landing page QA script | Add `QA-PUBLIC-01-platform-landing-page.md`. | QA README | Human QA script |
+
+**QA gate:** A visitor who has never heard of Meridian reads the landing page at the deployment root, understands what the platform does, sees each major feature introduced with a Northwood screenshot, understands the three offerings and how they differ, and submits an organization interest inquiry — and no real organization's data appears anywhere on the surface.
+
+**Explicitly out of scope for this milestone:**
+
+- payment, billing, or checkout for any offering;
+- self-service organization creation, which remains a God Mode action (PUBLIC-004);
+- a CMS or admin editing surface for landing page content;
+- serving the marketing surface from an on-site or event-locked node (PUBLIC-006).
 
 ---
 
@@ -988,7 +1021,8 @@ QA should run in this order:
 17. Client session and API wiring QA.
 18. Insights framework and initial metrics QA.
 19. Gap closure QA.
-20. Release candidate QA.
+20. Platform landing page QA.
+21. Release candidate QA.
 
 Each QA script should remain readable by someone who did not implement the feature.
 

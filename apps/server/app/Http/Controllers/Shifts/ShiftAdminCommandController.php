@@ -42,6 +42,7 @@ final class ShiftAdminCommandController extends Controller
             'signup_closes_at' => ['nullable', 'date'],
             'schedule_lock_at' => ['nullable', 'date'],
             'credit_policy_id' => ['nullable', 'uuid'],
+            'custom_credit_multiplier' => ['nullable', 'numeric'],
             'required_training_ids' => ['array'],
             'required_training_ids.*' => ['uuid'],
             'required_waiver_ids' => ['array'],
@@ -90,6 +91,7 @@ final class ShiftAdminCommandController extends Controller
             'signup_closes_at' => ['nullable', 'date'],
             'schedule_lock_at' => ['nullable', 'date'],
             'credit_policy_id' => ['nullable', 'uuid'],
+            'custom_credit_multiplier' => ['nullable', 'numeric'],
             'required_training_ids' => ['array'],
             'required_training_ids.*' => ['uuid'],
             'required_waiver_ids' => ['array'],
@@ -203,6 +205,7 @@ final class ShiftAdminCommandController extends Controller
             'credit_policy_id' => isset($validated['credit_policy_id']) && $validated['credit_policy_id'] !== null
                 ? (string) $validated['credit_policy_id']
                 : null,
+            'custom_credit_multiplier' => $validated['custom_credit_multiplier'] ?? null,
             'required_training_ids' => array_map(
                 fn ($id): string => (string) $id,
                 $validated['required_training_ids'] ?? [],
@@ -234,6 +237,7 @@ final class ShiftAdminCommandController extends Controller
             'credit_policy_id' => $shift->credit_policy_id !== null
                 ? (string) $shift->credit_policy_id
                 : null,
+            'custom_credit_multiplier' => $shift->customCreditMultiplier(),
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'required_training_ids' => $shift->trainingRequirements()
                 ->pluck('training_id')

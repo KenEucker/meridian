@@ -176,6 +176,7 @@ final class ShiftAdminReadController extends Controller
             'credit_policy_id' => $shift->credit_policy_id !== null
                 ? (string) $shift->credit_policy_id
                 : null,
+            'custom_credit_multiplier' => $shift->customCreditMultiplier(),
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
             'has_started' => $shift->starts_at !== null && now()->greaterThanOrEqualTo($shift->starts_at),
             /*
@@ -274,10 +275,14 @@ final class ShiftAdminReadController extends Controller
 
     /**
      * The credit policies a shift may name as its own rate (SHIFT-010;
-     * M18.16): the organization's active policies, plus the one this shift
-     * already names when that policy has since been archived — the select has
-     * to be able to render the current choice, and keeping an archived policy
-     * is allowed where newly choosing one is not.
+     * M18.16): the organization's active *named* policies, plus the one this
+     * shift already names when that policy has since been archived — the
+     * select has to be able to render the current choice, and keeping an
+     * archived policy is allowed where newly choosing one is not.
+     *
+     * Shift-scoped rows are left out: each is one shift's custom rate, which
+     * the form carries as `custom_credit_multiplier` rather than as an
+     * option another shift could pick.
      *
      * @return list<array<string, mixed>>
      */
@@ -285,6 +290,7 @@ final class ShiftAdminReadController extends Controller
     {
         $query = CreditPolicy::query()
             ->where('organization_id', $department->organization_id)
+            ->whereNull('shift_id')
             ->where(fn ($constraint) => $constraint
                 ->whereNull('archived_at')
                 ->when(

@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 
 /**
  * A rate at which worked hours become credits (ORG-009, SHIFT-010; data/API
@@ -26,7 +32,33 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CreditPolicy extends Model
 {
     /** @use HasFactory<CreditPolicyFactory> */
-    use HasFactory, HasUuids;
+    use AsSource, Filterable, HasFactory, HasUuids;
+
+    /**
+     * God Mode's credit policy list filters and sorts on these (M18.16).
+     *
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'id' => Where::class,
+        'organization_id' => Where::class,
+        'name' => Like::class,
+        'credit_multiplier' => Where::class,
+        'created_at' => WhereDateStartEnd::class,
+        'archived_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'id',
+        'organization_id',
+        'name',
+        'credit_multiplier',
+        'created_at',
+        'archived_at',
+    ];
 
     protected $table = 'credit_policies';
 
@@ -70,6 +102,15 @@ class CreditPolicy extends Model
     public function shift(): BelongsTo
     {
         return $this->belongsTo(Shift::class);
+    }
+
+    /**
+     * The shifts that name this policy as their rate (SHIFT-010) — the usage
+     * an administration surface counts before archiving one.
+     */
+    public function shifts(): HasMany
+    {
+        return $this->hasMany(Shift::class);
     }
 
     /**

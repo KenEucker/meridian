@@ -268,8 +268,12 @@ final class CreditPolicyAdminController extends Controller
     ): array {
         $organizationId = (string) $organization->getKey();
 
+        // Named organization-level policies only. Shift-scoped rows are one
+        // shift's custom rate (M18.16), administered from the shift that
+        // carries them rather than from this catalog.
         $rows = CreditPolicy::query()
             ->where('organization_id', $organizationId)
+            ->whereNull('shift_id')
             ->orderBy('name')
             ->get();
 

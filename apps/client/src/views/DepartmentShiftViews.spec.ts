@@ -649,6 +649,43 @@ describe("shift create and edit", () => {
     });
   });
 
+  it("gives a shift a custom rate between 0 and 2 instead of a named policy (M18.16)", async () => {
+    // Pre- and post-event work is typically priced below the standard hour,
+    // so the select offers a custom rate beside the named policies. The two
+    // are mutually exclusive on the wire: a custom rate sends no policy id.
+    const calls = stubNode((call) => {
+      if (call.url.endsWith("/commands/update-shift")) {
+        return { body: shiftPayload({ custom_credit_multiplier: "0.500" }) };
+      }
+
+      if (call.url.includes(`/shifts/${DAY_SHIFT_ID}`)) {
+        return { body: shiftPayload() };
+      }
+
+      return { body: workspacePayload() };
+    });
+
+    const { wrapper } = await mountShiftEdit(DAY_SHIFT_ID);
+
+    const policySelect = wrapper
+      .findAll("select")
+      .find((candidate) => candidate.text().includes("Organization default"));
+    expect(policySelect!.text()).toContain("Custom rate for this shift…");
+
+    await policySelect!.setValue("__custom__");
+    await wrapper
+      .get("input[aria-label='Custom credits per hour']")
+      .setValue("0.5");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(commandCalls(calls, "update-shift")[0]?.body).toMatchObject({
+      shift_id: DAY_SHIFT_ID,
+      credit_policy_id: null,
+      custom_credit_multiplier: "0.5",
+    });
+  });
+
   /*
    * Five fields that were blank and were being typed to the same values every
    * time. The window is the operational one, which is what setup and teardown

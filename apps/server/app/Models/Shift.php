@@ -142,6 +142,29 @@ class Shift extends Model
         return $this->belongsTo(CreditPolicy::class);
     }
 
+    /**
+     * The shift's custom rate, when its current policy is its own shift-scoped
+     * row (M18.16); null when it rides a named policy or the organization
+     * default. This is how a surface tells "Custom rate 0.5" apart from a
+     * named policy that happens to be chosen, without comparing ids itself.
+     */
+    public function customCreditMultiplier(): ?string
+    {
+        if ($this->credit_policy_id === null) {
+            return null;
+        }
+
+        $policy = $this->relationLoaded('creditPolicy')
+            ? $this->creditPolicy
+            : CreditPolicy::query()->find($this->credit_policy_id);
+
+        if ($policy === null || (string) $policy->shift_id !== (string) $this->id) {
+            return null;
+        }
+
+        return (string) $policy->credit_multiplier;
+    }
+
     public function trainingRequirements(): HasMany
     {
         return $this->hasMany(ShiftTrainingRequirement::class);
