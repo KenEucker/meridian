@@ -3,6 +3,9 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import HeroCenterLayout from "@/components/HeroCenterLayout.vue";
+import SegmentedOctagon, {
+  type OctagonSegment,
+} from "@/components/SegmentedOctagon.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import { participationLink } from "@/applications/participationModel";
@@ -110,6 +113,127 @@ function titleRepeatsSection(title: string, sectionLabel: string): boolean {
   return normalize(title) === normalize(sectionLabel);
 }
 
+/**
+ * Whether there is room for the ring.
+ *
+ * A media query cannot choose between two different DOM trees, and the ring and
+ * the card stack are different trees rather than one tree styled twice — so the
+ * breakpoint is observed here. It matches the width the card grid already used
+ * for its three-column layout, so the page changes shape once rather than
+ * twice.
+ */
+const OCTAGON_BREAKPOINT = "(min-width: 94rem)";
+const showOctagon = ref(false);
+
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  const query = window.matchMedia(OCTAGON_BREAKPOINT);
+
+  showOctagon.value = query.matches;
+  query.addEventListener("change", (event) => {
+    showOctagon.value = event.matches;
+  });
+}
+
+/**
+ * What a segment says about its section.
+ *
+ * A description of the contents, not the contents. The shapes are wide but
+ * they are still trapezoids, and a policy set in one is a policy nobody can
+ * read — so a segment names what is published there and the dialog carries
+ * the text itself. An empty section says so in those words rather than
+ * borrowing the node's longer sentence, which does not fit and does not need
+ * to: the block already names the subject.
+ */
+function describeSection(documents: readonly { title: string }[]): string {
+  if (documents.length === 0) {
+    return "No information has been published yet.";
+  }
+
+  if (documents.length === 1) {
+    return documents[0]!.title;
+  }
+
+  return `${documents.length} published documents: ${documents
+    .map((document) => document.title)
+    .join(", ")}`;
+}
+
+/**
+ * The eight segments of the ring.
+ *
+ * Six document sections, the invitation, and the page's own provenance note —
+ * which is exactly eight, and is why the note moved out of the middle. The
+ * centre holds the one fact somebody opening this page always wants: which
+ * event, and when.
+ *
+ * An unavailable invitation still takes its segment rather than collapsing the
+ * ring to seven. Seven segments would leave a gap in the octagon, which reads
+ * as a rendering fault rather than as a design.
+ */
+const selectedKey = ref<string | null>(null);
+const detailDialog = ref<HTMLDialogElement | null>(null);
+
+/**
+ * Open the reading pane on the chosen segment.
+ *
+ * `showModal` rather than `show`: a reading pane over a diagram wants the
+ * diagram inert underneath it, and modal brings focus trapping, Escape, and
+ * the backdrop without any of it being ours to maintain. Choosing the segment
+ * already open closes it.
+ */
+function openSegment(key: string): void {
+  if (selectedKey.value === key) {
+    closeSegment();
+
+    return;
+  }
+
+  selectedKey.value = key;
+  const dialog = detailDialog.value;
+
+  if (dialog !== null && !dialog.open) {
+    dialog.showModal();
+  }
+}
+
+function closeSegment(): void {
+  detailDialog.value?.close();
+  selectedKey.value = null;
+}
+
+const selectedSection = computed(
+  () =>
+    sections.value.find((section) => section.section === selectedKey.value) ??
+    null,
+);
+
+const octagonSegments = computed<OctagonSegment[]>(() => {
+  const documentSegments = sections.value.map((section, index) => ({
+    key: section.section,
+    title: section.label,
+    summary: describeSection(section.documents),
+    tone: index % 4,
+  }));
+
+  return [
+    ...documentSegments,
+    {
+      key: "invite",
+      title: "Invite your friends!",
+      summary: inviteLink.value
+        ? "The public application address for this event, to send to somebody who would be good here."
+        : "Available once this event has a public application address.",
+      tone: 2,
+    },
+    {
+      key: "about",
+      title: "About this page",
+      summary: `Where this page's content comes from, and what you can see of it.`,
+      tone: 3,
+    },
+  ];
+});
+
 async function loadEventInfo(): Promise<void> {
   if (eventId.value === "") {
     eventInfo.value = null;
@@ -158,6 +282,131 @@ void loadEventInfo();
       {{ loadError }}
       <button type="button" @click="loadEventInfo">Try again</button>
     </p>
+
+    <!--
+      The ring is a navigator, not the reading surface (M18.21B).
+
+      A segment is 164×126 and the things behind it are policy documents, so
+      the octagon carries a heading and a line of summary, and choosing one
+      hands the full text to the panel underneath — full width, left aligned,
+      normal measure, which is the shape prose is actually read in. Trying to
+      set a policy inside a trapezoid is how the previous attempt at this page
+      became unreadable.
+
+      Wide widths only. The ring needs room for eight segments around a centre;
+      below that it is a stack of cards, which is the same content in the shape
+      a phone can hold.
+    -->
+    <!--
+      The ring, with the text inside the shapes (M18.21B).
+
+      The segments are wide enough to hold a heading and a real paragraph, so
+      there is no dialog and nothing to click through: what the page says is
+      what is on the page. That is the whole reason the band is thick and the
+      channel around the centre is thin — the proportions serve the words
+      rather than the diagram.
+    -->
+    <div v-else-if="showOctagon" class="event-info__ring">
+      <SegmentedOctagon
+        :segments="octagonSegments"
+        :center-title="eventLabel"
+        :center-subtitle="operationsWindowLabel"
+        :selected="selectedKey"
+        label="Event information"
+        @select="openSegment"
+      />
+
+      <dialog
+        ref="detailDialog"
+        class="event-info__dialog"
+        @close="selectedKey = null"
+      >
+        <div class="event-info__detail">
+          <button
+            type="button"
+            class="event-info__dialog-close"
+            @click="closeSegment"
+          >
+            Close
+          </button>
+
+          <template v-if="selectedKey === 'invite'">
+            <h2>Invite your friends!</h2>
+            <p>
+              Events run on the people who show up. If you know somebody who
+              would be good here, send them this link. They do not need a
+              Meridian account, and applying commits them to nothing until an
+              organizer says yes.
+            </p>
+            <p v-if="inviteLink" class="event-info__invite-action">
+              <a :href="inviteLink">Apply to staff {{ eventLabel }}</a>
+            </p>
+            <p v-else class="event-info__empty">
+              This event has no public application address yet.
+            </p>
+          </template>
+
+          <template v-else-if="selectedKey === 'about'">
+            <h2>About this page</h2>
+            <dl class="event-info__facts">
+              <div>
+                <dt>Department</dt>
+                <dd>{{ departmentLabel }}</dd>
+              </div>
+              <div>
+                <dt>Organization</dt>
+                <dd>{{ organizationLabel }}</dd>
+              </div>
+              <div>
+                <dt>Published documents</dt>
+                <dd>{{ eventInfo?.documentCount ?? 0 }} visible to you</dd>
+              </div>
+            </dl>
+            <p class="event-info__source" role="note">
+              Every section here is the published policy and procedure content
+              you are permitted to see. Sections without a published document
+              say so instead of standing in for one.
+            </p>
+          </template>
+
+          <template v-else-if="selectedSection">
+            <h2>{{ selectedSection.label }}</h2>
+
+            <p
+              v-if="selectedSection.emptyDescription"
+              class="event-info__empty"
+              role="status"
+            >
+              {{ selectedSection.emptyDescription }}
+            </p>
+
+            <section
+              v-for="document in selectedSection.documents"
+              :key="document.id"
+              class="event-info__document"
+            >
+              <h3
+                v-if="
+                  !titleRepeatsSection(document.title, selectedSection.label)
+                "
+              >
+                {{ document.title }}
+              </h3>
+              <div
+                class="event-info__document-body"
+                v-html="document.renderedHtml"
+              />
+              <p class="event-info__document-meta">
+                {{
+                  document.documentType === "policy" ? "Policy" : "Procedure"
+                }}
+                / {{ document.scopeLabel }} / version {{ document.version }}
+              </p>
+            </section>
+          </template>
+        </div>
+      </dialog>
+    </div>
 
     <!--
       The six sections all answer one question, so the summary they belong to
@@ -712,6 +961,109 @@ void loadEventInfo();
   border-radius: var(--m-radius-sm);
   background: var(--m-surface-raised);
   color: var(--m-status-danger, #cc792f);
+}
+
+/*
+ * The ring and its detail panel. The octagon is capped so it stays a diagram
+ * rather than growing to fill a wall display, and the panel below it keeps a
+ * normal reading measure — the whole point of separating the two.
+ */
+/*
+ * The ring is now the page rather than the top half of it: with the reading
+ * pane in a dialog there is nothing underneath competing for height, so the
+ * octagon takes the room it needs to be legible at a glance. Capped against
+ * the viewport height as well as the width, because a diagram taller than the
+ * window is one somebody has to scroll to see whole.
+ */
+.event-info__ring {
+  display: grid;
+  justify-items: center;
+}
+
+/*
+ * Width leads, not viewport height.
+ *
+ * The shape is square — a regular octagon inside an 800×800 box — so any cap
+ * on height is also a cap on width, and a `vh` limit was leaving most of a
+ * wide page empty while the diagram sat small in the middle. Letting width
+ * lead costs some vertical scrolling on a short window, which is the cheaper
+ * of the two: a diagram that is too small to read is useless at any scroll
+ * position, and one that is legible is worth a scroll.
+ */
+.event-info__ring :deep(.octagon) {
+  width: min(100%, 1100px);
+}
+
+.event-info__dialog {
+  width: min(46rem, 92vw);
+  max-height: 84vh;
+  padding: 0;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  overflow: auto;
+}
+
+.event-info__dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.event-info__detail {
+  display: grid;
+  gap: var(--m-space-3);
+  align-content: start;
+  padding: var(--m-space-4);
+  text-align: start;
+}
+
+.event-info__dialog-close {
+  justify-self: end;
+  min-height: 2.25rem;
+  padding: var(--m-space-2) var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.event-info__detail h2 {
+  margin: 0;
+  font-family: var(--m-font-heading);
+  font-size: var(--m-text-md);
+  color: var(--m-text-primary);
+}
+
+.event-info__detail p {
+  margin: 0;
+  max-width: var(--m-measure);
+  color: var(--m-text-secondary);
+}
+
+.event-info__detail-prompt {
+  color: var(--m-text-muted);
+}
+
+.event-info__facts {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0;
+}
+
+.event-info__facts dt {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.event-info__facts dd {
+  margin: var(--m-space-1) 0 0;
+  color: var(--m-text-primary);
 }
 
 .event-info__error button {
