@@ -63,6 +63,7 @@ import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
+import WaiverAdministrationView from "@/views/WaiverAdministrationView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
 
 /*
@@ -504,6 +505,18 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/acknowledgments",
     name: "organizer.document-acknowledgments.index",
     component: OrganizerDocumentAcknowledgmentsView,
+  },
+  /*
+   * Waiver administration and completion recording (M18.18; WAIVER-001
+   * through WAIVER-006, WAIVER-010). One route for every waiver maintainer
+   * despite the organizer prefix: authority follows the waiver's scope —
+   * organizers, department leads, and team leads each see exactly the scopes
+   * they hold, resolved by the node.
+   */
+  {
+    path: "/organizer/waivers",
+    name: "organizer.waivers.index",
+    component: WaiverAdministrationView,
   },
   {
     path: "/organizer/branding",

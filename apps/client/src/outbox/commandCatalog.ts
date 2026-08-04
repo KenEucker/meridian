@@ -70,6 +70,12 @@ export type MeridianCommandType =
   // Acknowledgment requirement administration (M18.6).
   | "create-document-acknowledgment-requirement"
   | "set-document-acknowledgment-requirement-active"
+  // Waiver administration (M18.18).
+  | "create-waiver"
+  | "update-waiver"
+  | "archive-waiver"
+  | "restore-waiver"
+  | "record-waiver-completion"
   | "submit-application"
   | "publish-event-map"
   | "archive-event-map"
@@ -433,6 +439,47 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/set-document-acknowledgment-requirement-active",
       "Acknowledgment requirement",
       "Changing an acknowledgment requirement needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * Waiver administration (M18.18; WAIVER-001 through WAIVER-006,
+     * WAIVER-010).
+     *
+     * All connected-only, and completion recording most of all: a completion
+     * of a document-backed waiver names the document version the person was
+     * shown (WAIVER-008), and one held on a device would name whichever
+     * version the device last cached — the same reason acceptance above does
+     * not queue. The four administration commands are desk work with no urgent
+     * case.
+     */
+    "create-waiver": connectedOnly(
+      "create-waiver",
+      "/api/commands/create-waiver",
+      "Waiver",
+      "Creating a waiver needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "update-waiver": connectedOnly(
+      "update-waiver",
+      "/api/commands/update-waiver",
+      "Waiver",
+      "Changing a waiver needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "archive-waiver": connectedOnly(
+      "archive-waiver",
+      "/api/commands/archive-waiver",
+      "Waiver",
+      "Archiving a waiver needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "restore-waiver": connectedOnly(
+      "restore-waiver",
+      "/api/commands/restore-waiver",
+      "Waiver",
+      "Restoring a waiver needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "record-waiver-completion": connectedOnly(
+      "record-waiver-completion",
+      "/api/commands/record-waiver-completion",
+      "Waiver completion",
+      "Recording a waiver completion needs a connection to the node. It cannot be held on this device for later.",
     ),
     "submit-application": connectedOnly(
       "submit-application",

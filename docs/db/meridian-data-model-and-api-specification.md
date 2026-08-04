@@ -2442,6 +2442,15 @@ Rules:
 - completing a document-backed waiver records the acknowledged document and document version alongside the completion, using the same version-recording rule as policy/procedure acknowledgments (WAIVER-008; POL-043), and retains the acknowledged version's source and resolved text as a `document_version_snapshots` row
 - a completion of a waiver with no document reference records no document columns (WAIVER-009)
 
+#### Waiver administration endpoints
+
+Waiver administration authority follows the scope of the waiver, matching the policy/procedure maintenance rule (WAIVER-010): organization-scoped waivers by organizers, department-scoped by department leads, team-scoped by team leads. No separate capability code carries it; every endpoint resolves the caller's maintainable scopes.
+
+- `GET /api/organizations/{organization}/waivers` answers with the waivers in the caller's maintainable scopes, the scope options a new waiver may be assigned to, and the organization's published documents a waiver may reference (WAIVER-007). A caller maintaining no scope is refused.
+- `GET /api/organizations/{organization}/waivers/{waiver}` answers with one waiver, its referenced document rendered with fragment text inline (POL-022) when one is configured, and the completion roster: everybody the waiver's scope asks, with complete, lapsed, and incomplete distinguished — lapsed is the state WAIVER-006 turns into a credential block.
+- `POST /api/commands/create-waiver`, `update-waiver`, `archive-waiver`, and `restore-waiver` administer waivers within the caller's scope authority. Scope is fixed at creation; archiving keeps every recorded completion. All are audited.
+- `POST /api/commands/record-waiver-completion` records a completion for a staff member the waiver's scope asks; a staff member outside the scope, or an archived waiver, is refused. Recording is audited and connected-only, because a document-backed completion names the document version shown (WAIVER-008).
+
 ---
 
 ### 10.9 Shifts

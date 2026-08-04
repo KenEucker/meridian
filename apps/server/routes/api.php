@@ -51,6 +51,7 @@ use App\Http\Controllers\Teams\TeamReadController;
 use App\Http\Controllers\Teams\TeamStaffCommandController;
 use App\Http\Controllers\Trainings\TrainingCommandController;
 use App\Http\Controllers\Trainings\TrainingReadController;
+use App\Http\Controllers\Waivers\WaiverAdminController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -517,6 +518,29 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/commands/update-document-fragment', [DocumentCommandController::class, 'updateFragment'])
         ->name('api.commands.update-document-fragment');
 
+    /*
+     * Waiver administration (M18.18; WAIVER-001 through WAIVER-006,
+     * WAIVER-010). Authority follows the scope of the waiver, matching the
+     * policy/procedure maintenance rule — organization-scoped waivers by
+     * organizers, department-scoped by department leads, team-scoped by team
+     * leads — so there is no waiver capability in the catalog to check here;
+     * every endpoint resolves the caller's maintainable scopes instead.
+     */
+    Route::post('/commands/create-waiver', [WaiverAdminController::class, 'create'])
+        ->name('api.commands.create-waiver');
+
+    Route::post('/commands/update-waiver', [WaiverAdminController::class, 'update'])
+        ->name('api.commands.update-waiver');
+
+    Route::post('/commands/archive-waiver', [WaiverAdminController::class, 'archive'])
+        ->name('api.commands.archive-waiver');
+
+    Route::post('/commands/restore-waiver', [WaiverAdminController::class, 'restore'])
+        ->name('api.commands.restore-waiver');
+
+    Route::post('/commands/record-waiver-completion', [WaiverAdminController::class, 'recordCompletion'])
+        ->name('api.commands.record-waiver-completion');
+
     Route::post('/commands/create-training', [TrainingCommandController::class, 'create'])
         ->name('api.commands.create-training');
 
@@ -579,6 +603,12 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
         ->name('api.organizations.documents.index');
+
+    Route::get('/organizations/{organization}/waivers', [WaiverAdminController::class, 'index'])
+        ->name('api.organizations.waivers.index');
+
+    Route::get('/organizations/{organization}/waivers/{waiver}', [WaiverAdminController::class, 'show'])
+        ->name('api.organizations.waivers.show');
 
     /*
      * The two acknowledgment reads (M18.6). Deliberately a pair rather than one
