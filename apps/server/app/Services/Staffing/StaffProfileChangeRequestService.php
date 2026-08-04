@@ -10,6 +10,9 @@ use App\Models\StaffOrganizationStatus;
 use App\Models\StaffProfileChangeRequest;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use Closure;
 use Illuminate\Support\Facades\DB;
 
@@ -36,6 +39,8 @@ final class StaffProfileChangeRequestService
     public function __construct(
         private readonly AuditService $audit,
         private readonly StaffProfileChangeRequestAccess $access,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
     ) {}
 
     /**
@@ -191,6 +196,23 @@ final class StaffProfileChangeRequestService
                 reason: $reason,
                 sourceContext: $sourceContext,
             );
+
+            // VOL-025 in the mail, now that there is a path to send it on.
+            // M18.20D delivered the decision to the submitter's own surface and
+            // deferred the email here for want of one. A withdrawn request
+            // never reaches this method, so nothing notifies for a decision
+            // nobody took.
+            $locked->loadMissing(['staff', 'organization']);
+
+            if ($locked->staff instanceof Staff) {
+                $this->notifications->dispatch(
+                    type: NotificationType::ProfileChangeRequestDecided,
+                    subject: $locked,
+                    recipient: $this->notificationRecipients->forStaff($locked->staff),
+                    organization: $locked->organization,
+                    actor: $reviewer,
+                );
+            }
 
             return $locked;
         });

@@ -1746,6 +1746,7 @@ Configuration fields (ORG-017, ORG-018, VOL-027, VOL-028):
 - `hours_correction_grace_period_days` is the ORG-017 hours correction window, expressed in days after event end. It defaults to 14 and is never null: an organization that has not configured one still has the documented default.
 - `handle_change_policy` and `profile_picture_change_policy` each hold one of `organizer_only`, `organizer_sets_first`, `auto_approved`, or `staff_sets_first` (VOL-027). Null reads as `organizer_only`, the documented default. The value is stored null rather than defaulted in the schema so an organization that never chose stays distinguishable from one that chose the default deliberately, and so a later change of default reaches the first of them.
 - `handle_self_service_change_limit` is the VOL-028 allowance, and null reads as two. It is consulted only while `handle_change_policy` is `auto_approved`; zero switches the allowance off without changing the policy. Profile pictures have no equivalent column because pictures applied without review are not rationed.
+- `notifications_suppressed_at` is the NOTIFY-009 per-organization send-suppression switch. Null means this organization sends notification email; a timestamp means it does not, and records when that was decided. It is a timestamp rather than a boolean because "suppressed since" is the fact an operator wants when a restored copy of an organization's data stops mailing. The global development suppression is separate configuration, and either alone stops a send.
 
 Branding fields (BRAND-001, BRAND-004, BRAND-006, BRAND-013):
 
@@ -3823,6 +3824,45 @@ A viewer's filter selections are held for the session and are not persisted acro
 - no table stores a computed metric value; Insights compile on read
 - no snapshot, export, or PDF entity exists; a PDF is generated in the browser and downloaded
 - no saved Insight result, trend history, or cross-event aggregate is stored
+
+---
+
+### 10.20 Notification Deliveries
+
+Meridian sends transactional email for the NOTIFY-001 set and nothing else. There is no preference, digest, category, or notification-history entity, because NOTIFY-010 puts all four out of scope for MVP.
+
+#### `notification_deliveries`
+
+Represents one person told, or one person deliberately not told (NOTIFY-007).
+
+Key fields:
+
+- `id`
+- `notification_type` (one of the closed NOTIFY-001 set, plus the VOL-025 profile change decision)
+- `organization_id`, `event_id`, `department_id`, each nullable — the scope the notification concerns (NOTIFY-004)
+- `subject_entity_type`, `subject_entity_id` — the record the notification is about
+- `recipient_user_id`, nullable — null for an applicant with no user account
+- `recipient_staff_id`, nullable
+- `recipient_email` — empty where there was no address to use
+- `status` (`queued`, `sent`, `failed`, `suppressed`, `no_verified_address`, `held_for_central`)
+- `outcome_reason`, nullable
+- `context_json` — identifiers and names for reading the trail back
+- `attempts`
+- `queued_at`, `sent_at`, `resolved_at`, each nullable
+- `origin_node_id`, nullable
+- `origin_operation_uuid`, nullable — the node operation that handed this notification to central (NOTIFY-008)
+- `created_at`
+- `updated_at`
+
+Rules:
+
+- the row is written **before** the decision to send is taken, so every outcome is recorded. `sent` and `failed` are the two a mail transport log would also know; `suppressed`, `no_verified_address`, and `held_for_central` are the three it would not, because in those cases nothing was handed to a transport at all. NOTIFY-007 asks whether a person was told, and only a record written first distinguishes those from a send that failed
+- **no message body is stored** (NOTIFY-007). `context_json` carries identifiers, names, and scope; the message itself is composed from the subject record when the send runs, so a notification that crossed a sync describes the record as the sending node holds it
+- delivery is queued and never blocks the operation that caused it, and a delivery failure never rolls that operation back (NOTIFY-006)
+- an unverified address is recorded as `no_verified_address` rather than sent to (NOTIFY-005). An applicant with no user account is addressed at the application email address
+- an application auto-rejected due to Do Not Staff produces **no row at all** (NOTIFY-002): a record naming that application beside a rejection type would itself disclose the match
+- `origin_operation_uuid` is not unique. One node operation may be the origin of several deliveries, because a cancelled shift is one operation and one notification per person who was signed up for it
+- the audit trail carries the same five facts under `notification.<status>` actions, and outlives the row
 
 ---
 

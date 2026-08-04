@@ -9,8 +9,8 @@ use App\Models\Department;
 use App\Models\DeviceTrust;
 use App\Models\DocumentAcknowledgmentRequirement;
 use App\Models\FieldReport;
-use App\Models\Organization;
 use App\Models\OrchidAttachment;
+use App\Models\Organization;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
 use App\Models\User;
@@ -19,11 +19,12 @@ use App\Policies\FieldReportPolicy;
 use App\Services\Auth\ApiTokenAuthentication;
 use App\Services\Auth\SharedWorkstationSessionKey;
 use App\Services\Auth\SharedWorkstationSessionService;
-use App\Services\Node\EventScopedWriteGuard;
-use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Diagnostics\Checks;
 use App\Services\Diagnostics\DiagnosticRunner;
+use App\Services\Node\EventScopedWriteGuard;
+use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
+use App\Services\Notifications\NotificationOperationApplier;
 use App\Services\SystemConfig\ApplySystemConfigOverrides;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -47,7 +48,15 @@ class AppServiceProvider extends ServiceProvider
         // Appliers are registered against one shared registry so a node
         // operation received later resolves the appliers registered earlier
         // (technical spec 10.1).
-        $this->app->singleton(NodeOperationApplierRegistry::class);
+        $this->app->singleton(NodeOperationApplierRegistry::class, function ($app): NodeOperationApplierRegistry {
+            $registry = new NodeOperationApplierRegistry;
+
+            // Notifications an on-site node generated during the event window,
+            // which only central sends (M18.21; NOTIFY-008).
+            $registry->register($app->make(NotificationOperationApplier::class));
+
+            return $registry;
+        });
 
         // One guard instance holds the enforcement state, so the receive path
         // standing it down while it applies an operation stands down the same

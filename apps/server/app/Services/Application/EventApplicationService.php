@@ -15,6 +15,9 @@ use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Membership\DepartmentMembershipService;
 use App\Services\Membership\TeamMembershipService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -46,6 +49,8 @@ class EventApplicationService
         private readonly StaffStatusService $staffStatuses,
         private readonly DepartmentMembershipService $departmentMemberships,
         private readonly DepartmentAssignmentAccess $departmentAssignmentAccess,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
     ) {}
 
     /**
@@ -157,6 +162,8 @@ class EventApplicationService
                 sourceContext: AuditEvent::SOURCE_ORCHID,
             );
 
+            $this->notifyApplicationDecision($application, NotificationType::ApplicationApproved, $reviewer);
+
             return $application
                 ->load(['event', 'organization', 'reviewedBy', 'staff', 'departmentInterests'])
                 ->setRelation('staff', $staff);
@@ -179,6 +186,7 @@ class EventApplicationService
             status: EventApplication::STATUS_REJECTED,
             auditAction: 'event_application.rejected',
             defaultReason: 'Rejected at the organization level.',
+            notificationType: NotificationType::ApplicationRejected,
             decisionReason: $decisionReason,
         );
     }
@@ -199,6 +207,7 @@ class EventApplicationService
             status: EventApplication::STATUS_DEFERRED,
             auditAction: 'event_application.deferred',
             defaultReason: 'Deferred at the organization level.',
+            notificationType: NotificationType::ApplicationDeferred,
             decisionReason: $decisionReason,
         );
     }
@@ -545,6 +554,7 @@ class EventApplicationService
         string $status,
         string $auditAction,
         string $defaultReason,
+        NotificationType $notificationType,
         ?string $decisionReason = null,
     ): EventApplication {
         return DB::transaction(function () use (
@@ -553,6 +563,7 @@ class EventApplicationService
             $status,
             $auditAction,
             $defaultReason,
+            $notificationType,
             $decisionReason,
         ): EventApplication {
             /** @var EventApplication $application */
@@ -591,8 +602,41 @@ class EventApplicationService
                 sourceContext: AuditEvent::SOURCE_ORCHID,
             );
 
+            $this->notifyApplicationDecision($application, $notificationType, $reviewer);
+
             return $application->load(['event', 'organization', 'reviewedBy', 'departmentInterests']);
         });
+    }
+
+    /**
+     * Tell the applicant what was decided (NOTIFY-001).
+     *
+     * The Do Not Staff silence NOTIFY-002 requires is structural rather than a
+     * condition here: an auto-rejected application never becomes Submitted, and
+     * every path into this method has already refused anything that is not. The
+     * guard below is belt to that braces — the requirement is that nothing is
+     * ever sent, and a future reviewer path that forgot the Submitted check
+     * would otherwise disclose the record by mailing about it.
+     */
+    private function notifyApplicationDecision(
+        EventApplication $application,
+        NotificationType $type,
+        User $reviewer,
+    ): void {
+        if ($application->status === EventApplication::STATUS_AUTO_REJECTED_DNS) {
+            return;
+        }
+
+        $application->loadMissing(['event', 'organization', 'staff']);
+
+        $this->notifications->dispatch(
+            type: $type,
+            subject: $application,
+            recipient: $this->notificationRecipients->forApplication($application),
+            organization: $application->organization,
+            event: $application->event,
+            actor: $reviewer,
+        );
     }
 
     /**

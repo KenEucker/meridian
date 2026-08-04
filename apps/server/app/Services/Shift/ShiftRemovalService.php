@@ -8,6 +8,9 @@ use App\Models\Staff;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Credential\CredentialEligibilityService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +23,8 @@ class ShiftRemovalService
         private readonly AuditService $audit,
         private readonly ShiftAssignmentAccess $access,
         private readonly CredentialEligibilityService $credentials,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
     ) {}
 
     /**
@@ -48,6 +53,7 @@ class ShiftRemovalService
                 actor: $remover,
                 action: 'shift_assignment.removed',
                 moment: $moment,
+                notify: true,
             );
         });
     }
@@ -99,6 +105,7 @@ class ShiftRemovalService
         User $actor,
         string $action,
         Carbon $moment,
+        bool $notify = false,
     ): ShiftAssignment {
         if ($assignment->removed_at !== null) {
             throw ShiftRemovalException::alreadyRemoved();
@@ -125,6 +132,23 @@ class ShiftRemovalService
 
         if ($event !== null && $staff !== null) {
             $this->credentials->recalculate($event, $staff, $moment, $actor);
+        }
+
+        // NOTIFY-001 names "staff removed from a shift by a lead", and only
+        // that. Self-withdrawal reaches the same private method and does not
+        // notify: mailing somebody about the thing they just did on the screen
+        // in front of them is noise, and NOTIFY-001 is explicit that the set is
+        // events a person "would otherwise have no reason to check for".
+        if ($notify && $staff !== null) {
+            $this->notifications->dispatch(
+                type: NotificationType::ShiftAssignmentRemoved,
+                subject: $assignment,
+                recipient: $this->notificationRecipients->forStaff($staff),
+                organization: $event?->organization,
+                event: $event,
+                department: $assignment->shift?->department,
+                actor: $actor,
+            );
         }
 
         return $assignment;

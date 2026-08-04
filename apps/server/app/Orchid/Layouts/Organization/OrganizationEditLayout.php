@@ -9,6 +9,7 @@ use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\Organization;
 use Orchid\Screen\Field;
+use Orchid\Screen\Fields\CheckBox;
 use Orchid\Screen\Fields\Input;
 use Orchid\Screen\Fields\Select;
 use Orchid\Screen\Layouts\Rows;
@@ -122,6 +123,21 @@ class OrganizationEditLayout extends Rows
                 ->empty(__('Use the default (approved by organizers)'), '')
                 ->title(__('Profile picture approval'))
                 ->help(__('How a submitted profile picture is decided (VOL-027). Pictures applied without review are not rationed the way handles are.')),
+
+            /*
+             * The per-organization send-suppression switch (NOTIFY-009). It
+             * lives beside the other organization settings rather than on a
+             * screen of its own because it is one boolean, and it is stated
+             * here in full because switching it on silently stops every
+             * transactional email this organization's staff would receive.
+             * The global switch is separate and either alone stops a send;
+             * both are reported on the God Mode landing screen.
+             */
+            CheckBox::make('organization.notifications_suppressed')
+                ->sendTrueOrFalse()
+                ->title(__('Suppress notification email'))
+                ->placeholder(__('Send no notification email for this organization'))
+                ->help(__('Notifications are still recorded with their recipient, type, and subject record; none are sent. Use this for a rehearsal or a restored copy of this organization\'s data (NOTIFY-009).')),
         ];
     }
 

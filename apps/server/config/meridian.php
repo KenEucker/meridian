@@ -191,6 +191,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Transactional Notifications
+    |--------------------------------------------------------------------------
+    |
+    | Meridian sends transactional email for the NOTIFY-001 operational set and
+    | nothing else (M18.21; NOTIFY-006 through NOTIFY-009).
+    |
+    | `suppressed` is the global development suppression NOTIFY-009 asks for.
+    | Its default is derived from APP_ENV rather than hardcoded to false,
+    | because the deployments this switch exists to protect — a staging node, a
+    | developer machine, a database restored from a production backup — are
+    | exactly the ones nobody remembers to configure. Production still sends,
+    | and a production deployment that must not send sets it explicitly.
+    |
+    | `link_base_url` is where the action link in a notification points
+    | (NOTIFY-004). It falls back to APP_URL, which is correct wherever Laravel
+    | serves the built client itself, and is set explicitly where it does not.
+    |
+    */
+
+    'notifications' => [
+        'suppressed' => filter_var(
+            env('MERIDIAN_NOTIFICATIONS_SUPPRESSED', env('APP_ENV') !== 'production'),
+            FILTER_VALIDATE_BOOL,
+        ),
+        'max_attempts' => (int) env('MERIDIAN_NOTIFICATION_MAX_ATTEMPTS', 3),
+        'queue' => env('MERIDIAN_NOTIFICATION_QUEUE', 'notifications'),
+        'link_base_url' => env('MERIDIAN_NOTIFICATION_LINK_BASE_URL') ?: env('APP_URL', 'http://localhost'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Magic Link Authentication
     |--------------------------------------------------------------------------
     |

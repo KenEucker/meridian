@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Orchid\Layouts\Organization\OrganizationBrandingLayout;
 use App\Orchid\Layouts\Organization\OrganizationEditLayout;
 use App\Orchid\Support\BrandingScreenSupport;
+use App\Services\Audit\AuditService;
 use App\Services\Branding\BrandingAdminService;
 use App\Services\Branding\BrandingPalette;
 use App\Services\Branding\Lettermark;
@@ -187,6 +188,7 @@ class OrganizationEditScreen extends Screen
             'organization.handle_change_policy' => ['nullable', 'string', Rule::in(ProfileChangePolicy::values())],
             'organization.profile_picture_change_policy' => ['nullable', 'string', Rule::in(ProfileChangePolicy::values())],
             'organization.handle_self_service_change_limit' => ['nullable', 'integer', 'between:0,50'],
+            'organization.notifications_suppressed' => ['nullable', 'boolean'],
             'branding.display_name' => ['nullable', 'string', 'max:255'],
             'branding.department_branding_enabled' => ['nullable', 'boolean'],
             'branding.palette' => ['nullable', 'array'],
@@ -264,9 +266,21 @@ class OrganizationEditScreen extends Screen
         }
         unset($attributes['hours_correction_grace_period_days']);
 
+        /*
+         * The NOTIFY-009 suppression switch is a boolean on the form and a
+         * timestamp in the column, because "suppressed since" is the fact an
+         * operator wants and a checkbox has nowhere to keep it. Switching it on
+         * again while it is already on must not move the timestamp, or the
+         * record of when sending actually stopped is lost on every save.
+         */
+        $suppressNotifications = (bool) ($attributes['notifications_suppressed'] ?? false);
+        unset($attributes['notifications_suppressed']);
+
         $wasNew = ! $organization->exists;
 
         $organization->fill($attributes)->save();
+
+        $this->applyNotificationSuppression($organization, $suppressNotifications, $request);
 
         /*
          * Only values that actually moved go to the service: an unchanged save
@@ -333,6 +347,43 @@ class OrganizationEditScreen extends Screen
         Toast::info(__('Organization was saved.'));
 
         return redirect()->route('platform.organizations');
+    }
+
+    /**
+     * Switch this organization's notification email off or back on
+     * (NOTIFY-009), and audit the change.
+     *
+     * Audited because it is a governance decision with a visible consequence
+     * for every member of the organization — nobody hears about an approval,
+     * an addition, or a cancellation while it is on — and because the God Mode
+     * readiness surface reports the state without recording who chose it.
+     */
+    private function applyNotificationSuppression(
+        Organization $organization,
+        bool $suppress,
+        Request $request,
+    ): void {
+        $wasSuppressed = $organization->notificationsSuppressed();
+
+        if ($wasSuppressed === $suppress) {
+            return;
+        }
+
+        $organization->forceFill([
+            'notifications_suppressed_at' => $suppress ? now() : null,
+        ])->save();
+
+        app(AuditService::class)->recordForEntity(
+            entity: $organization,
+            action: $suppress
+                ? 'organization.notifications_suppressed'
+                : 'organization.notifications_resumed',
+            actorUser: $request->user() instanceof User ? $request->user() : null,
+            organizationId: (string) $organization->getKey(),
+            before: ['notifications_suppressed' => $wasSuppressed],
+            after: ['notifications_suppressed' => $suppress],
+            sourceContext: AuditEvent::SOURCE_ORCHID,
+        );
     }
 
     private function configurationActor(Request $request): User

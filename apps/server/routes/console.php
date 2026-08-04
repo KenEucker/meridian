@@ -67,3 +67,14 @@ Schedule::command('meridian:evaluate-lifecycle-thresholds')
 Schedule::command('meridian:calculate-event-credits')
     ->daily()
     ->withoutOverlapping();
+
+// The two NOTIFY-001 notifications no operation causes — a required document
+// acknowledgment outstanding, and a required waiver outstanding or expired —
+// are swept for daily (M18.21). Daily is dense enough for both: a waiver
+// expiration is a date, and a published requirement is not urgent the hour it
+// appears. The sweep is idempotent through the delivery records themselves and
+// refuses quietly on nodes that do not send (NOTIFY-008), so scheduling it
+// unconditionally is safe.
+Schedule::command('meridian:sweep-outstanding-requirement-notifications')
+    ->daily()
+    ->withoutOverlapping();

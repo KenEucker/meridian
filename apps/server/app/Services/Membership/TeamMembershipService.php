@@ -10,6 +10,9 @@ use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Audit\AuditService;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,6 +28,8 @@ class TeamMembershipService
     public function __construct(
         private readonly AuditService $audit,
         private readonly TeamAssignmentAccess $teamAssignmentAccess,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
     ) {}
 
     /**
@@ -117,6 +122,19 @@ class TeamMembershipService
                 after: $this->teamMembershipAuditSnapshot($teamMembership),
                 reason: $reason,
                 sourceContext: $sourceContext,
+            );
+
+            // A later team addition inside a department the staff member
+            // already belongs to, which NOTIFY-001A says gets its own
+            // notification. It cannot be the first-assignment pair: this method
+            // has already refused a staff member with no department membership.
+            $this->notifications->dispatch(
+                type: NotificationType::TeamMembershipAdded,
+                subject: $teamMembership,
+                recipient: $this->notificationRecipients->forStaff($staff),
+                organization: $team->department?->organization,
+                department: $team->department,
+                actor: $assigner,
             );
 
             return $teamMembership->load('team');

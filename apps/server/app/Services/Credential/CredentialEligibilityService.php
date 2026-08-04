@@ -10,6 +10,9 @@ use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\User;
 use App\Models\Waiver;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\NotificationRecipientResolver;
+use App\Services\Notifications\NotificationType;
 use App\Services\Status\StaffStatusService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -33,7 +36,11 @@ class CredentialEligibilityService
 
     public const REASON_MISSING_DATE_OF_BIRTH = 'missing_date_of_birth';
 
-    public function __construct(private readonly StaffStatusService $staffStatus) {}
+    public function __construct(
+        private readonly StaffStatusService $staffStatus,
+        private readonly NotificationDispatcher $notifications,
+        private readonly NotificationRecipientResolver $notificationRecipients,
+    ) {}
 
     /**
      * Evaluate whether the staff member satisfies credential requirements for the event.
@@ -255,6 +262,46 @@ class CredentialEligibilityService
             'changed_by_user_id' => $statusChanged ? $changedBy?->id : $credential->changed_by_user_id,
         ])->save();
 
-        return $credential->refresh();
+        $credential = $credential->refresh();
+
+        if ($statusChanged && $status === EventCredential::STATUS_BLOCKED) {
+            $this->notifyBlocked($credential, $changedBy);
+        }
+
+        return $credential;
+    }
+
+    /**
+     * Tell the staff member their credential is blocked (NOTIFY-001).
+     *
+     * Only on the transition into blocked. Recalculation runs on every shift
+     * signup, removal, waiver completion, and status change, and most runs
+     * leave the credential exactly where it was — notifying on each would mail
+     * somebody daily about a fact that has not changed since the first message,
+     * which is the opposite of NOTIFY-001's "would otherwise have no reason to
+     * check for". A credential that clears and blocks again is a new fact and
+     * notifies again.
+     *
+     * What the message may say about *why* is decided in the composer, because
+     * NOTIFY-002 forbids disclosing Do Not Staff and one of the block reasons
+     * is exactly that.
+     */
+    private function notifyBlocked(EventCredential $credential, ?User $changedBy): void
+    {
+        $credential->loadMissing(['event.organization', 'staff']);
+        $staff = $credential->staff;
+
+        if (! $staff instanceof Staff) {
+            return;
+        }
+
+        $this->notifications->dispatch(
+            type: NotificationType::CredentialEligibilityBlocked,
+            subject: $credential,
+            recipient: $this->notificationRecipients->forStaff($staff),
+            organization: $credential->event?->organization,
+            event: $credential->event,
+            actor: $changedBy,
+        );
     }
 }
