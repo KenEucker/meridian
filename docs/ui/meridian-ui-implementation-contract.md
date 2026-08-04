@@ -1187,6 +1187,7 @@ Route names are implementation targets and may be adapted to Laravel conventions
 
 | Screen ID | Route name | Purpose | Access |
 |---|---|---|---|
+| `public.marketing` (server-rendered) | `client.app` (deployment root) and `public.marketing.landing` | Platform marketing surface with the organization interest form, Blade (PUBLIC-001 through PUBLIC-006) | Public |
 | `public.participate` | `public.participate` | Organization participation page: who the organization is, what it is recruiting for, and the application form | Public |
 | `public.apply` | `public.apply` | Event application form reached from a shared link | Public |
 | `public.apply` (server-rendered) | `public.events.apply` | Staff event application, Blade form | Public or authenticated applicant |
@@ -1195,6 +1196,8 @@ Route names are implementation targets and may be adapted to Laravel conventions
 | `auth.code-entry` | `auth.code.entry` | In-application magic-link code entry, so a client completes login without leaving the application | Public |
 | `auth.provider-callback` | framework route | External provider callback | Public/system |
 | `signup.policy-acknowledgment` | `signup.documents.acknowledge` | Required policy/procedure acknowledgment during signup | Applicant/authenticated user with server connection |
+
+`public.marketing` is the deployment root, and the root answers two visitors: a request holding no Meridian session is served the marketing surface, and a browser holding one is served the client application it came for, since PUBLIC-001 describes the surface as being for organizations that do not yet use Meridian. `public.marketing.landing` serves the same page at its own address for a signed-in reader. Neither is served by an on-site node or by a node locked to an event (PUBLIC-006). The landing page's feature tour, screenshots, and offerings sections (PUBLIC-007 through PUBLIC-009) arrive with Milestone 20.
 
 In a client application, `auth.magic-link-sent` is a state of `auth.code-entry` rather than a screen of its own. Both belong to one exchange the person completes in a single sitting, and what the confirmation has to say — which address the code went to, and how long it lasts — is the heading of the screen where the code is typed. The screen stands separately in the browser flow, where the code is not entered in the application at all.
 

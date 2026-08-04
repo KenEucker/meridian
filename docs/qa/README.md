@@ -117,6 +117,18 @@ rejection, deferral, and rescind — stays in `QA-APPLY-01`. This script is the
 applicant's half, and it is the only one where the person under test has no
 Meridian account at all.
 
+## Alpha 1 Public marketing surface script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-PUBLIC-02-marketing-surface-and-organization-interest.md`](QA-PUBLIC-02-marketing-surface-and-organization-interest.md) | The public marketing surface at the deployment root: Meridian identity with no organization branding profile resolved, the client application still served at the root to a signed-in browser, the organization interest form and the inquiry it creates, no organization/user/staff record created by it, God Mode review with no create-organization path, the per-address and per-client submission limits, the hidden-field and timing traps with no challenge presented, the submission/discard/review audit trail, and the on-site and event-locked nodes that serve none of it | M18.23 |
+
+The landing page itself — the feature tour, the Northwood screenshots, and the
+three platform offerings (PUBLIC-007 through PUBLIC-009) — is Milestone 20's,
+and its coverage arrives with it as `QA-PUBLIC-01`. That ID is left free here
+because M20.6 names the file it belongs to; this script is numbered second
+because the surface it covers was built first.
+
 ## Alpha 1 Department self-administration script
 
 | ID | Coverage | Owning task |

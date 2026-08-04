@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -9,6 +11,8 @@ use Tests\TestCase;
 
 class ClientAppRouteTest extends TestCase
 {
+    use RefreshDatabase;
+
     private ?string $clientDistPath = null;
 
     protected function tearDown(): void
@@ -20,11 +24,17 @@ class ClientAppRouteTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_root_serves_the_shared_vue_client_index(): void
+    /**
+     * The root answers two visitors differently since M18.23: a signed-out one
+     * gets the marketing surface PUBLIC-001 puts there, and a browser holding a
+     * session gets the client it came for. The marketing half is covered by
+     * `MarketingSurfaceTest`; this is the half that has to keep working.
+     */
+    public function test_root_serves_the_shared_vue_client_index_to_a_signed_in_browser(): void
     {
         $this->installClientDist('<!doctype html><div id="app">Shared Vue client</div>');
 
-        $response = $this->get('/');
+        $response = $this->actingAs(User::factory()->create())->get('/');
 
         $response->assertOk();
         $this->assertFileResponseContains($response, 'Shared Vue client');

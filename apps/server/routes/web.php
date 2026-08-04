@@ -13,12 +13,54 @@ use App\Http\Controllers\ClientAppController;
 use App\Http\Controllers\Documents\DocumentExportController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
+use App\Http\Controllers\Marketing\MarketingSurfaceController;
+use App\Http\Controllers\Marketing\OrganizationInterestController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use App\Http\Controllers\Staffing\StaffProfileChangeRequestController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', ClientAppController::class)->name('client.app');
+/*
+ * The deployment root (M18.23; PUBLIC-001, PUBLIC-006).
+ *
+ * One address, two answers. A visitor holding no session gets the public
+ * marketing surface — the page PUBLIC-001 puts here for "organizations that do
+ * not yet use it" — and a browser that already holds a Meridian session gets
+ * the client application it came for. A node that does not serve the marketing
+ * surface at all, meaning an on-site node or a node locked to an event, serves
+ * the client application to everybody, which is what those nodes are deployed
+ * to do.
+ *
+ * The route keeps its `client.app` name because the client is still what it
+ * resolves to for every signed-in caller, and links elsewhere in the
+ * application mean the product when they point here.
+ */
+Route::get('/', MarketingSurfaceController::class)->name('client.app');
+
+/*
+ * The marketing surface at an address of its own, and the organization interest
+ * form it carries (PUBLIC-002 through PUBLIC-005).
+ *
+ * `/platform` exists so the page is reachable by a signed-in user who followed
+ * a link to it, and so the form has somewhere to return a validation error to
+ * that does not answer differently depending on who is asking. Both refuse on a
+ * node that does not serve the surface, and the refusal is a 404: there, the
+ * page is not there rather than withheld.
+ *
+ * The submission route carries an ordinary route throttle as well as the two
+ * PUBLIC-005 counters inside `OrganizationInterestThrottle`. The counters are
+ * the limits the requirement asks for, per address and per client per hour; the
+ * route throttle is the cheaper ceiling that stops a flood before it reaches
+ * validation.
+ */
+Route::get('platform', [MarketingSurfaceController::class, 'show'])
+    ->name('public.marketing.landing');
+Route::post('platform/interest', [OrganizationInterestController::class, 'store'])
+    ->middleware('throttle:20,1')
+    ->name('public.marketing.interest.store');
+Route::get('platform/interest/received', [OrganizationInterestController::class, 'received'])
+    ->name('public.marketing.interest.received');
+
 Route::get('assets/{clientAssetPath}', [ClientAppController::class, 'asset'])
     ->where('clientAssetPath', '.*')
     ->name('client.assets');

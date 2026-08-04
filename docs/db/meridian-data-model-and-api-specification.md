@@ -3961,6 +3961,55 @@ This deliberately differs from `insight_metric_definitions` in 10.19, which is r
 
 ---
 
+### 10.22 Organization Inquiries
+
+An organization that wrote in from the public marketing surface (PUBLIC-002, PUBLIC-003). It is a message, not a tenant.
+
+#### `organization_inquiries`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | |
+| `organization_name` | string | as typed; no organization record exists for it |
+| `contact_name` | string | |
+| `contact_email` | string | lowercased on write; unverified — nobody proved control of it to submit the form |
+| `description` | text | free text: what the organization runs |
+| `status` | string | `new`, `reviewed`, `closed` |
+| `review_notes` | text, nullable | internal; the contact never sees it |
+| `reviewed_by_user_id` | uuid, nullable | the God Mode operator who last recorded a decision |
+| `reviewed_at` | timestamp, nullable | |
+| `submitted_at` | timestamp | |
+
+The table carries no `organization_id`, no `user_id`, and no staff reference, and it never gains one. PUBLIC-003 puts organization, user, staff, and operational records out of reach of a public form, and PUBLIC-004 keeps organization creation a God Mode action. An organization created after a conversation that started here is created the ordinary way; linking the two rows would invite a create-from-inquiry path that PUBLIC-004 does not want.
+
+No IP address is stored. Rate limiting bounds submission and does it in the cache against a hashed client key, so the deterrent does not require keeping a log of who visited a marketing page.
+
+#### Surfaces
+
+- `GET /` — the marketing surface, for a request holding no Meridian session. A request that holds one is served the client application, because PUBLIC-001 describes the surface as being for organizations that do not yet use Meridian.
+- `GET /platform` — the same surface at an address of its own, so it is reachable by a signed-in user and so the interest form has a stable place to return a validation error to.
+- `POST /platform/interest` — an organization interest submission.
+- `GET /platform/interest/received` — the confirmation, flashed for one render.
+- `platform.organization-inquiries` and `platform.organization-inquiries.show` — God Mode review (PUBLIC-004), behind the `platform.organization-inquiries` capability. There is no create-organization action on either screen.
+
+Server-rendered rather than an API surface, for the same reason the applicant portal is: the reader holds no bearer token and has no account to issue one against. The pages carry Meridian identity and resolve no organization branding profile (PUBLIC-001, BRAND-003).
+
+#### Node scope (PUBLIC-006)
+
+The marketing surface is not served by an on-site node, and is not served by any node locked to an event. On those nodes the root address serves the client application and the marketing routes are a 404 — there, the page is not there rather than withheld.
+
+#### Automated-submission protection and audit (PUBLIC-005)
+
+- Two rate limits, per contact address and per submitting client, per hour, configurable and falling back to documented defaults rather than to no limit. Both are counted around every submission, including the ones the traps discard.
+- A hidden field no visitor can see. A submission that fills it is discarded, and the response is the one a real submission gets.
+- A floor on how fast the form can come back. A submission that trips it is returned to the visitor with what they wrote still in it, rather than discarded: timing catches real people occasionally, and PUBLIC-005 asks for protection that does not block legitimate use. Configurable to zero.
+- No challenge of any kind is presented to the submitter.
+- Submission is audited as `organization_inquiry.submitted` against the entity type `organization_inquiry`, with no organization scope and no actor, recording the organization name, contact name, contact address, and status. The free-text description is not copied into the audit payload; it lives on the row the entry names.
+- A discarded submission is audited as `organization_inquiry.discarded` with the reason and nothing else, so an operator can tell a trap that is misfiring from a quiet week.
+- A console decision is audited as `organization_inquiry.reviewed`, with the actor and the before and after status and notes.
+
+---
+
 ## 11. Policies, Procedures, and Fragments
 
 Policies and procedures are included in Alpha 1 and should be represented as first-class data modules.

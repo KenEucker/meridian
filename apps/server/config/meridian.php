@@ -269,6 +269,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public Marketing Surface
+    |--------------------------------------------------------------------------
+    |
+    | The organization interest form on the deployment-root marketing surface
+    | (PUBLIC-002 through PUBLIC-005).
+    |
+    | The two submission limits are PUBLIC-005 taken literally: per contact
+    | address, so one address cannot fill the console with the same inquiry, and
+    | per submitting client, so one machine cannot submit under a different
+    | address each time. Both are per hour.
+    |
+    | `interest_minimum_seconds_on_form` is the floor a submission has to clear
+    | between being handed the form and sending it. It is the weaker of the two
+    | automated-submission traps and the only one that can catch a real person,
+    | so a submission that trips it is returned to the visitor with what they
+    | wrote still in it rather than discarded. Setting it to zero switches the
+    | timing rule off, for a deployment that does its bot filtering elsewhere.
+    |
+    */
+
+    'marketing' => [
+        'interest_submissions_per_email_per_hour' => (int) env('MERIDIAN_ORGANIZATION_INTEREST_PER_EMAIL_PER_HOUR', 3),
+        'interest_submissions_per_client_per_hour' => (int) env('MERIDIAN_ORGANIZATION_INTEREST_PER_CLIENT_PER_HOUR', 10),
+        'interest_minimum_seconds_on_form' => (int) env('MERIDIAN_ORGANIZATION_INTEREST_MINIMUM_SECONDS', 3),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | API Bearer Tokens
     |--------------------------------------------------------------------------
     |

@@ -30,6 +30,8 @@ use App\Orchid\Screens\Incident\IncidentTypeEditScreen;
 use App\Orchid\Screens\Incident\IncidentTypeListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
 use App\Orchid\Screens\Organization\OrganizationEditScreen;
+use App\Orchid\Screens\Organization\OrganizationInquiryDetailScreen;
+use App\Orchid\Screens\Organization\OrganizationInquiryListScreen;
 use App\Orchid\Screens\Organization\OrganizationListScreen;
 use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\PlatformScreen;
@@ -171,6 +173,26 @@ Route::screen('organizations', OrganizationListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Organizations'), route('platform.organizations')));
+
+/*
+ * Platform > Operations > Organization Inquiries (M18.23; PUBLIC-004).
+ *
+ * Filed beside Organizations because that is where an operator goes next when
+ * they decide to act on one — and no further than beside it: there is no path
+ * from an inquiry to a created organization, because PUBLIC-004 keeps creation
+ * a deliberate act rather than a consequence of reading a message.
+ */
+Route::screen('organization-inquiries/{inquiry}', OrganizationInquiryDetailScreen::class)
+    ->name('platform.organization-inquiries.show')
+    ->breadcrumbs(fn (Trail $trail, $inquiry) => $trail
+        ->parent('platform.organization-inquiries')
+        ->push($inquiry->organization_name, route('platform.organization-inquiries.show', $inquiry)));
+
+Route::screen('organization-inquiries', OrganizationInquiryListScreen::class)
+    ->name('platform.organization-inquiries')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Organization Inquiries'), route('platform.organization-inquiries')));
 
 // Platform > Operations > Events > Event
 Route::screen('events/{event}/edit', EventEditScreen::class)
