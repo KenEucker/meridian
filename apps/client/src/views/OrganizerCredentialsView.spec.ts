@@ -308,8 +308,8 @@ describe("the credential eligibility export entry point", () => {
     // link that comes back (CLIENT-019).
     expect(exportCalls).toHaveLength(1);
     expect(exportCalls[0]?.method).toBe("POST");
-    // No narrowing is sent: the scope is the caller's own, and a department
-    // picker is M18.26's.
+    // No narrowing is sent: the scope is the caller's own, and the department
+    // picker belongs to `organizer.exports`.
     expect(exportCalls[0]?.body).toEqual({});
 
     expect(opened).toEqual([ISSUED_URL]);
@@ -339,7 +339,7 @@ describe("the credential eligibility export entry point", () => {
   it("offers the one export this page is about and none of the other four", async () => {
     // M18.25 gave the remaining Alpha 1 exports descriptors and download
     // paths, and this organizer holds all five capabilities. They belong to the
-    // reporting surfaces of M18.26; a credentials page offering a credits
+    // export surfaces of M18.26; a credentials page offering a credits
     // ledger is a page that stopped being about credentials.
     actAsOrganizer();
     stubNodeWithCredentials([]);

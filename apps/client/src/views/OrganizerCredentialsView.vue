@@ -41,7 +41,7 @@ import { sessionOrganizationLabel } from "@/session/sessionContext";
  * so "every export this caller may run" is now five entries rather than one.
  * This page is not where they belong: it is a page about event credentials, and
  * the export it offers is the one that reads those records. The other four are
- * offered by the reporting surfaces of M18.26. A caller holding, say, hours
+ * offered by the export surfaces of M18.26. A caller holding, say, hours
  * worked and not credential eligibility therefore has no export featureset here
  * at all rather than a page of exports about something else.
  */
@@ -96,8 +96,10 @@ const lede = computed(() => {
  *
  * The endpoint comes off the descriptor that was rendered, so the button runs
  * the export it is labelled with. No `department_id` is sent: the caller's own
- * scope is what the endpoint resolves by default, and narrowing is a control the
- * reporting surfaces of M18.26 add along with the department picker to drive it.
+ * scope is what the endpoint resolves by default, and narrowing belongs to
+ * `organizer.exports`, which carries the department picker that drives it. This
+ * page is about one event's credentials and exports them at the scope the caller
+ * already holds.
  */
 async function runExport(descriptor: ReportingExportDescriptor): Promise<void> {
   const event = authority.value;

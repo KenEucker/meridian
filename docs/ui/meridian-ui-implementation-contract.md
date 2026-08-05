@@ -1259,7 +1259,7 @@ Organization and event selection are connected-only. A client resolves its conte
 | `department.equipment` | `events.departments.equipment.index` | View equipment settings/inventory | Department logistics/administration as permitted; God Mode repair tooling is read-only unless an inventory task grants edit |
 | `department.credits` | `events.departments.credits.index` | Credit review/export | Department lead / organizer as permitted |
 | `department.documents` | `events.departments.documents.index` | Department policy/procedure library and maintainer entry | Department member/lead as permitted |
-| `department.reports` | `events.departments.reports.index` | Department-scoped reporting: the Alpha 1 exports the actor may run, narrowed to this department (`REPORT-014`) | Department roles carrying an export capability for the department |
+| `department.exports` | `events.departments.exports.index` | Department-scoped exports: the Alpha 1 reporting exports the actor may run, narrowed to this department (`REPORT-014`) | Department roles carrying an export capability for the department |
 
 ### 12.5 Department Operations Screens
 
@@ -1356,7 +1356,7 @@ shifts are distinguished, and data freshness/offline state is visible.
 | `organizer.events` | `organizer.events.index` | Event administration | Organizer |
 | `organizer.departments` | `organizer.departments.index` | Department administration | Organizer |
 | `organizer.credentials` | `organizer.credentials.index` | Event credential administration | Organizer |
-| `organizer.reports` | `organizer.reports.index` | Organization/event-scoped reporting: the Alpha 1 exports the actor may run across the event, with optional narrowing to one department (`REPORT-014`) | Organizer, Lead Organizer |
+| `organizer.exports` | `organizer.exports.index` | Organization/event-scoped exports: the Alpha 1 reporting exports the actor may run across the event, with optional narrowing to one department (`REPORT-014`) | Organizer, Lead Organizer |
 | `organizer.credit-policy` | `organizer.credit-policy.edit` | Credit policy configuration | Organizer |
 | `organizer.policy-documents` | `organizer.policy-documents.index` | Organization policy document administration | Organizer |
 | `organizer.procedure-documents` | `organizer.procedure-documents.index` | Organization procedure document administration | Organizer |
@@ -1892,7 +1892,7 @@ Documents and fragments may be scoped to organization, department, or team.
 
 Policy/procedure export controls may offer Markdown and PDF export for authorized users. Exports render fragment text inline and include document type, title, version, scope, and export timestamp.
 
-The reporting surfaces `organizer.reports` and `department.reports` offer the Alpha 1 reporting exports (`REPORT-001` through `REPORT-005`). Each offers only the exports the actor is authorized to run — an export they may not run is absent, not disabled — and states the scope, the columns, and the excluded fields before generation, so an organizer reads that emergency contacts are excluded without opening the file (`REPORT-010`, `REPORT-014`). A column included only under a rule is stated as that rule rather than as a column, because whether it is included is the server's answer (`REPORT-009`). Reporting exports are server-generated and online-only: with no node reachable the controls are refused where they stand rather than queued.
+The export surfaces `organizer.exports` and `department.exports` offer the Alpha 1 reporting exports (`REPORT-001` through `REPORT-005`). Both are titled Exports rather than Reports: every entry on them is a file the server generates and hands over, and section 20A.1 of the operating guide reserves "report" for a fixed formal output somebody reads. Each offers only the exports the actor is authorized to run — an export they may not run is absent, not disabled — and states the scope, the columns, and the excluded fields before generation, so an organizer reads that emergency contacts are excluded without opening the file (`REPORT-010`, `REPORT-014`). A column included only under a rule is stated as that rule rather than as a column, because whether it is included is the server's answer (`REPORT-009`). Reporting exports are server-generated and online-only: with no node reachable the controls are refused where they stand rather than queued.
 
 ---
 

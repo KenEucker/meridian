@@ -160,7 +160,7 @@ export const ROLE_SHIFT_LEAD = "shift_lead";
  * decides that from the role — `ReportingExportAccess::ORGANIZATION_WIDE_ROLES`
  * is these two codes — and it decides it again when the file is served. What
  * the client does with the same answer is choose which of REPORT-014's two
- * reporting surfaces a person's standing belongs to, so each states a scope it
+ * export surfaces a person's standing belongs to, so each states a scope it
  * can keep: the organizer surface runs at the caller's whole authority, and the
  * department surface names its department in every request it makes.
  */

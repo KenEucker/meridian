@@ -6,12 +6,12 @@ import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import { departmentReportingExportAuthority } from "@/reporting/reportingExports";
 
 /**
- * `department.reports` — the department-scoped reporting surface (M18.26;
+ * `department.exports` — the department-scoped export surface (M18.26;
  * REPORT-014, REPORT-015; REPORT-002 through REPORT-005, REPORT-007 through
  * REPORT-009; CLIENT-019, CLIENT-020; UI contract 12.4).
  *
  * The department lead's half of REPORT-014. Same five exports as
- * `organizer.reports` and the same two-step download; what differs is the scope,
+ * `organizer.exports` and the same two-step download; what differs is the scope,
  * and the difference is in the request rather than in a sentence: every export
  * run from here names this department, so the file that arrives is the file the
  * page said it would be. The node refuses a department outside the caller's own
@@ -58,8 +58,8 @@ const scopeStatement = computed(() => {
 
 <template>
   <WorkflowPageShell
-    heading-id="department-reports-heading"
-    title="Reports"
+    heading-id="department-exports-heading"
+    title="Exports"
     :eyebrow="eyebrow"
     :lede="lede"
   >
@@ -68,10 +68,10 @@ const scopeStatement = computed(() => {
       accepted here: it reaches every department, and a page that promised one
       would be describing a file the node was never asked for.
     -->
-    <p v-if="!authority" class="department-reports__restricted" role="status">
-      Department reporting requires a department role carrying an export
-      capability here, for an event this device is working in. An organizer
-      exports the whole event from the organizer Reports page.
+    <p v-if="!authority" class="department-exports__restricted" role="status">
+      Department exports require a department role carrying an export capability
+      here, for an event this device is working in. An organizer exports the
+      whole event from the organizer Exports page.
     </p>
 
     <ReportingExportSection
@@ -84,7 +84,7 @@ const scopeStatement = computed(() => {
 </template>
 
 <style scoped>
-.department-reports__restricted {
+.department-exports__restricted {
   margin: 0;
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);

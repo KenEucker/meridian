@@ -1,4 +1,4 @@
-// The two reporting surfaces against a stubbed node (M18.26; REPORT-014,
+// The two export surfaces against a stubbed node (M18.26; REPORT-014,
 // REPORT-015; REPORT-006 through REPORT-010; CLIENT-005, CLIENT-019,
 // CLIENT-020, CLIENT-024).
 //
@@ -34,8 +34,8 @@ import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
 } from "@/session/sessionAccess";
-import DepartmentReportsView from "@/views/DepartmentReportsView.vue";
-import OrganizerReportsView from "@/views/OrganizerReportsView.vue";
+import DepartmentExportsView from "@/views/DepartmentExportsView.vue";
+import OrganizerExportsView from "@/views/OrganizerExportsView.vue";
 
 const EVENT_ID = "11111111-1111-4111-8111-111111111111";
 const GATE_DEPARTMENT_ID = LOCAL_FIELD_DEPARTMENT_IDS.gate;
@@ -179,13 +179,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mountOrganizerReports(): Promise<VueWrapper> {
+async function mountOrganizerExports(): Promise<VueWrapper> {
   const router = createRouter({ history: createWebHistory(), routes });
 
-  await router.push({ name: "organizer.reports.index" });
+  await router.push({ name: "organizer.exports.index" });
   await router.isReady();
 
-  const wrapper = mount(OrganizerReportsView, {
+  const wrapper = mount(OrganizerExportsView, {
     global: { plugins: [router] },
   }) as VueWrapper;
 
@@ -202,18 +202,18 @@ async function mountOrganizerReports(): Promise<VueWrapper> {
  * router's `beforeEnter` recording the route's department is half of what makes
  * a deep link land in the right one.
  */
-async function mountDepartmentReports(
+async function mountDepartmentExports(
   departmentId: string = RANGERS_DEPARTMENT_ID,
 ): Promise<VueWrapper> {
   const router = createRouter({ history: createWebHistory(), routes });
 
   await router.push({
-    name: "events.departments.reports.index",
+    name: "events.departments.exports.index",
     params: { eventId: EVENT_ID, departmentId },
   });
   await router.isReady();
 
-  const wrapper = mount(DepartmentReportsView, {
+  const wrapper = mount(DepartmentExportsView, {
     global: { plugins: [router] },
   }) as VueWrapper;
 
@@ -235,12 +235,12 @@ function exportButton(wrapper: VueWrapper, label: string) {
     .find((button) => button.attributes("aria-label") === `Export ${label}`);
 }
 
-describe("the organizer reporting surface", () => {
+describe("the organizer export surface", () => {
   it("offers every Alpha 1 export and states each one before it is generated", async () => {
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
     stubNode();
 
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
     const text = wrapper.text();
 
     // REPORT-001 through REPORT-005, all five reachable from one surface, which
@@ -274,7 +274,7 @@ describe("the organizer reporting surface", () => {
 
     const opened = recordNavigations();
     const calls = stubNode();
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     await exportButton(wrapper, "Hours worked")!.trigger("click");
     await flushPromises();
@@ -298,7 +298,7 @@ describe("the organizer reporting surface", () => {
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
 
     const calls = stubNode();
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     await exportButton(wrapper, "Credits earned")!.trigger("click");
     await flushPromises();
@@ -313,9 +313,9 @@ describe("the organizer reporting surface", () => {
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
 
     const calls = stubNode();
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
-    await wrapper.find("#reporting-department").setValue(RANGERS_DEPARTMENT_ID);
+    await wrapper.find("#export-department").setValue(RANGERS_DEPARTMENT_ID);
     await flushPromises();
 
     // The scope statement moves with the picker, so what the file will cover is
@@ -349,7 +349,7 @@ describe("the organizer reporting surface", () => {
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
     stubNode();
 
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     expect(
       exportButtons(wrapper).map((button) => button.attributes("aria-label")),
@@ -364,11 +364,11 @@ describe("the organizer reporting surface", () => {
     selectSessionDepartment(RANGERS_DEPARTMENT_ID);
     stubNode();
 
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     expect(exportButtons(wrapper)).toEqual([]);
     expect(wrapper.text()).toContain(
-      "Event-wide reporting requires organizer authority",
+      "Event-wide exports require organizer authority",
     );
   });
 
@@ -388,7 +388,7 @@ describe("the organizer reporting surface", () => {
         : null,
     );
 
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     await exportButton(wrapper, "Hours worked")!.trigger("click");
     await flushPromises();
@@ -406,7 +406,7 @@ describe("the organizer reporting surface", () => {
     setNavigatorOnline(false);
 
     const calls = stubNode();
-    const wrapper = await mountOrganizerReports();
+    const wrapper = await mountOrganizerExports();
 
     expect(wrapper.text()).toContain(
       "Exports are generated by the node and require a server connection.",
@@ -425,10 +425,10 @@ describe("the organizer reporting surface", () => {
   });
 });
 
-describe("the department reporting surface", () => {
+describe("the department export surface", () => {
   it("names its department in every export it runs", async () => {
     const calls = stubNode();
-    const wrapper = await mountDepartmentReports();
+    const wrapper = await mountDepartmentExports();
 
     expect(wrapper.text()).toContain("Rangers only, within Local Field Event");
 
@@ -446,7 +446,7 @@ describe("the department reporting surface", () => {
   it("states the exclusions the export carries rather than the ones the role would allow", async () => {
     stubNode();
 
-    const wrapper = await mountDepartmentReports();
+    const wrapper = await mountDepartmentExports();
     const text = wrapper.text();
 
     // REPORT-008 holds for a department lead too: the roster excludes phone
@@ -474,7 +474,7 @@ describe("the department reporting surface", () => {
     );
     stubNode();
 
-    const wrapper = await mountDepartmentReports();
+    const wrapper = await mountDepartmentExports();
 
     expect(
       exportButtons(wrapper).map((button) => button.attributes("aria-label")),
@@ -485,20 +485,20 @@ describe("the department reporting surface", () => {
   it("offers nothing to an organizer, whose authority is not this department's", async () => {
     stubNode();
 
-    const wrapper = await mountDepartmentReports(
+    const wrapper = await mountDepartmentExports(
       LOCAL_FIELD_DEPARTMENT_IDS.organizer,
     );
 
     expect(exportButtons(wrapper)).toEqual([]);
     expect(wrapper.text()).toContain(
-      "Department reporting requires a department role carrying an export capability here",
+      "Department exports require a department role carrying an export capability here",
     );
   });
 
   it("offers nothing in a department the user holds no export grant in", async () => {
     stubNode();
 
-    const wrapper = await mountDepartmentReports(GATE_DEPARTMENT_ID);
+    const wrapper = await mountDepartmentExports(GATE_DEPARTMENT_ID);
 
     expect(exportButtons(wrapper)).toEqual([]);
   });
