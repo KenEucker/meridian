@@ -19,25 +19,24 @@ at. `QA-CRED-01` section G, `QA-SHIFT-01`, `QA-STAFF-01`, and `QA-SLB-01`
 section H each verify one export beside the domain that produces it; this script
 verifies all five together, and is the one that answers the Milestone 13 QA gate.
 
-Exports are server-generated and online-only in Alpha 1. No product UI entry
-point is required for this script: reporting surfaces (`REPORT-014`) are their
-own requirement and remain deferred, so the checks below use the documented
-domain services and the HTTP download endpoints. M16.22 added the one entry
-point in the client — `organizer.credentials`, reached from Credentials on the
-home directory's Organization pages — which runs the credential eligibility
-export and nothing else; a reviewer who wants to see that path end to end has it
-in `QA-CRED-01` section G, and the remaining four exports have no surface until
-M18.26.
+Exports are server-generated and online-only in Alpha 1. Sections A through I
+use the documented domain services and the HTTP download endpoints, so they can
+be run without a browser at all. Section J adds the product surfaces
+`REPORT-014` asks for, which M18.26 built: `organizer.reports` for the
+organization/event scope and `department.reports` for the department scope. The
+older single entry point, `organizer.credentials`, keeps the credential
+eligibility export it is a page for; that path end to end is in `QA-CRED-01`
+section G.
 
 The short-lived download URL half of `REPORT-015` covered credential eligibility
 alone until M18.25 extended it to all five. Section I below walks that path for
 the four it added, which is the half a client holding a bearer token rather than
-a session has to use, and the half M18.26's surfaces will run every export
-through.
+a session has to use, and the half every export in section J runs through.
 
 ## Requirements covered
 
 - `REPORT-001` through `REPORT-005`: the five exports.
+- `REPORT-014`: the organizer and department reporting surfaces, each offering only the exports the actor may run and stating the scope and the excluded fields before generation.
 - `REPORT-015`, `CLIENT-019`, `CLIENT-020`: every export retrieved through a short-lived scoped download URL, and audited.
 - `REPORT-006`, `REPORT-007`: organizer event-wide scope and department-role department scope.
 - `REPORT-008`: shift rosters exclude phone numbers and emergency contacts.
@@ -48,14 +47,15 @@ through.
 - Technical spec sections 11A.6 and 22.2 (short-lived downloads, CSV import/export).
 - Data/API spec sections 5.7, 8, 10.10, 10.11, and 10.12.
 - Development process section 7.10: export changes state actor permissions, scope rules, included columns, excluded sensitive fields, sample file, and test fixture.
-- Meridian Alpha 1 tasks M13.1 through M13.6, M13.9, M16.12, and M18.25.
+- Meridian Alpha 1 tasks M13.1 through M13.6, M13.9, M16.12, M18.25, and M18.26.
 
 ## Environment
 
 - A dedicated development/QA database. The setup below runs `migrate:fresh --seed` and must not be used against shared or valuable data.
 - Repository dependencies installed, with shell access from `apps/server`.
 - Laravel available at `http://127.0.0.1:8000` for the optional HTTP section.
-- No reporting UI is required; commands below use `php artisan tinker`.
+- Sections A through I need no reporting UI; commands there use `php artisan tinker`.
+- Section J needs the client running at `http://localhost:5173` and sign-in per `QA-AUTH-01`. Server CORS allows that origin only, so a client on another port fails every request after preflight.
 - Files are written to `storage/app/` so they can be opened in a spreadsheet and attached as evidence.
 
 ## Personas
@@ -197,6 +197,33 @@ use the Emberfall event id as `$EVENT`.
 24. Re-run the audit review in step 18 and read the entries the downloads in
     this section produced.
 
+### J. The reporting surfaces (M18.26)
+
+This section is run in the client. Every step is a normal sign-in and a normal
+click; nothing here is set up from `tinker`.
+
+25. Sign in as Olive Organizer and open Home. Read the Organization pages
+    section, then open **Reports**.
+26. Read one export entry end to end without downloading anything: its
+    description, its Scope, its Excluded fields, and its Columns. Read the
+    **Sometimes included** line on the staff contact list entry.
+27. Run the hours worked export from that page and read the message that
+    follows.
+28. Set the Departments control to `Rangers`, re-read the Scope line on any
+    entry, and run the staff contact export. Open the file that arrives.
+29. Sign out, sign in as Dana Departmentlead, and open Home. Look for Reports
+    under Organization pages, then open **Reports** under Department pages.
+30. Run the shift roster export from Dana's page and open the file. Then edit
+    the address bar to the Gate department's `/events/{event}/departments/{Gate
+    id}/reports` and read what the page offers.
+31. Sign in as Ira Ineligible and look for either Reports entry on Home. Then
+    open `/organizer/reports` by address.
+32. Back as Dana, disconnect the device from the network — airplane mode, or
+    stopping `php artisan serve` — reload the department Reports page, and try
+    to run an export.
+33. Review the audit entries the downloads in this section produced, using the
+    query in step 18.
+
 ## Expected results
 
 - Step 4: the credit calculation reports at least one entry created; an event holding an unfrozen hours record is refused outright rather than partially credited.
@@ -220,6 +247,15 @@ use the Emberfall event id as `$EVENT`.
 - Step 22: Dana's file carries the `emergency_contact_name` and `emergency_contact_phone` columns; Olive's narrowed file does not carry them at all, and both carry `staff_phone`. Narrowing changed which rows were exported and not the authority Olive came by (`REPORT-010`).
 - Step 23: the URL was issued before the grant was revoked and still returns HTTP 403 when opened afterwards. Authorization is resolved again when the file is served rather than trusted from issuance.
 - Step 24: each downloaded file produced one audit entry naming the user the URL was issued to — not an anonymous navigation — with the same `scope`, `department_ids`, and `row_count` fields a direct download records.
+- Step 25: Home lists **Reports** under Organization pages and lists no Reports entry under Department pages. The page names the event and the role it was reached by.
+- Step 26: every entry states what its rows are, its scope, its excluded fields, and its columns before anything is generated (`REPORT-014`). Four entries name emergency contacts among the excluded fields. The staff contact list entry states the emergency contact columns as a condition — included only when every exported row belongs to a department the caller holds a department role in — rather than promising them (`REPORT-009`, `REPORT-010`).
+- Step 27: the file downloads and the page says so, naming the moment the link expires. No credential appears in the link (`CLIENT-019`).
+- Step 28: the Scope line changes to name Rangers. The file that arrives carries Rangers rows only and does **not** carry the emergency contact columns — narrowing changed which rows were exported and not the authority Olive came by (`REPORT-010`).
+- Step 29: Dana's Home lists **Reports** under Department pages and lists none under Organization pages. Her page names Rangers and states that every export from it is scoped to Rangers.
+- Step 30: the file carries Rangers rows only, and the roster carries no phone number and no emergency contact (`REPORT-008`). The Gate address renders a page offering no export at all rather than an empty file or a disabled button (`CLIENT-005`).
+- Step 31: Ira sees no Reports entry anywhere on Home, and the organizer address renders the page's refusal sentence with no export controls on it.
+- Step 32: the page states that exports require a server connection and are not queued for later, and every export control is unavailable. Nothing is queued in the outbox for replay, because an export is a file rather than a command.
+- Step 33: every export run from a surface produced an audit entry with the acting user, the event, the scope, the department ids, and the row count — the same shape a `tinker` export produced in step 18. The exports narrowed in steps 28 and 30 record a `department` scope naming that department.
 
 ## Evidence to capture
 
@@ -231,6 +267,8 @@ use the Emberfall event id as `$EVENT`.
 - Transcript of the two credits files from step 13, before and after the policy rename.
 - Audit entries for `event_credential_eligibility.exported`, `event_shift_roster.exported`, `event_staff_contact.exported`, `event_hours_worked.exported`, and `event_credits_earned.exported`.
 - The four issued URLs from step 19 with their `expires_at` values, one file saved through a signed URL with no session, and the transcripts of the refusals in steps 21 and 23.
+- Screenshots of both reporting surfaces showing the stated scope, excluded fields, and columns, and of Dana's Home and Olive's Home showing which Reports entry each is offered.
+- Screenshot of the Gate department Reports page offering no export, and of the offline state in step 32.
 
 ## Failure notes
 
@@ -243,3 +281,6 @@ use the Emberfall event id as `$EVENT`.
 - Record any successful export that produced no audit entry, or any refused export that produced one.
 - Record any issued URL that still serves a file after its expiry, after its signature is edited, or after the role that earned it is revoked.
 - Record any download URL that carries a bearer token, a session cookie, or any credential beyond its signature.
+- Record any reporting surface offering an export the actor cannot run, whether it is offered as a disabled control or as one that fails when clicked.
+- Record any surface whose stated scope, columns, or excluded fields disagree with the file it produces.
+- Record any export control that queues rather than refusing while the node is unreachable.

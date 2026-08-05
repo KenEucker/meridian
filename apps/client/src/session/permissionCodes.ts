@@ -149,3 +149,20 @@ export const CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW =
  */
 export const ROLE_DEPARTMENT_LEAD = "department_lead";
 export const ROLE_SHIFT_LEAD = "shift_lead";
+
+/**
+ * The two organization-wide roles, for the one question a capability cannot
+ * answer: whether an export authority covers the event or one department
+ * (REPORT-006, REPORT-007; M18.26).
+ *
+ * All five export capabilities are granted to organizers and to department
+ * roles alike, so holding one says nothing about how wide it reaches. The node
+ * decides that from the role — `ReportingExportAccess::ORGANIZATION_WIDE_ROLES`
+ * is these two codes — and it decides it again when the file is served. What
+ * the client does with the same answer is choose which of REPORT-014's two
+ * reporting surfaces a person's standing belongs to, so each states a scope it
+ * can keep: the organizer surface runs at the caller's whole authority, and the
+ * department surface names its department in every request it makes.
+ */
+export const ROLE_ORGANIZER = "organizer";
+export const ROLE_LEAD_ORGANIZER = "lead_organizer";
