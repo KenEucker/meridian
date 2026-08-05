@@ -56,8 +56,8 @@ import StaffDocumentDetailView from "@/views/StaffDocumentDetailView.vue";
 import StaffDocumentLibraryView from "@/views/StaffDocumentLibraryView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
-import DepartmentReportsView from "@/views/DepartmentReportsView.vue";
-import OrganizerReportsView from "@/views/OrganizerReportsView.vue";
+import DepartmentExportsView from "@/views/DepartmentExportsView.vue";
+import OrganizerExportsView from "@/views/OrganizerExportsView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
 import DepartmentTeamEditView from "@/views/DepartmentTeamEditView.vue";
@@ -352,17 +352,17 @@ export const routes: RouteRecordRaw[] = [
     beforeEnter: selectDepartmentFromRoute,
   },
   /*
-   * The department-scoped reporting surface (M18.26; REPORT-014, REPORT-007).
+   * The department-scoped export surface (M18.26; REPORT-014, REPORT-007).
    *
    * Department-scoped in its path because it is department-scoped in its
    * requests: every export run from it names the department in the route, and
    * the node refuses one outside the caller's own scope. The organizer's half
-   * is `organizer.reports` below.
+   * is `organizer.exports` below.
    */
   {
-    path: "/events/:eventId/departments/:departmentId/reports",
-    name: "events.departments.reports.index",
-    component: DepartmentReportsView,
+    path: "/events/:eventId/departments/:departmentId/exports",
+    name: "events.departments.exports.index",
+    component: DepartmentExportsView,
     beforeEnter: selectDepartmentFromRoute,
   },
   {
@@ -582,7 +582,7 @@ export const routes: RouteRecordRaw[] = [
     component: OrganizerCredentialsView,
   },
   /*
-   * The organization/event-scoped reporting surface (M18.26; REPORT-014,
+   * The organization/event-scoped export surface (M18.26; REPORT-014,
    * REPORT-006, REPORT-015). Not event-scoped in its path despite being
    * event-scoped in its exports: which event this device is working in is the
    * session's answer, the way it is for `organizer.credentials` beside it, and
@@ -590,9 +590,9 @@ export const routes: RouteRecordRaw[] = [
    * that cannot be honored.
    */
   {
-    path: "/organizer/reports",
-    name: "organizer.reports.index",
-    component: OrganizerReportsView,
+    path: "/organizer/exports",
+    name: "organizer.exports.index",
+    component: OrganizerExportsView,
   },
   /*
    * Acknowledgment requirement administration and review (M18.6; POL-023,

@@ -23,7 +23,7 @@
 //    so what permits them is holding a session and belonging to a team, both of
 //    which come from the session response too.
 //
-// The two reporting entries are capability-permitted by five codes at once and
+// The two export entries are capability-permitted by five codes at once and
 // additionally by how wide the role carrying them reaches, so they read the same
 // authority their surfaces render from rather than restating the rule here. See
 // `reporting/reportingExports`.
@@ -531,20 +531,20 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       }
 
       /*
-       * The department reporting surface (M18.26; REPORT-014, REPORT-007).
+       * The department export surface (M18.26; REPORT-014, REPORT-007).
        *
        * Offered on the department-scoped half of the export authority, so a
        * lead reaches the page that exports the department they are working in
        * and an organizer does not reach it from their Organizers Department at
-       * all — their entry is Reports under Organization pages, which exports
+       * all — their entry is Exports under Organization pages, which covers
        * the whole event.
        */
       if (departmentReportingExportAuthority.value !== null) {
         departmentPages.push({
-          label: "Reports",
+          label: "Exports",
           description:
-            "Rosters, contacts, hours, and credits for this department.",
-          to: { name: "events.departments.reports.index", params },
+            "Roster, contact, hours, and credit files for this department.",
+          to: { name: "events.departments.exports.index", params },
         });
       }
 
@@ -655,7 +655,7 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     }
 
     /*
-     * The organizer reporting surface (M18.26; REPORT-014, REPORT-006).
+     * The organizer export surface (M18.26; REPORT-014, REPORT-006).
      *
      * Beside Credentials rather than inside it: that page offers the one export
      * that reads the records it is a page for, and this one offers all five
@@ -664,10 +664,10 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
      */
     if (organizerReportingExportAuthority.value !== null) {
       organizationPages.push({
-        label: "Reports",
+        label: "Exports",
         description:
-          "Event-wide credential, roster, contact, hours, and credit exports.",
-        to: { name: "organizer.reports.index" },
+          "Event-wide credential, roster, contact, hours, and credit files.",
+        to: { name: "organizer.exports.index" },
       });
     }
 

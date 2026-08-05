@@ -14,15 +14,22 @@ import { organizerReportingExportAuthority } from "@/reporting/reportingExports"
 import { organizerDepartmentAdminSession } from "@/session/organizerAdminSession";
 
 /**
- * `organizer.reports` — the organization/event-scoped reporting surface
+ * `organizer.exports` — the organization/event-scoped export surface
  * (M18.26; REPORT-014, REPORT-015; REPORT-001 through REPORT-006, REPORT-010;
  * CLIENT-019, CLIENT-020; UI contract 12.6).
  *
  * REPORT-014 asks for two reporting surfaces and this is the organizer's: every
  * Alpha 1 export the caller may run across the whole event, each stating its
  * scope and its excluded fields before anything is generated. The department
- * lead's is `department.reports`, which runs the same exports narrowed to one
+ * lead's is `department.exports`, which runs the same exports narrowed to one
  * department.
+ *
+ * The requirement says "reporting surfaces" and the product says Exports, which
+ * is deliberate. Every entry on both pages is a file the node generates and
+ * hands over; nothing here is a report somebody reads on screen. Calling the
+ * page Reports would promise the second thing, and the operating guide already
+ * reserves that word for fixed, formal outputs as against live Insights (UI
+ * operating guide 20A.1). Exports says what a person leaves with.
  *
  * Which of the two a person lands on follows the role that carries the export,
  * not the capability — organizers and department leads hold all five codes
@@ -118,8 +125,8 @@ onMounted(async () => {
 
 <template>
   <WorkflowPageShell
-    heading-id="organizer-reports-heading"
-    title="Reports"
+    heading-id="organizer-exports-heading"
+    title="Exports"
     :eyebrow="eyebrow"
     :lede="lede"
   >
@@ -128,10 +135,10 @@ onMounted(async () => {
       grant, or no event to apply one to, has nothing this page can offer
       (CLIENT-005). The server refuses the request either way (CLIENT-006).
     -->
-    <p v-if="!authority" class="organizer-reports__restricted" role="status">
-      Event-wide reporting requires organizer authority for an event this device
-      is working in. A department lead exports their own department from the
-      department's Reports page.
+    <p v-if="!authority" class="organizer-exports__restricted" role="status">
+      Event-wide exports require organizer authority for an event this device is
+      working in. A department lead exports their own department from the
+      department's Exports page.
     </p>
 
     <template v-else>
@@ -142,10 +149,10 @@ onMounted(async () => {
       >
         <ControlField
           label="Departments"
-          control-id="reporting-department"
+          control-id="export-department"
           width="lg"
         >
-          <select id="reporting-department" v-model="selectedDepartmentId">
+          <select id="export-department" v-model="selectedDepartmentId">
             <option value="">Every department in the event</option>
             <option
               v-for="department in departments"
@@ -160,7 +167,7 @@ onMounted(async () => {
 
       <p
         v-if="departmentsError"
-        class="organizer-reports__notice"
+        class="organizer-exports__notice"
         role="status"
       >
         {{ departmentsError }}
@@ -176,8 +183,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.organizer-reports__restricted,
-.organizer-reports__notice {
+.organizer-exports__restricted,
+.organizer-exports__notice {
   margin: 0;
   padding: var(--m-space-3);
   border: 1px solid var(--m-border-default);

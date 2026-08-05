@@ -27,7 +27,7 @@
 //
 // M18.25 completes the list. All five Alpha 1 exports (REPORT-001 through
 // REPORT-005) now have a `download-url` sibling on the node and a descriptor
-// here, so the reporting surfaces of M18.26 offer one download path rather than
+// here, so the export surfaces of M18.26 offer one download path rather than
 // one export that works differently from its four siblings.
 //
 // M18.26 adds the last thing a surface needs and a descriptor cannot carry:
@@ -375,7 +375,7 @@ export interface ReportingExportAuthority {
  * it may export nothing on it.
  *
  * Which exports a surface offers is the surface's question, not this module's:
- * the reporting surfaces of M18.26 offer all five, and `organizer.credentials`
+ * the export surfaces of M18.26 offer all five, and `organizer.credentials`
  * offers the one that reads the records it is a page for. Passing the list in
  * keeps the role label honest too — a page naming the standing that reached it
  * should name the role granting the export it is showing, not one granting some

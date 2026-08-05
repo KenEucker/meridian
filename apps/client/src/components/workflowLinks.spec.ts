@@ -167,7 +167,7 @@ describe("navigation without a permitting capability", () => {
       "Staff",
       "Field Reports",
       "Credentials",
-      "Reports",
+      "Exports",
     ]) {
       expect(labels).not.toContain(surface);
     }
@@ -253,10 +253,10 @@ describe("navigation without a permitting capability", () => {
     ["organizer", "Organization pages", "Department pages"],
     ["lead_organizer", "Organization pages", "Department pages"],
   ])(
-    "offers a %s the reporting surface written for their reach and not the other one",
+    "offers a %s the export surface written for their reach and not the other one",
     (roleCode, listed, absent) => {
       /*
-       * M18.26, REPORT-014. The two reporting surfaces are permitted by the same
+       * M18.26, REPORT-014. The two export surfaces are permitted by the same
        * five codes, so the capability cannot tell them apart — an organizer
        * exports the whole event and a department role exports its own
        * department, and each entry leads to the surface that states that scope.
@@ -268,12 +268,12 @@ describe("navigation without a permitting capability", () => {
         }),
       );
 
-      expect(sectionLabels(listed)).toContain("Reports");
-      expect(sectionLabels(absent)).not.toContain("Reports");
+      expect(sectionLabels(listed)).toContain("Exports");
+      expect(sectionLabels(absent)).not.toContain("Exports");
     },
   );
 
-  it("sends each Reports entry to its own surface", () => {
+  it("sends each Exports entry to its own surface", () => {
     install(
       sessionWith({
         roleCode: "department_lead",
@@ -281,14 +281,14 @@ describe("navigation without a permitting capability", () => {
       }),
     );
 
-    const departmentReports = useNavigationSections()
+    const departmentExports = useNavigationSections()
       .value.find((section) => section.title === "Department pages")
-      ?.links.find((link) => link.label === "Reports");
+      ?.links.find((link) => link.label === "Exports");
 
-    expect(departmentReports?.to.name).toBe("events.departments.reports.index");
+    expect(departmentExports?.to.name).toBe("events.departments.exports.index");
     // Department-scoped in its route, because it is department-scoped in its
     // requests.
-    expect(departmentReports?.to.params?.departmentId).toBe(DEPARTMENT_ID);
+    expect(departmentExports?.to.params?.departmentId).toBe(DEPARTMENT_ID);
 
     install(
       sessionWith({
@@ -297,12 +297,12 @@ describe("navigation without a permitting capability", () => {
       }),
     );
 
-    const organizerReports = useNavigationSections()
+    const organizerExports = useNavigationSections()
       .value.find((section) => section.title === "Organization pages")
-      ?.links.find((link) => link.label === "Reports");
+      ?.links.find((link) => link.label === "Exports");
 
-    expect(organizerReports?.to.name).toBe("organizer.reports.index");
-    expect(organizerReports?.to.params).toBeUndefined();
+    expect(organizerExports?.to.name).toBe("organizer.exports.index");
+    expect(organizerExports?.to.params).toBeUndefined();
   });
 
   it("offers Department Overview to a department lead and to nobody else", () => {

@@ -13,7 +13,7 @@ import {
  * The exports a caller may run, each stated before it is generated (M18.26;
  * REPORT-014, REPORT-015; CLIENT-019, CLIENT-020).
  *
- * One component behind both reporting surfaces, because the difference between
+ * One component behind both export surfaces, because the difference between
  * them is the scope they run at and not what they owe a reader. What they owe
  * is REPORT-014's list: what the rows are, which columns come back, and which
  * fields are deliberately absent — so an organizer sees that emergency contacts
