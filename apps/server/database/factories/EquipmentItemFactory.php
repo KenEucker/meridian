@@ -25,11 +25,30 @@ class EquipmentItemFactory extends Factory
             'event_id' => null,
             'department_id' => null,
             'name' => $this->faker->randomElement(['Radio', 'Safety Vest', 'Flag']).' '.$this->faker->bothify('##'),
+            'tracking' => EquipmentItem::TRACKING_INDIVIDUAL,
             'asset_tag' => $this->faker->optional()->bothify('EQ-####'),
             'serial_number' => $this->faker->optional()->bothify('SN-########'),
+            'quantity_total' => 1,
             'status' => EquipmentItem::STATUS_AVAILABLE,
             'archived_at' => null,
         ];
+    }
+
+    /**
+     * A quantity of interchangeable units of one kind (EQUIP-010).
+     *
+     * No asset tag and no serial number, because a pool has no per-unit
+     * identifier for one to belong to.
+     */
+    public function pooled(int $quantityTotal = 10): static
+    {
+        return $this->state(fn (): array => [
+            'tracking' => EquipmentItem::TRACKING_POOLED,
+            'asset_tag' => null,
+            'serial_number' => null,
+            'quantity_total' => $quantityTotal,
+            'status' => EquipmentItem::STATUS_AVAILABLE,
+        ]);
     }
 
     public function forEvent(Event $event): static

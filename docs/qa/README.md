@@ -56,6 +56,7 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 | ID | Coverage | Owning task |
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
+| [`QA-FR-02-dictated-field-reports.md`](QA-FR-02-dictated-field-reports.md) | Taking a Field Report for another staff member: who may (Department Operator, `ic_operator`, `ic_lead`) and who may not however senior; author and submitter recorded separately and both visible; append and photo authority staying with the author; the staff selector scoped to what the taker already sees, refused server-side rather than only hidden | M18.24A |
 
 ## Alpha 1 Incident management script
 
@@ -88,6 +89,7 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 | ID | Coverage | Owning task |
 |---|---|---|
 | [`QA-EQUIP-01-equipment-inventory-setup.md`](QA-EQUIP-01-equipment-inventory-setup.md) | Department logistics/administration Meridian Admin equipment inventory create/edit/archive/restore and bulk CSV import before operations, feeding Logistics checkout/check-in, outside Orchid/God Mode | M11.18 |
+| [`QA-EQUIP-02-pooled-tracked-equipment-and-lookup.md`](QA-EQUIP-02-pooled-tracked-equipment-and-lookup.md) | The tracking kind in inventory setup and import with pooled rows matched by name on a re-run; the two checkout presentations replacing the unit-by-unit checkbox list; scanner-driven lookup with ambiguous, unmatched, and out-of-scope values reported identically; shift-versus-event assignment scope with overdue and unknown derived rather than stored; partial pooled returns and audited write-offs; lookup against cached inventory with no node | M18.24, M18.24B, M18.24C, M18.24D |
 
 ## Alpha 1 God Mode import script
 

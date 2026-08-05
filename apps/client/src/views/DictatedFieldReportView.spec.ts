@@ -76,41 +76,30 @@ function stubEmptyIncidentNode(): void {
       const url = new URL(String(input), "http://node.test");
 
       /*
-       * The staff picker reads the department index rather than a fixture
-       * (M18.9; FR-016), so the node has to answer it here. What it returns is
-       * the scope under test: the operator and one other member of the
-       * department they are working, and nobody outside it.
+       * The staff picker reads the node's own dictation directory (M18.24A;
+       * FR-017), so the node has to answer it here. What it returns is the
+       * scope under test: the staff this operator's taking authority reaches,
+       * and nobody outside it. The node decided that from the roles they hold
+       * before the list was ever sent, which is what makes the picker unable to
+       * disclose anybody it should not.
        */
-      const body = url.pathname.endsWith("/logistics")
+      const body = url.pathname.endsWith("/field-report-dictation")
         ? {
-            context: {
-              event_id: "11111111-1111-4111-8111-111111111111",
-              event_label: "Local Field Event",
-              department_id: RANGERS,
-              department_label: "Rangers",
-              time_zone: "UTC",
-              as_of: "2027-07-04T18:00:00+00:00",
-            },
-            access: {},
-            searchable_staff: [
+            event_id: "11111111-1111-4111-8111-111111111111",
+            staff: [
               {
                 staff_id: "33333333-3333-4333-8333-333333333333",
                 display_name: "Local Field Author",
                 handle: "local-field-author",
-                team_label: "Command",
-                presence_state: "on_site",
+                department_label: "Rangers",
               },
               {
                 staff_id: VERA_STAFF_ID,
                 display_name: "Vera Staff",
                 handle: "vera",
-                team_label: "Dirt",
-                presence_state: "on_site",
+                department_label: "Rangers",
               },
             ],
-            searchable_equipment: [],
-            searchable_shifts: [],
-            staff_workspaces: {},
           }
         : {
             event_id: "11111111-1111-4111-8111-111111111111",

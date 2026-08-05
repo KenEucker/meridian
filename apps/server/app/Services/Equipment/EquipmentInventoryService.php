@@ -31,6 +31,12 @@ use Illuminate\Support\Str;
  *   `checked_out`/`returned` and refuses to change state or archive an item
  *   while it has an open checkout;
  * - items are archived, never deleted, so operational history survives.
+ *
+ * M18.24B adds the tracking kind (EQUIP-010). A row is either one physical unit
+ * with an identifier on it or a quantity of interchangeable ones, and setup is
+ * where that is decided. A pooled row carries no asset tag or serial number,
+ * because there is nothing per-unit to put one on; a tracked row carries
+ * `quantity_total` 1, because it is one thing.
  */
 final class EquipmentInventoryService
 {
@@ -53,7 +59,7 @@ final class EquipmentInventoryService
     public function __construct(private readonly AuditService $audit) {}
 
     /**
-     * @param  array{name: string, asset_tag?: string|null, serial_number?: string|null, event_id?: string|null}  $attributes
+     * @param  array{name: string, tracking?: string|null, asset_tag?: string|null, serial_number?: string|null, quantity_total?: mixed, event_id?: string|null}  $attributes
      */
     public function create(
         Department $department,
@@ -91,7 +97,7 @@ final class EquipmentInventoryService
     }
 
     /**
-     * @param  array{name: string, asset_tag?: string|null, serial_number?: string|null, event_id?: string|null, status?: string|null}  $attributes
+     * @param  array{name: string, tracking?: string|null, asset_tag?: string|null, serial_number?: string|null, quantity_total?: mixed, event_id?: string|null, status?: string|null}  $attributes
      */
     public function update(
         EquipmentItem $item,
@@ -112,15 +118,25 @@ final class EquipmentInventoryService
 
             $this->assertAssetTagAvailable($department, $values['asset_tag'], (string) $item->id);
 
+            if ($values['tracking'] !== $item->tracking && $this->hasOpenCheckout($item)) {
+                throw new EquipmentInventoryException(
+                    'This equipment is checked out. Return it from the Logistics Window before changing how it is tracked.',
+                );
+            }
+
             // Resolve the target state against the locked row, so an omitted
             // status keeps whatever Logistics last wrote rather than a value
             // read before the lock.
-            $status = $this->statusValue($requestedStatus, $item);
+            $status = $this->statusValue($requestedStatus, $item, $values['tracking']);
 
             if ($status !== $item->status && $this->hasOpenCheckout($item)) {
                 throw new EquipmentInventoryException(
                     'This equipment is checked out. Return it from the Logistics Window to change its state.',
                 );
+            }
+
+            if ($values['tracking'] === EquipmentItem::TRACKING_POOLED) {
+                $this->assertPoolCoversOutstanding($item, $values['quantity_total']);
             }
 
             $before = $this->snapshot($item);
@@ -188,16 +204,25 @@ final class EquipmentInventoryService
     /**
      * Bulk-create inventory from spreadsheet CSV text.
      *
-     * Expected header columns: `name` (required), `asset_tag` (optional), and
-     * `serial_number` (optional). Unknown columns are ignored. Every row is
-     * processed independently so one bad row does not abort the import, and
-     * rows whose asset tag already exists are skipped rather than duplicated,
-     * so re-running the same file is safe. Event scope comes from the request,
-     * not from the file, so an import cannot place equipment in another
-     * department or organization (EQUIP-006).
+     * Expected header columns: `name` (required), plus optional `tracking`,
+     * `asset_tag`, `serial_number`, and `quantity_total`. Unknown columns are
+     * ignored. Every row is processed independently so one bad row does not
+     * abort the import, and event scope comes from the request rather than from
+     * the file, so an import cannot place equipment in another department or
+     * organization (EQUIP-006).
+     *
+     * Re-running the same file is safe, and the two tracking kinds get there by
+     * different routes (EQUIP-010; data/API 10.13). A tracked row is identified
+     * by its asset tag, so a second import of it is skipped as a duplicate. A
+     * pooled row has no asset tag to be identified by, so it is matched on
+     * department, name, and tracking kind, and a re-run updates the pool's total
+     * rather than standing a second pool of radios next to the first. That is
+     * not a convenience: a department that imports its inventory twice and ends
+     * up with two "Handheld radio" pools has no correct availability for either.
      *
      * @return array{
      *     imported: int,
+     *     updated: int,
      *     skipped: int,
      *     rows: list<array{line: int, name: string, asset_tag: string|null, status: string, reason: string|null}>
      * }
@@ -228,9 +253,12 @@ final class EquipmentInventoryService
 
         $assetTagIndex = array_search('asset_tag', $header, true);
         $serialNumberIndex = array_search('serial_number', $header, true);
+        $trackingIndex = array_search('tracking', $header, true);
+        $quantityIndex = array_search('quantity_total', $header, true);
 
         $rows = [];
         $imported = 0;
+        $updated = 0;
 
         foreach ($lines as $offset => $line) {
             $lineNumber = $offset + 2;
@@ -255,13 +283,31 @@ final class EquipmentInventoryService
                 ? null
                 : $this->nullableTrim((string) ($columns[$serialNumberIndex] ?? ''));
 
+            $attributes = [
+                'name' => $name,
+                'tracking' => $trackingIndex === false
+                    ? null
+                    : $this->nullableTrim((string) ($columns[$trackingIndex] ?? '')),
+                'asset_tag' => $assetTag,
+                'serial_number' => $serialNumber,
+                'quantity_total' => $quantityIndex === false
+                    ? null
+                    : $this->nullableTrim((string) ($columns[$quantityIndex] ?? '')),
+                'event_id' => $event === null ? null : (string) $event->id,
+            ];
+
             try {
-                $this->create($department, [
-                    'name' => $name,
-                    'asset_tag' => $assetTag,
-                    'serial_number' => $serialNumber,
-                    'event_id' => $event === null ? null : (string) $event->id,
-                ], $actor, $sourceContext);
+                $existingPool = $this->matchingPool($department, $attributes);
+
+                if ($existingPool !== null) {
+                    $this->update($existingPool, $attributes, $actor, $sourceContext);
+                    $updated++;
+                    $rows[] = $this->importRow($lineNumber, $name, $assetTag, 'updated', null);
+
+                    continue;
+                }
+
+                $this->create($department, $attributes, $actor, $sourceContext);
             } catch (EquipmentInventoryException $exception) {
                 $rows[] = $this->importRow($lineNumber, $name, $assetTag, 'skipped', $exception->getMessage());
 
@@ -272,7 +318,7 @@ final class EquipmentInventoryService
             $rows[] = $this->importRow($lineNumber, $name, $assetTag, 'imported', null);
         }
 
-        $skipped = count($rows) - $imported;
+        $skipped = count($rows) - $imported - $updated;
 
         $this->audit->recordForEntity(
             entity: $department,
@@ -283,6 +329,7 @@ final class EquipmentInventoryService
             departmentId: (string) $department->id,
             after: [
                 'imported' => $imported,
+                'updated' => $updated,
                 'skipped' => $skipped,
             ],
             sourceContext: $sourceContext,
@@ -290,16 +337,43 @@ final class EquipmentInventoryService
 
         return [
             'imported' => $imported,
+            'updated' => $updated,
             'skipped' => $skipped,
             'rows' => $rows,
         ];
     }
 
     /**
+     * The pool this import row is a re-statement of, or null when it is new.
+     *
+     * Department, name, and tracking kind, because a pool has no asset tag to
+     * be matched on (data/API 10.13). Name is compared case-insensitively —
+     * "Handheld Radio" and "handheld radio" typed into a spreadsheet six months
+     * apart are one store-room shelf, and treating them as two is the duplicate
+     * this match exists to prevent. An archived pool is deliberately not
+     * matched: restoring it is a decision, not a side effect of an import.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function matchingPool(Department $department, array $attributes): ?EquipmentItem
+    {
+        if ($this->trackingValue($attributes['tracking'] ?? null) !== EquipmentItem::TRACKING_POOLED) {
+            return null;
+        }
+
+        return EquipmentItem::query()
+            ->where('department_id', $department->id)
+            ->pooled()
+            ->active()
+            ->whereRaw('LOWER(name) = ?', [Str::lower(trim((string) $attributes['name']))])
+            ->first();
+    }
+
+    /**
      * Validate and normalize product-path inventory attributes.
      *
      * @param  array<string, mixed>  $attributes
-     * @return array{name: string, asset_tag: string|null, serial_number: string|null, event_id: string|null}
+     * @return array{name: string, tracking: string, asset_tag: string|null, serial_number: string|null, quantity_total: int, event_id: string|null}
      */
     private function itemValues(Department $department, array $attributes): array
     {
@@ -327,16 +401,94 @@ final class EquipmentInventoryService
             $eventId = null;
         }
 
+        $tracking = $this->trackingValue($attributes['tracking'] ?? null);
+        $pooled = $tracking === EquipmentItem::TRACKING_POOLED;
+
         return [
             'name' => $name,
-            'asset_tag' => $this->nullableTrim($attributes['asset_tag'] ?? null),
-            'serial_number' => $this->nullableTrim($attributes['serial_number'] ?? null),
+            'tracking' => $tracking,
+            // A pool has no per-unit identifier to carry (EQUIP-010), so an
+            // identifier arriving on one is dropped rather than stored against
+            // a record no single unit answers to.
+            'asset_tag' => $pooled ? null : $this->nullableTrim($attributes['asset_tag'] ?? null),
+            'serial_number' => $pooled ? null : $this->nullableTrim($attributes['serial_number'] ?? null),
+            'quantity_total' => $pooled
+                ? $this->poolQuantity($attributes['quantity_total'] ?? null)
+                : 1,
             'event_id' => $eventId,
         ];
     }
 
-    private function statusValue(mixed $status, EquipmentItem $item): string
+    private function trackingValue(mixed $tracking): string
     {
+        if ($tracking === null || $tracking === '') {
+            return EquipmentItem::TRACKING_INDIVIDUAL;
+        }
+
+        $tracking = Str::lower(trim((string) $tracking));
+
+        if (! in_array($tracking, EquipmentItem::trackingKinds(), true)) {
+            throw new EquipmentInventoryException(
+                'Equipment tracking must be individual or pooled.',
+            );
+        }
+
+        return $tracking;
+    }
+
+    /**
+     * The pool size a maintainer typed.
+     *
+     * Zero is allowed and means the pool exists with nothing serviceable in it,
+     * which is where EQUIP-017's write-offs eventually land a pool that has
+     * been lost a unit at a time. Refusing zero would leave a maintainer unable
+     * to record the state their store room is actually in.
+     */
+    private function poolQuantity(mixed $quantity): int
+    {
+        if ($quantity === null || $quantity === '') {
+            throw new EquipmentInventoryException(
+                'Pooled equipment needs a total quantity.',
+            );
+        }
+
+        if (! is_numeric($quantity) || (int) $quantity != $quantity) {
+            throw new EquipmentInventoryException(
+                'Pooled equipment quantity must be a whole number.',
+            );
+        }
+
+        $quantity = (int) $quantity;
+
+        if ($quantity < 0) {
+            throw new EquipmentInventoryException(
+                'Pooled equipment quantity cannot be negative.',
+            );
+        }
+
+        return $quantity;
+    }
+
+    private function statusValue(mixed $status, EquipmentItem $item, string $tracking): string
+    {
+        /*
+         * A pool has one state and it is Available (EQUIP-016). Missing and
+         * Damaged describe units, and a pool's losses are recorded against its
+         * serviceable quantity through the audited adjustment EQUIP-017 defines
+         * — writing the whole record Missing would say every unit of it is
+         * gone, which is not what anybody means by three broken radios.
+         */
+        if ($tracking === EquipmentItem::TRACKING_POOLED) {
+            if ($status !== null && $status !== '' && (string) $status !== EquipmentItem::STATUS_AVAILABLE) {
+                throw new EquipmentInventoryException(
+                    'A pooled kind has no state of its own. Record missing or damaged units '
+                    .'when they are returned, which adjusts the pool quantity.',
+                );
+            }
+
+            return EquipmentItem::STATUS_AVAILABLE;
+        }
+
         if ($status === null || $status === '') {
             return $item->status;
         }
@@ -351,6 +503,25 @@ final class EquipmentInventoryService
         }
 
         return $status;
+    }
+
+    /**
+     * A pool cannot be shrunk below what is already in people's hands.
+     *
+     * Availability is `quantity_total` less what is out (EQUIP-016), and a total
+     * under that would make the derivation negative — a store room reporting
+     * minus two radios rather than a maintainer being told the number they typed
+     * is not one the department can be in yet.
+     */
+    private function assertPoolCoversOutstanding(EquipmentItem $item, int $quantityTotal): void
+    {
+        $outstanding = $item->openCheckoutQuantity();
+
+        if ($quantityTotal < $outstanding) {
+            throw new EquipmentInventoryException(
+                "{$outstanding} unit(s) of this kind are still checked out, so the total cannot be set below {$outstanding}.",
+            );
+        }
     }
 
     /**
@@ -468,8 +639,10 @@ final class EquipmentInventoryService
             'event_id' => $item->event_id !== null ? (string) $item->event_id : null,
             'department_id' => $item->department_id !== null ? (string) $item->department_id : null,
             'name' => $item->name,
+            'tracking' => $item->tracking,
             'asset_tag' => $item->asset_tag,
             'serial_number' => $item->serial_number,
+            'quantity_total' => (int) $item->quantity_total,
             'status' => $item->status,
             'archived_at' => $item->archived_at?->toIso8601String(),
         ];

@@ -199,6 +199,31 @@ class OperationalScenarioSeedTest extends TestCase
         }
 
         $this->assertTrue(EquipmentItem::query()->whereNotNull('archived_at')->exists());
+
+        /*
+         * Both tracking kinds, and a pool with some of it out (EQUIP-010,
+         * EQUIP-016). The checkout dialog draws two different presentations and
+         * a scenario holding only tracked units never renders the second one —
+         * which is how the pooled path stays plausible-looking and untested
+         * right up until somebody trusts it.
+         */
+        $pool = EquipmentItem::query()->pooled()->first();
+
+        $this->assertNotNull($pool, 'No pooled kind, so the quantity presentation has nothing to draw.');
+        $this->assertSame(
+            EquipmentItem::STATUS_AVAILABLE,
+            $pool->status,
+            'A pool is never stored checked out (EQUIP-016).',
+        );
+        $this->assertLessThan(
+            (int) $pool->quantity_total,
+            $pool->availableQuantity(),
+            'No pooled units are out, so derived availability is never seen to move.',
+        );
+        $this->assertTrue(
+            EquipmentItem::query()->individuallyTracked()->exists(),
+            'No individually tracked unit, so lookup has nothing to resolve.',
+        );
     }
 
     public function test_the_document_library_holds_every_state_and_a_shared_fragment(): void

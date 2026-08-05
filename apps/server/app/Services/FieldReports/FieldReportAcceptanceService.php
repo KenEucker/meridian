@@ -27,11 +27,21 @@ use Illuminate\Support\Str;
  * Name References in the accepted body are parsed into the rebuildable derived
  * index immediately after submission (NR-007; technical spec 17.7). Titles are
  * not parsed for Name References.
+ *
+ * A report may be *taken* as well as written (M18.24A; FR-015 through FR-017).
+ * The two identifiers the record already carries are enough to say so: `staff_id`
+ * is the author, `submitted_by_user_id` is whoever put it into Meridian, and for
+ * an ordinary report those are the same person. When they are not, the
+ * submitter must hold `field_reports.create_on_behalf` for the event and the
+ * author must be somebody that authority already reaches — otherwise acceptance
+ * refuses, because a report filed under a name the filer had no business naming
+ * is worse than no report.
  */
 final class FieldReportAcceptanceService
 {
     public function __construct(
         private readonly NameReferenceIndexService $nameReferences,
+        private readonly FieldReportOnBehalfAccess $onBehalf,
     ) {}
 
     /**
@@ -230,10 +240,21 @@ final class FieldReportAcceptanceService
         Device $device,
         Node $node,
     ): void {
-        if (! $staff->users()->whereKey($user->id)->exists()) {
-            throw FieldReportAcceptanceException::invalid(
-                'Field Report staff record is not linked to the submitting user.',
-            );
+        if ($this->onBehalf->wasTakenOnBehalf($staff, $user)) {
+            /*
+             * The author is somebody other than the submitter, which is a
+             * dictated report and is only allowed on FR-015's terms. Both
+             * refusals are worded the same way on purpose: a caller who may not
+             * take reports at all and one who named somebody outside their
+             * scope learn the same thing, so neither answer can be used to find
+             * out who exists (FR-017).
+             */
+            if (! $this->onBehalf->canTakeReportFor($user, $event, $staff)) {
+                throw FieldReportAcceptanceException::invalid(
+                    'Field Report staff record is not linked to the submitting user, '
+                    .'and the submitting user is not authorized to take a report for them.',
+                );
+            }
         }
 
         $trustedDevice = DeviceTrust::query()

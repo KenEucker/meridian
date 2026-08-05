@@ -22,8 +22,10 @@ use App\Http\Controllers\Documents\DocumentReadController;
 use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
+use App\Http\Controllers\Equipment\EquipmentLookupController;
 use App\Http\Controllers\Events\EventInfoReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
+use App\Http\Controllers\FieldReports\FieldReportDictationReadController;
 use App\Http\Controllers\FieldReports\FieldReportPhotoController;
 use App\Http\Controllers\FieldReports\FieldReportReadController;
 use App\Http\Controllers\HealthController;
@@ -855,6 +857,14 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.events.departments.planning');
 
     /*
+     * Equipment lookup at checkout (M18.24C; EQUIP-012, EQUIP-013, EQUIP-015).
+     * The desk resolves the same value against its cached inventory when no
+     * node is reachable; this is the node's answer when one is.
+     */
+    Route::get('/events/{event}/departments/{department}/equipment-lookup', EquipmentLookupController::class)
+        ->name('api.events.departments.equipment-lookup');
+
+    /*
      * Event credential administration (M18.5; CRED-009 through CRED-014; UI
      * contract 12.6).
      *
@@ -887,6 +897,13 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/field-reports', [FieldReportReadController::class, 'index'])
         ->name('api.events.field-reports.index');
+
+    /*
+     * The staff an operator may name when taking a Field Report for somebody
+     * else (M18.24A; FR-015, FR-017).
+     */
+    Route::get('/events/{event}/field-report-dictation', FieldReportDictationReadController::class)
+        ->name('api.events.field-report-dictation');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
         ->name('api.events.incidents.index');

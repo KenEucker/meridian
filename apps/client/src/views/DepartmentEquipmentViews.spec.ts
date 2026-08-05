@@ -386,8 +386,12 @@ describe("department equipment inventory", () => {
     expect(commandCalls(calls, "create-equipment-item")[0]?.body).toEqual({
       department_id: DEPARTMENT_ID,
       name: "Radio 20",
+      // One physical unit with a tag on it, which is what the form defaults to
+      // and what every equipment record was before pooling (EQUIP-010).
+      tracking: "individual",
       asset_tag: "RAD-020",
       serial_number: null,
+      quantity_total: 1,
       event_id: null,
     });
 
@@ -457,8 +461,10 @@ describe("department equipment inventory", () => {
     expect(commandCalls(calls, "update-equipment-item")[0]?.body).toEqual({
       equipment_item_id: RADIO_12_ID,
       name: "Radio 12 (UHF)",
+      tracking: "individual",
       asset_tag: "RAD-012",
       serial_number: "SN-0012",
+      quantity_total: 1,
       event_id: null,
     });
     expect(wrapper.text()).toContain("Radio 12 (UHF) updated.");
@@ -594,7 +600,7 @@ describe("department equipment inventory", () => {
       csv,
     });
 
-    expect(wrapper.text()).toContain("Imported 2 item(s); skipped 2.");
+    expect(wrapper.text()).toContain("Imported 2 item(s); updated 0; skipped 2.");
     expect(wrapper.text()).toContain("Missing name.");
     expect(wrapper.text()).toContain(
       'Asset tag "RAD-012" already exists in this department.',

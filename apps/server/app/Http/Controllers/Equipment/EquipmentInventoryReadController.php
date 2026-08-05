@@ -80,6 +80,11 @@ final class EquipmentInventoryReadController extends Controller
                 EquipmentItem::STATUS_DAMAGED,
             ],
             'status_labels' => EquipmentItem::statusLabels(),
+            // The two kinds a record may be (EQUIP-010; UI contract 9.6A), so
+            // the form offers the choice from the node's vocabulary rather than
+            // a list the client keeps its own copy of.
+            'tracking_kinds' => EquipmentItem::trackingKinds(),
+            'tracking_labels' => EquipmentItem::trackingLabels(),
             'equipment' => $items
                 ->map(fn (EquipmentItem $item): array => $this->payload(
                     $item,
@@ -91,10 +96,13 @@ final class EquipmentInventoryReadController extends Controller
     }
 
     /**
-     * The open checkout for each of these items, keyed by item.
+     * The open checkout for each individually tracked item, keyed by item.
      *
-     * An item has at most one, because `EquipmentCheckoutService` refuses a
-     * second while the first is open.
+     * A tracked item has at most one, because `EquipmentCheckoutService`
+     * refuses a second while the first is open. A pool is deliberately absent:
+     * several of its units may be out with several people at once, so there is
+     * no single holder to name, and what a maintainer needs from a pool is the
+     * quantity still available rather than a person (EQUIP-016).
      *
      * @param  list<mixed>  $itemIds
      * @return array<string, EquipmentCheckout>
@@ -109,6 +117,7 @@ final class EquipmentInventoryReadController extends Controller
             ->with(['staff', 'shift'])
             ->whereIn('equipment_item_id', $itemIds)
             ->whereNull('returned_at')
+            ->whereHas('equipmentItem', fn ($query) => $query->individuallyTracked())
             ->get()
             ->keyBy(fn (EquipmentCheckout $checkout): string => (string) $checkout->equipment_item_id)
             ->all();
@@ -125,8 +134,14 @@ final class EquipmentInventoryReadController extends Controller
             'department_id' => $item->department_id !== null ? (string) $item->department_id : null,
             'event_id' => $item->event_id !== null ? (string) $item->event_id : null,
             'name' => $item->name,
+            'tracking' => $item->tracking,
+            'tracking_label' => EquipmentItem::trackingLabel($item->tracking),
             'asset_tag' => $item->asset_tag,
             'serial_number' => $item->serial_number,
+            'quantity_total' => (int) $item->quantity_total,
+            // Derived, never stored (EQUIP-016). A pool with units out still
+            // reads Available; this is the number that has fallen.
+            'quantity_available' => $item->availableQuantity(),
             'status' => $item->status,
             'status_label' => EquipmentItem::statusLabel($item->status),
             'open_checkout' => $openCheckout === null

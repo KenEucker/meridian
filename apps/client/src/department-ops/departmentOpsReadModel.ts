@@ -62,8 +62,12 @@ import { clientSessionState } from "@/session/clientSession";
 import { submitAttendanceOperation } from "@/shift-board/submitAttendanceOperation";
 import type {
   DepartmentPresenceState,
+  EquipmentAssignmentScope,
+  EquipmentCheckoutCandidate,
+  EquipmentPresentationState,
   EquipmentReturnCondition,
   EquipmentState,
+  EquipmentTracking,
   LogisticsStaffStates,
   LogisticsStatePill,
   ShiftAttendanceState,
@@ -134,6 +138,11 @@ export interface OverviewEquipment {
   readonly assetTag: string | null;
   readonly staffName: string;
   readonly checkedOutAt: string | null;
+  readonly assignmentScope: EquipmentAssignmentScope;
+  readonly presentationState: EquipmentPresentationState;
+  readonly presentationStateLabel: string;
+  readonly dueAt: string | null;
+  readonly overdue: boolean;
 }
 
 export interface DeploymentOption {
@@ -217,6 +226,7 @@ export interface LogisticsEquipmentItem {
   readonly checkoutId: string | null;
   readonly equipmentItemId: string;
   readonly name: string;
+  readonly tracking: EquipmentTracking;
   readonly assetTag: string | null;
   readonly status: EquipmentState;
   readonly checkedOutAt: string | null;
@@ -229,6 +239,28 @@ export interface LogisticsEquipmentItem {
    * kind that quietly stays out for a week.
    */
   readonly shiftId: string | null;
+  /** Which of the two EQUIP-009 scopes, as the node derived it from the shift. */
+  readonly assignmentScope: EquipmentAssignmentScope;
+  /**
+   * What this checkout reads as right now — out, overdue, or unknown for an
+   * open one, and its return condition for a closed one (EQUIP-005).
+   *
+   * The node computes it on read, so nothing here has to recompute it and
+   * nothing on the device can be stale in a way the node is not. A cached desk
+   * read is stale about the whole payload at once, which the freshness banner
+   * already says; a locally recomputed "overdue" would be a second, quieter
+   * kind of wrong.
+   */
+  readonly presentationState: EquipmentPresentationState;
+  readonly presentationStateLabel: string;
+  /** When it is owed back, or null when nothing says (the `unknown` case). */
+  readonly dueAt: string | null;
+  readonly overdue: boolean;
+  /** Units handed out on this checkout; 1 for a tracked unit (EQUIP-011). */
+  readonly quantity: number;
+  readonly quantityReturned: number;
+  /** Units still owed after any partial return (data/API 10.13). */
+  readonly quantityOutstanding: number;
 }
 
 export interface LogisticsFutureSignup {
@@ -252,7 +284,6 @@ export interface LogisticsStaffWorkspace {
   readonly offSiteBlockedReason: string | null;
   readonly shiftCards: readonly LogisticsShiftCard[];
   readonly openEquipment: readonly LogisticsEquipmentItem[];
-  readonly availableEquipment: readonly LogisticsEquipmentItem[];
   readonly futureSignups: readonly LogisticsFutureSignup[];
 }
 
@@ -267,9 +298,20 @@ export interface LogisticsStaffRow {
 export interface LogisticsEquipmentRow {
   readonly equipmentItemId: string;
   readonly name: string;
+  readonly tracking: EquipmentTracking;
   readonly assetTag: string | null;
+  readonly serialNumber: string | null;
   readonly status: EquipmentState;
   readonly statusLabel: string;
+  /**
+   * What this row reads as, including the derived Overdue and Unknown a stored
+   * state cannot express (EQUIP-005). A pool never reads Checked out; it reads
+   * Available with the quantity that is left (UI contract 9.6).
+   */
+  readonly presentationState: EquipmentPresentationState | EquipmentState;
+  readonly presentationStateLabel: string;
+  readonly quantityTotal: number;
+  readonly quantityAvailable: number;
   readonly holderStaffId: string | null;
   readonly holderName: string | null;
 }
@@ -282,6 +324,20 @@ export interface LogisticsDeskRead {
   readonly searchableStaff: readonly LogisticsStaffRow[];
   readonly searchableEquipment: readonly LogisticsEquipmentRow[];
   readonly searchableShifts: readonly DepartmentOpsShift[];
+  /**
+   * What the desk may hand out, and the set lookup resolves against
+   * (EQUIP-015).
+   *
+   * It arrives with the desk read and is held with it, which is the whole point:
+   * a checkout at a gate with no signal resolves a scanned asset tag against
+   * this rather than against a node it cannot reach. Scope was applied by the
+   * node before it was cached, so an item outside this department was never in
+   * the copy the device holds and no local search can surface one.
+   *
+   * One list for the desk rather than one per workspace: an available item is
+   * available to whoever is standing at it.
+   */
+  readonly checkoutInventory: readonly EquipmentCheckoutCandidate[];
   readonly staffWorkspaces: Readonly<Record<string, LogisticsStaffWorkspace>>;
 }
 
@@ -442,13 +498,13 @@ export async function getDepartmentOverview(
         readonly current_deployment_id: string | null;
         readonly unscheduled: boolean;
       }[];
-      readonly equipment_out?: {
+      readonly equipment_out?: ({
         readonly checkout_id: string;
         readonly item_name: string;
         readonly asset_tag: string | null;
         readonly staff_name: string;
         readonly checked_out_at: string | null;
-      }[];
+      } & Partial<DerivedCheckoutPayload>)[];
       readonly deployments?: DeploymentPayload[];
       readonly on_site_count?: number;
     }
@@ -479,6 +535,7 @@ export async function getDepartmentOverview(
       assetTag: row.asset_tag,
       staffName: row.staff_name,
       checkedOutAt: row.checked_out_at,
+      ...toDerivedCheckout(row),
     })),
     deployments: (payload.deployments ?? []).map(toDeployment),
     onSiteCount: payload.on_site_count ?? 0,
@@ -533,7 +590,6 @@ interface WorkspacePayload {
     readonly correct_hours_blocked_reason?: string | null;
   }[];
   readonly open_equipment?: EquipmentPayload[];
-  readonly available_equipment?: EquipmentPayload[];
   readonly future_signups?: {
     readonly signup_id: string;
     readonly shift_id: string;
@@ -544,10 +600,52 @@ interface WorkspacePayload {
   }[];
 }
 
-interface EquipmentPayload {
+/**
+ * The derived reading the node attaches to every checkout it publishes
+ * (EQUIP-005, EQUIP-009). Optional on the wire so a payload from a node that
+ * predates M18.24 still parses into a sensible record rather than throwing.
+ */
+interface DerivedCheckoutPayload {
+  readonly assignment_scope: EquipmentAssignmentScope;
+  readonly assignment_scope_label: string;
+  readonly state: EquipmentPresentationState;
+  readonly state_label: string;
+  readonly due_at: string | null;
+  readonly overdue: boolean;
+  readonly quantity: number;
+  readonly quantity_returned: number;
+  readonly quantity_outstanding: number;
+}
+
+function toDerivedCheckout(payload: Partial<DerivedCheckoutPayload>): {
+  readonly assignmentScope: EquipmentAssignmentScope;
+  readonly presentationState: EquipmentPresentationState;
+  readonly presentationStateLabel: string;
+  readonly dueAt: string | null;
+  readonly overdue: boolean;
+  readonly quantity: number;
+  readonly quantityReturned: number;
+  readonly quantityOutstanding: number;
+} {
+  const state = payload.state ?? "checked_out";
+
+  return {
+    assignmentScope: payload.assignment_scope ?? "event",
+    presentationState: state,
+    presentationStateLabel: payload.state_label ?? "",
+    dueAt: payload.due_at ?? null,
+    overdue: payload.overdue ?? false,
+    quantity: payload.quantity ?? 1,
+    quantityReturned: payload.quantity_returned ?? 0,
+    quantityOutstanding: payload.quantity_outstanding ?? 1,
+  };
+}
+
+interface EquipmentPayload extends Partial<DerivedCheckoutPayload> {
   readonly checkout_id: string | null;
   readonly equipment_item_id: string;
   readonly name: string;
+  readonly tracking?: EquipmentTracking;
   readonly asset_tag: string | null;
   readonly status: EquipmentState;
   readonly checked_out_at: string | null;
@@ -559,10 +657,38 @@ function toEquipment(payload: EquipmentPayload): LogisticsEquipmentItem {
     checkoutId: payload.checkout_id,
     equipmentItemId: payload.equipment_item_id,
     name: payload.name,
+    tracking: payload.tracking ?? "individual",
     assetTag: payload.asset_tag,
     status: payload.status,
     checkedOutAt: payload.checked_out_at,
     shiftId: payload.shift_id ?? null,
+    ...toDerivedCheckout(payload),
+  };
+}
+
+interface CheckoutCandidatePayload {
+  readonly equipment_item_id: string;
+  readonly name: string;
+  readonly tracking: EquipmentTracking;
+  readonly tracking_label: string;
+  readonly asset_tag: string | null;
+  readonly serial_number: string | null;
+  readonly quantity_total: number;
+  readonly quantity_available: number;
+}
+
+function toCheckoutCandidate(
+  payload: CheckoutCandidatePayload,
+): EquipmentCheckoutCandidate {
+  return {
+    equipmentItemId: payload.equipment_item_id,
+    name: payload.name,
+    tracking: payload.tracking,
+    trackingLabel: payload.tracking_label,
+    assetTag: payload.asset_tag,
+    serialNumber: payload.serial_number,
+    quantityTotal: payload.quantity_total,
+    quantityAvailable: payload.quantity_available,
   };
 }
 
@@ -583,13 +709,20 @@ export async function getLogisticsDesk(
       readonly searchable_equipment?: {
         readonly equipment_item_id: string;
         readonly name: string;
+        readonly tracking?: EquipmentTracking;
         readonly asset_tag: string | null;
+        readonly serial_number?: string | null;
         readonly status: EquipmentState;
         readonly status_label: string;
+        readonly presentation_state?: EquipmentPresentationState;
+        readonly presentation_state_label?: string;
+        readonly quantity_total?: number;
+        readonly quantity_available?: number;
         readonly holder_staff_id: string | null;
         readonly holder_name: string | null;
       }[];
       readonly searchable_shifts?: ShiftPayload[];
+      readonly checkout_inventory?: CheckoutCandidatePayload[];
       readonly staff_workspaces?: Record<string, WorkspacePayload>;
     }
   >(base("logistics", eventId, departmentId));
@@ -632,7 +765,6 @@ export async function getLogisticsDesk(
         correctHoursBlockedReason: card.correct_hours_blocked_reason ?? null,
       })),
       openEquipment: (workspace.open_equipment ?? []).map(toEquipment),
-      availableEquipment: (workspace.available_equipment ?? []).map(toEquipment),
       futureSignups: (workspace.future_signups ?? []).map((signup) => ({
         signupId: signup.signup_id,
         shiftId: signup.shift_id,
@@ -658,13 +790,22 @@ export async function getLogisticsDesk(
     searchableEquipment: (payload.searchable_equipment ?? []).map((row) => ({
       equipmentItemId: row.equipment_item_id,
       name: row.name,
+      tracking: row.tracking ?? "individual",
       assetTag: row.asset_tag,
+      serialNumber: row.serial_number ?? null,
       status: row.status,
       statusLabel: row.status_label,
+      presentationState: row.presentation_state ?? row.status,
+      presentationStateLabel: row.presentation_state_label ?? row.status_label,
+      quantityTotal: row.quantity_total ?? 1,
+      quantityAvailable: row.quantity_available ?? 0,
       holderStaffId: row.holder_staff_id,
       holderName: row.holder_name,
     })),
     searchableShifts: (payload.searchable_shifts ?? []).map(toShift),
+    checkoutInventory: (payload.checkout_inventory ?? []).map(
+      toCheckoutCandidate,
+    ),
     staffWorkspaces: workspaces,
   };
 }
@@ -1009,12 +1150,23 @@ function correctionOperationUuid(): string {
   return cryptoScope.randomUUID();
 }
 
-/** Hand equipment to a staff member (SLB-012). */
+/**
+ * Hand equipment to a staff member (SLB-012, EQUIP-011).
+ *
+ * `quantity` is how many units of a pooled kind are going out; a tracked unit is
+ * one thing and the node refuses any other count for it. The idempotency key
+ * keeps its shape from before pooling — item plus staff member — so a repeated
+ * submission of the same handoff still checks nothing out twice (CLIENT-016).
+ * That does mean a second, deliberate handoff of the same pooled kind to the
+ * same person is the same key, which is correct rather than convenient: the
+ * desk should adjust the one open line, not open a second one beside it.
+ */
 export async function checkoutEquipment(
   context: DepartmentOpsContext,
   staffId: string,
   equipmentItemId: string,
   shiftId: string | null,
+  quantity = 1,
 ): Promise<void> {
   await sendConnectedCommand({
     commandType: "checkout-equipment",
@@ -1023,24 +1175,52 @@ export async function checkoutEquipment(
       equipment_item_id: equipmentItemId,
       staff_id: staffId,
       shift_id: shiftId,
+      /*
+       * The event this handoff is made under, for department stock that names
+       * no event of its own (EQUIP-009). The node prefers the item's own event
+       * where it has one and ignores this for a shift-assigned checkout, so
+       * sending it always is safe and saves the desk deciding which case it is
+       * in.
+       */
+      event_id: context.eventId,
+      quantity,
     },
     eventId: context.eventId,
     detail: staffId,
   });
 }
 
-/** Take equipment back, returned or otherwise (SLB-012, SLB-018). */
+/**
+ * Take equipment back, returned or otherwise (SLB-012, SLB-018, EQUIP-017).
+ *
+ * A pooled return carries how many came back and, when they came back missing
+ * or damaged, the reason the audited pool adjustment records. An omitted
+ * quantity returns everything still out on the checkout, which is what taking
+ * back what is in front of you means.
+ *
+ * The quantity is in the idempotency key because two partial returns of the
+ * same kind in the same condition are two different events — three radios back
+ * this morning and two more this afternoon — and collapsing them would lose the
+ * second.
+ */
 export async function returnEquipment(
   context: DepartmentOpsContext,
   checkoutId: string,
   condition: EquipmentReturnCondition,
+  quantity: number | null = null,
+  reason: string | null = null,
 ): Promise<void> {
   await sendConnectedCommand({
     commandType: "return-equipment",
-    idempotencyKey: `return-${checkoutId}-${condition}`,
+    idempotencyKey:
+      quantity === null
+        ? `return-${checkoutId}-${condition}`
+        : `return-${checkoutId}-${condition}-${quantity}`,
     payload: {
       equipment_checkout_id: checkoutId,
       return_condition: condition,
+      ...(quantity === null ? {} : { quantity }),
+      ...(reason === null || reason.trim() === "" ? {} : { reason: reason.trim() }),
     },
     eventId: context.eventId,
     detail: checkoutId,
@@ -1155,7 +1335,7 @@ export function logisticsStaffOnShift(
         endsAt: card.endsAt,
         openEquipmentCount: workspace.openEquipment.length,
         canCheckOut: card.canCheckOut,
-        canCheckOutEquipment: workspace.availableEquipment.length > 0,
+        canCheckOutEquipment: desk.checkoutInventory.length > 0,
       });
     }
   }
@@ -1214,11 +1394,13 @@ export function logisticsStaffStates(
     onShift: workspace.shiftCards.some(
       (card) => card.attendanceState === "checked_in",
     ),
+    // The node's derivation of the EQUIP-009 scope, rather than this module
+    // re-deciding it from a null shift column.
     hasShiftEquipment: workspace.openEquipment.some(
-      (item) => item.shiftId !== null,
+      (item) => item.assignmentScope === "shift",
     ),
     hasEventEquipment: workspace.openEquipment.some(
-      (item) => item.shiftId === null,
+      (item) => item.assignmentScope === "event",
     ),
   };
 }
@@ -1294,7 +1476,7 @@ export function searchLogisticsDesk(
   const equipmentHits = desk.searchableEquipment
     .filter((item) =>
       normalize(
-        `${item.name} ${item.assetTag ?? ""} ${item.holderName ?? ""}`,
+        `${item.name} ${item.assetTag ?? ""} ${item.serialNumber ?? ""} ${item.holderName ?? ""}`,
       ).includes(needle),
     )
     .map(
@@ -1303,9 +1485,18 @@ export function searchLogisticsDesk(
           id: item.equipmentItemId,
           kind: "equipment",
           label: item.assetTag ? `${item.name} (${item.assetTag})` : item.name,
-          detail: item.holderName
-            ? `Checked out to ${item.holderName}`
-            : item.statusLabel,
+          /*
+           * A pool is not held by anybody, so it says how much of it is left
+           * rather than naming a holder or reading Checked out (EQUIP-016; UI
+           * contract 9.6). A tracked unit names whoever has it, and otherwise
+           * reads its derived standing — which is where Overdue comes from.
+           */
+          detail:
+            item.tracking === "pooled"
+              ? `${item.quantityAvailable} of ${item.quantityTotal} available`
+              : item.holderName
+                ? `${item.presentationStateLabel} to ${item.holderName}`
+                : item.presentationStateLabel,
         }) satisfies LogisticsSearchHit,
     );
 

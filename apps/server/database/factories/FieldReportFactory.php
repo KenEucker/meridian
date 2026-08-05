@@ -52,11 +52,43 @@ class FieldReportFactory extends Factory
         ]);
     }
 
+    /**
+     * A report this user both authored and submitted.
+     *
+     * The staff record is linked to the user, because that link is what makes
+     * them the author (FR-009, FR-015, FR-016). An unlinked staff record would
+     * describe a report *taken* for somebody else, which is a different thing
+     * and has its own state below.
+     */
     public function forAuthor(User $user, ?Staff $staff = null): static
     {
+        return $this
+            ->state(fn (): array => [
+                'submitted_by_user_id' => $user->id,
+                'staff_id' => $staff?->id ?? Staff::factory(),
+            ])
+            ->afterCreating(function (FieldReport $report) use ($user): void {
+                $author = Staff::query()->find($report->staff_id);
+
+                if ($author !== null && ! $author->users()->whereKey($user->getKey())->exists()) {
+                    $author->users()->attach($user->getKey());
+                }
+            });
+    }
+
+    /**
+     * A report an operator took for somebody else (FR-015).
+     *
+     * `$author` is the reporting staff member the report belongs to and
+     * `$submitter` is the operator who wrote it down. The two are deliberately
+     * left unlinked: that is the whole shape of a taken report, and it is what
+     * append authority is measured against (FR-016).
+     */
+    public function takenOnBehalf(Staff $author, User $submitter): static
+    {
         return $this->state(fn (): array => [
-            'submitted_by_user_id' => $user->id,
-            'staff_id' => $staff?->id ?? Staff::factory(),
+            'staff_id' => $author->id,
+            'submitted_by_user_id' => $submitter->id,
         ]);
     }
 
