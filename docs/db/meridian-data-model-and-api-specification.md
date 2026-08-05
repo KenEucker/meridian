@@ -1069,6 +1069,10 @@ An authenticated client requests a short-lived URL for one resource, then naviga
 
 ```text
 POST /api/events/{event}/exports/credential-eligibility/download-url
+POST /api/events/{event}/exports/shift-roster/download-url
+POST /api/events/{event}/exports/staff-contact/download-url
+POST /api/events/{event}/exports/hours-worked/download-url
+POST /api/events/{event}/exports/credits-earned/download-url
 POST /api/events/{event}/incidents/{incident}/pdf/download-url
 POST /api/policy-documents/{policyDocument}/export/{format}/download-url
 POST /api/procedure-documents/{procedureDocument}/export/{format}/download-url
@@ -1084,6 +1088,8 @@ Rules:
 - it is scoped to the single resource it was issued for
 - issuing it applies the same authorization as a direct request for that resource
 - following it is not a second authorization decision
+
+An export URL is scoped to its report and to any `department_id` narrowing decided at issuance, and it carries the user it was issued to. The file is generated from that user's own scope resolved again at the moment it is served, so the same request from an organizer and from a department lead produces different files, and a role withdrawn between issuance and navigation stops the download.
 
 Insight Sheet PDFs are not on this list. They are generated in the browser from the rendered view and never leave the client, so there is no server resource to issue a URL for.
 

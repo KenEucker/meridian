@@ -150,6 +150,18 @@ Route::middleware('signed:relative')->group(function (): void {
     Route::get('downloads/events/{event}/exports/credential-eligibility', [ReportingExportController::class, 'signedCredentialEligibility'])
         ->name('downloads.exports.credential-eligibility');
 
+    Route::get('downloads/events/{event}/exports/shift-roster', [ReportingExportController::class, 'signedShiftRoster'])
+        ->name('downloads.exports.shift-roster');
+
+    Route::get('downloads/events/{event}/exports/staff-contact', [ReportingExportController::class, 'signedStaffContact'])
+        ->name('downloads.exports.staff-contact');
+
+    Route::get('downloads/events/{event}/exports/hours-worked', [ReportingExportController::class, 'signedHoursWorked'])
+        ->name('downloads.exports.hours-worked');
+
+    Route::get('downloads/events/{event}/exports/credits-earned', [ReportingExportController::class, 'signedCreditsEarned'])
+        ->name('downloads.exports.credits-earned');
+
     Route::get('downloads/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'signedDownload'])
         ->name('downloads.incidents.pdf');
 

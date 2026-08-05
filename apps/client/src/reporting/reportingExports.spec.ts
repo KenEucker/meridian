@@ -1,22 +1,29 @@
-// What the client may export, and how it asks for the file (M16.22; CLIENT-019,
-// CLIENT-020; REPORT-001, REPORT-006, REPORT-007).
+// What the client may export, and how it asks for the file (M16.22, M18.25;
+// CLIENT-019, CLIENT-020; REPORT-001 through REPORT-007).
 //
-// The view spec covers the surface. This one covers the two things underneath
-// it that a surface cannot show: that the authority computed here follows the
-// grant rather than the department, and that a narrowed export names the
-// department in the body the endpoint reads it from.
+// The view spec covers the surface. This one covers the things underneath it
+// that a surface cannot show: that the authority computed here follows the
+// grant rather than the department, that a narrowed export names the department
+// in the body the endpoint reads it from, and that each descriptor points at
+// its own report — the failure a list of five exports invites is the button
+// that runs the wrong one.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MeridianApiError, configureMeridianApi } from "@/api/meridianApi";
 import {
   installLocalFieldSession,
+  localFieldSessionDocument,
   LOCAL_FIELD_DEPARTMENT_IDS,
 } from "@/session/localFieldSessionFixture";
+import { CAPABILITY_REPORTS_HOURS_WORKED_EXPORT } from "@/session/permissionCodes";
 import {
-  CREDENTIAL_ELIGIBILITY_EXPORT,
   downloadCredentialEligibilityExport,
+  downloadReportingExport,
+  HOURS_WORKED_EXPORT,
+  REPORTING_EXPORTS,
   reportingExportAuthority,
+  STAFF_CONTACT_EXPORT,
 } from "@/reporting/reportingExports";
 import { clearClientSession } from "@/session/clientSession";
 import {
@@ -60,7 +67,26 @@ describe("what this client may export", () => {
     expect(authority?.eventLabel).toBe("Local Field Event");
     // Named as the node named it, so the page says what the server would say.
     expect(authority?.roleLabel).toBe("Organizer");
-    expect(authority?.exports).toEqual([CREDENTIAL_ELIGIBILITY_EXPORT]);
+    expect(authority?.exports).toEqual(REPORTING_EXPORTS);
+  });
+
+  it("offers only the exports the capability list actually carries", () => {
+    // CLIENT-005: an export the caller cannot run is absent, not disabled. The
+    // five codes are granted separately, so holding one is not holding five.
+    const document = localFieldSessionDocument();
+
+    installLocalFieldSession({
+      roles: document.roles.map((role) =>
+        role.role_code === "organizer"
+          ? { ...role, capabilities: [CAPABILITY_REPORTS_HOURS_WORKED_EXPORT] }
+          : role,
+      ),
+    });
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+
+    expect(reportingExportAuthority.value?.exports).toEqual([
+      HOURS_WORKED_EXPORT,
+    ]);
   });
 
   it("reports nothing in a department where the same user holds no export grant", () => {
@@ -135,5 +161,59 @@ describe("running the credential eligibility export", () => {
     await expect(
       downloadCredentialEligibilityExport(EVENT_ID, "some-other-department"),
     ).rejects.toThrow(MeridianApiError);
+  });
+});
+
+describe("the five Alpha 1 exports", () => {
+  it("sends each descriptor to its own report's endpoint", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ url: "http://node.test/downloads/x" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    for (const descriptor of REPORTING_EXPORTS) {
+      await downloadReportingExport(descriptor, EVENT_ID);
+    }
+
+    // The endpoint rides on the descriptor, so the entry that was rendered is
+    // the entry that names where it goes. Reading the calls back against the
+    // ids is what would catch a copy-pasted endpoint.
+    const requested = fetchMock.mock.calls.map(
+      (call) => (call as unknown as [string, RequestInit])[0],
+    );
+
+    expect(requested).toEqual(
+      REPORTING_EXPORTS.map(
+        (descriptor) =>
+          `http://node.test/api/events/${EVENT_ID}/exports/${descriptor.id}/download-url`,
+      ),
+    );
+  });
+
+  it("states the excluded fields of every export before it is generated", () => {
+    // REPORT-014: an organizer sees that emergency contacts are excluded
+    // without opening the file. Only the contact list may carry them at all,
+    // and there it is a condition rather than a column.
+    for (const descriptor of REPORTING_EXPORTS) {
+      expect(descriptor.columns).not.toContain("emergency_contact_name");
+      expect(descriptor.columns).not.toContain("date_of_birth");
+
+      if (descriptor.id !== "staff-contact") {
+        expect(descriptor.excludes).toContain("Emergency contacts");
+        expect(descriptor.conditionalColumns).toBeUndefined();
+      }
+    }
+
+    expect(STAFF_CONTACT_EXPORT.conditionalColumns?.columns).toEqual([
+      "emergency_contact_name",
+      "emergency_contact_phone",
+    ]);
+    // REPORT-008: the roster excludes phone numbers, which the contact list
+    // carries for every caller.
+    expect(STAFF_CONTACT_EXPORT.columns).toContain("staff_phone");
+    expect(
+      REPORTING_EXPORTS.find((descriptor) => descriptor.id === "shift-roster")
+        ?.excludes,
+    ).toContain("Phone numbers");
   });
 });

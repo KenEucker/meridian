@@ -29,6 +29,15 @@ interface ShortLivedDownloadUrlResponse {
 }
 
 /**
+ * The five Alpha 1 reporting exports share one path shape, so they are built
+ * from it rather than written out five times (M18.25; REPORT-001 through
+ * REPORT-005).
+ */
+function reportingExportEndpoint(eventId: string, report: string): string {
+  return `/api/events/${encodeURIComponent(eventId)}/exports/${report}/download-url`;
+}
+
+/**
  * The endpoints that issue a short-lived URL (data/API 5.7).
  *
  * Named here rather than spelled out at each call site so the surfaces bound in
@@ -36,7 +45,19 @@ interface ShortLivedDownloadUrlResponse {
  */
 export const shortLivedDownloadEndpoints = {
   credentialEligibilityExport(eventId: string): string {
-    return `/api/events/${encodeURIComponent(eventId)}/exports/credential-eligibility/download-url`;
+    return reportingExportEndpoint(eventId, "credential-eligibility");
+  },
+  shiftRosterExport(eventId: string): string {
+    return reportingExportEndpoint(eventId, "shift-roster");
+  },
+  staffContactExport(eventId: string): string {
+    return reportingExportEndpoint(eventId, "staff-contact");
+  },
+  hoursWorkedExport(eventId: string): string {
+    return reportingExportEndpoint(eventId, "hours-worked");
+  },
+  creditsEarnedExport(eventId: string): string {
+    return reportingExportEndpoint(eventId, "credits-earned");
   },
   incidentPdf(eventId: string, incidentId: string): string {
     return `/api/events/${encodeURIComponent(eventId)}/incidents/${encodeURIComponent(incidentId)}/pdf/download-url`;

@@ -7,8 +7,9 @@ import { meridianErrorMessage } from "@/api/meridianApi";
 import { credentialAdminAuthority } from "@/credentials/eventCredentialAdminModel";
 import { useConnectivity } from "@/offline/useConnectivity";
 import {
+  CREDENTIAL_ELIGIBILITY_EXPORT,
   downloadReportingExport,
-  reportingExportAuthority,
+  reportingExportAuthorityFor,
   type ReportingExportDescriptor,
 } from "@/reporting/reportingExports";
 import { sessionOrganizationLabel } from "@/session/sessionContext";
@@ -33,7 +34,18 @@ import { sessionOrganizationLabel } from "@/session/sessionContext";
  * again when it serves the file, so the surface names the rule and the roles it
  * is being applied to instead of guessing at the row count.
  */
-const authority = reportingExportAuthority;
+/**
+ * One export, and only one (M18.25).
+ *
+ * M18.25 gave the other four Alpha 1 exports a descriptor and a download path,
+ * so "every export this caller may run" is now five entries rather than one.
+ * This page is not where they belong: it is a page about event credentials, and
+ * the export it offers is the one that reads those records. The other four are
+ * offered by the reporting surfaces of M18.26. A caller holding, say, hours
+ * worked and not credential eligibility therefore has no export featureset here
+ * at all rather than a page of exports about something else.
+ */
+const authority = reportingExportAuthorityFor([CREDENTIAL_ELIGIBILITY_EXPORT]);
 const credentialAdmin = credentialAdminAuthority;
 const connectivity = useConnectivity();
 

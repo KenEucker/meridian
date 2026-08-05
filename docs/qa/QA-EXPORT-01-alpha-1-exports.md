@@ -22,28 +22,33 @@ verifies all five together, and is the one that answers the Milestone 13 QA gate
 Exports are server-generated and online-only in Alpha 1. No product UI entry
 point is required for this script: reporting surfaces (`REPORT-014`) are their
 own requirement and remain deferred, so the checks below use the documented
-domain services and the HTTP download endpoints. The short-lived download URL
-half of `REPORT-015` now exists for credential eligibility (M16.12) and is
-verified with the rest of that pattern rather than here. M16.22 added the one
-entry point that uses it — `organizer.credentials` in the client, reached from
-Credentials on the home directory's Organization pages — which runs the
-credential eligibility export and nothing else; a reviewer who wants to see that
-path end to end has it in `QA-CRED-01` section G, and the remaining four exports
-still have no surface until M18.26.
+domain services and the HTTP download endpoints. M16.22 added the one entry
+point in the client — `organizer.credentials`, reached from Credentials on the
+home directory's Organization pages — which runs the credential eligibility
+export and nothing else; a reviewer who wants to see that path end to end has it
+in `QA-CRED-01` section G, and the remaining four exports have no surface until
+M18.26.
+
+The short-lived download URL half of `REPORT-015` covered credential eligibility
+alone until M18.25 extended it to all five. Section I below walks that path for
+the four it added, which is the half a client holding a bearer token rather than
+a session has to use, and the half M18.26's surfaces will run every export
+through.
 
 ## Requirements covered
 
 - `REPORT-001` through `REPORT-005`: the five exports.
+- `REPORT-015`, `CLIENT-019`, `CLIENT-020`: every export retrieved through a short-lived scoped download URL, and audited.
 - `REPORT-006`, `REPORT-007`: organizer event-wide scope and department-role department scope.
 - `REPORT-008`: shift rosters exclude phone numbers and emergency contacts.
 - `REPORT-009`, `VOL-012`: department leads and department administration export emergency contacts for their own department.
 - `REPORT-010`, `VOL-011`: organizers hold no emergency contact access, including when narrowing to one department.
 - `CRED-005`, `HOURS-001`, `HOURS-007`, `HOURS-008`, `CREDIT-005`: the state each export reports and the basis it must reproduce.
 - Requirements sections 3.15, 5.12, 7.10, and 7.14.
-- Technical spec section 22.2 (CSV import/export).
-- Data/API spec sections 8, 10.10, 10.11, and 10.12.
+- Technical spec sections 11A.6 and 22.2 (short-lived downloads, CSV import/export).
+- Data/API spec sections 5.7, 8, 10.10, 10.11, and 10.12.
 - Development process section 7.10: export changes state actor permissions, scope rules, included columns, excluded sensitive fields, sample file, and test fixture.
-- Meridian Alpha 1 tasks M13.1 through M13.6 and M13.9.
+- Meridian Alpha 1 tasks M13.1 through M13.6, M13.9, M16.12, and M18.25.
 
 ## Environment
 
@@ -163,6 +168,35 @@ are the personas that carry no export role.
     php artisan tinker --execute='App\Models\AuditEvent::query()->whereIn("action", ["event_credential_eligibility.exported", "event_shift_roster.exported", "event_staff_contact.exported", "event_hours_worked.exported", "event_credits_earned.exported"])->latest("created_at")->take(20)->get(["action", "actor_user_id", "event_id", "department_id", "after_json"])->each(fn ($entry) => print($entry->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
     ```
 
+### I. Short-lived download URLs (M18.25)
+
+This section needs an API client that can send a bearer token, because the two
+steps under test are what a token-holding client does instead of navigating
+under a session. Obtain a token with `QA-AUTH-01` and export it as `$TOKEN`, and
+use the Emberfall event id as `$EVENT`.
+
+19. Ask for a URL for each of the four exports M18.25 added, as Olive:
+    ```bash
+    for report in shift-roster staff-contact hours-worked credits-earned; do curl -s -X POST "http://127.0.0.1:8000/api/events/$EVENT/exports/$report/download-url" -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json'; echo; done
+    ```
+20. Take one of the issued `url` values, open it in a browser with no Meridian
+    session — a private window is enough — and save the file. Then edit the
+    `signature` value by one character and open it again.
+21. Repeat step 19 signed in as Ira Ineligible, whose token carries no export
+    role, and as Dana narrowing to Gate:
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://127.0.0.1:8000/api/events/$EVENT/exports/hours-worked/download-url" -H "Authorization: Bearer $IRA_TOKEN" -H 'Accept: application/json'
+    curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://127.0.0.1:8000/api/events/$EVENT/exports/staff-contact/download-url" -H "Authorization: Bearer $DANA_TOKEN" -H 'Accept: application/json' -H 'Content-Type: application/json' -d "{\"department_id\":\"$GATE_ID\"}"
+    ```
+22. Ask for a staff contact URL as Dana with no narrowing, and another as Olive
+    narrowed to Rangers. Open both and compare their header rows.
+23. Ask for a credits earned URL as Dana, then revoke her grant and open the URL:
+    ```bash
+    php artisan tinker --execute='App\Models\TeamGrant::query()->update(["revoked_at" => now()]);'
+    ```
+24. Re-run the audit review in step 18 and read the entries the downloads in
+    this section produced.
+
 ## Expected results
 
 - Step 4: the credit calculation reports at least one entry created; an event holding an unfrozen hours record is refused outright rather than partially credited.
@@ -180,6 +214,12 @@ are the personas that carry no export role.
 - Step 16: each download saves a `.csv` attachment whose `Content-Disposition` filename matches the report, event, and timestamp pattern.
 - Step 17: the `department_id` narrowing returns only Rangers rows; a department id from another organization returns HTTP 404; the download as Omar returns HTTP 403 with a message naming the report.
 - Step 18: there is one audit entry per successful export, each carrying the acting user, the event, a `scope` of `event` or `department`, the `department_ids` it covered, and a `row_count` matching the file. Staff contact entries additionally carry `emergency_contacts_included`, true for Dana and false for Olive. No audit entry exists for a refused export.
+- Step 19: each call returns HTTP 200 with a `url` and an `expires_at` a few minutes out. The URL carries a `signature`, an `expires`, and an `actor`, and carries no bearer token, no session cookie, and nothing else identifying the caller (`CLIENT-019`).
+- Step 20: the file downloads with no session at all and arrives as a `.csv` attachment named for the report, the event, and a timestamp. The edited signature returns HTTP 403 and no file.
+- Step 21: both calls return HTTP 403 and neither returns a `url`. Being refused at issuance rather than handed a link that fails later is the point (`CLIENT-020`), and neither refusal writes an audit entry.
+- Step 22: Dana's file carries the `emergency_contact_name` and `emergency_contact_phone` columns; Olive's narrowed file does not carry them at all, and both carry `staff_phone`. Narrowing changed which rows were exported and not the authority Olive came by (`REPORT-010`).
+- Step 23: the URL was issued before the grant was revoked and still returns HTTP 403 when opened afterwards. Authorization is resolved again when the file is served rather than trusted from issuance.
+- Step 24: each downloaded file produced one audit entry naming the user the URL was issued to — not an anonymous navigation — with the same `scope`, `department_ids`, and `row_count` fields a direct download records.
 
 ## Evidence to capture
 
@@ -190,6 +230,7 @@ are the personas that carry no export role.
 - Transcript of step 15 showing the refusals for Omar, Ivy, Ira, and Gwen.
 - Transcript of the two credits files from step 13, before and after the policy rename.
 - Audit entries for `event_credential_eligibility.exported`, `event_shift_roster.exported`, `event_staff_contact.exported`, `event_hours_worked.exported`, and `event_credits_earned.exported`.
+- The four issued URLs from step 19 with their `expires_at` values, one file saved through a signed URL with no session, and the transcripts of the refusals in steps 21 and 23.
 
 ## Failure notes
 
@@ -200,3 +241,5 @@ are the personas that carry no export role.
 - Record any case where a department-scoped caller reaches another department's rows, or where an unauthorized actor resolves a scope at all.
 - Record any credits row whose policy name, multiplier, or credit value changes after the policy is renamed or re-rated.
 - Record any successful export that produced no audit entry, or any refused export that produced one.
+- Record any issued URL that still serves a file after its expiry, after its signature is edited, or after the role that earned it is revoked.
+- Record any download URL that carries a bearer token, a session cookie, or any credential beyond its signature.

@@ -152,6 +152,19 @@ describe("the endpoints that issue a URL", () => {
     expect(
       shortLivedDownloadEndpoints.credentialEligibilityExport("e 1"),
     ).toBe("/api/events/e%201/exports/credential-eligibility/download-url");
+    // The remaining four Alpha 1 exports reach the same path (M18.25).
+    expect(shortLivedDownloadEndpoints.shiftRosterExport("e1")).toBe(
+      "/api/events/e1/exports/shift-roster/download-url",
+    );
+    expect(shortLivedDownloadEndpoints.staffContactExport("e1")).toBe(
+      "/api/events/e1/exports/staff-contact/download-url",
+    );
+    expect(shortLivedDownloadEndpoints.hoursWorkedExport("e1")).toBe(
+      "/api/events/e1/exports/hours-worked/download-url",
+    );
+    expect(shortLivedDownloadEndpoints.creditsEarnedExport("e1")).toBe(
+      "/api/events/e1/exports/credits-earned/download-url",
+    );
     expect(shortLivedDownloadEndpoints.incidentPdf("e1", "i1")).toBe(
       "/api/events/e1/incidents/i1/pdf/download-url",
     );

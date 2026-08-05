@@ -43,7 +43,7 @@ use Illuminate\Support\Str;
  * them rather than filtered out, so a lead can see that someone on the list is
  * Inactive or Ineligible instead of wondering why they are missing from it.
  */
-final class StaffContactExportService
+final class StaffContactExportService implements ReportingExportGenerator
 {
     /**
      * Column order for the generated file. The header is part of the contract

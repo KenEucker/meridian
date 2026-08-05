@@ -74,6 +74,23 @@ export const CAPABILITY_FIELD_REPORTS_VIEW_EVENT = "field_reports.view_event";
 export const CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT =
   "reports.credential_eligibility.export";
 /**
+ * The remaining four Alpha 1 exports (REPORT-002 through REPORT-005; M18.25).
+ *
+ * One code per report rather than one for "reporting", because they are granted
+ * separately and a surface offers exactly the ones the caller holds. All five go
+ * to organizers for the whole event (REPORT-006) and to department roles for
+ * their own department (REPORT-007); which rows and which columns come back is
+ * the node's decision either way, and none of it is decided here.
+ */
+export const CAPABILITY_REPORTS_SHIFT_ROSTER_EXPORT =
+  "reports.shift_roster.export";
+export const CAPABILITY_REPORTS_STAFF_CONTACT_EXPORT =
+  "reports.staff_contact.export";
+export const CAPABILITY_REPORTS_HOURS_WORKED_EXPORT =
+  "reports.hours_worked.export";
+export const CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT =
+  "reports.credits_earned.export";
+/**
  * Revoking an event credential (CRED-011).
  *
  * Next to the export above and deliberately not the same thing. The export is
