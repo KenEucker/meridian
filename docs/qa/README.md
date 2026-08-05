@@ -56,7 +56,7 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 | ID | Coverage | Owning task |
 |---|---|---|
 | [`QA-FR-01-offline-field-report.md`](QA-FR-01-offline-field-report.md) | Offline Field Report submit with title/photos, reconnect/FRA, immutability, IC visibility, photo upload pending state, Name References, and `ic_lead`-only photo download | M9.9 |
-| [`QA-FR-02-dictated-field-reports.md`](QA-FR-02-dictated-field-reports.md) | Taking a Field Report for another staff member: who may (Department Operator, `ic_operator`, `ic_lead`) and who may not however senior; author and submitter recorded separately and both visible; append and photo authority staying with the author; the staff selector scoped to what the taker already sees, refused server-side rather than only hidden | M18.24A |
+| [`QA-FR-02-dictated-field-reports.md`](QA-FR-02-dictated-field-reports.md) | Taking a Field Report for another staff member: who may (`ic_operator` and `ic_lead` at this milestone; the Department Operator half of FR-015 waits on M18.10A, which owns the section 4.8A Operator capability set) and who may not however senior; author and submitter recorded separately and both visible; append and photo authority staying with the author; the staff selector scoped to the department the taker's console serves, refused server-side rather than only hidden | M18.24A |
 
 ## Alpha 1 Incident management script
 
