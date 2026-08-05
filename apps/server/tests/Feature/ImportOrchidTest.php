@@ -12,10 +12,12 @@ use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Tests\Support\Workbook;
 use Tests\TestCase;
 
 /**
- * God-mode Orchid CSV import screens for users and teams (technical spec 22.2).
+ * God-mode Orchid import screens for users, teams, shifts, and assignments
+ * (technical spec 22.2).
  */
 class ImportOrchidTest extends TestCase
 {
@@ -112,6 +114,36 @@ class ImportOrchidTest extends TestCase
             ->assertRedirect(route('platform.imports.teams'));
 
         $this->assertSame(1, Team::query()->where('code', 'DIRT')->count());
+    }
+
+    /**
+     * The upload is the workbook an operator built the roster in, not only a
+     * CSV they had to export first. The format is read from the file's
+     * contents, so a workbook saved under any name still imports.
+     */
+    public function test_an_uploaded_workbook_imports_users_and_reports_each_row(): void
+    {
+        $user = $this->importUser();
+
+        $file = UploadedFile::fake()->createWithContent(
+            'roster.xlsx',
+            Workbook::of([
+                ['email', 'name'],
+                ['vera.staff@example.org', 'Vera Staff'],
+                ['broken', 'Broken Row'],
+            ]),
+        );
+
+        $this->actingAs($user)
+            ->post(route('platform.imports.users', ['method' => 'import']), ['file' => $file])
+            ->assertRedirect(route('platform.imports.users'));
+
+        $this->assertDatabaseHas('users', ['email' => 'vera.staff@example.org']);
+
+        $screen = $this->actingAs($user)->get(route('platform.imports.users'));
+        $screen->assertOk();
+        $screen->assertSee('vera.staff@example.org');
+        $screen->assertSee('Email address is not valid.');
     }
 
     public function test_pasted_csv_imports_shifts_and_reports_each_row(): void

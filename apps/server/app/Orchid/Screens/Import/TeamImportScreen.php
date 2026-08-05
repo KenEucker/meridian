@@ -10,9 +10,9 @@ use App\Services\Imports\ImportResult;
 use App\Services\Imports\TeamImportService;
 
 /**
- * God-mode CSV import for teams (technical spec 22.2).
+ * God-mode spreadsheet and CSV import for teams (technical spec 22.2).
  */
-class TeamImportScreen extends CsvImportScreen
+class TeamImportScreen extends ImportScreen
 {
     public function name(): ?string
     {
@@ -21,7 +21,7 @@ class TeamImportScreen extends CsvImportScreen
 
     public function description(): ?string
     {
-        return 'Create or update department teams from a CSV. Each row names its department by organization slug and department code. Teams missing from the file are left alone; nothing here archives or deletes a team.';
+        return 'Create or update department teams from a spreadsheet or CSV. Each row names its department by organization slug and department code. Teams missing from the file are left alone; nothing here archives or deletes a team.';
     }
 
     protected function routeName(): string
@@ -34,8 +34,8 @@ class TeamImportScreen extends CsvImportScreen
         return TeamImportLayout::class;
     }
 
-    protected function runImport(string $csv, User $actor, bool $preview): ImportResult
+    protected function runImport(string $file, User $actor, bool $preview): ImportResult
     {
-        return app(TeamImportService::class)->import($csv, $actor, $preview);
+        return app(TeamImportService::class)->import($file, $actor, $preview);
     }
 }

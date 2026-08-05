@@ -10,9 +10,9 @@ use App\Services\Imports\ImportResult;
 use App\Services\Imports\UserImportService;
 
 /**
- * God-mode CSV import for users (technical spec 22.2).
+ * God-mode spreadsheet and CSV import for users (technical spec 22.2).
  */
-class UserImportScreen extends CsvImportScreen
+class UserImportScreen extends ImportScreen
 {
     public function name(): ?string
     {
@@ -21,7 +21,7 @@ class UserImportScreen extends CsvImportScreen
 
     public function description(): ?string
     {
-        return 'Create or update user accounts from a CSV of email addresses and names. The file cannot grant console access, roles, or passwords, and it never removes an account.';
+        return 'Create or update user accounts from a spreadsheet or CSV of email addresses and names. The file cannot grant console access, roles, or passwords, and it never removes an account.';
     }
 
     protected function routeName(): string
@@ -34,8 +34,8 @@ class UserImportScreen extends CsvImportScreen
         return UserImportLayout::class;
     }
 
-    protected function runImport(string $csv, User $actor, bool $preview): ImportResult
+    protected function runImport(string $file, User $actor, bool $preview): ImportResult
     {
-        return app(UserImportService::class)->import($csv, $actor, $preview);
+        return app(UserImportService::class)->import($file, $actor, $preview);
     }
 }

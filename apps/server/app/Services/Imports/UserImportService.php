@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * CSV import for users (technical spec 22.2).
+ * Spreadsheet and CSV import for users (technical spec 22.2).
  *
  * The file carries identity only: `email` and `name`. It deliberately cannot
  * carry passwords, console permissions, roles, or the disabled flag. Meridian
@@ -47,12 +47,12 @@ final class UserImportService
      * @throws ImportException when the file itself cannot be read.
      */
     public function import(
-        string $csv,
+        string $file,
         User $actor,
         bool $preview = false,
         string $sourceContext = AuditEvent::SOURCE_ORCHID,
     ): ImportResult {
-        $records = CsvImportReader::read($csv, self::REQUIRED_COLUMNS);
+        $records = ImportFileReader::read($file, self::REQUIRED_COLUMNS);
 
         if (! $preview) {
             return $this->apply($records, $actor, false, $sourceContext);

@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * CSV import for teams (technical spec 22.2).
+ * Spreadsheet and CSV import for teams (technical spec 22.2).
  *
  * Every row names its owning department by organization slug and department
  * code rather than by identifier, because that is what an operator can read off
@@ -64,12 +64,12 @@ final class TeamImportService
      * @throws ImportException when the file itself cannot be read.
      */
     public function import(
-        string $csv,
+        string $file,
         User $actor,
         bool $preview = false,
         string $sourceContext = AuditEvent::SOURCE_ORCHID,
     ): ImportResult {
-        $records = CsvImportReader::read($csv, self::REQUIRED_COLUMNS);
+        $records = ImportFileReader::read($file, self::REQUIRED_COLUMNS);
 
         if (! $preview) {
             return $this->apply($records, $actor, false, $sourceContext);

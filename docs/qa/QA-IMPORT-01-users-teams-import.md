@@ -1,20 +1,20 @@
-# QA-IMPORT-01: Users, Teams, Shifts, and Assignments CSV Import
+# QA-IMPORT-01: Users, Teams, Shifts, and Assignments Spreadsheet and CSV Import
 
 ## Purpose
 
-Verify that a God Mode operator can bulk-create and bulk-correct user accounts, department teams, event shifts, and shift assignments from a CSV file in the Orchid console, that a preview shows exactly what the file would do before anything is written, that one bad row never aborts the file, and that a spreadsheet cannot grant console access, put someone on a shift they may not work, or remove anything.
+Verify that a God Mode operator can bulk-create and bulk-correct user accounts, department teams, event shifts, and shift assignments from a spreadsheet or a CSV file in the Orchid console, that a preview shows exactly what the file would do before anything is written, that one bad row never aborts the file, and that a spreadsheet cannot grant console access, put someone on a shift they may not work, or remove anything.
 
-Section A covers the users and teams imports (M13.7). Section B covers the shifts and assignments imports (M13.8).
+Section A covers the users and teams imports (M13.7). Section B covers the shifts and assignments imports (M13.8). Section C covers uploading the `.xlsx` workbook itself rather than a CSV exported from it (M18.27), and is run against the same four screens.
 
 ## Requirements covered
 
-- Technical spec section 22.2: Alpha 1 Orchid / God Mode includes CSV import/export, focused first on Users, Teams, Shifts, and Assignments.
+- Technical spec section 22.2: Alpha 1 Orchid / God Mode includes CSV and spreadsheet import/export, focused first on Users, Teams, Shifts, and Assignments.
 - Technical spec section 22.1: Orchid is God Mode and repair tooling, not the normal Admin product shell.
 - `SHIFT-001` through `SHIFT-009`: shift structure, schedule, capacity, and signup-window rules an imported shift must still satisfy.
 - `SHIFT-012`, `SHIFT-014`, `SHIFT-015`, `SHIFT-016`, `TRAIN-008`, `WAIVER-005`: assignment eligibility an imported assignment must still satisfy.
 - Development process section 3.6: audit-sensitive changes record audit history.
 - Development process section 7.10: export/import changes state actor permissions, included columns, and round-trip behavior.
-- Meridian Alpha 1 tasks M13.7 and M13.8.
+- Meridian Alpha 1 tasks M13.7, M13.8, and M18.27.
 
 ## Documented import rules (enforced by `UserImportService`, `TeamImportService`, `ShiftImportService`, and `AssignmentImportService`)
 
@@ -35,12 +35,18 @@ Section A covers the users and teams imports (M13.7). Section B covers the shift
 - Assignment rows are eligibility-checked exactly like a lead assignment: Do Not Staff, department membership, eligible team membership, Ineligible status, and required trainings and waivers all refuse the row with the domain's own reason.
 - An imported assignment is recorded as lead-assigned by the operator running the import; the file cannot claim a staff member signed themselves up. A closed signup window does not refuse an import, because a roster usually arrives as a spreadsheet after signup closed.
 - Nobody is removed from a shift by an import, and a row for an existing active assignment is reported as already assigned rather than duplicated.
+- An upload may be an `.xlsx` workbook or a CSV. The format is read from the file's contents rather than its name, and both land on the same rows. Pasting takes CSV.
+- The first sheet of a workbook is the imported one; no attempt is made to guess which sheet was meant.
+- A workbook's row numbers are the ones the operator sees in the sheet, including past a row they emptied.
+- A date-formatted cell is read as the spreadsheet displays it, and is then subject to the same event-timezone rule as a typed one. A cell holding only a time keeps its time and gains no date.
+- A file that is not a readable `.xlsx` — including the legacy binary `.xls` and OpenDocument formats — is refused whole with a message saying to export CSV. The legacy `.xls` format is not supported.
 
 ## Environment
 
 - Development server environment with a migrated database
 - Orchid console at `/admin`
 - Screens under the God Mode section of the sidebar: **Import Users** (`/admin/imports/users`), **Import Teams** (`/admin/imports/teams`), **Import Shifts** (`/admin/imports/shifts`), and **Import Assignments** (`/admin/imports/assignments`)
+- A spreadsheet application that can save `.xlsx` (Excel, LibreOffice Calc, or Google Sheets exporting to `.xlsx`) for section C
 
 ## Personas
 
@@ -135,6 +141,19 @@ Run this section after section A, so the `DIRT` and `GREETERS` teams exist.
 27. Sign out, sign in as the console user without `platform.imports`, and try to open `/admin/imports/shifts` and `/admin/imports/assignments`.
 28. Open the audit log and review the entries produced by section B.
 
+### C. Uploading the workbook itself (M18.27)
+
+Run this section after section B. Build the workbook in a spreadsheet application rather than by renaming a CSV, so the cells carry the types a spreadsheet gives them.
+
+29. In a spreadsheet application, recreate the shifts table from the setup data on the first sheet, typing the `starts_at` and `ends_at` values as dates so the application formats them as dates rather than as text, and leaving `Gate Opening`'s capacity cell empty. Save it as `shifts.xlsx`.
+30. Open **Import Shifts**, choose the workbook under **Spreadsheet or CSV file**, and choose **Preview**, then **Import**.
+31. Open `Dirt Patrol Day` and read its scheduled start against the event timezone, and confirm `Gate Opening` still has no capacity limit.
+32. In the workbook, delete the entire `Ghost Shift` row so the rows below shift up in the sheet, change one remaining row so it is invalid, save, and re-upload with **Preview**.
+33. Rename `shifts.xlsx` to `shifts.csv` without converting it, and upload it.
+34. Add a second sheet to the workbook holding a different shift table, put it after the first sheet, save, and re-upload with **Preview**.
+35. Save one of the section A tables in the legacy `.xls` format, or export it as OpenDocument `.ods`, and upload that to **Import Users**.
+36. Repeat step 30 against **Import Users** with the users table saved as `users.xlsx`, and confirm the same outcomes section A reported for the CSV of that table.
+
 ## Expected results
 
 - Step 2: the preview reports 2 created, 0 updated, 3 skipped, and lists each row with its outcome — `Email address is not valid.`, `Missing email address.`, and `Duplicate of row 2 in this file.`. A notice states nothing was saved.
@@ -164,6 +183,13 @@ Run this section after section A, so the `DIRT` and `GREETERS` teams exist.
 - Step 26: the department-only row is skipped with `That title and start matches 2 shifts in this department. Add a team_code column to name one.`, and the row carrying `team_code` imports against the named team.
 - Step 27: both screens are denied (HTTP 403) and neither appears in that user's sidebar.
 - Step 28: created shifts have the ordinary `shift.created` entries and updated shifts `shift.updated` with before/after values; assignments have the ordinary `shift_assignment.assigned` entries naming Gwen Godmode as the actor; each run has a `shifts.imported` or `shift_assignments.imported` summary entry with its counts; the source context on every entry is `orchid`, and the previews in steps 14 and 22 left no audit entries at all.
+- Step 30: the preview and the import report the same per-row outcomes the CSV of the same table produced in steps 14 and 15 — the workbook is not a different import.
+- Step 31: `Dirt Patrol Day` starts at 09:00 in the event timezone, the same moment the CSV produced, rather than at 09:00 UTC or at a date shifted by a day. `Gate Opening` has no capacity limit: an empty cell in a workbook is absent from the file, and it must not pull the column beside it into `capacity`.
+- Step 32: the reported row numbers are the ones the spreadsheet now shows, so the invalid row is reported at the line the operator can open and correct, not at the line it held before the deletion.
+- Step 33: the file imports exactly as it did in step 30. The format is read from the contents, so a workbook under a CSV name is still a workbook.
+- Step 34: only the first sheet is imported, and the second sheet's rows are absent from the result.
+- Step 35: the file is refused whole and nothing is written. A legacy `.xls` is named as such and told to be saved as `.xlsx` or exported as CSV; an OpenDocument file is refused as not a spreadsheet Meridian can read, with the same advice. Neither is read as CSV and refused for a column the operator can see in their own file.
+- Step 36: identical outcomes to steps 4 through 8, including the refusal of a file whose header row is `username,name`, worded for a spreadsheet rather than for a CSV.
 
 ## Evidence to capture
 
@@ -177,6 +203,7 @@ Run this section after section A, so the `DIRT` and `GREETERS` teams exist.
 - Record of Vera's assignment status and assigning user after step 23
 - Audit log entries for `user.imported`, `user.updated`, `team.created`, `users.imported`, `teams.imported`, `shift.created`, `shift.updated`, `shifts.imported`, `shift_assignment.assigned`, and `shift_assignments.imported`
 - The 403 response or denied screen for the console user without `platform.imports`
+- The workbook used in section C, alongside a screenshot of its import result and of the same table's CSV import result
 
 ## Failure notes
 
@@ -188,3 +215,7 @@ Run this section after section A, so the `DIRT` and `GREETERS` teams exist.
 - Record any case where an imported shift time lands at the wrong moment for the event timezone.
 - Record any case where an import cancels a shift, removes an assignment, or drops a shift's training or waiver requirements.
 - Record any case where an imported assignment puts a staff member on a shift they are not eligible to work, or is recorded as a self-signup.
+- Record any case where a workbook and a CSV of the same table produce different outcomes.
+- Record any case where a workbook's empty cell shifts the columns beside it, or where a date cell lands on a different moment than the same date typed into a CSV.
+- Record any case where a reported row number does not match the row the spreadsheet shows.
+- Record any case where a sheet other than the first is imported.

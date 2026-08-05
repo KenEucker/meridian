@@ -53,14 +53,23 @@ and what you changed. "Fixed" is not a reason.
 ## Bulk import from a spreadsheet
 
 **Import Users**, **Import Teams**, **Import Shifts**, and **Import
-Assignments** take a CSV, either uploaded or pasted. Use them when a list
-arrives as a spreadsheet and entering it by hand would take an afternoon.
+Assignments** take an uploaded file or pasted rows. Use them when a list arrives
+as a spreadsheet and entering it by hand would take an afternoon.
+
+Upload the `.xlsx` workbook itself or a CSV exported from it — the format is
+read from the file's contents rather than its name, and both land on exactly the
+same rows, so neither choice is the wrong one. The paste box takes CSV, which is
+what to use over a slow on-site link. A legacy `.xls` and an OpenDocument file
+are refused by name; save or export those as `.xlsx` or CSV first.
 
 They all work the same way:
 
 - Column names are matched case-insensitively, order does not matter, and
   unknown columns are ignored. A file missing a required column is refused
   whole; a single bad row is skipped with a reason and the rest still imports.
+- In a workbook, the **first sheet** is the one imported, and the row numbers in
+  the result are the ones the sheet shows you — including past a row somebody
+  deleted — so a reported row is one you can open and correct.
 - **Preview** first. It runs the file and throws the result away, so you see the
   per-row outcome — created, updated, or skipped and why — before anything is
   written.
@@ -84,7 +93,10 @@ updated record is audited, plus one summary entry per run.
 Shifts name their event, department, and eligible team the same way. Times
 written without a timezone — `2026-08-28 09:00` — are read in the event's own
 timezone, because that is the time the shift is worked; a value carrying `Z` or
-an offset is taken as written. What identifies a shift is its event, department,
+an offset is taken as written. A cell a spreadsheet formatted as a date is read
+as the sheet displays it and then follows that same rule, so a workbook and a
+CSV of the same schedule land on the same moment. What identifies a shift is its
+event, department,
 team, title, and start together, so correcting a capacity or an end time updates
 the shift, while changing a title or a start creates a second one. Check the
 preview counts: a run reporting created where you expected updated is usually a

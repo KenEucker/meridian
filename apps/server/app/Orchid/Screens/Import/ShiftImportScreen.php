@@ -10,9 +10,9 @@ use App\Services\Imports\ImportResult;
 use App\Services\Imports\ShiftImportService;
 
 /**
- * God-mode CSV import for shifts (technical spec 22.2).
+ * God-mode spreadsheet and CSV import for shifts (technical spec 22.2).
  */
-class ShiftImportScreen extends CsvImportScreen
+class ShiftImportScreen extends ImportScreen
 {
     public function name(): ?string
     {
@@ -21,7 +21,7 @@ class ShiftImportScreen extends CsvImportScreen
 
     public function description(): ?string
     {
-        return 'Create or update event shifts from a CSV. Each row names its event, department, and eligible team by slug and code. Shifts missing from the file are left alone; nothing here cancels a shift, and training or waiver requirements already set on a shift are kept.';
+        return 'Create or update event shifts from a spreadsheet or CSV. Each row names its event, department, and eligible team by slug and code. Shifts missing from the file are left alone; nothing here cancels a shift, and training or waiver requirements already set on a shift are kept.';
     }
 
     protected function routeName(): string
@@ -34,8 +34,8 @@ class ShiftImportScreen extends CsvImportScreen
         return ShiftImportLayout::class;
     }
 
-    protected function runImport(string $csv, User $actor, bool $preview): ImportResult
+    protected function runImport(string $file, User $actor, bool $preview): ImportResult
     {
-        return app(ShiftImportService::class)->import($csv, $actor, $preview);
+        return app(ShiftImportService::class)->import($file, $actor, $preview);
     }
 }
