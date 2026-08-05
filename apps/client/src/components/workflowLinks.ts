@@ -22,9 +22,18 @@
 //    surfaces — they are the user's own, or their department's published pages —
 //    so what permits them is holding a session and belonging to a team, both of
 //    which come from the session response too.
+//
+// The two reporting entries are capability-permitted by five codes at once and
+// additionally by how wide the role carrying them reaches, so they read the same
+// authority their surfaces render from rather than restating the rule here. See
+// `reporting/reportingExports`.
 
 import { computed, type ComputedRef } from "vue";
 
+import {
+  departmentReportingExportAuthority,
+  organizerReportingExportAuthority,
+} from "@/reporting/reportingExports";
 import {
   CAPABILITY_DEPARTMENT_ADMINISTER,
   CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
@@ -522,6 +531,24 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       }
 
       /*
+       * The department reporting surface (M18.26; REPORT-014, REPORT-007).
+       *
+       * Offered on the department-scoped half of the export authority, so a
+       * lead reaches the page that exports the department they are working in
+       * and an organizer does not reach it from their Organizers Department at
+       * all — their entry is Reports under Organization pages, which exports
+       * the whole event.
+       */
+      if (departmentReportingExportAuthority.value !== null) {
+        departmentPages.push({
+          label: "Reports",
+          description:
+            "Rosters, contacts, hours, and credits for this department.",
+          to: { name: "events.departments.reports.index", params },
+        });
+      }
+
+      /*
        * Waiver administration for department and team leads (M18.18;
        * WAIVER-010). Role-permitted rather than capability-permitted, the way
        * Team Overview is: waiver authority follows the waiver's scope, which
@@ -624,6 +651,23 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
           ? "Event credential administration and eligibility export."
           : "Event credential eligibility export.",
         to: { name: "organizer.credentials.index" },
+      });
+    }
+
+    /*
+     * The organizer reporting surface (M18.26; REPORT-014, REPORT-006).
+     *
+     * Beside Credentials rather than inside it: that page offers the one export
+     * that reads the records it is a page for, and this one offers all five
+     * Alpha 1 exports across the event. An organizer holding four of the five
+     * codes still gets this entry and sees exactly those four (CLIENT-005).
+     */
+    if (organizerReportingExportAuthority.value !== null) {
+      organizationPages.push({
+        label: "Reports",
+        description:
+          "Event-wide credential, roster, contact, hours, and credit exports.",
+        to: { name: "organizer.reports.index" },
       });
     }
 

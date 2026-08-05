@@ -167,6 +167,7 @@ describe("navigation without a permitting capability", () => {
       "Staff",
       "Field Reports",
       "Credentials",
+      "Reports",
     ]) {
       expect(labels).not.toContain(surface);
     }
@@ -245,6 +246,63 @@ describe("navigation without a permitting capability", () => {
 
     install(sessionWith({ capabilities: [capability] }));
     expect(sectionLabels(section)).toContain(label);
+  });
+
+  it.each([
+    ["department_lead", "Department pages", "Organization pages"],
+    ["organizer", "Organization pages", "Department pages"],
+    ["lead_organizer", "Organization pages", "Department pages"],
+  ])(
+    "offers a %s the reporting surface written for their reach and not the other one",
+    (roleCode, listed, absent) => {
+      /*
+       * M18.26, REPORT-014. The two reporting surfaces are permitted by the same
+       * five codes, so the capability cannot tell them apart — an organizer
+       * exports the whole event and a department role exports its own
+       * department, and each entry leads to the surface that states that scope.
+       */
+      install(
+        sessionWith({
+          roleCode,
+          capabilities: ["reports.hours_worked.export"],
+        }),
+      );
+
+      expect(sectionLabels(listed)).toContain("Reports");
+      expect(sectionLabels(absent)).not.toContain("Reports");
+    },
+  );
+
+  it("sends each Reports entry to its own surface", () => {
+    install(
+      sessionWith({
+        roleCode: "department_lead",
+        capabilities: ["reports.hours_worked.export"],
+      }),
+    );
+
+    const departmentReports = useNavigationSections()
+      .value.find((section) => section.title === "Department pages")
+      ?.links.find((link) => link.label === "Reports");
+
+    expect(departmentReports?.to.name).toBe("events.departments.reports.index");
+    // Department-scoped in its route, because it is department-scoped in its
+    // requests.
+    expect(departmentReports?.to.params?.departmentId).toBe(DEPARTMENT_ID);
+
+    install(
+      sessionWith({
+        roleCode: "organizer",
+        capabilities: ["reports.hours_worked.export"],
+      }),
+    );
+
+    const organizerReports = useNavigationSections()
+      .value.find((section) => section.title === "Organization pages")
+      ?.links.find((link) => link.label === "Reports");
+
+    expect(organizerReports?.to.name).toBe("organizer.reports.index");
+    expect(organizerReports?.to.params).toBeUndefined();
   });
 
   it("offers Department Overview to a department lead and to nobody else", () => {

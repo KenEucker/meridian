@@ -28,9 +28,13 @@
 // M18.25 completes the list. All five Alpha 1 exports (REPORT-001 through
 // REPORT-005) now have a `download-url` sibling on the node and a descriptor
 // here, so the reporting surfaces of M18.26 offer one download path rather than
-// one export that works differently from its four siblings. The surfaces
-// themselves are still M18.26's; what this module answers is which exports a
-// caller may run and what each of them will contain.
+// one export that works differently from its four siblings.
+//
+// M18.26 adds the last thing a surface needs and a descriptor cannot carry:
+// which of REPORT-014's two surfaces a caller's standing belongs to. That is a
+// question about the role rather than about the capability, because all five
+// codes are granted to organizers and to department roles alike — see
+// `ReportingExportReach`.
 
 import { computed, type ComputedRef } from "vue";
 
@@ -45,11 +49,14 @@ import {
   CAPABILITY_REPORTS_HOURS_WORKED_EXPORT,
   CAPABILITY_REPORTS_SHIFT_ROSTER_EXPORT,
   CAPABILITY_REPORTS_STAFF_CONTACT_EXPORT,
+  ROLE_LEAD_ORGANIZER,
+  ROLE_ORGANIZER,
 } from "@/session/permissionCodes";
 import {
   selectedSessionDepartment,
   sessionEventContext,
 } from "@/session/sessionAccess";
+import type { SessionRole } from "@/session/sessionDocument";
 
 /**
  * One export, described well enough that somebody can decide whether to run it
@@ -301,6 +308,49 @@ export const REPORTING_EXPORTS: readonly ReportingExportDescriptor[] = [
   CREDITS_EARNED_EXPORT,
 ];
 
+/**
+ * How wide the standing behind an export reaches (REPORT-006, REPORT-007).
+ *
+ * Not a prediction of what the file will hold — property 1 above still stands,
+ * and the node resolves the rows twice regardless of what was asked here. It is
+ * the question REPORT-014 asks of the *caller*: an organizer belongs on the
+ * organization/event-scoped surface and a department role belongs on the
+ * department-scoped one, and the two say different things about their scope
+ * because they are different scopes.
+ *
+ * `"any"` is for a surface whose subject already fixes the scope —
+ * `organizer.credentials` is a page about one event's credentials for whoever
+ * may administer them — and which therefore states the rule for both cases.
+ */
+export type ReportingExportReach = "any" | "event" | "department";
+
+/**
+ * The role codes whose export authority covers the whole event (REPORT-006).
+ *
+ * The client's copy of `ReportingExportAccess::ORGANIZATION_WIDE_ROLES`. It is
+ * a copy and worth naming as one: if the node ever widens that list, a role it
+ * added would reach the department surface here rather than the organizer one.
+ * That is a surface offered too narrowly, never a file served too widely — the
+ * node resolves the scope when it issues the URL and again when it serves the
+ * file, and neither reads anything this module decided.
+ */
+const ORGANIZATION_WIDE_ROLE_CODES: readonly string[] = [
+  ROLE_ORGANIZER,
+  ROLE_LEAD_ORGANIZER,
+];
+
+function roleReaches(role: SessionRole, reach: ReportingExportReach): boolean {
+  if (reach === "any") {
+    return true;
+  }
+
+  const organizationWide = ORGANIZATION_WIDE_ROLE_CODES.includes(
+    role.role_code,
+  );
+
+  return reach === "event" ? organizationWide : !organizationWide;
+}
+
 /** The event an export would run against, and the standing that permits it. */
 export interface ReportingExportAuthority {
   readonly eventId: string;
@@ -309,11 +359,20 @@ export interface ReportingExportAuthority {
   readonly roleLabel: string;
   /** The exports those roles permit, in the order they are offered. */
   readonly exports: readonly ReportingExportDescriptor[];
+  /**
+   * The department those roles are held in.
+   *
+   * The narrowing a department-scoped surface sends with every request, and the
+   * department an organizer-scoped one is *not* narrowed to — an organizer's
+   * standing is held in the Organizers Department and reaches every other one.
+   */
+  readonly departmentId: string;
+  readonly departmentLabel: string;
 }
 
 /**
- * What this client may export from a named list, or null when it may export
- * nothing on it.
+ * What this client may export from a named list at a named reach, or null when
+ * it may export nothing on it.
  *
  * Which exports a surface offers is the surface's question, not this module's:
  * the reporting surfaces of M18.26 offer all five, and `organizer.credentials`
@@ -322,16 +381,21 @@ export interface ReportingExportAuthority {
  * should name the role granting the export it is showing, not one granting some
  * other export the same person also holds.
  *
- * Null covers three separate cases and a surface treats them as one: no session,
- * no resolved event, or no role here carrying one of these capabilities. All
- * three mean there is no export to offer, and CLIENT-005 says an unavailable
- * action is absent rather than disabled.
+ * The reach narrows which roles are read for that answer, so a department lead
+ * is not offered a surface promising the whole event and an organizer is not
+ * offered one promising their own department. See {@link ReportingExportReach}.
+ *
+ * Null covers four separate cases and a surface treats them as one: no session,
+ * no resolved event, no role here carrying one of these capabilities, or none
+ * carrying it at this reach. All of them mean there is no export to offer, and
+ * CLIENT-005 says an unavailable action is absent rather than disabled.
  *
  * The event is required rather than optional because every export endpoint is
  * event-scoped: with no event id there is no URL to ask for.
  */
 export function reportingExportAuthorityFor(
   offered: readonly ReportingExportDescriptor[],
+  reach: ReportingExportReach = "any",
 ): ComputedRef<ReportingExportAuthority | null> {
   return computed<ReportingExportAuthority | null>(() => {
     const department = selectedSessionDepartment.value;
@@ -341,15 +405,26 @@ export function reportingExportAuthorityFor(
       return null;
     }
 
+    /*
+     * Read from the roles rather than from the department's flattened
+     * capability list, because the reach is a property of the role that carried
+     * the code and flattening throws it away. At `"any"` the two are the same
+     * set, which is what keeps the surfaces that do not ask about reach reading
+     * exactly what they read before.
+     */
+    const atReach = department.roles.filter((role) =>
+      roleReaches(role, reach),
+    );
+
     const permitted = offered.filter((descriptor) =>
-      department.capabilities.includes(descriptor.capability),
+      atReach.some((role) => role.capabilities.includes(descriptor.capability)),
     );
 
     if (permitted.length === 0) {
       return null;
     }
 
-    const granting = department.roles.filter((role) =>
+    const granting = atReach.filter((role) =>
       permitted.some((descriptor) =>
         role.capabilities.includes(descriptor.capability),
       ),
@@ -370,13 +445,35 @@ export function reportingExportAuthorityFor(
       eventLabel: event.eventLabel ?? "This event",
       roleLabel: roleNames.length > 0 ? roleNames.join(", ") : "Your role",
       exports: permitted,
+      departmentId: department.departmentId,
+      departmentLabel: department.departmentLabel,
     };
   });
 }
 
-/** Every Alpha 1 export this caller may run, for a surface that offers them all. */
-export const reportingExportAuthority =
-  reportingExportAuthorityFor(REPORTING_EXPORTS);
+/**
+ * REPORT-014's two surfaces, each reading the standing it is written for
+ * (M18.26).
+ *
+ * Module-level rather than built per view, because they are the answer to a
+ * question about the session rather than about a page, and navigation asks the
+ * same question the surfaces do.
+ *
+ * Both read the department the client is currently working in, so somebody who
+ * organizes this organization and leads a department in it is offered the
+ * organizer surface while working in the Organizers Department and the
+ * department one while working in their own — each in the place their standing
+ * for it is held, which is where the node checks for it too.
+ */
+export const organizerReportingExportAuthority = reportingExportAuthorityFor(
+  REPORTING_EXPORTS,
+  "event",
+);
+
+export const departmentReportingExportAuthority = reportingExportAuthorityFor(
+  REPORTING_EXPORTS,
+  "department",
+);
 
 /**
  * Run one export for one event (REPORT-015).

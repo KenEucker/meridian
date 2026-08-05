@@ -18,11 +18,12 @@ import {
 } from "@/session/localFieldSessionFixture";
 import { CAPABILITY_REPORTS_HOURS_WORKED_EXPORT } from "@/session/permissionCodes";
 import {
+  departmentReportingExportAuthority,
   downloadCredentialEligibilityExport,
   downloadReportingExport,
   HOURS_WORKED_EXPORT,
+  organizerReportingExportAuthority,
   REPORTING_EXPORTS,
-  reportingExportAuthority,
   STAFF_CONTACT_EXPORT,
 } from "@/reporting/reportingExports";
 import { clearClientSession } from "@/session/clientSession";
@@ -61,7 +62,7 @@ describe("what this client may export", () => {
   it("reports the export and the roles that carry it where the grant is held", () => {
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
 
-    const authority = reportingExportAuthority.value;
+    const authority = organizerReportingExportAuthority.value;
 
     expect(authority?.eventId).toBe(EVENT_ID);
     expect(authority?.eventLabel).toBe("Local Field Event");
@@ -84,7 +85,7 @@ describe("what this client may export", () => {
     });
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
 
-    expect(reportingExportAuthority.value?.exports).toEqual([
+    expect(organizerReportingExportAuthority.value?.exports).toEqual([
       HOURS_WORKED_EXPORT,
     ]);
   });
@@ -94,13 +95,65 @@ describe("what this client may export", () => {
     // does not carry into another the same person is ordinary staff in.
     selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.gate);
 
-    expect(reportingExportAuthority.value).toBeNull();
+    expect(organizerReportingExportAuthority.value).toBeNull();
+    expect(departmentReportingExportAuthority.value).toBeNull();
   });
 
   it("reports nothing without a session at all", () => {
     clearClientSession();
 
-    expect(reportingExportAuthority.value).toBeNull();
+    expect(organizerReportingExportAuthority.value).toBeNull();
+    expect(departmentReportingExportAuthority.value).toBeNull();
+  });
+});
+
+describe("which of REPORT-014's two surfaces a standing belongs to", () => {
+  it("gives an organizer the event-wide authority and no department one", () => {
+    // REPORT-006: the organizer's export covers the event, so the surface that
+    // promises one department is not theirs — even though they are working in
+    // the Organizers Department when they hold it.
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+
+    expect(organizerReportingExportAuthority.value?.exports).toEqual(
+      REPORTING_EXPORTS,
+    );
+    expect(departmentReportingExportAuthority.value).toBeNull();
+  });
+
+  it("gives a department lead the department authority and no event-wide one", () => {
+    // REPORT-007, and the half that matters: a lead offered an event-wide
+    // surface would be reading a scope the node was never going to serve them.
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+
+    const authority = departmentReportingExportAuthority.value;
+
+    expect(authority?.exports).toEqual(REPORTING_EXPORTS);
+    expect(authority?.roleLabel).toBe("Department Lead");
+    // The narrowing the department surface sends with every request.
+    expect(authority?.departmentId).toBe(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+    expect(authority?.departmentLabel).toBe("Rangers");
+    expect(organizerReportingExportAuthority.value).toBeNull();
+  });
+
+  it("reads the reach off the role rather than off the capability", () => {
+    // All five codes go to organizers and to department roles alike, so the
+    // capability list cannot answer this. Same codes, same department, one role
+    // code changed: the standing moves from one surface to the other.
+    const document = localFieldSessionDocument();
+
+    installLocalFieldSession({
+      roles: document.roles.map((role) =>
+        role.role_code === "organizer"
+          ? { ...role, role_code: "lead_organizer", role_name: "Lead Organizer" }
+          : role,
+      ),
+    });
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+
+    expect(organizerReportingExportAuthority.value?.roleLabel).toBe(
+      "Lead Organizer",
+    );
+    expect(departmentReportingExportAuthority.value).toBeNull();
   });
 });
 
