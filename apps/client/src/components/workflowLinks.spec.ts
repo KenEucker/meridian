@@ -178,6 +178,9 @@ describe("navigation without a permitting capability", () => {
     expect(useStaffLinks().value.map((link) => link.label)).toEqual([
       "Me",
       "Event Info",
+      // M18.28: the staff dashboard is personal too, and gated by no capability
+      // — every widget on it is about the reader's own record.
+      "Dashboard",
       "Shifts",
       "My Field Reports",
       // M18.6: acknowledgments are personal too, and gated by no capability —
@@ -395,6 +398,8 @@ describe("navigation across the user's departments", () => {
 
     selectSessionDepartment("66666666-6666-4666-8666-666666666666");
     expect(useWorkflowLinks().value.map((link) => link.label)).toEqual([
+      // M18.28: the department's own dashboard, ahead of the workflows in it.
+      "Dashboard",
       "Overview",
       "Planning",
       "Logistics",

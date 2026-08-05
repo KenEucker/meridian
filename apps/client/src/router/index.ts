@@ -16,6 +16,7 @@ import {
 import DepartmentBrandingView from "@/views/DepartmentBrandingView.vue";
 import OrganizationBrandingView from "@/views/OrganizationBrandingView.vue";
 import AboutView from "@/views/AboutView.vue";
+import DepartmentDashboardView from "@/views/DepartmentDashboardView.vue";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DocumentEditView from "@/views/DocumentEditView.vue";
 import EventContextView from "@/views/EventContextView.vue";
@@ -33,6 +34,7 @@ import MarketingView from "@/views/MarketingView.vue";
 import { workstationSessionState } from "@/session/workstationSession";
 import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
+import ImsDashboardView from "@/views/ImsDashboardView.vue";
 import ImsRestrictedView from "@/views/ImsRestrictedView.vue";
 import ImsFieldReportListView from "@/views/ImsFieldReportListView.vue";
 import ImsFieldReportDetailView from "@/views/ImsFieldReportDetailView.vue";
@@ -42,6 +44,7 @@ import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
 import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
+import OrganizerDashboardView from "@/views/OrganizerDashboardView.vue";
 import ParticipationView from "@/views/ParticipationView.vue";
 import RootView from "@/views/RootView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
@@ -67,6 +70,7 @@ import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
+import StaffDashboardView from "@/views/StaffDashboardView.vue";
 import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
 import StaffProfileRequestsView from "@/views/StaffProfileRequestsView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
@@ -244,6 +248,22 @@ export const routes: RouteRecordRaw[] = [
     name: "settings.about",
     component: AboutView,
   },
+  /*
+   * The department operational home (M18.28; UI contract 12.4 `department.dashboard`,
+   * 13.2, 13.3).
+   *
+   * The department's own address, which is why it takes the contract's
+   * `events.departments.show` route name. Department Overview beneath it is a
+   * lead's situational awareness for one selected shift; this is the department's
+   * standing state, and which of the two regions somebody reads is decided by
+   * the standing they hold rather than by the page.
+   */
+  {
+    path: "/events/:eventId/departments/:departmentId",
+    name: "events.departments.show",
+    component: DepartmentDashboardView,
+    beforeEnter: selectDepartmentFromRoute,
+  },
   {
     path: "/events/:eventId/departments/:departmentId/overview",
     name: "events.departments.overview",
@@ -394,6 +414,18 @@ export const routes: RouteRecordRaw[] = [
   legacyShiftBoardRedirect("logistics"),
   legacyShiftBoardRedirect("operations"),
   legacyShiftBoardRedirect("planning"),
+  /*
+   * The staff task dashboard (M18.28; UI contract 12.3, 13.1).
+   *
+   * Not department-scoped and not in the path, for the same reason the shift
+   * board is not: every widget on it is about this person's own record across
+   * the event they are working in, and the event is the session's answer.
+   */
+  {
+    path: "/staff/dashboard",
+    name: "staff.dashboard",
+    component: StaffDashboardView,
+  },
   {
     path: "/staff/me",
     name: "staff.me",
@@ -501,6 +533,19 @@ export const routes: RouteRecordRaw[] = [
     name: "staff.field-reports.show",
     component: FieldReportDetailView,
   },
+  /*
+   * The IMS attention dashboard (M18.28; UI contract 12.7, 13.5).
+   *
+   * Routable for anybody, and refuses for itself. IC standing is the node's
+   * answer and the surface prints it — the same shape `ims.restricted` exists
+   * for, and the reason a reader without it gets an explanation rather than a
+   * not-found page.
+   */
+  {
+    path: "/ims",
+    name: "ims.dashboard",
+    component: ImsDashboardView,
+  },
   {
     path: "/ims/incidents",
     name: "ims.incidents.index",
@@ -545,6 +590,16 @@ export const routes: RouteRecordRaw[] = [
     path: "/ims/restricted",
     name: "ims.restricted",
     component: ImsRestrictedView,
+  },
+  /*
+   * The organization and event readiness dashboard (M18.28; UI contract 12.6,
+   * 13.4). Carries no incident data: 13.4's exclusion is kept by the surface
+   * asking the node for the organizer group alone.
+   */
+  {
+    path: "/organizer",
+    name: "organizer.dashboard",
+    component: OrganizerDashboardView,
   },
   {
     path: "/organizer/staff",

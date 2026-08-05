@@ -689,12 +689,17 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      // M18.28: the staff dashboard is personal too, and event-scoped, so it
+      // appears exactly when the interface is locked to an event.
+      "Dashboard",
       "Shifts",
       "My Field Reports",
       "Acknowledgments",
       // M18.7: the document library is personal too, so the lead who maintains
       // one department's documents still reads the ones published to them here.
       "Documents",
+      // M18.28: the department's own dashboard, ahead of the workflows inside it.
+      "Dashboard",
       "Overview",
       "Planning",
       "Logistics",
@@ -729,6 +734,7 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "Dashboard",
       "Shifts",
       "My Field Reports",
       "Acknowledgments",
@@ -765,6 +771,7 @@ describe("AppShell menu behavior", () => {
     ).toEqual([
       "Me",
       "Event Info",
+      "Dashboard",
       "Shifts",
       "My Field Reports",
       "Acknowledgments",
