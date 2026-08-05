@@ -39,11 +39,18 @@ class DictatedFieldReportTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** An Operator may take a report, and both people end up on the record (FR-015). */
+    /**
+     * An operator may take a report, and both people end up on the record
+     * (FR-015).
+     *
+     * The console here is the Rangers console, because Rangers carries the
+     * Incident Command designation for this event, and the person it takes a
+     * report from is a Ranger.
+     */
     public function test_an_operator_takes_a_report_recording_author_and_submitter_separately(): void
     {
         $world = $this->world();
-        $operator = $this->operatorFor($world['department'], $world['event']);
+        $operator = $this->icOperatorFor($world['department'], $world['event']);
 
         $report = app(FieldReportAcceptanceService::class)->accept(
             $this->submission($world, $operator, $world['reporter']),
@@ -69,7 +76,7 @@ class DictatedFieldReportTest extends TestCase
     public function test_the_submitter_gains_no_append_authority(): void
     {
         $world = $this->world();
-        $operator = $this->operatorFor($world['department'], $world['event']);
+        $operator = $this->icOperatorFor($world['department'], $world['event']);
 
         $report = app(FieldReportAcceptanceService::class)->accept(
             $this->submission($world, $operator, $world['reporter']),
@@ -112,19 +119,58 @@ class DictatedFieldReportTest extends TestCase
     }
 
     /**
-     * A Department Operator may only name their own department's staff
-     * (FR-017; requirements 4.8A).
+     * An operator may only name their own department's staff (FR-017;
+     * requirements 4.8A).
+     *
+     * Taking a report is a console function and a console serves the department
+     * it sits in — "another staff member of the department", in 4.8A's own
+     * words. Carrying the Incident Command designation does not widen that: it
+     * adds incident authority on top of a console, not a wider roster for it.
+     * Gate's own radio watch reaches Gate through Gate's Operator designation,
+     * which is M18.10A's to deliver.
      */
     public function test_an_operator_cannot_take_a_report_for_staff_outside_their_department(): void
     {
         $world = $this->world();
-        $operator = $this->operatorFor($world['department'], $world['event']);
+        $operator = $this->icOperatorFor($world['department'], $world['event']);
 
         $this->expectException(FieldReportAcceptanceException::class);
         $this->expectExceptionMessage('not authorized to take a report for them');
 
         app(FieldReportAcceptanceService::class)->accept(
             $this->submission($world, $operator, $world['outsider']),
+        );
+    }
+
+    /**
+     * A Department Operator is refused entirely, at this milestone (FR-015).
+     *
+     * Not a rule — a boundary. FR-015 names the Department Operator alongside
+     * the two IC roles and the capability belongs in their hands too, but
+     * granting it means giving the TEAM-012 Operator designation a capability,
+     * and the Operator capability set is M18.10A's (requirements 4.8A). So
+     * FR-015 is deliberately partially met until M18.10A ships, and a
+     * department whose radio watch is not the Incident Command console has
+     * nobody who can take a report for it yet.
+     */
+    public function test_a_department_operator_cannot_take_a_report_until_its_owning_milestone(): void
+    {
+        $world = $this->world();
+        $operator = $this->departmentOperatorFor($world['department']);
+
+        $this->assertFalse(
+            app(FieldReportOnBehalfAccess::class)->canTakeReports($operator, $world['event']),
+        );
+
+        $this->actingAsClient($operator)
+            ->getJson("/api/events/{$world['event']->id}/field-report-dictation")
+            ->assertForbidden();
+
+        $this->expectException(FieldReportAcceptanceException::class);
+        $this->expectExceptionMessage('not authorized to take a report for them');
+
+        app(FieldReportAcceptanceService::class)->accept(
+            $this->submission($world, $operator, $world['reporter']),
         );
     }
 
@@ -139,7 +185,7 @@ class DictatedFieldReportTest extends TestCase
     public function test_the_staff_selector_discloses_no_staff_outside_scope(): void
     {
         $world = $this->world();
-        $operator = $this->operatorFor($world['department'], $world['event']);
+        $operator = $this->icOperatorFor($world['department'], $world['event']);
 
         $selectable = app(FieldReportOnBehalfAccess::class)
             ->selectableStaffOptions($operator, $world['event']);
@@ -162,30 +208,32 @@ class DictatedFieldReportTest extends TestCase
     }
 
     /**
-     * Incident Command reaches the event, not one department (FR-015, FR-017).
+     * Taking authority follows the Incident Command designation, and reaches
+     * only the department carrying it (FR-015, FR-017; TEAM-012A).
      *
-     * An `ic_operator` already reads every Field Report in the event, so
-     * narrowing their picker to one department would leave Incident Command
-     * unable to take a report from whoever is actually on the radio while
-     * disclosing nothing they could not already see.
+     * The designation is set per event and defaults at the organization, so it
+     * moves. An `ic_operator` grant hung on a Gate team resolves to nothing at
+     * all while Rangers holds the designation — `EffectiveRoleResolver` admits
+     * an IC grant only from the event's Incident Command Department — which is
+     * why an IC role cannot be used to reach a second department's staff by
+     * granting it in that department.
      */
-    public function test_an_ic_operator_may_take_a_report_across_the_event(): void
+    public function test_taking_authority_follows_the_incident_command_designation(): void
     {
         $world = $this->world();
-        $icOperator = $this->icOperatorFor($world['event'], $world['icDepartment']);
+        $onBehalf = app(FieldReportOnBehalfAccess::class);
 
-        $selectable = app(FieldReportOnBehalfAccess::class)
-            ->selectableStaffOptions($icOperator, $world['event']);
-        $ids = array_column($selectable, 'staff_id');
+        $icOperator = $this->icOperatorFor($world['department'], $world['event']);
+        $ids = array_column($onBehalf->selectableStaffOptions($icOperator, $world['event']), 'staff_id');
 
         $this->assertContains((string) $world['reporter']->id, $ids);
-        $this->assertContains((string) $world['outsider']->id, $ids);
+        $this->assertNotContains((string) $world['outsider']->id, $ids);
 
-        $report = app(FieldReportAcceptanceService::class)->accept(
-            $this->submission($world, $icOperator, $world['outsider']),
-        );
+        // The same role, granted through the department that does not carry the
+        // designation, is not an operator for this event at all.
+        $gateSideGrant = $this->icOperatorFor($world['otherDepartment'], $world['event']);
 
-        $this->assertSame((string) $world['outsider']->id, (string) $report->staff_id);
+        $this->assertFalse($onBehalf->canTakeReports($gateSideGrant, $world['event']));
     }
 
     /** A caller with no taking authority is refused rather than shown an empty picker. */
@@ -217,7 +265,7 @@ class DictatedFieldReportTest extends TestCase
     public function test_a_taken_report_reaches_the_author_own_list(): void
     {
         $world = $this->world();
-        $operator = $this->operatorFor($world['department'], $world['event']);
+        $operator = $this->icOperatorFor($world['department'], $world['event']);
 
         $report = app(FieldReportAcceptanceService::class)->accept(
             $this->submission($world, $operator, $world['reporter']),
@@ -234,11 +282,22 @@ class DictatedFieldReportTest extends TestCase
     }
 
     /**
+     * Rangers and Gate both work the event, and Rangers carries the Incident
+     * Command designation.
+     *
+     * That is the arrangement the development scenario seeds
+     * (`DevelopmentScenarioSeeder`, which designates the department coded
+     * `RANGERS`), and it is the arrangement worth testing against: Incident
+     * Command is a designation set per event and defaulted at the organization,
+     * landing on an ordinary operational department, not a separate department
+     * of console staff standing beside the others. So the console that carries
+     * it is the Rangers console, and the people it takes reports from are
+     * Rangers.
+     *
      * @return array{
      *     organization: Organization,
      *     event: Event,
      *     department: Department,
-     *     icDepartment: Department,
      *     otherDepartment: Department,
      *     reporter: Staff,
      *     outsider: Staff,
@@ -252,13 +311,12 @@ class DictatedFieldReportTest extends TestCase
         $event = Event::factory()->for($organization)->create();
         $department = Department::factory()->for($organization)->create(['name' => 'Rangers']);
         $otherDepartment = Department::factory()->for($organization)->create(['name' => 'Gate']);
-        $icDepartment = Department::factory()->for($organization)->create(['name' => 'Incident Command']);
 
-        foreach ([$department, $otherDepartment, $icDepartment] as $participating) {
+        foreach ([$department, $otherDepartment] as $participating) {
             $event->departmentAssignments()->create(['department_id' => $participating->id]);
         }
 
-        $event->forceFill(['ic_department_id' => $icDepartment->id])->save();
+        $event->forceFill(['ic_department_id' => $department->id])->save();
 
         $reporter = Staff::factory()->create();
         $outsider = Staff::factory()->create();
@@ -273,7 +331,6 @@ class DictatedFieldReportTest extends TestCase
             'organization' => $organization,
             'event' => $event->refresh(),
             'department' => $department->refresh(),
-            'icDepartment' => $icDepartment,
             'otherDepartment' => $otherDepartment,
             'reporter' => $reporter,
             'outsider' => $outsider,
@@ -315,24 +372,28 @@ class DictatedFieldReportTest extends TestCase
         ];
     }
 
-    private function operatorFor(Department $department, Event $event): User
-    {
-        return $this->userWithDepartmentRole(
-            $department,
-            PermissionCatalog::ROLE_DEPARTMENT_OPERATOR,
-        );
-    }
-
     /**
      * An `ic_operator` resolves only through the event's Incident Command
      * Department, which is why the grant hangs on a team in it.
      */
-    private function icOperatorFor(Event $event, Department $icDepartment): User
+    private function icOperatorFor(Department $icDepartment, Event $event): User
     {
         return $this->userWithDepartmentRole(
             $icDepartment,
             PermissionCatalog::ROLE_IC_OPERATOR,
             $event,
+        );
+    }
+
+    /**
+     * A department's own radio watch: the TEAM-012 Operator designation, which
+     * carries no catalog capability until M18.10A.
+     */
+    private function departmentOperatorFor(Department $department): User
+    {
+        return $this->userWithDepartmentRole(
+            $department,
+            PermissionCatalog::ROLE_DEPARTMENT_OPERATOR,
         );
     }
 

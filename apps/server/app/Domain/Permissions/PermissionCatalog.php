@@ -128,13 +128,12 @@ final class PermissionCatalog
      *
      * `department_operator` and `staff_coordinator` enter the catalog with
      * M18.10 so the TEAM-012 Operator and TEAM-014 Staff Coordinator team
-     * designations have a role to attach a grant to. M18.24A gives
-     * `department_operator` its first capability — taking a Field Report on
-     * behalf of another staff member (FR-015; requirements 4.8A) — and the rest
-     * of the Operator set, including the derived `ic_operator` elevation for an
-     * Operator team in the event's Incident Command Department, stays with
-     * M18.10A. M18.11 gives `staff_coordinator` its application review
-     * authority (requirements 4.4; TEAM-014).
+     * designations have a role to attach a grant to. The Operator capability
+     * set (requirements 4.8A) and the derived `ic_operator` elevation for an
+     * Operator team in the event's Incident Command Department (TEAM-012A) are
+     * owned by M18.10A, so `department_operator` carries no catalog permission
+     * yet. M18.11 gives `staff_coordinator` its application review authority
+     * (requirements 4.4; TEAM-014).
      *
      * @return array<string, array{name: string, scope_type: string}>
      */
@@ -308,18 +307,29 @@ final class PermissionCatalog
      * Department and team leads are deliberately outside it — a handle is
      * organization-wide and a lead deciding one for their own department's
      * members would be four departments deciding four different answers.
-     * M18.24A adds field_reports.create_on_behalf to department_operator,
-     * ic_operator, and ic_lead, which is FR-015's list exactly. It is the
-     * Department Operator's first and, for MVP, only catalog capability, and
-     * the reason the role exists: somebody sitting at a radio writing down what
-     * a person in the field cannot file themselves (requirements 4.8A).
+     * M18.24A adds field_reports.create_on_behalf to ic_operator and ic_lead,
+     * and to department_operator not yet. FR-015 names all three and all three
+     * belong here eventually; reaching department_operator means giving the
+     * Operator designation a capability, and the Operator capability set is
+     * M18.10A's (requirements 4.8A; TEAM-012). The two IC roles are not
+     * M18.10A's to give, so they are granted here and FR-015 is left partially
+     * met on purpose rather than met by borrowing.
+     * Taking a report is a console function, and a console serves the
+     * department it sits in: the reachable authors are the active membership of
+     * the department the granting team belongs to, which is requirements 4.8A
+     * in as many words — "another staff member of the department". An IC role
+     * resolves only through the event's Incident Command Department
+     * (TEAM-012A), so that department is what it reaches. The IC designation
+     * adds incident authority on top of a console; it does not widen whose
+     * accounts that console may write down, and every other department's radio
+     * watch gets its own reach through its own Operator designation rather than
+     * through this one.
      * What it deliberately is not is a second way to reach a Field Report.
      * Taking one records the reporting staff member as the author and the taker
      * as the submitter, and append authority stays with the author (FR-016) —
      * so an operator who has taken fifty reports has gained no authority over
-     * any of them, and `department_operator` still holds no
-     * field_reports.view_event. ic_operator and ic_lead already did; this
-     * changes nothing about that either way.
+     * any of them. ic_operator and ic_lead already held
+     * field_reports.view_event; this changes nothing about that either way.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -391,9 +401,6 @@ final class PermissionCatalog
             ],
             self::ROLE_DEPARTMENT_PLANNING => [
                 self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE,
-            ],
-            self::ROLE_DEPARTMENT_OPERATOR => [
-                self::PERMISSION_FIELD_REPORTS_CREATE_ON_BEHALF,
             ],
             self::ROLE_STAFF_COORDINATOR => [
                 self::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,

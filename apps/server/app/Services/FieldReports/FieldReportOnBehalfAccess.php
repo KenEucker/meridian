@@ -25,20 +25,25 @@ use Illuminate\Support\Collection;
  * FR-015 puts in exactly three pairs of hands: a Department Operator, an
  * `ic_operator`, and an `ic_lead`. Nobody else, however senior — a department
  * lead cannot file a report under one of their staff members' names, and an
- * organizer cannot either.
+ * organizer cannot either. At this milestone only the two IC roles hold it;
+ * `department_operator` waits on M18.10A, which owns the Operator capability
+ * set (requirements 4.8A; TEAM-012).
  *
  * **For whom?** FR-017: "staff the creating user is already permitted to see",
- * and no wider. The two authorities reach different sets and it matters which:
+ * and no wider. One rule answers it for every holder, because taking a report
+ * is a console function and a console serves the department it sits in:
+ * the active membership of the department the granting team belongs to.
+ * Requirements 4.8A says it in as many words — "on behalf of another staff
+ * member of the department" — so a console in Rangers discloses nobody in Gate.
  *
- *  - A Department Operator sits at their own department's console and takes
- *    reports from their own department's people. Requirements 4.8A says so in
- *    as many words — "on behalf of another staff member of the department" — so
- *    the set is the active membership of the departments where they hold the
- *    role, and holding it in Rangers discloses nobody in Gate.
- *  - An `ic_operator` or `ic_lead` works the event. They already read every
- *    Field Report in it (FR-005), so the set is the event's participating
- *    departments' staff. Narrowing them to one department would leave Incident
- *    Command unable to take a report from the person actually on the radio.
+ * An IC role resolves only through the event's Incident Command Department
+ * (TEAM-012A), which is that department and not a fourth one standing beside
+ * the others: the designation is set per event and defaults at the
+ * organization, and it lands on an ordinary operational department. So an
+ * `ic_operator` reaches the staff of whichever department is carrying it. What
+ * the IC designation adds is incident authority on top of a console, not a
+ * wider roster for it, and every other department's radio watch reaches its own
+ * people through its own Operator designation rather than through this one.
  *
  * The set is computed rather than filtered on the way out. A picker that lists
  * everybody and refuses on submit has already disclosed the roster, which is
@@ -53,7 +58,7 @@ final class FieldReportOnBehalfAccess
      */
     public function canTakeReports(User $user, Event $event): bool
     {
-        return $this->scope($user, $event) !== null;
+        return $this->reachableDepartmentIds($user, $event) !== [];
     }
 
     /**
@@ -66,17 +71,10 @@ final class FieldReportOnBehalfAccess
      */
     public function canTakeReportFor(User $user, Event $event, Staff $author): bool
     {
-        $scope = $this->scope($user, $event);
-
-        if ($scope === null) {
-            return false;
-        }
-
-        if ($scope['event_wide']) {
-            return $this->staffInDepartments($this->eventDepartmentIds($event), [$author->id])->isNotEmpty();
-        }
-
-        return $this->staffInDepartments($scope['department_ids'], [$author->id])->isNotEmpty();
+        return $this->staffInDepartments(
+            $this->reachableDepartmentIds($user, $event),
+            [$author->id],
+        )->isNotEmpty();
     }
 
     /**
@@ -150,42 +148,21 @@ final class FieldReportOnBehalfAccess
     }
 
     /**
+     * The departments this user's taking authority reaches for this event, empty
+     * when they hold none.
+     *
+     * Authority reaches a staff member through the team that carries the grant
+     * (TEAM-010), so the department that team belongs to is the department the
+     * console serves — requirements 4.8A, "another staff member of the
+     * department". One reading for every holder of the capability: an IC role
+     * resolves only through the event's Incident Command Department (TEAM-012A)
+     * and so reaches that department, and M18.10A adds the per-department
+     * Operator as a second holder of the same rule rather than a different one.
+     *
      * @return list<string>
      */
     private function reachableDepartmentIds(User $user, Event $event): array
     {
-        $scope = $this->scope($user, $event);
-
-        if ($scope === null) {
-            return [];
-        }
-
-        return $scope['event_wide']
-            ? $this->eventDepartmentIds($event)
-            : $scope['department_ids'];
-    }
-
-    public function displayName(Staff $staff): string
-    {
-        return $staff->preferred_name !== null && $staff->preferred_name !== ''
-            ? $staff->preferred_name
-            : (string) $staff->legal_name;
-    }
-
-    /**
-     * How far this user's taking authority reaches for this event, or null when
-     * they hold none.
-     *
-     * `event_wide` is the Incident Command answer; `department_ids` is the
-     * Department Operator one. A user holding both gets the wider of the two,
-     * because a person who may already read the whole event's Field Reports is
-     * not disclosed anything by a picker that lists it.
-     *
-     * @return array{event_wide: bool, department_ids: list<string>}|null
-     */
-    private function scope(User $user, Event $event): ?array
-    {
-        $eventWide = false;
         $departmentIds = [];
 
         foreach ($user->staffProfiles()->get() as $staff) {
@@ -197,15 +174,6 @@ final class FieldReportOnBehalfAccess
                     continue;
                 }
 
-                if (in_array($role->roleCode, [
-                    PermissionCatalog::ROLE_IC_OPERATOR,
-                    PermissionCatalog::ROLE_IC_LEAD,
-                ], true)) {
-                    $eventWide = true;
-
-                    continue;
-                }
-
                 $team = Team::query()->find($role->teamId);
 
                 if ($team?->department_id !== null) {
@@ -214,33 +182,14 @@ final class FieldReportOnBehalfAccess
             }
         }
 
-        if (! $eventWide && $departmentIds === []) {
-            return null;
-        }
-
-        return [
-            'event_wide' => $eventWide,
-            'department_ids' => array_values(array_unique($departmentIds)),
-        ];
+        return array_values(array_unique($departmentIds));
     }
 
-    /**
-     * The departments taking part in this event.
-     *
-     * Incident Command's reach is the event, and the event is the departments
-     * assigned to it — not the whole organization, which would include a
-     * department that is not working this event at all.
-     *
-     * @return list<string>
-     */
-    private function eventDepartmentIds(Event $event): array
+    public function displayName(Staff $staff): string
     {
-        return $event->departmentAssignments()
-            ->whereNull('archived_at')
-            ->pluck('department_id')
-            ->map(fn (mixed $id): string => (string) $id)
-            ->values()
-            ->all();
+        return $staff->preferred_name !== null && $staff->preferred_name !== ''
+            ? $staff->preferred_name
+            : (string) $staff->legal_name;
     }
 
     /**
