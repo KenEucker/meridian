@@ -8,16 +8,27 @@ import StatusPill from "@/components/StatusPill.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
+  assignmentScopeLabel,
   attendanceStateLabel,
   attendanceTone,
+  equipmentPresentationLabel,
+  equipmentPresentationTone,
   equipmentStateLabel,
-  equipmentTone,
   formatTimestamp,
   lifecycleLabel,
   lifecycleTone,
   presenceStateLabel,
   presenceTone,
 } from "@/department-ops/labels";
+import {
+  addCheckoutLine,
+  checkoutLineQuantity,
+  lookUpEquipment,
+  pooledKinds,
+  removeCheckoutLine,
+  setCheckoutLineQuantity,
+  type EquipmentLookupResult,
+} from "@/department-ops/equipmentLookup";
 import {
   CURRENT_SHIFT_WINDOW_MINUTES,
   addStaffToShift,
@@ -40,7 +51,11 @@ import {
   type LogisticsSearchHit,
   type LogisticsShiftCard,
 } from "@/department-ops/departmentOpsReadModel";
-import type { EquipmentReturnCondition } from "@/department-ops/types";
+import type {
+  EquipmentCheckoutCandidate,
+  EquipmentCheckoutLine,
+  EquipmentReturnCondition,
+} from "@/department-ops/types";
 
 /**
  * The Logistics Window (SLB-003 through SLB-008, SLB-011, SLB-012, SLB-016
@@ -118,10 +133,24 @@ const dialogShiftId = ref("");
 const dialogHoursWorkedId = ref("");
 const dialogTimestamp = ref(toDateTimeLocal(new Date()));
 const dialogStartTimestamp = ref("");
-const selectedEquipmentIds = ref<string[]>([]);
+/**
+ * The handoff being staged, one line per kind (EQUIP-012, EQUIP-014).
+ *
+ * This replaces the checkbox-per-unit list the dialog used to render. Pooled
+ * kinds are added by choosing a quantity; tracked units are added by lookup, one
+ * line of one each. Nothing is committed until the operator confirms, so a
+ * mis-scan is removed from the list rather than checked out and checked back in.
+ */
+const checkoutLines = ref<readonly EquipmentCheckoutLine[]>([]);
+const equipmentQuery = ref("");
+const equipmentLookup = ref<EquipmentLookupResult | null>(null);
 const equipmentReturnConditions = ref<Record<string, EquipmentReturnCondition>>(
   {},
 );
+/** Units coming back on each open checkout; a pool may come back in parts. */
+const equipmentReturnQuantities = ref<Record<string, number>>({});
+/** The reason an audited pool adjustment carries (EQUIP-017). */
+const equipmentReturnReasons = ref<Record<string, string>>({});
 
 const context = computed(() => desk.value?.context ?? null);
 const access = computed(() => desk.value?.access ?? null);
@@ -162,9 +191,21 @@ const logisticsSummary = computed(() => ({
   offSite: (desk.value?.searchableStaff ?? []).filter(
     (staff) => staff.presenceState === "off_site",
   ).length,
-  equipmentOut: (desk.value?.searchableEquipment ?? []).filter(
-    (item) => item.status === "checked_out",
-  ).length,
+  /*
+   * Open handoffs, counted from the checkouts rather than from item state. A
+   * pool with units out is never stored `checked_out` (EQUIP-016), so counting
+   * states would report a department's radios as all back the moment they were
+   * pooled.
+   */
+  equipmentOut: Object.values(desk.value?.staffWorkspaces ?? {}).reduce(
+    (total, member) => total + member.openEquipment.length,
+    0,
+  ),
+  equipmentOverdue: Object.values(desk.value?.staffWorkspaces ?? {}).reduce(
+    (total, member) =>
+      total + member.openEquipment.filter((item) => item.overdue).length,
+    0,
+  ),
   currentShifts: currentShifts.value.length,
 }));
 const selectedShift = computed(
@@ -440,15 +481,27 @@ function openDialog(kind: DeskDialog, shiftId = ""): void {
   dialogHoursWorkedId.value = "";
   dialogTimestamp.value = toDateTimeLocal(new Date());
   dialogStartTimestamp.value = "";
-  selectedEquipmentIds.value = [];
-  equipmentReturnConditions.value =
+  checkoutLines.value = [];
+  equipmentQuery.value = "";
+  equipmentLookup.value = null;
+
+  const returning =
     kind === "check-out" && workspace.value
-      ? Object.fromEntries(
-          workspace.value.openEquipment
-            .filter((item) => item.checkoutId !== null)
-            .map((item) => [item.checkoutId, "returned"]),
-        )
-      : {};
+      ? workspace.value.openEquipment.filter((item) => item.checkoutId !== null)
+      : [];
+
+  equipmentReturnConditions.value = Object.fromEntries(
+    returning.map((item) => [item.checkoutId as string, "returned"]),
+  );
+  // Everything still out, which is what taking back what is in front of you
+  // means. An operator taking back only some of a pool lowers it.
+  equipmentReturnQuantities.value = Object.fromEntries(
+    returning.map((item) => [
+      item.checkoutId as string,
+      item.quantityOutstanding,
+    ]),
+  );
+  equipmentReturnReasons.value = {};
 }
 
 /**
@@ -509,14 +562,7 @@ function confirmDialog(): void {
         occurredAt,
       });
 
-      for (const equipmentItemId of selectedEquipmentIds.value) {
-        await checkoutEquipment(
-          context.value!,
-          member.staffId,
-          equipmentItemId,
-          shiftId === "" ? null : shiftId,
-        );
-      }
+      await commitCheckoutLines(member.staffId, shiftId === "" ? null : shiftId);
     } else if (kind === "correct-hours") {
       await correctHours(
         context.value!,
@@ -539,23 +585,124 @@ function confirmDialog(): void {
       for (const [checkoutId, condition] of Object.entries(
         equipmentReturnConditions.value,
       )) {
-        await returnEquipment(context.value!, checkoutId, condition);
-      }
-    } else {
-      for (const equipmentItemId of selectedEquipmentIds.value) {
-        await checkoutEquipment(
+        await returnEquipment(
           context.value!,
-          member.staffId,
-          equipmentItemId,
-          null,
+          checkoutId,
+          condition,
+          equipmentReturnQuantities.value[checkoutId] ?? null,
+          equipmentReturnReasons.value[checkoutId] ?? null,
         );
       }
+    } else {
+      await commitCheckoutLines(member.staffId, null);
     }
 
     dialog.value = null;
   },
   dialogSuccessMessage(kind, member.displayName),
   dialogPendingMessage(kind, member.displayName));
+}
+
+/**
+ * Send the staged lines, one command each (SLB-012; CLIENT-015).
+ *
+ * One command per line rather than one for the whole handoff, because that is
+ * what the node's checkout command is: a line is an item, a staff member, a
+ * scope, and a quantity. Each carries the idempotency key it always did, so a
+ * retried submission checks nothing out twice.
+ */
+async function commitCheckoutLines(
+  staffId: string,
+  shiftId: string | null,
+): Promise<void> {
+  for (const line of checkoutLines.value) {
+    await checkoutEquipment(
+      context.value!,
+      staffId,
+      line.equipmentItemId,
+      shiftId,
+      line.quantity,
+    );
+  }
+}
+
+/**
+ * The department inventory this desk may hand out, from the cached read.
+ *
+ * One list for the desk rather than one per workspace: an available item is
+ * available to whoever is standing at it, and the node sends it once.
+ */
+const checkoutInventory = computed<readonly EquipmentCheckoutCandidate[]>(
+  () => desk.value?.checkoutInventory ?? [],
+);
+
+/** Pooled kinds with something left in them (EQUIP-014). */
+const pooledInventory = computed(() => pooledKinds(checkoutInventory.value));
+
+/**
+ * Show what the current text matches, without acting on it.
+ *
+ * A watcher rather than an `@input` handler, because a handler on the same
+ * event as `v-model` can read the query one keystroke behind — which showed up
+ * as the dialog reporting the previous scan's failure under the current one.
+ * The watcher runs after the ref has moved, so what is on screen always
+ * describes what is in the field.
+ *
+ * It deliberately never adds a line. A prefix of one asset tag can be another
+ * tag in full, and adding equipment because somebody paused mid-word is not a
+ * behaviour an operator can predict.
+ */
+watch([equipmentQuery, checkoutInventory], ([query, inventory]) => {
+  equipmentLookup.value =
+    query.trim() === "" ? null : lookUpEquipment(inventory, query);
+});
+
+/**
+ * Resolve what the operator typed or scanned (EQUIP-013).
+ *
+ * Against the cached inventory, not the node — a gate with no signal still
+ * completes a handoff (EQUIP-015). An exact asset tag or serial match adds its
+ * line and clears the field, which is the whole scanner path: the scan arrives
+ * as keystrokes, Enter follows, the line appears, and nobody touches the
+ * screen.
+ */
+function resolveEquipmentQuery(): void {
+  const result = lookUpEquipment(checkoutInventory.value, equipmentQuery.value);
+
+  if (result.outcome === "resolved" && result.item !== null) {
+    checkoutLines.value = addCheckoutLine(checkoutLines.value, result.item);
+    equipmentQuery.value = "";
+    equipmentLookup.value = null;
+
+    return;
+  }
+
+  equipmentLookup.value = result;
+}
+
+function addTrackedUnit(item: EquipmentCheckoutCandidate): void {
+  checkoutLines.value = addCheckoutLine(checkoutLines.value, item);
+  equipmentQuery.value = "";
+  equipmentLookup.value = null;
+}
+
+function setPooledQuantity(
+  item: EquipmentCheckoutCandidate,
+  quantity: number,
+): void {
+  checkoutLines.value = setCheckoutLineQuantity(
+    checkoutLines.value,
+    item,
+    quantity,
+  );
+}
+
+function pooledQuantity(equipmentItemId: string): number {
+  return checkoutLineQuantity(checkoutLines.value, equipmentItemId);
+}
+
+function dropCheckoutLine(equipmentItemId: string): void {
+  checkoutLines.value = removeCheckoutLine(checkoutLines.value, equipmentItemId);
 }
 
 function dialogSuccessMessage(kind: DeskDialog, displayName: string): string {
@@ -601,6 +748,13 @@ function closeDialog(): void {
   dialog.value = null;
 }
 
+/**
+ * Take one open checkout back from the workspace, outside a dialog.
+ *
+ * Returns everything still out on it, which is the single-button case: a radio
+ * handed back at the desk. Partial pooled returns and write-off reasons go
+ * through the check-out dialog, where there is room to say how many and why.
+ */
 function returnItem(
   checkoutId: string,
   condition: EquipmentReturnCondition,
@@ -743,6 +897,15 @@ void loadDesk();
               ? `${logisticsSummary.equipmentOut} equipment handoff still open.`
               : "No open equipment handoffs."
           }}
+        </p>
+        <!--
+          Overdue is derived on read from the window each handoff was issued
+          against (EQUIP-005, EQUIP-009), so it is true the moment it becomes
+          true rather than when something remembered to write it down.
+        -->
+        <p v-if="logisticsSummary.equipmentOverdue > 0" role="status">
+          {{ logisticsSummary.equipmentOverdue }} past the window it was issued
+          for.
         </p>
       </div>
     </section>
@@ -1167,10 +1330,7 @@ void loadDesk();
 
       <section aria-labelledby="open-equipment-heading">
         <h3 id="open-equipment-heading">Equipment checked out</h3>
-        <div
-          v-if="workspace.availableEquipment.length > 0"
-          class="logistics__actions"
-        >
+        <div v-if="checkoutInventory.length > 0" class="logistics__actions">
           <button
             type="button"
             :disabled="busy"
@@ -1190,11 +1350,31 @@ void loadDesk();
             <div>
               <strong>{{ item.name }}</strong>
               <span class="logistics__card-pills">
+                <!--
+                  The derived reading, not the stored state (EQUIP-005). A
+                  handoff past the end of the shift or event it was issued
+                  against reads Overdue; one with no window to measure against
+                  reads Unknown rather than being reported as on time.
+                -->
                 <StatusPill
-                  :label="equipmentStateLabel(item.status)"
-                  :tone="equipmentTone(item.status)"
+                  :label="
+                    item.presentationStateLabel ||
+                    equipmentPresentationLabel(item.presentationState)
+                  "
+                  :tone="equipmentPresentationTone(item.presentationState)"
                   sr-prefix="Equipment"
                 />
+                <StatusPill
+                  :label="assignmentScopeLabel(item.assignmentScope)"
+                  tone="neutral"
+                  sr-prefix="Issued for"
+                />
+              </span>
+              <span v-if="item.tracking === 'pooled'" class="logistics__note">
+                {{ item.quantityOutstanding }} of {{ item.quantity }} still out
+              </span>
+              <span v-if="item.dueAt" class="logistics__note">
+                Due back {{ formatTimestamp(item.dueAt, timeZone) }}
               </span>
             </div>
             <div class="logistics__actions">
@@ -1305,31 +1485,116 @@ void loadDesk();
           <span>Actual start (leave empty to keep the recorded check-in)</span>
           <input v-model="dialogStartTimestamp" type="datetime-local" />
         </label>
-        <fieldset
-          v-if="
-            (dialog === 'check-in' || dialog === 'equipment-checkout') &&
-            workspace.availableEquipment.length > 0
-          "
+        <!--
+          Two presentations, never one list (EQUIP-012, EQUIP-014; UI contract
+          9.6A). Pooled kinds are a short quantity list, because choosing three
+          radios out of a box of forty is choosing a number. Tracked units come
+          through lookup, because a department may hold hundreds of them and a
+          checkbox each is slower to work than the handoff it is meant to
+          support. Each selection adds a line the operator can drop before
+          committing.
+        -->
+        <template
+          v-if="dialog === 'check-in' || dialog === 'equipment-checkout'"
         >
-          <legend>
-            {{ dialog === "check-in" ? "Hand off equipment" : "Available equipment" }}
-          </legend>
-          <label
-            v-for="item in workspace.availableEquipment"
-            :key="item.equipmentItemId"
-            class="logistics__check"
-          >
-            <input
-              v-model="selectedEquipmentIds"
-              type="checkbox"
-              :value="item.equipmentItemId"
-            />
-            <span>
-              {{ item.name }}
-              <template v-if="item.assetTag">({{ item.assetTag }})</template>
-            </span>
-          </label>
-        </fieldset>
+          <fieldset v-if="pooledInventory.length > 0">
+            <legend>Pooled equipment</legend>
+            <div
+              v-for="item in pooledInventory"
+              :key="item.equipmentItemId"
+              class="logistics__pool-row"
+            >
+              <label :for="`pool-${item.equipmentItemId}`">
+                {{ item.name }}
+                <span class="logistics__note">
+                  {{ item.quantityAvailable }} available
+                </span>
+              </label>
+              <input
+                :id="`pool-${item.equipmentItemId}`"
+                type="number"
+                min="0"
+                :max="item.quantityAvailable"
+                :value="pooledQuantity(item.equipmentItemId)"
+                @input="
+                  setPooledQuantity(
+                    item,
+                    Number(($event.target as HTMLInputElement).value),
+                  )
+                "
+              />
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Tracked equipment</legend>
+            <!--
+              `keydown.enter` is the scanner path. A barcode scanner acting as a
+              keyboard types the tag and presses Enter; an exact match resolves
+              straight to a line and clears the field, so a handoff completes
+              without a pointer event (EQUIP-013).
+            -->
+            <label class="logistics__lookup">
+              <span>Scan or search by asset tag, serial number, or name</span>
+              <input
+                v-model="equipmentQuery"
+                type="search"
+                autocomplete="off"
+                placeholder="RDO-14"
+                @keydown.enter.prevent="resolveEquipmentQuery"
+              />
+            </label>
+            <p
+              v-if="equipmentLookup?.message"
+              class="logistics__note"
+              role="status"
+            >
+              {{ equipmentLookup.message }}
+            </p>
+            <ul
+              v-if="(equipmentLookup?.matches.length ?? 0) > 0"
+              class="logistics__lookup-results"
+            >
+              <li
+                v-for="match in equipmentLookup?.matches ?? []"
+                :key="match.equipmentItemId"
+              >
+                <button
+                  type="button"
+                  :disabled="busy"
+                  @click="addTrackedUnit(match)"
+                >
+                  {{ match.name }}
+                  <template v-if="match.assetTag">
+                    ({{ match.assetTag }})
+                  </template>
+                </button>
+              </li>
+            </ul>
+          </fieldset>
+
+          <fieldset v-if="checkoutLines.length > 0">
+            <legend>Handing over</legend>
+            <ul class="logistics__lines">
+              <li v-for="line in checkoutLines" :key="line.equipmentItemId">
+                <span>
+                  {{ line.name }}
+                  <template v-if="line.assetTag">({{ line.assetTag }})</template>
+                  <template v-if="line.tracking === 'pooled'">
+                    &times; {{ line.quantity }}
+                  </template>
+                </span>
+                <button
+                  type="button"
+                  :disabled="busy"
+                  @click="dropCheckoutLine(line.equipmentItemId)"
+                >
+                  Remove
+                </button>
+              </li>
+            </ul>
+          </fieldset>
+        </template>
         <fieldset
           v-if="dialog === 'check-out' && workspace.openEquipment.length > 0"
         >
@@ -1355,6 +1620,36 @@ void loadDesk();
                 :value="condition"
               />
               <span>{{ equipmentStateLabel(condition) }}</span>
+            </label>
+            <!--
+              A pooled checkout may come back in parts, so the return takes a
+              quantity as well as a condition (EQUIP-017; data/API 10.13). Units
+              that come back missing or damaged reduce the pool's serviceable
+              total through an audited adjustment, and the reason is what that
+              adjustment carries — which is why the field appears only for those
+              two conditions.
+            -->
+            <label v-if="item.tracking === 'pooled'">
+              <span>How many came back (of {{ item.quantityOutstanding }})</span>
+              <input
+                v-model.number="equipmentReturnQuantities[item.checkoutId!]"
+                type="number"
+                min="1"
+                :max="item.quantityOutstanding"
+              />
+            </label>
+            <label
+              v-if="
+                item.tracking === 'pooled' &&
+                equipmentReturnConditions[item.checkoutId!] !== 'returned'
+              "
+            >
+              <span>Reason for the write-off</span>
+              <input
+                v-model="equipmentReturnReasons[item.checkoutId!]"
+                type="text"
+                placeholder="Dropped in the wash line"
+              />
             </label>
           </div>
         </fieldset>
@@ -1962,12 +2257,58 @@ void loadDesk();
   gap: var(--m-space-2);
 }
 
-.logistics__dialog input[type="datetime-local"] {
+.logistics__dialog input[type="datetime-local"],
+.logistics__dialog input[type="number"],
+.logistics__dialog input[type="search"],
+.logistics__dialog input[type="text"] {
   min-height: 2.5rem;
   padding: var(--m-space-2);
   border: 1px solid var(--m-border-default);
   border-radius: 6px;
   font: inherit;
+}
+
+/*
+ * A pooled kind is a name and a number, on one line. The stepper is narrow on
+ * purpose: an operator handing out three vests is typing one digit, and a field
+ * sized for prose would invite them to look for something else to put in it.
+ */
+.logistics__pool-row {
+  display: grid;
+  grid-template-columns: 1fr 5rem;
+  align-items: center;
+  gap: var(--m-space-3);
+}
+
+.logistics__pool-row + .logistics__pool-row {
+  margin-top: var(--m-space-2);
+}
+
+.logistics__pool-row label {
+  display: grid;
+  gap: 0;
+}
+
+.logistics__pool-row .logistics__note {
+  margin: 0;
+  font-size: var(--m-text-sm);
+}
+
+.logistics__lookup-results,
+.logistics__lines {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: var(--m-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.logistics__lines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
 }
 
 .logistics__check {

@@ -290,6 +290,11 @@ class AttendanceScenarioSeeder extends Seeder
      * Quinn's is signed out against the event with no shift behind it, and is
      * then written off as missing — the department is still owed it and it stays
      * in his workspace, but SLB-018 stops it being a reason to keep him here.
+     *
+     * A handful of pooled vests goes out beside them (EQUIP-011, EQUIP-016), so
+     * the scenario has a pool with some of it in somebody's hands: its available
+     * quantity is visibly below its total, it is not stored `checked_out`, and
+     * the partial-return path has a subject to work on.
      */
     private function handOutEquipment(ScenarioContext $context, Shift $day): void
     {
@@ -336,6 +341,23 @@ class AttendanceScenarioSeeder extends Seeder
             // the product's, and the God Mode write-off path is what this stands
             // in for.
             $eventRadio->forceFill(['status' => EquipmentItem::STATUS_MISSING])->save();
+        }
+
+        $vestPool = EquipmentItem::query()
+            ->where('department_id', $rangers->id)
+            ->pooled()
+            ->where('name', 'Hi-vis vest (pooled)')
+            ->first();
+
+        if ($vestPool !== null && $vestPool->availableQuantity() === (int) $vestPool->quantity_total) {
+            $checkouts->checkoutEquipment(
+                equipmentItem: $vestPool,
+                staff: $context->staff('vera'),
+                actor: $sam,
+                shift: $day,
+                checkedOutAt: ScenarioClock::hoursAgo(2),
+                quantity: 4,
+            );
         }
     }
 

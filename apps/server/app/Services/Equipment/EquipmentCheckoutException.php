@@ -65,4 +65,28 @@ class EquipmentCheckoutException extends RuntimeException
     {
         return new self('Equipment cannot be returned before it was checked out.');
     }
+
+    public static function invalidQuantity(): self
+    {
+        return new self('Equipment checkout quantity must be at least one unit.');
+    }
+
+    public static function trackedQuantityMustBeOne(): self
+    {
+        return new self('An individually tracked item is one unit; check out the unit rather than a quantity.');
+    }
+
+    public static function insufficientPoolQuantity(string $name, int $available, int $requested): self
+    {
+        return new self(
+            "Only {$available} of \"{$name}\" are available to hand out; {$requested} were requested.",
+        );
+    }
+
+    public static function returnExceedsOutstanding(int $outstanding, int $requested): self
+    {
+        return new self(
+            "This checkout has {$outstanding} unit(s) still out; {$requested} were offered back.",
+        );
+    }
 }

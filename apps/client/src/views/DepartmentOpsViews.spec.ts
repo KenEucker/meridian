@@ -189,14 +189,39 @@ function completedCard(overrides: Record<string, unknown>) {
   });
 }
 
+/**
+ * One tracked unit the desk may hand out, as the node publishes it in
+ * `checkout_inventory` (EQUIP-012, EQUIP-015).
+ */
 function equipment(id: string, name: string, assetTag: string) {
   return {
-    checkout_id: null,
     equipment_item_id: id,
     name,
+    tracking: "individual" as const,
+    tracking_label: "Tracked",
     asset_tag: assetTag,
-    status: "available",
-    checked_out_at: null,
+    serial_number: `SN-${assetTag}`,
+    quantity_total: 1,
+    quantity_available: 1,
+  };
+}
+
+/** A pooled kind, handed out by quantity rather than by unit (EQUIP-014). */
+function pooledEquipment(
+  id: string,
+  name: string,
+  quantityTotal: number,
+  quantityAvailable: number,
+) {
+  return {
+    equipment_item_id: id,
+    name,
+    tracking: "pooled" as const,
+    tracking_label: "Pooled",
+    asset_tag: null,
+    serial_number: null,
+    quantity_total: quantityTotal,
+    quantity_available: quantityAvailable,
   };
 }
 
@@ -208,9 +233,10 @@ function equipment(id: string, name: string, assetTag: string) {
  */
 let ariHoldsEquipment = false;
 
-const AVAILABLE_EQUIPMENT = [
+const CHECKOUT_INVENTORY = [
   equipment("equipment-radio-13", "Radio 13", "RDO-13"),
   equipment("equipment-radio-14", "Radio 14", "RDO-14"),
+  pooledEquipment("equipment-vests", "Safety vest", 40, 37),
 ];
 
 function logisticsPayload() {
@@ -263,6 +289,7 @@ function logisticsPayload() {
       shift(DAY_SHIFT_ID, "Ranger Dirt Day Shift", "active"),
       shift(SWING_SHIFT_ID, "Ranger Dirt Swing Shift", "upcoming"),
     ],
+    checkout_inventory: CHECKOUT_INVENTORY,
     staff_workspaces: {
       [AUTHOR_STAFF_ID]: {
         staff_id: AUTHOR_STAFF_ID,
@@ -306,7 +333,6 @@ function logisticsPayload() {
             checked_out_at: "2027-07-04T16:05:00+00:00",
           },
         ],
-        available_equipment: AVAILABLE_EQUIPMENT,
         future_signups: [],
       },
       [VERA_STAFF_ID]: {
@@ -325,7 +351,6 @@ function logisticsPayload() {
           }),
         ],
         open_equipment: [],
-        available_equipment: AVAILABLE_EQUIPMENT,
         future_signups: [],
       },
       [ARI_STAFF_ID]: {
@@ -370,7 +395,6 @@ function logisticsPayload() {
               },
             ]
           : [],
-        available_equipment: AVAILABLE_EQUIPMENT,
         future_signups: [
           {
             signup_id: "signup-ari-swing",
@@ -1146,7 +1170,16 @@ describe("department operations surfaces", () => {
     expect(commands).toHaveLength(0);
   });
 
-  it("hands out equipment from the workspace as a connected-only command", async () => {
+  /**
+   * A scanned asset tag completes the handoff without a pointer event
+   * (EQUIP-013).
+   *
+   * A barcode scanner acting as a keyboard types the tag and presses Enter.
+   * The exact match resolves straight to a line and the field clears, which is
+   * the whole reason lookup replaced the checkbox list: an operator with a
+   * scanner in one hand and a radio in the other has no spare hand for a mouse.
+   */
+  it("resolves a scanned asset tag straight to a checkout line", async () => {
     const { wrapper } = await mountAt(logisticsPath());
 
     await openWorkspace(wrapper, "Ari Ranger");
@@ -1160,8 +1193,14 @@ describe("department operations surfaces", () => {
     expect(dialog.get("#attendance-dialog-heading").text()).toBe(
       "Check out equipment",
     );
-    expect(dialog.text()).toContain("Radio 13");
-    await dialog.get('input[value="equipment-radio-13"]').setValue(true);
+
+    const lookup = dialog.get('input[type="search"]');
+    await lookup.setValue("RDO-13");
+    await lookup.trigger("keydown.enter");
+
+    expect((lookup.element as HTMLInputElement).value).toBe("");
+    expect(dialog.get(".logistics__lines").text()).toContain("Radio 13");
+
     await dialog
       .findAll("button")
       .find((button) => button.text() === "Confirm")!
@@ -1173,8 +1212,87 @@ describe("department operations surfaces", () => {
     expect(commands[0]!.body).toMatchObject({
       equipment_item_id: "equipment-radio-13",
       staff_id: ARI_STAFF_ID,
+      quantity: 1,
     });
     expect(commandOutbox.all()).toHaveLength(0);
+  });
+
+  /**
+   * No surface renders one control per tracked unit (EQUIP-012).
+   *
+   * The dialog used to draw a checkbox for every unit in the department, which
+   * is unusable for a department holding hundreds. The guard is on the count of
+   * rendered controls rather than on how the list looks, so a later rewrite
+   * that reintroduces the pattern under a different class name still trips it.
+   */
+  it("renders a bounded checkout dialog rather than one control per tracked unit", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Check out equipment")!
+      .trigger("click");
+
+    const dialog = wrapper.get('[role="dialog"]');
+
+    expect(dialog.findAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(dialog.text()).not.toContain("Radio 13");
+    expect(dialog.text()).not.toContain("Radio 14");
+    // The pooled kind is the one thing that is listed, because a short list of
+    // kinds with a quantity each is what EQUIP-014 asks for.
+    expect(dialog.get(".logistics__pool-row").text()).toContain("Safety vest");
+  });
+
+  /** A pooled kind is handed out by quantity, not by unit (EQUIP-011, EQUIP-014). */
+  it("hands out a quantity of a pooled kind", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Check out equipment")!
+      .trigger("click");
+
+    const dialog = wrapper.get('[role="dialog"]');
+    await dialog.get("#pool-equipment-vests").setValue("3");
+    await dialog
+      .findAll("button")
+      .find((button) => button.text() === "Confirm")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0]!.path).toBe("/api/commands/checkout-equipment");
+    expect(commands[0]!.body).toMatchObject({
+      equipment_item_id: "equipment-vests",
+      staff_id: ARI_STAFF_ID,
+      quantity: 3,
+    });
+  });
+
+  /** An unmatched value is reported rather than guessed at (EQUIP-013). */
+  it("says so when a scanned value matches nothing in scope", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Check out equipment")!
+      .trigger("click");
+
+    const dialog = wrapper.get('[role="dialog"]');
+    const lookup = dialog.get('input[type="search"]');
+    await lookup.setValue("GATE-999");
+    await lookup.trigger("keydown.enter");
+
+    expect(dialog.text()).toContain(
+      'No equipment available to hand out matches "GATE-999"',
+    );
+    expect(dialog.find(".logistics__lines").exists()).toBe(false);
   });
 
   it("adds an on-site staff member to a shift the node offered", async () => {

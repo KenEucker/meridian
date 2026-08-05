@@ -22,6 +22,8 @@ use App\Services\Attendance\HoursCorrectionException;
 use App\Services\Attendance\HoursCorrectionWindow;
 use App\Services\DepartmentOps\DepartmentOperationsAccess;
 use App\Services\DepartmentOps\DepartmentOperationsAuthority;
+use App\Services\Equipment\EquipmentCheckoutPresentation;
+use App\Services\Equipment\EquipmentLookupService;
 use App\Services\Presence\DepartmentPresenceException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -140,13 +142,23 @@ final class DepartmentOperationsReadController extends Controller
             'exceptions' => $this->exceptionsFor($selected, $rows->all(), $equipmentOut, $now),
             'assignments' => $rows->values()->all(),
             'equipment_out' => $equipmentOut
-                ->map(fn (EquipmentCheckout $checkout): array => [
-                    'checkout_id' => (string) $checkout->id,
-                    'item_name' => $checkout->equipmentItem?->name ?? 'Equipment',
-                    'asset_tag' => $checkout->equipmentItem?->asset_tag,
-                    'staff_name' => $this->staffName($checkout->staff),
-                    'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
-                ])
+                ->map(function (EquipmentCheckout $checkout) use ($event, $now): array {
+                    $derived = EquipmentCheckoutPresentation::describe(
+                        $checkout,
+                        $checkout->shift,
+                        $event,
+                        $now,
+                    );
+
+                    return [
+                        'checkout_id' => (string) $checkout->id,
+                        'item_name' => $checkout->equipmentItem?->name ?? 'Equipment',
+                        'asset_tag' => $checkout->equipmentItem?->asset_tag,
+                        'staff_name' => $this->staffName($checkout->staff),
+                        'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
+                        ...$derived,
+                    ];
+                })
                 ->values()
                 ->all(),
             'deployments' => $this->deploymentOptions($event, $department),
@@ -170,6 +182,7 @@ final class DepartmentOperationsReadController extends Controller
         Department $department,
         DepartmentOperationsAccess $access,
         HoursCorrectionWindow $correctionWindow,
+        EquipmentLookupService $lookup,
     ): JsonResponse {
         $authority = $this->authorize($request, $event, $department, $access);
 
@@ -190,7 +203,7 @@ final class DepartmentOperationsReadController extends Controller
         $assignments = $this->assignmentsForShifts($shifts->modelKeys(), $staffIds);
         $attendance = $this->attendanceForShifts($event, $department, $shifts->modelKeys(), $staffIds);
         $openEquipment = $this->openCheckoutsForStaff($event, $department, $staffIds);
-        $availableEquipment = $this->availableEquipment($department);
+        $checkoutInventory = $this->checkoutInventory($event, $department, $lookup);
         $signups = $this->futureSignups($event, $department, $staffIds, $now);
         $hours = $this->hoursForShifts($event, $department, $shifts->modelKeys(), $staffIds);
         $eligibleTeamMembers = $this->eligibleTeamMembers(
@@ -249,28 +262,9 @@ final class DepartmentOperationsReadController extends Controller
                     $correctionClosesAt,
                 ),
                 'open_equipment' => $held
-                    ->map(fn (EquipmentCheckout $checkout): array => [
-                        'checkout_id' => (string) $checkout->id,
-                        'equipment_item_id' => (string) $checkout->equipment_item_id,
-                        'name' => $checkout->equipmentItem?->name ?? 'Equipment',
-                        'asset_tag' => $checkout->equipmentItem?->asset_tag,
-                        'status' => $checkout->equipmentItem?->status ?? EquipmentItem::STATUS_CHECKED_OUT,
-                        'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
-                        /*
-                         * Which shift this was handed over for, when it was
-                         * handed over for one. Null is not missing data: a radio
-                         * signed out for the event is a different thing from one
-                         * signed out with a shift, and only the second comes back
-                         * when that shift ends. The desk needs to tell them apart
-                         * to know what it is still owed.
-                         */
-                        'shift_id' => $checkout->shift_id === null
-                            ? null
-                            : (string) $checkout->shift_id,
-                    ])
+                    ->map(fn (EquipmentCheckout $checkout): array => $this->openEquipmentPayload($checkout, $event, $now))
                     ->values()
                     ->all(),
-                'available_equipment' => $availableEquipment,
                 'future_signups' => $signups->get($staffId, new Collection)
                     ->map(fn (ShiftAssignment $assignment): array => [
                         'signup_id' => (string) $assignment->id,
@@ -302,15 +296,38 @@ final class DepartmentOperationsReadController extends Controller
                 ->values()
                 ->all(),
             'searchable_equipment' => $this->departmentEquipment($department)
-                ->map(function (EquipmentItem $item) use ($holders): array {
+                ->map(function (EquipmentItem $item) use ($holders, $event, $now): array {
                     $checkout = $holders->get((string) $item->id);
+                    /*
+                     * A pool is never labelled Checked out (UI contract 9.6):
+                     * it is not held by anybody, so it reads Available with the
+                     * quantity that is left. A tracked unit reads the derived
+                     * standing of its open checkout, which is where Overdue and
+                     * Unknown come from (EQUIP-005).
+                     */
+                    $derived = $checkout === null
+                        ? null
+                        : EquipmentCheckoutPresentation::describe(
+                            $checkout,
+                            $checkout->shift,
+                            $event,
+                            $now,
+                        );
 
                     return [
                         'equipment_item_id' => (string) $item->id,
                         'name' => $item->name,
+                        'tracking' => $item->tracking,
+                        'tracking_label' => EquipmentItem::trackingLabel($item->tracking),
                         'asset_tag' => $item->asset_tag,
+                        'serial_number' => $item->serial_number,
                         'status' => $item->status,
                         'status_label' => EquipmentItem::statusLabel($item->status),
+                        'quantity_total' => (int) $item->quantity_total,
+                        'quantity_available' => $item->availableQuantity(),
+                        'presentation_state' => $derived['state'] ?? $item->status,
+                        'presentation_state_label' => $derived['state_label']
+                            ?? EquipmentItem::statusLabel($item->status),
                         'holder_staff_id' => $checkout === null ? null : (string) $checkout->staff_id,
                         'holder_name' => $checkout === null ? null : $this->staffName($checkout->staff),
                     ];
@@ -318,6 +335,15 @@ final class DepartmentOperationsReadController extends Controller
                 ->values()
                 ->all(),
             'searchable_shifts' => $shifts->map(fn (Shift $shift): array => $this->shiftOption($shift, $now))->values()->all(),
+            /*
+             * Once for the desk, not once per workspace. An available item is
+             * available to whoever is standing at the desk, so the list does
+             * not vary by staff member — and a department with four hundred
+             * tracked units and a hundred staff would otherwise send forty
+             * thousand rows to render one dialog, which is the same problem
+             * EQUIP-012 is about at a different layer.
+             */
+            'checkout_inventory' => $checkoutInventory,
             'staff_workspaces' => (object) $workspaces,
         ]);
     }
@@ -1136,7 +1162,7 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         return EquipmentCheckout::query()
-            ->with(['equipmentItem', 'staff'])
+            ->with(['equipmentItem', 'staff', 'shift'])
             ->outstandingForDepartment($event, $department)
             ->whereIn('staff_id', $staffIds)
             ->get()
@@ -1149,7 +1175,7 @@ final class DepartmentOperationsReadController extends Controller
     private function openCheckoutsForShift(Shift $shift): Collection
     {
         return EquipmentCheckout::query()
-            ->with(['equipmentItem', 'staff'])
+            ->with(['equipmentItem', 'staff', 'shift'])
             ->where('shift_id', $shift->id)
             ->whereNull('returned_at')
             ->get();
@@ -1168,32 +1194,66 @@ final class DepartmentOperationsReadController extends Controller
     }
 
     /**
-     * What the desk may hand out right now.
+     * What the desk may hand out right now, and the set lookup resolves against.
      *
      * The same list for every workspace, because an available item is available
      * to whoever is standing at the desk. It is carried on each workspace rather
      * than beside them so the check-in and checkout dialogs read one object.
      *
+     * This is the inventory EQUIP-015 requires lookup to resolve against on a
+     * device with no connectivity: it is scoped by the node, cached with the
+     * rest of the desk read, and the client's resolver reads it rather than
+     * asking a node it may not be able to reach. Pooled kinds arrive with their
+     * available quantity and tracked units with their identifiers, which is the
+     * two presentations UI contract 9.6A splits (EQUIP-012, EQUIP-014).
+     *
      * @return list<array<string, mixed>>
      */
-    private function availableEquipment(Department $department): array
-    {
-        return EquipmentItem::query()
-            ->where('department_id', $department->id)
-            ->active()
-            ->where('status', EquipmentItem::STATUS_AVAILABLE)
-            ->orderBy('name')
-            ->get()
-            ->map(fn (EquipmentItem $item): array => [
-                'checkout_id' => null,
-                'equipment_item_id' => (string) $item->id,
-                'name' => $item->name,
-                'asset_tag' => $item->asset_tag,
-                'status' => $item->status,
-                'checked_out_at' => null,
-            ])
+    private function checkoutInventory(
+        Event $event,
+        Department $department,
+        EquipmentLookupService $lookup,
+    ): array {
+        return $lookup->candidates($event, $department)
+            ->map(fn (EquipmentItem $item): array => $lookup->payload($item))
             ->values()
             ->all();
+    }
+
+    /**
+     * One outstanding checkout as the desk reads it (EQUIP-005, EQUIP-009).
+     *
+     * The scope, the due time, and whether it is overdue are derived here from
+     * the stored checkout and the window it was issued against; none of them is
+     * a column. That is the point of EQUIP-005: overdue becomes true as a clock
+     * passes a time, and a stored flag would say "checked out" for hours after
+     * it stopped being true.
+     *
+     * @return array<string, mixed>
+     */
+    private function openEquipmentPayload(EquipmentCheckout $checkout, Event $event, Carbon $now): array
+    {
+        $item = $checkout->equipmentItem;
+        $derived = EquipmentCheckoutPresentation::describe($checkout, $checkout->shift, $event, $now);
+
+        return [
+            'checkout_id' => (string) $checkout->id,
+            'equipment_item_id' => (string) $checkout->equipment_item_id,
+            'name' => $item?->name ?? 'Equipment',
+            'tracking' => $item?->tracking ?? EquipmentItem::TRACKING_INDIVIDUAL,
+            'asset_tag' => $item?->asset_tag,
+            'status' => $item?->status ?? EquipmentItem::STATUS_CHECKED_OUT,
+            'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
+            /*
+             * Which shift this was handed over for, when it was handed over for
+             * one. Null is not missing data: a radio signed out for the event is
+             * a different thing from one signed out with a shift, and only the
+             * second comes back when that shift ends. The desk needs to tell
+             * them apart to know what it is still owed.
+             */
+            'shift_id' => $checkout->shift_id === null ? null : (string) $checkout->shift_id,
+            ...$derived,
+        ];
     }
 
     /**

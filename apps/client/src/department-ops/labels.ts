@@ -1,7 +1,10 @@
 import type { StatusPillTone } from "@/components/StatusPill.vue";
 import type {
   DepartmentPresenceState,
+  EquipmentAssignmentScope,
+  EquipmentPresentationState,
   EquipmentState,
+  EquipmentTracking,
   ShiftAttendanceState,
   ShiftLifecycle,
 } from "@/department-ops/types";
@@ -45,6 +48,53 @@ export function equipmentStateLabel(state: EquipmentState): string {
     case "damaged":
       return "Damaged";
   }
+}
+
+/**
+ * What an operator reads on an outstanding checkout (EQUIP-005).
+ *
+ * Overdue and Unknown are derived by the node and are additions to the reading,
+ * not to the five stored states UI contract 9.6 fixes. Unknown is the one worth
+ * saying out loud: it means there is no window end to measure this checkout
+ * against, so Meridian is declining to guess rather than reporting it on time.
+ */
+export function equipmentPresentationLabel(
+  state: EquipmentPresentationState,
+): string {
+  switch (state) {
+    case "overdue":
+      return "Overdue";
+    case "unknown":
+      return "Unknown";
+    default:
+      return equipmentStateLabel(state);
+  }
+}
+
+export function equipmentPresentationTone(
+  state: EquipmentPresentationState,
+): StatusPillTone {
+  switch (state) {
+    case "overdue":
+      return "critical";
+    // Not a warning. Nobody has done anything wrong; Meridian simply has no
+    // window to measure against, and painting that red would teach an operator
+    // to ignore the color on the state that does need acting on.
+    case "unknown":
+      return "caution";
+    default:
+      return equipmentTone(state);
+  }
+}
+
+/** Shift kit or event kit (EQUIP-009). */
+export function assignmentScopeLabel(scope: EquipmentAssignmentScope): string {
+  return scope === "shift" ? "Shift" : "Event";
+}
+
+/** Tracked or Pooled, in UI contract 9.6A's words rather than the stored value's. */
+export function equipmentTrackingLabel(tracking: EquipmentTracking): string {
+  return tracking === "pooled" ? "Pooled" : "Tracked";
 }
 
 export function lifecycleLabel(lifecycle: ShiftLifecycle): string {

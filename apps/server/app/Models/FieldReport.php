@@ -142,16 +142,85 @@ class FieldReport extends Model
     }
 
     /**
-     * Scope Field Reports submitted by a specific user (FR-004 author visibility).
+     * Scope Field Reports this user authored or took (FR-004 author visibility;
+     * FR-015).
+     *
+     * Two columns, because a taken report has two people on it: the reporting
+     * staff member it belongs to and the operator who wrote it down. Both reach
+     * it — the author because it is their account, the submitter because they
+     * are the one who typed it. Neither is rewritten to look like the other.
      *
      * @param  Builder<FieldReport>  $query
      * @return Builder<FieldReport>
      */
     public function scopeForAuthor(Builder $query, User|string $user): Builder
     {
-        $userId = $user instanceof User ? $user->getKey() : $user;
+        $userId = (string) ($user instanceof User ? $user->getKey() : $user);
 
-        return $query->where('submitted_by_user_id', (string) $userId);
+        return $query->where(function (Builder $scope) use ($userId): void {
+            $scope
+                ->where('submitted_by_user_id', $userId)
+                ->orWhereHas('staff', fn (Builder $staff) => $staff
+                    ->whereHas('users', fn (Builder $users) => $users->whereKey($userId)));
+        });
+    }
+
+    /**
+     * Whether this report's recorded author is this user (FR-009, FR-016).
+     *
+     * Resolved through the staff record rather than through
+     * `submitted_by_user_id`, because on a taken report those are two different
+     * people and append authority follows the author. An operator who took
+     * fifty reports may append to none of them.
+     */
+    public function isAuthoredBy(User $user): bool
+    {
+        return $this->authorUserIds()->contains((string) $user->getKey());
+    }
+
+    /** Whether this user is the one who put the report into Meridian (FR-015). */
+    public function wasSubmittedBy(User $user): bool
+    {
+        return (string) $this->submitted_by_user_id === (string) $user->getKey();
+    }
+
+    /**
+     * Whether this report was taken for its author by somebody else (FR-015).
+     *
+     * Derived from the two identifiers already on the record. Storing it would
+     * be a third fact that can disagree with the two it summarises.
+     */
+    public function wasTakenOnBehalf(): bool
+    {
+        if ($this->staff_id === null || $this->submitted_by_user_id === null) {
+            return false;
+        }
+
+        return ! $this->authorUserIds()->contains((string) $this->submitted_by_user_id);
+    }
+
+    /**
+     * The users the author staff record answers to.
+     *
+     * Read from the loaded relation when a caller has eager-loaded
+     * `staff.users`, which is what keeps a list of an event's Field Reports
+     * from asking one question per row.
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    private function authorUserIds(): \Illuminate\Support\Collection
+    {
+        if ($this->staff_id === null) {
+            return collect();
+        }
+
+        if ($this->relationLoaded('staff') && $this->staff?->relationLoaded('users') === true) {
+            return $this->staff->users->map(fn (User $user): string => (string) $user->getKey());
+        }
+
+        return $this->staff()->first()?->users()->pluck('users.id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ?? collect();
     }
 
     /**

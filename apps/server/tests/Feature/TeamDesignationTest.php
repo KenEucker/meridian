@@ -255,7 +255,7 @@ class TeamDesignationTest extends TestCase
         );
     }
 
-    public function test_an_operator_designation_grants_the_department_operator_role_with_no_capabilities_yet(): void
+    public function test_an_operator_designation_grants_the_department_operator_role(): void
     {
         $department = Department::factory()->create();
         $team = Team::factory()->for($department)->create();
@@ -269,11 +269,16 @@ class TeamDesignationTest extends TestCase
             (new EffectiveRoleResolver)->resolveForStaff($staff)->pluck('roleCode')->all(),
         );
 
-        // The Operator capability set is owned by M18.10A; the designation
-        // grants the role and the role carries nothing until then.
-        $this->assertArrayNotHasKey(
-            PermissionCatalog::ROLE_DEPARTMENT_OPERATOR,
-            PermissionCatalog::rolePermissions(),
+        /*
+         * The designation grants the role, and the role carries what M18.24A
+         * gave it and nothing more: taking a Field Report for somebody else
+         * (FR-015). The rest of the Operator set, including the derived
+         * `ic_operator` elevation for an Operator team in the event's Incident
+         * Command Department, is still M18.10A's.
+         */
+        $this->assertSame(
+            [PermissionCatalog::PERMISSION_FIELD_REPORTS_CREATE_ON_BEHALF],
+            PermissionCatalog::rolePermissions()[PermissionCatalog::ROLE_DEPARTMENT_OPERATOR],
         );
     }
 

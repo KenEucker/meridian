@@ -53,7 +53,9 @@ final class FieldReportReadController extends Controller
         }
 
         $reports = FieldReport::query()
-            ->with(['staff', 'submittedByUser'])
+            // `staff.users` so the taken-on-behalf reading is one query for the
+            // page rather than one per row.
+            ->with(['staff.users', 'submittedByUser'])
             ->forEvent($event)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -77,6 +79,16 @@ final class FieldReportReadController extends Controller
                         ?? $report->staff?->legal_name
                         ?? $report->submittedByUser?->name
                         ?? 'Unknown author',
+                    /*
+                     * Who put the report into Meridian, and whether that is a
+                     * different person from its author (FR-015). "Both shall be
+                     * preserved and both shall be visible wherever the report is
+                     * shown, so a reader can tell that the report was taken
+                     * rather than written" — an IC operator reading a list needs
+                     * that before they weigh what it says.
+                     */
+                    'submitter_name' => $report->submittedByUser?->name,
+                    'taken_on_behalf' => $report->wasTakenOnBehalf(),
                     'body' => $report->body,
                     // The moment the node accepted the report, falling back to
                     // the row's own timestamp for one that predates acceptance

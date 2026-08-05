@@ -61,12 +61,13 @@ const staffQuery = ref("");
 const selectedStaffId = ref<string | null>(null);
 
 /**
- * The staff an operator may name, read from the node (M18.9; FR-016).
+ * The staff an operator may name, read from the node (M18.24A; FR-017).
  *
  * Loaded only in dictation mode. A staff member filing their own report names
- * nobody, so asking the node for a department roster to satisfy a picker they
- * will never open would be a read taken for nothing — and one the node would
- * refuse for most of the people who file reports.
+ * nobody, so asking the node for a roster to satisfy a picker they will never
+ * open would be a read taken for nothing — and one the node refuses for
+ * everybody without taking authority, which is most of the people who file
+ * reports.
  */
 const staffDirectory = ref<readonly DictationStaffOption[]>([]);
 const staffDirectoryError = ref<string | null>(null);
@@ -86,15 +87,12 @@ async function loadStaffDirectory(): Promise<void> {
   staffDirectoryError.value = null;
 
   try {
-    staffDirectory.value = await loadDictationStaffDirectory(
-      params.eventId,
-      params.departmentId,
-    );
+    staffDirectory.value = await loadDictationStaffDirectory(params.eventId);
   } catch (error) {
     staffDirectory.value = [];
     staffDirectoryError.value = meridianErrorMessage(
       error,
-      "Unable to read the staff directory for this department. Check the connection to this node and try again.",
+      "Unable to read the staff you may take a report for. Check the connection to this node and try again.",
     );
   }
 }

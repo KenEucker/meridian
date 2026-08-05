@@ -44,16 +44,30 @@ class EquipmentEditLayout extends Rows
                 ->title(__('Name'))
                 ->placeholder(__('Radio 14')),
 
+            Select::make('equipmentItem.tracking')
+                ->options(EquipmentItem::trackingLabels())
+                ->required()
+                ->title(__('Tracking'))
+                ->help(__('Tracked equipment is one unit per record with an identifier on it. Pooled equipment is a quantity of interchangeable units and carries no asset tag or serial number.')),
+
             Input::make('equipmentItem.asset_tag')
                 ->type('text')
                 ->max(255)
                 ->title(__('Asset tag'))
-                ->placeholder(__('RDO-14')),
+                ->placeholder(__('RDO-14'))
+                ->help(__('Tracked equipment only.')),
 
             Input::make('equipmentItem.serial_number')
                 ->type('text')
                 ->max(255)
-                ->title(__('Serial number')),
+                ->title(__('Serial number'))
+                ->help(__('Tracked equipment only.')),
+
+            Input::make('equipmentItem.quantity_total')
+                ->type('number')
+                ->min(0)
+                ->title(__('Pool quantity'))
+                ->help(__('The serviceable total for a pooled kind. Tracked equipment is always one. Availability is this total less the units currently checked out.')),
 
             Select::make('equipmentItem.status')
                 ->options(EquipmentItem::statusLabels())

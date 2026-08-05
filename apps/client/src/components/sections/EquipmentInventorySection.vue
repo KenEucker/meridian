@@ -54,6 +54,30 @@ const eventOptions = computed(() => props.inventory?.events ?? []);
 const maintainableStates = computed(
   () => props.inventory?.maintainableStates ?? [],
 );
+const trackingKinds = computed(() => props.inventory?.trackingKinds ?? []);
+
+/**
+ * Whether the form is describing a pool rather than one physical unit
+ * (EQUIP-010).
+ *
+ * The two kinds carry different fields, so the form shows different fields. A
+ * pool has no asset tag or serial number to put on it and a tracked unit has no
+ * quantity, and offering both to both would invite a maintainer to fill in
+ * something the node then silently drops.
+ */
+const draftIsPooled = computed(() => draft.tracking === "pooled");
+
+/** What the node did with one import row. */
+function importRowLabel(status: string): string {
+  switch (status) {
+    case "imported":
+      return "Imported";
+    case "updated":
+      return "Updated";
+    default:
+      return "Skipped";
+  }
+}
 
 type EquipmentStatusFilter = "all" | "active" | "archived";
 
@@ -96,8 +120,10 @@ const description =
 function emptyDraft(): EquipmentItemDraft {
   return {
     name: "",
+    tracking: "individual",
     assetTag: "",
     serialNumber: "",
+    quantityTotal: "1",
     eventId: null,
     status: null,
   };
@@ -162,8 +188,10 @@ function onEdit(item: ProductEquipmentItem): void {
   editingId.value = item.id;
   Object.assign(draft, {
     name: item.name,
+    tracking: item.tracking,
     assetTag: item.assetTag ?? "",
     serialNumber: item.serialNumber ?? "",
+    quantityTotal: String(item.quantityTotal),
     eventId: item.eventId,
     // Checked out and Returned are Logistics states and are never among the
     // states the node offers here. A checked-out item sends no state at all,
@@ -252,7 +280,7 @@ async function onImport(): Promise<void> {
     );
     emit("reload");
     importResult.value = result;
-    actionNotice.value = `Imported ${result.imported} item(s); skipped ${result.skipped}.`;
+    actionNotice.value = `Imported ${result.imported} item(s); updated ${result.updated}; skipped ${result.skipped}.`;
   } catch (error) {
     actionError.value = meridianErrorMessage(
       error,
@@ -329,14 +357,32 @@ function checkoutHolder(item: ProductEquipmentItem): string {
           <input v-model="draft.name" type="text" required />
         </label>
 
-        <label>
+        <label v-if="trackingKinds.length > 0">
+          Tracking
+          <select v-model="draft.tracking" aria-label="Equipment tracking kind">
+            <option
+              v-for="kind in trackingKinds"
+              :key="kind.value"
+              :value="kind.value"
+            >
+              {{ kind.label }}
+            </option>
+          </select>
+        </label>
+
+        <label v-if="!draftIsPooled">
           Asset tag
           <input v-model="draft.assetTag" type="text" />
         </label>
 
-        <label>
+        <label v-if="!draftIsPooled">
           Serial number
           <input v-model="draft.serialNumber" type="text" />
+        </label>
+
+        <label v-if="draftIsPooled">
+          Pool quantity
+          <input v-model="draft.quantityTotal" type="number" min="0" />
         </label>
 
         <label>
@@ -377,6 +423,17 @@ function checkoutHolder(item: ProductEquipmentItem): string {
           This equipment is checked out. Its details stay editable, but return it
           from the Logistics Window to change its state.
         </p>
+        <!--
+          A pool is one record standing for a quantity of interchangeable units
+          (EQUIP-010), so it has no state of its own: losses are recorded when
+          units come back, as an audited adjustment to the quantity (EQUIP-017).
+        -->
+        <p v-else-if="draftIsPooled" class="equipment__hint">
+          A pooled kind is a quantity of interchangeable units and carries no
+          asset tag. It never reads Checked out; what is available is the total
+          less whatever is currently out. Missing or damaged units are recorded
+          when they are returned, which adjusts the total.
+        </p>
         <p v-else class="equipment__hint">
           New equipment starts Available. Checked out and Returned come from the
           Logistics Window.
@@ -408,6 +465,7 @@ function checkoutHolder(item: ProductEquipmentItem): string {
           <thead>
             <tr>
               <th scope="col">Equipment</th>
+              <th scope="col">Tracking</th>
               <th scope="col">Asset tag</th>
               <th scope="col">Serial</th>
               <th scope="col">Scope</th>
@@ -417,7 +475,7 @@ function checkoutHolder(item: ProductEquipmentItem): string {
           </thead>
           <tbody>
             <tr v-if="items.length === 0">
-              <td colspan="6">
+              <td colspan="7">
                 No equipment matches this filter. Add items or import a CSV to
                 build the inventory before operations.
               </td>
@@ -427,14 +485,26 @@ function checkoutHolder(item: ProductEquipmentItem): string {
                 <strong>{{ item.name }}</strong>
                 <p v-if="item.archivedAt" class="equipment__muted">Archived</p>
               </td>
+              <td>{{ item.trackingLabel }}</td>
               <td>{{ item.assetTag ?? "—" }}</td>
               <td>{{ item.serialNumber ?? "—" }}</td>
               <td>{{ eventLabel(item) }}</td>
               <td>
-                {{ item.statusLabel }}
-                <p v-if="item.openCheckout" class="equipment__muted">
-                  {{ checkoutHolder(item) }}
-                </p>
+                <!--
+                  A pool reads its availability rather than a state, because
+                  "Available" on its own says nothing about whether there is
+                  anything left in it (EQUIP-016; UI contract 9.6).
+                -->
+                <template v-if="item.tracking === 'pooled'">
+                  {{ item.quantityAvailable }} of {{ item.quantityTotal }}
+                  available
+                </template>
+                <template v-else>
+                  {{ item.statusLabel }}
+                  <p v-if="item.openCheckout" class="equipment__muted">
+                    {{ checkoutHolder(item) }}
+                  </p>
+                </template>
               </td>
               <td class="equipment__actions">
                 <button
@@ -474,9 +544,12 @@ function checkoutHolder(item: ProductEquipmentItem): string {
         <h3>Bulk import</h3>
         <p class="equipment__hint">
           Paste spreadsheet CSV with a <code>name</code> header column, plus
-          optional <code>asset_tag</code> and <code>serial_number</code>
-          columns. Rows are imported independently, and rows whose asset tag
-          already exists are skipped rather than duplicated.
+          optional <code>tracking</code>, <code>asset_tag</code>,
+          <code>serial_number</code>, and <code>quantity_total</code> columns.
+          Rows are imported independently. A tracked row whose asset tag already
+          exists is skipped rather than duplicated; a pooled row is matched by
+          name and updated, so re-running a file adjusts a pool rather than
+          adding a second one.
         </p>
 
         <label>
@@ -523,7 +596,7 @@ function checkoutHolder(item: ProductEquipmentItem): string {
             <tr v-for="row in importResult.rows" :key="row.line">
               <td>{{ row.line }}</td>
               <td>{{ row.name || "—" }}</td>
-              <td>{{ row.status === "imported" ? "Imported" : "Skipped" }}</td>
+              <td>{{ importRowLabel(row.status) }}</td>
               <td>{{ row.reason ?? "—" }}</td>
             </tr>
           </tbody>

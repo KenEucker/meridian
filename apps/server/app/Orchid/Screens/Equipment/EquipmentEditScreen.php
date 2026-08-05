@@ -34,6 +34,8 @@ class EquipmentEditScreen extends Screen
     {
         if (! $equipmentItem->exists) {
             $equipmentItem->status = EquipmentItem::STATUS_AVAILABLE;
+            $equipmentItem->tracking = EquipmentItem::TRACKING_INDIVIDUAL;
+            $equipmentItem->quantity_total = 1;
         }
 
         return [
@@ -106,8 +108,13 @@ class EquipmentEditScreen extends Screen
             'equipmentItem.event_id' => ['nullable', 'uuid', Rule::exists(Event::class, 'id')],
             'equipmentItem.department_id' => ['nullable', 'uuid', Rule::exists(Department::class, 'id')],
             'equipmentItem.name' => ['required', 'string', 'max:255'],
+            // Nullable rather than required: God Mode is repair tooling, and a
+            // repair that omits the kind means "leave it as it is" rather than
+            // being refused for a field the record already has an answer for.
+            'equipmentItem.tracking' => ['nullable', Rule::in(EquipmentItem::trackingKinds())],
             'equipmentItem.asset_tag' => ['nullable', 'string', 'max:255'],
             'equipmentItem.serial_number' => ['nullable', 'string', 'max:255'],
+            'equipmentItem.quantity_total' => ['nullable', 'integer', 'min:0'],
             'equipmentItem.status' => ['required', Rule::in(EquipmentItem::statuses())],
         ]);
 
@@ -116,6 +123,21 @@ class EquipmentEditScreen extends Screen
         $attributes['department_id'] = $attributes['department_id'] ?? null;
         $attributes['asset_tag'] = $attributes['asset_tag'] ?? null;
         $attributes['serial_number'] = $attributes['serial_number'] ?? null;
+        $attributes['tracking'] = $attributes['tracking']
+            ?? ($equipmentItem->tracking ?: EquipmentItem::TRACKING_INDIVIDUAL);
+
+        // A pool has no per-unit identifier and is never held as a whole; a
+        // tracked unit is one thing (EQUIP-010, EQUIP-016). God Mode repairs
+        // records rather than inventing kinds, so the shape is enforced here
+        // too.
+        if ($attributes['tracking'] === EquipmentItem::TRACKING_POOLED) {
+            $attributes['asset_tag'] = null;
+            $attributes['serial_number'] = null;
+            $attributes['quantity_total'] = (int) ($attributes['quantity_total'] ?? 0);
+            $attributes['status'] = EquipmentItem::STATUS_AVAILABLE;
+        } else {
+            $attributes['quantity_total'] = 1;
+        }
 
         $this->validateOrganizationScope($attributes);
 

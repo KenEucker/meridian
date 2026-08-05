@@ -51,7 +51,6 @@ function workspace(
     offSiteBlockedReason: null,
     shiftCards: [],
     openEquipment: [],
-    availableEquipment: [],
     futureSignups: [],
     ...overrides,
   };
@@ -92,10 +91,19 @@ function equipment(
     checkoutId: "checkout-1",
     equipmentItemId: "equipment-radio-12",
     name: "Radio 12",
+    tracking: "individual",
     assetTag: "RDO-12",
     status: "checked_out",
     checkedOutAt: "2027-07-04T16:05:00.000Z",
     shiftId: null,
+    assignmentScope: "event",
+    presentationState: "checked_out",
+    presentationStateLabel: "Checked out",
+    dueAt: null,
+    overdue: false,
+    quantity: 1,
+    quantityReturned: 0,
+    quantityOutstanding: 1,
     ...overrides,
   };
 }
@@ -126,13 +134,20 @@ function desk(overrides: Partial<LogisticsDeskRead> = {}): LogisticsDeskRead {
       {
         equipmentItemId: "equipment-radio-12",
         name: "Radio 12",
+        tracking: "individual",
         assetTag: "RDO-12",
+        serialNumber: "SN-0012",
         status: "checked_out",
         statusLabel: "Checked out",
+        presentationState: "checked_out",
+        presentationStateLabel: "Checked out",
+        quantityTotal: 1,
+        quantityAvailable: 0,
         holderStaffId: "staff-1",
         holderName: "Vera Staff",
       },
     ],
+    checkoutInventory: [],
     searchableShifts: [
       {
         shiftId: "shift-day",
@@ -233,8 +248,16 @@ describe("logistics desk presentation", () => {
           "staff-1": workspace({
             shiftCards: [card({ attendanceState: "checked_in" })],
             openEquipment: [
-              equipment({ checkoutId: "checkout-1", shiftId: "shift-day" }),
-              equipment({ checkoutId: "checkout-2", shiftId: null }),
+              equipment({
+                checkoutId: "checkout-1",
+                shiftId: "shift-day",
+                assignmentScope: "shift",
+              }),
+              equipment({
+                checkoutId: "checkout-2",
+                shiftId: null,
+                assignmentScope: "event",
+              }),
             ],
           }),
         },
@@ -255,7 +278,12 @@ describe("logistics desk presentation", () => {
       desk({
         staffWorkspaces: {
           "staff-1": workspace({
-            openEquipment: [equipment({ shiftId: "shift-day" })],
+            openEquipment: [
+              equipment({
+                shiftId: "shift-day",
+                assignmentScope: "shift",
+              }),
+            ],
           }),
         },
       }),

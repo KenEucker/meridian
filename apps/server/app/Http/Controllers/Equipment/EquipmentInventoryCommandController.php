@@ -36,8 +36,10 @@ final class EquipmentInventoryCommandController extends Controller
         $validated = $request->validate([
             'department_id' => ['required', 'uuid', Rule::exists(Department::class, 'id')],
             'name' => ['required', 'string', 'max:255'],
+            'tracking' => ['nullable', 'string', Rule::in(EquipmentItem::trackingKinds())],
             'asset_tag' => ['nullable', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],
+            'quantity_total' => ['nullable', 'integer', 'min:0'],
             'event_id' => ['nullable', 'uuid', Rule::exists(Event::class, 'id')],
         ]);
 
@@ -52,8 +54,10 @@ final class EquipmentInventoryCommandController extends Controller
         try {
             $item = $inventory->create($department, [
                 'name' => (string) $validated['name'],
+                'tracking' => $validated['tracking'] ?? null,
                 'asset_tag' => $validated['asset_tag'] ?? null,
                 'serial_number' => $validated['serial_number'] ?? null,
+                'quantity_total' => $validated['quantity_total'] ?? null,
                 'event_id' => $validated['event_id'] ?? null,
             ], $user, AuditEvent::SOURCE_API);
         } catch (EquipmentInventoryException $exception) {
@@ -74,8 +78,10 @@ final class EquipmentInventoryCommandController extends Controller
         $validated = $request->validate([
             'equipment_item_id' => ['required', 'uuid', Rule::exists(EquipmentItem::class, 'id')],
             'name' => ['required', 'string', 'max:255'],
+            'tracking' => ['nullable', 'string', Rule::in(EquipmentItem::trackingKinds())],
             'asset_tag' => ['nullable', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],
+            'quantity_total' => ['nullable', 'integer', 'min:0'],
             'event_id' => ['nullable', 'uuid', Rule::exists(Event::class, 'id')],
             'status' => ['nullable', 'string', Rule::in(EquipmentItem::statuses())],
         ]);
@@ -93,8 +99,13 @@ final class EquipmentInventoryCommandController extends Controller
         try {
             $item = $inventory->update($item, [
                 'name' => (string) $validated['name'],
+                // Omitted means "leave it as it is", so an edit form that never
+                // learned about tracking cannot silently turn a pool back into
+                // a single unit.
+                'tracking' => $validated['tracking'] ?? $item->tracking,
                 'asset_tag' => $validated['asset_tag'] ?? null,
                 'serial_number' => $validated['serial_number'] ?? null,
+                'quantity_total' => $validated['quantity_total'] ?? $item->quantity_total,
                 'event_id' => $validated['event_id'] ?? null,
                 'status' => $validated['status'] ?? null,
             ], $user, AuditEvent::SOURCE_API);
@@ -231,8 +242,12 @@ final class EquipmentInventoryCommandController extends Controller
             'department_id' => $item->department_id !== null ? (string) $item->department_id : null,
             'event_id' => $item->event_id !== null ? (string) $item->event_id : null,
             'name' => $item->name,
+            'tracking' => $item->tracking,
+            'tracking_label' => EquipmentItem::trackingLabel($item->tracking),
             'asset_tag' => $item->asset_tag,
             'serial_number' => $item->serial_number,
+            'quantity_total' => (int) $item->quantity_total,
+            'quantity_available' => $item->availableQuantity(),
             'status' => $item->status,
             'status_label' => EquipmentItem::statusLabel($item->status),
             'archived_at' => $item->archived_at?->toIso8601String(),

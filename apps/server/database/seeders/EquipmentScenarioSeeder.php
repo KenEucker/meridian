@@ -54,6 +54,19 @@ class EquipmentScenarioSeeder extends Seeder
             ]);
         }
 
+        /*
+         * A pooled kind, so the checkout dialog's two presentations both have
+         * something in them (EQUIP-010, EQUIP-014; UI contract 9.6A). Tracked
+         * units are found by lookup and pooled kinds by quantity, and a
+         * scenario with only the first kind never renders the second.
+         *
+         * Thirty is chosen so handing out a handful still leaves the number
+         * visibly moving rather than emptying, which is what makes the derived
+         * availability (EQUIP-016) legible to somebody clicking through it.
+         */
+        $this->pool($inventory, $rangers, $dana, 'Hi-vis vest (pooled)', 30);
+        $this->pool($inventory, $rangers, $dana, 'Water bottle', 60);
+
         $this->item($inventory, $rangers, $dana, [
             'name' => 'Perimeter Flag Set',
             'asset_tag' => 'FLG-01',
@@ -158,5 +171,37 @@ class EquipmentScenarioSeeder extends Seeder
             ['event_id' => null, ...$attributes],
             $actor,
         );
+    }
+
+    /**
+     * A pooled kind, matched on department and name because it has no asset tag
+     * to be matched on (data/API 10.13).
+     *
+     * Same idempotency rule the import path uses, for the same reason: a re-seed
+     * must leave one pool of thirty vests rather than two of thirty each.
+     */
+    private function pool(
+        EquipmentInventoryService $inventory,
+        Department $department,
+        User $actor,
+        string $name,
+        int $quantityTotal,
+    ): EquipmentItem {
+        $existing = EquipmentItem::query()
+            ->where('department_id', $department->id)
+            ->pooled()
+            ->where('name', $name)
+            ->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return $inventory->create($department, [
+            'name' => $name,
+            'tracking' => EquipmentItem::TRACKING_POOLED,
+            'quantity_total' => $quantityTotal,
+            'event_id' => null,
+        ], $actor);
     }
 }

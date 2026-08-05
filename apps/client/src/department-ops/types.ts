@@ -31,6 +31,52 @@ export type EquipmentReturnCondition = Extract<
   "returned" | "missing" | "damaged"
 >;
 
+/**
+ * What an operator reads on an outstanding checkout, which is more than the
+ * five stored states (EQUIP-005; UI contract 9.6).
+ *
+ * `overdue` and `unknown` are derived by the node from the stored checkout plus
+ * the window it was issued against, and are deliberately not stored: overdue
+ * becomes true as a clock passes a time, and a column would say "checked out"
+ * for hours after it stopped being so. `unknown` is the honest answer for a
+ * checkout with no window end to measure against — Meridian saying it cannot
+ * tell, rather than reporting on-time as if it knew.
+ */
+export const EQUIPMENT_PRESENTATION_STATES = [
+  "checked_out",
+  "overdue",
+  "unknown",
+  "returned",
+  "missing",
+  "damaged",
+] as const;
+
+export type EquipmentPresentationState =
+  (typeof EQUIPMENT_PRESENTATION_STATES)[number];
+
+/**
+ * Whether a checkout was issued for a shift or for the event (EQUIP-009).
+ *
+ * Shift kit is owed back when that shift ends; event kit is out until its holder
+ * leaves site, and it is the second kind that quietly stays out for a week.
+ */
+export const EQUIPMENT_ASSIGNMENT_SCOPES = ["shift", "event"] as const;
+
+export type EquipmentAssignmentScope =
+  (typeof EQUIPMENT_ASSIGNMENT_SCOPES)[number];
+
+/**
+ * How a record is tracked (EQUIP-010; UI contract 9.6A).
+ *
+ * `individual` is one physical unit with an identifier on it, found at checkout
+ * by entering, scanning, or searching. `pooled` is a quantity of interchangeable
+ * units handed out by choosing a count. Checkout surfaces present the two
+ * differently and never mix them into one list.
+ */
+export const EQUIPMENT_TRACKING_KINDS = ["individual", "pooled"] as const;
+
+export type EquipmentTracking = (typeof EQUIPMENT_TRACKING_KINDS)[number];
+
 export type ShiftLifecycle = "upcoming" | "active" | "completed" | "cancelled";
 
 export interface DepartmentOpsContext {
@@ -189,6 +235,34 @@ export interface LogisticsEquipmentItem {
   readonly checkedOutAt: string | null;
 }
 
+/**
+ * One kind of equipment the desk may hand out right now (EQUIP-012, EQUIP-014).
+ *
+ * The same row serves both presentations because the tracking kind decides which
+ * one it gets: a pooled kind becomes a quantity stepper, a tracked unit becomes
+ * a lookup result. `quantityAvailable` is the node's derivation, never a stored
+ * count (EQUIP-016).
+ */
+export interface EquipmentCheckoutCandidate {
+  readonly equipmentItemId: string;
+  readonly name: string;
+  readonly tracking: EquipmentTracking;
+  readonly trackingLabel: string;
+  readonly assetTag: string | null;
+  readonly serialNumber: string | null;
+  readonly quantityTotal: number;
+  readonly quantityAvailable: number;
+}
+
+/** A line an operator has staged for this handoff, before committing it. */
+export interface EquipmentCheckoutLine {
+  readonly equipmentItemId: string;
+  readonly name: string;
+  readonly tracking: EquipmentTracking;
+  readonly assetTag: string | null;
+  readonly quantity: number;
+}
+
 export interface LogisticsFutureSignup {
   readonly signupId: string;
   readonly shiftId: string;
@@ -208,7 +282,6 @@ export interface LogisticsStaffWorkspace {
   readonly offSiteBlockedReason: string | null;
   readonly shiftCards: readonly LogisticsShiftCard[];
   readonly openEquipment: readonly LogisticsEquipmentItem[];
-  readonly availableEquipment: readonly LogisticsEquipmentItem[];
   readonly futureSignups: readonly LogisticsFutureSignup[];
   readonly provisionsExtensionNote: string;
 }
@@ -236,9 +309,11 @@ export interface LogisticsDeskModel {
     readonly name: string;
     readonly assetTag: string | null;
     readonly status: EquipmentState;
+    readonly presentationState: EquipmentPresentationState;
     readonly holderName: string | null;
   }[];
   readonly searchableShifts: readonly ShiftOption[];
+  readonly checkoutInventory: readonly EquipmentCheckoutCandidate[];
   readonly staffWorkspaces: Readonly<Record<string, LogisticsStaffWorkspace>>;
   readonly selectedStaffId: string | null;
   readonly selectedSearchContext: LogisticsSearchContext | null;

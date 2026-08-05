@@ -69,6 +69,10 @@ class PermissionCatalogTest extends TestCase
             'incidents.print',
             'field_reports.view_event',
             'field_reports.download_photo',
+            // FR-015 / M18.24A: taking a report for somebody in the field who
+            // cannot file it themselves. It grants no authority over the report
+            // afterwards — append follows the recorded author (FR-016).
+            'field_reports.create_on_behalf',
             // CRED-011 / M18.5: the one authority outside IMS an IC lead holds.
             // It reaches the catalog through this role rather than through the
             // event's Incident Command Department because the department is
@@ -87,6 +91,7 @@ class PermissionCatalogTest extends TestCase
             'incidents.reopen',
             'incidents.link_field_report',
             'field_reports.view_event',
+            'field_reports.create_on_behalf',
         ], $this->permissionCodesFor('ic_operator'));
         $this->assertNotContains('field_reports.download_photo', $this->permissionCodesFor('ic_operator'));
         $this->assertNotContains('incidents.print', $this->permissionCodesFor('ic_operator'));
@@ -224,12 +229,34 @@ class PermissionCatalogTest extends TestCase
         ], $this->permissionCodesFor('shift_lead'));
     }
 
-    public function test_department_operator_carries_no_capabilities_until_its_owning_milestone(): void
+    public function test_department_operator_carries_only_the_authority_to_take_a_report(): void
     {
-        // M18.10 registers the role so the Operator team designation has a
-        // role to attach a grant to. Its capability set is owned by M18.10A
-        // (section 4.8A), so holding it grants nothing yet.
-        $this->assertSame([], $this->permissionCodesFor('department_operator'));
+        /*
+         * M18.24A / FR-015 / requirements 4.8A.
+         *
+         * One capability, and it is the reason the role exists: somebody at a
+         * radio writing down an account from a person in the field who cannot
+         * file it themselves. The rest of the Operator set, including the
+         * derived `ic_operator` elevation, is still M18.10A's.
+         *
+         * What matters as much as the entry is everything absent from it. An
+         * Operator does not read the event's Field Reports, does not touch
+         * incidents, and gains nothing over a report once they have taken it —
+         * append follows the recorded author (FR-016). Dispatch is not command.
+         */
+        $this->assertSame([
+            'field_reports.create_on_behalf',
+        ], $this->permissionCodesFor('department_operator'));
+
+        foreach ([
+            'field_reports.view_event',
+            'field_reports.download_photo',
+            'incidents.view',
+            'incidents.create',
+            'department.attendance.manage',
+        ] as $withheld) {
+            $this->assertNotContains($withheld, $this->permissionCodesFor('department_operator'));
+        }
     }
 
     public function test_staff_coordinator_carries_review_authority_and_no_other_governance(): void

@@ -60,8 +60,25 @@ export interface ProductEquipmentItem {
   readonly departmentId: string | null;
   readonly eventId: string | null;
   readonly name: string;
+  /**
+   * `individual` or `pooled` (EQUIP-010; UI contract 9.6A).
+   *
+   * Kept as the node's string rather than a client union, for the same reason
+   * `status` is: the vocabulary belongs to the node and the label beside it is
+   * the node's word for it.
+   */
+  readonly tracking: string;
+  readonly trackingLabel: string;
   readonly assetTag: string | null;
   readonly serialNumber: string | null;
+  /** The pool's serviceable total; 1 for a tracked unit. */
+  readonly quantityTotal: number;
+  /**
+   * What is left to hand out, derived by the node from the total less what is
+   * out (EQUIP-016). Never a stored count, which is why it is read rather than
+   * computed here.
+   */
+  readonly quantityAvailable: number;
   readonly status: string;
   /** The canonical label for `status`, as the node names it (UI contract 9.6). */
   readonly statusLabel: string;
@@ -96,14 +113,20 @@ export interface EquipmentInventory {
   readonly access: { readonly canManage: boolean };
   readonly events: readonly EquipmentEventOption[];
   readonly maintainableStates: readonly EquipmentStateOption[];
+  /** Tracked or Pooled, in the node's vocabulary (EQUIP-010; UI contract 9.6A). */
+  readonly trackingKinds: readonly EquipmentStateOption[];
   readonly equipment: readonly ProductEquipmentItem[];
 }
 
 /** The equipment form, as edited. */
 export interface EquipmentItemDraft {
   name: string;
+  /** `individual` or `pooled`; the form always supplies one. */
+  tracking: string;
   assetTag: string;
   serialNumber: string;
+  /** The pool size, as typed. Ignored by the node for a tracked unit. */
+  quantityTotal: string;
   eventId: string | null;
   /** `null` leaves the current state alone, matching the optional server field. */
   status: string | null;
@@ -119,6 +142,14 @@ export interface EquipmentImportRowResult {
 
 export interface EquipmentImportResult {
   readonly imported: number;
+  /**
+   * Pooled rows matched to an existing kind and re-stated (data/API 10.13).
+   *
+   * A pool has no asset tag to be recognised by, so a re-import matches it on
+   * department, name, and kind and adjusts its total rather than standing a
+   * second pool of the same thing next to the first.
+   */
+  readonly updated: number;
   readonly skipped: number;
   readonly rows: readonly EquipmentImportRowResult[];
 }
@@ -137,8 +168,12 @@ interface EquipmentItemPayload {
   readonly department_id: string | null;
   readonly event_id: string | null;
   readonly name: string;
+  readonly tracking?: string;
+  readonly tracking_label?: string;
   readonly asset_tag: string | null;
   readonly serial_number: string | null;
+  readonly quantity_total?: number;
+  readonly quantity_available?: number;
   readonly status: string;
   readonly status_label?: string;
   readonly open_checkout?: OpenCheckoutPayload | null;
@@ -152,11 +187,14 @@ interface EquipmentIndexPayload {
   readonly events?: { readonly id: string; readonly name: string }[];
   readonly maintainable_statuses?: string[];
   readonly status_labels?: Record<string, string>;
+  readonly tracking_kinds?: string[];
+  readonly tracking_labels?: Record<string, string>;
   readonly equipment?: EquipmentItemPayload[];
 }
 
 interface EquipmentImportPayload {
   readonly imported?: number;
+  readonly updated?: number;
   readonly skipped?: number;
   readonly rows?: {
     readonly line: number;
@@ -170,14 +208,22 @@ interface EquipmentImportPayload {
 function toItem(
   payload: EquipmentItemPayload,
   statusLabels: Record<string, string>,
+  trackingLabels: Record<string, string>,
 ): ProductEquipmentItem {
+  const tracking = payload.tracking ?? "individual";
+
   return {
     id: payload.id,
     departmentId: payload.department_id,
     eventId: payload.event_id,
     name: payload.name,
+    tracking,
+    trackingLabel:
+      payload.tracking_label ?? trackingLabels[tracking] ?? tracking,
     assetTag: payload.asset_tag,
     serialNumber: payload.serial_number,
+    quantityTotal: payload.quantity_total ?? 1,
+    quantityAvailable: payload.quantity_available ?? 0,
     status: payload.status,
     statusLabel:
       payload.status_label ?? statusLabels[payload.status] ?? payload.status,
@@ -205,10 +251,21 @@ function toItem(
  * something in it.
  */
 function toAttributes(draft: EquipmentItemDraft): Record<string, unknown> {
+  const pooled = draft.tracking === "pooled";
+
   return {
     name: draft.name.trim(),
-    asset_tag: emptyToNull(draft.assetTag),
-    serial_number: emptyToNull(draft.serialNumber),
+    tracking: draft.tracking,
+    /*
+     * A pool carries no per-unit identifier and a tracked unit carries no pool
+     * size (EQUIP-010), so the form sends only the fields its kind has. The
+     * node drops the others anyway; sending them would leave a maintainer who
+     * switched a record from tracked to pooled wondering why the tag they can
+     * still see in the box did not save.
+     */
+    asset_tag: pooled ? null : emptyToNull(draft.assetTag),
+    serial_number: pooled ? null : emptyToNull(draft.serialNumber),
+    quantity_total: pooled ? Number(draft.quantityTotal || "0") : 1,
     event_id: draft.eventId,
   };
 }
@@ -234,6 +291,7 @@ export async function getDepartmentEquipment(
   )).data;
 
   const statusLabels = result.status_labels ?? {};
+  const trackingLabels = result.tracking_labels ?? {};
 
   return {
     departmentId: result.department?.id ?? departmentId,
@@ -244,8 +302,12 @@ export async function getDepartmentEquipment(
       value: status,
       label: statusLabels[status] ?? status,
     })),
+    trackingKinds: (result.tracking_kinds ?? []).map((tracking) => ({
+      value: tracking,
+      label: trackingLabels[tracking] ?? tracking,
+    })),
     equipment: (result.equipment ?? []).map((item) =>
-      toItem(item, statusLabels),
+      toItem(item, statusLabels, trackingLabels),
     ),
   };
 }
@@ -309,12 +371,13 @@ export async function restoreEquipmentItem(
 }
 
 /**
- * Hand an inventory spreadsheet to the node (EQUIP-001).
+ * Hand an inventory spreadsheet to the node (EQUIP-001, EQUIP-010).
  *
  * The CSV is sent as typed. Which column is the name, which row named nothing,
- * and which asset tag was already taken are the server's findings, and its
- * per-row results are what the screen reports. Event scope comes from the form
- * rather than from the file.
+ * which asset tag was already taken, and which pooled kind is a re-statement of
+ * one the department already holds are the server's findings, and its per-row
+ * results are what the screen reports. Event scope comes from the form rather
+ * than from the file.
  */
 export async function importEquipmentInventory(
   departmentId: string,
@@ -335,6 +398,7 @@ export async function importEquipmentInventory(
 
   return {
     imported: result.imported ?? 0,
+    updated: result.updated ?? 0,
     skipped: result.skipped ?? 0,
     rows: (result.rows ?? []).map((row) => ({
       line: row.line,
