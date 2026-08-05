@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * CSV import for shift assignments (technical spec 22.2).
+ * Spreadsheet and CSV import for shift assignments (technical spec 22.2).
  *
  * This is the companion to the shift import: once a schedule exists, the roster
  * that goes with it is usually the second spreadsheet. A row says who works
@@ -90,12 +90,12 @@ final class AssignmentImportService
      * @throws ImportException when the file itself cannot be read.
      */
     public function import(
-        string $csv,
+        string $file,
         User $actor,
         bool $preview = false,
         string $sourceContext = AuditEvent::SOURCE_ORCHID,
     ): ImportResult {
-        $records = CsvImportReader::read($csv, self::REQUIRED_COLUMNS);
+        $records = ImportFileReader::read($file, self::REQUIRED_COLUMNS);
 
         if (! $preview) {
             return $this->apply($records, $actor, false, $sourceContext);

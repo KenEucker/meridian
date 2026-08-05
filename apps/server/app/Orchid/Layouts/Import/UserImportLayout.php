@@ -19,9 +19,9 @@ class UserImportLayout extends Rows
         return [
             Input::make('file')
                 ->type('file')
-                ->accept('.csv,text/csv')
-                ->title(__('CSV file'))
-                ->help(__('Upload a CSV exported from a spreadsheet, or paste the rows below instead.')),
+                ->accept('.xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ->title(__('Spreadsheet or CSV file'))
+                ->help(__('Upload the .xlsx workbook the rows were built in, or a CSV exported from it. The first sheet of a workbook is the one imported. Or paste the rows below instead.')),
 
             TextArea::make('csv')
                 ->rows(10)

@@ -16,7 +16,7 @@ use Orchid\Support\Facades\Layout;
 use Orchid\Support\Facades\Toast;
 
 /**
- * Shared behavior for the Alpha 1 Orchid / God Mode CSV imports (technical
+ * Shared behavior for the Alpha 1 Orchid / God Mode imports (technical
  * spec 22.2).
  *
  * Every import offers the same two actions. **Preview** runs the file and rolls
@@ -25,11 +25,13 @@ use Orchid\Support\Facades\Toast;
  * single count cannot tell an operator which row of their spreadsheet was
  * wrong, and one bad row never aborts the file.
  *
- * The file may be uploaded or pasted. Pasting is what makes this usable over a
- * slow on-site link and from a terminal session; the upload is what makes it
- * usable straight out of a spreadsheet export.
+ * The file may be uploaded or pasted. An upload may be the `.xlsx` workbook the
+ * operator built the roster in or a CSV exported from it — the format is
+ * detected from the file's contents rather than its name, so neither choice is
+ * a wrong one. Pasting takes CSV, and is what makes this usable over a slow
+ * on-site link and from a terminal session.
  */
-abstract class CsvImportScreen extends Screen
+abstract class ImportScreen extends Screen
 {
     /**
      * Maximum upload size in kilobytes. These files are lists of names and
@@ -105,7 +107,7 @@ abstract class CsvImportScreen extends Screen
      */
     abstract protected function formLayout(): string;
 
-    abstract protected function runImport(string $csv, User $actor, bool $preview): ImportResult;
+    abstract protected function runImport(string $file, User $actor, bool $preview): ImportResult;
 
     private function applyImport(Request $request, bool $preview): RedirectResponse
     {
@@ -119,16 +121,16 @@ abstract class CsvImportScreen extends Screen
             'csv' => ['nullable', 'string'],
         ]);
 
-        $csv = $this->csvFrom($request);
+        $file = $this->fileFrom($request);
 
-        if ($csv === null) {
-            Toast::warning(__('Choose a CSV file or paste CSV rows first.'));
+        if ($file === null) {
+            Toast::warning(__('Choose a spreadsheet or CSV file, or paste CSV rows first.'));
 
             return redirect()->route($this->routeName());
         }
 
         try {
-            $result = $this->runImport($csv, $user, $preview);
+            $result = $this->runImport($file, $user, $preview);
         } catch (ImportException $exception) {
             Toast::warning(__($exception->getMessage()));
 
@@ -155,8 +157,11 @@ abstract class CsvImportScreen extends Screen
     /**
      * An uploaded file wins over pasted text, so an operator who picks a file
      * and forgets to clear an earlier paste imports the file they just chose.
+     *
+     * The contents are returned as read. A workbook is binary and is passed on
+     * whole; only a text paste can be meaningfully blank.
      */
-    private function csvFrom(Request $request): ?string
+    private function fileFrom(Request $request): ?string
     {
         $file = $request->file('file');
 
