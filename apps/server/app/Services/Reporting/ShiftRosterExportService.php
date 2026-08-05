@@ -33,7 +33,7 @@ use Illuminate\Support\Str;
  * cancelled shift is reported as cancelled rather than dropped, so a printed
  * roster still explains why nobody is expected.
  */
-final class ShiftRosterExportService
+final class ShiftRosterExportService implements ReportingExportGenerator
 {
     /**
      * Column order for the generated file. The header is part of the contract

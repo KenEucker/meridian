@@ -25,19 +25,27 @@
 //     decided when that URL is issued, which is why a refusal is something the
 //     surface prints rather than a tab opening onto an error page.
 //
-// Only credential eligibility is here. The other four Alpha 1 exports
-// (REPORT-002 through REPORT-005) have endpoints but no `download-url` sibling
-// and no surface to run them from; both arrive with the reporting surfaces of
-// M18.25 and M18.26, which extend the list below rather than replacing it.
+// M18.25 completes the list. All five Alpha 1 exports (REPORT-001 through
+// REPORT-005) now have a `download-url` sibling on the node and a descriptor
+// here, so the reporting surfaces of M18.26 offer one download path rather than
+// one export that works differently from its four siblings. The surfaces
+// themselves are still M18.26's; what this module answers is which exports a
+// caller may run and what each of them will contain.
 
-import { computed } from "vue";
+import { computed, type ComputedRef } from "vue";
 
 import {
   downloadThroughShortLivedUrl,
   shortLivedDownloadEndpoints,
   type ShortLivedDownloadUrl,
 } from "@/downloads/shortLivedDownload";
-import { CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT } from "@/session/permissionCodes";
+import {
+  CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
+  CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT,
+  CAPABILITY_REPORTS_HOURS_WORKED_EXPORT,
+  CAPABILITY_REPORTS_SHIFT_ROSTER_EXPORT,
+  CAPABILITY_REPORTS_STAFF_CONTACT_EXPORT,
+} from "@/session/permissionCodes";
 import {
   selectedSessionDepartment,
   sessionEventContext,
@@ -74,6 +82,20 @@ export interface ReportingExportDescriptor {
    * are excluded without having to open it (REPORT-010).
    */
   readonly excludes: readonly string[];
+  /**
+   * Columns the node appends only when a rule holds, and the rule.
+   *
+   * The staff contact export is the only one that has any: emergency contacts
+   * ride along for a caller who leads every department in the file (REPORT-009)
+   * and never for an organizer (REPORT-010). Which of those the caller is
+   * depends on the scope the node resolves, and property 1 above says this
+   * module does not predict that — so the rule is stated and the outcome is
+   * not. A surface prints it as a condition, not as a promise.
+   */
+  readonly conditionalColumns?: {
+    readonly columns: readonly string[];
+    readonly condition: string;
+  };
 }
 
 /**
@@ -109,9 +131,174 @@ export const CREDENTIAL_ELIGIBILITY_EXPORT: ReportingExportDescriptor = {
   excludes: ["Phone numbers", "Emergency contacts", "Dates of birth"],
 };
 
-/** The exports this client has an entry point for. */
+/**
+ * Shift roster (REPORT-002; M13.2).
+ *
+ * One row per staff member on a shift, plus one row for a shift nobody is on,
+ * so an unfilled shift is visible in the file rather than missing from it.
+ * Phone numbers and emergency contacts are excluded by construction, which is
+ * REPORT-008 and applies to every caller including a department lead who would
+ * be allowed them on the contact list.
+ */
+export const SHIFT_ROSTER_EXPORT: ReportingExportDescriptor = {
+  id: "shift-roster",
+  label: "Shift roster",
+  format: "CSV",
+  capability: CAPABILITY_REPORTS_SHIFT_ROSTER_EXPORT,
+  endpoint: shortLivedDownloadEndpoints.shiftRosterExport,
+  contains:
+    "One row per staff member on a shift, and one row for a shift nobody is on yet, carrying the department and team, the scheduled window, capacity and roster size, and whether the staff member signed up or was assigned. A cancelled shift is reported as cancelled rather than dropped.",
+  columns: [
+    "event_name",
+    "department",
+    "team",
+    "shift_title",
+    "shift_status",
+    "shift_starts_at",
+    "shift_ends_at",
+    "shift_capacity",
+    "assigned_staff_count",
+    "staff_legal_name",
+    "staff_preferred_name",
+    "staff_handle",
+    "staff_email",
+    "assignment_status",
+    "assignment_source",
+  ],
+  excludes: ["Phone numbers", "Emergency contacts", "Dates of birth"],
+};
+
+/**
+ * Staff contact list (REPORT-003; M13.3).
+ *
+ * The one Alpha 1 export permitted to carry contact details. Phone numbers are
+ * on every copy — a contact list without them would not be one — and emergency
+ * contacts are appended only for a caller who leads every department in the
+ * file, which is why they are conditional columns here rather than columns.
+ */
+export const STAFF_CONTACT_EXPORT: ReportingExportDescriptor = {
+  id: "staff-contact",
+  label: "Staff contact list",
+  format: "CSV",
+  capability: CAPABILITY_REPORTS_STAFF_CONTACT_EXPORT,
+  endpoint: shortLivedDownloadEndpoints.staffContactExport,
+  contains:
+    "One row per active department membership in the departments working this event, carrying the department, the teams held in it, contact details, and the membership and organization statuses, so somebody who is Inactive or Ineligible is reported rather than quietly missing.",
+  columns: [
+    "event_name",
+    "department",
+    "department_code",
+    "teams",
+    "staff_legal_name",
+    "staff_preferred_name",
+    "staff_handle",
+    "staff_email",
+    "staff_phone",
+    "department_membership_status",
+    "organization_status",
+  ],
+  excludes: ["Dates of birth"],
+  conditionalColumns: {
+    columns: ["emergency_contact_name", "emergency_contact_phone"],
+    condition:
+      "Included only when every exported row belongs to a department you hold a department role in (REPORT-009). An organizer's file omits the columns entirely, including when narrowed to one department, because narrowing changes which rows are exported and not the authority you came by (REPORT-010).",
+  },
+};
+
+/**
+ * Actual hours worked (REPORT-004; M13.4).
+ *
+ * Rows come from recorded hours alone, so a no-show, an open check-in, and an
+ * unworked shift produce none. The scheduled window sits beside the actual one
+ * rather than being absorbed into it, so a short or long shift reads as a
+ * difference (HOURS-001).
+ */
+export const HOURS_WORKED_EXPORT: ReportingExportDescriptor = {
+  id: "hours-worked",
+  label: "Hours worked",
+  format: "CSV",
+  capability: CAPABILITY_REPORTS_HOURS_WORKED_EXPORT,
+  endpoint: shortLivedDownloadEndpoints.hoursWorkedExport,
+  contains:
+    "One row per recorded hours record, carrying the scheduled window and scheduled minutes beside the actual window, the minutes and decimal hours worked, the hours status, and the correction state with its correction and freeze moments.",
+  columns: [
+    "event_name",
+    "department",
+    "team",
+    "shift_title",
+    "shift_starts_at",
+    "shift_ends_at",
+    "scheduled_minutes",
+    "staff_legal_name",
+    "staff_preferred_name",
+    "staff_handle",
+    "staff_email",
+    "actual_started_at",
+    "actual_ended_at",
+    "minutes_worked",
+    "hours_worked",
+    "hours_status",
+    "correction_state",
+    "corrected_at",
+    "frozen_at",
+  ],
+  excludes: ["Phone numbers", "Emergency contacts", "Dates of birth"],
+};
+
+/**
+ * Credits earned (REPORT-005; M13.6).
+ *
+ * Rows come from the credit ledger, so frozen hours no calculation run has
+ * reached yet are absent — what was worked rather than earned is the hours
+ * worked export's answer. Every basis column is read from the entry's frozen
+ * calculation basis, so a policy renamed or re-rated afterwards does not
+ * restate what the event already paid (CREDIT-005).
+ */
+export const CREDITS_EARNED_EXPORT: ReportingExportDescriptor = {
+  id: "credits-earned",
+  label: "Credits earned",
+  format: "CSV",
+  capability: CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT,
+  endpoint: shortLivedDownloadEndpoints.creditsEarnedExport,
+  contains:
+    "One row per credit ledger entry, carrying the credited hours, the policy name and multiplier they were priced at, and the resulting credits in adjacent columns, plus the policy source, the calculation moment, and the hours record's freeze and correction moments, so the arithmetic is re-checkable inside the row.",
+  columns: [
+    "event_name",
+    "department",
+    "team",
+    "shift_title",
+    "shift_starts_at",
+    "shift_ends_at",
+    "staff_legal_name",
+    "staff_preferred_name",
+    "staff_handle",
+    "staff_email",
+    "entry_type",
+    "credit_status",
+    "minutes_worked",
+    "hours",
+    "credit_policy_name",
+    "credit_multiplier",
+    "credits",
+    "policy_source",
+    "calculated_at",
+    "hours_frozen_at",
+    "hours_corrected_at",
+  ],
+  excludes: ["Phone numbers", "Emergency contacts", "Dates of birth"],
+};
+
+/**
+ * The exports this client has an entry point for, in the order they are
+ * offered: who is credentialed, who is scheduled, how to reach them, what they
+ * worked, and what it earned.
+ */
 export const REPORTING_EXPORTS: readonly ReportingExportDescriptor[] = [
   CREDENTIAL_ELIGIBILITY_EXPORT,
+  SHIFT_ROSTER_EXPORT,
+  STAFF_CONTACT_EXPORT,
+  HOURS_WORKED_EXPORT,
+  CREDITS_EARNED_EXPORT,
 ];
 
 /** The event an export would run against, and the standing that permits it. */
@@ -125,18 +312,28 @@ export interface ReportingExportAuthority {
 }
 
 /**
- * What this client may export, or null when it may export nothing.
+ * What this client may export from a named list, or null when it may export
+ * nothing on it.
  *
- * Null covers three separate cases and the surface treats them as one: no
- * session, no resolved event, or no role here carrying an export capability. All
+ * Which exports a surface offers is the surface's question, not this module's:
+ * the reporting surfaces of M18.26 offer all five, and `organizer.credentials`
+ * offers the one that reads the records it is a page for. Passing the list in
+ * keeps the role label honest too — a page naming the standing that reached it
+ * should name the role granting the export it is showing, not one granting some
+ * other export the same person also holds.
+ *
+ * Null covers three separate cases and a surface treats them as one: no session,
+ * no resolved event, or no role here carrying one of these capabilities. All
  * three mean there is no export to offer, and CLIENT-005 says an unavailable
  * action is absent rather than disabled.
  *
  * The event is required rather than optional because every export endpoint is
  * event-scoped: with no event id there is no URL to ask for.
  */
-export const reportingExportAuthority = computed<ReportingExportAuthority | null>(
-  () => {
+export function reportingExportAuthorityFor(
+  offered: readonly ReportingExportDescriptor[],
+): ComputedRef<ReportingExportAuthority | null> {
+  return computed<ReportingExportAuthority | null>(() => {
     const department = selectedSessionDepartment.value;
     const event = sessionEventContext.value;
 
@@ -144,7 +341,7 @@ export const reportingExportAuthority = computed<ReportingExportAuthority | null
       return null;
     }
 
-    const permitted = REPORTING_EXPORTS.filter((descriptor) =>
+    const permitted = offered.filter((descriptor) =>
       department.capabilities.includes(descriptor.capability),
     );
 
@@ -174,8 +371,12 @@ export const reportingExportAuthority = computed<ReportingExportAuthority | null
       roleLabel: roleNames.length > 0 ? roleNames.join(", ") : "Your role",
       exports: permitted,
     };
-  },
-);
+  });
+}
+
+/** Every Alpha 1 export this caller may run, for a surface that offers them all. */
+export const reportingExportAuthority =
+  reportingExportAuthorityFor(REPORTING_EXPORTS);
 
 /**
  * Run one export for one event (REPORT-015).

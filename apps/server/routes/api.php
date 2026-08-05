@@ -929,6 +929,27 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::post('/events/{event}/exports/credential-eligibility/download-url', [ReportingExportController::class, 'issueCredentialEligibilityDownloadUrl'])
         ->name('api.events.exports.credential-eligibility.download-url');
 
+    /*
+     * The remaining four Alpha 1 exports on the same path (M18.25; REPORT-002
+     * through REPORT-005, REPORT-015).
+     *
+     * Their plain GETs above have existed since Milestone 13; what they lacked
+     * was this half, which is the only way a token-holding client can save one.
+     * The reporting surfaces of M18.26 offer all five through one path rather
+     * than one export that downloads differently from its four siblings.
+     */
+    Route::post('/events/{event}/exports/shift-roster/download-url', [ReportingExportController::class, 'issueShiftRosterDownloadUrl'])
+        ->name('api.events.exports.shift-roster.download-url');
+
+    Route::post('/events/{event}/exports/staff-contact/download-url', [ReportingExportController::class, 'issueStaffContactDownloadUrl'])
+        ->name('api.events.exports.staff-contact.download-url');
+
+    Route::post('/events/{event}/exports/hours-worked/download-url', [ReportingExportController::class, 'issueHoursWorkedDownloadUrl'])
+        ->name('api.events.exports.hours-worked.download-url');
+
+    Route::post('/events/{event}/exports/credits-earned/download-url', [ReportingExportController::class, 'issueCreditsEarnedDownloadUrl'])
+        ->name('api.events.exports.credits-earned.download-url');
+
     Route::post('/events/{event}/incidents/{incident}/pdf/download-url', [IncidentPdfController::class, 'issueDownloadUrl'])
         ->name('api.events.incidents.pdf.download-url');
 

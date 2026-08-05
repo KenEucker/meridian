@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Attachment;
+use App\Models\AttendanceRecord;
 use App\Models\AuditEvent;
+use App\Models\CreditPolicy;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
+use App\Models\EventDepartmentAssignment;
 use App\Models\FieldReport;
+use App\Models\HoursWorked;
 use App\Models\Incident;
 use App\Models\Organization;
 use App\Models\PermissionRole;
@@ -23,7 +27,9 @@ use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Credential\CredentialEligibilityService;
+use App\Services\Credits\CreditCalculationService;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -40,6 +46,29 @@ use Tests\TestCase;
 class ShortLivedDownloadUrlTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * The path segment of every Alpha 1 export, which is also the report half
+     * of both route names (M18.25; REPORT-001 through REPORT-005).
+     *
+     * @var list<string>
+     */
+    private const EXPORT_REPORTS = [
+        'credential-eligibility',
+        'shift-roster',
+        'staff-contact',
+        'hours-worked',
+        'credits-earned',
+    ];
+
+    /**
+     * Contact details the exclusion rules are searched for by value, so a file
+     * that leaked one fails on the number itself rather than on a column name
+     * somebody could rename.
+     */
+    private const STAFF_PHONE = '+1-208-555-0100';
+
+    private const STAFF_EMERGENCY_CONTACT = 'Quinn Contact';
 
     protected function tearDown(): void
     {
@@ -176,6 +205,187 @@ class ShortLivedDownloadUrlTest extends TestCase
         TeamGrant::query()->update(['revoked_at' => now()]);
 
         $this->get($issued['url'])->assertForbidden();
+    }
+
+    /**
+     * M18.25: the remaining four Alpha 1 exports on the same path.
+     *
+     * The credential eligibility cases above are the pattern under test; these
+     * assert the other four reports reach it too, because a reporting surface
+     * that offers five exports and can only download one of them is the gap
+     * this task closes.
+     */
+    public function test_every_alpha_1_export_answers_the_download_url_path(): void
+    {
+        $scenario = $this->workedExportScenario();
+
+        $expectations = [
+            'credential-eligibility' => 'credential_status',
+            'shift-roster' => 'assignment_status',
+            'staff-contact' => 'staff_phone',
+            'hours-worked' => 'minutes_worked',
+            'credits-earned' => 'credit_multiplier',
+        ];
+
+        foreach ($expectations as $report => $header) {
+            $issued = $this->actingAsClient($scenario['organizer'])
+                ->postJson("/api/events/{$scenario['event']->id}/exports/{$report}/download-url")
+                ->assertOk()
+                ->assertJsonStructure(['url', 'expires_at'])
+                ->json();
+
+            $this->assertStringNotContainsString('Bearer', $issued['url'], $report);
+            $this->assertStringContainsString('signature=', $issued['url'], $report);
+
+            $response = $this->get($issued['url']);
+
+            $response->assertOk();
+            $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+
+            $contents = (string) $response->getContent();
+
+            // The header proves the signed route reached the right generator
+            // rather than any file at all, and the row proves the export ran
+            // against real records instead of an empty scope.
+            $this->assertStringContainsString($header, $contents, $report);
+            $this->assertStringContainsString('Vera Staff', $contents, $report);
+        }
+    }
+
+    public function test_an_unauthorized_client_is_refused_a_url_for_every_export(): void
+    {
+        $scenario = $this->workedExportScenario();
+
+        foreach (self::EXPORT_REPORTS as $report) {
+            $this->actingAsClient($scenario['plainStaffUser'])
+                ->postJson("/api/events/{$scenario['event']->id}/exports/{$report}/download-url")
+                ->assertForbidden();
+
+            // A department lead may not narrow to a department they do not
+            // lead, and being refused at issuance is the point (CLIENT-020).
+            $this->actingAsClient($scenario['rangersLead'])
+                ->postJson("/api/events/{$scenario['event']->id}/exports/{$report}/download-url", [
+                    'department_id' => (string) $scenario['gate']->id,
+                ])
+                ->assertForbidden();
+        }
+
+        // Nothing was generated, so nothing was audited.
+        $this->assertSame(0, AuditEvent::query()->where('action', 'like', 'event_%.exported')->count());
+    }
+
+    public function test_a_department_leads_signed_download_covers_their_own_department_only(): void
+    {
+        $scenario = $this->workedExportScenario();
+
+        foreach (['shift-roster', 'staff-contact', 'hours-worked', 'credits-earned'] as $report) {
+            $issued = $this->actingAsClient($scenario['rangersLead'])
+                ->postJson("/api/events/{$scenario['event']->id}/exports/{$report}/download-url")
+                ->assertOk()
+                ->json();
+
+            $contents = (string) $this->get($issued['url'])->assertOk()->getContent();
+
+            // The scope follows the person the signature names, not the
+            // anonymous browser that arrives with it (REPORT-007).
+            $this->assertStringContainsString('Vera Staff', $contents, $report);
+            $this->assertStringNotContainsString('Rita Revoked', $contents, $report);
+
+            $audit = AuditEvent::query()
+                ->where('action', 'like', 'event_%.exported')
+                ->latest('created_at')
+                ->firstOrFail();
+
+            $this->assertSame((string) $scenario['rangersLead']->id, (string) $audit->actor_user_id, $report);
+            $this->assertSame('department', $audit->after_json['scope'], $report);
+        }
+    }
+
+    /**
+     * REPORT-008, REPORT-009, REPORT-010 across the signed route.
+     *
+     * The exclusion rules are the export services' own and are tested with
+     * them; what is new here is that a file reached by navigation obeys them,
+     * because the navigation carries no authority of its own and the file it
+     * produces depends entirely on whose name the signature holds.
+     */
+    public function test_the_field_exclusion_rules_survive_the_signed_route(): void
+    {
+        $scenario = $this->workedExportScenario();
+
+        $rosterUrl = $this->actingAsClient($scenario['organizer'])
+            ->postJson("/api/events/{$scenario['event']->id}/exports/shift-roster/download-url")
+            ->assertOk()
+            ->json('url');
+
+        $roster = (string) $this->get($rosterUrl)->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('emergency_contact', $roster);
+        $this->assertStringNotContainsString(self::STAFF_PHONE, $roster);
+        $this->assertStringNotContainsString(self::STAFF_EMERGENCY_CONTACT, $roster);
+
+        // The lead of every exported department gets the emergency contact
+        // columns (REPORT-009, VOL-012).
+        $leadContactUrl = $this->actingAsClient($scenario['rangersLead'])
+            ->postJson("/api/events/{$scenario['event']->id}/exports/staff-contact/download-url")
+            ->assertOk()
+            ->json('url');
+
+        $leadContacts = (string) $this->get($leadContactUrl)->assertOk()->getContent();
+
+        $this->assertStringContainsString('emergency_contact_name', $leadContacts);
+        $this->assertStringContainsString(self::STAFF_EMERGENCY_CONTACT, $leadContacts);
+
+        // The organizer does not, including when narrowing to the one
+        // department the lead exported: narrowing changes which rows are
+        // exported and not the authority the caller came by (REPORT-010).
+        $narrowedUrl = $this->actingAsClient($scenario['organizer'])
+            ->postJson("/api/events/{$scenario['event']->id}/exports/staff-contact/download-url", [
+                'department_id' => (string) $scenario['rangers']->id,
+            ])
+            ->assertOk()
+            ->json('url');
+
+        $narrowedContacts = (string) $this->get($narrowedUrl)->assertOk()->getContent();
+
+        $this->assertStringContainsString('Vera Staff', $narrowedContacts);
+        $this->assertStringNotContainsString('emergency_contact', $narrowedContacts);
+        $this->assertStringNotContainsString(self::STAFF_EMERGENCY_CONTACT, $narrowedContacts);
+        // The one export permitted to carry a phone number still does
+        // (REPORT-009).
+        $this->assertStringContainsString(self::STAFF_PHONE, $narrowedContacts);
+    }
+
+    public function test_a_narrowing_and_a_withdrawn_role_both_hold_on_the_new_exports(): void
+    {
+        $scenario = $this->workedExportScenario();
+
+        $issued = $this->actingAsClient($scenario['organizer'])
+            ->postJson("/api/events/{$scenario['event']->id}/exports/hours-worked/download-url", [
+                'department_id' => (string) $scenario['gate']->id,
+            ])
+            ->assertOk()
+            ->json();
+
+        $contents = (string) $this->get($issued['url'])->assertOk()->getContent();
+
+        $this->assertStringContainsString('Rita Revoked', $contents);
+        $this->assertStringNotContainsString('Vera Staff', $contents);
+
+        // Widening the scope by hand invalidates the signature it was part of.
+        $widened = str_replace('department_id='.$scenario['gate']->id.'&', '', $issued['url']);
+
+        $this->assertNotSame($issued['url'], $widened);
+        $this->get($widened)->assertForbidden();
+
+        $creditsUrl = $this->actingAsClient($scenario['rangersLead'])
+            ->postJson("/api/events/{$scenario['event']->id}/exports/credits-earned/download-url")
+            ->assertOk()
+            ->json('url');
+
+        TeamGrant::query()->update(['revoked_at' => now()]);
+
+        $this->get($creditsUrl)->assertForbidden();
     }
 
     public function test_an_incident_pdf_url_is_issued_to_a_lead_refused_to_an_operator_and_scoped_to_one_incident(): void
@@ -444,13 +654,114 @@ class ShortLivedDownloadUrlTest extends TestCase
         $eligibility->recalculate($event, $rita);
 
         return [
+            'organization' => $organization,
             'event' => $event,
             'rangers' => $rangers,
+            'rangersTeam' => $rangersTeam,
             'gate' => $gate,
+            'gateTeam' => $gateTeam,
             'organizer' => $organizer,
             'rangersLead' => $rangersLead,
             'plainStaffUser' => $plainStaffUser,
+            'vera' => $vera,
+            'rita' => $rita,
         ];
+    }
+
+    /**
+     * The same event after it has been worked: both departments assigned to it,
+     * a finished shift in each with frozen hours, and the credit ledger those
+     * hours were priced into.
+     *
+     * Four of the five exports read records the scenario above does not
+     * produce — a staff contact list reads the departments actually working the
+     * event, and hours and credits read work already done — so the event moves
+     * behind the clock. That is not scene-setting: CREDIT-001 refuses a credit
+     * calculation until the correction grace period has closed, and the grace
+     * period is measured from the event's end.
+     *
+     * @return array<string, mixed>
+     */
+    private function workedExportScenario(): array
+    {
+        $scenario = $this->exportScenario();
+        $event = $scenario['event'];
+
+        foreach ([$scenario['rangers'], $scenario['gate']] as $department) {
+            EventDepartmentAssignment::factory()->create([
+                'event_id' => $event->id,
+                'department_id' => $department->id,
+            ]);
+        }
+
+        $startsAt = now()->subMonths(2)->setTime(9, 0);
+        $endsAt = $startsAt->copy()->addDays(3)->setTime(18, 0);
+
+        $event->forceFill([
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
+            'active_event_window_starts_at' => $startsAt->copy()->subDay(),
+            'active_event_window_ends_at' => $endsAt->copy()->addDay(),
+        ])->save();
+
+        $policy = CreditPolicy::factory()
+            ->for($scenario['organization'])
+            ->multiplier('1.500')
+            ->create(['name' => 'Standard Credit']);
+
+        $scenario['organization']->forceFill(['default_credit_policy_id' => $policy->id])->save();
+
+        $this->workedShift($event, $scenario['rangers'], $scenario['rangersTeam'], 'Rangers Dirt Night', $scenario['vera'], $startsAt);
+        $this->workedShift($event, $scenario['gate'], $scenario['gateTeam'], 'Gate Opening', $scenario['rita'], $startsAt);
+
+        app(CreditCalculationService::class)->calculateForEvent($event->refresh(), $scenario['organizer']);
+
+        return $scenario;
+    }
+
+    /**
+     * A shift somebody worked and was checked out of, with the hours record
+     * frozen so a credit run will price it.
+     */
+    private function workedShift(
+        Event $event,
+        Department $department,
+        Team $team,
+        string $title,
+        Staff $staff,
+        CarbonInterface $startsAt,
+    ): void {
+        $shift = Shift::factory()->create([
+            'event_id' => $event->id,
+            'department_id' => $department->id,
+            'eligible_team_id' => $team->id,
+            'title' => $title,
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->copy()->addHours(8),
+            'capacity' => null,
+        ]);
+
+        $assignment = $this->signUp($shift, $staff);
+        $endedAt = $startsAt->copy()->addMinutes(450);
+
+        $record = AttendanceRecord::factory()->create([
+            'shift_id' => $shift->id,
+            'shift_assignment_id' => $assignment->id,
+            'staff_id' => $staff->id,
+            'current_state' => AttendanceRecord::STATE_CHECKED_OUT,
+            'checked_in_at' => $startsAt,
+            'checked_out_at' => $endedAt,
+        ]);
+
+        HoursWorked::factory()->create([
+            'shift_id' => $shift->id,
+            'staff_id' => $staff->id,
+            'attendance_record_id' => $record->id,
+            'actual_started_at' => $startsAt,
+            'actual_ended_at' => $endedAt,
+            'minutes_worked' => 450,
+            'frozen_at' => $endedAt->copy()->addDays(20),
+        ]);
     }
 
     /**
@@ -481,10 +792,16 @@ class ShortLivedDownloadUrlTest extends TestCase
 
     private function staff(Organization $organization, string $legalName, string $handle, Department $department): Staff
     {
+        // Contact details every staff member carries, so the exports that must
+        // exclude them have something to exclude rather than passing on a blank
+        // column.
         $staff = Staff::factory()->create([
             'legal_name' => $legalName,
             'handle' => $handle,
             'email' => $handle.'@northwood-collective.test',
+            'phone' => self::STAFF_PHONE,
+            'emergency_contact_name' => self::STAFF_EMERGENCY_CONTACT,
+            'emergency_contact_phone' => '+1-208-555-0199',
         ]);
 
         StaffOrganizationStatus::query()->create([

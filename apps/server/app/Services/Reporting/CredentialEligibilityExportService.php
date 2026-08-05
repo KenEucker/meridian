@@ -35,7 +35,7 @@ use Illuminate\Support\Str;
  * belong to {@see StaffContactExportService}, which is the one export
  * REPORT-009 lets carry them, and only for a department the caller leads.
  */
-final class CredentialEligibilityExportService
+final class CredentialEligibilityExportService implements ReportingExportGenerator
 {
     /**
      * Column order for the generated file. The header is part of the contract

@@ -336,6 +336,24 @@ describe("the credential eligibility export entry point", () => {
     expect(calls[0]?.url).toContain(CREDENTIALS_PATH);
   });
 
+  it("offers the one export this page is about and none of the other four", async () => {
+    // M18.25 gave the remaining Alpha 1 exports descriptors and download
+    // paths, and this organizer holds all five capabilities. They belong to the
+    // reporting surfaces of M18.26; a credentials page offering a credits
+    // ledger is a page that stopped being about credentials.
+    actAsOrganizer();
+    stubNodeWithCredentials([]);
+
+    const wrapper = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Credential eligibility");
+    expect(text).not.toContain("Credits earned");
+    expect(text).not.toContain("Hours worked");
+    expect(text).not.toContain("Shift roster");
+    expect(text).not.toContain("Staff contact list");
+  });
+
   it("prints the node's refusal and opens nothing", async () => {
     actAsOrganizer();
 
