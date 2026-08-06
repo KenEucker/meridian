@@ -13,13 +13,18 @@ import {
 import {
   installLocalFieldSession,
   localFieldSessionDocument,
+  LOCAL_FIELD_DEPARTMENT_IDS,
   LOCAL_FIELD_ORGANIZATION_ID,
   LOCAL_FIELD_OTHER_EVENT_ID,
   LOCAL_FIELD_OTHER_ORGANIZATION_ID,
   switchableLocalFieldContext,
 } from "@/session/localFieldSessionFixture";
-import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
+import {
+  resetSelectedSessionDepartment,
+  selectedSessionDepartmentId,
+} from "@/session/sessionAccess";
 import type { SessionDocument } from "@/session/sessionDocument";
+import DepartmentContextView from "@/views/DepartmentContextView.vue";
 import EventContextView from "@/views/EventContextView.vue";
 import HomeView from "@/views/HomeView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
@@ -247,6 +252,122 @@ describe("context.events", () => {
       "This session carries no association with that organization",
     );
     expect(wrapper.findAll(".context-events__switch")).toHaveLength(0);
+  });
+});
+
+describe("context.departments", () => {
+  async function mountDepartmentContext(eventId: string) {
+    const router = buildRouter();
+    await router.push({
+      name: "events.departments.index",
+      params: { eventId },
+    });
+    await router.isReady();
+
+    return {
+      router,
+      wrapper: mount(DepartmentContextView, { global: { plugins: [router] } }),
+    };
+  }
+
+  it("lists the departments the session carries and marks the current one", async () => {
+    const { wrapper } = await mountDepartmentContext(
+      localFieldSessionDocument().context.event_id!,
+    );
+    const items = wrapper.findAll(".context-departments__item");
+
+    expect(items).toHaveLength(4);
+    expect(items.map((item) => item.text())).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Rangers"),
+        expect.stringContaining("Gate"),
+        expect.stringContaining("DPW"),
+      ]),
+    );
+
+    // Rangers is the session's resolved department, so it is where this client
+    // is already working.
+    const current = items.filter(
+      (item) => item.attributes("data-current") === "true",
+    );
+
+    expect(current).toHaveLength(1);
+    expect(current[0]!.text()).toContain("Rangers");
+  });
+
+  it("says what standing opens each department", async () => {
+    // Built from the role names the node sent, so the summary says what the
+    // node would say rather than what the client guessed.
+    const { wrapper } = await mountDepartmentContext(
+      localFieldSessionDocument().context.event_id!,
+    );
+
+    const rangers = wrapper
+      .findAll(".context-departments__item")
+      .find((item) => item.text().includes("Rangers"))!;
+
+    expect(rangers.text()).toContain("Department lead");
+  });
+
+  it("opens on a device with no connectivity", async () => {
+    /*
+     * UI contract 12.2: organization and event selection are connected-only,
+     * and department entry is not — the departments in scope are already part
+     * of the cached session, which is the state a lead in a field is in.
+     */
+    setDeviceOnLine(false);
+    installClientSession(localFieldSessionDocument(), "cache");
+
+    const { wrapper } = await mountDepartmentContext(
+      localFieldSessionDocument().context.event_id!,
+    );
+
+    expect(wrapper.findAll(".context-departments__item")).toHaveLength(4);
+    expect(wrapper.findAll(".context-departments__enter")).toHaveLength(4);
+  });
+
+  it("renders nothing to enter for a client holding no session", async () => {
+    // CLIENT-005: a client with nothing renders no map of pages it would be
+    // refused at, and says which of the two nothings this is.
+    clearClientSession();
+
+    const { wrapper } = await mountDepartmentContext("event-anything");
+
+    expect(wrapper.findAll(".context-departments__item")).toHaveLength(0);
+    expect(wrapper.get(".context-departments__empty").text()).toContain(
+      "not holding a session",
+    );
+  });
+
+  it("says so when the session carries no department associations", async () => {
+    installClientSession(
+      localFieldSessionDocument({ departments: [], teams: [], roles: [] }),
+      "network",
+    );
+
+    const { wrapper } = await mountDepartmentContext(
+      localFieldSessionDocument().context.event_id!,
+    );
+
+    expect(wrapper.get(".context-departments__empty").text()).toContain(
+      "no department associations",
+    );
+  });
+
+  it("records the choice so the shell follows the department that was entered", async () => {
+    const { wrapper } = await mountDepartmentContext(
+      localFieldSessionDocument().context.event_id!,
+    );
+
+    const gate = wrapper
+      .findAll(".context-departments__item")
+      .find((item) => item.text().includes("Gate"))!;
+
+    await gate.get(".context-departments__enter").trigger("click");
+
+    expect(selectedSessionDepartmentId.value).toBe(
+      LOCAL_FIELD_DEPARTMENT_IDS.gate,
+    );
   });
 });
 

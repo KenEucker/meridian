@@ -1,11 +1,13 @@
-// The participation surface and the reviewer's queue (M18.21A; APP-001,
-// APP-011, APP-016, APP-017, APP-018, APP-019).
+// The participation surface, the reviewer's queue, and one application read on
+// its own (M18.21A, M18.29; APP-001, APP-003, APP-005, APP-011, APP-016,
+// APP-017, APP-018, APP-019).
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MeridianApiError } from "@/api/meridianApi";
 import { participationLink } from "@/applications/participationModel";
+import OrganizerApplicationDetailView from "@/views/OrganizerApplicationDetailView.vue";
 import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
 import ParticipationView from "@/views/ParticipationView.vue";
 
@@ -42,10 +44,12 @@ vi.mock("@/applications/participationModel", async () => {
 });
 
 const getApplicationReviewQueue = vi.fn();
+const getApplication = vi.fn();
 const decideApplication = vi.fn();
 
 vi.mock("@/applications/applicationReviewModel", () => ({
   getApplicationReviewQueue: () => getApplicationReviewQueue(),
+  getApplication: (...args: unknown[]) => getApplication(...args),
   decideApplication: (...args: unknown[]) => decideApplication(...args),
 }));
 
@@ -374,5 +378,149 @@ describe("OrganizerApplicationsView", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Northwood — no event");
+  });
+
+  it("opens each row's detail surface by address (M18.29)", async () => {
+    getApplicationReviewQueue.mockResolvedValue({
+      canReview: true,
+      hasDepartmentLeadVisibility: false,
+      applications: [submitted],
+    });
+
+    const wrapper = mount(OrganizerApplicationsView);
+    await flushPromises();
+
+    expect(wrapper.get(".applications__applicant a").text()).toBe("Robin Hale");
+  });
+});
+
+describe("OrganizerApplicationDetailView", () => {
+  const submitted = {
+    id: "app-1",
+    scope: "event" as const,
+    organizationId: "org-1",
+    organizationName: "Northwood",
+    eventId: "event-1",
+    eventName: "Emberfall 2026",
+    applicantLegalName: "Robin Hale",
+    applicantEmail: "robin@example.test",
+    status: "submitted" as const,
+    statusLabel: "Submitted",
+    submittedAt: "2026-08-01T00:00:00+00:00",
+    reviewedAt: null,
+    reviewedBy: null,
+    decisionReason: null,
+    departmentInterests: [{ id: "dept-1", name: "Gate", archived: false }],
+    canReview: true,
+  };
+
+  beforeEach(() => {
+    routeParams.applicationId = "app-1";
+  });
+
+  it("reads the application by id rather than reusing the queue", async () => {
+    // The queue is filtered, so a link somebody followed often names an
+    // application the last list read never contained.
+    getApplication.mockResolvedValue(submitted);
+
+    mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(getApplication).toHaveBeenCalledWith("app-1");
+  });
+
+  it("shows what the applicant submitted, including department interest", async () => {
+    getApplication.mockResolvedValue(submitted);
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Robin Hale");
+    expect(wrapper.text()).toContain("robin@example.test");
+    expect(wrapper.text()).toContain("Emberfall 2026");
+    expect(wrapper.text()).toContain("Gate");
+    // APP-011: interest, and never presented as an assignment, and never
+    // editable during review in Alpha 1.
+    expect(wrapper.text()).toContain("not an assignment");
+    expect(wrapper.findAll("select")).toHaveLength(0);
+  });
+
+  it("says plainly when no department interest was recorded (APP-011)", async () => {
+    getApplication.mockResolvedValue({
+      ...submitted,
+      departmentInterests: [],
+    });
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("No department preference");
+  });
+
+  it("requires a reason before rejection is available", async () => {
+    getApplication.mockResolvedValue(submitted);
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    const reject = () =>
+      wrapper.findAll("button").find((button) => button.text() === "Reject");
+
+    expect(reject()?.attributes("disabled")).toBeDefined();
+
+    await wrapper.find(".application__reason input").setValue("Fully staffed.");
+    await flushPromises();
+
+    expect(reject()?.attributes("disabled")).toBeUndefined();
+  });
+
+  it("offers no decision controls on a department lead's read-only view (APP-011)", async () => {
+    getApplication.mockResolvedValue({ ...submitted, canReview: false });
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("named a department you lead");
+    expect(
+      wrapper.findAll("button").some((button) => button.text() === "Approve"),
+    ).toBe(false);
+  });
+
+  it("shows who decided an application and why (APP-003; requirements 2.4)", async () => {
+    getApplication.mockResolvedValue({
+      ...submitted,
+      status: "rejected" as const,
+      statusLabel: "Rejected",
+      reviewedAt: "2026-08-02T00:00:00+00:00",
+      reviewedBy: "Olive Organizer",
+      decisionReason: "We are fully staffed for this event.",
+    });
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Rejected");
+    expect(wrapper.text()).toContain("Olive Organizer");
+    expect(wrapper.text()).toContain("We are fully staffed for this event.");
+    // A decided application offers no second decision.
+    expect(
+      wrapper.findAll("button").some((button) => button.text() === "Approve"),
+    ).toBe(false);
+  });
+
+  it("states the refusal when the node will not answer for this application", async () => {
+    // The node's own sentence, not a second copy of its rules written here.
+    getApplication.mockRejectedValue(
+      new MeridianApiError("Forbidden", 403, {
+        message: "You may not read this application.",
+      }),
+    );
+
+    const wrapper = mount(OrganizerApplicationDetailView);
+    await flushPromises();
+
+    expect(wrapper.get(".application__notice").text()).toContain(
+      "You may not read this application.",
+    );
   });
 });

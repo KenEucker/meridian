@@ -135,6 +135,31 @@ export const CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW =
   "organization.applications.review";
 
 /**
+ * Administering the organization's events (M18.29; UI contract 12.6
+ * `organizer.events`; ORG-006).
+ *
+ * Organizers and Lead Organizers hold it. The Staff Coordinator does not:
+ * TEAM-014 gives that designation application review and no other organizer
+ * governance capability, and declaring when an event runs is what the
+ * governance freeze, the credential window, and the hours grace period are all
+ * measured from.
+ */
+export const CAPABILITY_ORGANIZATION_EVENTS_MANAGE =
+  "organization.events.manage";
+
+/**
+ * Reading the organization's audit record (M18.29; requirements 2.4; UI
+ * contract 12.6 `organizer.audit`).
+ *
+ * Its own capability rather than a rider on configuration or staff
+ * administration, because reading who changed something is a different job from
+ * changing it — and because an organization that wanted to hand one to somebody
+ * should not be handing over the other with it.
+ */
+export const CAPABILITY_ORGANIZATION_AUDIT_REVIEW =
+  "organization.audit.review";
+
+/**
  * Role codes, for the two surfaces that answer to standing rather than to a
  * capability.
  *

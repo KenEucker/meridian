@@ -16,6 +16,7 @@ import {
 import DepartmentBrandingView from "@/views/DepartmentBrandingView.vue";
 import OrganizationBrandingView from "@/views/OrganizationBrandingView.vue";
 import AboutView from "@/views/AboutView.vue";
+import DepartmentContextView from "@/views/DepartmentContextView.vue";
 import DepartmentDashboardView from "@/views/DepartmentDashboardView.vue";
 import DepartmentOverviewView from "@/views/DepartmentOverviewView.vue";
 import DocumentEditView from "@/views/DocumentEditView.vue";
@@ -43,8 +44,11 @@ import MeView from "@/views/MeView.vue";
 import NotFoundView from "@/views/NotFoundView.vue";
 import OperationsCenterView from "@/views/OperationsCenterView.vue";
 import OrganizationContextView from "@/views/OrganizationContextView.vue";
+import OrganizerApplicationDetailView from "@/views/OrganizerApplicationDetailView.vue";
 import OrganizerApplicationsView from "@/views/OrganizerApplicationsView.vue";
+import OrganizerAuditView from "@/views/OrganizerAuditView.vue";
 import OrganizerDashboardView from "@/views/OrganizerDashboardView.vue";
+import OrganizerEventsView from "@/views/OrganizerEventsView.vue";
 import ParticipationView from "@/views/ParticipationView.vue";
 import RootView from "@/views/RootView.vue";
 import OrganizerDepartmentEditView from "@/views/OrganizerDepartmentEditView.vue";
@@ -197,6 +201,26 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizations/:organizationId/events",
     name: "organizations.events.index",
     component: EventContextView,
+  },
+  /*
+   * The third context screen (M18.29; UI contract 12.2 `context.departments`).
+   *
+   * Event-scoped in its path rather than organization-scoped, because a
+   * department space is an address inside an event and the entries it offers
+   * lead into one. Unlike the two above it is not connected-only: the
+   * departments in scope are already part of the cached session, so this opens
+   * on a device with no signal — which is the state a lead standing in a field
+   * is most likely to be in.
+   *
+   * Listed with the other two context screens rather than beside the
+   * department surfaces, because what it is for is choosing where to work —
+   * the same job `organizations.index` and `organizations.events.index` do one
+   * level up.
+   */
+  {
+    path: "/events/:eventId/departments",
+    name: "events.departments.index",
+    component: DepartmentContextView,
   },
   /*
    * Sign-in (UI contract 12.1; M16.11; AUTH-018, AUTH-019).
@@ -672,6 +696,45 @@ export const routes: RouteRecordRaw[] = [
     path: "/organizer/applications",
     name: "organizer.applications.index",
     component: OrganizerApplicationsView,
+  },
+  /*
+   * One application, read and decided (M18.29; APP-003, APP-005, APP-011,
+   * APP-019; UI contract 12.6, 12.10.2).
+   *
+   * An address of its own so an application is shareable between two
+   * reviewers, and so a link from a notification lands on the record rather
+   * than on a queue somebody then has to search. Routable for anybody and
+   * refused by the node: a caller who may not see this application is told so,
+   * which is a different fact from an application that does not exist.
+   */
+  {
+    path: "/organizer/applications/:applicationId",
+    name: "organizer.applications.show",
+    component: OrganizerApplicationDetailView,
+  },
+  /*
+   * Event administration (M18.29; UI contract 12.6 `organizer.events`;
+   * ORG-006). Organization-scoped and not event-scoped in its path, like
+   * `organizer.departments` beside it: the surface is the list of the
+   * organization's events, so naming one in the address would be naming the
+   * thing being chosen.
+   */
+  {
+    path: "/organizer/events",
+    name: "organizer.events.index",
+    component: OrganizerEventsView,
+  },
+  /*
+   * Audit review (M18.29; requirements 2.4; UI contract 12.6). Organization-
+   * scoped, because an audit record is a fact about an organization's history
+   * and outlives any one of its events. Incident and Field Report history is
+   * absent from the node's answer rather than filtered by the surface
+   * (ORG-015).
+   */
+  {
+    path: "/organizer/audit",
+    name: "organizer.audit.index",
+    component: OrganizerAuditView,
   },
   /*
    * Handle and profile picture change request review (M18.20D; VOL-019 through

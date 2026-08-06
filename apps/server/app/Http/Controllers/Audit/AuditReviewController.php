@@ -1,0 +1,232 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Audit;
+
+use App\Http\Controllers\Controller;
+use App\Models\AuditEvent;
+use App\Models\Organization;
+use App\Models\User;
+use App\Services\Audit\AuditReviewAccess;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * Audit review as a product surface (M18.29; requirements 2.4; UI contract
+ * 12.6 `organizer.audit`).
+ *
+ * Requirements 2.4 asks for two things of an audit record: that changes are
+ * attributed to the person who made them, and that important history is
+ * preserved. This surface answers the first. Every row says who acted, what
+ * they acted on, when, from where, why where a reason was required, and which
+ * fields moved.
+ *
+ * **It does not serve the before and after values.** An audit payload is a
+ * verbatim copy of whatever the writing path snapshotted, so the set of fields
+ * an organizer would read here is the union of every field every audited path
+ * happens to record — including a staff member's phone number, which
+ * REPORT-002 keeps out of the roster an organizer exports. Naming the fields
+ * that changed answers "who changed what, when, and why" without the surface
+ * quietly becoming an unscoped read of everything else. Repair work that needs
+ * the values is God Mode's, and M18.34 builds that screen.
+ *
+ * The IMS exclusion lives in {@see AuditReviewAccess}, not here: ORG-015 is a
+ * rule about what organizing reaches, and a filter a controller applied would
+ * be a rule one endpoint kept.
+ */
+final class AuditReviewController extends Controller
+{
+    /** Enough to read a shift's worth of history without paging forever. */
+    private const DEFAULT_PER_PAGE = 50;
+
+    private const MAX_PER_PAGE = 200;
+
+    /** How many distinct actions and entity types the filter lists offer. */
+    private const FILTER_OPTION_LIMIT = 200;
+
+    public function index(
+        Request $request,
+        Organization $organization,
+        AuditReviewAccess $access,
+    ): JsonResponse {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
+
+        if (! $access->canReviewAudit($user, $organization)) {
+            return response()->json([
+                'message' => 'Only organizers may review this organization\'s audit record.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'action' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'entity_type' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'event_id' => ['sometimes', 'nullable', 'uuid'],
+            'department_id' => ['sometimes', 'nullable', 'uuid'],
+            'actor_user_id' => ['sometimes', 'nullable', 'uuid'],
+            'from' => ['sometimes', 'nullable', 'date'],
+            'to' => ['sometimes', 'nullable', 'date'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        $perPage = min((int) ($validated['per_page'] ?? self::DEFAULT_PER_PAGE), self::MAX_PER_PAGE);
+
+        $scoped = fn (): Builder => $access->scopeReviewable(
+            AuditEvent::query(),
+            $organization,
+        );
+
+        $page = $this->filtered($scoped(), $validated)
+            ->with(['actorUser', 'event', 'department'])
+            ->latest('created_at')
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', (int) ($validated['page'] ?? 1));
+
+        return response()->json([
+            'organization_id' => (string) $organization->getKey(),
+            'entries' => collect($page->items())
+                ->map(fn (AuditEvent $entry): array => $this->row($entry))
+                ->values()
+                ->all(),
+            'pagination' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'last_page' => $page->lastPage(),
+            ],
+            /*
+             * Filter values are read from the rows this caller may see rather
+             * than from a hardcoded list, so a filter can never offer an action
+             * that only exists in a part of the record they are not shown.
+             */
+            'options' => [
+                'actions' => $this->distinct($scoped(), 'action'),
+                'entity_types' => $this->distinct($scoped(), 'entity_type'),
+            ],
+        ]);
+    }
+
+    /**
+     * @param  Builder<AuditEvent>  $query
+     * @param  array<string, mixed>  $filters
+     * @return Builder<AuditEvent>
+     */
+    private function filtered(Builder $query, array $filters): Builder
+    {
+        foreach (['action', 'entity_type', 'event_id', 'department_id', 'actor_user_id'] as $column) {
+            $value = $filters[$column] ?? null;
+
+            if ($value !== null && $value !== '') {
+                $query->where($column, (string) $value);
+            }
+        }
+
+        if (($filters['from'] ?? null) !== null && $filters['from'] !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse((string) $filters['from']));
+        }
+
+        if (($filters['to'] ?? null) !== null && $filters['to'] !== '') {
+            $query->where('created_at', '<=', CarbonImmutable::parse((string) $filters['to']));
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  Builder<AuditEvent>  $query
+     * @return list<string>
+     */
+    private function distinct(Builder $query, string $column): array
+    {
+        return $query
+            ->select($column)
+            ->distinct()
+            ->orderBy($column)
+            ->limit(self::FILTER_OPTION_LIMIT)
+            ->pluck($column)
+            ->map(fn ($value): string => (string) $value)
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function row(AuditEvent $entry): array
+    {
+        return [
+            'id' => (string) $entry->getKey(),
+            'action' => (string) $entry->action,
+            'entity_type' => (string) $entry->entity_type,
+            'entity_label' => $this->entityLabel((string) $entry->entity_type),
+            'entity_id' => (string) $entry->entity_id,
+            /*
+             * Attribution, which is what requirements 2.4 asks of every change.
+             * A row with no actor is a scheduled job — the lifecycle evaluator
+             * (ORG-019), the automatic no-show — and says so rather than
+             * showing a blank that reads like missing data.
+             */
+            'actor_name' => $entry->actorUser?->name,
+            'actor_user_id' => $entry->actor_user_id !== null ? (string) $entry->actor_user_id : null,
+            'actor_device_id' => $entry->actor_device_id !== null ? (string) $entry->actor_device_id : null,
+            'actor_node_id' => $entry->actor_node_id !== null ? (string) $entry->actor_node_id : null,
+            'event_id' => $entry->event_id !== null ? (string) $entry->event_id : null,
+            'event_name' => $entry->event?->name,
+            'department_id' => $entry->department_id !== null ? (string) $entry->department_id : null,
+            'department_name' => $entry->department?->name,
+            'reason' => $entry->reason,
+            'source_context' => (string) $entry->source_context,
+            'recorded_at' => $entry->created_at?->toIso8601String(),
+            // The names of the fields that moved, without their values. See the
+            // class docblock for why the values stay in God Mode.
+            'changed_fields' => $this->changedFields($entry),
+        ];
+    }
+
+    /**
+     * The fields this entry recorded a change to.
+     *
+     * The union of both snapshots rather than only the keys whose values
+     * differ: a path that recorded a creation has no before at all, and one
+     * that snapshotted a field it did not change still says the field was part
+     * of the record it was writing.
+     *
+     * @return list<string>
+     */
+    private function changedFields(AuditEvent $entry): array
+    {
+        $before = is_array($entry->before_json) ? $entry->before_json : [];
+        $after = is_array($entry->after_json) ? $entry->after_json : [];
+
+        $fields = array_values(array_unique([
+            ...array_keys($before),
+            ...array_keys($after),
+        ]));
+
+        sort($fields);
+
+        return array_map(static fn ($field): string => (string) $field, $fields);
+    }
+
+    /**
+     * A readable name for an entity type.
+     *
+     * `audit_events.entity_type` holds a morph class, which is a PHP class name
+     * for everything the application has not aliased. An organizer reading
+     * their own organization's history should not have to know that
+     * `App\Models\StaffOrganizationStatus` is a staff status.
+     */
+    private function entityLabel(string $entityType): string
+    {
+        $base = str_contains($entityType, '\\')
+            ? (string) substr(strrchr($entityType, '\\') ?: '', 1)
+            : $entityType;
+
+        $spaced = preg_replace('/(?<!^)[A-Z]/', ' $0', $base) ?? $base;
+
+        return ucfirst(strtolower(str_replace('_', ' ', $spaced)));
+    }
+}

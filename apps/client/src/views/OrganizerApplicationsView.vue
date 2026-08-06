@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
@@ -270,8 +271,23 @@ onMounted(() => {
         :data-scope="application.scope"
       >
         <header class="applications__row-header">
+          <!--
+            The applicant's name opens the detail surface (M18.29; UI contract
+            12.6 `organizer.application-detail`). A link rather than a control,
+            because it is an address: the same page is reachable by pasting it,
+            which is what makes an application shareable between two reviewers.
+            Department leads follow it to the same read-only view APP-011 gives
+            them here.
+          -->
           <h2 class="applications__applicant">
-            {{ application.applicantLegalName }}
+            <RouterLink
+              :to="{
+                name: 'organizer.applications.show',
+                params: { applicationId: application.id },
+              }"
+            >
+              {{ application.applicantLegalName }}
+            </RouterLink>
           </h2>
           <span class="applications__status" :data-status="application.status">
             {{ application.statusLabel }}
