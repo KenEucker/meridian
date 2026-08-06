@@ -85,6 +85,12 @@ covers what the console says, `QA-GOD-02` covers how it looks.
 |---|---|---|
 | [`QA-KIOSK-01-kiosk-surfaces.md`](QA-KIOSK-01-kiosk-surfaces.md) | The six screens in UI contract 12.8 and the rule that decides whether any of them are reachable: a workstation with no pinned organization and event puts its Kiosk in setup, and stays there with a client session naming a perfectly good event on the same machine, because UI-020 rules out inferring context from the authenticated user, cached event data, the network, the viewport, and the last route alike; the first pin made from God Mode, where a department that does not work the chosen event is refused by name, and the ordinary move made by an organizer from the Kiosk itself on `organization.events.manage`, both audited, both ending the live session because it was signed in to the previous context; the desk's shift board recording check-in, check-out, and no-show against the workstation's own scope, queuing with the node stopped and syncing once, and offering no control at all to somebody the node grants no attendance authority; a handover that states the queued count and what is abandoned before it ends the session, with code entry unreachable while one is live; and re-authentication confirming the signed-in user with a fresh login code, refusing a valid code belonging to anybody else, and handing nothing over when it does | M16.9, M18.28, M18.32 |
 
+## Alpha 1 Command palette script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-NAV-01-command-palette.md`](QA-NAV-01-command-palette.md) | `Ctrl+K`, `Cmd+K`, and `/` only outside a field, with the slash typed as a character inside the desk's search box and a Field Report body; the palette's offer compared entry for entry against the same persona's Home, in both directions, across a department lead, a member holding no roles, and an organizer; IMS entries following Incident Command standing rather than organizer seniority; no camp and no operational map location at any query (MAP-018); the Kiosk's three states — unpinned, pinned but locked, signed in — offering nothing from a client session on the same machine, and never the session end the session bar owns; and the keyboard path from opening to dismissal with focus returned to the control that opened it | M18.33 |
+
 ## Alpha 1 Product document authoring script
 
 | ID | Coverage | Owning task |
