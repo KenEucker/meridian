@@ -3227,6 +3227,14 @@ Key fields:
 
 `map_location_id` is optional. A deployment may reference an operational map location, but deployments are not required to have a map location, and the reference does not replace `location_details`.
 
+Rules:
+
+- the option list is maintained from `department.deployments`, by a holder of `department.deployments.assign` or of `department.administer` for the department
+- `name` is unique per event and department, compared case-insensitively, including against archived rows
+- deployments are archived rather than deleted: `current_deployment_assignments` references them with a restricting key, and an option a department stopped using is still where somebody was standing
+- a deployment carrying any `current_deployment_assignments` row cannot be archived until those staff are moved
+- creating, updating, archiving, and restoring a deployment are audited, and are event-scoped writes subject to event authority
+
 #### `current_deployment_assignments`
 
 Represents current deployment/location state for MVP.

@@ -11,11 +11,14 @@ use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Credentials\EventCredentialAdminController;
 use App\Http\Controllers\Credits\CreditPolicyAdminController;
+use App\Http\Controllers\Credits\DepartmentCreditReviewController;
 use App\Http\Controllers\Dashboard\DashboardReadController;
 use App\Http\Controllers\DepartmentOps\DepartmentOperationsReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
+use App\Http\Controllers\Departments\DepartmentRosterReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
+use App\Http\Controllers\Deployments\DeploymentAdminController;
 use App\Http\Controllers\Deployments\DeploymentCommandController;
 use App\Http\Controllers\Documents\DocumentAcknowledgmentController;
 use App\Http\Controllers\Documents\DocumentCommandController;
@@ -324,6 +327,29 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
         ->name('api.commands.set-current-deployment');
+
+    /*
+     * Deployment option administration (M18.30; SLB-009; UI contract 12.4
+     * `department.deployments`). The four commands behind the list the command
+     * above assigns from: `deployments` has been readable since M16.21 and
+     * writable by nothing since M10.8, which left SLB-009's "shall always
+     * include a deployment/location module" true and empty at the same time.
+     *
+     * Archive rather than delete, because a current assignment points at the
+     * row with a restricting key and a location a department stopped using is
+     * still where somebody was standing.
+     */
+    Route::post('/commands/create-deployment', [DeploymentAdminController::class, 'create'])
+        ->name('api.commands.create-deployment');
+
+    Route::post('/commands/update-deployment', [DeploymentAdminController::class, 'update'])
+        ->name('api.commands.update-deployment');
+
+    Route::post('/commands/archive-deployment', [DeploymentAdminController::class, 'archive'])
+        ->name('api.commands.archive-deployment');
+
+    Route::post('/commands/restore-deployment', [DeploymentAdminController::class, 'restore'])
+        ->name('api.commands.restore-deployment');
 
     Route::post('/commands/mark-staff-on-site', [DepartmentPresenceCommandController::class, 'markOnSite'])
         ->name('api.commands.mark-staff-on-site');
@@ -889,6 +915,33 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/departments/{department}/planning', [DepartmentOperationsReadController::class, 'planning'])
         ->name('api.events.departments.planning');
+
+    /*
+     * The three remaining department screens (M18.30; UI contract 12.4).
+     *
+     * Same scope and same shape as the four above — one event, one department,
+     * one read each, carrying the caller's own standing so the surface offers
+     * nothing the node would refuse.
+     *
+     * The roster is the department's staff list rather than the Admin page's
+     * team-assignment list, and it is the one read in Meridian that serves
+     * emergency contacts: VOL-012 gives them to department leads for their own
+     * department, and they are absent from the payload for everybody else
+     * rather than blanked in it (VOL-011).
+     *
+     * Credit review answers to `reports.credits_earned.export`, the same
+     * capability the file behind it answers to, because reading the ledger and
+     * exporting it are the same rows and the same disclosure. It writes
+     * nothing: calculation is an organizer's (ORG-010).
+     */
+    Route::get('/events/{event}/departments/{department}/roster', DepartmentRosterReadController::class)
+        ->name('api.events.departments.roster');
+
+    Route::get('/events/{event}/departments/{department}/deployments', [DeploymentAdminController::class, 'index'])
+        ->name('api.events.departments.deployments.index');
+
+    Route::get('/events/{event}/departments/{department}/credits', DepartmentCreditReviewController::class)
+        ->name('api.events.departments.credits');
 
     /*
      * The dashboard read (M18.28; UI contract 13.1 through 13.6).
