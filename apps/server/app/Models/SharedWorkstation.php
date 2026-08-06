@@ -9,11 +9,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Orchid\Screen\AsSource;
 
 class SharedWorkstation extends Model
 {
     /** @use HasFactory<SharedWorkstationFactory> */
-    use HasFactory, HasUuids;
+    // `AsSource` because the God Mode pinning screen lists these rows (M18.32;
+    // technical spec 13.1, "shared workstations are managed in God mode").
+    use AsSource, HasFactory, HasUuids;
 
     public $incrementing = false;
 

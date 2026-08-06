@@ -1423,6 +1423,17 @@ Sheets the user cannot access are omitted from `insights.index`, not listed as i
 | `kiosk.reauth` | `kiosk.reauth` | Re-auth for privileged action | Trusted workstation/authenticated user |
 | `kiosk.shift-board` | `kiosk.shift-board` | Kiosk-safe shift board entry | Authorized shift/department lead |
 | `kiosk.safe-timeout` | `kiosk.safe-timeout` | Safe timeout surface | Trusted workstation |
+| `kiosk.setup` | `kiosk.setup` | Kiosk setup and support: what this machine is, what it is pinned to, and changing the pin | Trusted workstation; the pin change requires `organization.events.manage` |
+
+`kiosk.setup` is the surface UI-017 calls the Kiosk setup/support surface and UI-020 sends an unpinned Kiosk to. It was missing from this table until M18.32 built it, which is why it is added here rather than in a reconciliation task: a rule that names a surface needs the surface named.
+
+Every Kiosk route but `kiosk.setup` and `kiosk.safe-timeout` redirects to setup while the workstation has no pinned organization and event (UI-019), including `kiosk.workstation-login` — a login code is scoped to a pinned event, so an unpinned workstation has none to issue and code entry there could only fail. What is pinned is read from the node rather than derived, because UI-020 rules out the viewport, the network, the authenticated user, the last route, and cached event data alike; the last answer the node gave about *this machine* is kept against an unreachable node, which is remembering rather than inferring.
+
+The first pin, and the organization, are God Mode's (technical spec 13.1). An unpinned workstation has no organization for an organizer's authority to be held in and cannot be signed in to at all. Changing the event, and the optional department, is an organizer's from this surface, and a pin ends whatever session the workstation was holding, because that session was signed in to the previous context.
+
+`kiosk.reauth` takes a fresh login code for the session's own user. Section 18.2 rules out a separate PIN as an independent central credential, and the login code is already scoped to one user and this workstation and is generated in seconds from a phone against a node with no route to central. A valid code belonging to anybody else is refused and hands nothing over: a handover is the explicit end `kiosk.switch-user` performs.
+
+`kiosk.shift-board` is not a second `staff.shift-board`. That one is somebody browsing shifts and signing themselves up; this is the shared machine at the desk, scoped to the workstation's own pinned event and department, where an authorized shift or department lead records check-in, check-out, and no-show for other people. Self check-in stays out of it (kiosk guide 5).
 
 The Kiosk shell carries a session bar above the routed surface, outside anything a screen can collapse or scroll away, because "the active user is shown prominently at all times" (technical spec 13.3) is not a property a screen can be trusted to preserve. It shows the active user's name as its largest element, warns before the inactivity timeout with a control that continues the session, and offers the control that ends it. It renders nothing while the workstation is locked.
 

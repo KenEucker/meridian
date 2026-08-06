@@ -9,6 +9,7 @@
     "dev:admin": "vite --mode meridian-admin",
     "dev:field": "vite --mode meridian-field",
     "dev:kiosk": "vite --mode meridian-kiosk",
+    "dev:kiosk:workstation": "vite --mode meridian-kiosk --host 127.0.0.1 --port 5175 --strictPort",
     "build": "vue-tsc --build --force && vite build --mode meridian-admin && vite build --mode meridian-field && vite build --mode meridian-kiosk",
     "build:admin": "vite build --mode meridian-admin",
     "build:field": "vite build --mode meridian-field",

@@ -45,6 +45,8 @@ class SharedWorkstationSessionService
 {
     public const AUDIT_ENDED = 'shared_workstation_session.ended';
 
+    public const AUDIT_REAUTHENTICATED = 'shared_workstation_session.reauthenticated';
+
     public function __construct(
         private readonly SharedWorkstationLoginCodeService $loginCodes,
         private readonly AuditService $audit,
@@ -89,6 +91,70 @@ class SharedWorkstationSessionService
         });
 
         return new EstablishedSharedWorkstationSession($session, $sessionKey);
+    }
+
+    /**
+     * Confirm that the person at the keyboard is still the signed-in user
+     * (M18.32; UI-017; UI contract 12.8 `kiosk.reauth`, 18.2).
+     *
+     * "Privileged actions may require re-authentication", and Alpha 1 has no
+     * separate Meridian PIN to require — 18.2 rules one out as an independent
+     * central credential. What it does have is the login code, which is already
+     * scoped to one user, one event, and this workstation, is single use, and is
+     * generated in seconds from the phone in the user's pocket (AUTH-027). So a
+     * confirmation is a fresh code for the same user, redeemed through the same
+     * path an entry goes through: the trusted-workstation rule, the
+     * per-workstation attempt limit, and the use audit all apply unchanged.
+     *
+     * A code for anybody else is refused and no session changes hands. Switching
+     * users is {@see start()} after an explicit end, and 13.3 is deliberate that
+     * there is no quiet handover.
+     *
+     * What this records is a timestamp on the session. Which actions demand a
+     * recent one, and how recent, belongs to those actions rather than here.
+     *
+     * @throws SharedWorkstationLoginException
+     */
+    public function reauthenticate(SharedWorkstationSession $session, string $code): SharedWorkstationSession
+    {
+        $workstation = $session->sharedWorkstation()->first();
+
+        if (! $workstation instanceof SharedWorkstation || ! $session->isActive()) {
+            throw SharedWorkstationLoginException::noActiveSession();
+        }
+
+        $record = $this->loginCodes->redeem($workstation, $code);
+
+        if ((string) $record->user_id !== (string) $session->user_id) {
+            throw SharedWorkstationLoginException::reauthenticationMismatch();
+        }
+
+        $confirmedAt = now();
+
+        $session->forceFill([
+            'reauthenticated_at' => $confirmedAt,
+            'last_activity_at' => $confirmedAt,
+        ])->save();
+
+        $this->audit->recordForEntity(
+            entity: $session,
+            action: self::AUDIT_REAUTHENTICATED,
+            actorUser: $session->user()->first(),
+            actorDevice: $workstation->device()->first(),
+            organizationId: $workstation->organization_id,
+            eventId: $session->event_id,
+            departmentId: $workstation->department_id,
+            after: [
+                'shared_workstation_session_id' => $session->getKey(),
+                'shared_workstation_id' => $workstation->getKey(),
+                'user_id' => $session->user_id,
+                'login_code_id' => $record->getKey(),
+                'reauthenticated_at' => $confirmedAt->toIso8601String(),
+            ],
+            sourceContext: AuditEvent::SOURCE_API,
+        );
+
+        return $session;
     }
 
     /**

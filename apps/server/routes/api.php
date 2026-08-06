@@ -40,6 +40,7 @@ use App\Http\Controllers\Incidents\IncidentListPresetController;
 use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Incidents\IncidentTypeAdminController;
+use App\Http\Controllers\Kiosk\KioskWorkstationContextController;
 use App\Http\Controllers\Marketing\OrganizationInterestController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
@@ -185,6 +186,51 @@ Route::get('/auth/shared-workstation-session', [SharedWorkstationSessionControll
 Route::delete('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'destroy'])
     ->middleware('auth:workstation')
     ->name('api.auth.shared-workstation-session.destroy');
+
+/*
+ * Re-authentication before a privileged action (M18.32; UI-017; UI contract
+ * 12.8 `kiosk.reauth`, 18.2).
+ *
+ * Behind the workstation guard, because it re-confirms the session the caller
+ * already holds rather than establishing one. The typed code is checked against
+ * that session's user, so a valid code for somebody else confirms nothing and
+ * hands nothing over — switching users is the explicit end that 13.3 requires.
+ *
+ * Throttled like code entry, because it is code entry: a workstation being
+ * guessed at through this route is a workstation being guessed at.
+ */
+Route::post('/auth/shared-workstation-session/reauthentication', [SharedWorkstationSessionController::class, 'reauthenticate'])
+    ->middleware(['auth:workstation', 'throttle:20,1'])
+    ->name('api.auth.shared-workstation-session.reauthenticate');
+
+/*
+ * The Kiosk pinned context (M18.32; UI-019 through UI-021; technical spec 13.1).
+ *
+ * The read carries no credential on purpose. UI-020 forbids a Kiosk from
+ * inferring its pinned context from anything it holds locally, so it has to ask
+ * the node — and the state it asks in is the state with no session, because
+ * whether it may offer a login screen at all is what the answer decides. It
+ * answers only for a trusted, unrevoked workstation, discloses the pinned
+ * organization, event, and department and nothing else, and grants nothing: the
+ * pinned event is still entered with a login code the node issued to a named
+ * user (AUTH-030).
+ *
+ * The other two carry one. Reading the events a workstation could be pinned to
+ * is reading an organization's events, and changing which event a machine works
+ * is event administration (UI-021), so both answer to
+ * `organization.events.manage` — the capability M18.29 gave the two organizer
+ * roles and neither the Staff Coordinator nor any department role.
+ */
+Route::get('/kiosk/workstations/{sharedWorkstation}', [KioskWorkstationContextController::class, 'show'])
+    ->name('api.kiosk.workstations.show');
+
+Route::get('/kiosk/workstations/{sharedWorkstation}/pinned-context/options', [KioskWorkstationContextController::class, 'options'])
+    ->middleware('auth:sanctum,workstation')
+    ->name('api.kiosk.workstations.pinned-context.options');
+
+Route::put('/kiosk/workstations/{sharedWorkstation}/pinned-context', [KioskWorkstationContextController::class, 'update'])
+    ->middleware('auth:sanctum,workstation')
+    ->name('api.kiosk.workstations.pinned-context.update');
 
 /*
  * Session resolution (CLIENT-001 through CLIENT-003; technical spec 11A.2;

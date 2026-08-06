@@ -19,10 +19,20 @@
 // Encryption (M8.3), device signing (M8.4), and the node this device works
 // against each have a real probe, and since M16.5 the session document answers
 // two more: `logged in` and `event selected` are facts about the session the
-// client holds, not features waiting to be built. The remaining items — device
-// trust, local cache, and last sync — still depend on work owned by later
-// Alpha 1 milestones, and rather than invent behavior they are reported
-// honestly as `pending` until their signal is wired in by the owning task.
+// client holds, not features waiting to be built.
+//
+// `device trusted` is answered for one kind of device and pending for the other,
+// which is the honest shape of what exists. Technical spec 13.1 calls a shared
+// workstation "a special kind of trusted device", and since M18.32 the node
+// publishes that trust: the Kiosk pinned-context read answers for a trusted,
+// unrevoked workstation and 404s for anything else. A personal device's trust
+// lives in `device_trusts` (data/API 12.2) and no endpoint publishes it, so a
+// client cannot know, and the item says so rather than guessing from the
+// device-bound token — a token proves this device may call the node, not that
+// the user established trust with it.
+//
+// `local cache complete` and `last sync completed` still depend on work owned by
+// later Alpha 1 milestones and are reported honestly as `pending`.
 
 import { nodeConnection, type NodeConnection } from "@/app/nodeConnection";
 import {
@@ -34,6 +44,8 @@ import {
   type LocalEncryptionReadiness,
 } from "@/readiness/localEncryption";
 import { clientSessionState } from "@/session/clientSession";
+import { kioskContextState } from "@/session/kioskContext";
+import { sharedWorkstationId } from "@/session/workstationIdentity";
 
 /**
  * Stable identifiers for the technical spec section 14 readiness items, in the
@@ -106,15 +118,35 @@ export interface ReadinessSessionSignal {
 }
 
 /**
+ * What this machine is, as far as device trust goes (M18.32; technical spec
+ * 13.1).
+ *
+ * Only a shared workstation can answer today. `isSharedWorkstation` is whether
+ * this machine claims to be one at all — a personal device does not, and gets a
+ * pending item rather than a failing one, because "not a shared workstation" is
+ * not a trust problem.
+ */
+export interface ReadinessWorkstationSignal {
+  /** Whether this machine is configured as a shared workstation. */
+  readonly isSharedWorkstation: boolean;
+  /** Whether the node vouches for it, or null when the node has not said. */
+  readonly trusted: boolean | null;
+  readonly workstationName: string | null;
+  /** True when `trusted` is the node's last answer rather than a fresh one. */
+  readonly fromStoredAnswer: boolean;
+}
+
+/**
  * Readiness signals available today. Local encryption (M8.3), device signing
- * (M8.4), the node connection, and the session (M16.5) are wired; the remaining
- * items resolve to `pending`.
+ * (M8.4), the node connection, the session (M16.5), and shared-workstation
+ * trust (M18.32) are wired; the remaining items resolve to `pending`.
  */
 export interface ReadinessChecklistInputs {
   readonly localEncryption: LocalEncryptionReadiness;
   readonly deviceSigning: DeviceSigningReadiness;
   readonly node: NodeConnection;
   readonly session: ReadinessSessionSignal;
+  readonly workstation: ReadinessWorkstationSignal;
 }
 
 const READINESS_ITEM_ORDER: readonly ReadinessItemKey[] = [
@@ -147,7 +179,6 @@ const PENDING_DETAIL = "Not available yet in this build.";
 
 /** Items that resolve to `pending` until their owning milestone wires them up. */
 const PENDING_ITEMS: readonly ReadinessItemKey[] = [
-  "deviceTrusted",
   "localCacheComplete",
   "lastSyncCompleted",
 ];
@@ -213,6 +244,72 @@ function eventSelectedItem(
     "eventSelected",
     "ready",
     session.nodeLocked ? `${label}. This node is locked to it.` : label,
+  );
+}
+
+/**
+ * `device trusted` (M18.32; technical spec 13.1; data/API 12.2).
+ *
+ * Two kinds of device, and only one of them can answer today.
+ *
+ * A **shared workstation** is "a special kind of trusted device" (13.1), and its
+ * trust is published: the pinned-context read answers for a trusted, unrevoked
+ * workstation and 404s for anything else, so a machine that got an answer has
+ * been vouched for by name. A machine that claims to be a shared workstation and
+ * gets refused is genuinely not ready — that is a technician's problem, and the
+ * one case on this checklist where "device trusted" can honestly fail.
+ *
+ * A **personal device** cannot answer. Trust is a `device_trusts` row per
+ * user/device pair (data/API 12.2) and no endpoint publishes it. The
+ * device-bound API token is deliberately not read as a substitute: a token
+ * proves this device may call the node, and trust is the separate six-week
+ * relationship AUTH-024 keeps on its own lifetime. Reporting the token as trust
+ * would be a false pass on the item most worth not faking.
+ *
+ * A stored answer still reads ready. The node being unreachable is the ordinary
+ * state of a machine on site, readiness is advisory and must not nag (spec 14),
+ * and the node enforces trust on every request regardless of what this says. The
+ * detail names that it is the stored answer so the reader knows which it is.
+ */
+function deviceTrustedItem(
+  workstation: ReadinessWorkstationSignal,
+): ReadinessChecklistItem {
+  if (!workstation.isSharedWorkstation) {
+    return toItem(
+      "deviceTrusted",
+      "pending",
+      "Personal device trust is not published to a client yet in this build.",
+    );
+  }
+
+  if (workstation.trusted === null) {
+    return toItem(
+      "deviceTrusted",
+      "pending",
+      "This workstation has not been confirmed with the node yet.",
+    );
+  }
+
+  if (!workstation.trusted) {
+    return toItem(
+      "deviceTrusted",
+      "not-ready",
+      "This node holds no trusted shared workstation with this machine's identifier.",
+    );
+  }
+
+  const name = workstation.workstationName;
+  const label =
+    name === null || name === ""
+      ? "Trusted shared workstation."
+      : `Trusted shared workstation ${name}.`;
+
+  return toItem(
+    "deviceTrusted",
+    "ready",
+    workstation.fromStoredAnswer
+      ? `${label} This is the node's last answer; it could not be reached to confirm.`
+      : label,
   );
 }
 
@@ -284,6 +381,9 @@ export function buildReadinessChecklist(
     }
     if (key === "eventSelected") {
       return eventSelectedItem(inputs.session);
+    }
+    if (key === "deviceTrusted") {
+      return deviceTrustedItem(inputs.workstation);
     }
     if (PENDING_ITEMS.includes(key)) {
       return toItem(key, "pending", PENDING_DETAIL);
@@ -392,6 +492,50 @@ function describeRefusedSession(): string {
 }
 
 /**
+ * What this machine is, for the `device trusted` item (M18.32).
+ *
+ * "Is a shared workstation" is whether the machine holds a workstation identity
+ * at all, which is a property of the machine rather than of the mode it is
+ * running in — an Admin build pointed at a workstation identifier is still that
+ * workstation, and a Kiosk with no identifier is still not one.
+ *
+ * Trust is null until the node has answered, so a machine mid-boot reports
+ * pending rather than a failure it has not earned.
+ */
+export function resolveReadinessWorkstationSignal(): ReadinessWorkstationSignal {
+  const context = kioskContextState.context;
+  const status = kioskContextState.status;
+
+  if (sharedWorkstationId.value === null && context === null) {
+    return {
+      isSharedWorkstation: false,
+      trusted: null,
+      workstationName: null,
+      fromStoredAnswer: false,
+    };
+  }
+
+  if (status === "unresolved" || status === "resolving") {
+    return {
+      isSharedWorkstation: true,
+      trusted: null,
+      workstationName: context?.workstationName ?? null,
+      fromStoredAnswer: false,
+    };
+  }
+
+  return {
+    isSharedWorkstation: true,
+    // `unknown` is the node refusing to answer for this machine, which is the
+    // one honest negative: it is claiming to be a workstation this node does
+    // not hold as a trusted one.
+    trusted: status === "unknown" ? false : (context?.trusted ?? false),
+    workstationName: context?.workstationName ?? null,
+    fromStoredAnswer: status === "stored",
+  };
+}
+
+/**
  * Probe the current client scope and build the readiness checklist in one call.
  * Defaults to the real platform (`globalThis`) while tests inject a scope.
  */
@@ -403,5 +547,6 @@ export function resolveReadinessChecklist(
     deviceSigning: checkDeviceSigningReadiness(scope),
     node: nodeConnection.value,
     session: resolveReadinessSessionSignal(),
+    workstation: resolveReadinessWorkstationSignal(),
   });
 }

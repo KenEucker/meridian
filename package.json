@@ -62,10 +62,12 @@
     "mobile:test": "corepack pnpm --filter @meridian/mobile run test",
     "mobile:cap:copy": "corepack pnpm --filter @meridian/mobile run cap:copy",
     "mobile:cap:sync": "corepack pnpm --filter @meridian/mobile run cap:sync",
-    "desktop:start": "corepack pnpm --filter @meridian/desktop run start",
-    "desktop:build": "corepack pnpm --filter @meridian/desktop run build",
-    "desktop:typecheck": "corepack pnpm --filter @meridian/desktop run typecheck",
-    "desktop:test": "corepack pnpm --filter @meridian/desktop run test",
+    "kiosk:start": "corepack pnpm --filter @meridian/kiosk run start",
+    "kiosk:build": "corepack pnpm --filter @meridian/kiosk run build",
+    "kiosk:typecheck": "corepack pnpm --filter @meridian/kiosk run typecheck",
+    "kiosk:test": "corepack pnpm --filter @meridian/kiosk run test",
+    "kiosk:workstation": "node scripts/dev/start-shared-workstation.mjs",
+    "kiosk:workstation:codes": "php apps/server/artisan meridian:shared-workstation",
     "docs:package": "node scripts/release/package-technician-docs.mjs",
     "docs:check": "node scripts/release/package-technician-docs.mjs --check",
     "changelog:generate": "node scripts/release/generate-changelog.mjs",
@@ -74,8 +76,8 @@
     "brand:sync": "node -e \"require('fs').copyFileSync('apps/client/public/assets/brand/meridian-mark.png','apps/server/public/img/brand/meridian-mark.png')\"",
     "tokens:typecheck": "corepack pnpm --filter @meridian/ui-tokens run typecheck",
     "tokens:test": "corepack pnpm --filter @meridian/ui-tokens run test",
-    "build": "corepack pnpm run client:build && corepack pnpm run mobile:build && corepack pnpm run desktop:build",
-    "typecheck": "corepack pnpm run tokens:typecheck && corepack pnpm run client:typecheck && corepack pnpm run mobile:typecheck && corepack pnpm run desktop:typecheck",
-    "test": "corepack pnpm run process:check && corepack pnpm run tokens:test && corepack pnpm run client:test && corepack pnpm run mobile:test && corepack pnpm run desktop:test"
+    "build": "corepack pnpm run client:build && corepack pnpm run mobile:build && corepack pnpm run kiosk:build",
+    "typecheck": "corepack pnpm run tokens:typecheck && corepack pnpm run client:typecheck && corepack pnpm run mobile:typecheck && corepack pnpm run kiosk:typecheck",
+    "test": "corepack pnpm run process:check && corepack pnpm run tokens:test && corepack pnpm run client:test && corepack pnpm run mobile:test && corepack pnpm run kiosk:test"
   }
 }

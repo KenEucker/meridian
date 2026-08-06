@@ -13,6 +13,10 @@ import {
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
+import {
+  resetKioskContext,
+  resolveKioskContext,
+} from "@/session/kioskContext";
 import { configureSharedWorkstationId } from "@/session/workstationIdentity";
 import {
   enterWorkstationLoginCode,
@@ -54,6 +58,10 @@ function stubNode(): void {
         return json(localFieldSessionDocument());
       }
 
+      if (path.startsWith("/api/kiosk/workstations/")) {
+        return json(pinnedContextPayload());
+      }
+
       if (method === "DELETE") {
         return json({ ended: true });
       }
@@ -83,6 +91,29 @@ function stubNode(): void {
   );
 }
 
+/**
+ * What the node says this machine is pinned to (M18.32; UI-019).
+ *
+ * Every Kiosk route but setup and safe timeout is behind it, so the session
+ * surfaces are only reachable at all once it has been resolved.
+ */
+function pinnedContextPayload() {
+  return {
+    shared_workstation: { id: WORKSTATION_ID, name: "Gate A Workstation" },
+    pinned: true,
+    organization: { id: "org-1", name: "Northwood Collective" },
+    event: {
+      id: "event-1",
+      name: "Emberfall 2027",
+      timezone: "UTC",
+      active_event_window_starts_at: null,
+      active_event_window_ends_at: null,
+    },
+    department: null,
+    context_pinned_at: "2027-05-01T00:00:00+00:00",
+  };
+}
+
 function buildRouter() {
   return createRouter({ history: createWebHistory(), routes });
 }
@@ -94,19 +125,22 @@ async function signIn(): Promise<void> {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   node.expiresAt = "2027-06-01T12:05:00+00:00";
   window.localStorage.clear();
   resetWorkstationSession();
+  resetKioskContext();
   clearClientSession();
   configureSharedWorkstationId(WORKSTATION_ID);
   stubNode();
   configureMeridianApi({ baseUrl: "http://node.test", bearerToken: null });
+  await resolveKioskContext();
 });
 
 afterEach(async () => {
   configureSharedWorkstationId(null);
   resetWorkstationSession();
+  resetKioskContext();
   clearClientSession();
   await resetFieldReportRuntime();
   resetCommandOutbox();

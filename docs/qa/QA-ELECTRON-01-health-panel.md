@@ -45,10 +45,10 @@ at this stage.
 1. From the repository root, install workspace dependencies:
    `corepack pnpm install`.
 2. Run the automated unit tests:
-   `corepack pnpm --filter @meridian/desktop run test`.
+   `corepack pnpm --filter @meridian/kiosk run test`.
 3. Type check and build the Electron main process:
-   `corepack pnpm --filter @meridian/desktop run typecheck` and
-   `corepack pnpm --filter @meridian/desktop run build`.
+   `corepack pnpm --filter @meridian/kiosk run typecheck` and
+   `corepack pnpm --filter @meridian/kiosk run build`.
 4. Approve the Electron binary download once for this workspace:
    `corepack pnpm approve-builds` (select `electron`).
 5. Start a local server that serves `GET /api/health` (for example, run
@@ -56,7 +56,7 @@ at this stage.
 6. Start the shared client dev server in Kiosk mode:
    `corepack pnpm run client:dev:kiosk -- --host 127.0.0.1`.
 7. Start the wrapper:
-   `MERIDIAN_SERVER_URL="http://localhost:8000/" MERIDIAN_CLIENT_DEV_SERVER_URL="http://127.0.0.1:5173/" corepack pnpm --filter @meridian/desktop run start`.
+   `MERIDIAN_SERVER_URL="http://localhost:8000/" MERIDIAN_CLIENT_DEV_SERVER_URL="http://127.0.0.1:5173/" corepack pnpm --filter @meridian/kiosk run start`.
 8. Confirm the wrapper opens the development Meridian Kiosk UI in a
    fullscreen/kiosk window with no browser chrome or menu bar.
 9. Make a temporary visible Vue text or style change and confirm the Electron
@@ -73,7 +73,7 @@ at this stage.
 - `corepack pnpm install` completes without errors.
 - The unit tests pass (config and health modules).
 - `typecheck` and `build` complete without errors; `build` produces
-  `apps/desktop/dist/main.js`.
+  `apps/kiosk/dist/main.js`.
 - The wrapper opens the development Meridian Kiosk UI from Vite fullscreen/kiosk
   with no browser chrome, and Vue changes hot-update in the Electron window.
 - The health panel lists all technical spec 25.3 fields in order: local node

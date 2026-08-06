@@ -8,6 +8,7 @@ import {
   type ReadinessChecklistInputs,
   type ReadinessItemKey,
   type ReadinessSessionSignal,
+  type ReadinessWorkstationSignal,
 } from "@/readiness/checklist";
 import type { DeviceSigningReadiness } from "@/readiness/deviceSigning";
 import type { LocalEncryptionReadiness } from "@/readiness/localEncryption";
@@ -121,6 +122,29 @@ function noSession(): ReadinessSessionSignal {
   };
 }
 
+/** An ordinary personal device, which is not a shared workstation at all. */
+function personalDevice(): ReadinessWorkstationSignal {
+  return {
+    isSharedWorkstation: false,
+    trusted: null,
+    workstationName: null,
+    fromStoredAnswer: false,
+  };
+}
+
+/** A machine the node vouches for by name (M18.32; technical spec 13.1). */
+function trustedWorkstation(
+  overrides: Partial<ReadinessWorkstationSignal> = {},
+): ReadinessWorkstationSignal {
+  return {
+    isSharedWorkstation: true,
+    trusted: true,
+    workstationName: "onsite-command-1",
+    fromStoredAnswer: false,
+    ...overrides,
+  };
+}
+
 function inputs(
   overrides: Partial<ReadinessChecklistInputs> = {},
 ): ReadinessChecklistInputs {
@@ -129,6 +153,7 @@ function inputs(
     deviceSigning: availableSigning(),
     node: configuredNode(),
     session: liveSession(),
+    workstation: personalDevice(),
     ...overrides,
   };
 }
@@ -205,16 +230,87 @@ describe("buildReadinessChecklist", () => {
       .filter((item) => item.status === "pending")
       .map((item) => item.key);
 
+    // `deviceTrusted` is pending here because the default input is a personal
+    // device, whose trust no endpoint publishes (data/API 12.2). It carries its
+    // own reason rather than the generic one, because "this build cannot ask"
+    // and "this feature does not exist" are different things to read.
     expect(pendingKeys).toEqual([
       "deviceTrusted",
       "localCacheComplete",
       "lastSyncCompleted",
     ]);
     for (const item of items) {
-      if (item.status === "pending") {
+      if (item.status === "pending" && item.key !== "deviceTrusted") {
         expect(item.detail).toBe("Not available yet in this build.");
       }
     }
+  });
+});
+
+/*
+ * `device trusted` (M18.32; technical spec 13.1; data/API 12.2).
+ *
+ * Answered for a shared workstation, which 13.1 calls "a special kind of trusted
+ * device" and whose trust the node publishes, and pending for a personal device,
+ * whose `device_trusts` row no endpoint serves.
+ */
+describe("device trusted", () => {
+  it("is ready and names the workstation the node vouches for", () => {
+    const items = buildReadinessChecklist(
+      inputs({ workstation: trustedWorkstation() }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.deviceTrusted.status).toBe("ready");
+    expect(byKey.deviceTrusted.detail).toContain("onsite-command-1");
+  });
+
+  it("is not ready when the node holds no trusted workstation for this machine", () => {
+    // The one case on this checklist where device trust can honestly fail: the
+    // machine claims to be a shared workstation and the node refuses to answer
+    // for it, which is a technician's problem rather than a pending feature.
+    const items = buildReadinessChecklist(
+      inputs({ workstation: trustedWorkstation({ trusted: false }) }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.deviceTrusted.status).toBe("not-ready");
+    expect(byKey.deviceTrusted.detail).toContain("no trusted shared workstation");
+  });
+
+  it("stays ready on the stored answer and says which answer it is", () => {
+    // An unreachable node is the ordinary state of a machine on site. Readiness
+    // is advisory and must not nag (technical spec 14), and the node enforces
+    // trust on every request whatever this says.
+    const items = buildReadinessChecklist(
+      inputs({ workstation: trustedWorkstation({ fromStoredAnswer: true }) }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.deviceTrusted.status).toBe("ready");
+    expect(byKey.deviceTrusted.detail).toContain("last answer");
+  });
+
+  it("is pending, not failing, while the node has not answered yet", () => {
+    const items = buildReadinessChecklist(
+      inputs({ workstation: trustedWorkstation({ trusted: null }) }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.deviceTrusted.status).toBe("pending");
+  });
+
+  it("does not read a device-bound token as trust on a personal device", () => {
+    // A token proves this device may call the node; trust is the separate
+    // six-week relationship in `device_trusts`. Reporting one as the other
+    // would be a false pass on the item most worth not faking.
+    const items = buildReadinessChecklist(
+      inputs({ workstation: personalDevice(), session: liveSession() }),
+    );
+    const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+
+    expect(byKey.deviceTrusted.status).toBe("pending");
+    expect(byKey.deviceTrusted.detail).toContain("not published to a client");
   });
 });
 

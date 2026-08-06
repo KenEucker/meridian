@@ -145,6 +145,27 @@ class SharedWorkstationSchemaTest extends TestCase
         $this->assertTrue($workstation->hasPinnedKioskContext());
     }
 
+    /**
+     * The setup state (M18.32; UI-019, UI-020; technical spec 13.1).
+     *
+     * "If Meridian Kiosk starts without a pinned organization and event, it
+     * enters setup" is a state the row has to be able to hold. Until M18.32 both
+     * columns were NOT NULL, so every workstation was pinned by construction and
+     * the condition the Kiosk branches on could only ever be true.
+     */
+    public function test_a_shared_workstation_may_hold_no_pinned_context_at_all(): void
+    {
+        $workstation = SharedWorkstation::factory()->create([
+            'organization_id' => null,
+            'event_id' => null,
+            'department_id' => null,
+            'context_pinned_at' => null,
+        ]);
+
+        $this->assertFalse($workstation->refresh()->hasPinnedKioskContext());
+        $this->assertTrue($workstation->isTrusted());
+    }
+
     public function test_shared_workstation_is_unique_per_event_name_and_device(): void
     {
         $eventId = fake()->uuid();

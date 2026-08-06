@@ -36,6 +36,12 @@ class SharedWorkstationLoginException extends RuntimeException
     /** The submitted code is unknown, already used, revoked, or expired. */
     public const REASON_INVALID_CODE = 'invalid_login_code';
 
+    /** A re-authentication code belongs to somebody other than the active user. */
+    public const REASON_REAUTHENTICATION_MISMATCH = 'reauthentication_user_mismatch';
+
+    /** There was no live session at the workstation to re-authenticate. */
+    public const REASON_NO_ACTIVE_SESSION = 'no_active_workstation_session';
+
     public function __construct(
         public readonly string $reason,
         string $message,
@@ -120,6 +126,37 @@ class SharedWorkstationLoginException extends RuntimeException
         return new self(
             self::REASON_INVALID_CODE,
             'That login code is not valid for this workstation. Codes are single use and expire.',
+            401,
+        );
+    }
+
+    /**
+     * A valid code, for the wrong person (M18.32; UI contract 18.2).
+     *
+     * Re-authentication confirms the user who is already signed in; it is not a
+     * quiet way to hand the workstation to somebody else. Technical spec 13.3
+     * requires a session to be ended explicitly before another user signs in, so
+     * the refusal names the surface that does that rather than doing it here.
+     *
+     * The code is spent by the time this is thrown, for the same reason a code
+     * entered against a disabled account is: possession was proved, and handing
+     * the credential back for another attempt is what a single-use code exists
+     * to prevent.
+     */
+    public static function reauthenticationMismatch(): self
+    {
+        return new self(
+            self::REASON_REAUTHENTICATION_MISMATCH,
+            'That code belongs to a different user. To hand this workstation over, end the current session and sign in again.',
+            403,
+        );
+    }
+
+    public static function noActiveSession(): self
+    {
+        return new self(
+            self::REASON_NO_ACTIVE_SESSION,
+            'This workstation has no live session to confirm.',
             401,
         );
     }

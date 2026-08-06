@@ -15,6 +15,8 @@ import {
   resolveClientVersion,
   resolveHealthUrl,
   resolveServerUrl,
+  resolveSharedWorkstationId,
+  resolveWindowedMode,
 } from "./config";
 
 describe("resolveServerUrl", () => {
@@ -43,13 +45,13 @@ describe("resolveClientDistPath", () => {
   it("defaults to the fixed Meridian Kiosk dist directory beside the desktop app", () => {
     // Compared through `resolve` rather than against a literal, because these
     // helpers return native paths and the separator differs by platform.
-    expect(resolveClientDistPath({}, "/repo/apps/desktop")).toBe(
+    expect(resolveClientDistPath({}, "/repo/apps/kiosk")).toBe(
       resolve("/repo/apps/client/dist/kiosk"),
     );
   });
 
   it("uses MERIDIAN_CLIENT_DIST_DIR when provided", () => {
-    expect(resolveClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "../custom-dist" }, "/repo/apps/desktop")).toBe(
+    expect(resolveClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "../custom-dist" }, "/repo/apps/kiosk")).toBe(
       resolve("/repo/apps/custom-dist"),
     );
   });
@@ -57,8 +59,8 @@ describe("resolveClientDistPath", () => {
 
 describe("resolveAppIconPath", () => {
   it("defaults to the Meridian desktop icon asset beside the desktop app", () => {
-    expect(resolveAppIconPath({}, "/repo/apps/desktop")).toBe(
-      resolve("/repo/apps/desktop/assets/icon.png"),
+    expect(resolveAppIconPath({}, "/repo/apps/kiosk")).toBe(
+      resolve("/repo/apps/kiosk/assets/icon.png"),
     );
   });
 });
@@ -143,7 +145,7 @@ describe("resolveClientVersion", () => {
       throw new Error("missing");
     }) as unknown as typeof import("node:fs").readFileSync;
 
-    expect(resolveClientVersion({}, "/repo/apps/desktop", readFile)).toBe("2.0.0");
+    expect(resolveClientVersion({}, "/repo/apps/kiosk", readFile)).toBe("2.0.0");
   });
 
   it("returns unknown when the root package version cannot be read", () => {
@@ -151,7 +153,7 @@ describe("resolveClientVersion", () => {
       throw new Error("missing");
     }) as unknown as typeof import("node:fs").readFileSync;
 
-    expect(resolveClientVersion({}, "/repo/apps/desktop", readFile)).toBe("unknown");
+    expect(resolveClientVersion({}, "/repo/apps/kiosk", readFile)).toBe("unknown");
   });
 
   it("returns unknown when the root package version is not numeric", () => {
@@ -163,7 +165,7 @@ describe("resolveClientVersion", () => {
       throw new Error("missing");
     }) as unknown as typeof import("node:fs").readFileSync;
 
-    expect(resolveClientVersion({}, "/repo/apps/desktop", readFile)).toBe("unknown");
+    expect(resolveClientVersion({}, "/repo/apps/kiosk", readFile)).toBe("unknown");
   });
 });
 
@@ -191,5 +193,37 @@ describe("resolveHealthUrl", () => {
     expect(() => resolveHealthUrl({ MERIDIAN_HEALTH_URL: "ftp://health.local" })).toThrow(
       /must use http or https/,
     );
+  });
+});
+
+describe("resolveSharedWorkstationId", () => {
+  it("is null on a desktop install that is not a shared workstation", () => {
+    // The ordinary case, and the one that has to stay inert: the Kiosk falls
+    // back to whatever a technician configured on the machine, and shows setup
+    // when there is nothing to fall back to (UI-019, UI-020).
+    expect(resolveSharedWorkstationId({})).toBeNull();
+    expect(resolveSharedWorkstationId({ MERIDIAN_SHARED_WORKSTATION_ID: "   " })).toBeNull();
+  });
+
+  it("carries the workstation the wrapper was told this machine is", () => {
+    expect(
+      resolveSharedWorkstationId({ MERIDIAN_SHARED_WORKSTATION_ID: " onsite-command-1 " }),
+    ).toBe("onsite-command-1");
+  });
+});
+
+describe("resolveWindowedMode", () => {
+  it("is fullscreen kiosk unless something says otherwise", () => {
+    // An on-site workstation is fullscreen and locked down. That is what the
+    // wrapper is for, so it is what an unset environment gets.
+    expect(resolveWindowedMode({})).toBe(false);
+    expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: "false" })).toBe(false);
+    expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: "no" })).toBe(false);
+  });
+
+  it("opens windowed when a developer asks for it", () => {
+    for (const value of ["1", "true", "TRUE", "yes"]) {
+      expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: value })).toBe(true);
+    }
   });
 });

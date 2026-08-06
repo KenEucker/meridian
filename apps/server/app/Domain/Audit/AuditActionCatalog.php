@@ -94,6 +94,11 @@ final class AuditActionCatalog
         'node.pairing_completed',
         'node_pairing_token.issued',
         'node_pairing_token.revoked',
+        // Technical spec 13.1: "Context changes are audited." A shared
+        // workstation's pinned context decides which organization's and which
+        // event's operational scope appears on a machine strangers stand in
+        // front of, which puts it with device trust rather than below it.
+        'shared_workstation.context_pinned',
         // Data/API section 8: policy/procedure acknowledgments.
         'document_acknowledgment.accepted',
         // Organization governance: the values every other rule is measured

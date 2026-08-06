@@ -657,6 +657,91 @@ class SharedWorkstationSessionTest extends TestCase
             ->count());
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Re-authentication (M18.32; UI-017; UI contract 12.8, 18.2)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * "Privileged actions may require re-authentication" (UI contract 18.2), and
+     * Alpha 1 has no separate PIN to require — so a confirmation is a fresh login
+     * code for the user who is already signed in.
+     */
+    public function test_a_fresh_code_for_the_active_user_confirms_the_session(): void
+    {
+        $workstation = $this->workstation();
+        $subject = User::factory()->create();
+        $sessionKey = $this->establish($workstation, $subject);
+
+        $this->asWorkstation($sessionKey)
+            ->postJson(route('api.auth.shared-workstation-session.reauthenticate'), [
+                'code' => $this->codeFor($subject, $workstation),
+            ])
+            ->assertOk()
+            ->assertJsonPath('user.id', $subject->getKey());
+
+        $session = SharedWorkstationSession::query()->sole();
+
+        $this->assertNotNull($session->reauthenticated_at);
+        $this->assertTrue($session->isActive());
+
+        $audit = AuditEvent::query()
+            ->where('action', SharedWorkstationSessionService::AUDIT_REAUTHENTICATED)
+            ->sole();
+
+        $this->assertSame((string) $session->getKey(), $audit->entity_id);
+        $this->assertSame($subject->getKey(), $audit->actor_user_id);
+    }
+
+    /**
+     * A confirmation is not a handover. Technical spec 13.3 requires the current
+     * user to end their session before another signs in, so a valid code for
+     * somebody else confirms nothing and leaves the session with its own user.
+     */
+    public function test_a_code_for_another_user_is_refused_and_the_session_is_unchanged(): void
+    {
+        $workstation = $this->workstation();
+        $subject = User::factory()->create();
+        $somebodyElse = User::factory()->create();
+        $sessionKey = $this->establish($workstation, $subject);
+
+        $this->asWorkstation($sessionKey)
+            ->postJson(route('api.auth.shared-workstation-session.reauthenticate'), [
+                'code' => $this->codeFor($somebodyElse, $workstation),
+            ])
+            ->assertStatus(403)
+            ->assertJsonPath('reason', SharedWorkstationLoginException::REASON_REAUTHENTICATION_MISMATCH);
+
+        $session = SharedWorkstationSession::query()->sole();
+
+        $this->assertSame($subject->getKey(), $session->user_id);
+        $this->assertNull($session->reauthenticated_at);
+        $this->assertTrue($session->isActive());
+    }
+
+    public function test_an_invalid_code_confirms_nothing(): void
+    {
+        $workstation = $this->workstation();
+        $sessionKey = $this->establish($workstation, User::factory()->create());
+
+        $this->asWorkstation($sessionKey)
+            ->postJson(route('api.auth.shared-workstation-session.reauthenticate'), [
+                'code' => 'NOTACODE',
+            ])
+            ->assertStatus(401)
+            ->assertJsonPath('reason', SharedWorkstationLoginException::REASON_INVALID_CODE);
+
+        $this->assertNull(SharedWorkstationSession::query()->sole()->reauthenticated_at);
+    }
+
+    public function test_a_workstation_holding_no_session_cannot_re_authenticate(): void
+    {
+        $this->postJson(route('api.auth.shared-workstation-session.reauthenticate'), [
+            'code' => 'K3M7PQRS',
+        ])->assertUnauthorized();
+    }
+
     /**
      * Establish a session at a workstation and answer its raw key.
      */

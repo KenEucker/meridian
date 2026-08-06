@@ -67,6 +67,9 @@ class SharedWorkstationSession extends Model
         'session_key_hash',
         'started_at',
         'last_activity_at',
+        // When the active user last proved, by typing a fresh login code, that
+        // they are still the person at the keyboard (M18.32; UI contract 18.2).
+        'reauthenticated_at',
         'ended_at',
         'ended_reason',
     ];
@@ -89,6 +92,7 @@ class SharedWorkstationSession extends Model
         return [
             'started_at' => 'datetime',
             'last_activity_at' => 'datetime',
+            'reauthenticated_at' => 'datetime',
             'ended_at' => 'datetime',
         ];
     }

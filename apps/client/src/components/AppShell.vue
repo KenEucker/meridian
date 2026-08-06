@@ -48,6 +48,7 @@ import {
   sessionSwitchingUnavailableReason,
 } from "@/session/sessionContext";
 import { describeSwitchUnavailable } from "@/session/sessionContextCopy";
+import { workstationSessionState } from "@/session/workstationSession";
 
 type ThemeChoice = "light" | "dark";
 const meridianMarkUrl = "/assets/brand/meridian-mark.png";
@@ -227,6 +228,26 @@ const showContextSwitching = computed(
  */
 const showsPersonalSignIn = computed(
   () => appConfig.value.uiMode !== "kiosk",
+);
+
+/*
+ * Switching users belongs to a shared workstation and to nowhere else (M18.32;
+ * UI-017; technical spec 13.3).
+ *
+ * This was a disabled placeholder until `kiosk.switch-user` existed. It is a
+ * real link now, and it is absent rather than disabled everywhere else, because
+ * UI-017 is explicit that "Admin mode shall not become a quick switcher for its
+ * own session" — a greyed-out entry there would promise a feature the
+ * requirements rule out rather than one that is coming.
+ *
+ * It needs a live session for the same reason the surface does: there is nobody
+ * to switch away from on a locked workstation, and the menu it sits in is
+ * showing that session's user.
+ */
+const showsWorkstationSwitch = computed(
+  () =>
+    appConfig.value.uiMode === "kiosk" &&
+    workstationSessionState.status === "active",
 );
 
 async function signOutOfDevice(): Promise<void> {
@@ -686,14 +707,14 @@ onBeforeUnmount(() => {
               >
                 Settings
               </RouterLink>
-              <button
-                type="button"
+              <RouterLink
+                v-if="showsWorkstationSwitch"
                 role="menuitem"
-                aria-disabled="true"
+                :to="{ name: 'kiosk.switch-user' }"
                 @click="closeUserMenu"
               >
                 Switch user
-              </button>
+              </RouterLink>
               <!--
                 Operating context: the organization the session resolved to, and
                 the way out of it (M16.7; CLIENT-011 through CLIENT-013).

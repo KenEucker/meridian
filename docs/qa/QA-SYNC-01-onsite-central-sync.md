@@ -97,7 +97,7 @@ by the feature tasks that emit those operations.
    ```
 2. From the repository root, run the Electron health panel tests:
    ```bash
-   corepack pnpm --filter @meridian/desktop run test
+   corepack pnpm --filter @meridian/kiosk run test
    ```
 
 ### B. Pairing and idle sync state

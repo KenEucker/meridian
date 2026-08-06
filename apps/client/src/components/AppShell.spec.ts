@@ -32,6 +32,10 @@ import {
   selectedSessionDepartment,
 } from "@/session/sessionAccess";
 import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
+import {
+  enterWorkstationLoginCode,
+  resetWorkstationSession,
+} from "@/session/workstationSession";
 
 vi.mock("@/field-reports/syncFieldReportOutbox", () => ({
   syncFieldReportOutbox: vi.fn(async () => undefined),
@@ -75,6 +79,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetToMeridian();
+  resetWorkstationSession();
   resetSelectedSessionDepartment();
   resetNodeReachability();
   setDeviceOnLine(true);
@@ -423,7 +428,10 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.get(".app-shell__menu-theme").text()).toContain("Light");
     expect(wrapper.get(".app-shell__menu-theme").text()).toContain("Dark");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Settings");
-    expect(wrapper.get(".app-shell__user-menu").text()).toContain(
+    // Switching users belongs to a shared workstation. UI-017 is explicit that
+    // "Admin mode shall not become a quick switcher for its own session", so
+    // the entry is absent here rather than disabled (M18.32).
+    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain(
       "Switch user",
     );
     expect(wrapper.get(".app-shell__user-menu").text()).toContain(
@@ -432,6 +440,75 @@ describe("AppShell fixed UI mode display", () => {
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Organizer");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("Gate");
     expect(wrapper.get(".app-shell__user-menu").text()).toContain("DPW");
+  });
+
+  /*
+   * Switching users on a shared workstation (M18.32; UI-017; technical spec
+   * 13.3).
+   *
+   * The entry was a disabled placeholder until `kiosk.switch-user` existed. Now
+   * it is a real link in Kiosk and absent everywhere else — UI-017 rules out
+   * Admin becoming "a quick switcher for its own session", so a greyed-out entry
+   * there would promise something the requirements refuse rather than something
+   * that is coming.
+   */
+  it("offers switching users from the Kiosk menu once somebody is signed in", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            session_key: "kQ7mVt2ZrBdN4xLpWyH3sCfJ8gEaU6nToXvI1bYh",
+            session: {
+              id: "session-1",
+              started_at: "2027-06-01T12:00:00+00:00",
+              last_activity_at: "2027-06-01T12:00:00+00:00",
+              expires_at: "2027-06-01T12:05:00+00:00",
+              inactivity_timeout_seconds: 300,
+              reauthenticated_at: null,
+            },
+            user: { id: "user-1", name: "Dana Reyes" },
+            shared_workstation: {
+              id: "workstation-gate-a",
+              name: "Gate A Workstation",
+              organization_id: "org-1",
+              department_id: null,
+            },
+            event_id: "event-1",
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await enterWorkstationLoginCode({
+      sharedWorkstationId: "workstation-gate-a",
+      code: "K3M7PQRS",
+    });
+
+    const wrapper = mount(AppShell, {
+      props: { config: appConfigForUiMode("kiosk") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+
+    expect(wrapper.get(".app-shell__user-menu").text()).toContain("Switch user");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("offers no switch on a locked Kiosk, because there is nobody to switch from", async () => {
+    const wrapper = mount(AppShell, {
+      props: { config: appConfigForUiMode("kiosk") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await wrapper.get(".app-shell__user-button").trigger("click");
+
+    expect(wrapper.get(".app-shell__user-menu").text()).not.toContain(
+      "Switch user",
+    );
   });
 
   /*

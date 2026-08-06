@@ -79,6 +79,36 @@ class SharedWorkstationSessionController extends Controller
     }
 
     /**
+     * Confirm the active user before a privileged action (M18.32; UI-017; UI
+     * contract 12.8 `kiosk.reauth`, 18.2).
+     *
+     * Behind the workstation guard, because what is being re-confirmed is the
+     * session the caller already holds. The typed code is checked against that
+     * session's user, so a valid code belonging to somebody else confirms
+     * nothing and hands nothing over.
+     */
+    public function reauthenticate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:64'],
+        ]);
+
+        $session = $this->currentSession($request);
+
+        if (! $session instanceof SharedWorkstationSession) {
+            return $this->refusal(SharedWorkstationLoginException::noActiveSession());
+        }
+
+        try {
+            $session = $this->sessions->reauthenticate($session, $validated['code']);
+        } catch (SharedWorkstationLoginException $exception) {
+            return $this->refusal($exception);
+        }
+
+        return response()->json($this->sessionPayload($session));
+    }
+
+    /**
      * The user ending their own session, which is what technical spec 13.3
      * requires before another user may sign in at the same workstation.
      */
@@ -122,6 +152,10 @@ class SharedWorkstationSessionController extends Controller
                 // did something.
                 'expires_at' => $session->expiresAt()->toIso8601String(),
                 'inactivity_timeout_seconds' => SharedWorkstationSession::INACTIVITY_TIMEOUT_MINUTES * 60,
+                // Null until somebody re-confirms who they are (M18.32). It is
+                // reported rather than interpreted: how recent a confirmation
+                // must be belongs to the action that asks for one.
+                'reauthenticated_at' => $session->reauthenticated_at?->toIso8601String(),
             ],
             // "The active user is shown prominently at all times" (technical
             // spec 13.3) needs the name to be in the session response rather
