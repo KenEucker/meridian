@@ -239,6 +239,7 @@ describe("organizer.audit", () => {
     entityLabel: "Staff organization status",
     entityId: "status-1",
     actorName: "Olive Organizer",
+    actorLabel: "Olive Organizer",
     actorUserId: "user-1",
     eventId: null,
     eventName: null,
@@ -284,8 +285,19 @@ describe("organizer.audit", () => {
   });
 
   it("names a scheduled job rather than leaving the actor blank", async () => {
+    // Worded by the node, so this surface and the God Mode trail cannot
+    // disagree about what a row with nobody behind it is called (M18.34).
     getAuditReview.mockResolvedValue(
-      review({ entries: [{ ...entry, actorName: null, actorUserId: null }] }),
+      review({
+        entries: [
+          {
+            ...entry,
+            actorName: null,
+            actorLabel: "A scheduled job",
+            actorUserId: null,
+          },
+        ],
+      }),
     );
 
     const wrapper = mount(OrganizerAuditView);

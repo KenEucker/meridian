@@ -1441,6 +1441,7 @@ A timeout lands on `kiosk.safe-timeout`. An explicit end lands on `kiosk.worksta
 | `orchid.events` | Orchid screen | Event administration including IC and Placement department designation | Organizer/god mode |
 | `orchid.event-maps` | Orchid screen | Event maps, map assets/packages, camps, and map locations administration | Authorized maintainer/god mode |
 | `orchid.notes` | Orchid screen | Note list/detail repair visibility | God mode / authorized repair |
+| `orchid.audit` | Orchid screen | Audit trail across every organization on the node, narrowed by organization, department, or team, with the recorded before and after values on an entry | God mode |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
 | `orchid.node-config` | Orchid screen | Node configuration and source display | God mode |
 | `orchid.api-tokens` | Orchid screen | Issued API tokens by user and device, with revocation of one token or every token on a device | God mode |

@@ -182,10 +182,13 @@ watch(organizationId, () => {
               <!--
                 Requirements 2.4: attribution. A row with no actor is a
                 scheduled job — the lifecycle evaluator, the automatic no-show —
-                and says so, rather than leaving a blank that reads like the
-                record lost somebody's name.
+                or an exchange a device or node made on its own, and the node
+                says which, rather than leaving a blank that reads like the
+                record lost somebody's name. Worded by the node so this surface
+                and the God Mode trail cannot disagree about what "nobody" is
+                called.
               -->
-              <dd>{{ entry.actorName ?? "A scheduled job" }}</dd>
+              <dd>{{ entry.actorLabel }}</dd>
             </div>
             <div>
               <dt>When</dt>

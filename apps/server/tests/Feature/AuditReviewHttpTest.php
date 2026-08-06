@@ -185,6 +185,32 @@ class AuditReviewHttpTest extends TestCase
         $this->assertStringNotContainsString('555-0199', (string) $body);
     }
 
+    /**
+     * The wording for a row with nobody behind it comes from
+     * {@see \App\Models\AuditEvent::describeActor()}, which the God Mode trail
+     * reads too — so the two surfaces cannot end up calling the same row
+     * different things. `ConsoleAuditTest` pins the God Mode half.
+     */
+    public function test_a_row_with_no_user_behind_it_is_labelled_rather_than_left_blank(): void
+    {
+        [$organization, $organizer] = $this->organizerScaffold();
+
+        app(AuditService::class)->record(
+            action: 'organization.status_evaluated',
+            entityType: 'App\\Models\\StaffOrganizationStatus',
+            entityId: 'a-status',
+            organizationId: (string) $organization->id,
+        );
+
+        $this->actingAsClient($organizer)
+            ->getJson("/api/organizations/{$organization->id}/audit")
+            ->assertOk()
+            ->assertJsonPath('entries.0.actor_name', null)
+            ->assertJsonPath('entries.0.actor_label', 'A scheduled job')
+            // And the record type reads as words rather than as a namespace.
+            ->assertJsonPath('entries.0.entity_label', 'Staff organization status');
+    }
+
     public function test_the_record_filters_by_action_and_by_when_it_happened(): void
     {
         [$organization, $organizer] = $this->organizerScaffold();

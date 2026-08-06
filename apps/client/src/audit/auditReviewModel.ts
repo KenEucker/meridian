@@ -32,6 +32,13 @@ export interface AuditEntry {
   readonly entityId: string;
   /** Null for a scheduled job, which acts with no person behind it. */
   readonly actorName: string | null;
+  /**
+   * Who acted, in words, for a row with no user behind it — a scheduled job, a
+   * device, or a node. The node words it, so the same fallback ladder answers
+   * here and on the God Mode trail rather than each surface inventing its own
+   * sentence for "nobody".
+   */
+  readonly actorLabel: string;
   readonly actorUserId: string | null;
   readonly eventId: string | null;
   readonly eventName: string | null;
@@ -75,6 +82,7 @@ interface EntryPayload {
   readonly entity_label?: string;
   readonly entity_id?: string;
   readonly actor_name?: string | null;
+  readonly actor_label?: string;
   readonly actor_user_id?: string | null;
   readonly event_id?: string | null;
   readonly event_name?: string | null;
@@ -109,6 +117,7 @@ function toEntry(payload: EntryPayload): AuditEntry {
     entityLabel: payload.entity_label ?? payload.entity_type ?? "",
     entityId: payload.entity_id ?? "",
     actorName: payload.actor_name ?? null,
+    actorLabel: payload.actor_label ?? payload.actor_name ?? "A scheduled job",
     actorUserId: payload.actor_user_id ?? null,
     eventId: payload.event_id ?? null,
     eventName: payload.event_name ?? null,

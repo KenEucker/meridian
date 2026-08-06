@@ -161,7 +161,7 @@ final class AuditReviewController extends Controller
             'id' => (string) $entry->getKey(),
             'action' => (string) $entry->action,
             'entity_type' => (string) $entry->entity_type,
-            'entity_label' => $this->entityLabel((string) $entry->entity_type),
+            'entity_label' => $entry->describeEntityType(),
             'entity_id' => (string) $entry->entity_id,
             /*
              * Attribution, which is what requirements 2.4 asks of every change.
@@ -170,6 +170,7 @@ final class AuditReviewController extends Controller
              * showing a blank that reads like missing data.
              */
             'actor_name' => $entry->actorUser?->name,
+            'actor_label' => $entry->describeActor(),
             'actor_user_id' => $entry->actor_user_id !== null ? (string) $entry->actor_user_id : null,
             'actor_device_id' => $entry->actor_device_id !== null ? (string) $entry->actor_device_id : null,
             'actor_node_id' => $entry->actor_node_id !== null ? (string) $entry->actor_node_id : null,
@@ -180,53 +181,14 @@ final class AuditReviewController extends Controller
             'reason' => $entry->reason,
             'source_context' => (string) $entry->source_context,
             'recorded_at' => $entry->created_at?->toIso8601String(),
-            // The names of the fields that moved, without their values. See the
-            // class docblock for why the values stay in God Mode.
-            'changed_fields' => $this->changedFields($entry),
+            /*
+             * The names of the fields that moved, without their values. See the
+             * class docblock for why the values stay in God Mode. The list
+             * itself comes from the model, so "which fields moved" means the
+             * same thing here and on the God Mode entry screen that serves it
+             * alongside the values (M18.34).
+             */
+            'changed_fields' => $entry->changedFieldNames(),
         ];
-    }
-
-    /**
-     * The fields this entry recorded a change to.
-     *
-     * The union of both snapshots rather than only the keys whose values
-     * differ: a path that recorded a creation has no before at all, and one
-     * that snapshotted a field it did not change still says the field was part
-     * of the record it was writing.
-     *
-     * @return list<string>
-     */
-    private function changedFields(AuditEvent $entry): array
-    {
-        $before = is_array($entry->before_json) ? $entry->before_json : [];
-        $after = is_array($entry->after_json) ? $entry->after_json : [];
-
-        $fields = array_values(array_unique([
-            ...array_keys($before),
-            ...array_keys($after),
-        ]));
-
-        sort($fields);
-
-        return array_map(static fn ($field): string => (string) $field, $fields);
-    }
-
-    /**
-     * A readable name for an entity type.
-     *
-     * `audit_events.entity_type` holds a morph class, which is a PHP class name
-     * for everything the application has not aliased. An organizer reading
-     * their own organization's history should not have to know that
-     * `App\Models\StaffOrganizationStatus` is a staff status.
-     */
-    private function entityLabel(string $entityType): string
-    {
-        $base = str_contains($entityType, '\\')
-            ? (string) substr(strrchr($entityType, '\\') ?: '', 1)
-            : $entityType;
-
-        $spaced = preg_replace('/(?<!^)[A-Z]/', ' $0', $base) ?? $base;
-
-        return ucfirst(strtolower(str_replace('_', ' ', $spaced)));
     }
 }

@@ -177,6 +177,26 @@ nobody looks:
     navigate directly to `/organizer/audit` and confirm the surface states the
     node's refusal.
 
+### The God Mode audit trail (`orchid.audit`)
+
+37. Sign in to the God Mode console as a user holding `platform.audit` and open
+    **Audit Trail** under God Mode.
+38. Confirm the trail lists recorded changes newest first, each naming the
+    action, the record type in words rather than as a namespace, who made it,
+    the organization and department where the row carries them, and the source.
+39. Confirm the organization, department, and team filters are present, and that
+    choosing each narrows the list.
+40. With the team filter set to a team, confirm the list carries changes to the
+    team itself and to records belonging to it — a grant, a membership, a shift
+    — and no changes belonging to a different team.
+41. Confirm the trail carries rows the product surface does not: an incident or
+    Field Report entry, and a row with no organization such as a node pairing.
+42. Open an entry and confirm it shows the recorded before and after values, the
+    reason, the actor identifiers, and the signature metadata where present.
+43. Confirm the entry screen offers no edit or delete of any kind.
+44. Sign in as a console user without `platform.audit` and confirm both the trail
+    and a direct entry address are refused.
+
 ## Expected results
 
 - **Department spaces.** Every department listed is one the session carries, with
@@ -208,6 +228,16 @@ nobody looks:
   Filters are applied by the node and offer only values present in what this
   reader may see. No incident or Field Report history appears anywhere in the
   record, at any filter, on any page.
+- **The God Mode trail.** The same rows, read as repair tooling: node-wide,
+  narrowed by the same organization/department/team filter bar the other God
+  Mode lists carry, carrying the incident and Field Report history the product
+  surface withholds and the node/system rows no organizer has scope for, and
+  showing the recorded values on an entry. `ORG-015` governs what organizing
+  reaches, not what support access reaches. Nothing on it is editable, because
+  audit rows refuse updates and deletes at the model.
+- **One vocabulary.** A row with nobody behind it is called the same thing on
+  both surfaces, and a record type reads as the same words on both, because both
+  read one definition on the model rather than each formatting its own.
 - **Absences.** Every surface a persona does not hold is absent from navigation
   rather than shown disabled, and every direct navigation to one is refused by
   the node rather than rendering an empty page.
@@ -224,6 +254,8 @@ nobody looks:
   as separate rows, and of an event inside its window with no edit offered
 - API response body of the refused Incident Command designation (step 26)
 - Screenshot of the audit record showing changed field names and no values
+- Screenshot of the God Mode Audit Trail with a scope filter applied, and of one
+  entry showing its before and after values
 - The record-type filter list from step 35, as evidence that no incident or Field
   Report type is offered
 

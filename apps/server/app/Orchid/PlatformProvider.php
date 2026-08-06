@@ -145,6 +145,20 @@ class PlatformProvider extends OrchidServiceProvider
                 ->permission('platform.permissions')
                 ->title(__('God Mode')),
 
+            /*
+             * The audit trail (M18.34; requirements 2.4; UI contract 12.9).
+             *
+             * Beside the Permission Catalog rather than in Infrastructure,
+             * because the two answer the same kind of question about the same
+             * kind of subject: the catalog answers "why can this person do
+             * that", and this answers "who did it, and when". Infrastructure is
+             * about the node.
+             */
+            Menu::make(__('Audit Trail'))
+                ->icon('bs.clock-history')
+                ->route('platform.audit')
+                ->permission('platform.audit'),
+
             // Bulk CSV import (technical spec 22.2). Filed under God Mode
             // rather than beside the list screens they write to: importing a
             // file writes many records at once from outside the normal product
@@ -289,6 +303,14 @@ class PlatformProvider extends OrchidServiceProvider
             // access finds a capability under the heading they saw it under.
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.permissions', __('Permission catalog'))
+                // Reading the audit trail across every organization on this
+                // node (M18.34; requirements 2.4). Separate from the product
+                // capability `organization.audit.review`, which is one
+                // organization's own history with incident and Field Report
+                // entries excluded (ORG-015). This is the repair view: it spans
+                // organizations, carries node and system rows the product
+                // surface has no scope for, and shows the recorded values.
+                ->addPermission('platform.audit', __('Audit trail'))
                 ->addPermission('platform.imports', __('Bulk CSV imports'))
                 ->addPermission('platform.documentation', __('Technician documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),
