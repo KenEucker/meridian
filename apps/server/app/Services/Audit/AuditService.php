@@ -21,8 +21,17 @@ use Illuminate\Database\Eloquent\Model;
  */
 class AuditService
 {
+    public function __construct(private readonly AuditPolicy $policy) {}
+
     /**
      * Record an audit event for an explicit entity type and identifier.
+     *
+     * Returns null when the organization's configuration does not record this
+     * action. Callers treat the return as informational — nothing in Meridian
+     * branches on whether an audit row was written, and nothing should: an
+     * operation succeeding or failing is not a question about the record of it.
+     * {@see AuditPolicy} decides, and the floor it enforces means the entries
+     * requirements 2.4 and data/API section 8 oblige are never the ones skipped.
      *
      * @param  array<string, mixed>|null  $before
      * @param  array<string, mixed>|null  $after
@@ -43,7 +52,11 @@ class AuditService
         ?string $reason = null,
         string $sourceContext = AuditEvent::SOURCE_SYSTEM,
         ?array $signatureMetadata = null,
-    ): AuditEvent {
+    ): ?AuditEvent {
+        if (! $this->policy->shouldRecord($organizationId, $action)) {
+            return null;
+        }
+
         return AuditEvent::query()->create([
             'organization_id' => $organizationId,
             'event_id' => $eventId,
@@ -84,7 +97,7 @@ class AuditService
         ?string $reason = null,
         string $sourceContext = AuditEvent::SOURCE_SYSTEM,
         ?array $signatureMetadata = null,
-    ): AuditEvent {
+    ): ?AuditEvent {
         return $this->record(
             action: $action,
             entityType: $entity->getMorphClass(),

@@ -197,6 +197,36 @@ nobody looks:
 44. Sign in as a console user without `platform.audit` and confirm both the trail
     and a direct entry address are refused.
 
+### Audit volume controls (`orchid.audit-settings`, God Mode)
+
+45. Still in God Mode, open **Audit Settings**. Confirm the list names every
+    organization with its level, its exceptions count, the rows and estimated
+    size it is currently holding, and its limits — or "No limit" where none is
+    set.
+46. Confirm the page states whether this node's audit table is partitioned by
+    month, and lists the partitions where it is.
+47. Open an organization. Confirm the required actions are listed as always
+    recorded and are not editable.
+48. Set the level to **Minimal** and save. Perform an ordinary operational
+    action in the product — check a staff member in — and confirm no audit entry
+    was written for it.
+49. Perform a required action — revoke an event credential — and confirm an
+    entry **was** written despite the Minimal level.
+50. Add `attendance.checked_in` to **Always record**, save, check somebody in
+    again, and confirm the entry is now written.
+51. Set a **Maximum entries** limit below the organization's current row count,
+    save, and choose **Apply limits now**.
+52. Confirm the screen reports how many entries were archived, that the row
+    count has fallen to the limit, and that the newest entries are the ones that
+    remain.
+53. Confirm an `audit.archived` entry appears in the God Mode audit trail naming
+    the file, the row count, and the range removed.
+54. Locate the archive file on the node and confirm it carries one JSON object
+    per archived row, including the before and after values.
+55. Sign in as a console user holding `platform.audit` but not
+    `platform.audit.settings`, and confirm the settings screens are refused
+    while the trail still opens.
+
 ## Expected results
 
 - **Department spaces.** Every department listed is one the session carries, with
@@ -238,6 +268,12 @@ nobody looks:
 - **One vocabulary.** A row with nobody behind it is called the same thing on
   both surfaces, and a record type reads as the same words on both, because both
   read one definition on the model rather than each formatting its own.
+- **Volume controls.** The level governs what is written; the required floor
+  overrides it in both directions — a required entry is written at Minimal, and
+  no exception removes one. Limits archive rather than delete: the rows leave
+  the table only after they are in a file and the archival is itself recorded,
+  and the newest history is what survives. Reading the trail and changing what
+  the trail will contain are separate permissions.
 - **Absences.** Every surface a persona does not hold is absent from navigation
   rather than shown disabled, and every direct navigation to one is refused by
   the node rather than rendering an empty page.
@@ -256,6 +292,10 @@ nobody looks:
 - Screenshot of the audit record showing changed field names and no values
 - Screenshot of the God Mode Audit Trail with a scope filter applied, and of one
   entry showing its before and after values
+- Screenshot of Audit Settings showing measured usage beside the configured
+  limits, and of the partition list where the node is partitioned
+- The `audit.archived` entry from step 53, and the first line of the archive file
+  from step 54
 - The record-type filter list from step 35, as evidence that no incident or Field
   Report type is offered
 
@@ -265,9 +305,15 @@ nobody looks:
   status the node reported and whether a second decision was accepted.
 - If an audit entry shows a before or after value, record the action and the
   fields — that is a disclosure boundary, not a formatting bug.
-- If any incident or Field Report entity type appears in the audit record or its
-  filters, stop and record the entity type verbatim; `ORG-015` is the rule it
-  crosses.
+- If any incident or Field Report entity type appears in the *product* audit
+  record or its filters, stop and record the entity type verbatim; `ORG-015` is
+  the rule it crosses. The God Mode trail is expected to carry them.
+- If a required action is missing after step 49, stop. The floor is the property
+  the whole verbosity feature rests on, and a gap in it means an obligation under
+  requirements 2.4 or data/API section 8 is configurable, which it must not be.
+- If step 52 removed rows but step 54 finds no archive file, stop and record
+  both. History leaving the table without an archive is the one outcome the
+  archival ordering exists to prevent.
 - If a department lead's approve succeeds, record the application id, the
   resulting status, and whether a staff record was created — an approval creates
   organization standing and is not undone by rejecting afterwards.

@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\Audit\AuditReviewAccess;
 use App\Services\Audit\AuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -144,7 +145,7 @@ class AuditReviewHttpTest extends TestCase
         app(AuditService::class)->record(
             action: 'node.paired',
             entityType: 'App\\Models\\Node',
-            entityId: 'a-node',
+            entityId: (string) Str::uuid(),
         );
 
         $this->actingAsClient($organizer)
@@ -165,7 +166,7 @@ class AuditReviewHttpTest extends TestCase
         app(AuditService::class)->record(
             action: 'staff.profile_updated',
             entityType: 'App\\Models\\Staff',
-            entityId: 'a-staff-record',
+            entityId: (string) Str::uuid(),
             organizationId: (string) $organization->id,
             before: ['phone' => '555-0100', 'preferred_name' => 'Robin'],
             after: ['phone' => '555-0199', 'preferred_name' => 'Robin'],
@@ -198,7 +199,7 @@ class AuditReviewHttpTest extends TestCase
         app(AuditService::class)->record(
             action: 'organization.status_evaluated',
             entityType: 'App\\Models\\StaffOrganizationStatus',
-            entityId: 'a-status',
+            entityId: (string) Str::uuid(),
             organizationId: (string) $organization->id,
         );
 

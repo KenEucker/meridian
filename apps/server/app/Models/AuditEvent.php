@@ -108,6 +108,13 @@ class AuditEvent extends Model
         ];
     }
 
+    /**
+     * Whether the one path allowed to remove rows is running.
+     *
+     * @see withArchival()
+     */
+    private static bool $archiving = false;
+
     protected static function booted(): void
     {
         static::updating(function (): void {
@@ -115,8 +122,40 @@ class AuditEvent extends Model
         });
 
         static::deleting(function (): void {
-            throw new RuntimeException('Audit events are immutable and cannot be deleted.');
+            // Updating stays forbidden unconditionally. Removal has exactly one
+            // legitimate caller, and it is not "the operator changed their
+            // mind": AuditArchivalService writes the rows to a signed archive
+            // and records the archival before anything is removed.
+            if (! self::$archiving) {
+                throw new RuntimeException('Audit events are immutable and cannot be deleted.');
+            }
         });
+    }
+
+    /**
+     * Run a callback with removal permitted (M18.34; data/API 14.1).
+     *
+     * Deliberately a scoped escape rather than a flag anyone can set, and
+     * deliberately narrow: the guard is what makes the table trustworthy, and a
+     * retention limit is the only reason Meridian has to lift it. The `finally`
+     * matters more than it looks — a throw inside archival that left the flag
+     * raised would leave the whole process able to delete audit history.
+     *
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback
+     * @return TReturn
+     */
+    public static function withArchival(callable $callback): mixed
+    {
+        $previous = self::$archiving;
+        self::$archiving = true;
+
+        try {
+            return $callback();
+        } finally {
+            self::$archiving = $previous;
+        }
     }
 
     public function organization(): BelongsTo

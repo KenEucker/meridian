@@ -16,6 +16,7 @@ use App\Models\Training;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -208,7 +209,7 @@ class ConsoleAuditTest extends TestCase
         app(AuditService::class)->record(
             action: 'node.paired',
             entityType: 'App\\Models\\Node',
-            entityId: 'a-node',
+            entityId: (string) Str::uuid(),
         );
 
         $this->actingAs($this->godModeUser())
@@ -228,7 +229,7 @@ class ConsoleAuditTest extends TestCase
         $entry = app(AuditService::class)->record(
             action: 'staff.status_changed',
             entityType: 'App\\Models\\StaffOrganizationStatus',
-            entityId: 'a-status',
+            entityId: (string) Str::uuid(),
             organizationId: (string) $organization->id,
             before: ['status' => 'prospective'],
             after: ['status' => 'active'],

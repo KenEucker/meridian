@@ -159,6 +159,14 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.audit')
                 ->permission('platform.audit'),
 
+            // What each organization records and keeps. God Mode only for now:
+            // getting it wrong does not inconvenience an organization, it costs
+            // it the record of what it did.
+            Menu::make(__('Audit Settings'))
+                ->icon('bs.sliders2')
+                ->route('platform.audit.settings')
+                ->permission('platform.audit.settings'),
+
             // Bulk CSV import (technical spec 22.2). Filed under God Mode
             // rather than beside the list screens they write to: importing a
             // file writes many records at once from outside the normal product
@@ -311,6 +319,11 @@ class PlatformProvider extends OrchidServiceProvider
                 // organizations, carries node and system rows the product
                 // surface has no scope for, and shows the recorded values.
                 ->addPermission('platform.audit', __('Audit trail'))
+                // Deciding what an organization records and how long it keeps
+                // it. Separate from reading the trail on purpose: reading is
+                // support work, and changing what future support work will be
+                // able to read is a different kind of power.
+                ->addPermission('platform.audit.settings', __('Audit settings'))
                 ->addPermission('platform.imports', __('Bulk CSV imports'))
                 ->addPermission('platform.documentation', __('Technician documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),

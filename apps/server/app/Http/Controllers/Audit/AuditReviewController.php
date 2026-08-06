@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Audit review as a product surface (M18.29; requirements 2.4; UI contract
@@ -46,6 +47,15 @@ final class AuditReviewController extends Controller
 
     /** How many distinct actions and entity types the filter lists offer. */
     private const FILTER_OPTION_LIMIT = 200;
+
+    /**
+     * How long the filter option lists are held.
+     *
+     * Short enough that an organization recording a brand-new action sees it in
+     * the dropdown within a minute, long enough that paging through a long
+     * record does not re-run two `DISTINCT` scans per page.
+     */
+    private const FILTER_OPTION_TTL_SECONDS = 60;
 
     public function index(
         Request $request,
@@ -102,12 +112,34 @@ final class AuditReviewController extends Controller
              * Filter values are read from the rows this caller may see rather
              * than from a hardcoded list, so a filter can never offer an action
              * that only exists in a part of the record they are not shown.
+             *
+             * Cached, because this is the expensive half of the request and the
+             * cheap half of the answer: a `DISTINCT` over an organization's
+             * whole history ran on every page turn, while the set of actions an
+             * organization has ever recorded changes a few times a year. Keyed
+             * by organization and held briefly, so a newly-recorded action
+             * appears within the minute rather than instantly — which is the
+             * right trade for a control that exists to narrow a list somebody
+             * is already looking at.
              */
-            'options' => [
-                'actions' => $this->distinct($scoped(), 'action'),
-                'entity_types' => $this->distinct($scoped(), 'entity_type'),
-            ],
+            'options' => Cache::remember(
+                self::filterOptionsCacheKey($organization),
+                self::FILTER_OPTION_TTL_SECONDS,
+                fn (): array => [
+                    'actions' => $this->distinct($scoped(), 'action'),
+                    'entity_types' => $this->distinct($scoped(), 'entity_type'),
+                ],
+            ),
         ]);
+    }
+
+    /**
+     * The cache key the filter options are held under, so the write path can
+     * drop them when an organization records an action it has not used before.
+     */
+    public static function filterOptionsCacheKey(Organization $organization): string
+    {
+        return 'audit.filter-options.'.$organization->getKey();
     }
 
     /**

@@ -5368,6 +5368,30 @@ Key fields:
 - `signature_metadata_json`, nullable
 - `created_at`
 
+Storage and volume (ADR-0002):
+
+- The table is indexed for the two audit surfaces that read it by scope:
+  `(organization_id, created_at)`, `department_id`, `event_id`, and
+  `actor_user_id`, alongside the original `created_at`, `(entity_type,
+  entity_id)`, and `action`.
+- How much an organization writes is configurable per organization, on five
+  ordered verbosity levels with per-action overrides. A required floor —
+  everything section 8 and requirements 2.4 oblige — is enforced in the write
+  path and cannot be reached below by any level or override. An action the
+  catalogue does not know is written at every level.
+- How much an organization keeps is configurable per organization, by maximum
+  rows, maximum estimated content size, and a retention window in days. Every
+  limit is null by default, meaning unbounded. Reaching a limit archives the
+  oldest rows to a JSON Lines file carrying every column, records the archival
+  as an `audit.archived` entry, and only then removes them. Nothing else in the
+  application may remove an audit row.
+- On PostgreSQL the table is range-partitioned by month on `created_at`, on by
+  default. The primary key is `(id, created_at)` because the partition key must
+  appear in every unique constraint, and `created_at` is not-null because a
+  partition key cannot be null. A default partition catches rows outside the
+  created months, so an unexpected timestamp is never a write that fails.
+- These controls are configured from God Mode only.
+
 ### 14.2 `sync_conflicts`
 
 Represents operations that could not be safely applied.
