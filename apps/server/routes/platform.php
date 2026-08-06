@@ -458,17 +458,22 @@ Route::screen('document-fragments', DocumentFragmentListScreen::class)
  * order every other list/detail pair here uses.
  */
 /*
- * Platform > God Mode > Audit Settings (data/API 14.1). Declared before the
- * `audit/{entry}` pattern so `audit/settings` is a screen rather than an entry
- * id — the one place in this file where route order carries meaning.
+ * Platform > God Mode > Audit Settings (data/API 14.1).
+ *
+ * `audit-settings` rather than `audit/settings`, which is not cosmetic. Nesting
+ * it under the trail's path made `settings` indistinguishable from an entry id
+ * without careful route ordering, and made the navigation highlight both
+ * entries at once: a menu item is active for its own href plus `href/*`, so
+ * everything under the trail's address lit the trail up as well. A sibling path
+ * has neither problem and needs no rule to keep it that way.
  */
-Route::screen('audit/settings/{organization}', AuditSettingsEditScreen::class)
+Route::screen('audit-settings/{organization}', AuditSettingsEditScreen::class)
     ->name('platform.audit.settings.edit')
     ->breadcrumbs(fn (Trail $trail, $organization) => $trail
         ->parent('platform.audit.settings')
         ->push(__('Organization'), route('platform.audit.settings.edit', $organization)));
 
-Route::screen('audit/settings', AuditSettingsListScreen::class)
+Route::screen('audit-settings', AuditSettingsListScreen::class)
     ->name('platform.audit.settings')
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')

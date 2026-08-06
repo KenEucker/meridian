@@ -39,7 +39,7 @@ which was a `DISTINCT` over an organization's whole history on every page turn,
 is cached for a minute.
 
 **2. Configure how much is written, per organization.** Five ordered verbosity
-levels — Minimal, Low, Standard (the default), Detailed, Complete — with an
+levels — Minimal, Low, Standard, Detailed, and Complete, which is the default — with an
 action catalogued at the level it first appears at, plus per-action overrides
 for the exceptions. `AuditActionCatalog::REQUIRED` is a floor no level and no
 override reaches below, holding everything requirements 2.4 and data/API section
@@ -76,7 +76,14 @@ organization, it costs it the record of what it did.
   always after an archive and a record — but the invariant has changed from "no
   path exists" to "one path exists and is audited". This is the part of the
   decision most worth revisiting if it proves uncomfortable.
-- **An organization can now record less than it did.** The floor means it cannot
+- **The default records exactly what Meridian recorded before.** Complete, not
+  a middle setting. An earlier draft of this defaulted to Standard, reasoning
+  that nobody should pay for the noisiest level by accident — and thereby
+  stopped recording attendance, equipment, deployments, and shift assignments
+  for every organization that had never heard of the control. The full suite
+  caught it. Recording less is opt-in, chosen from a screen that shows what the
+  organization is currently storing.
+- **An organization can now record less than it did, if it chooses to.** The floor means it cannot
   record less than it is obliged to, and the biggest single writer is inside the
   floor, so the realistic saving is routine operational noise rather than the
   bulk. Verbosity is not the lever for the largest contributor; retention and

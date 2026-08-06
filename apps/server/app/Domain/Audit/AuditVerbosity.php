@@ -28,7 +28,7 @@ enum AuditVerbosity: string
     /** The floor, plus the decisions that change somebody's standing. */
     case Low = 'low';
 
-    /** The default: everything an organizer would ask about after the fact. */
+    /** Everything an organizer would ask about after the fact. */
     case Standard = 'standard';
 
     /** Adds routine operational work — attendance, equipment, deployments. */
@@ -40,14 +40,22 @@ enum AuditVerbosity: string
     /**
      * The documented default for an organization that has not chosen.
      *
-     * Standard rather than Complete, because Complete includes the per-view
-     * read audits that dominate the volume, and an organization that has not
-     * thought about this should not be paying for the noisiest setting by
-     * accident. It is a default, not a ceiling: the control is one click away.
+     * Complete, which is exactly what Meridian recorded before this setting
+     * existed. An earlier draft defaulted to Standard on the reasoning that
+     * Complete is the noisiest setting and nobody should pay for it by
+     * accident — which quietly stopped recording attendance, equipment,
+     * deployments, and shift assignments for every organization that had never
+     * heard of the control. A default that reduces the record is the wrong
+     * default for an audit feature: the organization that most needs the
+     * history is the one that never thought about the setting.
+     *
+     * So this is opt-in. Volume is a real problem and the levels are how an
+     * organization addresses it, deliberately, having looked at what it is
+     * currently storing on the God Mode screen that offers the choice.
      */
     public static function default(): self
     {
-        return self::Standard;
+        return self::Complete;
     }
 
     public static function fromValue(?string $value): self

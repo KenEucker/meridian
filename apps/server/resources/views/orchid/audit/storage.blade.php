@@ -11,11 +11,11 @@
     <h3 class="h5 mb-3">{{ __('Audit storage on this node') }}</h3>
 
     @if (! $partitioning_supported)
-        <p class="text-muted mb-0">
+        <p class="mb-0">
             {{ __('This node runs a database without declarative partitioning, so the audit table is a single table. Per-organization limits are what bound its growth here.') }}
         </p>
     @elseif ($partitioning_active)
-        <p class="text-muted">
+        <p class="mb-3">
             {{ __('The audit table is partitioned by month. Time-ranged reads touch only the months they cover, and a month can later be detached and archived without a delete running against live rows.') }}
         </p>
 
@@ -32,7 +32,7 @@
             @endforeach
         </ul>
     @else
-        <p class="text-muted mb-0">
+        <p class="mb-0">
             {{ __('This node supports partitioning but the audit table is not partitioned. It was either switched off in configuration before the table was built, or the migration has not run. Per-organization limits still apply.') }}
         </p>
     @endif

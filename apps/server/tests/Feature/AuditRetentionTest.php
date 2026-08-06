@@ -36,8 +36,11 @@ class AuditRetentionTest extends TestCase
     {
         $organization = Organization::factory()->create();
 
-        $this->assertSame(AuditVerbosity::Standard, $organization->auditVerbosity());
-        $this->assertSame(AuditVerbosity::Standard, AuditVerbosity::default());
+        // Complete, which is exactly what Meridian recorded before the setting
+        // existed. A default that reduced the record would change every
+        // existing deployment's behaviour without anybody choosing it.
+        $this->assertSame(AuditVerbosity::Complete, $organization->auditVerbosity());
+        $this->assertSame(AuditVerbosity::Complete, AuditVerbosity::default());
     }
 
     public function test_a_level_omits_the_actions_catalogued_above_it(): void

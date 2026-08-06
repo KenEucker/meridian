@@ -5375,7 +5375,9 @@ Storage and volume (ADR-0002):
   `actor_user_id`, alongside the original `created_at`, `(entity_type,
   entity_id)`, and `action`.
 - How much an organization writes is configurable per organization, on five
-  ordered verbosity levels with per-action overrides. A required floor —
+  ordered verbosity levels with per-action overrides. The default is the most
+  complete level, which is what was recorded before the setting existed;
+  recording less is opt-in. A required floor —
   everything section 8 and requirements 2.4 oblige — is enforced in the write
   path and cannot be reached below by any level or override. An action the
   catalogue does not know is written at every level.

@@ -41,7 +41,7 @@ class ConsoleAuditSettingsTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Northwood Collective');
-        $response->assertSee('Standard');
+        $response->assertSee('Complete');
         $response->assertSee('1,000 rows');
     }
 
