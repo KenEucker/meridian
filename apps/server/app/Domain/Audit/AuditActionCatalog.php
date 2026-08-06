@@ -139,6 +139,8 @@ final class AuditActionCatalog
             'event.created' => AuditVerbosity::Standard,
             'event.updated' => AuditVerbosity::Standard,
             'event.ic_department_changed' => AuditVerbosity::Standard,
+            'event.department_assigned' => AuditVerbosity::Standard,
+            'event.department_removed' => AuditVerbosity::Standard,
             'shift.created' => AuditVerbosity::Standard,
             'shift.updated' => AuditVerbosity::Standard,
             'training.created' => AuditVerbosity::Standard,

@@ -7,7 +7,8 @@ namespace App\Services\Events;
 use RuntimeException;
 
 /**
- * A refused event administration edit (M18.29).
+ * A refused event administration edit (M18.29), including a refused change to
+ * which departments participate in the event (M18.31).
  *
  * Value refusals only. The node-authority refusal belongs to
  * {@see \App\Services\Node\EventAuthorityException}, which already words the

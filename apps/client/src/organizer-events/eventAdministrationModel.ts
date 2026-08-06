@@ -1,17 +1,25 @@
-// Event administration, as an organizer's client reads it (M18.29; UI contract
-// 12.6 `organizer.events`; ORG-005, ORG-006; data/API 10.2).
+// Event administration, as an organizer's client reads it (M18.29, M18.31; UI
+// contract 12.6 `organizer.events`; ORG-005, ORG-006; PLACE-003; data/API 10.2,
+// 10.6).
 //
-// One read answers with the organization's events, and each event carries three
+// One read answers with the organization's events, and each event carries four
 // things a surface cannot work out for itself:
 //
-//  - the departments eligible to run its Incident Command, which ORG-006 limits
-//    to the departments assigned to *that* event, so the list is per event and
-//    never per organization;
+//  - which departments work it, and which of the organization's departments
+//    could be added — participation is per event, so both lists are too;
 //  - what Incident Command resolves to today — the override where one is set,
 //    and the ORG-005 organization default otherwise — so "inherited" is a
 //    stated answer rather than a blank select;
+//  - why a participating department may not be removed, where that is the case,
+//    worded by the node so the sentence read before the attempt and the one
+//    returned after it are the same sentence;
 //  - where the event sits in its authority lifecycle, and which node holds
 //    authority for its other records while it runs.
+//
+// The participating list is also the Incident Command choice list. ORG-006
+// admits only a department assigned to the event, which is this list exactly,
+// so the client reads one list for both rather than being sent two that could
+// disagree.
 //
 // The last of those is context, not a gate. Every other event-scoped record
 // moves to the on-site primary node during the active window, but the `events`
@@ -25,10 +33,23 @@
 
 import { meridianJson } from "@/api/meridianApi";
 
-/** A department this event may designate as its Incident Command (ORG-006). */
+/** A department, named for a select or a list. */
 export interface EventDepartmentOption {
   readonly id: string;
   readonly name: string;
+}
+
+/**
+ * A department that works this event (data/API 10.6), and what it runs.
+ *
+ * `removalRefusal` is the node's sentence, present exactly when the department
+ * holds a designation the event still depends on — Incident Command (ORG-006)
+ * or Placement (PLACE-003).
+ */
+export interface ParticipatingDepartment extends EventDepartmentOption {
+  readonly isIncidentCommand: boolean;
+  readonly isPlacement: boolean;
+  readonly removalRefusal: string | null;
 }
 
 /** What Incident Command resolves to for an event right now. */
@@ -59,7 +80,10 @@ export interface AdministrableEvent {
   readonly archived: boolean;
   readonly icDepartmentId: string | null;
   readonly effectiveIcDepartment: EffectiveIncidentCommand | null;
-  readonly icDepartmentOptions: readonly EventDepartmentOption[];
+  /** PLACE-002, read-only here: choosing it is M14.1's, with its map authority. */
+  readonly placementDepartment: EventDepartmentOption | null;
+  readonly participatingDepartments: readonly ParticipatingDepartment[];
+  readonly assignableDepartments: readonly EventDepartmentOption[];
   readonly authority: EventWriteAuthority;
 }
 
@@ -106,7 +130,15 @@ interface EventPayload {
     name: string;
     inherited: boolean;
   } | null;
-  readonly ic_department_options?: readonly EventDepartmentOption[];
+  readonly placement_department?: EventDepartmentOption | null;
+  readonly participating_departments?: readonly {
+    id: string;
+    name: string;
+    is_incident_command?: boolean;
+    is_placement?: boolean;
+    removal_refusal?: string | null;
+  }[];
+  readonly assignable_departments?: readonly EventDepartmentOption[];
   readonly authority?: {
     phase?: string;
     authoritative_node?: string | null;
@@ -133,7 +165,17 @@ function toEvent(payload: EventPayload): AdministrableEvent {
     archived: payload.archived === true,
     icDepartmentId: payload.ic_department_id ?? null,
     effectiveIcDepartment: payload.effective_ic_department ?? null,
-    icDepartmentOptions: payload.ic_department_options ?? [],
+    placementDepartment: payload.placement_department ?? null,
+    participatingDepartments: (payload.participating_departments ?? []).map(
+      (department) => ({
+        id: department.id,
+        name: department.name,
+        isIncidentCommand: department.is_incident_command === true,
+        isPlacement: department.is_placement === true,
+        removalRefusal: department.removal_refusal ?? null,
+      }),
+    ),
+    assignableDepartments: payload.assignable_departments ?? [],
     authority: {
       phase: payload.authority?.phase ?? "preparation",
       authoritativeNode: payload.authority?.authoritative_node ?? null,
@@ -189,6 +231,52 @@ export async function updateEvent(
       body: JSON.stringify({ event_id: eventId, ...draft }),
     },
   );
+
+  return toAdministration(organizationId, payload);
+}
+
+/** Add a department to an event, or bring back one that was removed. */
+export async function assignDepartmentToEvent(
+  organizationId: string,
+  eventId: string,
+  departmentId: string,
+): Promise<EventAdministration> {
+  return participationCommand(
+    "/api/commands/assign-department-to-event",
+    organizationId,
+    eventId,
+    departmentId,
+  );
+}
+
+/**
+ * Take a department out of an event. The node refuses while the department
+ * holds the event's Incident Command (ORG-006) or Placement (PLACE-003)
+ * designation.
+ */
+export async function removeDepartmentFromEvent(
+  organizationId: string,
+  eventId: string,
+  departmentId: string,
+): Promise<EventAdministration> {
+  return participationCommand(
+    "/api/commands/remove-department-from-event",
+    organizationId,
+    eventId,
+    departmentId,
+  );
+}
+
+async function participationCommand(
+  path: string,
+  organizationId: string,
+  eventId: string,
+  departmentId: string,
+): Promise<EventAdministration> {
+  const payload = await meridianJson<AdministrationPayload>(path, {
+    method: "POST",
+    body: JSON.stringify({ event_id: eventId, department_id: departmentId }),
+  });
 
   return toAdministration(organizationId, payload);
 }

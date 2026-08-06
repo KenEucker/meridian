@@ -6,17 +6,22 @@ Verify the four product surfaces M18.29 adds to the ones M16.7 and M18.21A
 already built: entering a department space from the session the client is
 holding, reading one application on its own address, administering the
 organization's events without the God Mode console, and reading the
-organization's audit record.
+organization's audit record. M18.31 adds the last thing event administration was
+missing — which departments work the event — to the same surface.
 
-Two boundaries are what this script is really for, and both fail quietly if
-nobody looks:
+Three boundaries are what this script is really for, and all three fail quietly
+if nobody looks:
 
 - application review authority is organizer and Staff Coordinator, and nobody
   else — a department lead reaches the same application read-only and is refused
   the decision by the node rather than by a hidden button;
 - an organizer's audit record carries no incident and no Field Report history,
   because organizing reaches neither (`ORG-015`), and an audit row naming an
-  incident is a way of reading it.
+  incident is a way of reading it;
+- a department carrying the event's Incident Command or Placement designation
+  cannot be taken out of the event, because a designation naming a department
+  that no longer works the event is invisible from the designation's own
+  surface.
 
 ## Requirements covered
 
@@ -28,6 +33,9 @@ nobody looks:
 - `APP-019`: application review is reachable from a normal product surface.
 - `ORG-005`, `ORG-006`: the organization default Incident Command Department and
   the event override, which must be an active department assigned to that event.
+- `PLACE-003`: the designated Placement department is one of the departments
+  assigned to that event, so a department holding the designation cannot be
+  removed from the event while it holds it.
 - `ORG-015`: the Organizers Department grants no access to incidents or Field
   Reports.
 - `TEAM-014`, requirements section 4.4: the Staff Coordinator reviews
@@ -44,7 +52,8 @@ nobody looks:
   `organizer.audit`.
 - Technical spec section 10.2: during an event's active window the on-site
   primary node is authoritative for that event's records.
-- Data/API spec section 10.2 `events`; section 14.1 `audit_events`.
+- Data/API spec section 10.2 `events`; section 10.6
+  `event_department_assignments`; section 14.1 `audit_events`.
 - Accessibility checklist sections 8, 9, 14, and 18.
 
 ## Environment
@@ -57,7 +66,9 @@ nobody looks:
 - For API checks, authenticated requests against
   `/api/organizations/{organization}/events`,
   `/api/organizations/{organization}/audit`, `/api/applications/{application}`,
-  and `/api/commands/create-event` and `/api/commands/update-event`
+  and `/api/commands/create-event`, `/api/commands/update-event`,
+  `/api/commands/assign-department-to-event`, and
+  `/api/commands/remove-department-from-event`
 
 ## Personas
 
@@ -152,78 +163,103 @@ nobody looks:
     holding the event's shifts, attendance, and hours. Confirm **Edit** is still
     offered, open it, set the active window's close to a moment in the past, and
     save. Confirm the save is accepted and the event leaves its active window.
-28. Sign in as the Staff Coordinator and confirm **Events** is absent from
+
+### Event departments (`organizer.events`)
+
+28. Still on **Events** as Olive Organizer, confirm each event lists the
+    departments that work it under **Departments**, and that an event with none
+    says so in a sentence rather than showing an empty list.
+29. Under **Add a department**, choose a department that is not in the event and
+    choose **Add**. Confirm it appears in the department list and is no longer
+    offered in the add control.
+30. Open **Edit** on that event and confirm the Incident Command selector now
+    offers the department just added. Cancel without saving.
+31. Choose **Remove** on a department that holds no designation, confirm it
+    leaves the list and returns to the add control, then add it back and confirm
+    it appears once rather than twice.
+32. Designate a participating department as the event's Incident Command and
+    save. Confirm that department's row now reads **Incident Command**, offers
+    no **Remove**, and states which designation to clear before it can leave.
+33. Using the API, `POST /api/commands/remove-department-from-event` naming that
+    department and confirm the node answers 422 with the same sentence the
+    surface showed, and that the department still participates.
+34. Set `events.placement_department_id` for that event to a different
+    participating department — directly, since the Placement selector is
+    Milestone 14's — reload the surface, and confirm that department's row reads
+    **Placement**, offers no **Remove**, and that the same API call is refused
+    with 422 naming Placement.
+35. Sign in as the Staff Coordinator and confirm **Events** is absent from
     navigation; navigate directly to `/organizer/events` and confirm the surface
     states the node's refusal.
 
 ### Audit review (`organizer.audit`)
 
-29. Sign in as Olive Organizer and open **Audit** under Organization pages, or
+36. Sign in as Olive Organizer and open **Audit** under Organization pages, or
     navigate to `/organizer/audit`.
-30. Confirm the record lists changes with the person who made them, what was
+37. Confirm the record lists changes with the person who made them, what was
     changed, when, the reason where one was given, and the names of the fields
     that changed.
-31. Confirm no entry shows a before or after **value**.
-32. Confirm an entry written by a scheduled job names a scheduled job rather than
+38. Confirm no entry shows a before or after **value**.
+39. Confirm an entry written by a scheduled job names a scheduled job rather than
     leaving the actor blank.
-33. Filter by an action and confirm the list narrows; filter by a date range and
+40. Filter by an action and confirm the list narrows; filter by a date range and
     confirm the same.
-34. Confirm the action and record-type filters offer only values that appear in
+41. Confirm the action and record-type filters offer only values that appear in
     the record this reader may see.
-35. Search the record for any entry naming an incident or a Field Report — by
+42. Search the record for any entry naming an incident or a Field Report — by
     scanning the record-type filter and by paging the list — and confirm there is
     none, even though the seeded event has both.
-36. Sign in as Vera Staff and confirm **Audit** is absent from navigation;
+43. Sign in as Vera Staff and confirm **Audit** is absent from navigation;
     navigate directly to `/organizer/audit` and confirm the surface states the
     node's refusal.
 
 ### The God Mode audit trail (`orchid.audit`)
 
-37. Sign in to the God Mode console as a user holding `platform.audit` and open
+44. Sign in to the God Mode console as a user holding `platform.audit` and open
     **Audit Trail** under God Mode.
-38. Confirm the trail lists recorded changes newest first, each naming the
+45. Confirm the trail lists recorded changes newest first, each naming the
     action, the record type in words rather than as a namespace, who made it,
     the organization and department where the row carries them, and the source.
-39. Confirm the organization, department, and team filters are present, and that
+46. Confirm the organization, department, and team filters are present, and that
     choosing each narrows the list.
-40. With the team filter set to a team, confirm the list carries changes to the
+47. With the team filter set to a team, confirm the list carries changes to the
     team itself and to records belonging to it — a grant, a membership, a shift
     — and no changes belonging to a different team.
-41. Confirm the trail carries rows the product surface does not: an incident or
+48. Confirm the trail carries rows the product surface does not: an incident or
     Field Report entry, and a row with no organization such as a node pairing.
-42. Open an entry and confirm it shows the recorded before and after values, the
+49. Open an entry and confirm it shows the recorded before and after values, the
     reason, the actor identifiers, and the signature metadata where present.
-43. Confirm the entry screen offers no edit or delete of any kind.
-44. Sign in as a console user without `platform.audit` and confirm both the trail
+50. Confirm the entry screen offers no edit or delete of any kind.
+51. Sign in as a console user without `platform.audit` and confirm both the trail
     and a direct entry address are refused.
 
 ### Audit volume controls (`orchid.audit-settings`, God Mode)
 
-45. Still in God Mode, open **Audit Settings**. Confirm the list names every
+52. Still in God Mode, open **Audit Settings**. Confirm the list names every
     organization with its level, its exceptions count, the rows and estimated
     size it is currently holding, and its limits — or "No limit" where none is
     set.
-46. Confirm the page states whether this node's audit table is partitioned by
+53. Confirm the page states whether this node's audit table is partitioned by
     month, and lists the partitions where it is.
-47. Open an organization. Confirm the required actions are listed as always
+54. Open an organization. Confirm the required actions are listed as always
     recorded and are not editable.
-48. Set the level to **Minimal** and save. Perform an ordinary operational
+55. Set the level to **Minimal** and save. Perform an ordinary operational
     action in the product — check a staff member in — and confirm no audit entry
     was written for it.
-49. Perform a required action — revoke an event credential — and confirm an
+56. Perform a required action — revoke an event credential — and confirm an
     entry **was** written despite the Minimal level.
-50. Add `attendance.checked_in` to **Always record**, save, check somebody in
+57. Add `attendance.checked_in` to **Always record**, save, check somebody in
     again, and confirm the entry is now written.
-51. Set a **Maximum entries** limit below the organization's current row count,
+58. Set a **Maximum entries** limit below the organization's current row count,
     save, and choose **Apply limits now**.
-52. Confirm the screen reports how many entries were archived, that the row
+59. Confirm the screen reports how many entries were archived, that the row
     count has fallen to the limit, and that the newest entries are the ones that
     remain.
-53. Confirm an `audit.archived` entry appears in the God Mode audit trail naming
+60. Confirm an `audit.archived` entry appears in the God Mode audit trail naming
     the file, the row count, and the range removed.
-54. Locate the archive file on the node and confirm it carries one JSON object
+61. Locate the archive file on the node and confirm it carries one JSON object
     per archived row, including the before and after values.
-55. Sign in as a console user holding `platform.audit` but not
+62. Sign in as a console user holding `platform.audit` but not
     `platform.audit.settings`, and confirm the settings screens are refused
     while the trail still opens.
 
@@ -253,6 +289,15 @@ nobody looks:
   event inside its active window names the node holding its other records and still offers
   the edit, because closing that window is the edit.
   A Staff Coordinator reaches none of it.
+- **Event departments.** Which departments work an event is managed from the
+  event itself, and the list managed there is the same list the Incident Command
+  selector offers, so a department added is immediately designatable. A
+  department returning after a removal appears once, because the assignment is
+  restored rather than written again. A department holding the event's Incident
+  Command (`ORG-006`) or Placement (`PLACE-003`) designation says which
+  designation it holds, is offered no removal, and is refused removal by the node
+  with the same sentence the surface showed — the surface explains the refusal,
+  it does not create it.
 - **Audit review.** Every entry attributes the change to an actor, or names a
   scheduled job where there was none. Field names appear; field values do not.
   Filters are applied by the node and offer only values present in what this
@@ -289,14 +334,17 @@ nobody looks:
 - Screenshot of the events list showing published dates and active event window
   as separate rows, and of an event inside its window with no edit offered
 - API response body of the refused Incident Command designation (step 26)
+- Screenshot of an event's department list showing a designated department with
+  its designation named and no Remove offered, and the API response bodies of
+  the two refused removals (steps 33 and 34)
 - Screenshot of the audit record showing changed field names and no values
 - Screenshot of the God Mode Audit Trail with a scope filter applied, and of one
   entry showing its before and after values
 - Screenshot of Audit Settings showing measured usage beside the configured
   limits, and of the partition list where the node is partitioned
-- The `audit.archived` entry from step 53, and the first line of the archive file
-  from step 54
-- The record-type filter list from step 35, as evidence that no incident or Field
+- The `audit.archived` entry from step 60, and the first line of the archive file
+  from step 61
+- The record-type filter list from step 42, as evidence that no incident or Field
   Report type is offered
 
 ## Failure notes
@@ -308,10 +356,10 @@ nobody looks:
 - If any incident or Field Report entity type appears in the *product* audit
   record or its filters, stop and record the entity type verbatim; `ORG-015` is
   the rule it crosses. The God Mode trail is expected to carry them.
-- If a required action is missing after step 49, stop. The floor is the property
+- If a required action is missing after step 56, stop. The floor is the property
   the whole verbosity feature rests on, and a gap in it means an obligation under
   requirements 2.4 or data/API section 8 is configurable, which it must not be.
-- If step 52 removed rows but step 54 finds no archive file, stop and record
+- If step 59 removed rows but step 61 finds no archive file, stop and record
   both. History leaving the table without an archive is the one outcome the
   archival ordering exists to prevent.
 - If a department lead's approve succeeds, record the application id, the
@@ -319,6 +367,13 @@ nobody looks:
   organization standing and is not undone by rejecting afterwards.
 - If event administration is reachable by a Staff Coordinator, record which
   capability the session response carried for them.
+- If a removal in step 33 or 34 succeeds, stop and record the event, the
+  department, and the designation it held. A designation naming a department
+  that no longer works the event is the state `ORG-006` and `PLACE-003` exist to
+  prevent, and it is not visible from either designation's own surface.
+- If a department returning in step 31 appears twice, record both rows from
+  `event_department_assignments`. The table is unique on event and department,
+  so two rows means the restore path wrote where it should have revived.
 - If the save in step 27 is refused, record the message verbatim. Closing an
   active event window from the node an organizer is standing at is the one event
   edit that must never be gated on event authority (M12.6), because a refusal
