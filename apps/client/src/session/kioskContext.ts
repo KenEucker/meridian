@@ -57,6 +57,19 @@ export interface KioskNamedRecord {
 export interface KioskPinnedContext {
   readonly workstationId: string;
   readonly workstationName: string;
+  /**
+   * Whether the node holds this machine as a trusted shared workstation
+   * (technical spec 13.1, "a shared workstation is a special kind of trusted
+   * device").
+   *
+   * Always true when it is present, because the node answers this read for no
+   * other kind of workstation — an untrusted or revoked one is a 404. It is
+   * carried as a field anyway rather than inferred from the answer existing,
+   * because "the node replied" and "the node vouches for this machine" are
+   * different statements, and a reader of the readiness checklist is asking the
+   * second one.
+   */
+  readonly trusted: boolean;
   /** UI-019 in one field: an organization and an event, both present. */
   readonly pinned: boolean;
   readonly organization: KioskNamedRecord | null;
@@ -174,6 +187,7 @@ function readContext(value: unknown): KioskPinnedContext | null {
   return {
     workstationId,
     workstationName: asString(value.shared_workstation.name) ?? "",
+    trusted: value.shared_workstation.trusted === true,
     pinned: value.pinned === true,
     organization: readNamedRecord(value.organization),
     event: readEvent(value.event),
@@ -372,6 +386,7 @@ function writeStoredContext(context: KioskPinnedContext | null): void {
         shared_workstation: {
           id: context.workstationId,
           name: context.workstationName,
+          trusted: context.trusted,
         },
         pinned: context.pinned,
         organization: context.organization,
