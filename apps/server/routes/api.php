@@ -608,16 +608,22 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.update-organization-configuration');
 
     /*
-     * Event administration as a product surface (M18.29; UI contract 12.6
-     * `organizer.events`; ORG-006). One read carries the organization's events
-     * with each one's eligible Incident Command departments and whether this
-     * node may write it, because ORG-006 admits only a department assigned to
-     * that event and an organization-wide list would offer refusals.
+     * Event administration as a product surface (M18.29, M18.31; UI contract
+     * 12.6 `organizer.events`; ORG-006; PLACE-003). One read carries the
+     * organization's events with the departments participating in each one, the
+     * departments that could join it, and whether this node may write it,
+     * because participation is per event and ORG-006 admits only a department
+     * assigned to that event as its Incident Command.
      *
-     * Create and update are separate commands rather than one upsert: they are
-     * different acts with different audit entries, and an endpoint that decided
-     * which from the presence of an id would turn a typo'd id into a second
-     * event.
+     * Create, update, and the two participation changes are separate commands
+     * rather than one upsert: they are different acts with different audit
+     * entries, and an endpoint that decided which from the presence of an id
+     * would turn a typo'd id into a second event.
+     *
+     * Removal archives the assignment and is refused while the department holds
+     * the event's Incident Command (ORG-006) or Placement (PLACE-003)
+     * designation, because a designation naming a department that no longer
+     * works the event is the state both requirements exist to prevent.
      */
     Route::get('/organizations/{organization}/events', [EventAdministrationController::class, 'index'])
         ->name('api.organizations.events.index');
@@ -627,6 +633,12 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/update-event', [EventAdministrationController::class, 'update'])
         ->name('api.commands.update-event');
+
+    Route::post('/commands/assign-department-to-event', [EventAdministrationController::class, 'assignDepartment'])
+        ->name('api.commands.assign-department-to-event');
+
+    Route::post('/commands/remove-department-from-event', [EventAdministrationController::class, 'removeDepartment'])
+        ->name('api.commands.remove-department-from-event');
 
     /*
      * Audit review as a product surface (M18.29; requirements 2.4; UI contract

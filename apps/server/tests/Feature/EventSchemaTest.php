@@ -29,6 +29,7 @@ class EventSchemaTest extends TestCase
         $this->assertTrue(Schema::hasColumn('events', 'minimum_staff_age'));
         $this->assertTrue(Schema::hasColumn('events', 'status'));
         $this->assertTrue(Schema::hasColumn('events', 'ic_department_id'));
+        $this->assertTrue(Schema::hasColumn('events', 'placement_department_id'));
         $this->assertTrue(Schema::hasColumn('events', 'active_event_window_starts_at'));
         $this->assertTrue(Schema::hasColumn('events', 'active_event_window_ends_at'));
         $this->assertTrue(Schema::hasColumn('events', 'created_at'));
@@ -111,6 +112,30 @@ class EventSchemaTest extends TestCase
             $activeWindowEndsAt->toDateTimeString(),
             $event->active_event_window_ends_at->toDateTimeString()
         );
+    }
+
+    /**
+     * PLACE-002, PLACE-005: an event designates zero or one Placement
+     * department, and the designation is its own — a department may be
+     * Placement and Incident Command for the same event, and each designation
+     * grants only its own authority (PLACE-008).
+     */
+    public function test_event_placement_department_is_optional_and_separate_from_incident_command(): void
+    {
+        $organization = Organization::factory()->create();
+        $placement = Department::factory()->for($organization)->create();
+
+        $undesignated = Event::factory()->for($organization)->create();
+
+        $this->assertNull($undesignated->placement_department_id);
+
+        $event = Event::factory()->for($organization)->create([
+            'placement_department_id' => $placement->id,
+        ]);
+
+        $this->assertSame($placement->id, $event->placement_department_id);
+        $this->assertNull($event->ic_department_id);
+        $this->assertTrue($event->placementDepartment->is($placement));
     }
 
     public function test_event_schedule_can_be_tbd(): void

@@ -1908,7 +1908,7 @@ Relationships:
 Rules:
 
 - `placement_department_id` is nullable; an event may designate zero or one Placement department.
-- When set, `placement_department_id` must reference a department assigned to the event.
+- When set, `placement_department_id` must reference a department assigned to the event. M18.31 adds the column and enforces the rule from the participation side — a designated department cannot be removed from the event while it holds the designation. Choosing the designation, and the organization default it starts from, arrive with M14.1, alongside the map authority PLACE-004 says the designation unlocks.
 - `placement_department_id` defaults from the organization `default_placement_department_id` where set, and the event may override it.
 - The Placement designation is event-scoped: it grants map/placement authority only for this event and does not make the department globally special, IC, or Organizers.
 - A department may be the Placement department and also the IC department (or Organizers) for the same event; each designation grants only its own authority.
@@ -2481,6 +2481,28 @@ Key fields:
 - `department_id`
 - `created_at`
 - `archived_at`
+
+Administration (M18.31; ORG-006, PLACE-003):
+
+- participation is maintained from the event administration surface
+  (`organizer.events`) by `organization.events.manage` holders: the
+  `GET /api/organizations/{organization}/events` read carries, per event, the
+  departments participating in it and the organization's active departments that
+  are not, and `POST /api/commands/assign-department-to-event` /
+  `POST /api/commands/remove-department-from-event` change them
+- the participating list is also the set the event's Incident Command
+  designation may be chosen from, because ORG-006 admits only a department
+  assigned to that event
+- a department is unique per event: re-adding one restores its archived row
+  rather than writing a second, and adding one that already participates changes
+  nothing and records nothing
+- removal sets `archived_at` rather than deleting the row, so the shifts, hours,
+  and incidents that name the department stay readable
+- removal is refused while the department holds the event's Incident Command
+  (ORG-006) or Placement (PLACE-003) designation; the refusal names the
+  designation to clear first
+- both changes are audited against the event as `event.department_assigned` and
+  `event.department_removed`, each recording the department
 
 #### `event_staff_assignments`
 

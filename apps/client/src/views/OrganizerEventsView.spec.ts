@@ -1,6 +1,6 @@
-// Event administration and audit review as product surfaces (M18.29; UI
-// contract 12.6 `organizer.events`, `organizer.audit`; ORG-005, ORG-006;
-// requirements 2.4; ORG-015).
+// Event administration and audit review as product surfaces (M18.29, M18.31;
+// UI contract 12.6 `organizer.events`, `organizer.audit`; ORG-005, ORG-006;
+// PLACE-003; requirements 2.4; ORG-015).
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,11 +12,17 @@ import OrganizerEventsView from "@/views/OrganizerEventsView.vue";
 const getEventAdministration = vi.fn();
 const createEvent = vi.fn();
 const updateEvent = vi.fn();
+const assignDepartmentToEvent = vi.fn();
+const removeDepartmentFromEvent = vi.fn();
 
 vi.mock("@/organizer-events/eventAdministrationModel", () => ({
   getEventAdministration: (...args: unknown[]) => getEventAdministration(...args),
   createEvent: (...args: unknown[]) => createEvent(...args),
   updateEvent: (...args: unknown[]) => updateEvent(...args),
+  assignDepartmentToEvent: (...args: unknown[]) =>
+    assignDepartmentToEvent(...args),
+  removeDepartmentFromEvent: (...args: unknown[]) =>
+    removeDepartmentFromEvent(...args),
 }));
 
 const getAuditReview = vi.fn();
@@ -42,10 +48,24 @@ const emberfall = {
   archived: false,
   icDepartmentId: null,
   effectiveIcDepartment: { id: "dept-1", name: "Rangers", inherited: true },
-  icDepartmentOptions: [
-    { id: "dept-1", name: "Rangers" },
-    { id: "dept-2", name: "Gate" },
+  placementDepartment: null,
+  participatingDepartments: [
+    {
+      id: "dept-1",
+      name: "Rangers",
+      isIncidentCommand: false,
+      isPlacement: false,
+      removalRefusal: null,
+    },
+    {
+      id: "dept-2",
+      name: "Gate",
+      isIncidentCommand: false,
+      isPlacement: false,
+      removalRefusal: null,
+    },
   ],
+  assignableDepartments: [{ id: "dept-3", name: "DPW" }],
   authority: {
     phase: "preparation",
     authoritativeNode: null,
@@ -97,7 +117,12 @@ describe("organizer.events", () => {
       .trigger("click");
     await flushPromises();
 
-    const options = wrapper.findAll("select option").map((option) => option.text());
+    // The event's own participating list is the choice list, so the select is
+    // read from the form rather than from every select on the page.
+    const options = wrapper
+      .get(".events__form")
+      .findAll("select option")
+      .map((option) => option.text());
 
     expect(options).toEqual([
       "Inherit the organization default",
@@ -109,7 +134,7 @@ describe("organizer.events", () => {
   it("explains rather than offering an empty select when nothing participates yet", async () => {
     getEventAdministration.mockResolvedValue(
       administration({
-        events: [{ ...emberfall, icDepartmentOptions: [] }],
+        events: [{ ...emberfall, participatingDepartments: [] }],
       }),
     );
 
@@ -122,7 +147,7 @@ describe("organizer.events", () => {
       .trigger("click");
     await flushPromises();
 
-    expect(wrapper.findAll("select")).toHaveLength(0);
+    expect(wrapper.get(".events__form").findAll("select")).toHaveLength(0);
     expect(wrapper.text()).toContain("No department participates in this event yet");
   });
 
@@ -138,8 +163,8 @@ describe("organizer.events", () => {
       .trigger("click");
     await flushPromises();
 
-    await wrapper.find("select").setValue("dept-2");
-    await wrapper.find("form").trigger("submit");
+    await wrapper.get(".events__form select").setValue("dept-2");
+    await wrapper.get(".events__form").trigger("submit");
     await flushPromises();
 
     expect(updateEvent).toHaveBeenCalledWith(
@@ -172,7 +197,7 @@ describe("organizer.events", () => {
 
     await wrapper.findAll(".events__field input")[0]!.setValue("Emberfall 2027");
     await wrapper.findAll(".events__field input")[1]!.setValue("emberfall-2027");
-    await wrapper.find("form").trigger("submit");
+    await wrapper.get(".events__form").trigger("submit");
     await flushPromises();
 
     expect(createEvent).toHaveBeenCalledTimes(1);
@@ -208,6 +233,126 @@ describe("organizer.events", () => {
     ).toBe(true);
   });
 
+  it("adds a department to the event as its own command (M18.31)", async () => {
+    assignDepartmentToEvent.mockResolvedValue(administration());
+
+    const wrapper = mount(OrganizerEventsView);
+    await flushPromises();
+
+    await wrapper.get(".events__add-department select").setValue("dept-3");
+    await wrapper.get(".events__add-department").trigger("submit");
+    await flushPromises();
+
+    expect(assignDepartmentToEvent).toHaveBeenCalledWith(
+      "org-1",
+      "event-1",
+      "dept-3",
+    );
+  });
+
+  it("removes a participating department that holds no designation", async () => {
+    removeDepartmentFromEvent.mockResolvedValue(administration());
+
+    const wrapper = mount(OrganizerEventsView);
+    await flushPromises();
+
+    await wrapper
+      .get(".events__department-list")
+      .findAll("button")
+      .find((button) => button.text() === "Remove")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(removeDepartmentFromEvent).toHaveBeenCalledWith(
+      "org-1",
+      "event-1",
+      "dept-1",
+    );
+  });
+
+  /*
+   * ORG-006 and PLACE-003: a designation may only name a department assigned to
+   * the event, so the department cannot leave while it holds one. The node
+   * refuses regardless (CLIENT-006); the surface's job is to say which
+   * designation to clear rather than let somebody find out by being refused.
+   */
+  it("offers no Remove for a designated department and gives the node's reason", async () => {
+    getEventAdministration.mockResolvedValue(
+      administration({
+        events: [
+          {
+            ...emberfall,
+            placementDepartment: { id: "dept-2", name: "Gate" },
+            participatingDepartments: [
+              {
+                id: "dept-1",
+                name: "Rangers",
+                isIncidentCommand: true,
+                isPlacement: false,
+                removalRefusal:
+                  "Rangers runs Incident Command for this event. Designate another department, or clear the designation, and then remove it.",
+              },
+              {
+                id: "dept-2",
+                name: "Gate",
+                isIncidentCommand: false,
+                isPlacement: true,
+                removalRefusal:
+                  "Gate runs Placement for this event. Designate another department, or clear the designation, and then remove it.",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const wrapper = mount(OrganizerEventsView);
+    await flushPromises();
+
+    const list = wrapper.get(".events__department-list");
+
+    expect(list.findAll("button")).toHaveLength(0);
+    expect(list.text()).toContain("Rangers runs Incident Command");
+    expect(list.text()).toContain("Gate runs Placement");
+    expect(list.text()).toContain("Incident Command");
+    expect(list.text()).toContain("Placement");
+  });
+
+  it("says an event has no departments rather than showing an empty list", async () => {
+    getEventAdministration.mockResolvedValue(
+      administration({
+        events: [{ ...emberfall, participatingDepartments: [] }],
+      }),
+    );
+
+    const wrapper = mount(OrganizerEventsView);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("No department works this event yet");
+  });
+
+  it("states the node's refusal when a participation change is not accepted", async () => {
+    removeDepartmentFromEvent.mockRejectedValue(
+      new MeridianApiError("Unprocessable", 422, {
+        message: "Rangers runs Incident Command for this event.",
+      }),
+    );
+
+    const wrapper = mount(OrganizerEventsView);
+    await flushPromises();
+
+    await wrapper
+      .get(".events__department-list")
+      .findAll("button")
+      .find((button) => button.text() === "Remove")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".events__departments .events__error").text()).toContain(
+      "runs Incident Command",
+    );
+  });
+
   it("states the node's refusal when a save is not accepted", async () => {
     updateEvent.mockRejectedValue(
       new MeridianApiError("Unprocessable", 422, {
@@ -224,7 +369,7 @@ describe("organizer.events", () => {
       .trigger("click");
     await flushPromises();
 
-    await wrapper.find("form").trigger("submit");
+    await wrapper.get(".events__form").trigger("submit");
     await flushPromises();
 
     expect(wrapper.get(".events__error").text()).toContain("already belongs");

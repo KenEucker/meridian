@@ -42,6 +42,7 @@ class Event extends Model
         'minimum_staff_age',
         'status',
         'ic_department_id',
+        'placement_department_id',
         'branding_logo_attachment_id',
         'branding_updated_at',
         'active_event_window_starts_at',
@@ -124,6 +125,18 @@ class Event extends Model
     public function icDepartment(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'ic_department_id');
+    }
+
+    /**
+     * The department running placement for this event (PLACE-002, PLACE-003).
+     *
+     * Event-scoped by design: designating a department here makes it Placement
+     * for this event and nothing else, and does not make it Incident Command or
+     * Organizers (PLACE-005).
+     */
+    public function placementDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'placement_department_id');
     }
 
     public function applications(): HasMany

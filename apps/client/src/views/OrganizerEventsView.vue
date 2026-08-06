@@ -3,12 +3,15 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
+  assignDepartmentToEvent,
   createEvent,
   getEventAdministration,
+  removeDepartmentFromEvent,
   updateEvent,
   type AdministrableEvent,
   type EventAdministration,
   type EventAdministrationDraft,
+  type ParticipatingDepartment,
 } from "@/organizer-events/eventAdministrationModel";
 import { sessionOrganizationId } from "@/session/sessionContext";
 
@@ -28,10 +31,23 @@ import { sessionOrganizationId } from "@/session/sessionContext";
  * teardown, and it is the one that moves authority to the on-site node and
  * freezes governance content.
  *
+ * Which departments work the event is managed here too (M18.31). It is on the
+ * event card rather than inside the edit form because adding a department is
+ * its own act with its own audit entry, not a field of the event, and because
+ * the Incident Command select in the form reads the very list being edited —
+ * changing participation and then choosing from a stale copy of it is how an
+ * organizer gets a refusal for a department they just added.
+ *
  * Incident Command is offered per event and never per organization, because
  * ORG-006 admits only a department assigned to that event. An event with no
  * override says what it inherits (ORG-005) rather than showing an empty select
  * that reads like nobody is running incidents.
+ *
+ * A department running Incident Command or Placement for the event says so and
+ * is offered no Remove, with the node's own sentence in its place. The node
+ * refuses the removal regardless (ORG-006, PLACE-003); the difference is being
+ * told which designation to clear first rather than finding out by being
+ * refused.
  *
  * An event this node may not write says so and offers no save. It is not the
  * boundary — the node refuses the write regardless (CLIENT-006) — it is the
@@ -69,7 +85,20 @@ const editingEvent = computed(() =>
     ? null
     : (events.value.find((event) => event.id === editing.value) ?? null),
 );
-const icOptions = computed(() => editingEvent.value?.icDepartmentOptions ?? []);
+// ORG-006 admits only a department assigned to this event, which is exactly the
+// participating list — so the select reads that rather than a second list.
+const icOptions = computed(
+  () => editingEvent.value?.participatingDepartments ?? [],
+);
+
+/** The department chosen in each event's "add a department" select. */
+const departmentToAdd = reactive<Record<string, string>>({});
+
+/** The event whose participation change was refused, and what the node said. */
+const participationError = ref<{ eventId: string; message: string } | null>(
+  null,
+);
+const changingParticipation = ref(false);
 
 function emptyForm(): EventForm {
   return {
@@ -267,6 +296,63 @@ async function save(): Promise<void> {
   }
 }
 
+/**
+ * Add a department to an event, or take one out (M18.31).
+ *
+ * Both answer with the whole administration payload, so the participating list,
+ * the Incident Command choices, and the designation labels all move together on
+ * one read rather than being patched locally into three views of the same fact.
+ */
+async function changeParticipation(
+  event: AdministrableEvent,
+  departmentId: string,
+  change: (
+    organizationId: string,
+    eventId: string,
+    departmentId: string,
+  ) => Promise<EventAdministration>,
+): Promise<void> {
+  const id = organizationId.value;
+
+  if (id === null || id === "" || departmentId === "") {
+    return;
+  }
+
+  changingParticipation.value = true;
+  participationError.value = null;
+  notice.value = null;
+
+  try {
+    administration.value = await change(id, event.id, departmentId);
+    departmentToAdd[event.id] = "";
+  } catch (error) {
+    participationError.value = {
+      eventId: event.id,
+      message: meridianErrorMessage(
+        error,
+        "That department could not be changed.",
+      ),
+    };
+  } finally {
+    changingParticipation.value = false;
+  }
+}
+
+function addDepartment(event: AdministrableEvent): void {
+  void changeParticipation(
+    event,
+    departmentToAdd[event.id] ?? "",
+    assignDepartmentToEvent,
+  );
+}
+
+function removeDepartment(
+  event: AdministrableEvent,
+  department: ParticipatingDepartment,
+): void {
+  void changeParticipation(event, department.id, removeDepartmentFromEvent);
+}
+
 onMounted(() => {
   void load();
 });
@@ -377,8 +463,8 @@ watch(organizationId, () => {
         <!--
           ORG-006: only a department assigned to this event may run its
           Incident Command, so the choices are this event's own. An event with
-          none assigned yet gets an explanation rather than an empty select —
-          participation is managed on this surface by M18.31.
+          none assigned yet gets an explanation rather than an empty select,
+          and the explanation names where departments are added.
         -->
         <template v-if="editing !== 'new'">
           <label v-if="icOptions.length > 0" class="events__field">
@@ -398,7 +484,8 @@ watch(organizationId, () => {
           </label>
           <p v-else class="events__hint" role="note">
             No department participates in this event yet, so there is none to
-            designate for Incident Command.
+            designate for Incident Command. Add one under Departments on the
+            event below.
           </p>
         </template>
 
@@ -464,7 +551,107 @@ watch(organizationId, () => {
             </dd>
             <dd v-else>Not designated</dd>
           </div>
+          <div v-if="event.placementDepartment">
+            <dt>Placement</dt>
+            <dd>{{ event.placementDepartment.name }}</dd>
+          </div>
         </dl>
+
+        <!--
+          Which departments work this event (M18.31; data/API 10.6). Adding and
+          removing are immediate commands rather than fields of the event form:
+          they are separate acts with their own audit entries, and the form's
+          Incident Command select reads this list.
+        -->
+        <section class="events__departments">
+          <h3 class="events__departments-heading">Departments</h3>
+
+          <p
+            v-if="
+              participationError && participationError.eventId === event.id
+            "
+            class="events__error"
+            role="alert"
+          >
+            {{ participationError.message }}
+          </p>
+
+          <p
+            v-if="event.participatingDepartments.length === 0"
+            class="events__hint"
+            role="note"
+          >
+            No department works this event yet. A department has to be here
+            before it can run the event's Incident Command.
+          </p>
+
+          <ul v-else class="events__department-list">
+            <li
+              v-for="department in event.participatingDepartments"
+              :key="department.id"
+              class="events__department"
+            >
+              <span class="events__department-name">{{ department.name }}</span>
+              <span v-if="department.isIncidentCommand" class="events__tag">
+                Incident Command
+              </span>
+              <span v-if="department.isPlacement" class="events__tag">
+                Placement
+              </span>
+              <span
+                v-if="department.removalRefusal"
+                class="events__hint"
+                role="note"
+              >
+                {{ department.removalRefusal }}
+              </span>
+              <button
+                v-else-if="!event.archived"
+                type="button"
+                :disabled="changingParticipation"
+                @click="removeDepartment(event, department)"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
+
+          <form
+            v-if="!event.archived && event.assignableDepartments.length > 0"
+            class="events__add-department"
+            @submit.prevent="addDepartment(event)"
+          >
+            <label class="events__field">
+              Add a department
+              <select v-model="departmentToAdd[event.id]">
+                <option value="">Choose a department</option>
+                <option
+                  v-for="option in event.assignableDepartments"
+                  :key="option.id"
+                  :value="option.id"
+                >
+                  {{ option.name }}
+                </option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              :disabled="
+                changingParticipation || !departmentToAdd[event.id]
+              "
+            >
+              Add
+            </button>
+          </form>
+          <p
+            v-else-if="!event.archived"
+            class="events__hint"
+            role="note"
+          >
+            Every active department of this organization already works this
+            event.
+          </p>
+        </section>
 
         <p v-if="event.archived" class="events__readonly" role="note">
           Archived. Archived events are kept for their history and are corrected
@@ -617,6 +804,56 @@ watch(organizationId, () => {
   margin: 0;
   color: var(--m-color-muted-foreground, #5b6b66);
   font-size: 0.9rem;
+}
+
+.events__departments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+  border-top: 1px solid var(--m-color-border, #d5ddda);
+  padding-top: var(--m-space-2, 0.5rem);
+}
+
+.events__departments-heading {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.events__department-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+}
+
+.events__department {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2, 0.5rem);
+  flex-wrap: wrap;
+}
+
+.events__department-name {
+  font-weight: 600;
+}
+
+.events__tag {
+  border: 1px solid var(--m-color-border, #d5ddda);
+  border-radius: var(--m-radius-1, 0.25rem);
+  padding: 0.05rem 0.35rem;
+  color: var(--m-color-muted-foreground, #5b6b66);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.events__add-department {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--m-space-2, 0.5rem);
+  flex-wrap: wrap;
 }
 
 .events__notice,

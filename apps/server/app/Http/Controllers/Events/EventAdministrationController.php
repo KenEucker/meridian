@@ -13,21 +13,28 @@ use App\Models\User;
 use App\Services\Events\EventAdministrationAccess;
 use App\Services\Events\EventAdministrationException;
 use App\Services\Events\EventAdministrationService;
+use App\Services\Events\EventDepartmentParticipationService;
 use App\Services\Events\IncidentCommandDepartmentSelectionService;
 use App\Services\Node\EventAuthority;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Event administration as a product surface (M18.29; UI contract 12.6
- * `organizer.events`; ORG-006; data/API 10.2).
+ * Event administration as a product surface (M18.29, M18.31; UI contract 12.6
+ * `organizer.events`; ORG-006; PLACE-003; data/API 10.2, 10.6).
  *
- * One read answers with the organization's events, the departments eligible to
- * carry each event's Incident Command designation, and — per event — where it
+ * One read answers with the organization's events, the departments participating
+ * in each one, the departments that could join it, and — per event — where it
  * sits in its authority lifecycle. The departments are sent per event rather
- * than once because ORG-006 admits only a department actively assigned to
- * *that* event, so a single organization-wide list would offer choices the node
- * would refuse.
+ * than once because participation is per event and ORG-006 admits only a
+ * department actively assigned to *that* event as its Incident Command, so a
+ * single organization-wide list would offer choices the node would refuse.
+ *
+ * The participating list is one list rather than two. It is what an organizer
+ * manages, and it is exactly the set the Incident Command designation may be
+ * chosen from, so sending it twice would be two answers to one question that
+ * could drift apart on a slow read.
  *
  * The authority block is context and not a gate. The `events` row is exempt
  * from event authority by design, so an organizer can close or extend the very
@@ -36,37 +43,35 @@ use Illuminate\Http\Request;
  * phase the event is in and which node holds authority for its other records,
  * so somebody editing an event mid-window knows what is happening elsewhere.
  *
- * Writes are two commands rather than one upsert. Creating an event and
- * correcting one are different acts with different audit entries, and a single
- * endpoint deciding which it was from the presence of an id would be a place
- * for a typo'd id to silently create a second event.
+ * Writes are separate commands rather than one upsert. Creating an event,
+ * correcting one, and changing who works it are different acts with different
+ * audit entries, and a single endpoint deciding which it was from the shape of
+ * its body would be a place for a typo'd id to silently do the wrong one.
  */
 final class EventAdministrationController extends Controller
 {
-    public function index(
-        Request $request,
-        Organization $organization,
-        EventAdministrationAccess $access,
-        EventAuthority $authority,
-        IncidentCommandDepartmentSelectionService $incidentCommand,
-    ): JsonResponse {
+    public function __construct(
+        private readonly EventAdministrationAccess $access,
+        private readonly EventAdministrationService $events,
+        private readonly EventDepartmentParticipationService $participation,
+        private readonly EventAuthority $authority,
+        private readonly IncidentCommandDepartmentSelectionService $incidentCommand,
+    ) {}
+
+    public function index(Request $request, Organization $organization): JsonResponse
+    {
         $user = $request->user();
         abort_unless($user instanceof User, 401);
 
-        if (! $access->canManageEvents($user, $organization)) {
+        if (! $this->access->canManageEvents($user, $organization)) {
             return $this->refusal();
         }
 
-        return response()->json($this->payload($organization, $authority, $incidentCommand));
+        return response()->json($this->payload($organization));
     }
 
-    public function create(
-        Request $request,
-        EventAdministrationAccess $access,
-        EventAdministrationService $events,
-        EventAuthority $authority,
-        IncidentCommandDepartmentSelectionService $incidentCommand,
-    ): JsonResponse {
+    public function create(Request $request): JsonResponse
+    {
         $validated = $request->validate($this->rules() + [
             'organization_id' => ['required', 'uuid', 'exists:organizations,id'],
         ]);
@@ -76,26 +81,21 @@ final class EventAdministrationController extends Controller
 
         $organization = Organization::query()->findOrFail((string) $validated['organization_id']);
 
-        if (! $access->canManageEvents($user, $organization)) {
+        if (! $this->access->canManageEvents($user, $organization)) {
             return $this->refusal();
         }
 
         try {
-            $events->create($organization, $this->attributes($request, $validated), $user, AuditEvent::SOURCE_API);
+            $this->events->create($organization, $this->attributes($request, $validated), $user, AuditEvent::SOURCE_API);
         } catch (EventAdministrationException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        return response()->json($this->payload($organization, $authority, $incidentCommand));
+        return response()->json($this->payload($organization));
     }
 
-    public function update(
-        Request $request,
-        EventAdministrationAccess $access,
-        EventAdministrationService $events,
-        EventAuthority $authority,
-        IncidentCommandDepartmentSelectionService $incidentCommand,
-    ): JsonResponse {
+    public function update(Request $request): JsonResponse
+    {
         $validated = $request->validate($this->rules() + [
             'event_id' => ['required', 'uuid', 'exists:events,id'],
         ]);
@@ -106,17 +106,84 @@ final class EventAdministrationController extends Controller
         $event = Event::query()->with('organization')->findOrFail((string) $validated['event_id']);
         $organization = $event->organization;
 
-        if (! $organization instanceof Organization || ! $access->canManageEvents($user, $organization)) {
+        if (! $organization instanceof Organization || ! $this->access->canManageEvents($user, $organization)) {
             return $this->refusal();
         }
 
         try {
-            $events->update($event, $this->attributes($request, $validated), $user, AuditEvent::SOURCE_API);
+            $this->events->update($event, $this->attributes($request, $validated), $user, AuditEvent::SOURCE_API);
         } catch (EventAdministrationException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        return response()->json($this->payload($organization, $authority, $incidentCommand));
+        return response()->json($this->payload($organization));
+    }
+
+    /**
+     * Add a department to an event, or restore one that was removed (M18.31;
+     * data/API 10.6 `event_department_assignments`).
+     */
+    public function assignDepartment(Request $request): JsonResponse
+    {
+        return $this->changeParticipation(
+            $request,
+            fn (Event $event, Department $department, User $actor) => $this->participation->assign(
+                event: $event,
+                department: $department,
+                actor: $actor,
+                sourceContext: AuditEvent::SOURCE_API,
+            ),
+        );
+    }
+
+    /**
+     * Remove a department from an event, unless it still holds the event's
+     * Incident Command (ORG-006) or Placement (PLACE-003) designation.
+     */
+    public function removeDepartment(Request $request): JsonResponse
+    {
+        return $this->changeParticipation(
+            $request,
+            fn (Event $event, Department $department, User $actor) => $this->participation->remove(
+                event: $event,
+                department: $department,
+                actor: $actor,
+                sourceContext: AuditEvent::SOURCE_API,
+            ),
+        );
+    }
+
+    /**
+     * The two participation commands, which differ only in what they call.
+     *
+     * @param  callable(Event, Department, User): mixed  $change
+     */
+    private function changeParticipation(Request $request, callable $change): JsonResponse
+    {
+        $validated = $request->validate([
+            'event_id' => ['required', 'uuid', 'exists:events,id'],
+            'department_id' => ['required', 'uuid', 'exists:departments,id'],
+        ]);
+
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
+
+        $event = Event::query()->with('organization')->findOrFail((string) $validated['event_id']);
+        $organization = $event->organization;
+
+        if (! $organization instanceof Organization || ! $this->access->canManageEvents($user, $organization)) {
+            return $this->refusal();
+        }
+
+        $department = Department::query()->findOrFail((string) $validated['department_id']);
+
+        try {
+            $change($event, $department, $user);
+        } catch (EventAdministrationException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($this->payload($organization));
     }
 
     /**
@@ -163,19 +230,18 @@ final class EventAdministrationController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function payload(
-        Organization $organization,
-        EventAuthority $authority,
-        IncidentCommandDepartmentSelectionService $incidentCommand,
-    ): array {
+    private function payload(Organization $organization): array
+    {
         $organizationId = (string) $organization->getKey();
 
         $events = Event::query()
             ->where('organization_id', $organizationId)
             ->with([
                 'icDepartment',
-                // ORG-006 admits only an active department actively assigned to
-                // the event, so the relation is narrowed here and the row below
+                'placementDepartment',
+                // Participation is what the surface manages and what ORG-006
+                // and PLACE-003 both read, so the relation is narrowed here to
+                // active assignments of active departments and the row below
                 // reports what came back rather than filtering a second time.
                 'participatingDepartments' => fn ($query) => $query
                     ->wherePivotNull('archived_at')
@@ -190,6 +256,18 @@ final class EventAdministrationController extends Controller
         $defaultIcDepartment = Department::query()
             ->find($organization->default_ic_department_id);
 
+        /*
+         * Every active department of the organization, held once and narrowed
+         * per event below. The alternative is one query per event asking which
+         * departments are not in it, which is the same answer arrived at as
+         * many times as the organization has events.
+         */
+        $departments = Department::query()
+            ->where('organization_id', $organizationId)
+            ->whereNull('archived_at')
+            ->orderBy('name')
+            ->get();
+
         return [
             'organization_id' => $organizationId,
             /*
@@ -203,21 +281,21 @@ final class EventAdministrationController extends Controller
                 'name' => (string) $defaultIcDepartment->name,
             ],
             'events' => $events
-                ->map(fn (Event $event): array => $this->row($event, $authority, $incidentCommand))
+                ->map(fn (Event $event): array => $this->row($event, $departments))
                 ->values()
                 ->all(),
         ];
     }
 
     /**
+     * @param  EloquentCollection<int, Department>  $departments
      * @return array<string, mixed>
      */
-    private function row(
-        Event $event,
-        EventAuthority $authority,
-        IncidentCommandDepartmentSelectionService $incidentCommand,
-    ): array {
-        $effectiveIc = $incidentCommand->effectiveDepartment($event);
+    private function row(Event $event, EloquentCollection $departments): array
+    {
+        $effectiveIc = $this->incidentCommand->effectiveDepartment($event);
+        $participating = $event->participatingDepartments;
+        $participatingIds = $participating->map(fn (Department $department): string => (string) $department->getKey());
 
         return [
             'id' => (string) $event->getKey(),
@@ -245,9 +323,36 @@ final class EventAdministrationController extends Controller
                 'name' => (string) $effectiveIc->name,
                 'inherited' => $event->ic_department_id === null,
             ],
-            // ORG-006 admits only a department actively assigned to this event,
-            // so the choices are the event's own participating departments.
-            'ic_department_options' => $event->participatingDepartments
+            /*
+             * The event's Placement designation (PLACE-002). Read-only here:
+             * choosing it is M14.1's, along with the map authority PLACE-004
+             * says it unlocks. It is published because the screen surface
+             * specification asks event admin views to show when a department is
+             * the event's Placement department, and because it is half of why a
+             * removal can be refused.
+             */
+            'placement_department' => $event->placementDepartment === null ? null : [
+                'id' => (string) $event->placementDepartment->getKey(),
+                'name' => (string) $event->placementDepartment->name,
+            ],
+            /*
+             * Which departments work this event (data/API 10.6). This is the
+             * list the surface manages, and it is also the set ORG-006 admits
+             * for Incident Command, so it is sent once and read for both.
+             */
+            'participating_departments' => $participating
+                ->map(fn (Department $department): array => $this->participant($event, $department))
+                ->values()
+                ->all(),
+            /*
+             * The active departments of this organization that are not in this
+             * event yet. Sent rather than left to the client to subtract,
+             * because the client would need the organization's whole department
+             * list to do the subtraction and this surface is not otherwise
+             * about departments.
+             */
+            'assignable_departments' => $departments
+                ->reject(fn (Department $department): bool => $participatingIds->contains((string) $department->getKey()))
                 ->map(fn (Department $department): array => [
                     'id' => (string) $department->getKey(),
                     'name' => (string) $department->name,
@@ -262,9 +367,32 @@ final class EventAdministrationController extends Controller
              * that the window can be closed from the node somebody is at.
              */
             'authority' => [
-                'phase' => $authority->phaseFor($event),
-                'authoritative_node' => $authority->authoritativeNodeFor($event)?->node_name,
+                'phase' => $this->authority->phaseFor($event),
+                'authoritative_node' => $this->authority->authoritativeNodeFor($event)?->node_name,
             ],
+        ];
+    }
+
+    /**
+     * One participating department, carrying why it may not be removed where
+     * that is the case.
+     *
+     * The refusal sentence comes from the same method the command refuses with,
+     * so what the surface says before the attempt and what the node says after
+     * it cannot be two different explanations.
+     *
+     * @return array<string, mixed>
+     */
+    private function participant(Event $event, Department $department): array
+    {
+        $departmentId = (string) $department->getKey();
+
+        return [
+            'id' => $departmentId,
+            'name' => (string) $department->name,
+            'is_incident_command' => (string) $event->ic_department_id === $departmentId,
+            'is_placement' => (string) $event->placement_department_id === $departmentId,
+            'removal_refusal' => $this->participation->removalRefusal($event, $department),
         ];
     }
 
