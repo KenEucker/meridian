@@ -131,6 +131,46 @@ class ConsoleVisualIdentityTest extends TestCase
     }
 
     /**
+     * A read-only field keeps the input surface and the primary foreground.
+     *
+     * The framework paints `.form-control[readonly]` `#fff` on `#15141a` in
+     * literal colors — nothing the token bridge sets reaches them — and a
+     * second rule drops read-only text to 23% opacity. Both outrank the plain
+     * `.form-control` rule, because an attribute selector carries more
+     * specificity than a class, so the console has to re-declare them at
+     * matching specificity rather than rely on the general rule.
+     *
+     * This is not cosmetic on a console where read-only fields carry the
+     * content: the recorded values on an audit entry, the measured usage
+     * beside a limit, both versions of a sync conflict.
+     */
+    public function test_read_only_fields_paint_from_the_shared_tokens(): void
+    {
+        $css = $this->bridge();
+
+        foreach ([
+            '.form-control[readonly],',
+            '.form-select[readonly],',
+            'textarea.form-control[readonly] {',
+        ] as $selector) {
+            $this->assertStringContainsString($selector, $css);
+        }
+
+        // The input surface and the primary foreground, not the canvas a
+        // disabled control recedes to.
+        $this->assertStringContainsString(
+            "background-color: var(--m-surface-base);
+    border-color: var(--m-console-border);
+    color: var(--m-text-primary);
+    opacity: 1;",
+            $css,
+        );
+
+        // Read-only *and* disabled is disabled, which is the stronger claim.
+        $this->assertStringContainsString('.form-control[readonly]:disabled,', $css);
+    }
+
+    /**
      * Bridging `--bs-link-color` is not enough on its own: the framework paints
      * links from a separate `--bs-link-color-rgb` triple that a hex token
      * cannot produce, so links kept the framework's near-black and turned

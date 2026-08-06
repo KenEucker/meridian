@@ -118,6 +118,32 @@ export async function getApplicationReviewQueue(): Promise<ApplicationReviewQueu
   };
 }
 
+/**
+ * One application, for the detail surface (M18.29; UI contract 12.6
+ * `organizer.application-detail`, 12.10.2).
+ *
+ * A read of its own rather than a row picked out of the queue. The queue is
+ * filtered by status and by department interest, so the row somebody followed a
+ * link to is often not in the list this client last held — and a detail page
+ * that could only render what a previous read happened to contain would be a
+ * page that works from one direction and not the other.
+ *
+ * The node answers the same two populations here that it answers on the list: a
+ * reviewer for the organization, and the department lead APP-011 grants
+ * read-only visibility over an application naming their department. Everybody
+ * else meets a refusal, which is the honest answer — an application they may
+ * not see is not an empty page.
+ */
+export async function getApplication(
+  applicationId: string,
+): Promise<ReviewableApplication | null> {
+  const payload = await meridianJson<{
+    application?: ApplicationPayload;
+  }>(`/api/applications/${encodeURIComponent(applicationId)}`);
+
+  return payload?.application == null ? null : toApplication(payload.application);
+}
+
 type Decision = "approve" | "reject" | "defer";
 
 const COMMAND_FOR_DECISION = {

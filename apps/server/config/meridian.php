@@ -169,6 +169,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Audit Storage
+    |--------------------------------------------------------------------------
+    |
+    | `audit_events` is append-only and grows for the life of a deployment
+    | (data/API 14.1). Monthly declarative partitioning on `created_at` keeps
+    | the table's growth from becoming one table's problem: every scoped read
+    | the two audit surfaces make is time-ordered, so Postgres prunes to the
+    | partitions a page actually touches, and a month's history can later be
+    | detached and archived without a delete ever running against live rows.
+    |
+    | On by default, and PostgreSQL-only. Declarative partitioning does not
+    | exist in SQLite, which is what the test suite runs on, so the migration
+    | and the scheduled partition-creation command are both no-ops there rather
+    | than failures. `months_ahead` is how far in advance partitions are
+    | created; a row with no partition to land in is an insert that fails, so
+    | the margin is deliberately generous relative to the daily schedule.
+    |
+    */
+    'audit' => [
+        'partitioning' => [
+            'enabled' => filter_var(
+                env('MERIDIAN_AUDIT_PARTITIONING_ENABLED', true),
+                FILTER_VALIDATE_BOOL,
+            ),
+            'months_ahead' => (int) env('MERIDIAN_AUDIT_PARTITION_MONTHS_AHEAD', 3),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Event Mode Safeguards
     |--------------------------------------------------------------------------
     |

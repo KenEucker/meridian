@@ -47,8 +47,10 @@ import {
   CAPABILITY_INCIDENTS_VIEW,
   CAPABILITY_ORGANIZATION_BRANDING_MANAGE,
   CAPABILITY_ORGANIZATION_APPLICATIONS_REVIEW,
+  CAPABILITY_ORGANIZATION_AUDIT_REVIEW,
   CAPABILITY_ORGANIZATION_DEPARTMENTS_MANAGE,
   CAPABILITY_ORGANIZATION_DESIGNATIONS_MANAGE,
+  CAPABILITY_ORGANIZATION_EVENTS_MANAGE,
   CAPABILITY_ORGANIZATION_INCIDENT_TYPES_MANAGE,
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
   CAPABILITY_POLICIES_VIEW_PUBLISHED,
@@ -64,6 +66,7 @@ import {
   departmentHasRole,
   selectedSessionDepartment,
   selectedSessionDepartmentRouteParams,
+  sessionDepartmentAccesses,
   sessionEstablished,
   sessionEventContext,
   sessionLedTeams,
@@ -515,15 +518,15 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
      * association each have nothing to switch to, and a Home tile leading to a
      * screen that only explains itself is a tile that wastes a click.
      */
+    const contextLinks: WorkflowLink[] = [];
+
     if (sessionSwitchingAvailable.value) {
-      const contextLinks: WorkflowLink[] = [
-        {
-          label: "Organization",
-          pageLabel: "Switch organization",
-          description: "The organizations you hold an association with.",
-          to: { name: "organizations.index" },
-        },
-      ];
+      contextLinks.push({
+        label: "Organization",
+        pageLabel: "Switch organization",
+        description: "The organizations you hold an association with.",
+        to: { name: "organizations.index" },
+      });
 
       if (sessionOrganizationId.value !== null) {
         contextLinks.push({
@@ -536,10 +539,37 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
           },
         });
       }
+    }
 
+    /*
+     * The third context screen (M18.29; UI contract 12.2
+     * `context.departments`).
+     *
+     * Offered on different terms from the two above, because it answers a
+     * different question. Switching organization or event is connected-only —
+     * only the node can resolve a session somewhere else — while entering a
+     * department reads what the session already carries, so this entry survives
+     * a locked node and an offline client. It needs an event, because a
+     * department space is an address inside one, and it needs a department to
+     * enter.
+     */
+    if (params !== null && sessionDepartmentAccesses.value.length > 0) {
+      contextLinks.push({
+        label: "Departments",
+        pageLabel: "Department spaces",
+        description: "The departments you are associated with in this event.",
+        to: {
+          name: "events.departments.index",
+          params: { eventId: params.eventId },
+        },
+      });
+    }
+
+    if (contextLinks.length > 0) {
       sections.push({
         title: "Context",
-        description: "The organization and event this device is working in.",
+        description:
+          "The organization, event, and department this device is working in.",
         links: contextLinks,
       });
     }
@@ -703,6 +733,22 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         label: "Departments",
         description: "Organizer department administration.",
         to: { name: "organizer.departments.index" },
+      });
+    }
+
+    /*
+     * Event administration (M18.29; UI contract 12.6 `organizer.events`;
+     * ORG-006). Beside Departments, because the two are the same kind of work —
+     * the shape of the organization, and the occasions it produces — and the
+     * Incident Command designation is made on one from a list the other
+     * maintains.
+     */
+    if (departmentHasCapability(department, CAPABILITY_ORGANIZATION_EVENTS_MANAGE)) {
+      organizationPages.push({
+        label: "Events",
+        description:
+          "Event identity, published dates, the active event window, and Incident Command.",
+        to: { name: "organizer.events.index" },
       });
     }
 
@@ -873,6 +919,19 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
         description:
           "Organization display name, logos, palette, and the department override switch.",
         to: { name: "organizer.branding" },
+      });
+    }
+
+    /*
+     * Audit review (M18.29; requirements 2.4; UI contract 12.6). Last in the
+     * section, because it is the page somebody opens about work done on the
+     * others rather than a place work is done.
+     */
+    if (departmentHasCapability(department, CAPABILITY_ORGANIZATION_AUDIT_REVIEW)) {
+      organizationPages.push({
+        label: "Audit",
+        description: "Who changed what in this organization, when, and why.",
+        to: { name: "organizer.audit.index" },
       });
     }
 

@@ -110,6 +110,15 @@ class ConsoleContrastTest extends TestCase
             // their labels stay readable instead of relying on the WCAG
             // exemption for inactive components.
             'disabled control label' => ['var(--m-text-muted)', 'var(--m-surface-app)', 4.5],
+
+            // A read-only control is not a disabled one. The framework paints
+            // it `#fff` on `#15141a` in literal colors that no theme bridge
+            // reaches, and drops its text to 23% opacity; the console
+            // re-declares both, keeping the input surface and the primary
+            // foreground because a read-only field carries real content — the
+            // recorded values on an audit entry, the measured usage beside a
+            // limit — rather than an inactive control's label.
+            'read-only control value' => ['var(--m-text-primary)', 'var(--m-surface-base)', 4.5],
             'disabled control boundary' => [
                 'color-mix(in srgb, var(--m-border-default) 70%, var(--m-text-primary))',
                 'var(--m-surface-app)',

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Application\ApplicationReviewController;
 use App\Http\Controllers\Application\PublicParticipationController;
 use App\Http\Controllers\Attendance\AttendanceCommandController;
+use App\Http\Controllers\Audit\AuditReviewController;
 use App\Http\Controllers\Auth\ApiAuthController;
 use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
 use App\Http\Controllers\Auth\SharedWorkstationSessionController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
 use App\Http\Controllers\Equipment\EquipmentLookupController;
+use App\Http\Controllers\Events\EventAdministrationController;
 use App\Http\Controllers\Events\EventInfoReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
 use App\Http\Controllers\FieldReports\FieldReportDictationReadController;
@@ -578,6 +580,37 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::post('/commands/update-organization-configuration', [OrganizationConfigurationController::class, 'update'])
         ->name('api.commands.update-organization-configuration');
+
+    /*
+     * Event administration as a product surface (M18.29; UI contract 12.6
+     * `organizer.events`; ORG-006). One read carries the organization's events
+     * with each one's eligible Incident Command departments and whether this
+     * node may write it, because ORG-006 admits only a department assigned to
+     * that event and an organization-wide list would offer refusals.
+     *
+     * Create and update are separate commands rather than one upsert: they are
+     * different acts with different audit entries, and an endpoint that decided
+     * which from the presence of an id would turn a typo'd id into a second
+     * event.
+     */
+    Route::get('/organizations/{organization}/events', [EventAdministrationController::class, 'index'])
+        ->name('api.organizations.events.index');
+
+    Route::post('/commands/create-event', [EventAdministrationController::class, 'create'])
+        ->name('api.commands.create-event');
+
+    Route::post('/commands/update-event', [EventAdministrationController::class, 'update'])
+        ->name('api.commands.update-event');
+
+    /*
+     * Audit review as a product surface (M18.29; requirements 2.4; UI contract
+     * 12.6 `organizer.audit`). Organization-scoped, and narrowed by
+     * `AuditReviewAccess` rather than here: ORG-015 keeps incident and Field
+     * Report history out of what organizing reaches, and a filter this route
+     * applied would be a rule one endpoint kept.
+     */
+    Route::get('/organizations/{organization}/audit', [AuditReviewController::class, 'index'])
+        ->name('api.organizations.audit.index');
 
     /*
      * Credit policies and calculation runs (M18.16; ORG-009, ORG-020;

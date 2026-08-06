@@ -122,6 +122,10 @@ final class PermissionCatalog
 
     public const PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW = 'staff.profile-change-requests.review';
 
+    public const PERMISSION_ORGANIZATION_EVENTS_MANAGE = 'organization.events.manage';
+
+    public const PERMISSION_ORGANIZATION_AUDIT_REVIEW = 'organization.audit.review';
+
     /**
      * Canonical effective roles keyed by code (technical spec section 15.1)
      * with their authority scope (technical spec section 15.2).
@@ -206,6 +210,8 @@ final class PermissionCatalog
             self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE => 'Edit organization configuration: lifecycle inactivity thresholds, the hours correction grace period, the calendar year start, the default credit policy, and the Organizers, default Incident Command, and default Placement department designations.',
             self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE => 'Maintain the organization credit policies — create, rename, re-rate, archive, and restore — and start credit calculation runs for events whose grace period has closed.',
             self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW => 'Review staff profile change requests for the organization: approve or reject a requested handle or a submitted profile picture, with a reason.',
+            self::PERMISSION_ORGANIZATION_EVENTS_MANAGE => 'Administer organization events: create one, edit its identity, schedule, timezone, minimum staff age, and active event window, and override the default Incident Command Department for it.',
+            self::PERMISSION_ORGANIZATION_AUDIT_REVIEW => 'Review the organization audit record: who changed what, when, and why, across the organizations this authority covers.',
         ];
     }
 
@@ -330,6 +336,15 @@ final class PermissionCatalog
      * so an operator who has taken fifty reports has gained no authority over
      * any of them. ic_operator and ic_lead already held
      * field_reports.view_event; this changes nothing about that either way.
+     * M18.29 adds organization.events.manage and organization.audit.review to
+     * the two organizer roles and to nobody else, which is what UI contract
+     * 12.6 grants `organizer.events` and `organizer.audit`. Neither reaches
+     * staff_coordinator: that role decides applications and profile change
+     * requests, and TEAM-014 is explicit that it carries "no other organizer
+     * governance capability". They are two capabilities rather than one because
+     * they are two jobs — declaring when an event runs, and reading who changed
+     * what — and an organization that wanted to hand one to somebody would be
+     * handing over the other with it.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -425,6 +440,8 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
                 self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
                 self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
+                self::PERMISSION_ORGANIZATION_EVENTS_MANAGE,
+                self::PERMISSION_ORGANIZATION_AUDIT_REVIEW,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -445,6 +462,8 @@ final class PermissionCatalog
                 self::PERMISSION_ORGANIZATION_CONFIGURATION_MANAGE,
                 self::PERMISSION_ORGANIZATION_CREDIT_POLICIES_MANAGE,
                 self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
+                self::PERMISSION_ORGANIZATION_EVENTS_MANAGE,
+                self::PERMISSION_ORGANIZATION_AUDIT_REVIEW,
             ],
         ];
     }

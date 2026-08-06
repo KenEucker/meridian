@@ -578,6 +578,36 @@ fieldset:disabled .btn {
     opacity: 1;
 }
 
+/* A read-only control is not a disabled one, and the framework treats it as
+   neither: `.form-control[readonly]` is painted `#fff` on `#15141a` directly,
+   in literal colors rather than through `--bs-*`, so nothing the theme bridge
+   sets reaches it — a white box with near-white text once the console is dark.
+   A second framework rule drops read-only text to 23% opacity, which is below
+   the contrast floor in either theme.
+
+   Both are re-declared here at matching specificity. Read-only fields carry
+   real content — the recorded values on an audit entry, the measured usage
+   beside a limit — so they keep the input surface and the primary foreground
+   rather than receding the way a disabled control above does. What marks them
+   is the absent caret and the unchanged value, not a colour the reader has to
+   squint at. */
+.form-control[readonly],
+.form-select[readonly],
+textarea.form-control[readonly] {
+    background-color: var(--m-surface-base);
+    border-color: var(--m-console-border);
+    color: var(--m-text-primary);
+    opacity: 1;
+}
+
+/* A control that is read-only *and* disabled is disabled: it recedes, because
+   the stronger statement is the one worth making. */
+.form-control[readonly]:disabled,
+.form-select[readonly]:disabled {
+    background-color: var(--m-surface-app);
+    color: var(--m-text-muted);
+}
+
 /*
  * Enhanced select controls.
  *

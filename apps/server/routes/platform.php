@@ -6,6 +6,10 @@ use App\Http\Controllers\Documents\DocumentExportController;
 use App\Orchid\Screens\ApiToken\ApiTokenListScreen;
 use App\Orchid\Screens\Application\ApplicationDetailScreen;
 use App\Orchid\Screens\Application\ApplicationListScreen;
+use App\Orchid\Screens\Audit\AuditDetailScreen;
+use App\Orchid\Screens\Audit\AuditListScreen;
+use App\Orchid\Screens\Audit\AuditSettingsEditScreen;
+use App\Orchid\Screens\Audit\AuditSettingsListScreen;
 use App\Orchid\Screens\Console\ChangelogScreen;
 use App\Orchid\Screens\Console\DocumentationScreen;
 use App\Orchid\Screens\Credit\CreditPolicyEditScreen;
@@ -446,6 +450,46 @@ Route::screen('document-fragments', DocumentFragmentListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Document Fragments'), route('platform.document-fragments')));
+
+/*
+ * Platform > God Mode > Audit Trail (M18.34; requirements 2.4; UI contract
+ * 12.9). The entry route is declared before the list so `audit/{entry}` is
+ * matched as an entry rather than swallowed by a later pattern, matching the
+ * order every other list/detail pair here uses.
+ */
+/*
+ * Platform > God Mode > Audit Settings (data/API 14.1).
+ *
+ * `audit-settings` rather than `audit/settings`, which is not cosmetic. Nesting
+ * it under the trail's path made `settings` indistinguishable from an entry id
+ * without careful route ordering, and made the navigation highlight both
+ * entries at once: a menu item is active for its own href plus `href/*`, so
+ * everything under the trail's address lit the trail up as well. A sibling path
+ * has neither problem and needs no rule to keep it that way.
+ */
+Route::screen('audit-settings/{organization}', AuditSettingsEditScreen::class)
+    ->name('platform.audit.settings.edit')
+    ->breadcrumbs(fn (Trail $trail, $organization) => $trail
+        ->parent('platform.audit.settings')
+        ->push(__('Organization'), route('platform.audit.settings.edit', $organization)));
+
+Route::screen('audit-settings', AuditSettingsListScreen::class)
+    ->name('platform.audit.settings')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Audit Settings'), route('platform.audit.settings')));
+
+Route::screen('audit/{entry}', AuditDetailScreen::class)
+    ->name('platform.audit.show')
+    ->breadcrumbs(fn (Trail $trail, $entry) => $trail
+        ->parent('platform.audit')
+        ->push(__('Entry'), route('platform.audit.show', $entry)));
+
+Route::screen('audit', AuditListScreen::class)
+    ->name('platform.audit')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Audit Trail'), route('platform.audit')));
 
 // Platform > Infrastructure > Sync Conflicts > Conflict
 Route::screen('sync-conflicts/{conflict}', SyncConflictDetailScreen::class)

@@ -157,6 +157,69 @@ class ApplicationReviewHttpTest extends TestCase
     }
 
     /**
+     * APP-005 / TEAM-014 / requirements 4.4: the Staff Coordinator is the other
+     * half of the review population, and decides on the same path an organizer
+     * does. The catalog half of this is
+     * `PermissionCatalogTest::test_application_review_authority_covers_organizer_and_staff_coordinator_only`.
+     */
+    public function test_a_staff_coordinator_decides_an_application(): void
+    {
+        Mail::fake();
+
+        [$organization] = $this->organizerScaffold();
+        $coordinator = $this->staffCoordinatorFor($organization);
+        $application = $this->applicationFor($organization, 'robin@example.test');
+
+        $this->actingAsClient($coordinator)
+            ->getJson('/api/applications')
+            ->assertOk()
+            ->assertJsonPath('can_review', true);
+
+        $this->actingAsClient($coordinator)
+            ->postJson('/api/commands/defer-application', [
+                'application_id' => (string) $application->id,
+                'reason' => 'Waiting on the department to confirm capacity.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', EventApplication::STATUS_DEFERRED);
+    }
+
+    /**
+     * The detail read behind `organizer.application-detail` (M18.29; UI
+     * contract 12.6, 12.10.2). A department lead reaches the same address for
+     * the read-only visibility APP-011 grants them, and a caller with neither
+     * authority meets a refusal rather than a page.
+     */
+    public function test_the_detail_read_answers_reviewers_and_named_department_leads_only(): void
+    {
+        $organization = Organization::factory()->create();
+        $organizersDepartment = Department::factory()->for($organization)->create(['name' => 'Organizers']);
+        $organization->forceFill(['organizers_department_id' => $organizersDepartment->id])->save();
+
+        $department = Department::factory()->for($organization)->create(['name' => 'Gate']);
+        $lead = $this->departmentLeadFor($department);
+        $stranger = $this->departmentLeadFor(
+            Department::factory()->for($organization)->create(['name' => 'DPW']),
+        );
+
+        $application = $this->applicationFor($organization, 'robin@example.test');
+        EventApplicationDepartmentInterest::query()->create([
+            'event_application_id' => $application->id,
+            'department_id' => $department->id,
+        ]);
+
+        $this->actingAsClient($lead)
+            ->getJson("/api/applications/{$application->id}")
+            ->assertOk()
+            ->assertJsonPath('application.id', (string) $application->id)
+            ->assertJsonPath('application.can_review', false);
+
+        $this->actingAsClient($stranger)
+            ->getJson("/api/applications/{$application->id}")
+            ->assertForbidden();
+    }
+
+    /**
      * @return array{0: Organization, 1: User}
      */
     private function organizerScaffold(): array
@@ -191,6 +254,42 @@ class ApplicationReviewHttpTest extends TestCase
         ]);
 
         return [$organization->refresh(), $user];
+    }
+
+    /**
+     * A Staff Coordinator, which is a designation on a team inside the
+     * configured Organizers Department (TEAM-014).
+     */
+    private function staffCoordinatorFor(Organization $organization): User
+    {
+        $organizersDepartment = Department::query()
+            ->whereKey($organization->organizers_department_id)
+            ->firstOrFail();
+
+        $user = User::factory()->create();
+        $staff = Staff::factory()->create();
+        $user->staffProfiles()->attach($staff->id);
+
+        $team = Team::factory()->for($organizersDepartment)->create(['name' => 'Staff Coordination']);
+        $membership = DepartmentMembership::factory()
+            ->for($organizersDepartment)
+            ->for($staff)
+            ->create();
+
+        TeamMembership::factory()->create([
+            'team_id' => $team->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $membership->id,
+        ]);
+
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'permission_role_id' => PermissionRole::query()
+                ->where('code', PermissionCatalog::ROLE_STAFF_COORDINATOR)
+                ->firstOrFail()->id,
+        ]);
+
+        return $user;
     }
 
     private function departmentLeadFor(Department $department): User

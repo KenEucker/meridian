@@ -313,6 +313,69 @@ class PermissionCatalogTest extends TestCase
         }
     }
 
+    /**
+     * M18.29 / APP-005, APP-019 / TEAM-014, requirements 4.4.
+     *
+     * The task M18.29 asks for in as many words: application review authority
+     * covers organizer and Staff Coordinator only. Asserted as the whole
+     * population rather than as four spot checks, so a role that gains the
+     * capability later fails here rather than quietly joining the reviewers.
+     * Lead Organizer is an organizer — the two organizer roles are the same
+     * standing at different reach — and God Mode reviews through the console's
+     * own `platform.applications`, which is support access rather than staff
+     * standing and is not part of this catalog.
+     */
+    public function test_application_review_authority_covers_organizer_and_staff_coordinator_only(): void
+    {
+        $reviewers = [];
+
+        foreach (array_keys(PermissionCatalog::roles()) as $roleCode) {
+            if (PermissionCatalog::roleHasPermission(
+                $roleCode,
+                PermissionCatalog::PERMISSION_ORGANIZATION_APPLICATIONS_REVIEW,
+            )) {
+                $reviewers[] = $roleCode;
+            }
+        }
+
+        $this->assertSame(['organizer', 'lead_organizer', 'staff_coordinator'], $reviewers);
+
+        // And the same population as the database sees it, so a seeder that
+        // drifted from the catalog fails here too. Department leads are the
+        // absence that matters most: APP-011 grants them read-only visibility
+        // over applications naming their department, which is standing rather
+        // than a capability and must never become one.
+        foreach (['department_lead', 'department_administration', 'ic_lead', 'staff'] as $role) {
+            $this->assertNotContains(
+                'organization.applications.review',
+                $this->permissionCodesFor($role),
+                "{$role} must not hold application review authority.",
+            );
+        }
+    }
+
+    /**
+     * M18.29 / UI contract 12.6: `organizer.events` and `organizer.audit` are
+     * organizer surfaces, and the Staff Coordinator carries neither.
+     */
+    public function test_event_administration_and_audit_review_are_organizer_governance_only(): void
+    {
+        foreach (['organization.events.manage', 'organization.audit.review'] as $capability) {
+            $this->assertContains($capability, $this->permissionCodesFor('organizer'));
+            $this->assertContains($capability, $this->permissionCodesFor('lead_organizer'));
+
+            foreach ([
+                'staff_coordinator',
+                'department_lead',
+                'department_administration',
+                'ic_lead',
+                'staff',
+            ] as $role) {
+                $this->assertNotContains($capability, $this->permissionCodesFor($role));
+            }
+        }
+    }
+
     public function test_seeder_is_idempotent(): void
     {
         $roleCount = PermissionRole::query()->count();

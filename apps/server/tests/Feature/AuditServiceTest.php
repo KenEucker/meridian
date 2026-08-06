@@ -28,7 +28,7 @@ class AuditServiceTest extends TestCase
         $node = Node::factory()->create();
         $entityId = (string) Str::uuid();
 
-        $audit = (new AuditService)->record(
+        $audit = app(AuditService::class)->record(
             action: 'organization.status.changed',
             entityType: 'staff_organization_status',
             entityId: $entityId,
@@ -70,7 +70,7 @@ class AuditServiceTest extends TestCase
 
     public function test_record_defaults_optional_fields_to_null_and_system_source(): void
     {
-        $audit = (new AuditService)->record(
+        $audit = app(AuditService::class)->record(
             action: 'permission.role.granted',
             entityType: 'team_grant',
             entityId: (string) Str::uuid(),
@@ -93,7 +93,7 @@ class AuditServiceTest extends TestCase
     {
         $organization = Organization::factory()->create();
 
-        $audit = (new AuditService)->recordForEntity(
+        $audit = app(AuditService::class)->recordForEntity(
             entity: $organization,
             action: 'organization.archived',
             organizationId: $organization->id,
@@ -109,7 +109,7 @@ class AuditServiceTest extends TestCase
         $organization = Organization::factory()->create();
         $user = User::factory()->create();
 
-        $audit = (new AuditService)->record(
+        $audit = app(AuditService::class)->record(
             action: 'organization.archived',
             entityType: 'organization',
             entityId: $organization->id,
@@ -125,7 +125,7 @@ class AuditServiceTest extends TestCase
 
     public function test_for_entity_scope_filters_by_type_and_id(): void
     {
-        $service = new AuditService;
+        $service = app(AuditService::class);
 
         $incidentId = (string) Str::uuid();
         $otherIncidentId = (string) Str::uuid();

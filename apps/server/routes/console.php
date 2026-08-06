@@ -58,6 +58,25 @@ Schedule::command('meridian:evaluate-lifecycle-thresholds')
     ->daily()
     ->withoutOverlapping();
 
+// Audit limits, where an organization has configured any (data/API 14.1). The
+// command archives before it removes and records the archival, so it is safe to
+// run unattended; it refuses quietly on a node that does not own the audit
+// record, and does nothing at all for an organization with no limits set, which
+// is every organization until somebody sets one. Daily rather than hourly
+// because a limit is a bound on a table's growth, not a deadline.
+Schedule::command('meridian:enforce-audit-limits')
+    ->daily()
+    ->withoutOverlapping();
+
+// Upcoming monthly audit partitions, where the table is partitioned. A
+// range-partitioned table refuses an insert with nowhere to put it, and an
+// audit write that fails is a change nobody recorded — so the partitions are
+// created months ahead rather than when the first row of a month arrives. A
+// no-op on any node whose table is not partitioned, SQLite included.
+Schedule::command('meridian:ensure-audit-partitions')
+    ->daily()
+    ->withoutOverlapping();
+
 // Event credits are written on a schedule once the correction grace period
 // closes (M18.16; CREDIT-001), so a configured organization gets its ledger
 // without anyone pressing the button on the credit policy surface. The command

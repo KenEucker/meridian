@@ -348,6 +348,97 @@ describe("navigation without a permitting capability", () => {
   });
 });
 
+describe("the M18.29 context and organizer surfaces", () => {
+  it("offers event administration and audit review on their own capabilities", () => {
+    // UI contract 12.6: both are organizer surfaces, and each answers to its own
+    // code rather than to "being an organizer" — reading who changed something
+    // is a different job from changing it.
+    install(sessionWith({ roleCode: "organizer", capabilities: [] }));
+
+    expect(sectionLabels("Organization pages")).not.toContain("Events");
+    expect(sectionLabels("Organization pages")).not.toContain("Audit");
+
+    install(
+      sessionWith({
+        roleCode: "organizer",
+        capabilities: ["organization.events.manage"],
+      }),
+    );
+
+    expect(sectionLabels("Organization pages")).toContain("Events");
+    expect(sectionLabels("Organization pages")).not.toContain("Audit");
+
+    install(
+      sessionWith({
+        roleCode: "organizer",
+        capabilities: ["organization.audit.review"],
+      }),
+    );
+
+    expect(sectionLabels("Organization pages")).toContain("Audit");
+    expect(sectionLabels("Organization pages")).not.toContain("Events");
+  });
+
+  it("sends each organizer entry to its own surface", () => {
+    install(
+      sessionWith({
+        roleCode: "organizer",
+        capabilities: ["organization.events.manage", "organization.audit.review"],
+      }),
+    );
+
+    const organizationPages = useNavigationSections().value.find(
+      (section) => section.title === "Organization pages",
+    );
+
+    expect(
+      organizationPages?.links.find((link) => link.label === "Events")?.to.name,
+    ).toBe("organizer.events.index");
+    expect(
+      organizationPages?.links.find((link) => link.label === "Audit")?.to.name,
+    ).toBe("organizer.audit.index");
+  });
+
+  it("offers the department context screen on the session alone", () => {
+    /*
+     * UI contract 12.2: entering a department space needs no capability, unlike
+     * the two switchers above it — the departments in scope are already part of
+     * the session, which is why this entry survives a locked node.
+     */
+    install(sessionWith({}));
+
+    const context = useNavigationSections().value.find(
+      (section) => section.title === "Context",
+    );
+    const departments = context?.links.find(
+      (link) => link.label === "Departments",
+    );
+
+    expect(departments?.to.name).toBe("events.departments.index");
+    expect(departments?.to.params?.eventId).toBe(EVENT_ID);
+    // And the two connected-only switchers are absent on a locked node, which
+    // is what makes this a different gate rather than the same one.
+    expect(context?.links.map((link) => link.label)).toEqual(["Departments"]);
+  });
+
+  it("offers no department context screen to a session carrying no departments", () => {
+    install(
+      localFieldSessionDocument({
+        departments: [],
+        teams: [],
+        roles: [],
+        capabilities: [],
+      }),
+    );
+
+    expect(
+      useNavigationSections()
+        .value.find((section) => section.title === "Context")
+        ?.links.map((link) => link.label) ?? [],
+    ).not.toContain("Departments");
+  });
+});
+
 describe("navigation and the session verdict", () => {
   it("drops every entry when a cached session outlives its event window", () => {
     // CLIENT-008: past the locked event's window a cached document grants

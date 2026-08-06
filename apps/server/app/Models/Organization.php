@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Audit\AuditVerbosity;
 use App\Domain\Staffing\ProfileChangePolicy;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -61,6 +62,13 @@ class Organization extends Model
         'handle_self_service_change_limit',
         'notifications_suppressed_at',
         'accepts_organization_applications',
+        // How much audit history this organization writes, and how much it
+        // keeps. Configured from God Mode only for now.
+        'audit_verbosity',
+        'audit_action_overrides',
+        'audit_max_rows',
+        'audit_max_bytes',
+        'audit_retention_days',
         'archived_at',
     ];
 
@@ -103,6 +111,10 @@ class Organization extends Model
             'branding_palette_json' => 'array',
             'department_branding_enabled' => 'boolean',
             'branding_updated_at' => 'datetime',
+            'audit_action_overrides' => 'array',
+            'audit_max_rows' => 'integer',
+            'audit_max_bytes' => 'integer',
+            'audit_retention_days' => 'integer',
         ];
     }
 
@@ -254,6 +266,32 @@ class Organization extends Model
     public function profilePictureChangePolicy(): ProfileChangePolicy
     {
         return ProfileChangePolicy::resolve($this->profile_picture_change_policy);
+    }
+
+    /**
+     * How much of what happens here is written down.
+     *
+     * An organization that has never chosen reads as the documented default,
+     * the way every other configuration column does. The floor is not part of
+     * this answer: {@see \App\Services\Audit\AuditPolicy} applies it above
+     * whatever this returns, so no level can reach below what requirements 2.4
+     * and data/API section 8 oblige.
+     */
+    public function auditVerbosity(): AuditVerbosity
+    {
+        return AuditVerbosity::fromValue($this->audit_verbosity);
+    }
+
+    /**
+     * Whether this organization has asked for a bound on its audit history at
+     * all. Every limit is null by default, which is what every organization has
+     * today and means unbounded.
+     */
+    public function hasAuditLimits(): bool
+    {
+        return $this->audit_max_rows !== null
+            || $this->audit_max_bytes !== null
+            || $this->audit_retention_days !== null;
     }
 
     /**
