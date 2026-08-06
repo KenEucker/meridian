@@ -10,6 +10,7 @@ use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Credentials\EventCredentialAdminController;
 use App\Http\Controllers\Credits\CreditPolicyAdminController;
+use App\Http\Controllers\Dashboard\DashboardReadController;
 use App\Http\Controllers\DepartmentOps\DepartmentOperationsReadController;
 use App\Http\Controllers\Departments\DepartmentCommandController;
 use App\Http\Controllers\Departments\DepartmentReadController;
@@ -855,6 +856,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/events/{event}/departments/{department}/planning', [DepartmentOperationsReadController::class, 'planning'])
         ->name('api.events.departments.planning');
+
+    /*
+     * The dashboard read (M18.28; UI contract 13.1 through 13.6).
+     *
+     * One read behind every dashboard surface — `staff.dashboard`,
+     * `department.dashboard`, `organizer.dashboard`, `ims.dashboard`, and
+     * `kiosk.home` — because they are five presentations of one question and
+     * five endpoints would be five places for the answers to disagree. The
+     * department-scoped groups compile against `?department_id=`; the rest are
+     * event-scoped and need none. A group the caller does not hold is absent
+     * from the response rather than empty.
+     */
+    Route::get('/events/{event}/dashboard', [DashboardReadController::class, 'show'])
+        ->name('api.events.dashboard');
 
     /*
      * Equipment lookup at checkout (M18.24C; EQUIP-012, EQUIP-013, EQUIP-015).

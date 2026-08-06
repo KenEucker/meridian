@@ -55,6 +55,8 @@ import {
   CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
   CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
   ROLE_DEPARTMENT_LEAD,
+  ROLE_LEAD_ORGANIZER,
+  ROLE_ORGANIZER,
   ROLE_SHIFT_LEAD,
 } from "@/session/permissionCodes";
 import {
@@ -99,11 +101,12 @@ export type NavigationSection = {
  * lead holding every department capability — so the person with the most to
  * reach still reads one list. It moved from ten to eleven when the shift board
  * joined the personal pages (M18.2), from eleven to twelve when acknowledgments
- * did (M18.6), and from twelve to thirteen when the document library did
- * (M18.7), each time for the same reason: that lead gained a page rather than
- * gaining a reason to hunt through two menus.
+ * did (M18.6), from twelve to thirteen when the document library did (M18.7),
+ * and from thirteen to fifteen when the two dashboards arrived (M18.28) — one
+ * personal and one for the department — each time for the same reason: that lead
+ * gained a page rather than gaining a reason to hunt through two menus.
  */
-export const COMBINED_NAVIGATION_MAX_ITEMS = 13;
+export const COMBINED_NAVIGATION_MAX_ITEMS = 15;
 
 /**
  * The event the interface is currently working in, or null when the session
@@ -140,6 +143,32 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
     }
 
     const isDepartmentLead = departmentHasRole(department, ROLE_DEPARTMENT_LEAD);
+
+    /*
+     * The department dashboard (M18.28; UI contract 12.4, 13.2, 13.3).
+     *
+     * First, because it is the department's home rather than one of the
+     * workflows inside it. Offered on any department standing that opens a
+     * widget group — the lead role for 13.2, and the operational capabilities
+     * for 13.3 — so somebody who would be shown an empty page is not sent to it
+     * (CLIENT-005).
+     */
+    if (
+      isDepartmentLead ||
+      departmentHasCapability(
+        department,
+        CAPABILITY_DEPARTMENT_PRESENCE_MANAGE,
+        CAPABILITY_DEPARTMENT_ATTENDANCE_MANAGE,
+        CAPABILITY_DEPARTMENT_EQUIPMENT_MANAGE,
+        CAPABILITY_DEPARTMENT_DEPLOYMENTS_ASSIGN,
+      )
+    ) {
+      links.push({
+        label: "Dashboard",
+        description: "Coverage, check-in, trainings, and the shift running now.",
+        to: { name: "events.departments.show", params },
+      });
+    }
 
     if (isDepartmentLead) {
       links.push({
@@ -260,6 +289,18 @@ function imsDirectoryLinks(
   }
 
   return [
+    /*
+     * The IMS attention dashboard (M18.28; UI contract 12.7, 13.5). Listed
+     * beside Field Reports rather than in the tab bar for the same reason: the
+     * Incidents workspace is the hub, and both of these are pages reached from
+     * inside it.
+     */
+    {
+      label: "IC Dashboard",
+      pageLabel: "Incident Command dashboard",
+      description: "Open, serious, on-scene, and monitoring incidents at a glance.",
+      to: { name: "ims.dashboard" },
+    },
     {
       label: "Field Reports",
       description: "Event Field Reports visible to Incident Command.",
@@ -307,6 +348,23 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
             name: "events.info",
             params: { eventId: eventContext.value.eventId },
           },
+        },
+        /*
+         * The staff dashboard (M18.28; UI contract 12.3, 13.1). Personal like Me
+         * and gated by no capability, because every widget on it is about the
+         * reader's own record — their shift, their departments, their
+         * outstanding documents. It needs an event, since all of them are
+         * event-scoped, which is why it sits inside this branch.
+         *
+         * Third rather than second: Event Info's adjacency to Me is an
+         * invariant of its own, and a dashboard that pushed the arrival
+         * information down the list would be trading a page somebody reads once
+         * before they travel for one they read during the event.
+         */
+        {
+          label: "Dashboard",
+          description: "Your current shift, what is next, and what needs you.",
+          to: { name: "staff.dashboard" },
         },
         /*
          * The shift board (M18.2; SHIFT-018). A personal page rather than a
@@ -608,6 +666,27 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     }
 
     const organizationPages: WorkflowLink[] = [];
+
+    /*
+     * The organizer dashboard (M18.28; UI contract 12.6, 13.4).
+     *
+     * Role-permitted rather than capability-permitted, like Department Overview
+     * and Team Overview: the contract grants the whole 13.4 group to "organizer"
+     * rather than to any code in the catalogue, and the node opens it on the
+     * same standing. First in the section, because it is the organization's home
+     * and the rest of the section is what it links into.
+     */
+    if (
+      departmentHasRole(department, ROLE_ORGANIZER) ||
+      departmentHasRole(department, ROLE_LEAD_ORGANIZER)
+    ) {
+      organizationPages.push({
+        label: "Dashboard",
+        pageLabel: "Organizer dashboard",
+        description: "Event readiness, coverage, applications, and the operations window.",
+        to: { name: "organizer.dashboard" },
+      });
+    }
 
     if (departmentHasCapability(department, CAPABILITY_ORGANIZATION_STAFF_MANAGE)) {
       organizationPages.push({
