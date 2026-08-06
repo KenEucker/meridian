@@ -62,8 +62,11 @@ import StaffDocumentAcknowledgmentsView from "@/views/StaffDocumentAcknowledgmen
 import StaffDocumentDetailView from "@/views/StaffDocumentDetailView.vue";
 import StaffDocumentLibraryView from "@/views/StaffDocumentLibraryView.vue";
 import OrganizerStaffView from "@/views/OrganizerStaffView.vue";
+import DepartmentCreditsView from "@/views/DepartmentCreditsView.vue";
+import DepartmentDeploymentsView from "@/views/DepartmentDeploymentsView.vue";
 import DepartmentEquipmentView from "@/views/DepartmentEquipmentView.vue";
 import DepartmentExportsView from "@/views/DepartmentExportsView.vue";
+import DepartmentRosterView from "@/views/DepartmentRosterView.vue";
 import OrganizerExportsView from "@/views/OrganizerExportsView.vue";
 import DepartmentShiftEditView from "@/views/DepartmentShiftEditView.vue";
 import DepartmentShiftListView from "@/views/DepartmentShiftListView.vue";
@@ -393,6 +396,40 @@ export const routes: RouteRecordRaw[] = [
     path: "/events/:eventId/departments/:departmentId/equipment",
     name: "events.departments.equipment.index",
     component: DepartmentEquipmentView,
+    beforeEnter: selectDepartmentFromRoute,
+  },
+  /*
+   * The three remaining department screens (M18.30; UI contract 12.4).
+   *
+   * The roster is the department's staff list rather than the Admin page's
+   * team-assignment list, and it is the one surface in the product that serves
+   * emergency contacts — to the department leads VOL-012 names, and to nobody
+   * else, decided by the node on the read rather than by anything here.
+   *
+   * Deployments maintains the options the Operations Center assigns staff
+   * between. It has been readable since M16.21 and writable by nothing since
+   * M10.8, which is why a department's first event opened that module empty.
+   *
+   * Credits reads the frozen ledger for this department and offers the credits
+   * export beside it, which is what the contract's "credit review/export"
+   * names. It writes nothing: calculation is an organizer's (ORG-010).
+   */
+  {
+    path: "/events/:eventId/departments/:departmentId/roster",
+    name: "events.departments.roster",
+    component: DepartmentRosterView,
+    beforeEnter: selectDepartmentFromRoute,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/deployments",
+    name: "events.departments.deployments.index",
+    component: DepartmentDeploymentsView,
+    beforeEnter: selectDepartmentFromRoute,
+  },
+  {
+    path: "/events/:eventId/departments/:departmentId/credits",
+    name: "events.departments.credits.index",
+    component: DepartmentCreditsView,
     beforeEnter: selectDepartmentFromRoute,
   },
   /*

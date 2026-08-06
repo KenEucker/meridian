@@ -55,6 +55,7 @@ import {
   CAPABILITY_ORGANIZATION_STAFF_MANAGE,
   CAPABILITY_POLICIES_VIEW_PUBLISHED,
   CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
+  CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT,
   CAPABILITY_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
   ROLE_DEPARTMENT_LEAD,
   ROLE_LEAD_ORGANIZER,
@@ -619,6 +620,35 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       }
 
       /*
+       * The department roster (M18.30; UI contract 12.4; VOL-012).
+       *
+       * Three standings open it and they open different amounts of it, which
+       * is why the entry answers to three checks rather than one: department
+       * administration and planning read the whole department, and a team lead
+       * reads the teams they lead. Whether the rows carry emergency contacts is
+       * not decided here at all — the node decides it on the read, and a client
+       * that guessed would be guessing about a next-of-kin phone number.
+       *
+       * The Admin page's staff list is not this. That one exists to put people
+       * on teams and carries no way to reach anybody.
+       */
+      if (
+        departmentHasCapability(
+          department,
+          CAPABILITY_DEPARTMENT_ADMINISTER,
+          CAPABILITY_DEPARTMENT_SCHEDULE_MANAGE,
+        ) ||
+        departmentHasRole(department, ROLE_SHIFT_LEAD)
+      ) {
+        departmentPages.push({
+          label: "Roster",
+          description:
+            "The department's staff list, their teams, and how to reach them.",
+          to: { name: "events.departments.roster", params },
+        });
+      }
+
+      /*
        * The department export surface (M18.26; REPORT-014, REPORT-007).
        *
        * Offered on the department-scoped half of the export authority, so a
@@ -666,6 +696,56 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
           label: "Equipment",
           description: "Department equipment inventory and bulk CSV import.",
           to: { name: "events.departments.equipment.index", params },
+        });
+      }
+
+      /*
+       * Deployment options (M18.30; SLB-009; UI contract 12.4).
+       *
+       * Beside Equipment, because the two are the same kind of work: what a
+       * department has, and where it puts people. Offered on either the
+       * capability that assigns staff to a deployment or the one that
+       * administers the department, which is the contract's "department
+       * operations/administration as permitted" — the operator moving people
+       * at two in the morning is the one who finds out the list is missing a
+       * gate, and sending them to find a lead is how it stays missing.
+       */
+      if (
+        departmentHasCapability(
+          department,
+          CAPABILITY_DEPARTMENT_DEPLOYMENTS_ASSIGN,
+          CAPABILITY_DEPARTMENT_ADMINISTER,
+        )
+      ) {
+        departmentPages.push({
+          label: "Deployments",
+          description:
+            "The places this department deploys to, and what is standing at each.",
+          to: { name: "events.departments.deployments.index", params },
+        });
+      }
+
+      /*
+       * Credit review (M18.30; CREDIT-005; UI contract 12.4).
+       *
+       * Gated on the credits export capability, which is the same authority the
+       * read behind the page answers to: looking at the ledger and downloading
+       * it are the same rows and the same disclosure. Separate from Exports
+       * next to it because that page offers five files and this one answers a
+       * question — what did this department earn, and how was each number
+       * arrived at.
+       */
+      if (
+        departmentHasCapability(
+          department,
+          CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT,
+        )
+      ) {
+        departmentPages.push({
+          label: "Credits",
+          description:
+            "What this department earned at this event, and the basis behind every number.",
+          to: { name: "events.departments.credits.index", params },
         });
       }
 

@@ -168,6 +168,10 @@ describe("navigation without a permitting capability", () => {
       "Field Reports",
       "Credentials",
       "Exports",
+      // M18.30's three.
+      "Roster",
+      "Deployments",
+      "Credits",
     ]) {
       expect(labels).not.toContain(surface);
     }
@@ -436,6 +440,73 @@ describe("the M18.29 context and organizer surfaces", () => {
         .value.find((section) => section.title === "Context")
         ?.links.map((link) => link.label) ?? [],
     ).not.toContain("Departments");
+  });
+});
+
+describe("the M18.30 department surfaces", () => {
+  it("offers the roster to administration, to planning, and to a team lead", () => {
+    // UI contract 12.4: "department administration/planning or permitted lead".
+    // Three standings, three checks — a team lead holds no capability at all
+    // and reaches it through the role, the way Team Overview beside it does.
+    install(sessionWith({ capabilities: ["department.administer"] }));
+    expect(sectionLabels("Department pages")).toContain("Roster");
+
+    install(sessionWith({ capabilities: ["department.schedule.manage"] }));
+    expect(sectionLabels("Department pages")).toContain("Roster");
+
+    install(sessionWith({ roleCode: "shift_lead", isTeamLead: true }));
+    expect(sectionLabels("Department pages")).toContain("Roster");
+
+    // And not to a department member holding neither.
+    install(sessionWith({ capabilities: ["department.equipment.manage"] }));
+    expect(sectionLabels("Department pages")).not.toContain("Roster");
+  });
+
+  it("offers deployments on either the assign capability or the admin one", () => {
+    install(sessionWith({ capabilities: ["department.deployments.assign"] }));
+    expect(sectionLabels("Department pages")).toContain("Deployments");
+
+    install(sessionWith({ capabilities: ["department.administer"] }));
+    expect(sectionLabels("Department pages")).toContain("Deployments");
+
+    install(sessionWith({ capabilities: ["department.presence.manage"] }));
+    expect(sectionLabels("Department pages")).not.toContain("Deployments");
+  });
+
+  it("offers credit review on the credits export capability and on no other", () => {
+    // Reading the ledger and downloading it are the same rows and the same
+    // disclosure, so they answer to one code rather than two.
+    install(sessionWith({ capabilities: ["reports.credits_earned.export"] }));
+    expect(sectionLabels("Department pages")).toContain("Credits");
+
+    install(sessionWith({ capabilities: ["reports.hours_worked.export"] }));
+    expect(sectionLabels("Department pages")).not.toContain("Credits");
+  });
+
+  it("sends each department entry to its own surface", () => {
+    install(
+      sessionWith({
+        capabilities: [
+          "department.administer",
+          "department.deployments.assign",
+          "reports.credits_earned.export",
+        ],
+      }),
+    );
+
+    const departmentPages = useNavigationSections().value.find(
+      (section) => section.title === "Department pages",
+    );
+
+    expect(
+      departmentPages?.links.find((link) => link.label === "Roster")?.to.name,
+    ).toBe("events.departments.roster");
+    expect(
+      departmentPages?.links.find((link) => link.label === "Deployments")?.to.name,
+    ).toBe("events.departments.deployments.index");
+    expect(
+      departmentPages?.links.find((link) => link.label === "Credits")?.to.name,
+    ).toBe("events.departments.credits.index");
   });
 });
 
