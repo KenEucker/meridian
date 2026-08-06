@@ -73,6 +73,16 @@ export type WorkstationLoginOutcome =
   /** A session is already live. It has to be ended before another may start. */
   | "session_active";
 
+export type WorkstationReauthOutcome =
+  /** The node accepted the code for the signed-in user. */
+  | "confirmed"
+  /** The node refused: wrong code, spent, or somebody else's. */
+  | "refused"
+  /** The node could not be reached, or answered something unusable. */
+  | "unreachable"
+  /** There is no live session to confirm. */
+  | "no_session";
+
 export interface WorkstationSessionUser {
   readonly id: string;
   readonly name: string;
@@ -103,6 +113,14 @@ interface WorkstationSessionState {
   expiresAt: string | null;
   /** Whether the deadline is close enough to warn about. */
   expiring: boolean;
+  /**
+   * When the active user last re-confirmed who they are, or null (M18.32).
+   *
+   * The node's timestamp, reported rather than interpreted: whether a
+   * confirmation is recent enough is the question of whichever action asked for
+   * one.
+   */
+  reauthenticatedAt: string | null;
   endedReason: WorkstationSessionEndReason | null;
   entering: boolean;
   /** What to tell the person whose code was not accepted. */
@@ -126,6 +144,7 @@ const state = reactive<WorkstationSessionState>({
   startedAt: null,
   expiresAt: null,
   expiring: false,
+  reauthenticatedAt: null,
   endedReason: null,
   entering: false,
   entryError: null,
@@ -154,6 +173,7 @@ interface WorkstationSessionPayload {
   readonly eventId: string | null;
   readonly startedAt: string | null;
   readonly expiresAt: string | null;
+  readonly reauthenticatedAt: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,6 +228,7 @@ function readSessionPayload(value: unknown): WorkstationSessionPayload | null {
     eventId: asString(value.event_id),
     startedAt: asString(value.session.started_at),
     expiresAt,
+    reauthenticatedAt: asString(value.session.reauthenticated_at),
   };
 }
 
@@ -219,6 +240,7 @@ function install(payload: WorkstationSessionPayload): void {
   state.startedAt = payload.startedAt;
   state.expiresAt = payload.expiresAt;
   state.expiring = false;
+  state.reauthenticatedAt = payload.reauthenticatedAt;
   state.endedReason = null;
   state.entryError = null;
 }
@@ -274,6 +296,69 @@ export async function enterWorkstationLoginCode(input: {
     await refreshClientSession({ eventId: payload.eventId, persist: false });
 
     return "signed_in";
+  } catch (error) {
+    if (error instanceof MeridianApiError) {
+      state.entryError = error.message;
+
+      return "refused";
+    }
+
+    state.entryError = "This workstation could not reach the node.";
+
+    return "unreachable";
+  } finally {
+    state.entering = false;
+  }
+}
+
+/**
+ * Confirm that the person at the keyboard is still the signed-in user (M18.32;
+ * UI-017; UI contract 12.8 `kiosk.reauth`, 18.2).
+ *
+ * "Privileged actions may require re-authentication", and Alpha 1 has no
+ * separate Meridian PIN to require — 18.2 rules one out as an independent
+ * central credential. What it has is the login code, already scoped to this user
+ * and this workstation and generated in seconds from the phone in their pocket
+ * (AUTH-027). So a confirmation is a fresh code, checked by the node against the
+ * session's own user.
+ *
+ * A code belonging to somebody else is refused rather than treated as a
+ * handover: switching users requires ending the session first, and the surface
+ * that does that is `kiosk.switch-user`.
+ *
+ * The verdict is the node's and is reported as it arrives. Nothing here decides
+ * that a confirmation was recent enough to matter.
+ */
+export async function reauthenticateWorkstationSession(
+  code: string,
+): Promise<WorkstationReauthOutcome> {
+  if (sessionKey === null || state.status !== "active") {
+    return "no_session";
+  }
+
+  state.entering = true;
+  state.entryError = null;
+
+  try {
+    const payload = readSessionPayload(
+      await meridianJson<unknown>(
+        "/api/auth/shared-workstation-session/reauthentication",
+        {
+          method: "POST",
+          body: JSON.stringify({ code: code.trim() }),
+        },
+      ),
+    );
+
+    if (payload === null) {
+      state.entryError = "This workstation could not confirm the session.";
+
+      return "unreachable";
+    }
+
+    install(payload);
+
+    return "confirmed";
   } catch (error) {
     if (error instanceof MeridianApiError) {
       state.entryError = error.message;
@@ -439,6 +524,7 @@ function lock(reason: WorkstationSessionEndReason | null): void {
   state.startedAt = null;
   state.expiresAt = null;
   state.expiring = false;
+  state.reauthenticatedAt = null;
   state.endedReason = reason;
   state.entering = false;
   state.entryError = null;

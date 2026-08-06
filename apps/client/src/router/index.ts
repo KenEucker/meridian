@@ -9,6 +9,7 @@ import {
 import { holdsMeridianCredential } from "@/api/meridianApi";
 import { meridianAppConfig } from "@/app/appConfig";
 import { clientSessionState } from "@/session/clientSession";
+import { kioskContextPinned } from "@/session/kioskContext";
 import {
   departmentBrandingRouteProps,
   organizationBrandingRouteProps,
@@ -27,7 +28,11 @@ import FieldReportDetailView from "@/views/FieldReportDetailView.vue";
 import FieldReportsIndexView from "@/views/FieldReportsIndexView.vue";
 import EventInfoView from "@/views/EventInfoView.vue";
 import KioskHomeView from "@/views/KioskHomeView.vue";
+import KioskReauthView from "@/views/KioskReauthView.vue";
 import KioskSafeTimeoutView from "@/views/KioskSafeTimeoutView.vue";
+import KioskSetupView from "@/views/KioskSetupView.vue";
+import KioskShiftBoardView from "@/views/KioskShiftBoardView.vue";
+import KioskSwitchUserView from "@/views/KioskSwitchUserView.vue";
 import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
@@ -140,6 +145,23 @@ function requireWorkstationSession() {
  */
 function refuseWorkstationSwitch() {
   return workstationSessionState.status === "active" ? { name: "kiosk.home" } : true;
+}
+
+/**
+ * A Kiosk with no pinned context is in setup (M18.32; UI-019, UI-020).
+ *
+ * "When Kiosk mode starts without a pinned context, it shall enter setup rather
+ * than inferring context from the current user, event data, viewport, local
+ * network, or last route." Every one of those inferences is a thing a router
+ * could have done here — sent the machine to the last route, or to the session's
+ * event, or to a department it happens to hold cached — so the guard does the one
+ * thing left: it sends it to setup and waits for the node to say otherwise.
+ *
+ * Setup and the safe-timeout surface are outside it. Setup is where this sends
+ * things, and safe timeout holds nothing that needs a context to be meaningful.
+ */
+function requirePinnedKioskContext() {
+  return kioskContextPinned.value ? true : { name: "kiosk.setup" };
 }
 
 function legacyShiftBoardRedirect(surface: string) {
@@ -818,26 +840,55 @@ export const routes: RouteRecordRaw[] = [
     component: DocumentEditView,
   },
   /*
-   * Kiosk surfaces (UI contract 12.8; M16.9). Three of the six exist: the two a
-   * shared-workstation session begins and ends at, and the dashboard it holds
-   * open. `kiosk.switch-user`, `kiosk.reauth`, and `kiosk.shift-board` are their
-   * own tasks.
+   * Kiosk surfaces (UI contract 12.8; M16.9, M18.32).
    *
-   * The safe-timeout surface is reachable whether or not a session is live,
-   * because a timeout is precisely the case where there is no session left to
-   * check by the time somebody arrives at it.
+   * Two gates run in front of most of them and the order is the requirement.
+   * `requirePinnedKioskContext` is first, because a machine that does not know
+   * which event it is at has no operating context for any of these screens and
+   * UI-020 sends it to setup rather than anywhere else — including to code
+   * entry, which could not succeed anyway: a login code is scoped to a pinned
+   * event, so an unpinned workstation has none to issue. `requireWorkstationSession`
+   * is second, and is about who is standing there rather than what the machine is.
+   *
+   * Two surfaces sit outside both. `kiosk.setup` is where the first gate sends
+   * things, and `kiosk.safe-timeout` holds no name, event, or record, which is
+   * what makes it safe — it is reachable with no session and no context at all,
+   * because a timeout is precisely the case where there is nothing left to check.
    */
   {
     path: "/kiosk",
     name: "kiosk.home",
     component: KioskHomeView,
-    beforeEnter: requireWorkstationSession,
+    beforeEnter: [requirePinnedKioskContext, requireWorkstationSession],
+  },
+  {
+    path: "/kiosk/setup",
+    name: "kiosk.setup",
+    component: KioskSetupView,
   },
   {
     path: "/kiosk/sign-in",
     name: "kiosk.workstation-login",
     component: KioskWorkstationLoginView,
-    beforeEnter: refuseWorkstationSwitch,
+    beforeEnter: [requirePinnedKioskContext, refuseWorkstationSwitch],
+  },
+  {
+    path: "/kiosk/switch-user",
+    name: "kiosk.switch-user",
+    component: KioskSwitchUserView,
+    beforeEnter: [requirePinnedKioskContext, requireWorkstationSession],
+  },
+  {
+    path: "/kiosk/confirm",
+    name: "kiosk.reauth",
+    component: KioskReauthView,
+    beforeEnter: [requirePinnedKioskContext, requireWorkstationSession],
+  },
+  {
+    path: "/kiosk/shift-board",
+    name: "kiosk.shift-board",
+    component: KioskShiftBoardView,
+    beforeEnter: [requirePinnedKioskContext, requireWorkstationSession],
   },
   {
     path: "/kiosk/timed-out",

@@ -226,6 +226,16 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.api-tokens')
                 ->permission('platform.api-tokens'),
 
+            // The Kiosk pinned context (technical spec 13.1, "shared
+            // workstations are managed in God mode"). Beside the login codes
+            // because a code is scoped to a workstation's pinned event: a
+            // machine in setup cannot be issued one, and this is where it stops
+            // being in setup.
+            Menu::make(__('Shared Workstations'))
+                ->icon('bs.pc-display')
+                ->route('platform.shared-workstations')
+                ->permission('platform.shared-workstations'),
+
             // Login codes for trusted shared workstations (AUTH-026, AUTH-028).
             // Filed beside API Tokens because both administer credentials that
             // reach this node, and a technician preparing an event or recovering
@@ -340,6 +350,12 @@ class PlatformProvider extends OrchidServiceProvider
                 // God Mode capability. A user generating their own code needs no
                 // capability at all — holding a session is the authority.
                 ->addPermission('platform.shared-workstation-login-codes', __('Workstation login codes'))
+                // Pinning a Kiosk to an organization and event decides which
+                // operational scope appears on a machine strangers stand in
+                // front of, so the first pin and the repair path stay God Mode
+                // (technical spec 13.1). An organizer changes the event from the
+                // Kiosk setup screen instead, on `organization.events.manage`.
+                ->addPermission('platform.shared-workstations', __('Kiosk pinned context'))
                 // System configuration and diagnostics capabilities are
                 // granular (SYS-024 through SYS-027): viewing configuration,
                 // changing it, changing secrets, viewing diagnostics,

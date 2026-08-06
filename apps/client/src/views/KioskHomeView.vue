@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
 
 import ContentGrid from "@/components/ContentGrid.vue";
 import DashboardWidgetCard from "@/components/DashboardWidgetCard.vue";
@@ -10,6 +11,7 @@ import {
   kioskNodeStatusWidget,
 } from "@/dashboard/kioskDeviceWidgets";
 import { useNodeConnectionStatus } from "@/offline/useConnectivity";
+import { kioskContextState } from "@/session/kioskContext";
 import { workstationSessionState } from "@/session/workstationSession";
 
 /*
@@ -63,6 +65,16 @@ const deviceWidgets = computed(() => [
   kioskNodeStatusWidget(nodeConnection.value),
   kioskCurrentUserWidget(user.value?.name ?? null, workstation.value?.name ?? null),
 ]);
+
+/**
+ * The pinned context, as the node named it (M18.32; UI contract 18.1).
+ *
+ * "Kiosk screens must show current organization, current event, operations-window
+ * state, trusted workstation state." The session response carries identifiers;
+ * the names come from the pinned-context read, which is the one thing on the
+ * machine that knows what those identifiers are called.
+ */
+const pinnedContext = computed(() => kioskContextState.context);
 </script>
 
 <template>
@@ -73,6 +85,37 @@ const deviceWidgets = computed(() => [
     <p v-if="workstation" class="kiosk-home__workstation">
       {{ workstation.name }}
     </p>
+
+    <!--
+      Where this machine is working, in words rather than identifiers (UI
+      contract 18.1). The department line is absent rather than "none" when the
+      workstation is the whole site's, because that is a different fact from a
+      department nobody recorded.
+    -->
+    <p v-if="pinnedContext" class="kiosk-home__context" data-testid="kiosk-home-context">
+      {{ pinnedContext.organization?.name ?? "Unknown organization" }} ·
+      {{ pinnedContext.event?.name ?? "Unknown event"
+      }}<template v-if="pinnedContext.department">
+        · {{ pinnedContext.department.name }}</template
+      >
+    </p>
+
+    <!--
+      The two Kiosk surfaces this dashboard leads to. Switching users is here
+      rather than only in the session bar because it is the act a queue of people
+      is waiting on; the shift board is the desk's own work.
+    -->
+    <nav class="kiosk-home__links" aria-label="Kiosk surfaces">
+      <RouterLink class="kiosk-home__link" :to="{ name: 'kiosk.shift-board' }">
+        Shift board
+      </RouterLink>
+      <RouterLink class="kiosk-home__link" :to="{ name: 'kiosk.switch-user' }">
+        Switch user
+      </RouterLink>
+      <RouterLink class="kiosk-home__link" :to="{ name: 'kiosk.setup' }">
+        Workstation setup
+      </RouterLink>
+    </nav>
 
     <ContentGrid min="tile" label="Workstation widgets">
       <DashboardWidgetCard
@@ -123,6 +166,36 @@ const deviceWidgets = computed(() => [
   font-size: var(--m-text-sm);
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.kiosk-home__context {
+  margin: 0;
+  color: var(--m-text-secondary);
+  font-weight: 700;
+}
+
+.kiosk-home__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2);
+}
+
+.kiosk-home__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0 var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.kiosk-home__link:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .kiosk-home__empty {

@@ -999,9 +999,10 @@ God mode generating a code for another user is a console screen rather than an e
 Entering a login code at a trusted shared workstation establishes a shared-workstation session (12.6, technical spec 13.3). It is not an API credential: it issues no bearer token and trusts no device (AUTH-030), so it has its own endpoints and its own guard rather than arriving through `POST /api/auth/session`.
 
 ```text
-POST   /api/auth/shared-workstation-session   enter a code and start a session
-GET    /api/auth/shared-workstation-session   read the session, and record activity
-DELETE /api/auth/shared-workstation-session   end the session
+POST   /api/auth/shared-workstation-session                  enter a code and start a session
+GET    /api/auth/shared-workstation-session                  read the session, and record activity
+DELETE /api/auth/shared-workstation-session                  end the session
+POST   /api/auth/shared-workstation-session/reauthentication confirm the active user
 ```
 
 The start request carries the shared workstation and the typed code. Its response carries the session key once, and every response carries the session's start, last activity, and inactivity deadline, the active user's identity, the workstation with its pinned organization and optional department, and the event the session is scoped to.
@@ -1018,6 +1019,25 @@ Rules:
 - roles and capabilities are not in these responses; the session key authenticates `GET /api/me`, so there is one answer to what the active user may do
 - a workstation holds one session at a time, so starting one closes whatever was still open there: `superseded` if it was live, `timed_out` if it had already lapsed
 - ending is answered the same way whether or not there was a session to end, because a workstation asking to be signed out gets to be signed out
+- re-authentication confirms the user a session already belongs to before a privileged action (UI contract 18.2). Alpha 1 has no separate PIN credential and 18.2 rules one out, so what it takes is a fresh login code for that same user, redeemed through the 12.4 path with its trusted-workstation rule, per-workstation entry limit, and use audit unchanged. A valid code for anybody else is refused with `reauthentication_user_mismatch` and hands nothing over — switching users is the explicit end above. The confirmation is recorded as `reauthenticated_at` on the session and reported in every session response; how recent a confirmation must be is the question of whichever action asks for one, not of this endpoint
+
+#### Kiosk pinned context
+
+A Kiosk has to know, before anybody signs in, whether the machine is pinned to an organization and an event (UI-019), and UI-020 forbids it from working that out from the viewport, the network, the authenticated user, the last route, or cached event data. So it is a read, and the read has to answer a workstation holding no credential — which is the state the question is asked in.
+
+```text
+GET /api/kiosk/workstations/{workstation}                          what this machine is pinned to
+GET /api/kiosk/workstations/{workstation}/pinned-context/options   events it may be pinned to
+PUT /api/kiosk/workstations/{workstation}/pinned-context           change the pinned event and department
+```
+
+Rules:
+
+- the read carries no credential and answers only for a trusted, unrevoked workstation; anything else is a 404, so an unknown identifier and a decommissioned machine are answered alike
+- it carries the pinned organization, event, and department and nothing else — no staff, no shifts, no counts — and grants nothing: entering the pinned event still needs a login code the node issued to a named user (AUTH-030)
+- `pinned` is true only when both an organization and an event are on the record, so the UI-019 condition is stated once on the node rather than re-derived by every client
+- the options read and the write require `organization.events.manage` in the workstation's own organization: reading the events a machine could work is reading an organization's events, and choosing which one it works is event administration (UI-021)
+- the organization is not a field on the write. It is what God Mode registered with the trusted device behind the machine, so a workstation with no pinned organization is refused with `workstation_organization_unpinned` and its first pin is God Mode's
 
 ### 5.5 Session resolution
 
@@ -4725,8 +4745,8 @@ Key fields:
 
 - `id`
 - `device_id`
-- `organization_id`
-- `event_id`
+- `organization_id`, nullable
+- `event_id`, nullable
 - `department_id`, nullable
 - `name`
 - `trusted`
@@ -4739,8 +4759,10 @@ Rules:
 
 - every Kiosk shared workstation must be pinned to one organization and one event before normal operation
 - a Kiosk shared workstation may optionally be pinned to one department
-- missing pinned organization/event context sends Meridian Kiosk to setup
-- authorized organizers, lead organizers, and God Mode users may change pinned context
+- missing pinned organization/event context sends Meridian Kiosk to setup; `organization_id` and `event_id` are nullable so that state can be held, because a workstation that could not be unpinned could never be in setup
+- authorized organizers, lead organizers, and God Mode users may change pinned context, and every change is audited as `shared_workstation.context_pinned`
+- an event may only be pinned if the workstation's organization produces it, and a department only if it participates in that event — the same participating list ORG-006 admits the Incident Command designation from
+- pinning ends whatever session the workstation was holding, because that session was signed in to the previous context
 - pinned context constrains Kiosk shell/scope selection but does not grant authority
 - inactivity timeout is 5 minutes for MVP; the session it bounds is `shared_workstation_sessions` in 12.6
 - timeout abandons unsaved work while saved local queued operations remain queued for sync
@@ -4823,6 +4845,7 @@ Key fields:
 - `session_key_hash`
 - `started_at`
 - `last_activity_at`
+- `reauthenticated_at`, nullable
 - `ended_at`, nullable
 - `ended_reason`, nullable: `signed_out`, `timed_out`, or `superseded`
 - `created_at` and `updated_at`
@@ -4836,6 +4859,7 @@ Rules:
 - a session observed past its window is ended and stamped at the moment it expired, not at the moment it was noticed, so a workstation nobody touched for an hour records an hour of nobody being signed in
 - the session is not authority of its own: it resolves to a user, and a disabled user resolves to nobody (technical spec 13.3, permissions come entirely from the active user)
 - a session end is audited as `shared_workstation_session.ended` with the reason, which is the part not already recorded by the code's use
+- `reauthenticated_at` records the last time the active user confirmed, by typing a fresh login code, that they are still the person at the keyboard (UI contract 18.2). It is null for the ordinary session, carries no expiry of its own, and is audited as `shared_workstation_session.reauthenticated`; which actions demand a recent confirmation, and how recent, belongs to those actions
 - ending a session touches nothing a device has queued; queued commands are not session data
 
 ---
