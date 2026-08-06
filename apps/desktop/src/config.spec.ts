@@ -15,6 +15,8 @@ import {
   resolveClientVersion,
   resolveHealthUrl,
   resolveServerUrl,
+  resolveSharedWorkstationId,
+  resolveWindowedMode,
 } from "./config";
 
 describe("resolveServerUrl", () => {
@@ -191,5 +193,37 @@ describe("resolveHealthUrl", () => {
     expect(() => resolveHealthUrl({ MERIDIAN_HEALTH_URL: "ftp://health.local" })).toThrow(
       /must use http or https/,
     );
+  });
+});
+
+describe("resolveSharedWorkstationId", () => {
+  it("is null on a desktop install that is not a shared workstation", () => {
+    // The ordinary case, and the one that has to stay inert: the Kiosk falls
+    // back to whatever a technician configured on the machine, and shows setup
+    // when there is nothing to fall back to (UI-019, UI-020).
+    expect(resolveSharedWorkstationId({})).toBeNull();
+    expect(resolveSharedWorkstationId({ MERIDIAN_SHARED_WORKSTATION_ID: "   " })).toBeNull();
+  });
+
+  it("carries the workstation the wrapper was told this machine is", () => {
+    expect(
+      resolveSharedWorkstationId({ MERIDIAN_SHARED_WORKSTATION_ID: " onsite-command-1 " }),
+    ).toBe("onsite-command-1");
+  });
+});
+
+describe("resolveWindowedMode", () => {
+  it("is fullscreen kiosk unless something says otherwise", () => {
+    // An on-site workstation is fullscreen and locked down. That is what the
+    // wrapper is for, so it is what an unset environment gets.
+    expect(resolveWindowedMode({})).toBe(false);
+    expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: "false" })).toBe(false);
+    expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: "no" })).toBe(false);
+  });
+
+  it("opens windowed when a developer asks for it", () => {
+    for (const value of ["1", "true", "TRUE", "yes"]) {
+      expect(resolveWindowedMode({ MERIDIAN_DESKTOP_WINDOWED: value })).toBe(true);
+    }
   });
 });

@@ -221,6 +221,45 @@ export function resolveClientVersion(
 }
 
 /**
+ * Resolve the trusted shared workstation this machine is, when it is one
+ * (M18.32; technical spec 13.1).
+ *
+ * The Kiosk client reads its workstation identity from
+ * `window.__MERIDIAN_RUNTIME_CONFIG__.sharedWorkstationId`, which is the
+ * injection point a deployment fills in — and the desktop wrapper *is* the
+ * deployment for an on-site machine. Passing it here rather than expecting
+ * somebody to type it into the Kiosk's own storage is what makes an installed
+ * workstation come up knowing what it is after a wipe or a reinstall.
+ *
+ * It is not a credential (AUTH-030). Knowing the identifier grants nothing: the
+ * node still requires a login code it issued to a named person, and still
+ * requires the workstation to be trusted.
+ *
+ * Null when unset, which is the ordinary state of a desktop install that is not
+ * a shared workstation. The Kiosk then falls back to whatever a technician
+ * configured on the machine itself, and shows setup when there is nothing.
+ */
+export function resolveSharedWorkstationId(env: EnvLike = {}): string | null {
+  const raw = env.MERIDIAN_SHARED_WORKSTATION_ID?.trim();
+
+  return raw ? raw : null;
+}
+
+/**
+ * Whether to open in a normal resizable window instead of fullscreen kiosk.
+ *
+ * An on-site workstation is fullscreen and locked down, which is the default
+ * and the point. A developer exercising a Kiosk workflow needs to be able to
+ * reach the rest of their machine, and a fullscreen window with no menu bar on
+ * a second monitor is how a testing session turns into a forced quit.
+ */
+export function resolveWindowedMode(env: EnvLike = {}): boolean {
+  const raw = env.MERIDIAN_DESKTOP_WINDOWED?.trim().toLowerCase();
+
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+/**
  * Resolve the server health URL.
  *
  * Uses `MERIDIAN_HEALTH_URL` when explicitly provided, otherwise derives the

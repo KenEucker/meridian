@@ -62,6 +62,8 @@
     "mobile:test": "corepack pnpm --filter @meridian/mobile run test",
     "mobile:cap:copy": "corepack pnpm --filter @meridian/mobile run cap:copy",
     "mobile:cap:sync": "corepack pnpm --filter @meridian/mobile run cap:sync",
+    "kiosk:workstation": "node scripts/dev/start-shared-workstation.mjs",
+    "kiosk:workstation:codes": "php apps/server/artisan meridian:shared-workstation",
     "desktop:start": "corepack pnpm --filter @meridian/desktop run start",
     "desktop:build": "corepack pnpm --filter @meridian/desktop run build",
     "desktop:typecheck": "corepack pnpm --filter @meridian/desktop run typecheck",

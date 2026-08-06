@@ -19,13 +19,13 @@
       "runtimeExecutable": "corepack",
       "runtimeArgs": [
         "pnpm",
+        "--filter",
+        "@meridian/client",
         "run",
-        "client:dev:kiosk",
-        "--",
-        "--host",
-        "127.0.0.1"
+        "dev:kiosk:workstation"
       ],
-      "autoPort": true
+      "port": 5175,
+      "url": "http://127.0.0.1:5175"
     },
     {
       "name": "server",

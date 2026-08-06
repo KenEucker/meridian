@@ -30,6 +30,7 @@ import {
   resolveAppIconPath,
   resolveAppUrlOverride,
   resolveServerUrlSetting,
+  resolveWindowedMode,
   NODE_SETTINGS_FILE,
   type ResolvedServerUrl,
 } from "./config";
@@ -69,16 +70,28 @@ function nodeSetting(): ResolvedServerUrl {
 }
 
 function createMainWindow(appUrl: string): BrowserWindow {
+  // Fullscreen and locked down is what an on-site workstation is, and stays the
+  // default. `MERIDIAN_DESKTOP_WINDOWED` is for exercising a Kiosk workflow on a
+  // developer's own machine, where a fullscreen window with no menu bar is how a
+  // testing session ends in a forced quit.
+  const windowed = resolveWindowedMode(process.env);
+
   const window = new BrowserWindow({
     show: false,
-    fullscreen: true,
-    kiosk: true,
+    fullscreen: !windowed,
+    kiosk: !windowed,
+    width: windowed ? 1280 : undefined,
+    height: windowed ? 900 : undefined,
     autoHideMenuBar: true,
     backgroundColor: "#11151c",
     icon: resolveAppIconPath(process.env),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // Tells the Kiosk which trusted shared workstation this machine is, before
+      // any page script runs (M18.32). See `preload.ts` for why that ordering is
+      // the whole point.
+      preload: join(__dirname, "preload.js"),
     },
   });
 

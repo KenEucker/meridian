@@ -18,6 +18,10 @@ public_html/hot
 storage/*.key
 .env
 .env.*.local
+# Written by `pnpm run kiosk:workstation` and holding the workstation this
+# machine was provisioned as. Not a credential (AUTH-030), but it is one
+# developer's local machine identity and belongs to nobody else's checkout.
+.env.shared-workstation
 Homestead.yaml
 Homestead.json
 /.vagrant
