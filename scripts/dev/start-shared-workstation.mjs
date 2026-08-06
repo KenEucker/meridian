@@ -10,7 +10,7 @@
  * who wants to test switching users needs two of the third. This does all of it:
  *
  *  1. asks the node to provision (or reuse) the workstation and issue the codes;
- *  2. writes what it learned into `apps/desktop/.env.shared-workstation`, which
+ *  2. writes what it learned into `apps/kiosk/.env.shared-workstation`, which
  *     is the machine's own configuration and survives the next run;
  *  3. starts the Kiosk Vite dev server on a port of its own, so it sits beside a
  *     shared client already holding 5173;
@@ -36,10 +36,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const serverEnvPath = resolve(repoRoot, "apps/server/.env");
-const workstationEnvPath = resolve(repoRoot, "apps/desktop/.env.shared-workstation");
+const workstationEnvPath = resolve(repoRoot, "apps/kiosk/.env.shared-workstation");
 const workstationEnvExamplePath = resolve(
   repoRoot,
-  "apps/desktop/.env.shared-workstation.example",
+  "apps/kiosk/.env.shared-workstation.example",
 );
 
 /**
@@ -201,7 +201,19 @@ function provisionWorkstation(passthroughArgs) {
     process.exit(1);
   }
 
-  return JSON.parse(output.slice(start, end + 1));
+  const provisioned = JSON.parse(output.slice(start, end + 1));
+
+  // Anything the command said before the payload is the reason a code is
+  // missing, and it is the part somebody needs. Generation is rate limited per
+  // user (AUTH-029), so a developer who has run this a few times in a row gets
+  // no codes and deserves to be told that rather than left guessing.
+  provisioned.notes = output
+    .slice(0, start)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return provisioned;
 }
 
 function reportProvisioned(provisioned) {
@@ -214,7 +226,18 @@ function reportProvisioned(provisioned) {
 
   if (!provisioned.login_codes || provisioned.login_codes.length === 0) {
     console.log("No login codes were issued, so nobody can sign in at this workstation yet.");
-    console.log("Re-run with --code-for=someone@example.com to issue one.");
+
+    for (const note of provisioned.notes ?? []) {
+      console.log(`  ${note}`);
+    }
+
+    console.log("");
+    console.log(
+      "Code generation is rate limited per user (AUTH-029), so running this repeatedly runs out of codes.",
+    );
+    console.log(
+      "Wait it out, name somebody else with --code-for=someone@example.test, or issue one from God Mode.",
+    );
     console.log("");
 
     return;
@@ -273,7 +296,7 @@ async function waitForKiosk() {
 function startDesktopWrapper(env) {
   const wrapper = spawn(
     "corepack",
-    ["pnpm", "--filter", "@meridian/desktop", "run", "start"],
+    ["pnpm", "--filter", "@meridian/kiosk", "run", "start"],
     { cwd: repoRoot, stdio: "inherit", env, shell: process.platform === "win32" },
   );
 

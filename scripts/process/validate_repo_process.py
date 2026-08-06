@@ -42,7 +42,7 @@ REQUIRED_DIRECTORIES = [
     "apps/client",
     "apps/server",
     "apps/mobile",
-    "apps/desktop",
+    "apps/kiosk",
     "packages/shared-types",
     "packages/openapi-client",
     "deploy/docker",

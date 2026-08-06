@@ -186,7 +186,7 @@ meridian/
     client/        Shared Vue client
     server/        Laravel + Orchid + API + client serving
     mobile/        Capacitor mobile packaging
-    desktop/       Electron wrapper
+    kiosk/         Electron wrapper for Meridian Kiosk
   packages/
     shared-types/
     openapi-client/

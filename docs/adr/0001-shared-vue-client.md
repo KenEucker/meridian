@@ -32,7 +32,7 @@ backend services. Orchid remains God Mode / repair tooling under `/admin`.
 `apps/mobile` is a Capacitor packaging project for iOS and Android. It contains
 mobile packaging configuration and points at the Field artifact.
 
-`apps/desktop` is an Electron packaging project. It serves a packaged local
+`apps/kiosk` is an Electron packaging project. It serves a packaged local
 copy of the Kiosk artifact through a tiny local static server and keeps desktop
 health/status UI in the Electron shell.
 

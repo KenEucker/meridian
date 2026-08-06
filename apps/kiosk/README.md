@@ -50,7 +50,7 @@ tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist/kiosk` from `apps/desktop` | Meridian Kiosk build directory to serve locally. |
+| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist/kiosk` from `apps/kiosk` | Meridian Kiosk build directory to serve locally. |
 | `MERIDIAN_CLIENT_PORT` | `0` | Local static-server port. `0` lets the OS choose. |
 | `MERIDIAN_CLIENT_DEV_SERVER_URL` | `http://localhost:5173/` | Shared Vue Vite dev server opened by unpackaged Electron. |
 | `MERIDIAN_APP_URL` | unset | Optional override that skips both the development URL default and packaged static server. |
@@ -74,13 +74,13 @@ Run the desktop checks from the repository root via the workspace filter:
 
 ```bash
 # Type check
-corepack pnpm --filter @meridian/desktop run typecheck
+corepack pnpm --filter @meridian/kiosk run typecheck
 
 # Unit tests (config + health modules)
-corepack pnpm --filter @meridian/desktop run test
+corepack pnpm --filter @meridian/kiosk run test
 
 # Build the Kiosk artifact and compile the Electron main process to dist/
-corepack pnpm --filter @meridian/desktop run build
+corepack pnpm --filter @meridian/kiosk run build
 ```
 
 The root `build`, `typecheck`, and `test` scripts delegate to this app (and the
@@ -102,7 +102,7 @@ node's event, issues a login code per user, starts the Kiosk dev server on its
 own port, and opens the wrapper. The codes are printed once, exactly as the God
 Mode screen prints them.
 
-Everything it learns goes in `apps/desktop/.env.shared-workstation`, which is
+Everything it learns goes in `apps/kiosk/.env.shared-workstation`, which is
 gitignored and survives the next run; `.env.shared-workstation.example` documents
 what belongs there. Arguments pass through to the artisan command underneath, so
 `--department=Rangers`, `--code-for=someone@example.test`, and `--name=` all
@@ -122,7 +122,7 @@ corepack pnpm approve-builds
 corepack pnpm run client:dev
 
 # Terminal 2: compile the main process, then start the wrapper
-corepack pnpm --filter @meridian/desktop run start
+corepack pnpm --filter @meridian/kiosk run start
 ```
 
 When launched from the workspace with `electron .`, the unpackaged wrapper

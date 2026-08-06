@@ -68,9 +68,9 @@ Laravel backend/API, serves Meridian Admin, and exposes Orchid God Mode / repair
 tooling (see
 [apps/server/README.md](apps/server/README.md)), `apps/mobile` contains the
 Capacitor iOS/Android packaging wrapper (see
-[apps/mobile/README.md](apps/mobile/README.md)), and `apps/desktop` contains
+[apps/mobile/README.md](apps/mobile/README.md)), and `apps/kiosk` contains
 the Electron on-site wrapper shell (see
-[apps/desktop/README.md](apps/desktop/README.md)). The managed PostgreSQL
+[apps/kiosk/README.md](apps/kiosk/README.md)). The managed PostgreSQL
 database service lives under [deploy/docker](deploy/docker/README.md), and the
 PowerSync service configuration lives under
 [deploy/powersync](deploy/powersync/README.md). The `caddy` and `dns`
@@ -82,7 +82,7 @@ deployment behavior.
 Meridian is in early scaffolding. The `apps/server` Laravel scaffold can boot
 and run its test suite, the `apps/client` shared Vue client builds and runs its
 smoke tests, `apps/mobile` validates the Capacitor packaging configuration,
-and the `apps/desktop` Electron wrapper shell builds and runs its unit tests.
+and the `apps/kiosk` Electron wrapper shell builds and runs its unit tests.
 A managed PostgreSQL database service ([deploy/docker](deploy/docker/README.md)),
 PostgreSQL development configuration, seed data, and the PowerSync service
 baseline are present; the complete multi-service deployment bundle (server
