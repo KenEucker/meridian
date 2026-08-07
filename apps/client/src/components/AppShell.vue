@@ -14,6 +14,11 @@ import {
 import { departmentSurfaceAttributes } from "@/branding/departmentSurfaceScope";
 import { applyDocumentTitle } from "@/branding/documentTitle";
 import { applyFavicon } from "@/branding/favicon";
+import CommandPalette from "@/components/CommandPalette.vue";
+import {
+  opensCommandPalette,
+  useCommandPaletteResults,
+} from "@/components/commandPalette";
 import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
   useCombinedNavigation,
@@ -201,6 +206,50 @@ const userLabel = computed(
   () => clientSessionState.document?.user.name ?? "Not signed in",
 );
 const connectionStatus = useNodeConnectionStatus();
+
+/*
+ * The command palette (M18.33; UI contract 6.1, 7.1, 7.2).
+ *
+ * The trigger belongs to the top bar, which is where contract 6.1 puts it, and
+ * the shortcut listener belongs here too: `Ctrl+K` has to work from every
+ * surface, and the shell is the one component mounted on all of them.
+ *
+ * Offered only when there is something to offer. A client that has not resolved
+ * a session reaches no page and can perform no action, so the trigger is absent
+ * and the shortcut does nothing rather than opening an empty box — the same rule
+ * the menus apply by rendering nothing (CLIENT-005).
+ */
+const commandPaletteResults = useCommandPaletteResults(appConfig);
+const commandPaletteOpen = ref(false);
+const commandPaletteAvailable = computed(
+  () => commandPaletteResults.value.length > 0,
+);
+
+function openCommandPalette(): void {
+  if (commandPaletteAvailable.value) {
+    commandPaletteOpen.value = true;
+  }
+}
+
+function closeCommandPalette(): void {
+  commandPaletteOpen.value = false;
+}
+
+function handleCommandPaletteShortcut(event: KeyboardEvent): void {
+  if (commandPaletteOpen.value || !opensCommandPalette(event)) {
+    return;
+  }
+
+  // Taken from the browser only once it is going to be used: `Ctrl+K` focuses
+  // the address bar in some browsers, and `/` is a character somebody may have
+  // meant to type — `opensCommandPalette` has already ruled the second one out.
+  event.preventDefault();
+  openCommandPalette();
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("keydown", handleCommandPaletteShortcut);
+}
 
 /*
  * Context switching in the user menu (M16.7; CLIENT-012, CLIENT-013).
@@ -526,6 +575,7 @@ onBeforeUnmount(() => {
     document.removeEventListener("pointerdown", handleWorkflowMenuOutsideClick);
     document.removeEventListener("pointerdown", handleStaffMenuOutsideClick);
     document.removeEventListener("visibilitychange", refreshOnAttention);
+    document.removeEventListener("keydown", handleCommandPaletteShortcut);
   }
 
   if (typeof window !== "undefined") {
@@ -598,6 +648,50 @@ onBeforeUnmount(() => {
         <div v-else class="app-shell__context-placeholder"></div>
 
         <div class="app-shell__actions">
+          <!--
+            The command palette trigger (UI contract 6.1; component library
+            4.1). Absent rather than disabled for a client with nothing to
+            reach: a control that opens an empty box is worse than no control.
+
+            The shortcut hint is on the button rather than in a tooltip, and
+            drops on the narrowest screens where the label goes too — a device
+            with no keyboard has no use for a key name.
+          -->
+          <button
+            v-if="commandPaletteAvailable"
+            type="button"
+            class="app-shell__command-palette"
+            aria-label="Search pages and actions"
+            aria-haspopup="dialog"
+            :aria-expanded="commandPaletteOpen"
+            @click="openCommandPalette"
+          >
+            <svg
+              class="app-shell__command-palette-icon"
+              aria-hidden="true"
+              focusable="false"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                cx="11"
+                cy="11"
+                r="7"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+              <path
+                d="m16.5 16.5 4 4"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="2"
+              />
+            </svg>
+            <span class="app-shell__command-palette-label">Search</span>
+            <kbd class="app-shell__command-palette-shortcut">Ctrl K</kbd>
+          </button>
+
           <div
             v-if="otherDepartmentMarks.length > 0"
             class="app-shell__department-marks"
@@ -976,6 +1070,17 @@ onBeforeUnmount(() => {
     <main class="app-shell__main">
       <slot />
     </main>
+
+    <!--
+      The command palette, last in the shell so it overlays the surface it was
+      opened from (M18.33; UI contract 7.1, 7.2). What it may offer is decided
+      before it gets here.
+    -->
+    <CommandPalette
+      :open="commandPaletteOpen"
+      :results="commandPaletteResults"
+      @close="closeCommandPalette"
+    />
   </div>
 </template>
 
@@ -1300,6 +1405,49 @@ onBeforeUnmount(() => {
   color: var(--m-action-primary-text);
 }
 
+/*
+ * The command palette trigger. Sized and bordered like the user button beside
+ * it, because the two are one control cluster and a search box styled as a
+ * field in this row would read as somewhere to type rather than somewhere to
+ * press.
+ */
+.app-shell__command-palette {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--m-surface-base) 80%, transparent);
+  color: var(--m-text-secondary);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell__command-palette-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  color: var(--m-text-muted);
+}
+
+.app-shell__command-palette-shortcut {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: 4px;
+  color: var(--m-text-muted);
+  font-family: inherit;
+  font-size: var(--m-text-xs);
+  font-weight: 800;
+}
+
 .app-shell__user {
   position: relative;
   min-width: 0;
@@ -1610,6 +1758,7 @@ onBeforeUnmount(() => {
 }
 
 .app-shell__home:focus-visible,
+.app-shell__command-palette:focus-visible,
 .app-shell__menu-theme button:focus-visible,
 .app-shell__user-button:focus-visible,
 .app-shell__user-menu a:focus-visible,
@@ -1743,6 +1892,28 @@ onBeforeUnmount(() => {
   .app-shell__user-label,
   .app-shell__user-dropdown-icon {
     display: none;
+  }
+
+  /*
+   * The trigger collapses to its icon here, for the same reason the user button
+   * does. The key name goes with the label: a phone has no `Ctrl` to press, and
+   * this is the "constrained small-screen context" the operating guide allows a
+   * visible label to be dropped in (21.2) — the accessible name stays.
+   */
+  .app-shell__command-palette {
+    width: 2.25rem;
+    min-height: 2.25rem;
+    justify-content: center;
+    padding: 0 var(--m-space-2);
+  }
+
+  .app-shell__command-palette-label,
+  .app-shell__command-palette-shortcut {
+    display: none;
+  }
+
+  .app-shell__command-palette-icon {
+    color: var(--m-text-primary);
   }
 
   .app-shell__user-icon {

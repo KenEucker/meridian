@@ -345,6 +345,34 @@ Suggested result model:
 ]
 ```
 
+The Alpha 1 palette (M18.33) carries actions and navigation and no records.
+Operating guide 10.3 offers incidents, Field Reports, and documents by title as
+something the palette *may* include; those are not built, and the IMS rule above
+is kept without them because the Incidents workspace, the IC dashboard, and IMS
+Field Reports are navigation entries following `incidents.view` — a reader
+without IC standing for the event's configured Incident Command department is
+offered none of the three, and there is no record search to leak a second way.
+
+Its destinations come out of the same permission derivation the shell menus and
+the home directory render from, rather than a read of its own. A palette is a
+second way into pages somebody can already reach, not a second answer about what
+they may reach, and two derivations would be two places for the answer to differ
+the day a grant is withdrawn. The client's results therefore carry a route
+rather than a URL and no `permission` field: the code that permits an entry is
+what put it in the list at all, and nothing downstream re-decides from it. The
+server still refuses the request regardless of what was listed (`CLIENT-006`).
+
+Kiosk is the one branch. A shared workstation holds a machine rather than a
+personal session, so its results are built from the pinned context and the
+trusted-workstation state — setup and the device pages when nothing is pinned,
+the way in when a pinned workstation is locked, the desk's own surfaces once
+somebody is signed in at it — and no organizer or department page reaches it
+from a client session the same device may be holding (kiosk guide 11).
+
+Camps and map places are absent by construction rather than by a filter
+(`MAP-018`): no navigation entry names one, and the palette adds no source of
+its own. Map search stays in the scoped panel on the map surface (`MAP-019`).
+
 ---
 
 ## 8. Canonical Role Contract
