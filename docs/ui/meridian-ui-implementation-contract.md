@@ -1480,6 +1480,8 @@ A timeout lands on `kiosk.safe-timeout`. An explicit end lands on `kiosk.worksta
 | `orchid.events` | Orchid screen | Event administration including IC and Placement department designation | Organizer/god mode |
 | `orchid.event-maps` | Orchid screen | Event maps, map assets/packages, camps, and map locations administration | Authorized maintainer/god mode |
 | `orchid.notes` | Orchid screen | Note list/detail repair visibility | God mode / authorized repair |
+| `orchid.field-reports` | Orchid screen | Field Report list/detail repair visibility, read-only, with the rows the product's own visibility rules would serve the same reader | God mode / authorized repair, then `FieldReportPolicy` |
+| `orchid.incidents` | Orchid screen | Incident list/detail repair visibility, read-only, with the incidents of the events the reader holds `incidents.view` for | God mode / authorized repair, then `incidents.view` |
 | `orchid.audit-settings` | Orchid screen | Per-organization audit verbosity, per-action exceptions, and retention limits, with the measured usage beside them | God mode |
 | `orchid.audit` | Orchid screen | Audit trail across every organization on the node, narrowed by organization, department, or team, with the recorded before and after values on an entry | God mode |
 | `orchid.sync-conflicts` | Orchid screen | Sync conflict queue and resolution | God mode |
@@ -1489,6 +1491,10 @@ A timeout lands on `kiosk.safe-timeout`. An explicit end lands on `kiosk.worksta
 | `orchid.insight-metric-definitions` | Orchid screen | Registered Insight Metric definitions and their administrable registration metadata; no metric logic authoring | God mode / authorized administrator |
 | `orchid.insight-sheets` | Orchid screen | Organization Insight Sheets, metric placements, ordering, placement configuration, sheet filter configuration, and Command sharing | Organizer / god mode |
 | `orchid.insight-sharing-audit` | Orchid screen | Audit records for Insight sharing and unsharing | Organizer / god mode |
+
+Two of these screens are gated twice, and the second gate is the product's own. `orchid.field-reports` and `orchid.incidents` open on a console permission and then serve only the records the reader would be served in the product: `FieldReportPolicy` for a Field Report, the `incidents.view` grant for an incident. A console session is not staff standing, and an operator holding neither reads an empty list rather than the node's records. It applies to a typed address as well as to a list: the entry screens re-ask the same question.
+
+The line is drawn between a record and its history on purpose. `orchid.audit` carries every incident and Field Report row it holds, because a row saying who reopened an incident is history about a change and repair work needs it (ORG-015 governs what *organizing* reaches, not support access). The record itself — somebody's account of what happened to them, an incident's narrative timeline — stays behind the rules that protect it everywhere else. `orchid.document-acknowledgments` sits on the audit side of that line: an acknowledgment is an attestation about a document, not content.
 
 ---
 

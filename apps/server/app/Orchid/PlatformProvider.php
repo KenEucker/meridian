@@ -139,6 +139,15 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.document-fragments')
                 ->permission('platform.document-fragments'),
 
+            // Who accepted which version of which document (M18.34; POL-043
+            // through POL-045). Filed with the documents rather than in God
+            // Mode: it is the other half of authoring one, and the question it
+            // answers is asked by whoever maintains the document.
+            Menu::make(__('Document Acknowledgments'))
+                ->icon('bs.check2-square')
+                ->route('platform.document-acknowledgments')
+                ->permission('platform.document-acknowledgments'),
+
             Menu::make(__('Permission Catalog'))
                 ->icon('bs.key')
                 ->route('platform.permissions')
@@ -166,6 +175,31 @@ class PlatformProvider extends OrchidServiceProvider
                 ->icon('bs.sliders2')
                 ->route('platform.audit.settings')
                 ->permission('platform.audit.settings'),
+
+            /*
+             * Field Report and incident repair visibility (M18.34; UI contract
+             * 12.9; technical spec 22.2).
+             *
+             * Filed under God Mode because they are break-glass reads rather
+             * than administration, and placed after the trail because that is
+             * the order a repair question is usually worked: the audit row says
+             * something happened to a record, and these say what the record is.
+             *
+             * Holding the console permission is not enough to see a row on
+             * either. Both screens then apply the product's own visibility
+             * rules — FR-005 and FR-006 for a Field Report, the
+             * `incidents.view` grant for an incident — so an operator with no
+             * standing in an event opens an empty list.
+             */
+            Menu::make(__('Field Reports'))
+                ->icon('bs.file-earmark-medical')
+                ->route('platform.field-reports')
+                ->permission('platform.field-reports'),
+
+            Menu::make(__('Incidents'))
+                ->icon('bs.exclamation-octagon')
+                ->route('platform.incidents')
+                ->permission('platform.incidents'),
 
             // Bulk CSV import (technical spec 22.2). Filed under God Mode
             // rather than beside the list screens they write to: importing a
@@ -315,7 +349,12 @@ class PlatformProvider extends OrchidServiceProvider
                 ->addPermission('platform.credit-policies', __('Credit policies'))
                 ->addPermission('platform.policy-documents', __('Policy documents'))
                 ->addPermission('platform.procedure-documents', __('Procedure documents'))
-                ->addPermission('platform.document-fragments', __('Document fragments')),
+                ->addPermission('platform.document-fragments', __('Document fragments'))
+                // Reading who has accepted which document version (POL-043
+                // through POL-045). Grouped with the documents rather than with
+                // God Mode because it is the evidence half of maintaining one,
+                // and it writes nothing: the model refuses updates and deletes.
+                ->addPermission('platform.document-acknowledgments', __('Document acknowledgments')),
 
             // Grouped the way the sidebar is, so an operator granting console
             // access finds a capability under the heading they saw it under.
@@ -334,6 +373,14 @@ class PlatformProvider extends OrchidServiceProvider
                 // support work, and changing what future support work will be
                 // able to read is a different kind of power.
                 ->addPermission('platform.audit.settings', __('Audit settings'))
+                // Opening the two break-glass record screens (M18.34). Neither
+                // grant discloses a record on its own: they admit an operator
+                // to a screen that then answers to the product's rules — FR-005
+                // and FR-006 for a Field Report, `incidents.view` for an
+                // incident — so console access cannot become event-wide
+                // Incident Command reading.
+                ->addPermission('platform.field-reports', __('Field report repair visibility'))
+                ->addPermission('platform.incidents', __('Incident repair visibility'))
                 ->addPermission('platform.imports', __('Bulk CSV imports'))
                 ->addPermission('platform.documentation', __('Technician documentation'))
                 ->addPermission('platform.changelog', __('Changelog')),

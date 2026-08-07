@@ -10,6 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 use RuntimeException;
 
 /**
@@ -27,6 +32,15 @@ use RuntimeException;
  */
 class FieldReport extends Model
 {
+    /**
+     * `AsSource` and `Filterable` are for the God Mode repair screen (M18.34),
+     * which lists and narrows this table. Neither adds a write path: the model
+     * refuses updates and deletes below, and technical spec 22.3 rules out a
+     * console edit of a finalized body.
+     */
+    use AsSource;
+    use Filterable;
+
     /** @use HasFactory<FieldReportFactory> */
     use HasFactory, HasUuids;
 
@@ -58,6 +72,27 @@ class FieldReport extends Model
         'origin_device_id',
         'origin_node_id',
         'sync_status',
+    ];
+
+    /**
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'fra_number' => Like::class,
+        'temporary_local_number' => Like::class,
+        'title' => Like::class,
+        'sync_status' => Where::class,
+        'created_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'fra_number',
+        'title',
+        'sync_status',
+        'created_at',
     ];
 
     /**
@@ -234,5 +269,42 @@ class FieldReport extends Model
         $eventId = $event instanceof Event ? $event->getKey() : $event;
 
         return $query->where('event_id', (string) $eventId);
+    }
+
+    /**
+     * The organization / department / team narrowing the God Mode list screen
+     * offers (M18.34).
+     *
+     * A report has no organization column: it belongs to an event, and the
+     * event belongs to the organization. Going through the event rather than
+     * through the department is deliberate — `department_id` is nullable on a
+     * report filed against no department, and narrowing by organization must
+     * not quietly drop those.
+     *
+     * @param  Builder<FieldReport>  $query
+     * @return Builder<FieldReport>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->whereHas('event', fn (Builder $event) => $event
+            ->where('organization_id', $organizationId));
+    }
+
+    /**
+     * @param  Builder<FieldReport>  $query
+     * @return Builder<FieldReport>
+     */
+    public function scopeInDepartment(Builder $query, string $departmentId): Builder
+    {
+        return $query->where('department_id', $departmentId);
+    }
+
+    /**
+     * @param  Builder<FieldReport>  $query
+     * @return Builder<FieldReport>
+     */
+    public function scopeInTeam(Builder $query, string $teamId): Builder
+    {
+        return $query->where('team_id', $teamId);
     }
 }

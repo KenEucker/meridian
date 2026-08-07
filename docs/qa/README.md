@@ -36,8 +36,11 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 
 | [`QA-GOD-02-console-visual-identity.md`](QA-GOD-02-console-visual-identity.md) | Meridian palette, typography, and spacing resolved from the shared design tokens in place of framework defaults; the Meridian logo in expanded and collapsed navigation and the Meridian favicon across console, authentication, and setup; a footer stating the repository's actual license, a 2026-to-present copyright range, and the Meridian build version with no framework license, version, credit, or link left anywhere; login, magic-link, sign-out, and node first-run setup brought onto the same identity; an active organization branding profile leaving the console unchanged; contrast and focus visibility across tables, forms, badges, and disabled states in both themes; the vendor view override inventory | M15C.10 |
 
-The two God Mode scripts split by *content* and *appearance*: `QA-GOD-01`
-covers what the console says, `QA-GOD-02` covers how it looks.
+| [`QA-GOD-03-orchid-repair-visibility.md`](QA-GOD-03-orchid-repair-visibility.md) | The three record screens the console had never carried: acknowledgment review naming who accepted which document at which document and fragment revision, spanning organizations, keeping an earlier acceptance at its earlier revision, narrowing by organization (its departments included) and by department, and offering no team filter; Field Report and incident repair visibility gated twice, where the console permission opens the screen and the product's own rules decide the rows — nothing for a console operator with no staff standing, nothing for a department lead outside Incident Command, an author's own reports for their author, one event's records for somebody holding Incident Command standing there, and the same answer to a typed address as to the list; author and taker distinguished on a report taken over a radio; a photo counted rather than served; an incident's history complete including entries marked stricken; and no write control on any of the three | M18.34 |
+
+The three God Mode scripts split by *content*, *appearance*, and *records*:
+`QA-GOD-01` covers what the console says, `QA-GOD-02` covers how it looks, and
+`QA-GOD-03` covers the operational records it can and cannot reach.
 
 ## Alpha 1 System Configuration and Diagnostics script
 

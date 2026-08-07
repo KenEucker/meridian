@@ -11,6 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Orchid\Filters\Filterable;
+use Orchid\Filters\Types\Like;
+use Orchid\Filters\Types\Where;
+use Orchid\Filters\Types\WhereDateStartEnd;
+use Orchid\Screen\AsSource;
 use RuntimeException;
 
 /**
@@ -23,6 +28,15 @@ use RuntimeException;
  */
 class Incident extends Model
 {
+    /**
+     * `AsSource` and `Filterable` are for the God Mode repair screen (M18.34),
+     * which lists and narrows this table. Neither adds a write path: that
+     * screen reads, and an incident changes through the paths that record an
+     * INC-007 timeline entry for the change.
+     */
+    use AsSource;
+    use Filterable;
+
     /** @use HasFactory<IncidentFactory> */
     use HasFactory, HasUuids;
 
@@ -65,6 +79,29 @@ class Incident extends Model
         'camp_id',
         'map_location_id',
         'created_by_user_id',
+        'closed_at',
+    ];
+
+    /**
+     * @var array<string, class-string>
+     */
+    protected $allowedFilters = [
+        'incident_number' => Like::class,
+        'title' => Like::class,
+        'status' => Where::class,
+        'priority_label' => Where::class,
+        'started_at' => WhereDateStartEnd::class,
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $allowedSorts = [
+        'incident_number',
+        'title',
+        'status',
+        'priority_label',
+        'started_at',
         'closed_at',
     ];
 
@@ -183,5 +220,24 @@ class Incident extends Model
         $eventId = $event instanceof Event ? $event->getKey() : $event;
 
         return $query->where('event_id', (string) $eventId);
+    }
+
+    /**
+     * Organization narrowing for the God Mode list screen (M18.34).
+     *
+     * Organization is the only level an incident has. It carries no department
+     * and no team: INC-001 makes an incident event-scoped, and who works it is
+     * recorded as assigned staff rather than as an owning department. The
+     * console filter bar shows only the levels a model declares, so the
+     * department and team controls are absent here rather than present and
+     * inert.
+     *
+     * @param  Builder<Incident>  $query
+     * @return Builder<Incident>
+     */
+    public function scopeInOrganization(Builder $query, string $organizationId): Builder
+    {
+        return $query->whereHas('event', fn (Builder $event) => $event
+            ->where('organization_id', $organizationId));
     }
 }
