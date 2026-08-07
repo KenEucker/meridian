@@ -309,9 +309,15 @@ Suggested columns:
 
 | Requirement | Status | Issue | PR | Automated tests | Human QA scenario | Notes |
 |---|---|---|---|---|---|---|
-| `SHIFT-016` | In progress | `#42` | `#51` | `ShiftEligibilityTest` | `QA-SHIFT-02` | Enforce training/waiver for scheduled and unscheduled additions |
+| `SHIFT-016` | In progress (usable) | `#42` | `#51` | `ShiftEligibilityTest` | `QA-SHIFT-02` | Enforce training/waiver for scheduled and unscheduled additions |
 | `FR-012` | Not started |  |  |  |  | Copy field report content into incident notes when linked |
-| `INC-014` | Partial | `#63` | `#80` | `IncidentTimelineTest` | `QA-INC-03` | Needs attachment strike coverage |
+| `INC-014` | In progress (domain) | `#63` | `#80` | `IncidentTimelineTest` | `QA-INC-03` | Attachment strike service exists; no surface reaches it yet |
+
+Statuses come from the vocabulary the matrix itself defines (M18.35): `Not
+started`, `In progress (domain)` for delivered behavior no user-reachable
+surface exercises yet, `In progress (usable)` for delivered behavior a user
+can exercise while scope remains, and `Complete`. A row may not claim
+delivery while the surface behind it renders fixture data.
 
 The matrix does not need to be perfect on day one, but every merged PR should improve it.
 
