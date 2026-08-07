@@ -5102,6 +5102,10 @@ Each queued command shall carry a client-generated idempotency key, and the serv
 
 A client shall show the user which of their commands are queued, which have been accepted, and which have been rejected, and shall not silently discard a rejected command.
 
+### CLIENT-017A
+
+A user holding the authority to do so shall be able to resolve a rejected command by re-issuing it as an override, which shall be recorded as a distinct command referencing the one that was refused, shall be audited with the acting user and the refusal reason it overrides, and shall be available only for refusal reasons the technical specification lists as overridable.
+
 ### CLIENT-018
 
 Commands that the technical specification restricts to connected operation shall be refused at queue time rather than queued and rejected later.
