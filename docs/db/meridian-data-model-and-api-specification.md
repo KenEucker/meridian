@@ -1221,6 +1221,35 @@ Departments operations read models (Overview, Logistics, Operations, Planning) a
 
 The Event Horizon read (5.8A) is core on the same footing. Each item kind declares its owning module, a kind owned by an inactive module is omitted, and the endpoint returns the rest. Where no kind remains available to the caller it reports the surface as not applicable rather than returning an empty list, so an organization running none of the owning modules does not present a staff member with a readiness page that reads as "you are ready" (HORIZON-017).
 
+The offline read set (5.10) is core and composes module-owned sections. Each section declares its owning module, and a section owned by a module the organization does not run is absent from the response rather than present and empty (MOD-016).
+
+### 5.10 Offline read set
+
+```text
+GET /api/offline-read-set
+GET /api/offline-read-set?event_id={event}
+```
+
+Returns everything the calling device may hold with no connectivity: the 7.1 cache set for the caller, composed by the server rather than replicated by a sync engine (ADR-0003).
+
+The response carries three things:
+
+- `version`: a content-addressed identifier for this exact set
+- `sections`: the authorized records, keyed by section name, each an array of rows
+- `readiness`: what the set is bounded by — when it was composed, the context event and the window its staleness is bounded by (11A.4), the node's event lock, the effective role codes and active modules it was composed under, the sections this build cannot compose yet, and a row count per section
+
+Two boundaries apply, in order. The caller's effective roles and memberships decide what may be read at all, resolved through the same resolver every other API read answers from, so a device never holds records its user could not retrieve through the API (7.3, CLIENT-021). The organization's active module set then decides which sections travel (MOD-016). Neither is carried in the caller's token: the set is composed per request against live grants, which is what makes a revoked grant, an archived membership, or a deactivated module change the next set rather than the next sign-in (CLIENT-022).
+
+`event_id` selects which of the caller's own events roles and staleness resolve at, under the same rules and the same refusal reason codes as session resolution (5.5). It narrows the answer and never widens it. It does not narrow the records: a device that walks out of signal keeps what it holds for every event it holds it for.
+
+The read is conditional. The response carries an `ETag` over the set's content, and a caller returning it as `If-None-Match` on an unchanged set receives `304` with no body. The version is computed from the content and never from the moment of composition, so an unchanged set has an unchanged version. The set is still composed to answer a conditional request — there is no stored version to compare against, and storing one would mean serving a set from before a grant was withdrawn.
+
+A login with no staff profile receives an empty set rather than a refusal: it is a signed-in user with no standing, and nothing is the true answer to what they may hold.
+
+A section technical spec 9.3 names that this build cannot compose yet is reported in `readiness.deferred_sections` with the reason and the work that owns it, rather than being omitted. An absent key would leave a client unable to distinguish "you have none of these" from "this Meridian has none of these", which are different things to tell somebody with no signal.
+
+The endpoint writes nothing and records no audit event. What a device may hold is derived from what its user may read, and reading it is not an event.
+
 ---
 
 ## 6. Permission Model
