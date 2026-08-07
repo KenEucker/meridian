@@ -14,6 +14,14 @@ use App\Domain\Modules\ModuleKey;
  * call site: a section states what it belongs to, and the composer drops the
  * ones whose module the organization does not run. A section with no module is
  * core (MOD-004) and always travels.
+ *
+ * A section is also either stored rows or computed ones. Almost every section is
+ * the first: the device holds what the database holds and derives the rest for
+ * itself. The Planning Table's plan-versus-actual rows are the second — they are
+ * counts *of* identities the device is deliberately not given (SLB-019), so the
+ * node computes them and the device cannot recompute them. That distinction is
+ * what {@see self::aggregate()} marks, and what lets the set report a freshness
+ * for the computed rows without putting a clock inside the version.
  */
 final class OfflineReadSetSection
 {
@@ -24,6 +32,7 @@ final class OfflineReadSetSection
         public readonly string $name,
         public readonly array $rows,
         public readonly ?ModuleKey $module = null,
+        public readonly bool $computed = false,
     ) {}
 
     /**
@@ -40,5 +49,15 @@ final class OfflineReadSetSection
     public static function owned(string $name, ModuleKey $module, array $rows): self
     {
         return new self($name, $rows, $module);
+    }
+
+    /**
+     * Rows the node computed, which the device cannot recompute.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    public static function aggregate(string $name, ModuleKey $module, array $rows): self
+    {
+        return new self($name, $rows, $module, computed: true);
     }
 }

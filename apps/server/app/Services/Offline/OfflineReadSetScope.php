@@ -16,13 +16,13 @@ use App\Models\User;
  * section cannot reach past the caller's scope because it is handed the scope
  * and never the request.
  *
- * The associations are membership-derived and the role codes are resolver-
+ * The associations are membership-derived and the role grants are resolver-
  * derived, and both are here because the set needs both. The regular-staff
  * sections of technical spec 9.3 are membership-scoped — a staff member holds
  * their own shifts and their own department's documents by belonging to them,
- * not by holding a role — while the role-additive sections M18.47 adds are
- * narrowed by the roles. Composing them from one resolved scope is what keeps
- * the two from answering differently about the same caller.
+ * not by holding a role — while the role-additive sections are narrowed by the
+ * grants. Composing them from one resolved scope is what keeps the two from
+ * answering differently about the same caller.
  */
 final class OfflineReadSetScope
 {
@@ -41,6 +41,12 @@ final class OfflineReadSetScope
      * @param  array<string, string>  $departmentOrganizations  department id => organization id
      * @param  array<string, string>  $teamOrganizations  team id => organization id
      * @param  array<string, string>  $eventOrganizations  event id => organization id
+     * @param  list<OfflineReadSetRoleGrant>  $roleGrants  every role the caller holds,
+     *                                                    resolved once per event in
+     *                                                    scope, which is what the
+     *                                                    role-additive sections of
+     *                                                    technical spec 9.3 are
+     *                                                    scoped by
      */
     public function __construct(
         public readonly User $user,
@@ -56,6 +62,7 @@ final class OfflineReadSetScope
         public readonly array $departmentOrganizations = [],
         public readonly array $teamOrganizations = [],
         public readonly array $eventOrganizations = [],
+        public readonly array $roleGrants = [],
     ) {}
 
     /**
@@ -69,6 +76,74 @@ final class OfflineReadSetScope
     public function hasStaffProfile(): bool
     {
         return $this->staffIds !== [];
+    }
+
+    /**
+     * The (event, department) pairs one of these roles reaches.
+     *
+     * The unit the department-scoped lists of technical spec 9.3 are about: a
+     * Logistics index is a department's staff, equipment, and shifts *at an
+     * event*, and a caller holding the role in two departments holds two of
+     * them. Deduplicated and ordered, because a contributor composes one section
+     * from all of the pairs and the set's version is a hash of what comes out.
+     *
+     * @return list<array{event_id: string, department_id: string, organization_id: string}>
+     */
+    public function departmentScopesFor(string ...$roleCodes): array
+    {
+        $scopes = [];
+
+        foreach ($this->grantsFor(...$roleCodes) as $grant) {
+            $scopes[$grant->eventId.':'.$grant->departmentId] = [
+                'event_id' => $grant->eventId,
+                'department_id' => $grant->departmentId,
+                'organization_id' => $grant->organizationId,
+            ];
+        }
+
+        ksort($scopes);
+
+        return array_values($scopes);
+    }
+
+    /**
+     * The (event, team) pairs one of these roles reaches.
+     *
+     * `shift_lead` is the team-scoped one, and the designation narrowing is
+     * already applied: {@see \App\Services\Permissions\EffectiveRoleResolver}
+     * only resolves it for a membership designated `membership_role = 'lead'`
+     * (TEAM-009), so an undesignated member of a granted team produces no pair
+     * here and reaches no shift-lead section.
+     *
+     * @return list<array{event_id: string, team_id: string, department_id: string, organization_id: string}>
+     */
+    public function teamScopesFor(string ...$roleCodes): array
+    {
+        $scopes = [];
+
+        foreach ($this->grantsFor(...$roleCodes) as $grant) {
+            $scopes[$grant->eventId.':'.$grant->teamId] = [
+                'event_id' => $grant->eventId,
+                'team_id' => $grant->teamId,
+                'department_id' => $grant->departmentId,
+                'organization_id' => $grant->organizationId,
+            ];
+        }
+
+        ksort($scopes);
+
+        return array_values($scopes);
+    }
+
+    /**
+     * @return list<OfflineReadSetRoleGrant>
+     */
+    public function grantsFor(string ...$roleCodes): array
+    {
+        return array_values(array_filter(
+            $this->roleGrants,
+            static fn (OfflineReadSetRoleGrant $grant): bool => in_array($grant->roleCode, $roleCodes, true),
+        ));
     }
 
     /**
@@ -114,6 +189,16 @@ final class OfflineReadSetScope
             departmentOrganizations: $this->departmentOrganizations,
             teamOrganizations: $this->teamOrganizations,
             eventOrganizations: $this->eventOrganizations,
+            /*
+             * Grants narrow with everything else. A role held in an organization
+             * that has the module off must not compose that module's section for
+             * a different organization's records, which is the same reason the
+             * memberships above are filtered rather than kept.
+             */
+            roleGrants: array_values(array_filter(
+                $this->roleGrants,
+                static fn (OfflineReadSetRoleGrant $grant): bool => $keep($grant->organizationId),
+            )),
         );
     }
 }

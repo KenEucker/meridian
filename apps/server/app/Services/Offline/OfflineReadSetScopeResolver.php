@@ -112,6 +112,7 @@ class OfflineReadSetScopeResolver
         $contextEvent = $this->contextEvent($requestedEventId, $lockedEventId, $events);
         $standingOrganizationIds = $this->standingOrganizationIds($staffIds);
         $departmentOrganizations = $this->departmentOrganizations($departmentIds);
+        $roleGrants = $this->roleGrants($staff, $events);
 
         return new OfflineReadSetScope(
             user: $user,
@@ -131,7 +132,90 @@ class OfflineReadSetScopeResolver
                     (string) $event->getKey() => (string) $event->organization_id,
                 ])
                 ->all(),
+            roleGrants: $roleGrants,
         );
+    }
+
+    /**
+     * Every role the caller holds, resolved once per event in scope.
+     *
+     * The role-additive sections of technical spec 9.3 are about a department or
+     * a team *at an event*, so a role code alone cannot say which records
+     * travel. Resolving per event is what applies the grant's own event scope
+     * without restating it: {@see EffectiveRoleResolver} already admits a grant
+     * only when it is unscoped or scoped to the event it is asked about, so an
+     * event-scoped grant produces exactly one of these and an unscoped one
+     * produces a grant per event. That is the narrowing M16.13 asserted, and it
+     * is applied by the same resolver rather than by a copy of its rule.
+     *
+     * The other two narrowings come along unchanged: the `shift_lead`
+     * designation (TEAM-009) and the Incident Command department check are the
+     * resolver's, and a revoked grant is simply not resolved.
+     *
+     * @param  Collection<int, Staff>  $staff
+     * @param  Collection<int, Event>  $events
+     * @return list<OfflineReadSetRoleGrant>
+     */
+    private function roleGrants(Collection $staff, Collection $events): array
+    {
+        if ($events->isEmpty()) {
+            return [];
+        }
+
+        $teams = Team::query()
+            ->whereIn('id', $staff
+                ->flatMap(fn (Staff $profile): Collection => $profile->teamMemberships()->active()->pluck('team_id'))
+                ->unique()
+                ->values()
+                ->all())
+            ->with('department')
+            ->get()
+            ->keyBy(fn (Team $team): string => (string) $team->getKey());
+
+        $grants = [];
+
+        foreach ($events as $event) {
+            $eventId = (string) $event->getKey();
+            $organizationId = (string) $event->organization_id;
+
+            foreach ($staff as $profile) {
+                foreach ($this->roles->resolveForStaff($profile, $event) as $role) {
+                    $team = $teams->get($role->teamId);
+
+                    if (! $team instanceof Team || $team->department === null) {
+                        continue;
+                    }
+
+                    /*
+                     * A role is held over a department, and a department belongs
+                     * to one organization. The resolver answers about a staff
+                     * member's teams wherever they are, so a login with standing
+                     * in two organizations would otherwise carry one
+                     * organization's authority into the other's event.
+                     */
+                    if ((string) $team->department->organization_id !== $organizationId) {
+                        continue;
+                    }
+
+                    /*
+                     * Keyed rather than appended: two staff profiles of one
+                     * login can hold the same grant, and the section composed
+                     * from it should not be composed twice.
+                     */
+                    $grants[$role->roleCode.':'.$eventId.':'.$role->teamId] = new OfflineReadSetRoleGrant(
+                        roleCode: $role->roleCode,
+                        eventId: $eventId,
+                        departmentId: (string) $team->department_id,
+                        teamId: (string) $team->getKey(),
+                        organizationId: $organizationId,
+                    );
+                }
+            }
+        }
+
+        ksort($grants);
+
+        return array_values($grants);
     }
 
     /**

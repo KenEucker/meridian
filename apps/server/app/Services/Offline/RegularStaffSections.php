@@ -25,11 +25,8 @@ use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
 use App\Models\TeamMembership;
 use App\Services\FieldReports\FieldReportPhotoLimits;
-use DateTimeInterface;
+use App\Services\Offline\Concerns\ShapesOfflineRows;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 
 /**
  * The regular-staff cache list of technical spec 9.3, composed for one caller.
@@ -66,6 +63,8 @@ use Illuminate\Support\Collection;
  */
 final class RegularStaffSections implements OfflineReadSetContributor
 {
+    use ShapesOfflineRows;
+
     /**
      * @return list<OfflineReadSetSection>
      */
@@ -640,57 +639,4 @@ final class RegularStaffSections implements OfflineReadSetContributor
         ];
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Shaping
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * @template TModel of Model
-     *
-     * @param  \Illuminate\Database\Eloquent\Builder<TModel>  $query
-     * @param  callable(TModel): array<string, mixed>  $row
-     * @return list<array<string, mixed>>
-     */
-    private function rows($query, callable $row): array
-    {
-        return $this->map($query->get(), $row);
-    }
-
-    /**
-     * @template TModel of Model
-     *
-     * @param  Collection<int, TModel>  $models
-     * @param  callable(TModel): array<string, mixed>  $row
-     * @return list<array<string, mixed>>
-     */
-    private function map(Collection $models, callable $row): array
-    {
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $models->map($row)->values()->all();
-
-        return $rows;
-    }
-
-    /**
-     * A timestamp as the device reads it, or null.
-     *
-     * Every moment in the set is ISO 8601 with its offset. A device compares
-     * these against its own clock while it has no way to ask the node what time
-     * it is, and a bare local-looking string would be the wrong moment on a
-     * device whose timezone is not the event's.
-     */
-    private function moment(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if ($value instanceof DateTimeInterface) {
-            return Carbon::instance($value)->toIso8601String();
-        }
-
-        return (string) $value;
-    }
 }
