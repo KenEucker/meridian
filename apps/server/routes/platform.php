@@ -16,6 +16,7 @@ use App\Orchid\Screens\Credit\CreditPolicyEditScreen;
 use App\Orchid\Screens\Credit\CreditPolicyListScreen;
 use App\Orchid\Screens\Department\DepartmentEditScreen;
 use App\Orchid\Screens\Department\DepartmentListScreen;
+use App\Orchid\Screens\Document\DocumentAcknowledgmentListScreen;
 use App\Orchid\Screens\Document\DocumentFragmentEditScreen;
 use App\Orchid\Screens\Document\DocumentFragmentListScreen;
 use App\Orchid\Screens\Document\PolicyDocumentEditScreen;
@@ -26,10 +27,14 @@ use App\Orchid\Screens\Equipment\EquipmentEditScreen;
 use App\Orchid\Screens\Equipment\EquipmentListScreen;
 use App\Orchid\Screens\Event\EventEditScreen;
 use App\Orchid\Screens\Event\EventListScreen;
+use App\Orchid\Screens\FieldReport\FieldReportDetailScreen;
+use App\Orchid\Screens\FieldReport\FieldReportListScreen;
 use App\Orchid\Screens\Import\AssignmentImportScreen;
 use App\Orchid\Screens\Import\ShiftImportScreen;
 use App\Orchid\Screens\Import\TeamImportScreen;
 use App\Orchid\Screens\Import\UserImportScreen;
+use App\Orchid\Screens\Incident\IncidentDetailScreen;
+use App\Orchid\Screens\Incident\IncidentListScreen;
 use App\Orchid\Screens\Incident\IncidentTypeEditScreen;
 use App\Orchid\Screens\Incident\IncidentTypeListScreen;
 use App\Orchid\Screens\Node\NodeConfigScreen;
@@ -452,6 +457,13 @@ Route::screen('document-fragments', DocumentFragmentListScreen::class)
         ->parent('platform.index')
         ->push(__('Document Fragments'), route('platform.document-fragments')));
 
+// Platform > Policies & Procedures > Acknowledgments (M18.34; UI contract 12.9)
+Route::screen('document-acknowledgments', DocumentAcknowledgmentListScreen::class)
+    ->name('platform.document-acknowledgments')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Document Acknowledgments'), route('platform.document-acknowledgments')));
+
 /*
  * Platform > God Mode > Audit Trail (M18.34; requirements 2.4; UI contract
  * 12.9). The entry route is declared before the list so `audit/{entry}` is
@@ -491,6 +503,38 @@ Route::screen('audit', AuditListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Audit Trail'), route('platform.audit')));
+
+/*
+ * Platform > God Mode > Field Reports and Incidents (M18.34; UI contract 12.9;
+ * technical spec 22.2). Repair *visibility*: both screens open on a console
+ * permission and then serve only what the product's own rules would serve the
+ * same person, so a console session is not a way around FR-005 or the
+ * `incidents.view` grant. The entry routes are declared before their lists for
+ * the same reason the audit pair is.
+ */
+Route::screen('field-reports/{fieldReport}', FieldReportDetailScreen::class)
+    ->name('platform.field-reports.show')
+    ->breadcrumbs(fn (Trail $trail, $fieldReport) => $trail
+        ->parent('platform.field-reports')
+        ->push(__('Field Report'), route('platform.field-reports.show', $fieldReport)));
+
+Route::screen('field-reports', FieldReportListScreen::class)
+    ->name('platform.field-reports')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Field Reports'), route('platform.field-reports')));
+
+Route::screen('incidents/{incident}', IncidentDetailScreen::class)
+    ->name('platform.incidents.show')
+    ->breadcrumbs(fn (Trail $trail, $incident) => $trail
+        ->parent('platform.incidents')
+        ->push(__('Incident'), route('platform.incidents.show', $incident)));
+
+Route::screen('incidents', IncidentListScreen::class)
+    ->name('platform.incidents')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Incidents'), route('platform.incidents')));
 
 // Platform > Infrastructure > Sync Conflicts > Conflict
 Route::screen('sync-conflicts/{conflict}', SyncConflictDetailScreen::class)

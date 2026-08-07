@@ -60,6 +60,31 @@ class ConsoleNavigationSectionsTest extends TestCase
     }
 
     /**
+     * The three record screens M18.34 adds, each under the heading that says
+     * what it is for. Acknowledgment review is the other half of maintaining a
+     * document, so it files with the documents; the two break-glass reads are
+     * repair tooling, so they file under God Mode.
+     */
+    public function test_the_record_screens_sit_under_the_headings_that_explain_them(): void
+    {
+        $this->assertSame('Policies & Procedures', $this->sectionFor('Document Acknowledgments'));
+        $this->assertSame('God Mode', $this->sectionFor('Field Reports'));
+        $this->assertSame('God Mode', $this->sectionFor('Incidents'));
+
+        $response = $this->actingAs($this->consoleUser([
+            'platform.index' => true,
+            'platform.document-acknowledgments' => true,
+            'platform.field-reports' => true,
+            'platform.incidents' => true,
+        ]))->get(route('platform.main'));
+
+        $response->assertOk();
+        $response->assertSee('Document Acknowledgments');
+        $response->assertSee('Field Reports');
+        $response->assertSee('Incidents');
+    }
+
+    /**
      * The heading an item renders under: its own title, or the closest title
      * above it.
      */
