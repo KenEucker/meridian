@@ -46,8 +46,11 @@ afterEach(() => {
 describe("the command catalog", () => {
   it("registers exactly the Alpha 1 offline writes as queueable", () => {
     // Data/API 7.2 closes the list, and 5.6 says so: "Offline-writable commands
-    // remain those listed in 7.2." Anything else is connected-only, which is why
-    // the catalog is default-deny rather than default-queue.
+    // remain those listed in 7.2." The Event Horizon's two preference commands
+    // are the one addition a later section makes explicitly — 5.8A: "the two
+    // preference commands may be queued offline like any other command"
+    // (M18.44). Anything else is connected-only, which is why the catalog is
+    // default-deny rather than default-queue.
     expect(
       COMMAND_CATALOG.filter((command) => command.offlineWritable).map(
         (command) => command.type,
@@ -57,6 +60,8 @@ describe("the command catalog", () => {
       "check-in-staff",
       "check-out-staff",
       "mark-no-show",
+      "hide-event-horizon",
+      "show-event-horizon",
     ]);
   });
 

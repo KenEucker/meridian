@@ -2,6 +2,7 @@ import { createApp } from "vue";
 
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
+import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
@@ -48,6 +49,13 @@ registerSessionContextReset((context) => {
    * off the workstation the next person signs in to (technical spec 13.3).
    */
   clearReadCache();
+  /*
+   * The Event Horizon's menu summary goes with it (M18.43; HORIZON-014). It
+   * summarizes one person's answer for one event; carried across a switch it
+   * would offer — or withhold — the entry on the strength of somebody else's
+   * readiness.
+   */
+  resetEventHorizonPresence();
 });
 
 /*

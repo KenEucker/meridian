@@ -49,6 +49,8 @@ export interface OrganizationConfigurationValues {
   readonly calendarYearStartMonth: number | null;
   readonly calendarYearStartDay: number | null;
   readonly hoursCorrectionGracePeriodDays: number;
+  /** Days before the active window start the Event Horizon opens (HORIZON-011). */
+  readonly eventHorizonLeadDays: number;
   readonly defaultCreditPolicyId: string | null;
   readonly organizersDepartmentId: string | null;
   readonly defaultIcDepartmentId: string | null;
@@ -84,6 +86,7 @@ export interface OrganizationConfigurationUpdate {
   readonly calendar_year_start_month?: number | null;
   readonly calendar_year_start_day?: number | null;
   readonly hours_correction_grace_period_days?: number;
+  readonly event_horizon_lead_days?: number;
   readonly default_credit_policy_id?: string | null;
   readonly organizers_department_id?: string | null;
   readonly default_ic_department_id?: string | null;
@@ -101,6 +104,7 @@ interface ConfigurationPayload {
     readonly calendar_year_start_month?: number | null;
     readonly calendar_year_start_day?: number | null;
     readonly hours_correction_grace_period_days?: number;
+    readonly event_horizon_lead_days?: number;
     readonly default_credit_policy_id?: string | null;
     readonly organizers_department_id?: string | null;
     readonly default_ic_department_id?: string | null;
@@ -142,6 +146,7 @@ function toConfiguration(
       calendarYearStartDay: values.calendar_year_start_day ?? null,
       hoursCorrectionGracePeriodDays:
         values.hours_correction_grace_period_days ?? 14,
+      eventHorizonLeadDays: values.event_horizon_lead_days ?? 30,
       defaultCreditPolicyId: values.default_credit_policy_id ?? null,
       organizersDepartmentId: values.organizers_department_id ?? null,
       defaultIcDepartmentId: values.default_ic_department_id ?? null,

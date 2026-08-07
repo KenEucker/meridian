@@ -26,6 +26,7 @@ import {
   useStaffLinks,
   useWorkflowLinks,
 } from "@/components/workflowLinks";
+import { refreshEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import {
   useConnectivity,
@@ -453,6 +454,27 @@ watch(
      * the rest of the session behavior.
      */
     void refreshClientSessionOnReconnect(state, previous);
+  },
+  { immediate: true },
+);
+
+/*
+ * The Event Horizon's presence in the workflow menu (M18.43; HORIZON-010,
+ * HORIZON-011; UI contract 19C.2).
+ *
+ * Whether the entry renders turns on the node's answer — is the moment inside
+ * the presentation window, and has this member hidden the surface — and a menu
+ * cannot render what nothing has fetched. So the shell asks once whenever the
+ * session resolves an event, quietly: the read is cached like every other
+ * Alpha 1 read, a failure just leaves the entry absent, and the surface itself
+ * re-reads when opened.
+ */
+watch(
+  () => sessionEventContext.value?.eventId ?? null,
+  (eventId) => {
+    if (eventId !== null) {
+      void refreshEventHorizonPresence(eventId);
+    }
   },
   { immediate: true },
 );

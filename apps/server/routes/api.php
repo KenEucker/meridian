@@ -28,6 +28,8 @@ use App\Http\Controllers\Equipment\EquipmentCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryCommandController;
 use App\Http\Controllers\Equipment\EquipmentInventoryReadController;
 use App\Http\Controllers\Equipment\EquipmentLookupController;
+use App\Http\Controllers\EventHorizon\EventHorizonPreferenceController;
+use App\Http\Controllers\EventHorizon\EventHorizonReadController;
 use App\Http\Controllers\Events\EventAdministrationController;
 use App\Http\Controllers\Events\EventInfoReadController;
 use App\Http\Controllers\FieldReports\FieldReportCommandController;
@@ -417,6 +419,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/withdraw-from-shift', [ShiftSignupCommandController::class, 'withdraw'])
         ->name('api.commands.withdraw-from-shift');
+
+    /*
+     * The Event Horizon's two preference commands (M18.44; HORIZON-012 through
+     * HORIZON-015; data/API 5.8A). Self-scoped like the shift commands above:
+     * both act only on the caller's own view state, neither accepts a subject
+     * staff member, and neither is audited — personal view state is not a
+     * record of anything operational (technical spec 21D.10). Hiding is
+     * refused by the node while any item is outstanding (HORIZON-013).
+     */
+    Route::post('/commands/hide-event-horizon', [EventHorizonPreferenceController::class, 'hide'])
+        ->name('api.commands.hide-event-horizon');
+
+    Route::post('/commands/show-event-horizon', [EventHorizonPreferenceController::class, 'showSurface'])
+        ->name('api.commands.show-event-horizon');
 
     /*
      * Staff self-service on their own profile (M18.20; VOL-015, VOL-016,
@@ -1014,6 +1030,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::get('/events/{event}/dashboard', [DashboardReadController::class, 'show'])
         ->name('api.events.dashboard');
+
+    /*
+     * The Event Horizon read (M18.38; HORIZON-001 through HORIZON-008;
+     * data/API 5.8A).
+     *
+     * One staff member's readiness for one event, compiled on read and stored
+     * nowhere. Authorization is event access alone — the endpoint requires no
+     * capability of its own (HORIZON-002), and each registered item kind is
+     * evaluated under the caller's existing authorization for the domain it
+     * reads. A caller outside the presentation window receives the same shape
+     * with the window reported as not applicable rather than a 404.
+     */
+    Route::get('/events/{event}/event-horizon', [EventHorizonReadController::class, 'show'])
+        ->name('api.events.event-horizon');
 
     /*
      * Equipment lookup at checkout (M18.24C; EQUIP-012, EQUIP-013, EQUIP-015).

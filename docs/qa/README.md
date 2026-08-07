@@ -103,9 +103,14 @@ The three God Mode scripts split by *content*, *appearance*, and *records*:
 Milestone 18 tasks that already carry their own scripts are referenced from
 `QA-GAP-01` rather than repeated in it: `QA-STAFF-03`, `QA-APPLY-02`,
 `QA-PUBLIC-02`, `QA-EQUIP-02`, `QA-FR-02`, `QA-DEPT-01`, `QA-ORG-04`,
-`QA-KIOSK-01`, `QA-NAV-01`, `QA-GOD-03`, `QA-EXPORT-01`, and `QA-CLIENT-01`.
-The Event Horizon (Part E) is its own gate and arrives as `QA-HORIZON-01` with
-M18.45.
+`QA-KIOSK-01`, `QA-NAV-01`, `QA-GOD-03`, `QA-EXPORT-01`, `QA-CLIENT-01`, and
+`QA-HORIZON-01`. The Event Horizon (Part E) is its own gate below.
+
+## Alpha 1 Event Horizon script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-HORIZON-01-event-horizon.md`](QA-HORIZON-01-event-horizon.md) | The Part E gate: the readiness list compiled on read from the five fixed kinds with nothing persisted and nothing configurable beyond the lead-up window; presentation only within the organization's configured lead-up through the close of the operations window, moving when the event moves because it is held in days; unreadable kinds absent rather than unknown, with the coverage gap kind reaching only teams the viewer leads and carrying no staff names; expired waivers and trainings reading outstanding with expiry named, an earlier-version acknowledgment staying complete, full and closed shifts producing no item, and a held shift reading complete rather than disappearing; server-decided ordering rendered without a sort control; action links entering their surfaces under those surfaces' own authorization; the whole-surface dismissal refused server-side while anything is outstanding, invisible to others and to the audit trail, restorable from Me, and not surviving a new outstanding item; and offline rendering disclosed as a stored copy that never claims "nothing outstanding" it has not established | M18.45 |
 
 ## Scripts added ahead of their milestones
 

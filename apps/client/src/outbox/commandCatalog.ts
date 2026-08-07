@@ -42,6 +42,9 @@ export type MeridianCommandType =
   // Staff self-service on their own schedule (M18.2).
   | "sign-up-for-shift"
   | "withdraw-from-shift"
+  // The Event Horizon's own view state (M18.44; HORIZON-012; data/API 5.8A).
+  | "hide-event-horizon"
+  | "show-event-horizon"
   // Staff self-service on their own profile (M18.20, M18.20B, M18.20C).
   | "update-my-profile"
   | "request-handle-change"
@@ -264,6 +267,28 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/withdraw-from-shift",
       "Shift withdrawal",
       "Withdrawing from a shift needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    /*
+     * The Event Horizon's two preference commands (M18.44; HORIZON-012 through
+     * HORIZON-015).
+     *
+     * Offline writes by the specification's own word: data/API 5.8A says "the
+     * two preference commands may be queued offline like any other command" —
+     * the one addition to the 7.2 list a later section makes explicitly. They
+     * qualify for the same reason attendance does: each records a decision the
+     * person has already made about their own state, and the node re-checks
+     * the HORIZON-013 guard when the queue drains, so a hide held past a new
+     * outstanding item is refused there rather than mishandled here.
+     */
+    "hide-event-horizon": offlineWrite(
+      "hide-event-horizon",
+      "/api/commands/hide-event-horizon",
+      "Hide Event Horizon",
+    ),
+    "show-event-horizon": offlineWrite(
+      "show-event-horizon",
+      "/api/commands/show-event-horizon",
+      "Restore Event Horizon",
     ),
     /*
      * The staff member's own profile (M18.20; VOL-015). Connected-only for the

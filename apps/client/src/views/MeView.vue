@@ -4,6 +4,11 @@ import { RouterLink } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import { formatTimestamp } from "@/department-ops/labels";
+import {
+  eventHorizonPresence,
+  refreshEventHorizonPresence,
+  setEventHorizonHidden,
+} from "@/event-horizon/eventHorizonModel";
 import { clientSessionState } from "@/session/clientSession";
 import {
   selectedSessionDepartment,
@@ -266,6 +271,56 @@ const currentEventTargetLabel = computed(() => {
     ? "Opens Team Overview"
     : "Opens Event Info";
 });
+
+/*
+ * Restoring a hidden Event Horizon (M18.44; HORIZON-015; UI contract 19C.7).
+ *
+ * This page is the named way back: hiding the surface removes its menu entry,
+ * so the restore control has to live somewhere the member still reaches. The
+ * control renders only while the node's last answer says the surface is hidden
+ * — a member who never hid it sees nothing here, because a control for
+ * un-doing a decision nobody made is noise.
+ */
+const horizonHidden = computed(
+  () =>
+    eventId.value !== null &&
+    eventHorizonPresence.eventId === eventId.value &&
+    eventHorizonPresence.hidden,
+);
+const horizonRestoreBusy = ref(false);
+const horizonRestoreError = ref<string | null>(null);
+
+watch(
+  eventId,
+  (id) => {
+    if (id !== null) {
+      void refreshEventHorizonPresence(id);
+    }
+  },
+  { immediate: true },
+);
+
+async function restoreEventHorizon(): Promise<void> {
+  const id = eventId.value;
+
+  if (id === null || horizonRestoreBusy.value) {
+    return;
+  }
+
+  horizonRestoreBusy.value = true;
+  horizonRestoreError.value = null;
+
+  try {
+    await setEventHorizonHidden(id, false);
+  } catch (error) {
+    horizonRestoreError.value = meridianErrorMessage(
+      error,
+      "Unable to restore the Event Horizon right now.",
+    );
+  } finally {
+    horizonRestoreBusy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -405,6 +460,41 @@ const currentEventTargetLabel = computed(() => {
         </ul>
       </section>
     </section>
+
+    <!--
+      The way back for a hidden Event Horizon (M18.44; HORIZON-015; 19C.7).
+      Rendered only while it is hidden: the surface returns on its own when
+      something becomes outstanding, and this is the member restoring it
+      sooner by their own choice.
+    -->
+    <section
+      v-if="horizonHidden"
+      class="me__section"
+      aria-labelledby="me-event-horizon-heading"
+    >
+      <div class="me__section-heading">
+        <p class="me__eyebrow">Readiness</p>
+        <h2 id="me-event-horizon-heading">Event Horizon</h2>
+      </div>
+
+      <p class="me__horizon-note">
+        You hid the Event Horizon for this event. It returns on its own if
+        something becomes outstanding again, or you can bring it back now.
+      </p>
+
+      <button
+        type="button"
+        class="me__horizon-restore"
+        :disabled="horizonRestoreBusy"
+        @click="restoreEventHorizon"
+      >
+        {{ horizonRestoreBusy ? "Restoring…" : "Restore the Event Horizon" }}
+      </button>
+
+      <p v-if="horizonRestoreError" class="me__schedule-error" role="alert">
+        {{ horizonRestoreError }}
+      </p>
+    </section>
   </section>
 </template>
 
@@ -413,6 +503,32 @@ const currentEventTargetLabel = computed(() => {
   display: grid;
   gap: var(--m-space-5);
   width: var(--m-content-workflow);
+}
+
+.me__horizon-note {
+  margin: 0;
+  color: var(--m-text-secondary);
+}
+
+.me__horizon-restore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  min-height: 2.75rem;
+  padding: 0 var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-base);
+  color: var(--m-text-primary);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.me__horizon-restore:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .me__schedule-error {

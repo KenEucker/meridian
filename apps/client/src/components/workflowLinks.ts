@@ -30,6 +30,7 @@
 
 import { computed, type ComputedRef } from "vue";
 
+import { useEventHorizonMenuPresence } from "@/event-horizon/eventHorizonModel";
 import {
   departmentReportingExportAuthority,
   organizerReportingExportAuthority,
@@ -327,6 +328,9 @@ function imsDirectoryLinks(
  */
 export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   const eventContext = useEventContext();
+  const eventHorizonPresent = useEventHorizonMenuPresence(
+    computed(() => eventContext.value?.eventId ?? null),
+  );
 
   return computed(() => {
     if (!sessionEstablished.value) {
@@ -342,6 +346,23 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
         to: { name: "staff.me" },
       },
     ];
+
+    /*
+     * The Event Horizon (M18.43; HORIZON-010 through HORIZON-013; UI contract
+     * 19C.2). First among the event-scoped entries, because inside its window
+     * it is the staff landing destination: what you still have outstanding is
+     * the first question of the lead-up. Present only while the node's last
+     * answer said the window applies and the member has not hidden it —
+     * absent otherwise, with no entry explaining that it would have been here.
+     */
+    if (eventContext.value && eventHorizonPresent.value) {
+      links.push({
+        label: "Horizon",
+        pageLabel: "Event Horizon",
+        description: "What you still have outstanding before this event.",
+        to: { name: "staff.event-horizon" },
+      });
+    }
 
     if (eventContext.value) {
       links.push(
