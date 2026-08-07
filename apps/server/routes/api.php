@@ -47,6 +47,7 @@ use App\Http\Controllers\Marketing\OrganizationInterestController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
+use App\Http\Controllers\Offline\OfflineReadSetController;
 use App\Http\Controllers\Organizations\OrganizationConfigurationController;
 use App\Http\Controllers\Presence\DepartmentPresenceCommandController;
 use App\Http\Controllers\Reporting\ReportingExportController;
@@ -253,6 +254,29 @@ Route::put('/kiosk/workstations/{sharedWorkstation}/pinned-context', [KioskWorks
 Route::get('/me', [SessionController::class, 'show'])
     ->middleware('auth:sanctum,workstation')
     ->name('api.me');
+
+/*
+ * The offline read set (M18.46; CLIENT-021, CLIENT-022, MOD-016; technical
+ * spec 9.3, 9.5, 11A.7; data/API 7.1, 7.3; ADR-0003).
+ *
+ * Everything the calling device may hold with no connectivity, composed
+ * through the same effective-role resolver every other read answers from and
+ * bounded by the organization's active modules. It sits beside `/api/me`
+ * rather than under an event because it is the same kind of thing: the second
+ * call a client makes after login, answering what it may keep rather than what
+ * it may do.
+ *
+ * The `workstation` guard travels with it for the same reason it travels with
+ * the session: a Kiosk holds a shared-workstation session rather than a bearer
+ * token, and a workstation that could hold no offline data would be a
+ * workstation that stops working the moment the node does.
+ *
+ * Conditional: an unchanged set answers 304 against the caller's
+ * `If-None-Match`, because the device asking is the one on a weak connection.
+ */
+Route::get('/offline-read-set', [OfflineReadSetController::class, 'show'])
+    ->middleware('auth:sanctum,workstation')
+    ->name('api.offline-read-set');
 
 // Branding is chrome, not operational content: every signed-in user of an
 // organization sees its identity on every screen (BRAND-002), and a device
