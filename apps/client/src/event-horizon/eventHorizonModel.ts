@@ -29,7 +29,7 @@
 import { computed, reactive, type ComputedRef } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 
-import { meridianCachedJson } from "@/api/meridianApi";
+import { holdsMeridianCredential, meridianCachedJson } from "@/api/meridianApi";
 import type { ReadFreshness } from "@/offline/readCache";
 import { queueCommand } from "@/outbox/submitCommand";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
@@ -241,10 +241,19 @@ export async function fetchEventHorizon(eventId: string): Promise<EventHorizon> 
  * entry in the workflow menu, and a menu cannot render what nothing has
  * fetched). Failures leave the summary as it stands: a menu entry is not worth
  * an error, and the surface reports its own reads.
+ *
+ * A client holding no credential asks nothing. The node would answer 401, a
+ * refusal `meridianCachedJson` rethrows rather than caching, so the request
+ * could only spend a round trip to learn what `holdsMeridianCredential`
+ * already says — the same reason the command outbox checks it before sending.
  */
 export async function refreshEventHorizonPresence(
   eventId: string,
 ): Promise<void> {
+  if (!holdsMeridianCredential()) {
+    return;
+  }
+
   try {
     await fetchEventHorizon(eventId);
   } catch {
