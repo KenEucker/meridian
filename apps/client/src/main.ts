@@ -3,6 +3,7 @@ import { createApp } from "vue";
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
@@ -49,6 +50,15 @@ registerSessionContextReset((context) => {
    * off the workstation the next person signs in to (technical spec 13.3).
    */
   clearReadCache();
+  /*
+   * And the offline read set, whole (M18.48; technical spec 9.3, 13.3;
+   * CLIENT-014, CLIENT-022). It is the composed answer to "what may this user
+   * read", and the person entering this context is not the person it was
+   * composed for — on a shared workstation, quite literally. Dropped in memory
+   * synchronously, so no surface can render a departed session's roster in the
+   * tick after it ended.
+   */
+  clearOfflineReadSet();
   /*
    * The Event Horizon's menu summary goes with it (M18.43; HORIZON-014). It
    * summarizes one person's answer for one event; carried across a switch it
