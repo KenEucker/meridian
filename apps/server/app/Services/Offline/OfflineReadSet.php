@@ -152,8 +152,46 @@ final class OfflineReadSet
                 static fn (DeferredOfflineReadSetSection $section): array => $section->toArray(),
                 $this->deferred,
             ),
+            'aggregate_freshness' => $this->aggregateFreshness(),
             'counts' => $this->counts(),
         ];
+    }
+
+    /**
+     * When the node computed the sections a device cannot recompute (SLB-019;
+     * technical spec 9.3).
+     *
+     * Every other section is stored rows, and "how fresh" is answered for the
+     * whole set by `composed_at`. A computed section needs saying separately
+     * because a stale count reads exactly like a current one: a Planning Table
+     * showing eleven checked in is making a claim about now, and a device with
+     * no signal has to be able to say when that stopped being checked.
+     *
+     * It lives in readiness rather than on the rows, and that placement is the
+     * design. Readiness is outside the version; a timestamp inside a section
+     * would move the version every time the set was composed, and every refresh
+     * would become a full transfer on precisely the connection this endpoint is
+     * conditional for.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function aggregateFreshness(): array
+    {
+        $freshness = [];
+
+        foreach ($this->sections as $section) {
+            if (! $section->computed) {
+                continue;
+            }
+
+            $freshness[] = [
+                'section' => $section->name,
+                'computed_at' => $this->composedAt->toIso8601String(),
+                'usable_until' => $this->contextEvent?->active_event_window_ends_at?->toIso8601String(),
+            ];
+        }
+
+        return $freshness;
     }
 
     /**

@@ -22,6 +22,9 @@ use App\Services\Attendance\HoursCorrectionException;
 use App\Services\Attendance\HoursCorrectionWindow;
 use App\Services\DepartmentOps\DepartmentOperationsAccess;
 use App\Services\DepartmentOps\DepartmentOperationsAuthority;
+use App\Services\DepartmentOps\DeskHorizon;
+use App\Services\DepartmentOps\PlanVersusActual;
+use App\Services\DepartmentOps\ShiftLifecycle;
 use App\Services\Equipment\EquipmentCheckoutPresentation;
 use App\Services\Equipment\EquipmentLookupService;
 use App\Services\Presence\DepartmentPresenceException;
@@ -58,19 +61,6 @@ use Illuminate\Support\Carbon;
  */
 final class DepartmentOperationsReadController extends Controller
 {
-    /**
-     * How far either side of now the Logistics Window's shift index reaches.
-     *
-     * A desk is a service station for the shift in front of it: the one running,
-     * the one about to start, and the one that just ended and still has people
-     * to check out and equipment to take back. Twelve hours back and thirty-six
-     * forward covers an overnight handover without handing a desk every shift of
-     * a ten-day event.
-     */
-    private const DESK_HORIZON_HOURS_BEFORE = 12;
-
-    private const DESK_HORIZON_HOURS_AFTER = 36;
-
     /**
      * Department Overview for a selected shift (SLB-001, SLB-002).
      *
@@ -424,6 +414,7 @@ final class DepartmentOperationsReadController extends Controller
         Event $event,
         Department $department,
         DepartmentOperationsAccess $access,
+        PlanVersusActual $aggregates,
     ): JsonResponse {
         $authority = $this->authorize($request, $event, $department, $access);
 
@@ -455,11 +446,6 @@ final class DepartmentOperationsReadController extends Controller
             );
         }
 
-        $shiftIds = $shifts->modelKeys();
-        $assignments = $this->assignmentCounts($shiftIds);
-        $attendance = $this->attendanceCounts($shiftIds);
-        $actualMinutes = $this->actualMinutes($shiftIds);
-
         return response()->json([
             ...$this->envelope($event, $department, $authority, $now),
             'teams' => Team::query()
@@ -477,16 +463,7 @@ final class DepartmentOperationsReadController extends Controller
                 'team_id' => $teamId,
                 'date' => $date,
             ],
-            'rows' => $shifts
-                ->map(fn (Shift $shift): array => $this->planningRow(
-                    $shift,
-                    $now,
-                    $assignments[(string) $shift->id] ?? ['total' => 0, 'unscheduled' => 0],
-                    $attendance[(string) $shift->id] ?? ['checked_in' => 0, 'no_show' => 0],
-                    $actualMinutes[(string) $shift->id] ?? 0,
-                ))
-                ->values()
-                ->all(),
+            'rows' => $aggregates->rows($shifts, $now),
         ]);
     }
 
@@ -561,8 +538,8 @@ final class DepartmentOperationsReadController extends Controller
             ->where('event_id', $event->id)
             ->where('department_id', $department->id)
             ->active()
-            ->where('ends_at', '>=', $now->copy()->subHours(self::DESK_HORIZON_HOURS_BEFORE))
-            ->where('starts_at', '<=', $now->copy()->addHours(self::DESK_HORIZON_HOURS_AFTER))
+            ->where('ends_at', '>=', DeskHorizon::endsAfter($now))
+            ->where('starts_at', '<=', DeskHorizon::startsBefore($now))
             ->orderBy('starts_at')
             ->get();
     }
@@ -600,19 +577,7 @@ final class DepartmentOperationsReadController extends Controller
 
     private function lifecycle(Shift $shift, Carbon $now): string
     {
-        if ($shift->isCancelled()) {
-            return 'cancelled';
-        }
-
-        if ($shift->starts_at !== null && $now->lessThan($shift->starts_at)) {
-            return 'upcoming';
-        }
-
-        if ($shift->ends_at !== null && $now->greaterThan($shift->ends_at)) {
-            return 'completed';
-        }
-
-        return 'active';
+        return ShiftLifecycle::of($shift, $now);
     }
 
     /**
@@ -1344,162 +1309,6 @@ final class DepartmentOperationsReadController extends Controller
         }
 
         return $deployments;
-    }
-
-    /**
-     * @param  list<mixed>  $shiftIds
-     * @return array<string, array{total: int, unscheduled: int}>
-     */
-    private function assignmentCounts(array $shiftIds): array
-    {
-        if ($shiftIds === []) {
-            return [];
-        }
-
-        $counts = [];
-
-        foreach (
-            ShiftAssignment::query()
-                ->with('shift:id,starts_at')
-                ->whereIn('shift_id', $shiftIds)
-                ->whereNull('removed_at')
-                ->get() as $assignment
-        ) {
-            $shiftId = (string) $assignment->shift_id;
-            $counts[$shiftId] ??= ['total' => 0, 'unscheduled' => 0];
-            $counts[$shiftId]['total']++;
-
-            $startsAt = $assignment->shift?->starts_at;
-
-            if ($startsAt !== null
-                && $assignment->created_at !== null
-                && $assignment->created_at->greaterThanOrEqualTo($startsAt)) {
-                $counts[$shiftId]['unscheduled']++;
-            }
-        }
-
-        return $counts;
-    }
-
-    /**
-     * @param  list<mixed>  $shiftIds
-     * @return array<string, array{checked_in: int, no_show: int}>
-     */
-    private function attendanceCounts(array $shiftIds): array
-    {
-        if ($shiftIds === []) {
-            return [];
-        }
-
-        $counts = [];
-
-        foreach (
-            AttendanceRecord::query()->whereIn('shift_id', $shiftIds)->get() as $record
-        ) {
-            $shiftId = (string) $record->shift_id;
-            $counts[$shiftId] ??= ['checked_in' => 0, 'no_show' => 0];
-
-            // Anyone who arrived, counted by their arrival rather than by the
-            // state they are in now, so a completed shift still reports the
-            // people who worked it.
-            if ($record->checked_in_at !== null) {
-                $counts[$shiftId]['checked_in']++;
-            }
-
-            if ($record->current_state === AttendanceRecord::STATE_NO_SHOW) {
-                $counts[$shiftId]['no_show']++;
-            }
-        }
-
-        return $counts;
-    }
-
-    /**
-     * @param  list<mixed>  $shiftIds
-     * @return array<string, int>
-     */
-    private function actualMinutes(array $shiftIds): array
-    {
-        if ($shiftIds === []) {
-            return [];
-        }
-
-        return HoursWorked::query()
-            ->whereIn('shift_id', $shiftIds)
-            ->selectRaw('shift_id, sum(minutes_worked) as minutes')
-            ->groupBy('shift_id')
-            ->get()
-            ->mapWithKeys(fn ($row): array => [(string) $row->shift_id => (int) $row->minutes])
-            ->all();
-    }
-
-    /**
-     * One identity-free plan-versus-actual row (SLB-019).
-     *
-     * Planned hours are what the shift asked for: its capacity across its own
-     * window, or — where it sets no capacity target — the people actually on it,
-     * because a shift with no target cannot be under one.
-     *
-     * @param  array{total: int, unscheduled: int}  $assignments
-     * @param  array{checked_in: int, no_show: int}  $attendance
-     * @return array<string, mixed>
-     */
-    private function planningRow(
-        Shift $shift,
-        Carbon $now,
-        array $assignments,
-        array $attendance,
-        int $actualMinutes,
-    ): array {
-        $lifecycle = $this->lifecycle($shift, $now);
-        $durationHours = $shift->starts_at !== null && $shift->ends_at !== null
-            ? $shift->starts_at->diffInMinutes($shift->ends_at) / 60
-            : 0.0;
-        $plannedHours = round(($shift->capacity ?? $assignments['total']) * $durationHours, 1);
-        $actualHours = round($actualMinutes / 60, 1);
-
-        return [
-            'shift_id' => (string) $shift->id,
-            'title' => $shift->title,
-            'team_id' => (string) $shift->eligible_team_id,
-            'team_label' => $shift->eligibleTeam?->name ?? $shift->team_name_snapshot,
-            'starts_at' => $shift->starts_at?->toIso8601String(),
-            'ends_at' => $shift->ends_at?->toIso8601String(),
-            'lifecycle' => $lifecycle,
-            'capacity' => $shift->capacity,
-            'signed_up_or_assigned_count' => $assignments['total'],
-            'checked_in_count' => $attendance['checked_in'],
-            'no_show_count' => $attendance['no_show'],
-            'unscheduled_count' => $assignments['unscheduled'],
-            'planned_hours' => $plannedHours,
-            'actual_hours' => $actualHours,
-            'variance_hours' => round($actualHours - $plannedHours, 1),
-            'status_label' => $this->planningStatusLabel(
-                $lifecycle,
-                $shift->capacity,
-                $assignments['total'],
-                $plannedHours,
-                $actualHours,
-            ),
-        ];
-    }
-
-    private function planningStatusLabel(
-        string $lifecycle,
-        ?int $capacity,
-        int $assigned,
-        float $plannedHours,
-        float $actualHours,
-    ): string {
-        return match (true) {
-            $lifecycle === 'cancelled' => 'Cancelled',
-            $lifecycle === 'upcoming' && $capacity !== null && $assigned < $capacity => 'Under target',
-            $lifecycle === 'upcoming' => 'Upcoming',
-            $lifecycle === 'completed' && $actualHours > $plannedHours => 'Completed over plan',
-            $lifecycle === 'completed' => 'Completed under plan',
-            $capacity !== null && $assigned < $capacity => 'Under target',
-            default => 'On plan',
-        };
     }
 
     private function staffName(?Staff $staff): string

@@ -46,14 +46,39 @@ class OfflineReadSetComposer
         private readonly OfflineReadSetScopeResolver $scopes,
         private readonly ActiveModuleResolver $modules,
         RegularStaffSections $regularStaff,
+        DepartmentLogisticsSections $logistics,
+        DepartmentOperationsSections $operations,
+        DepartmentPlanningSections $planning,
+        ShiftLeadSections $shiftLead,
+        DepartmentLeadSections $departmentLead,
     ) {
         /*
-         * The regular-staff list of technical spec 9.3, and for now only that
-         * one. M18.47 adds the role-additive lists as further contributors;
-         * they compose from the same scope and are filtered by the same module
-         * boundary, which is the point of the seam.
+         * The lists of technical spec 9.3: the regular-staff one every staff
+         * member receives, then the five a role adds to it. They compose from
+         * the same scope and are filtered by the same module boundary, which is
+         * the point of the seam — a role-additive list is not a second endpoint
+         * with a second set of rules, it is more sections of one set.
+         *
+         * A caller holding none of the roles receives only the first, because a
+         * contributor with no grant to compose from returns no sections rather
+         * than empty ones. An empty `logistics_staff_index` would be a claim
+         * that a department has no staff, and a caller who holds no Logistics
+         * role is not entitled to make it.
+         *
+         * Two lists of section 9.3 are deliberately not here. The event map
+         * package has its own permission rules and its own sensitive-layer
+         * boundary, and the IC list is guarded by "incidents should not be
+         * greedily synced" — both are their own work rather than a section
+         * appended to this one.
          */
-        $this->contributors = [$regularStaff];
+        $this->contributors = [
+            $regularStaff,
+            $logistics,
+            $operations,
+            $planning,
+            $shiftLead,
+            $departmentLead,
+        ];
     }
 
     /**
