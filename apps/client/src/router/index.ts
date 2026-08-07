@@ -80,6 +80,7 @@ import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
 import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
+import EventHorizonView from "@/views/EventHorizonView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
 import StaffDashboardView from "@/views/StaffDashboardView.vue";
@@ -513,6 +514,20 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/me",
     name: "staff.me",
     component: MeView,
+  },
+  /*
+   * The Event Horizon (M18.43; HORIZON-001, HORIZON-010; UI contract 19C).
+   *
+   * Self-scoped like Me above: whose readiness this is, and for which event,
+   * are the session's answers. The route is always registered and the surface
+   * decides its own absence — outside the presentation window, or with no item
+   * kind available to the viewer, it sends a typed address to home rather than
+   * rendering an empty state the menu would never have offered (19C.2).
+   */
+  {
+    path: "/staff/event-horizon",
+    name: "staff.event-horizon",
+    component: EventHorizonView,
   },
   /*
    * Edit your own profile (M18.20; VOL-014 through VOL-016; UI contract 12.3

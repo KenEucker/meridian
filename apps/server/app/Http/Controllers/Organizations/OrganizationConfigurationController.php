@@ -64,6 +64,7 @@ final class OrganizationConfigurationController extends Controller
             'calendar_year_start_month' => ['sometimes', 'nullable', 'integer'],
             'calendar_year_start_day' => ['sometimes', 'nullable', 'integer'],
             'hours_correction_grace_period_days' => ['sometimes', 'nullable', 'integer'],
+            'event_horizon_lead_days' => ['sometimes', 'nullable', 'integer'],
             'default_credit_policy_id' => ['sometimes', 'nullable', 'uuid'],
             'organizers_department_id' => ['sometimes', 'nullable', 'uuid'],
             'default_ic_department_id' => ['sometimes', 'nullable', 'uuid'],
@@ -140,6 +141,7 @@ final class OrganizationConfigurationController extends Controller
                 'calendar_year_start_month' => $organization->calendar_year_start_month,
                 'calendar_year_start_day' => $organization->calendar_year_start_day,
                 'hours_correction_grace_period_days' => $organization->hoursCorrectionGracePeriodDays(),
+                'event_horizon_lead_days' => $organization->eventHorizonLeadDays(),
                 'default_credit_policy_id' => $organization->default_credit_policy_id !== null
                     ? (string) $organization->default_credit_policy_id
                     : null,

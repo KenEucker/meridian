@@ -57,6 +57,7 @@ final class OrganizationConfigurationService
         'calendar_year_start_month',
         'calendar_year_start_day',
         'hours_correction_grace_period_days',
+        'event_horizon_lead_days',
         'default_credit_policy_id',
         'organizers_department_id',
         'default_ic_department_id',
@@ -137,6 +138,12 @@ final class OrganizationConfigurationService
         if (array_key_exists('hours_correction_grace_period_days', $changes)) {
             $values['hours_correction_grace_period_days'] = $this->gracePeriodDays(
                 $changes['hours_correction_grace_period_days'],
+            );
+        }
+
+        if (array_key_exists('event_horizon_lead_days', $changes)) {
+            $values['event_horizon_lead_days'] = $this->eventHorizonLeadDays(
+                $changes['event_horizon_lead_days'],
             );
         }
 
@@ -222,6 +229,31 @@ final class OrganizationConfigurationService
         }
 
         return $limit;
+    }
+
+    /**
+     * The HORIZON-011 lead-up window (M18.38A). Like the grace period above,
+     * it cannot be cleared: an organization always has one, and 30 days is the
+     * documented default. Zero is legitimate — the Event Horizon then opens
+     * with the active window itself.
+     */
+    private function eventHorizonLeadDays(mixed $value): int
+    {
+        if ($value === null) {
+            throw OrganizationConfigurationException::invalid(
+                'The Event Horizon lead-up window cannot be cleared: an organization always has one, and 30 days is the default.',
+            );
+        }
+
+        $days = (int) $value;
+
+        if ($days < 0 || $days > 365) {
+            throw OrganizationConfigurationException::invalid(
+                'The Event Horizon lead-up window must be between 0 and 365 days before the active event window starts.',
+            );
+        }
+
+        return $days;
     }
 
     private function positiveYearsOrNull(mixed $value, string $key): ?int
@@ -386,6 +418,7 @@ final class OrganizationConfigurationService
             'calendar_year_start_month' => $organization->calendar_year_start_month,
             'calendar_year_start_day' => $organization->calendar_year_start_day,
             'hours_correction_grace_period_days' => $organization->hours_correction_grace_period_days,
+            'event_horizon_lead_days' => $organization->event_horizon_lead_days,
             'default_credit_policy_id' => $organization->default_credit_policy_id !== null
                 ? (string) $organization->default_credit_policy_id
                 : null,

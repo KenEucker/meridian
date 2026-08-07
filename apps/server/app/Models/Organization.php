@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Domain\Audit\AuditVerbosity;
 use App\Domain\Staffing\ProfileChangePolicy;
+use App\Services\Audit\AuditPolicy;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -57,6 +58,7 @@ class Organization extends Model
         'calendar_year_start_month',
         'calendar_year_start_day',
         'hours_correction_grace_period_days',
+        'event_horizon_lead_days',
         'handle_change_policy',
         'profile_picture_change_policy',
         'handle_self_service_change_limit',
@@ -105,6 +107,7 @@ class Organization extends Model
             'calendar_year_start_month' => 'integer',
             'calendar_year_start_day' => 'integer',
             'hours_correction_grace_period_days' => 'integer',
+            'event_horizon_lead_days' => 'integer',
             'notifications_suppressed_at' => 'datetime',
             'accepts_organization_applications' => 'boolean',
             'archived_at' => 'datetime',
@@ -254,6 +257,19 @@ class Organization extends Model
     }
 
     /**
+     * The HORIZON-011 lead-up window in days before an event's active window
+     * start, from which the Event Horizon begins to be presented (M18.38A;
+     * technical spec 21D.4). Falls back to the documented default of 30 for a
+     * row hydrated without the column. Held in days rather than as a date so
+     * that moving an event moves the window with it, on the same reasoning as
+     * the SHIFT-017 relative schedule cutoff.
+     */
+    public function eventHorizonLeadDays(): int
+    {
+        return (int) ($this->event_horizon_lead_days ?? 30);
+    }
+
+    /**
      * How handle changes are decided here (VOL-027). An organization that has
      * never chosen reads as the documented default.
      */
@@ -273,7 +289,7 @@ class Organization extends Model
      *
      * An organization that has never chosen reads as the documented default,
      * the way every other configuration column does. The floor is not part of
-     * this answer: {@see \App\Services\Audit\AuditPolicy} applies it above
+     * this answer: {@see AuditPolicy} applies it above
      * whatever this returns, so no level can reach below what requirements 2.4
      * and data/API section 8 oblige.
      */

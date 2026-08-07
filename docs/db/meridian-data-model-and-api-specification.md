@@ -3956,13 +3956,6 @@ Meridian sends transactional email for the NOTIFY-001 set and nothing else. Ther
 #### `notification_deliveries`
 
 Represents one person told, or one person deliberately not told (NOTIFY-007).
-### 10.21 Event Horizon
-
-The Event Horizon compiles one staff member's readiness for one event out of records the other domains already own. Nothing here stores an item, an outstanding count, or a readiness state; the only row the feature owns is one person's preference about whether to keep seeing it.
-
-#### `event_horizon_dismissals`
-
-Represents one staff member having hidden the Event Horizon for one event (HORIZON-012).
 
 Key fields:
 
@@ -3980,11 +3973,6 @@ Key fields:
 - `queued_at`, `sent_at`, `resolved_at`, each nullable
 - `origin_node_id`, nullable
 - `origin_operation_uuid`, nullable — the node operation that handed this notification to central (NOTIFY-008)
-- `staff_id`
-- `event_id`
-- `dismissed_at`
-- `created_at`
-- `updated_at`
 
 Rules:
 
@@ -3995,6 +3983,26 @@ Rules:
 - an application auto-rejected due to Do Not Staff produces **no row at all** (NOTIFY-002): a record naming that application beside a rejection type would itself disclose the match
 - `origin_operation_uuid` is not unique. One node operation may be the origin of several deliveries, because a cancelled shift is one operation and one notification per person who was signed up for it
 - the audit trail carries the same five facts under `notification.<status>` actions, and outlives the row
+
+### 10.21 Event Horizon
+
+The Event Horizon compiles one staff member's readiness for one event out of records the other domains already own. Nothing here stores an item, an outstanding count, or a readiness state; the only row the feature owns is one person's preference about whether to keep seeing it.
+
+#### `event_horizon_dismissals`
+
+Represents one staff member having hidden the Event Horizon for one event (HORIZON-012).
+
+Key fields:
+
+- `id`
+- `staff_id`
+- `event_id`
+- `dismissed_at`
+- `created_at`
+- `updated_at`
+
+Rules:
+
 - one row per staff member per event; restoring the surface deletes the row rather than adding a second state, because "not hidden" is the absence of a decision and needs no record
 - writing a row is refused while any item is outstanding for that staff member and event (HORIZON-013), enforced server-side rather than by withholding the control
 - the row is personal view state on the footing of `insight_sheet_favorites`: it is invisible to every other user, it is not audited, and no other feature reads it

@@ -63,6 +63,7 @@ const form = reactive({
   prospectiveYears: "",
   activeYears: "",
   gracePeriodDays: "14",
+  eventHorizonLeadDays: "30",
   calendarMonth: "",
   calendarDay: "",
   defaultCreditPolicyId: "",
@@ -157,6 +158,7 @@ function fillForm(current: OrganizationConfiguration): void {
   form.prospectiveYears = values.prospectiveInactiveThresholdYears?.toString() ?? "";
   form.activeYears = values.activeInactiveThresholdYears?.toString() ?? "";
   form.gracePeriodDays = values.hoursCorrectionGracePeriodDays.toString();
+  form.eventHorizonLeadDays = values.eventHorizonLeadDays.toString();
   form.calendarMonth = values.calendarYearStartMonth?.toString() ?? "";
   form.calendarDay = values.calendarYearStartDay?.toString() ?? "";
   form.defaultCreditPolicyId = values.defaultCreditPolicyId ?? "";
@@ -200,6 +202,7 @@ async function onSave(): Promise<void> {
       prospective_inactive_threshold_years: numberOrNull(form.prospectiveYears),
       active_inactive_threshold_years: numberOrNull(form.activeYears),
       hours_correction_grace_period_days: Number(form.gracePeriodDays),
+      event_horizon_lead_days: Number(form.eventHorizonLeadDays),
       calendar_year_start_month: numberOrNull(form.calendarMonth),
       calendar_year_start_day: numberOrNull(form.calendarDay),
       default_credit_policy_id: form.defaultCreditPolicyId || null,
@@ -314,6 +317,20 @@ async function onSave(): Promise<void> {
               />
             </ControlField>
             <ControlField
+              label="Event Horizon lead-up window (days before the event)"
+              control-id="config-horizon-lead-days"
+            >
+              <input
+                id="config-horizon-lead-days"
+                v-model="form.eventHorizonLeadDays"
+                type="number"
+                min="0"
+                max="365"
+                required
+                :disabled="!editable"
+              />
+            </ControlField>
+            <ControlField
               label="Calendar year start month"
               control-id="config-calendar-month"
             >
@@ -349,8 +366,10 @@ async function onSave(): Promise<void> {
           </div>
           <p class="org-configuration-settings__note">
             Hours can be corrected until the grace period closes, and freeze
-            after it. The calendar year start takes a month and a day together,
-            or neither.
+            after it. The Event Horizon opens for staff that many days before
+            an event's active window starts, and 30 is the documented default.
+            The calendar year start takes a month and a day together, or
+            neither.
           </p>
         </fieldset>
 
