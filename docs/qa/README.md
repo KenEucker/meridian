@@ -94,6 +94,34 @@ The three God Mode scripts split by *content*, *appearance*, and *records*:
 |---|---|---|
 | [`QA-NAV-01-command-palette.md`](QA-NAV-01-command-palette.md) | `Ctrl+K`, `Cmd+K`, and `/` only outside a field, with the slash typed as a character inside the desk's search box and a Field Report body; the palette's offer compared entry for entry against the same persona's Home, in both directions, across a department lead, a member holding no roles, and an organizer; IMS entries following Incident Command standing rather than organizer seniority; no camp and no operational map location at any query (MAP-018); the Kiosk's three states — unpinned, pinned but locked, signed in — offering nothing from a client session on the same machine, and never the session end the session bar owns; and the keyboard path from opening to dismissal with focus returned to the control that opened it | M18.33 |
 
+## Alpha 1 Milestone 18 gap closure script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-GAP-01-milestone-18-gap-closure.md`](QA-GAP-01-milestone-18-gap-closure.md) | The milestone 18 QA gate in one sitting, without Orchid: department presence with both off-site refusals, unscheduled shift addition, hours correction and its closed grace period, the staff shift board with every denial reason rendered, document acknowledgment recording its version, the staff document library, team designations granting exactly their documented capability sets and naming themselves in permission explanations, the Staff Coordinator holding application review and nothing else, the four attendance operations agreeing on their authority, audited and freeze-guarded organization configuration with live incident-type curation, unattended lifecycle transitions, shift-over-default credit resolution with frozen entries, document-backed waivers rendering inline and recording versions, dashboards disclosing only what their reader could open with the organizer incident exclusion kept by construction, and branded notification delivery that never rolls back the operation it reports | M18.37 |
+
+Milestone 18 tasks that already carry their own scripts are referenced from
+`QA-GAP-01` rather than repeated in it: `QA-STAFF-03`, `QA-APPLY-02`,
+`QA-PUBLIC-02`, `QA-EQUIP-02`, `QA-FR-02`, `QA-DEPT-01`, `QA-ORG-04`,
+`QA-KIOSK-01`, `QA-NAV-01`, `QA-GOD-03`, `QA-EXPORT-01`, and `QA-CLIENT-01`.
+The Event Horizon (Part E) is its own gate and arrives as `QA-HORIZON-01` with
+M18.45.
+
+## Scripts added ahead of their milestones
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-MAP-01-event-geography-and-maps.md`](QA-MAP-01-event-geography-and-maps.md) | The Milestone 14 gate: Placement designation limited to event-assigned departments, pre-window map and camp/location authoring under Placement authority, publish-driven visibility, camp names withheld from unpermitted volunteers online and offline, the kiosk dashboard map, optional-and-never-required IMS references, Field Reports staying single-body, operations-window locking with the audited organizer override, and the absence of dropped pins, palette entries, and volunteer corrections | M14.13 (added ahead by M18.36) |
+| [`QA-INSIGHT-01-insights-framework.md`](QA-INSIGHT-01-insights-framework.md) | The Milestone 17 gate: automatic no-show determination at the ±5% boundary with late-arrival supersession, sheets with independently configured placements of one metric type, per-viewer scope over one sheet, IMS-derived metrics held to the IC pool, under-5 aggregates withheld with a stated reason, independent operational and data-quality state axes, offline compilation with honest staleness, Command sharing with originating-department labels and window-bound expiry, action links entering surfaces under their own authorization, personal volunteer Insights without `insights.view`, and the browser PDF snapshot Meridian stores no copy of | M17.20 (added ahead by M18.36) |
+
+Milestones 14 and 17 have not landed. The plan has referenced both scripts
+since those milestones were specified, and M18.36 adds them so a referenced
+script cannot read as coverage that was never planned; each opens with the
+same status note, is written from its milestone's acceptance criteria, and is
+corrected by its owning task to what actually ships before it is run as a
+gate. `QA-EXPORT-01` and `QA-CLIENT-01`, the other two scripts M18.36 names,
+already landed with M13.9 and M16.23.
+
 ## Alpha 1 Product document authoring script
 
 | ID | Coverage | Owning task |
