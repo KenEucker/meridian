@@ -30,7 +30,7 @@ import { computed, reactive, type ComputedRef } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 
 import { holdsMeridianCredential, meridianCachedJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import { queueCommand } from "@/outbox/submitCommand";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
 

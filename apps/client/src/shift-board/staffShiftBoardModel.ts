@@ -20,7 +20,8 @@
 // signup held on a device is a shift somebody thinks they hold.
 
 import { meridianCachedJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 
 /** An advisory that came back with a shift, or with a signup (SHIFT-014). */
@@ -40,7 +41,12 @@ export interface ShiftBoardEntry {
   readonly startsAt: string | null;
   readonly endsAt: string | null;
   readonly capacity: number | null;
-  readonly activeAssignmentCount: number;
+  /**
+   * How many people are on it, as the node counted them. Null when nobody
+   * counted: the offline copy of a shift carries the shift, not a tally that
+   * changes every time somebody else signs up.
+   */
+  readonly activeAssignmentCount: number | null;
   readonly signupOpensAt: string | null;
   readonly signupClosesAt: string | null;
   readonly scheduleLockAt: string | null;
@@ -113,7 +119,7 @@ function toEntry(payload: ShiftBoardEntryPayload): ShiftBoardEntry {
     startsAt: payload.starts_at,
     endsAt: payload.ends_at,
     capacity: payload.capacity,
-    activeAssignmentCount: payload.active_assignment_count ?? 0,
+    activeAssignmentCount: payload.active_assignment_count ?? null,
     signupOpensAt: payload.signup_opens_at,
     signupClosesAt: payload.signup_closes_at,
     scheduleLockAt: payload.schedule_lock_at,
@@ -131,19 +137,118 @@ function toEntry(payload: ShiftBoardEntryPayload): ShiftBoardEntry {
   };
 }
 
+/** One shift as the offline read set carries it (technical spec 9.3). */
+interface StoredShiftRow {
+  readonly id: string;
+  readonly event_id: string;
+  readonly department_id: string;
+  readonly eligible_team_id: string | null;
+  readonly title: string;
+  readonly department_name_snapshot: string | null;
+  readonly team_name_snapshot: string | null;
+  readonly starts_at: string | null;
+  readonly ends_at: string | null;
+  readonly capacity: number | null;
+  readonly signup_opens_at: string | null;
+  readonly signup_closes_at: string | null;
+  readonly schedule_lock_at: string | null;
+  readonly cancelled_at: string | null;
+}
+
+interface StoredShiftAssignmentRow {
+  readonly shift_id: string;
+  readonly assignment_status: string | null;
+}
+
+interface StoredEventRow {
+  readonly id: string;
+  readonly name: string | null;
+}
+
+/**
+ * The board this device can show with no node in reach (M18.50; CLIENT-021;
+ * technical spec 9.3).
+ *
+ * It is narrower than the node's board and honestly so. Section 9.3 asks a
+ * regular staff member's device to hold "their own shifts", and that is what the
+ * set carries: the shifts they are assigned to, not every shift their
+ * departments are running. So the offline board is the shifts they hold, each
+ * marked signed up, and it does not offer any shift they might take — which is
+ * the right answer twice over, because signup is connected-only (data/API 7.2)
+ * and a board that offered a shift no command could accept would be inviting
+ * somebody to believe they had taken it.
+ *
+ * Nothing here decides eligibility, for the reason at the head of this module.
+ * `canSignUp` and `canWithdraw` are false because this device has no verdict, not
+ * because it computed one, and no unavailability reason is invented to explain a
+ * shift the reader is already on.
+ *
+ * The assignment count is left null rather than derived from the assignments this
+ * device holds. It holds the caller's own assignment and no one else's, so
+ * counting them would report every shift in the event as having exactly one
+ * person on it.
+ */
+function storedShiftBoard(
+  eventId: string,
+): OfflineReadProjection<ShiftBoardPayload> {
+  return (source) => {
+    if (!source.carries("shifts")) {
+      return null;
+    }
+
+    const assignments = new Map(
+      source
+        .section<StoredShiftAssignmentRow>("shift_assignments")
+        .map((assignment) => [assignment.shift_id, assignment]),
+    );
+
+    const event =
+      source
+        .section<StoredEventRow>("events")
+        .find((candidate) => candidate.id === eventId) ?? null;
+
+    const shifts = source
+      .section<StoredShiftRow>("shifts")
+      .filter((shift) => shift.event_id === eventId)
+      .map<ShiftBoardEntryPayload>((shift) => ({
+        id: shift.id,
+        department_id: shift.department_id,
+        department_name: shift.department_name_snapshot,
+        eligible_team_id: shift.eligible_team_id ?? "",
+        eligible_team_name: shift.team_name_snapshot,
+        title: shift.title,
+        starts_at: shift.starts_at,
+        ends_at: shift.ends_at,
+        capacity: shift.capacity,
+        signup_opens_at: shift.signup_opens_at,
+        signup_closes_at: shift.signup_closes_at,
+        schedule_lock_at: shift.schedule_lock_at,
+        cancelled_at: shift.cancelled_at,
+        signed_up: true,
+        assignment_status: assignments.get(shift.id)?.assignment_status ?? null,
+        can_sign_up: false,
+        can_withdraw: false,
+      }));
+
+    return { data: { event: { id: eventId, name: event?.name ?? null }, shifts } };
+  };
+}
+
 /**
  * Read the whole board for one event.
  *
- * Cached, because "their own shifts" is the first thing technical spec 9.3 asks a
- * regular staff member's device to hold. A volunteer standing where there is no
- * signal still needs to know when they are due and where; a board that answers
- * "check the connection to this node" is the failure that rule exists against.
+ * Answered from what this device holds when the node cannot be reached, because
+ * "their own shifts" is the first thing technical spec 9.3 asks a regular staff
+ * member's device to hold. A volunteer standing where there is no signal still
+ * needs to know when they are due and where; a board that answers "check the
+ * connection to this node" is the failure that rule exists against.
  */
 export async function getShiftBoard(
   eventId: string,
 ): Promise<ShiftBoard> {
   const { data, freshness } = await meridianCachedJson<ShiftBoardPayload>(
     `/api/events/${eventId}/shift-board`,
+    { offline: storedShiftBoard(eventId) },
   );
 
   return {
@@ -226,9 +331,17 @@ export function shiftBoardWindowLabel(shift: ShiftBoardEntry): string {
  * How full the shift is (SHIFT-007, SHIFT-012).
  *
  * The count is the node's; a shift with no cap says so rather than showing a
- * denominator it does not have.
+ * denominator it does not have, and a copy that arrived without a count says
+ * that rather than printing a zero. "0 of 4 signed up" on a shift somebody is
+ * standing on is not a stale number, it is a wrong one.
  */
 export function shiftBoardCapacityLabel(shift: ShiftBoardEntry): string {
+  if (shift.activeAssignmentCount === null) {
+    return shift.capacity === null
+      ? "Signed-up count unavailable offline"
+      : `Capacity ${shift.capacity}; signed-up count unavailable offline`;
+  }
+
   return shift.capacity === null
     ? `${shift.activeAssignmentCount} signed up`
     : `${shift.activeAssignmentCount} of ${shift.capacity} signed up`;

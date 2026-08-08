@@ -24,7 +24,7 @@ import {
   kioskCurrentUserWidget,
   kioskNodeStatusWidget,
 } from "@/dashboard/kioskDeviceWidgets";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import {
@@ -148,7 +148,7 @@ function stubDashboard(payload: unknown, status = 200): string[] {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",

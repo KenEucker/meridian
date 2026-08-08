@@ -18,7 +18,7 @@
 // No server runs for any of this, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -270,7 +270,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   selectSessionDepartment(DEPARTMENT_ID);
   configureMeridianApi({

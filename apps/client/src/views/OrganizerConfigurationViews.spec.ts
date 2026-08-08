@@ -11,7 +11,7 @@
 // address it through the page, because that is how a person reaches it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -311,7 +311,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   configureMeridianApi({
     baseUrl: "http://node.test",
     bearerToken: "device-token",

@@ -19,7 +19,7 @@
 // module passes through.
 
 import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import { describeCommand } from "@/outbox/commandCatalog";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 

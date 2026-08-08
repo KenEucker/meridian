@@ -12,7 +12,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { routes } from "@/router";
 import MeView from "@/views/MeView.vue";
 import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
@@ -113,7 +113,7 @@ function pendingPicturePayload(
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   configureMeridianApi({
     baseUrl: "http://node.test",
     bearerToken: "device-token",

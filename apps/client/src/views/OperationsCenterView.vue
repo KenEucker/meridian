@@ -220,7 +220,7 @@ async function loadImsCounts(): Promise<void> {
   }
 
   try {
-    const reports = await getEventFieldReports(eventId);
+    const { reports } = await getEventFieldReports(eventId);
 
     fieldReportCounts.value = {
       total: reports.length,

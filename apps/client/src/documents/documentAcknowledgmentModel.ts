@@ -30,6 +30,8 @@
 import { computed } from "vue";
 
 import { meridianCachedJson } from "@/api/meridianApi";
+import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
+import { LIVE_READ, type ReadFreshness } from "@/offline/readFreshness";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import type { MeridianCommandType } from "@/outbox/commandCatalog";
 import { CAPABILITY_DOCUMENT_ACKNOWLEDGMENTS_REVIEW } from "@/session/permissionCodes";
@@ -71,6 +73,8 @@ export interface MyAcknowledgments {
   readonly requirements: readonly AcknowledgmentRequirement[];
   readonly outstandingCount: number;
   readonly gating: AcknowledgmentGating;
+  /** Whether this list came from the node or from what the device holds. */
+  readonly freshness: ReadFreshness;
 }
 
 interface RequirementPayload {
@@ -130,6 +134,7 @@ function toRequirement(payload: RequirementPayload): AcknowledgmentRequirement {
 
 function toMyAcknowledgments(
   payload: MyAcknowledgmentsPayload,
+  freshness: ReadFreshness = LIVE_READ,
 ): MyAcknowledgments {
   const requirements = (payload.requirements ?? []).map(toRequirement);
 
@@ -144,15 +149,185 @@ function toMyAcknowledgments(
         payload.gating?.blocks_credential_eligibility ?? false,
       explanation: payload.gating?.explanation ?? GATING_FALLBACK.explanation,
     },
+    freshness,
   };
 }
 
-export async function getMyAcknowledgments(): Promise<MyAcknowledgments> {
-  return toMyAcknowledgments(
-    (await meridianCachedJson<MyAcknowledgmentsPayload>(
-      "/api/document-acknowledgments/me",
-    )).data,
+/** One row of the acknowledgment sections the offline read set carries. */
+interface StoredRequirementRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly scope_type: string;
+  readonly scope_id: string;
+  readonly document_type: string;
+  readonly document_id: string;
+  readonly requirement_context: string;
+}
+
+interface StoredDocumentRow {
+  readonly id: string;
+  readonly title: string;
+  readonly document_revision: number;
+  readonly fragment_revision: number;
+}
+
+interface StoredAcknowledgmentRow {
+  readonly document_type: string;
+  readonly document_id: string;
+  readonly scope_type: string;
+  readonly scope_id: string;
+  readonly document_revision: number;
+  readonly fragment_revision: number;
+  readonly acknowledged_at: string | null;
+}
+
+interface StoredNamedRow {
+  readonly id: string;
+  readonly name: string | null;
+}
+
+/** The same `major.minor` reading the node's `versionLabel` produces. */
+function versionLabel(
+  documentRevision: number,
+  fragmentRevision: number,
+): string {
+  return `${documentRevision}.${String(fragmentRevision).padStart(2, "0")}`;
+}
+
+const CONTEXT_LABELS: Readonly<Record<string, string>> = {
+  signup: "Staff signup",
+  training: "Training",
+};
+
+/**
+ * What this person is outstanding on, answered from what the device holds
+ * (M18.50; technical spec 9.3; POL-045).
+ *
+ * The set carries both halves on purpose — what the caller was required to
+ * acknowledge and what they have acknowledged — because one without the other
+ * cannot answer the question somebody with no signal is asking: am I outstanding
+ * on anything before I go on shift. Acknowledged is the presence of a record for
+ * that document at that scope, which is POL-045's rule exactly: an acknowledgment
+ * made at an earlier version stays one, and the version it was made at is carried
+ * so the row can still say the document has moved since.
+ *
+ * The document text does not travel. The set carries markdown; what the surfaces
+ * show is the node's render with referenced fragments resolved (POL-022), and a
+ * browser rendering its own approximation of governance text is not the same
+ * document. So the offline row states which document is outstanding and leaves
+ * the text empty, and the surface says the text needs a connection rather than
+ * presenting an empty article as the policy.
+ */
+const storedAcknowledgments: OfflineReadProjection<MyAcknowledgmentsPayload> = (
+  source,
+) => {
+  if (!source.carries("document_acknowledgment_requirements")) {
+    return null;
+  }
+
+  const documents = new Map<string, StoredDocumentRow>([
+    ...source
+      .section<StoredDocumentRow>("policy_documents")
+      .map((row): [string, StoredDocumentRow] => [`policy:${row.id}`, row]),
+    ...source
+      .section<StoredDocumentRow>("procedure_documents")
+      .map((row): [string, StoredDocumentRow] => [`procedure:${row.id}`, row]),
+  ]);
+
+  const scopeNames = new Map<string, string>([
+    ...source
+      .section<StoredNamedRow>("organizations")
+      .map((row): [string, string] => [
+        `organization:${row.id}`,
+        `Organization: ${row.name ?? "Not configured"}`,
+      ]),
+    ...source
+      .section<StoredNamedRow>("departments")
+      .map((row): [string, string] => [
+        `department:${row.id}`,
+        `Department: ${row.name ?? "Not configured"}`,
+      ]),
+  ]);
+
+  const acknowledgments = source.section<StoredAcknowledgmentRow>(
+    "document_acknowledgments",
   );
+
+  const requirements = source
+    .section<StoredRequirementRow>("document_acknowledgment_requirements")
+    .flatMap<RequirementPayload>((requirement) => {
+      const document = documents.get(
+        `${requirement.document_type}:${requirement.document_id}`,
+      );
+
+      /*
+       * A requirement whose document is not in the set is one this device
+       * cannot describe — the node only sends published documents in the
+       * caller's audience — and a row naming a document it cannot name would
+       * be worse than no row.
+       */
+      if (document === undefined) {
+        return [];
+      }
+
+      const accepted =
+        acknowledgments.find(
+          (acknowledgment) =>
+            acknowledgment.document_type === requirement.document_type &&
+            acknowledgment.document_id === requirement.document_id &&
+            acknowledgment.scope_type === requirement.scope_type &&
+            acknowledgment.scope_id === requirement.scope_id,
+        ) ?? null;
+
+      return [
+        {
+          requirement_id: requirement.id,
+          organization_id: requirement.organization_id,
+          scope_type: requirement.scope_type,
+          scope_label:
+            scopeNames.get(
+              `${requirement.scope_type}:${requirement.scope_id}`,
+            ) ?? requirement.scope_type,
+          requirement_context: requirement.requirement_context,
+          requirement_context_label:
+            CONTEXT_LABELS[requirement.requirement_context] ??
+            requirement.requirement_context,
+          document_type: requirement.document_type,
+          document_id: requirement.document_id,
+          document_title: document.title,
+          document_version: versionLabel(
+            document.document_revision,
+            document.fragment_revision,
+          ),
+          rendered_html: "",
+          acknowledged: accepted !== null,
+          acknowledged_at: accepted?.acknowledged_at ?? null,
+          acknowledged_version:
+            accepted === null
+              ? null
+              : versionLabel(
+                  accepted.document_revision,
+                  accepted.fragment_revision,
+                ),
+          document_changed_since:
+            accepted !== null &&
+            (accepted.document_revision !== document.document_revision ||
+              accepted.fragment_revision !== document.fragment_revision),
+        },
+      ];
+    });
+
+  return { data: { requirements } };
+};
+
+export async function getMyAcknowledgments(): Promise<MyAcknowledgments> {
+  const { data, freshness } =
+    await meridianCachedJson<MyAcknowledgmentsPayload>(
+      "/api/document-acknowledgments/me",
+      { offline: storedAcknowledgments },
+    );
+
+  return toMyAcknowledgments(data, freshness);
 }
 
 /**

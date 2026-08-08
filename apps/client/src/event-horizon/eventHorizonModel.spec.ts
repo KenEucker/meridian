@@ -13,7 +13,7 @@ import {
   useEventHorizonMenuPresence,
   type EventHorizonItem,
 } from "@/event-horizon/eventHorizonModel";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 
 function item(overrides: Partial<EventHorizonItem> = {}): EventHorizonItem {
   return {
@@ -45,7 +45,7 @@ function stubNode(body: unknown): void {
 }
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   resetEventHorizonPresence();
   configureMeridianApi({
     baseUrl: "http://node.test",

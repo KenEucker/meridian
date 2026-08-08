@@ -17,6 +17,8 @@ import type {
   OfflineReadSetPayload,
   OfflineReadSetRow,
 } from "@/offline/offlineReadSet";
+import { pullOfflineReadSet } from "@/offline/offlineReadSetRuntime";
+import type { OfflineReadSetContext } from "@/offline/offlineReadSetStorage";
 
 export const FIXTURE_EVENT_ID = "11111111-1111-4111-8111-111111111111";
 export const FIXTURE_ORGANIZATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -160,4 +162,38 @@ export function measuredDepartmentReadSet(
       logistics_equipment_index: logisticsEquipmentIndexRows(),
     },
   });
+}
+
+/**
+ * Put a set on the device the way the device gets one (M18.50).
+ *
+ * Through the pull rather than into the store, so a spec that seeds a set gets
+ * the same record a device that refreshed would hold — including the fact that it
+ * came off the wire, which is what 11A.4 reads to decide whether an unbounded set
+ * may still be served. Seeding the store directly would produce a record no
+ * refresh could ever have produced.
+ *
+ * The stub is installed and removed around the pull alone, so a spec that has its
+ * own `fetch` mock for the endpoints under test keeps it.
+ */
+export async function installOfflineReadSet(
+  payload: OfflineReadSetPayload,
+  context: OfflineReadSetContext = {
+    organizationId: FIXTURE_ORGANIZATION_ID,
+    eventId: FIXTURE_EVENT_ID,
+  },
+): Promise<void> {
+  const held = globalThis.fetch;
+
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })) as typeof fetch;
+
+  try {
+    await pullOfflineReadSet(context);
+  } finally {
+    globalThis.fetch = held;
+  }
 }

@@ -2,7 +2,7 @@
 import { computed } from "vue";
 
 import { formatTimestamp } from "@/department-ops/labels";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { ReadFreshness } from "@/offline/readFreshness";
 
 /**
  * What a surface says when it is showing a stored copy (M18.9; technical spec

@@ -45,11 +45,16 @@ interface DictationStaffPayload {
 /**
  * Read the staff an operator may name, sorted by display name.
  *
- * One read, and the node decides what is in it. Cached with the rest of the
- * device's authorized reads, so an operator who has opened the surface once can
- * still take a report with the node out of reach — the Field Report itself is
- * an offline write (data/API 7.2), and a picker that needed a live node would
- * be the one thing standing between a radio call and a record of it.
+ * One read, and the node decides what is in it.
+ *
+ * Connected-only since M18.50, and the reason is the authority rather than the
+ * data. FR-017 scopes this picker by the caller's taking authority — Department
+ * Operator or Incident Command for this event — and the nearest thing the
+ * offline read set carries is `logistics_staff_index`, which is scoped by the
+ * Logistics role. Answering one authority's question from another's list would
+ * be the client widening a scope the node had drawn (CLIENT-006), so it is left
+ * unanswered instead. Restoring it needs the node to compose a dictation section,
+ * which M18.53's surface inventory scopes.
  */
 export async function loadDictationStaffDirectory(
   eventId: string,

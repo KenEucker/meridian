@@ -58,7 +58,7 @@ async function loadReports(): Promise<void> {
   loadError.value = null;
 
   try {
-    reports.value = await getEventFieldReports(eventId);
+    reports.value = (await getEventFieldReports(eventId)).reports;
   } catch (error) {
     reports.value = [];
     loadError.value = meridianErrorMessage(

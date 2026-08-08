@@ -16,7 +16,7 @@ import { createRouter, createWebHistory, type Router } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { resetCommandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -138,7 +138,7 @@ function setNavigatorOnline(onLine: boolean): void {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   resetCommandOutbox();
   resetEventHorizonPresence();
   installLocalFieldSession();
@@ -325,8 +325,20 @@ describe("the Event Horizon surface", () => {
     expect(router.currentRoute.value.name).toBe("home");
   });
 
-  it("renders the stored copy with its staleness disclosed and withholds the all-clear", async () => {
-    // First visit stores the read.
+  /*
+   * M18.43 rendered this surface from a stored copy of its own response, and
+   * M18.50 deleted the store that held it. The Event Horizon is compiled on read
+   * (M18.38) — its items are the node's evaluations against the moment it was
+   * asked, not records — so the offline read set carries nothing to compose it
+   * from, and until it carries a compiled section a device with no node in reach
+   * is told so rather than shown an evaluation nobody re-ran.
+   *
+   * The surface's stored-copy handling (19C.9) is left standing: the disclosure,
+   * the withheld all-clear, and the withheld hide control are all driven by the
+   * freshness the seam reports, so they come back with the projection rather than
+   * having to be written again.
+   */
+  it("says it needs a connection rather than compiling an answer of its own", async () => {
     stubNode(() => ({
       body: horizonPayload({
         can_hide: true,
@@ -338,19 +350,15 @@ describe("the Event Horizon surface", () => {
     const first = await mountView();
     first.wrapper.unmount();
 
-    // Then the node becomes unreachable and the surface renders the copy.
     stubUnreachableNode();
 
     const { wrapper } = await mountView();
     const text = wrapper.text();
 
-    expect(text).toContain("Fire Safety Policy");
-    // 19C.9: the copy is disclosed, and "nothing outstanding" is never
-    // presented off a stored copy.
-    expect(text).toContain("stored copy");
+    expect(text).toContain("Unable to load the Event Horizon");
+    expect(text).not.toContain("Fire Safety Policy");
+    // The all-clear is never presented off a read that did not happen either.
     expect(text).not.toContain("Nothing outstanding — everything below is complete.");
-    // The hide control is not offered off a stored copy either: whether
-    // anything is outstanding right now is exactly what the copy cannot say.
     expect(wrapper.find(".event-horizon__hide").exists()).toBe(false);
   });
 });

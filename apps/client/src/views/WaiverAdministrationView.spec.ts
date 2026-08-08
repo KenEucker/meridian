@@ -19,7 +19,7 @@
 // No server runs for any of it (CLIENT-024).
 
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -191,7 +191,7 @@ function setNavigatorOnline(onLine: boolean): void {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",

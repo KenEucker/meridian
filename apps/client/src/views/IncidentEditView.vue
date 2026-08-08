@@ -437,7 +437,9 @@ async function loadFieldReportCandidates(): Promise<void> {
   }
 
   try {
-    fieldReportCandidates.value = await getEventFieldReports(eventId.value);
+    fieldReportCandidates.value = (
+      await getEventFieldReports(eventId.value)
+    ).reports;
   } catch {
     // As above.
   }

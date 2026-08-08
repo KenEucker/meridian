@@ -50,6 +50,11 @@
 import { computed, ref } from "vue";
 
 import { meridianCachedJson } from "@/api/meridianApi";
+import {
+  unionPendingByDeviceId,
+  type OfflineReadProjection,
+} from "@/offline/offlineReadProjection";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import {
   CAPABILITY_FIELD_REPORTS_VIEW_EVENT,
@@ -219,6 +224,12 @@ export interface ImsFieldReportListItem extends FieldReportLinkCandidate {
     readonly status: IncidentStatus;
     readonly priorityLabel: IncidentPriorityLabel;
   }[];
+}
+
+export interface ImsFieldReportList {
+  readonly reports: readonly ImsFieldReportListItem[];
+  /** Whether this list came from the node or from what the device holds. */
+  readonly freshness: ReadFreshness;
 }
 
 export interface ImsIncident {
@@ -505,30 +516,173 @@ export async function getEventIncident(
   return toIncident(payload.incident);
 }
 
-/** Read the event's Field Reports, as Incident Command sees them. */
+/** One Field Report as the offline read set carries it (technical spec 9.3). */
+interface StoredFieldReportRow {
+  readonly id: string;
+  readonly event_id: string;
+  readonly staff_id: string | null;
+  readonly fra_number: string | null;
+  readonly temporary_local_number: string | null;
+  readonly title: string;
+  readonly body: string;
+  readonly created_at: string | null;
+  readonly device_submitted_at: string | null;
+}
+
+interface StoredStaffRow {
+  readonly id: string;
+  readonly legal_name: string | null;
+  readonly preferred_name: string | null;
+}
+
+/**
+ * The display name for a staff row the set carries, built the way the node
+ * builds it: preferred name where there is one, legal name otherwise.
+ */
+function storedStaffNames(
+  rows: readonly StoredStaffRow[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      row.preferred_name !== null && row.preferred_name !== ""
+        ? row.preferred_name
+        : (row.legal_name ?? ""),
+    ]),
+  );
+}
+
+/**
+ * The Field Reports this device can show with no node in reach (M18.50;
+ * technical spec 9.3, 17.2).
+ *
+ * Two lists become one. The set carries the caller's own submitted reports as
+ * the node holds them, and the outbox carries the ones this device has filed and
+ * not yet sent — the reports a person standing in a field has just written, which
+ * are the ones they are most likely to go looking for.
+ *
+ * They are unioned on the device-generated identifier rather than concatenated.
+ * A Field Report has been keyed by a UUID the device minted since M9.1 and the
+ * node stores that same key, so a report waiting in the outbox and the accepted
+ * copy of it in the set are one record under one key. Concatenating would show
+ * it twice, once with its temporary local number and once with its FRA number,
+ * which reads as two reports of the same incident.
+ *
+ * It is narrower than the node's list, and the surface's stale-read disclosure is
+ * what says so: this is the copy this device holds, and this device holds the
+ * caller's own reports rather than the event's.
+ */
+function storedFieldReports(
+  eventId: string,
+): OfflineReadProjection<FieldReportListPayload> {
+  return (source) => {
+    if (!source.carries("field_reports")) {
+      return null;
+    }
+
+    const names = storedStaffNames(source.section<StoredStaffRow>("staff"));
+
+    const stored = source
+      .section<StoredFieldReportRow>("field_reports")
+      .filter((report) => report.event_id === eventId)
+      .map((report) => ({
+        id: report.id,
+        event_id: report.event_id,
+        display_number: report.fra_number ?? report.temporary_local_number ?? "",
+        title: report.title,
+        author_name: names.get(report.staff_id ?? "") ?? "",
+        body: report.body,
+        created_at: report.created_at ?? report.device_submitted_at ?? "",
+      }));
+
+    const pending = source
+      .pending("submit-field-report")
+      .filter((command) => command.eventId === eventId)
+      .map((command) => {
+        const payload = command.payload as {
+          readonly staff_id?: unknown;
+          readonly temporary_local_number?: unknown;
+          readonly title?: unknown;
+          readonly body?: unknown;
+          readonly device_submitted_at?: unknown;
+        };
+        const staffId =
+          typeof payload.staff_id === "string" ? payload.staff_id : "";
+
+        return {
+          id: command.key,
+          event_id: eventId,
+          /*
+           * The temporary local number, and it stays temporary-looking on
+           * purpose (technical spec 17.5): a report the node has not seen must
+           * not be presented under something that reads like an FRA number.
+           */
+          display_number:
+            typeof payload.temporary_local_number === "string"
+              ? payload.temporary_local_number
+              : "",
+          title: typeof payload.title === "string" ? payload.title : "",
+          author_name: names.get(staffId) ?? "",
+          body: typeof payload.body === "string" ? payload.body : "",
+          created_at:
+            typeof payload.device_submitted_at === "string"
+              ? payload.device_submitted_at
+              : command.queuedAt,
+        };
+      });
+
+    return {
+      data: {
+        event_id: eventId,
+        field_reports: unionPendingByDeviceId(
+          stored,
+          pending,
+          (report) => report.id,
+        ) as FieldReportListPayload["field_reports"],
+      },
+      // Narrower than the request: the set carries this reader's own reports,
+      // not the event's, and the surface names the difference rather than
+      // letting a short list read as a quiet shift.
+      narrowed: true,
+    };
+  };
+}
+
+/**
+ * Read the event's Field Reports, as Incident Command sees them.
+ *
+ * Carries its own freshness because what answers it offline is not the same list
+ * (M18.50). A stale copy of an event's Field Reports is worth showing; a stale
+ * copy presented as the event's current list is not, and the surface says which
+ * one it has.
+ */
 export async function getEventFieldReports(
   eventId: string,
-): Promise<ImsFieldReportListItem[]> {
-  const payload = (await meridianCachedJson<FieldReportListPayload>(
+): Promise<ImsFieldReportList> {
+  const { data, freshness } = await meridianCachedJson<FieldReportListPayload>(
     `/api/events/${encodeURIComponent(eventId)}/field-reports`,
-  )).data;
+    { offline: storedFieldReports(eventId) },
+  );
 
-  return (payload.field_reports ?? []).map((report) => ({
-    id: report.id,
-    eventId: report.event_id ?? eventId,
-    displayNumber: report.display_number,
-    title: report.title,
-    authorName: report.author_name,
-    body: report.body,
-    createdAt: report.created_at ?? "",
-    relatedIncidents: (report.related_incidents ?? []).map((incident) => ({
-      id: incident.id,
-      incidentNumber: incident.incident_number,
-      title: incident.title,
-      status: incident.status,
-      priorityLabel: incident.priority_label ?? "",
+  return {
+    freshness,
+    reports: (data.field_reports ?? []).map((report) => ({
+      id: report.id,
+      eventId: report.event_id ?? eventId,
+      displayNumber: report.display_number,
+      title: report.title,
+      authorName: report.author_name,
+      body: report.body,
+      createdAt: report.created_at ?? "",
+      relatedIncidents: (report.related_incidents ?? []).map((incident) => ({
+        id: incident.id,
+        incidentNumber: incident.incident_number,
+        title: incident.title,
+        status: incident.status,
+        priorityLabel: incident.priority_label ?? "",
+      })),
     })),
-  }));
+  };
 }
 
 export function blankIncidentAutosaveForm(

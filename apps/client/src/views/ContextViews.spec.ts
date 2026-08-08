@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetNodeReachability } from "@/offline/nodeReachability";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -95,7 +95,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   /*
    * And what this device observed about its node, for the same reason. A case
    * whose stubbed node refuses a read leaves the client holding "no node

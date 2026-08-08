@@ -29,7 +29,7 @@
 import type { RouteLocationRaw } from "vue-router";
 
 import { meridianCachedJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { ReadFreshness } from "@/offline/readFreshness";
 
 /**
  * The attention scale (UI contract 9.9; widget spec 5).

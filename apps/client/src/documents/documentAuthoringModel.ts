@@ -43,7 +43,8 @@
 // reachable fails and says so rather than queueing.
 
 import { meridianCachedJson, meridianJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import {
   downloadThroughShortLivedUrl,
   shortLivedDownloadEndpoints,
@@ -391,21 +392,9 @@ export async function getOrganizationDocuments(
     return query === "" ? endpoint : `${endpoint}?${query}`;
   };
 
-  /*
-   * The fallback drops the search and keeps every other filter (M18.9).
-   *
-   * A surface that always asks for one state — the staff library asks for
-   * published and nothing else — has that state in every copy it stored, so the
-   * broad copy to fall back on is "the same question without the search term"
-   * rather than the bare endpoint, which this device may never have read.
-   */
-  const unsearched = new URLSearchParams(parameters);
-
-  unsearched.delete("q");
-
   const read = await meridianCachedJson<DocumentIndexPayload>(
     withPath(parameters),
-    { fallbackPath: withPath(unsearched) },
+    { offline: storedDocumentLibrary(organizationId, state, search) },
   );
   const result = read.data;
 
@@ -423,34 +412,166 @@ export async function getOrganizationDocuments(
       scopes,
     },
     eventInfoSections: result.event_info_sections ?? [],
-    documents: narrowDocuments(
-      (result.documents ?? []).map(toDocument),
-      read.freshness.narrowed === true ? search : "",
-    ),
+    documents: (result.documents ?? []).map(toDocument),
     fragments: (result.fragments ?? []).map(toFragment),
   };
 }
 
-/**
- * Apply the title search the node would have applied.
- *
- * Only reached when a searched read fell back to the stored copy of the same
- * question without the search term. A case-insensitive substring, which is what
- * the node's `q` does for a title; nothing here tries to reproduce a fuller
- * server-side search, because a browser guessing at ranking would make the
- * offline answer differ from the online one in ways nobody could predict.
- */
-function narrowDocuments(
-  documents: readonly ProductDocument[],
-  search: string,
-): readonly ProductDocument[] {
-  const needle = search.trim().toLowerCase();
+/** One document as the offline read set carries it (technical spec 9.3). */
+interface StoredDocumentRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly scope_type: DocumentScopeType;
+  readonly scope_id: string;
+  readonly title: string;
+  readonly slug: string;
+  readonly markdown_source: string;
+  readonly document_revision: number;
+  readonly fragment_revision: number;
+  readonly published_at: string | null;
+}
 
-  return needle === ""
-    ? documents
-    : documents.filter((document) =>
-        document.title.toLowerCase().includes(needle),
-      );
+interface StoredNamedRow {
+  readonly id: string;
+  readonly name: string | null;
+}
+
+interface StoredFragmentRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly scope_type: DocumentScopeType;
+  readonly scope_id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly markdown_source: string;
+  readonly version: number;
+}
+
+/**
+ * The library this device holds, searched where it stands (M18.50; technical
+ * spec 9.3).
+ *
+ * It is published-and-in-audience only, because that is what the set carries: a
+ * maintainer's drafts are the node's answer to a maintainer and do not travel.
+ * So the stored answer is `narrowed` whatever was typed into the search box —
+ * the copy covers less than the request would have, and a reader who finds
+ * nothing is owed the difference between "no such document" and "no such
+ * document in what this device is holding".
+ *
+ * `can_maintain` is false and every row's own `can_maintain` with it. That is
+ * not this client deciding an authority; it is this client declining to assert
+ * one it cannot check, and every document write is connected-only anyway
+ * (technical spec 9.4).
+ *
+ * The rendered HTML does not travel either. The set carries markdown and the
+ * render is the node's, with referenced fragments resolved (POL-022); a browser
+ * rendering its own approximation of a published policy would be a second
+ * document. The library lists what is there, and reading one needs a node.
+ */
+function storedDocumentLibrary(
+  organizationId: string,
+  state: DocumentStateFilter,
+  search: string,
+): OfflineReadProjection<DocumentIndexPayload> {
+  return (source) => {
+    if (
+      !source.carries("policy_documents") &&
+      !source.carries("procedure_documents")
+    ) {
+      return null;
+    }
+
+    /*
+     * A filter this copy cannot honour is answered by not answering. Every
+     * document the set carries is published, so "draft" or "archived" would be
+     * satisfied by an empty list — which reads as "your organization has no
+     * drafts" rather than as "this device does not hold them".
+     */
+    if (state !== "all" && state !== "published") {
+      return null;
+    }
+
+    /*
+     * The scope label the node writes, rebuilt from the records the set already
+     * carries. Not decoration: a library that lists four documents under a blank
+     * scope cannot tell a reader which of them is their department's.
+     */
+    const scopeLabels = new Map<string, string>([
+      ...source
+        .section<StoredNamedRow>("organizations")
+        .map((row): [string, string] => [
+          `organization:${row.id}`,
+          `Organization: ${row.name ?? ""}`,
+        ]),
+      ...source
+        .section<StoredNamedRow>("departments")
+        .map((row): [string, string] => [
+          `department:${row.id}`,
+          `Department: ${row.name ?? ""}`,
+        ]),
+      ...source
+        .section<StoredNamedRow>("teams")
+        .map((row): [string, string] => [
+          `team:${row.id}`,
+          `Team: ${row.name ?? ""}`,
+        ]),
+    ]);
+
+    const matches = (title: string): boolean =>
+      search.trim() === "" ||
+      title.toLowerCase().includes(search.trim().toLowerCase());
+
+    const documents = (
+      [
+        ["policy", "policy_documents"],
+        ["procedure", "procedure_documents"],
+      ] as const
+    ).flatMap(([documentType, section]) =>
+      source
+        .section<StoredDocumentRow>(section)
+        .filter((row) => matches(row.title))
+        .map<DocumentPayload>((row) => ({
+          id: row.id,
+          document_type: documentType,
+          organization_id: row.organization_id,
+          scope_type: row.scope_type,
+          scope_id: row.scope_id,
+          scope_label: scopeLabels.get(`${row.scope_type}:${row.scope_id}`) ?? "",
+          title: row.title,
+          slug: row.slug,
+          markdown_source: row.markdown_source,
+          state: "published",
+          state_label: "Published",
+          version: `${row.document_revision}.${String(row.fragment_revision).padStart(2, "0")}`,
+          published_at: row.published_at,
+          can_maintain: false,
+        })),
+    );
+
+    const fragments = source
+      .section<StoredFragmentRow>("document_fragments")
+      .map<FragmentPayload>((row) => ({
+        id: row.id,
+        organization_id: row.organization_id,
+        scope_type: row.scope_type,
+        scope_id: row.scope_id,
+        scope_label: scopeLabels.get(`${row.scope_type}:${row.scope_id}`) ?? "",
+        name: row.name,
+        slug: row.slug,
+        markdown_source: row.markdown_source,
+        version: row.version,
+      }));
+
+    return {
+      data: {
+        organization_id: organizationId,
+        access: { can_maintain: false, scopes: [] },
+        documents,
+        fragments,
+      },
+      narrowed: true,
+    };
+  };
 }
 
 /**

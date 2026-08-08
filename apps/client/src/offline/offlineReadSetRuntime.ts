@@ -265,6 +265,20 @@ export function offlineReadSetUsable(now: Date = new Date()): boolean {
 }
 
 /**
+ * When this device took delivery of the set it holds, or null when it holds
+ * none.
+ *
+ * Delivery rather than composition, because that is what a stale-read notice is
+ * claiming: "the copy this device stored" is dated by the moment the device
+ * stored it (M18.50; UI implementation contract 16.2).
+ */
+export function offlineReadSetStoredAt(): string | null {
+  void offlineReadSetRevision.value;
+
+  return offlineReadSetStore.held()?.storedAt ?? null;
+}
+
+/**
  * One section's rows, or none where the set may not be served.
  *
  * Refusal is silence rather than an error, and that is the same shape a caller
