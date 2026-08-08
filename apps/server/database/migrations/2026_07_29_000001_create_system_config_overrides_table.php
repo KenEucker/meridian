@@ -11,7 +11,7 @@ return new class extends Migration
      * (technical spec 22A.3, 22A.5; SYS-005 through SYS-007).
      *
      * Overrides are deployment infrastructure: they belong to the node they
-     * were written on, are never replicated through PowerSync, and are never
+     * were written on, never reach a device's offline read set, and are never
      * carried by node-to-node sync (SYS-011, SYS-012). Non-secret values are
      * stored JSON-encoded so type distinctions survive storage; secret values
      * are stored only in the encrypted column (SYS-013).

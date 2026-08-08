@@ -273,7 +273,7 @@ shift Vera is eligible for and one she is not.
 
 ### I. Explicit non-goals for this script
 
-62. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or PowerSync operations.
+62. Confirm this script did not require Orchid shift screens, public API clients, offline queues, or device sync operations.
 63. Confirm unscheduled shift additions during live operations are out of scope here and belong to Milestone 10 / `QA-SLB-01`.
 64. Confirm credential eligibility recalculation after signup/removal is verified in `QA-CRED-01-credential-eligibility.md`, not as a duplicate pass/fail gate in this script.
 65. Confirm the shift roster export in section H is server-generated and online-only, that no product UI entry point is required for it yet, and that the remaining Alpha 1 exports and their consolidated script belong to M13.3 through M13.9 (`QA-EXPORT-01`).

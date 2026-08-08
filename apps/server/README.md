@@ -54,8 +54,7 @@ The development connection defaults match the committed `.env.example`:
 
 Provide a PostgreSQL server that matches these values. The recommended option is
 the managed database service under [`deploy/docker`](../../deploy/docker/README.md),
-which runs PostgreSQL 18 with logical replication enabled and provisions the
-PowerSync roles, storage database, and publication on first boot:
+which runs PostgreSQL 18 with logical replication enabled:
 
 ```bash
 # From the repository root:
@@ -80,9 +79,9 @@ docker run --name meridian-postgres \
 ```
 
 > The `docker run` command above is a bare-database convenience that does not set
-> up logical replication or the PowerSync prerequisites. Use the
-> [`deploy/docker`](../../deploy/docker/README.md) service when you need PowerSync
-> to connect. The complete multi-service deployment bundle remains a separate,
+> up logical replication. Use the
+> [`deploy/docker`](../../deploy/docker/README.md) service when node-to-node sync
+> needs it. The complete multi-service deployment bundle remains a separate,
 > later task.
 
 If you already run PostgreSQL natively, create a matching role and database:

@@ -48,11 +48,12 @@ use Tests\TestCase;
  *
  * `PowerSyncPermissionScopedReplicationTest` and
  * `PowerSyncDeviceCacheProjectionTest` proved the shift-lead and department-lead
- * boundary against `deploy/powersync/sync-config.yaml` — one by running the
- * shipped streams, one by reading them as text. Those assertions are ported here
- * onto the endpoint that replaces them, and the ones the sync dialect could not
- * express are added: department Logistics, Operations, and Planning, which the
- * rules never had streams for at all.
+ * boundary against the sync rules — one by running the shipped streams, one by
+ * reading them as text. Those assertions were ported here onto the endpoint that
+ * replaces them, and the ones the sync dialect could not express were added:
+ * department Logistics, Operations, and Planning, which the rules never had
+ * streams for at all. M18.51 retired the rules and those two tests; this is
+ * where what they proved now lives.
  *
  * The properties are the requirements' own. A device holds nothing its user
  * could not retrieve through the API (CLIENT-021), a change to what the user

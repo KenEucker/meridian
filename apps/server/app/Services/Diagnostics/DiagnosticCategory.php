@@ -40,7 +40,7 @@ final class DiagnosticCategory
             self::QUEUE => 'Queue and scheduled work',
             self::STORAGE => 'Storage and filesystem',
             self::WIRING => 'Providers and application wiring',
-            self::SYNC => 'PowerSync and node sync',
+            self::SYNC => 'Device and node sync',
             self::NODE => 'Node health',
             self::INTEGRATIONS => 'External integrations',
             self::SECURITY => 'Security',

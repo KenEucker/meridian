@@ -11,7 +11,7 @@ use App\Services\NodeHealth\NodeHealthException;
 use App\Services\NodeHealth\NodeHealthReportBuilder;
 use App\Services\NodeHealth\NodeHealthReportPayload;
 use App\Services\NodeHealth\NodeHealthReportReceiver;
-use App\Services\PowerSync\PowerSyncHealthClient;
+use App\Services\Offline\OfflineReadSetProbe;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -37,7 +37,7 @@ class NodeHealthReportTest extends TestCase
     {
         parent::setUp();
 
-        $this->instance(PowerSyncHealthClient::class, new class extends PowerSyncHealthClient
+        $this->instance(OfflineReadSetProbe::class, new class extends OfflineReadSetProbe
         {
             public function __construct() {}
 

@@ -100,8 +100,8 @@ final class ShiftLeadSections implements OfflineReadSetContributor
      *
      * The event is the grant's, resolved before this class is reached: an
      * event-scoped grant produced one scope and reaches only that event's
-     * shifts, which is the narrowing `PowerSyncPermissionScopedReplicationTest`
-     * asserted against the rules and asserts here against the endpoint.
+     * shifts, which is the narrowing the retired sync-rule tests asserted and
+     * `OfflineReadSetRoleScopesTest` now asserts against the endpoint.
      *
      * @return list<array<string, mixed>>
      */

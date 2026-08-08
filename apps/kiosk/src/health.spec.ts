@@ -16,7 +16,7 @@ const SPEC_25_3_FIELDS = [
   "Node role",
   "Event name",
   "Sync status",
-  "PowerSync status",
+  "Offline read set status",
   "Connected devices",
   "Local discovery status",
   "Certificate / HTTPS status",
@@ -95,7 +95,7 @@ describe("buildHealthPanelModel", () => {
       "Local node name",
       "Event name",
       "Sync status",
-      "PowerSync status",
+      "Offline read set status",
       "Connected devices",
       "Local discovery status",
     ]) {

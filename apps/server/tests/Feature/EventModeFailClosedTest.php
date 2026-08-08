@@ -6,9 +6,18 @@ use App\Models\Node;
 use App\Services\EventMode\EventModeCheck;
 use App\Services\EventMode\EventModeGuard;
 use App\Services\EventMode\EventModeNotReadyException;
-use Illuminate\Support\Facades\Http;
+use App\Services\Offline\OfflineReadSetProbe;
 use Tests\TestCase;
 
+/**
+ * Event-mode fail-closed behavior against the offline read set probe
+ * (ADR-0003; technical spec 8.6, 26.2).
+ *
+ * The second server-owned check used to be a PowerSync liveness request over
+ * HTTP. It is now an in-process question about whether this node can serve
+ * `GET /api/offline-read-set`, so the probe is stubbed rather than the HTTP
+ * client faked — there is no request to fake, which is the point of the change.
+ */
 class EventModeFailClosedTest extends TestCase
 {
     protected function setUp(): void
@@ -18,20 +27,21 @@ class EventModeFailClosedTest extends TestCase
         config([
             'meridian.event_mode.enabled' => null,
             'meridian.event_mode.require_https' => true,
-            'meridian.event_mode.require_powersync' => true,
-            'powersync.endpoint' => 'http://powersync.test',
-            'powersync.liveness_path' => '/probes/liveness',
+            'meridian.event_mode.require_offline_read_set' => true,
         ]);
     }
 
-    private function fakePowerSync(int $status): void
+    private function markReadSetServable(bool $available): void
     {
-        Http::fake([
-            'http://powersync.test/probes/liveness' => Http::response(
-                $status < 400 ? ['status' => 'ok'] : [],
-                $status,
-            ),
-        ]);
+        $this->instance(OfflineReadSetProbe::class, new class($available) extends OfflineReadSetProbe
+        {
+            public function __construct(private readonly bool $available) {}
+
+            public function isAvailable(): bool
+            {
+                return $this->available;
+            }
+        });
     }
 
     private function guard(): EventModeGuard
@@ -39,10 +49,10 @@ class EventModeFailClosedTest extends TestCase
         return app(EventModeGuard::class);
     }
 
-    public function test_development_mode_never_blocks_even_without_https_or_powersync(): void
+    public function test_development_mode_never_blocks_even_without_https_or_the_read_set(): void
     {
         config(['app.url' => 'http://localhost']);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_DEVELOPMENT);
 
@@ -52,10 +62,10 @@ class EventModeFailClosedTest extends TestCase
         $this->assertSame([], $readiness->checks);
     }
 
-    public function test_event_mode_passes_with_https_and_powersync_available(): void
+    public function test_event_mode_passes_with_https_and_a_servable_read_set(): void
     {
         config(['app.url' => 'https://onsite.example.org']);
-        $this->fakePowerSync(200);
+        $this->markReadSetServable(true);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
 
@@ -64,10 +74,25 @@ class EventModeFailClosedTest extends TestCase
         $this->assertSame([], $readiness->reasons());
     }
 
+    /**
+     * A real node satisfies the read-set check without any stubbing: the route
+     * is registered and the composer resolves. This is what keeps the check
+     * from being a rule only the test harness can pass.
+     */
+    public function test_the_read_set_probe_answers_on_an_unstubbed_node(): void
+    {
+        config(['app.url' => 'https://onsite.example.org']);
+
+        $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
+
+        $this->assertTrue($readiness->eventMode);
+        $this->assertFalse($readiness->blocked());
+    }
+
     public function test_event_mode_fails_closed_when_https_validation_fails(): void
     {
         config(['app.url' => 'http://onsite.example.org']);
-        $this->fakePowerSync(200);
+        $this->markReadSetServable(true);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
 
@@ -77,14 +102,14 @@ class EventModeFailClosedTest extends TestCase
             $readiness->failures(),
         );
         $this->assertContains(EventModeCheck::HTTPS, $failureKeys);
-        $this->assertNotContains(EventModeCheck::POWERSYNC, $failureKeys);
+        $this->assertNotContains(EventModeCheck::OFFLINE_READ_SET, $failureKeys);
         $this->assertStringContainsString('HTTPS', implode(' ', $readiness->reasons()));
     }
 
-    public function test_event_mode_fails_closed_when_powersync_is_unavailable(): void
+    public function test_event_mode_fails_closed_when_the_offline_read_set_cannot_be_served(): void
     {
         config(['app.url' => 'https://onsite.example.org']);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
 
@@ -93,15 +118,15 @@ class EventModeFailClosedTest extends TestCase
             static fn ($check): string => $check->key,
             $readiness->failures(),
         );
-        $this->assertContains(EventModeCheck::POWERSYNC, $failureKeys);
+        $this->assertContains(EventModeCheck::OFFLINE_READ_SET, $failureKeys);
         $this->assertNotContains(EventModeCheck::HTTPS, $failureKeys);
-        $this->assertStringContainsString('PowerSync', implode(' ', $readiness->reasons()));
+        $this->assertStringContainsString('offline read set', implode(' ', $readiness->reasons()));
     }
 
     public function test_ensure_ready_throws_when_event_mode_is_blocked(): void
     {
         config(['app.url' => 'http://onsite.example.org']);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $this->expectException(EventModeNotReadyException::class);
 
@@ -111,7 +136,7 @@ class EventModeFailClosedTest extends TestCase
     public function test_ensure_ready_passes_in_development_mode(): void
     {
         config(['app.url' => 'http://localhost']);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $this->guard()->ensureReady(Node::ROLE_DEVELOPMENT);
 
@@ -124,7 +149,7 @@ class EventModeFailClosedTest extends TestCase
             'meridian.event_mode.enabled' => true,
             'app.url' => 'http://localhost',
         ]);
-        $this->fakePowerSync(200);
+        $this->markReadSetServable(true);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_DEVELOPMENT);
 
@@ -138,7 +163,7 @@ class EventModeFailClosedTest extends TestCase
             'meridian.event_mode.enabled' => false,
             'app.url' => 'http://onsite.example.org',
         ]);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
 
@@ -151,9 +176,9 @@ class EventModeFailClosedTest extends TestCase
         config([
             'app.url' => 'http://onsite.example.org',
             'meridian.event_mode.require_https' => false,
-            'meridian.event_mode.require_powersync' => false,
+            'meridian.event_mode.require_offline_read_set' => false,
         ]);
-        $this->fakePowerSync(503);
+        $this->markReadSetServable(false);
 
         $readiness = $this->guard()->evaluate(Node::ROLE_ONSITE);
 

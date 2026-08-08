@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposed
+Accepted. Implemented by M18.46 through M18.51: the read set endpoint, its
+role-additive sections, the client store, proactive refresh, the read-model
+migration, and finally M18.51's removal of the PowerSync configuration,
+diagnostics check, event-mode dependency, deploy service, and database
+provisioning. The tasks landed in that order on purpose, so the replacement was
+carrying reads before the rules were withdrawn.
 
 ## Context
 

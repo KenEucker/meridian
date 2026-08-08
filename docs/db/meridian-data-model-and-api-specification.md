@@ -17,8 +17,8 @@ It is intended to keep the same concepts, relationships, identifiers, permission
 - Meridian Admin shared Vue product UI
 - Orchid God Mode / repair tooling
 - OpenAPI-described Laravel API
-- PowerSync device projections
-- local SQLite client databases
+- offline read set device projections
+- local client stores
 - Vue/Capacitor Meridian Field app
 - Vue/Electron Meridian Kiosk app
 - Electron on-site wrapper
@@ -73,7 +73,7 @@ Laravel owns:
 - domain services/actions
 - command acceptance flows
 - audit event generation
-- PowerSync upload handling
+- command outbox upload handling
 - server-side human-number assignment
 - node operation acceptance and application
 - sync conflict creation
@@ -105,11 +105,14 @@ Meridian Admin is the server-hosted shared Vue product UI. Normal Admin,
 organizer, department, staff, and operational workflows belong in the shared Vue
 client unless they are explicitly God Mode repair tooling.
 
-### 3.4 PowerSync Responsibility
+### 3.4 Device Sync Responsibility
 
-PowerSync provides server-to-device synchronization and local SQLite projections.
+Server-to-device synchronization is Meridian's own, in two halves (ADR-0003; technical spec 9.1):
 
-PowerSync handles:
+- the **offline read set** (section 7.1) — one authenticated read composing the records a device may hold, stored whole on the device and refreshed on login, on reconnect, and on context switch;
+- the **command outbox** — the device-side queue for the supported offline writes, submitted to the node when one is reachable.
+
+Between them they handle:
 
 - authorized data caching on devices
 - offline reads
@@ -117,7 +120,7 @@ PowerSync handles:
 - upload of device-originated operations to Laravel
 - reflection of accepted canonical state back to devices
 
-PowerSync is not the business-rule engine.
+Neither is the business-rule engine. The read set is composed by the same authorization the rest of the API answers from, and the outbox carries commands Laravel decides on.
 
 Device writes are accepted through Laravel validation and acceptance flows. Domain-sensitive writes should be represented as operations or commands, not blind row edits.
 
@@ -125,9 +128,9 @@ Name Reference extraction may happen server-side, locally, or both, but any deri
 
 ### 3.5 Node Sync Responsibility
 
-Meridian node sync is separate from PowerSync.
+Meridian node sync is separate from device sync.
 
-PowerSync handles:
+The offline read set and the command outbox handle:
 
 ```text
 Meridian server ↔ user devices
@@ -151,7 +154,7 @@ Meridian UI mode is fixed by deployment target:
 | Capacitor mobile application | `field` | Meridian Field |
 | Electron desktop/on-site application | `kiosk` | Meridian Kiosk |
 
-UI mode is not a data authority source. APIs, policies, PowerSync rules, node
+UI mode is not a data authority source. APIs, policies, the offline read set, node
 sync handlers, Orchid actions, and domain services must not grant access because
 a request came from `admin`, `field`, or `kiosk` mode.
 
@@ -1283,7 +1286,7 @@ Laravel policies, gates, middleware, command handlers, and domain services enfor
 
 - API requests
 - Orchid actions
-- PowerSync upload handling
+- command outbox upload handling
 - mobile/PWA actions
 - Electron/shared-workstation actions
 - exports
@@ -1471,7 +1474,7 @@ Module entitlement administration requires God Mode. Module enablement requires 
 
 ## 7. Sync Model
 
-### 7.1 PowerSync Device Cache
+### 7.1 Offline Read Set Device Cache
 
 Devices cache authorized data.
 
@@ -3708,7 +3711,7 @@ Rules:
 
 ### 10.18 Event Maps and Geography
 
-Event maps, camps, and map locations are event-scoped. Canonical data lives in PostgreSQL; PowerSync projects only permitted records to devices. Map records are not offline-writable for MVP.
+Event maps, camps, and map locations are event-scoped. Canonical data lives in PostgreSQL; the offline read set carries only permitted records to devices. Map records are not offline-writable for MVP.
 
 #### `event_maps`
 
@@ -4474,9 +4477,9 @@ matches a substring of the title, because somebody looking a policy up types par
 of what they remember of its name. An empty term is not a filter and returns the
 whole visible library.
 
-### 11.13 PowerSync Rules for Policies/Procedures
+### 11.13 Offline Read Set Sections for Policies/Procedures
 
-PowerSync should sync:
+The offline read set should carry:
 
 - published documents visible to the active user
 - published fragments referenced by synced documents
@@ -5399,7 +5402,7 @@ Key fields:
 
 Rules:
 
-- never replicated through PowerSync; never carried by node sync (SYS-011, SYS-012)
+- never carried in a device's offline read set; never carried by node sync (SYS-011, SYS-012)
 - bootstrap-locked variables are refused at write and skipped at load (SYS-010)
 - invalid rows are skipped at boot and reported through diagnostics (SYS-006, SYS-022)
 - every write is audited with redacted values (SYS-015)
@@ -5577,7 +5580,7 @@ Alpha 1 includes:
 - document versioning
 - acknowledgment during signup/training
 - Markdown/PDF export
-- PowerSync of visible published documents/fragments
+- visible published documents/fragments in the offline read set
 
 Alpha 1 excludes:
 
@@ -5625,11 +5628,10 @@ Alpha 1 excludes:
 
 The following implementation details may be refined later without changing the core data model contract:
 
-1. Exact PowerSync schema and sync rules.
-2. Exact Laravel module folder structure.
-3. Exact OpenAPI generation package.
-4. Exact file storage abstraction and S3/MinIO transition plan.
-5. Exact photo conversion pipeline.
+1. Exact Laravel module folder structure.
+2. Exact OpenAPI generation package.
+3. Exact file storage abstraction and S3/MinIO transition plan.
+4. Exact photo conversion pipeline.
 6. Exact Markdown sanitizer/renderer libraries for Laravel and Vue/Capacitor.
 7. Exact custom fragment token grammar and editor UI.
 8. Exact snapshot strategy for acknowledged document versions.
@@ -5655,7 +5657,7 @@ The same domain service/action/command handler should be used by:
 
 - API controllers
 - Orchid screens
-- PowerSync upload handling
+- command outbox upload handling
 - mobile/PWA operational actions
 - Electron/shared workstation actions
 - node operation application

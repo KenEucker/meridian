@@ -47,7 +47,7 @@ However, Alpha 1 should avoid excessive modularity or framework abstraction that
 
 Meridian source code should be open source from the start.
 
-PowerSync may be used as an external dependency and does not need to be shipped as part of Meridian’s source code. Meridian does not need to maintain a fully open-source alternate sync path for Alpha 1.
+Server-to-device sync is Meridian's own code (section 9.1), so there is no external sync dependency to hold outside the repository.
 
 ---
 
@@ -69,7 +69,7 @@ The server/admin application is a Laravel modular monolith with:
 - PostgreSQL.
 - Orchid admin panel.
 - OpenAPI-described API.
-- PowerSync service integration.
+- Offline read set and command outbox.
 - Node sync API.
 - Docker Compose deployment.
 
@@ -94,7 +94,7 @@ The shared client application is:
 - Vue.
 - Mobile-first.
 - Offline-capable.
-- PowerSync-backed.
+- Backed by the offline read set and the command outbox.
 - Locally encrypted.
 - Device-signing capable.
 - Built as the Admin artifact served by Laravel.
@@ -170,7 +170,7 @@ Meridian supports multiple node roles:
 
 Central and on-site nodes synchronize using Meridian application-level operation sync, not raw database replication.
 
-PowerSync is used for server-to-device synchronization. Meridian node sync is separate from PowerSync.
+The offline read set and the command outbox (section 9.1) are used for server-to-device synchronization. Meridian node sync is separate from both.
 
 ---
 
@@ -193,7 +193,6 @@ meridian/
   deploy/
     docker/
     caddy/
-    powersync/
     dns/
 ```
 
@@ -204,7 +203,7 @@ Each target should produce a built distribution artifact:
 - Electron desktop installer with `apps/client/dist/kiosk`.
 - Deployment configuration bundle.
 
-OpenAPI should generate a TypeScript API client used by the Vue app, even though most operational data comes through PowerSync.
+OpenAPI should generate a TypeScript API client used by the Vue app. Offline reads come from the stored read set, which is itself fetched over that API.
 
 ---
 
@@ -219,7 +218,6 @@ The server stack is:
 - Orchid.
 - OpenAPI.
 - Docker Compose.
-- PowerSync service.
 - Caddy or equivalent reverse proxy.
 - DNS support for on-site deployments where Meridian controls DNS.
 
@@ -292,7 +290,7 @@ OpenAPI endpoints should be grouped by module where practical.
 
 Meridian uses PostgreSQL for central and on-site nodes.
 
-SQLite may be used locally by PowerSync on devices, but the canonical server database is PostgreSQL.
+Devices store their offline read set in browser-native storage. The canonical server database is PostgreSQL.
 
 ## 6.2 IDs
 
@@ -392,7 +390,6 @@ node_private_key or key reference
 central_node_url, optional
 organization_id
 event_id
-PowerSync config
 hostname/domain, optional
 ```
 
@@ -519,7 +516,7 @@ On-site nodes should support `.local` mDNS names, but `.local` names are not suf
 
 Setup must fail closed if HTTPS validation fails in event mode.
 
-PowerSync unavailability should also fail closed in event mode.
+A node that cannot serve the offline read set (section 9.1) should also fail closed in event mode. This is what offline readiness actually depends on: a device with no signal holds what the node handed it, so a node that cannot hand it anything is not ready to run an event.
 
 Client event mode must fail closed if local encryption or device signing is unavailable.
 
@@ -560,17 +557,22 @@ On-site nodes are unaffected: an on-site node serves its one event hostname (8.3
 
 ---
 
-# 9. PowerSync and Device Sync
+# 9. Device Sync
 
 ## 9.1 Chosen sync layer
 
-PowerSync is the chosen device sync layer for Alpha 1.
+Server-to-device sync is Meridian's own, in two halves:
 
-PowerSync is an external dependency. Meridian does not need to ship PowerSync source code.
+- **Reads**: the server composes a scoped offline read set and serves it from one authenticated endpoint (section 9.3, 9.5). The device stores it whole and refreshes it on login, on regaining connectivity, and on context switch.
+- **Writes**: the command outbox (section 11A.5) queues the section 9.4 offline writes and submits them to the node when it is reachable.
+
+There is no external device sync service and no client sync SDK. ADR-0003 retired PowerSync, which had held this position through Alpha 1: its server half shipped, its client half was never specified, and its sync-rules dialect was a second implementation of an authorization model that already existed in PHP. One authorization model, exercised by the same tests as every other read, is what replaced it.
+
+Section 10 node-to-node sync is separate and unaffected. It always was.
 
 ## 9.2 Sync responsibility
 
-PowerSync handles:
+The offline read set and the command outbox handle:
 
 ```text
 Meridian server ↔ user devices
@@ -581,6 +583,8 @@ Meridian node sync handles:
 ```text
 central node ↔ on-site node
 ```
+
+A device talks only to the node it is pointed at. It never replicates from the database directly, and it holds no credential to.
 
 ## 9.3 Client data model
 
@@ -654,7 +658,7 @@ IC roles may cache:
 
 Incidents should not be greedily synced.
 
-Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. PowerSync must not become the business-rule engine for Name Reference visibility or search authorization.
+Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. The offline read set must not become the business-rule engine for Name Reference visibility or search authorization.
 
 ## 9.4 Offline write scope
 
@@ -680,13 +684,15 @@ Failed sync actions remain recoverable.
 
 Normal users should see sync status unobtrusively. Advanced sync details are hidden behind advanced/debug/God mode.
 
-## 9.5 Permission scoping of sync rules
+## 9.5 Permission scoping of the offline read set
 
 The cache lists in section 9.3 describe what each role should receive. They are expectations, not the authorization boundary.
 
-Sync rules are scoped by the user's effective roles, as defined in section 11A.7. A device does not receive records its user could not retrieve through the API, and a change to a user's effective roles changes what subsequently replicates to that user's devices.
+The read set is composed per request, through the same effective-role resolver every other API read answers from (section 11A.7). A device does not receive records its user could not retrieve through the API, and a change to a user's effective roles changes the next set that device is handed. Nothing about the boundary is carried in a token or stored between requests, so there is no earlier answer to serve after a grant is withdrawn.
 
-Sync rules are also scoped by the organization's active modules (section 15A.5). A device does not receive records belonging to a module the organization does not run, and a change to module state changes what subsequently replicates.
+The read set is also scoped by the organization's active modules (section 15A.5). A device does not receive records belonging to a module the organization does not run, and a change to module state changes the next set.
+
+This is one authorization implementation rather than two. The rule the boundary rests on lives in PHP with the rest of the access services, so a permission change is made once and can be wrong in one place at most.
 
 ---
 
@@ -961,15 +967,15 @@ A short-lived URL expires, is scoped to the single resource it was issued for, a
 
 This applies to reporting exports, generated incident PDFs, document exports, and attachments.
 
-## 11A.7 Permission-scoped replication
+## 11A.7 Permission-scoped offline data
 
-Offline data replicated to a device is limited to what the device's user is permitted to read. A device does not receive records its user could not retrieve through the API.
+Offline data held by a device is limited to what the device's user is permitted to read. A device does not receive records its user could not retrieve through the API.
 
-The cache expectations in section 9.3 describe what a role *should* receive. This section states the boundary: sync rules are scoped by the user's effective roles, so a device cannot hold data its user has no capability to read. UI hiding is not sufficient, consistent with the existing rule for sensitive map layers.
+The cache expectations in section 9.3 describe what a role *should* receive. This section states the boundary: the offline read set is composed through the user's effective roles, so a device cannot hold data its user has no capability to read. UI hiding is not sufficient, consistent with the existing rule for sensitive map layers.
 
-A change to a user's effective roles changes what subsequently replicates to that user's devices.
+A change to a user's effective roles changes the next set that user's devices receive. Because the set is composed per request and never stored server-side, there is no earlier answer that could outlive the grant it was built from.
 
-Module state is a second, organization-level boundary applied the same way: a device does not hold records belonging to a module that is inactive for the organization, regardless of what its user is permitted to read (MOD-016). Deactivating a module removes its records from devices; activating one replicates the permitted records back.
+Module state is a second, organization-level boundary applied the same way: a device does not hold records belonging to a module that is inactive for the organization, regardless of what its user is permitted to read (MOD-016). Deactivating a module removes its records from the next set; activating one returns the permitted records.
 
 ---
 
@@ -1409,7 +1415,7 @@ A module is enforced in five places. Any one of them alone is insufficient.
 
 - **HTTP.** Route middleware resolves the organization and the route's owning module and refuses inactive ones. Route groups declare their module once rather than each controller checking.
 - **Client.** The router guard and navigation read the active module set from session/context resolution (section 11A.3), so a disabled module has no nav entry and no reachable route.
-- **Sync.** PowerSync rules are scoped by active modules as well as by effective roles (section 9.5, 11A.7). Devices do not hold inactive modules' records.
+- **Sync.** The offline read set is scoped by active modules as well as by effective roles (section 9.5, 11A.7). Devices do not hold inactive modules' records.
 - **Admin console.** Orchid screens follow section 15A.6.
 - **Background work.** Scheduled jobs, export generation, and notification producers skip organizations for which their module is inactive.
 
@@ -2311,7 +2317,7 @@ Policy documents, procedure documents, and fragments are authored as Markdown.
 
 Laravel APIs should send Markdown/source content as plain text. Rendering happens where the document is rendered.
 
-The shared Vue client may render synced Markdown locally through PowerSync-backed data for offline reliability.
+The shared Vue client may render Markdown locally from the stored offline read set for offline reliability.
 
 Laravel may render Markdown server-side for previews, PDF export, Markdown export with resolved fragments, and other server-generated artifacts.
 
@@ -2331,9 +2337,9 @@ Markdown must be sanitized before rendering.
 
 Fragment Markdown must be sanitized independently before inclusion.
 
-## 21.8 PowerSync behavior
+## 21.8 Offline behavior
 
-Policies/procedures and fragments should use PowerSync for offline reliability.
+Policies/procedures and fragments should travel in the offline read set (section 9.1) for offline reliability.
 
 Published documents visible to the active user are synced to the device.
 
@@ -2467,7 +2473,7 @@ The minimum vertical slice is:
 8. Export a document as Markdown with fragments resolved inline.
 9. Export a document as PDF with fragments rendered inline.
 10. Sync published visible documents and referenced fragments to the on-site node.
-11. Sync visible published documents and fragments to devices through PowerSync.
+11. Carry visible published documents and fragments to devices in the offline read set.
 12. Sync acknowledgments from on-site to central.
 
 Policy/procedure packets are post-Alpha 1.
@@ -2488,7 +2494,7 @@ This feature must not become a full GIS, CAD, dispatch, public navigation, or li
 
 ## 21A.2 Entities and modules
 
-Map data lives in a Laravel module that owns event maps, map assets/packages, optional map layers, camps, and non-camp map locations. Canonical schema lives in PostgreSQL; PowerSync projects permitted data to devices but is not the business-rule engine.
+Map data lives in a Laravel module that owns event maps, map assets/packages, optional map layers, camps, and non-camp map locations. Canonical schema lives in PostgreSQL; the offline read set carries permitted data to devices but is not the business-rule engine.
 
 Core concepts:
 
@@ -3125,8 +3131,8 @@ Unresolved sync conflicts
 
 Deployment and configuration readiness reports node configuration completeness,
 node role and pairing state, presence of required secrets, secure connection
-policy status, and PowerSync connectivity (GOD-006, sections 25.3 and 26.2). The
-secure connection policy and PowerSync signals are the same event-mode
+policy status, and offline read set availability (GOD-006, sections 25.3 and
+26.2). The secure connection policy and read set signals are the same event-mode
 fail-closed checks described in section 26.2; the landing screen reports them
 rather than evaluating a second, separate policy.
 
@@ -3271,8 +3277,8 @@ value would land (SYS-004).
 `system_config_overrides` stores node-scoped overrides: one row per node and
 variable, carrying the declared type, a JSON-encoded non-secret value or an
 encrypted secret value, an active flag, a change reason, and creator/updater
-references. Overrides are deployment infrastructure: they are never replicated
-through PowerSync, never carried by node-to-node sync, and never copied from
+references. Overrides are deployment infrastructure: they never reach a device's
+offline read set, are never carried by node-to-node sync, and are never copied from
 central to on-site nodes (SYS-011, SYS-012). The existing
 `node_config_values` store remains the write path for node identity and
 pairing state; the catalogue marks those variables managed and read-only here
@@ -3338,7 +3344,9 @@ check degrades to warning; not-applicable is ignored (SYS-031). Checks are
 read-only and non-destructive, clean up probe files, and report unknown
 instead of pretending (SYS-032). Registered categories: application, security,
 configuration overrides, database, cache, queue and scheduler heartbeat,
-storage, wiring, PowerSync, node sync, node identity, integrations (SYS-033).
+storage, wiring, offline read set, node sync, node identity, integrations
+(SYS-033). The sync category carries `sync.offline_read_set` and `sync.node`;
+`sync.powersync` was removed with the service it probed (ADR-0003).
 A scheduler-written heartbeat makes scheduler liveness measurable; queue
 checks never claim worker liveness from a reachable connection.
 
@@ -3497,7 +3505,7 @@ local node name
 node role
 event name
 sync status
-PowerSync status
+offline read set status
 connected devices
 local discovery status
 certificate/HTTPS status
@@ -3538,7 +3546,7 @@ Production/event modes:
 - Use sample configs with fake values only.
 - Run database migrations automatically, with backup warnings first.
 - Fail closed if HTTPS validation fails in event mode.
-- Fail closed if PowerSync is unavailable in event mode.
+- Fail closed if the offline read set cannot be served in event mode.
 - Fail closed if local encryption or device signing is unavailable on the client.
 
 Config schema version mismatches do not block startup in Alpha 1.
@@ -3572,7 +3580,7 @@ Alpha 1 includes:
 ```text
 Laravel + Orchid + PostgreSQL
 Docker Compose deployment
-PowerSync
+Offline read set and command outbox
 Shared Vue client
 Capacitor mobile wrapper
 Electron desktop wrapper
@@ -3633,7 +3641,7 @@ Alpha 1 should prove:
 15. IC roles can create and manage incidents online.
 16. Permitted IC users can see incident-level Name Reference chips derived from incident notes and attached Field Reports, and clicking a chip runs normal permission-filtered search.
 17. A lead can create a fragment, reference it in a policy/procedure document, publish the document, and preview it with fragment text inline.
-18. A user can view visible published policies/procedures offline from synced PowerSync data.
+18. A user can view visible published policies/procedures offline from their stored read set.
 19. A user can acknowledge a required policy/procedure document during signup or training while connected to the server.
 20. The acknowledgment stores document ID and document version.
 21. A fragment edit automatically bumps the fragment-revision component of published referencing documents.
@@ -3715,14 +3723,14 @@ Recommended order:
 5. Auth providers
 6. Node config and setup flow
 7. Node keys, pairing, and roles
-8. PowerSync service
+8. Offline read set endpoint and client store
 9. Vue + Capacitor app shell
 10. Device trust
 11. Device signing
 12. Local encryption
 13. Readiness checklist
 14. Policy/procedure and fragment modules
-15. Policy/procedure PowerSync rules
+15. Policy/procedure offline read set sections
 16. Policy/procedure acknowledgments and exports
 17. Offline field report text
 18. Field report photo attachments
@@ -3752,35 +3760,34 @@ Fake/dev auth is allowed only in development mode, never Alpha 1 production/even
 
 The following areas may need later detail:
 
-1. Exact PowerSync schema and sync rules.
-2. Exact Laravel module folder structure.
-3. Exact OpenAPI generation package.
-4. Exact file storage abstraction and S3/MinIO transition plan.
-5. Exact crypto implementation for Capacitor secure storage.
-6. Exact browser/PWA limitations for secure key storage.
-7. Exact local discovery implementation.
-8. Exact Caddy/DNS configuration for on-site router/AP deployments.
-9. Exact spreadsheet import formats.
-10. Exact audit log table schema.
-11. Exact node operation payload JSON strategy.
-12. Exact conflict resolver UI.
-13. Exact readiness UI.
-14. Exact shared workstation session UI.
-15. Exact IC incident dashboard UI.
-16. Exact attendance reconciliation rules.
-17. Exact photo conversion pipeline.
-18. Exact deployment bundle format.
-19. Exact Markdown sanitizer/renderer libraries for Laravel and the shared Vue client.
-20. Exact custom fragment token grammar and editor UI.
-21. Exact snapshot strategy for acknowledged policy/procedure versions.
-22. Exact background job behavior for fragment-driven document version bumps.
-23. Exact acknowledgement flow placement in signup and training screens.
-24. Post-Alpha 1 multi-on-site-node architecture.
-25. Post-Alpha 1 backups and restore workflows.
-26. Exact effective-permission-level role codes for the Placement department (mint placement-specific codes mirroring IC roles, or reuse `department_lead` plus map-management grants). Resolved map behavior: Placement leads may publish/archive maps; non-lead Placement members get view by default and edit only via map-management grant; locked-map overrides are organizer/admin-only.
-27. Exact map asset/package storage, tiling, and topographic basemap package format.
-28. Exact GeoJSON/geometry storage representation and local-coordinate encoding for placement maps.
-29. Exact Action Plan banner screen-ID allowlist and banner component placement rules.
+1. Exact Laravel module folder structure.
+2. Exact OpenAPI generation package.
+3. Exact file storage abstraction and S3/MinIO transition plan.
+4. Exact crypto implementation for Capacitor secure storage.
+5. Exact browser/PWA limitations for secure key storage.
+6. Exact local discovery implementation.
+7. Exact Caddy/DNS configuration for on-site router/AP deployments.
+8. Exact spreadsheet import formats.
+9. Exact audit log table schema.
+10. Exact node operation payload JSON strategy.
+11. Exact conflict resolver UI.
+12. Exact readiness UI.
+13. Exact shared workstation session UI.
+14. Exact IC incident dashboard UI.
+15. Exact attendance reconciliation rules.
+16. Exact photo conversion pipeline.
+17. Exact deployment bundle format.
+18. Exact Markdown sanitizer/renderer libraries for Laravel and the shared Vue client.
+19. Exact custom fragment token grammar and editor UI.
+20. Exact snapshot strategy for acknowledged policy/procedure versions.
+21. Exact background job behavior for fragment-driven document version bumps.
+22. Exact acknowledgement flow placement in signup and training screens.
+23. Post-Alpha 1 multi-on-site-node architecture.
+24. Post-Alpha 1 backups and restore workflows.
+25. Exact effective-permission-level role codes for the Placement department (mint placement-specific codes mirroring IC roles, or reuse `department_lead` plus map-management grants). Resolved map behavior: Placement leads may publish/archive maps; non-lead Placement members get view by default and edit only via map-management grant; locked-map overrides are organizer/admin-only.
+26. Exact map asset/package storage, tiling, and topographic basemap package format.
+27. Exact GeoJSON/geometry storage representation and local-coordinate encoding for placement maps.
+28. Exact Action Plan banner screen-ID allowlist and banner component placement rules.
 30. Exact Direction deep-link entity allowlist and resolver UX.
 31. Exact Final AAR auto-assembly merge formatting from Submission AARs.
 32. Whether offline Note create / add-to-Briefing is required post–Alpha 1.
@@ -3901,9 +3908,13 @@ A reusable named Markdown text object referenced by policy and procedure documen
 
 A record that a user acknowledged a specific policy or procedure document version during signup or training.
 
-## PowerSync
+## Offline read set
 
-The external sync dependency used for server-to-device local database synchronization.
+The scoped set of records a device may hold to work without connectivity, composed per request by the server through the caller's effective roles and the organization's active modules (section 9.1, 9.3, 9.5). It replaced PowerSync as the server-to-device read mechanism (ADR-0003).
+
+## Command outbox
+
+The device-side queue that holds the section 9.4 offline writes until a node accepts, refuses, or the person dismisses them (section 11A.5). It is the write half of server-to-device sync.
 
 ## Node sync
 

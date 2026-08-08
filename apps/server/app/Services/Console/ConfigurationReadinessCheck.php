@@ -19,7 +19,7 @@ use App\Services\Node\NodeSetupService;
  *
  * Five signals are reported: node configuration completeness, node role and
  * pairing state, presence of required secrets, secure connection policy status,
- * and PowerSync connectivity.
+ * and offline read set availability.
  *
  * The last two are not evaluated here. They are the event-mode fail-closed
  * checks in {@see EventModeGuard}, and this reports what that guard already
@@ -46,7 +46,7 @@ final class ConfigurationReadinessCheck
 
     public const SECURE_CONNECTION = 'configuration.secure_connection';
 
-    public const POWERSYNC = 'configuration.powersync';
+    public const OFFLINE_READ_SET = 'configuration.offline_read_set';
 
     public const NOTIFICATIONS_SUPPRESSED = 'configuration.notifications_suppressed';
 
@@ -258,8 +258,8 @@ final class ConfigurationReadinessCheck
     }
 
     /**
-     * Secure connection policy and PowerSync connectivity, as the event-mode
-     * guard evaluates them (technical spec 26.2). In development mode the guard
+     * Secure connection policy and offline read set availability, as the
+     * event-mode guard evaluates them (technical spec 26.2). In development mode the guard
      * runs no checks and this group stays quiet, which is correct: a laptop on
      * plain HTTP is not a deployment fault.
      *
@@ -278,9 +278,9 @@ final class ConfigurationReadinessCheck
                     resolveRoute: 'platform.node.config',
                     resolveLabel: 'Node Configuration',
                 ),
-                EventModeCheck::POWERSYNC => new AttentionItem(
-                    key: self::POWERSYNC,
-                    label: 'PowerSync is not reachable',
+                EventModeCheck::OFFLINE_READ_SET => new AttentionItem(
+                    key: self::OFFLINE_READ_SET,
+                    label: 'The offline read set cannot be served',
                     detail: (string) $failure->reason,
                     resolveRoute: 'platform.node.config',
                     resolveLabel: 'Node Configuration',

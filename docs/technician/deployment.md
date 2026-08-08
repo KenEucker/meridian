@@ -8,13 +8,16 @@ How to stand up a Meridian server.
 |---|---|
 | Laravel server | The API, Meridian Admin, and the God Mode console. |
 | PostgreSQL | All Meridian data. |
-| PowerSync | Feeds offline-capable devices. Required in event mode. |
 | Caddy | TLS termination and reverse proxy. |
 | Shared Vue client | Meridian Admin, Field, and Kiosk builds served by the server. |
 
+Offline-capable devices are fed by the Laravel server itself. There is no
+separate sync service to run: a device fetches its offline read set from the
+node it is pointed at, and queues its writes back through the same node.
+
 Deployment configuration templates live under `deploy/`: `deploy/docker` for
-Compose, `deploy/caddy` for the reverse proxy, `deploy/powersync` for the sync
-service, and `deploy/dns` for name resolution on the event network.
+Compose, `deploy/caddy` for the reverse proxy, and `deploy/dns` for name
+resolution on the event network.
 
 ## Roles a deployment can take
 
@@ -32,14 +35,13 @@ do:
 ## Bring up a node
 
 1. Start PostgreSQL and confirm the server can reach it.
-2. Start PowerSync. In event mode a node refuses to run without it.
-3. Put Caddy in front with a certificate the browsers on the event network will
+2. Put Caddy in front with a certificate the browsers on the event network will
    actually trust. Event mode requires HTTPS and fails closed without it.
-4. Start the Laravel server. Migrations run automatically in production and
+3. Start the Laravel server. Migrations run automatically in production and
    event modes — take a database backup before you start, not after.
-5. Open the server in a browser. A node with no identity redirects to first-run
+4. Open the server in a browser. A node with no identity redirects to first-run
    setup. Follow [Node setup and pairing](node-setup-and-pairing.md).
-6. Open the God Mode console. The landing screen lists anything still
+5. Open the God Mode console. The landing screen lists anything still
    outstanding.
 
 ## Secrets
@@ -61,7 +63,8 @@ Work through this on the node that will run the event:
 - [ ] Node is paired with central and event data has synced down.
 - [ ] HTTPS is trusted by the devices that will be used, not just by your
       laptop.
-- [ ] PowerSync is reachable from the event network, not only from the host.
+- [ ] The server is reachable from the event network, not only from the host —
+      that is how devices get the data they will run on when the signal drops.
 - [ ] The God Mode landing screen reports no outstanding attention items.
 - [ ] You know how to reach the person who can change central-side data once
       the active event window opens and central starts refusing event-scoped

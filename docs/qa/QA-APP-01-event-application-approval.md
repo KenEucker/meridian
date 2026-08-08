@@ -160,7 +160,7 @@ This script complements `QA-APPLY-01-public-event-application.md`. Use the publi
 
 ### G. Online-only and accessibility review
 
-53. Confirm application submission is online-only in Alpha 1. There is no offline queue, local-only submitted state, PowerSync operation, or conflict-resolution path for applications.
+53. Confirm application submission is online-only in Alpha 1. There is no offline queue, local-only submitted state, device sync operation, or conflict-resolution path for applications.
 54. Confirm assignment and rescind checks are server-side/admin-side behavior in this milestone and do not create offline device operations.
 55. Review the public form and Orchid review detail by keyboard only. Confirm reachable controls, visible focus, visible labels, canonical status labels, and non-color-only state communication.
 56. Confirm destructive or high-impact actions such as Approve and Rescind require confirmation.

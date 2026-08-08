@@ -10,7 +10,8 @@
 // This module makes the decision; it does not itself start, stop, or gate any
 // offline write. The encryption/signing key lifecycles and the surfaces that
 // consume this gate are owned by later Alpha 1 tasks. The server owns the
-// matching HTTPS and PowerSync fail-closed checks (technical spec 8.6).
+// matching HTTPS and offline read set fail-closed checks (technical spec 8.6;
+// ADR-0003 replaced the PowerSync probe with the read-set one in M18.51).
 
 import type { ReadinessProbeScope } from "@/readiness/checklist";
 import {

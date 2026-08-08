@@ -11,7 +11,7 @@ use App\Services\Diagnostics\DiagnosticResult;
 use App\Services\Diagnostics\DiagnosticRunner;
 use App\Services\Diagnostics\DiagnosticStatus;
 use App\Services\Node\NodeOperationRecorder;
-use App\Services\PowerSync\PowerSyncHealthClient;
+use App\Services\Offline\OfflineReadSetProbe;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -29,7 +29,7 @@ class SystemDiagnosticsTest extends TestCase
     {
         parent::setUp();
 
-        $this->markPowerSyncAvailable();
+        $this->markOfflineReadSetServable();
     }
 
     private function fakeCheck(string $key, string $status, bool $required, string $category = DiagnosticCategory::APPLICATION): DiagnosticCheck
@@ -256,9 +256,9 @@ class SystemDiagnosticsTest extends TestCase
         ]]);
     }
 
-    private function markPowerSyncAvailable(bool $available = true): void
+    private function markOfflineReadSetServable(bool $available = true): void
     {
-        $this->instance(PowerSyncHealthClient::class, new class($available) extends PowerSyncHealthClient
+        $this->instance(OfflineReadSetProbe::class, new class($available) extends OfflineReadSetProbe
         {
             public function __construct(private readonly bool $available) {}
 

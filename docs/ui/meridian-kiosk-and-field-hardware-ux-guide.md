@@ -53,7 +53,7 @@ The kiosk dashboard should:
 - expose only role-appropriate actions;
 - support command palette access with kiosk-safe results;
 - include a map by default when the event has a published map and the kiosk/user is permitted to view it;
-- surface local node, PowerSync, HTTPS/certificate, connected-device, and version health only where relevant to the current user or trusted operator.
+- surface local node, offline read set, HTTPS/certificate, connected-device, and version health only where relevant to the current user or trusted operator.
 
 The kiosk map is read-only, should work from the offline event map package, should show a stale/offline map status where relevant, and must not show sensitive map layers/locations without permission. Camps and map locations must not appear in the global command palette; map search/filter stays in a scoped panel on the map surface.
 

@@ -83,7 +83,7 @@ class AppServiceProvider extends ServiceProvider
                 Checks\SchedulerHeartbeatCheck::class,
                 Checks\StorageCheck::class,
                 Checks\WiringCheck::class,
-                Checks\PowerSyncCheck::class,
+                Checks\OfflineReadSetCheck::class,
                 Checks\NodeSyncCheck::class,
                 Checks\NodeIdentityCheck::class,
                 Checks\IntegrationsCheck::class,

@@ -17,9 +17,9 @@ use Illuminate\Http\Response;
  * (CLIENT-021, CLIENT-022, MOD-016; technical spec 9.3, 9.5, 11A.7; data/API
  * 7.1, 7.3; ADR-0003).
  *
- * One authenticated read composes the section 9.3 set for the caller. It
- * replaces PowerSync's server-to-device replication with a set the server
- * builds through the same resolver every other API read answers from, which is
+ * One authenticated read composes the section 9.3 set for the caller. It is
+ * the server-to-device mechanism, replacing the sync layer ADR-0003 retired
+ * with a set built through the same resolver every other API read answers from, which is
  * the single change ADR-0003 turns on: one authorization model, in PHP,
  * exercised by the same tests as everything else.
  *

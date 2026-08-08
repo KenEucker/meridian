@@ -44,8 +44,8 @@ Meridian Alpha 1 UI implementation should follow this technical contract:
 - Server-hosted web target: Laravel serves the Admin build of the shared Vue client as Meridian Admin.
 - Mobile packaging wrapper: Capacitor packages the Field build of the shared Vue client for iOS and Android as Meridian Field.
 - Desktop on-site wrapper: Electron packages and serves the Kiosk build of the shared Vue client locally as Meridian Kiosk.
-- Device sync: PowerSync-backed local state and sync-aware UI.
-- Offline-first behavior: PowerSync-backed local state and sync-aware UI.
+- Device sync: offline read set and command outbox backed local state, and sync-aware UI.
+- Offline-first behavior: offline read set and command outbox backed local state, and sync-aware UI.
 - Install targets: server-hosted web app, Electron for on-site laptop, and Capacitor mobile app.
 - Styling: semantic design tokens, not hard-coded raw brand colors.
 - Auth: email magic link, Google OAuth, and Discord OAuth; no internal username/password auth for Alpha 1.

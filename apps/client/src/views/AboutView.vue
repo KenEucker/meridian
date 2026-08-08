@@ -477,10 +477,6 @@ watch(
           <dt>FR photo outbox</dt>
           <dd>{{ photoSyncText }}</dd>
         </div>
-        <div>
-          <dt>PowerSync client</dt>
-          <dd>Pending later Alpha 1 milestone; FR upload uses command API.</dd>
-        </div>
       </dl>
 
       <dl class="about__meta about__meta--secondary" aria-label="Server details">

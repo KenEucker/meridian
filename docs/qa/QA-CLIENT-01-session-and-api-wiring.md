@@ -360,14 +360,14 @@ capabilities rather than from authentication.
     corepack pnpm --filter @meridian/client run test -- fixtureIsolation
     ```
 
-58. Permission-scoped replication (`CLIENT-021`, `CLIENT-022`) is verified by
-    `PowerSyncPermissionScopedReplicationTest` and
-    `PowerSyncDeviceCacheProjectionTest` rather than by hand: the check is what a
-    device is permitted to replicate, which is a property of the sync rules and
-    not of a screen. Run them as this script's evidence for those two:
+58. Permission-scoped offline data (`CLIENT-021`, `CLIENT-022`) is verified by
+    `OfflineReadSetTest` and `OfflineReadSetRoleScopesTest` rather than by hand:
+    the check is what a device is permitted to hold, which is a property of how
+    the set is composed and not of a screen. Run them as this script's evidence
+    for those two:
 
     ```bash
-    cd apps/server && php artisan test --filter=PowerSync
+    cd apps/server && php artisan test --filter=OfflineReadSet
     ```
 
 ## Expected results
@@ -490,7 +490,7 @@ capabilities rather than from authentication.
   `session/localFieldSessionFixture.ts`, is what the client's own tests stand on
   so they run without a server (`CLIENT-024`), and this check is what proves
   nothing a user can reach imports it.
-- Step 58: the PowerSync tests pass.
+- Step 58: the offline read set tests pass.
 
 ## Evidence to capture
 
@@ -512,7 +512,7 @@ capabilities rather than from authentication.
 - Network panel transcript of step 46 showing the two requests in order.
 - The refusals from steps 48, 49, and 50.
 - Olive's and Dana's credential eligibility files from steps 46 and 51.
-- The `php artisan test --filter=PowerSync` output.
+- The `php artisan test --filter=OfflineReadSet` output.
 
 ## Failure notes
 

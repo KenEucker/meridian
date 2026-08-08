@@ -5,7 +5,7 @@ namespace App\Services\EventMode;
 use App\Models\Node;
 use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodeSetupService;
-use App\Services\PowerSync\PowerSyncHealthClient;
+use App\Services\Offline\OfflineReadSetProbe;
 
 /**
  * Evaluates and enforces event-mode fail-closed safeguards on the server
@@ -18,7 +18,10 @@ use App\Services\PowerSync\PowerSyncHealthClient;
  *
  *   - HTTPS validation: the configured application URL must use HTTPS
  *     (technical spec 8.2 "production/event mode never uses plain HTTP").
- *   - PowerSync availability: the PowerSync liveness probe must succeed.
+ *   - Offline read set availability: the node must be able to serve the set a
+ *     device caches to work without signal (ADR-0003). This replaced the
+ *     PowerSync liveness probe, which failed event mode closed on a service no
+ *     client ever connected to.
  *
  * Local encryption and device signing are client-side checks and are evaluated
  * on the client (technical spec 8.6). Development mode never blocks.
@@ -26,7 +29,7 @@ use App\Services\PowerSync\PowerSyncHealthClient;
 class EventModeGuard
 {
     public function __construct(
-        private readonly PowerSyncHealthClient $powerSync,
+        private readonly OfflineReadSetProbe $offlineReadSet,
         private readonly NodeSetupService $nodes,
         private readonly NodeConfigResolver $configResolver,
     ) {}
@@ -64,8 +67,8 @@ class EventModeGuard
             $checks[] = $this->evaluateHttps();
         }
 
-        if ((bool) config('meridian.event_mode.require_powersync', true)) {
-            $checks[] = $this->evaluatePowerSync();
+        if ((bool) config('meridian.event_mode.require_offline_read_set', true)) {
+            $checks[] = $this->evaluateOfflineReadSet();
         }
 
         return new EventModeReadiness(eventMode: true, checks: $checks);
@@ -101,17 +104,17 @@ class EventModeGuard
         );
     }
 
-    private function evaluatePowerSync(): EventModeCheck
+    private function evaluateOfflineReadSet(): EventModeCheck
     {
-        $passed = $this->powerSync->isAvailable();
+        $passed = $this->offlineReadSet->isAvailable();
 
         return new EventModeCheck(
-            key: EventModeCheck::POWERSYNC,
-            label: 'PowerSync availability',
+            key: EventModeCheck::OFFLINE_READ_SET,
+            label: 'Offline read set availability',
             passed: $passed,
             reason: $passed
                 ? null
-                : 'PowerSync is unavailable: event mode requires the PowerSync service to be reachable.',
+                : 'The offline read set is unavailable: event mode requires this node to be able to serve the set devices cache from.',
         );
     }
 

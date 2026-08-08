@@ -47,7 +47,6 @@ REQUIRED_DIRECTORIES = [
     "packages/openapi-client",
     "deploy/docker",
     "deploy/caddy",
-    "deploy/powersync",
     "deploy/dns",
 ]
 

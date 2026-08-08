@@ -10,8 +10,8 @@ surfaces failures without treating an outage backlog as a defect, and lets God
 mode resolve sync conflicts by accepting either the on-site or central version.
 
 This script closes the Milestone 12 human QA gate. It does not define new
-operation vocabularies for product features, implement PowerSync client
-transport, or require raw database replication. Per-entity appliers remain owned
+operation vocabularies for product features, exercise the server-to-device sync
+path, or require raw database replication. Per-entity appliers remain owned
 by the feature tasks that emit those operations.
 
 ## Requirements covered

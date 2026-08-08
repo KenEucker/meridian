@@ -204,8 +204,8 @@ return [
     |
     | Production/event mode must fail closed when required capabilities are
     | unavailable (technical spec 8.6 and 26.2). The server owns the HTTPS and
-    | PowerSync checks; local encryption and device signing are client-side
-    | checks. When `enabled` is null, event mode is derived from the effective
+    | offline read set checks; local encryption and device signing are
+    | client-side checks. When `enabled` is null, event mode is derived from the effective
     | node role: any non-development role (standalone/central/onsite) is treated
     | as event/production mode (technical spec 26.1). Set MERIDIAN_EVENT_MODE to
     | force it on or off. The require_* flags default to on so a misconfigured
@@ -216,7 +216,7 @@ return [
     'event_mode' => [
         'enabled' => env('MERIDIAN_EVENT_MODE'),
         'require_https' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_HTTPS', true), FILTER_VALIDATE_BOOL),
-        'require_powersync' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_POWERSYNC', true), FILTER_VALIDATE_BOOL),
+        'require_offline_read_set' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_OFFLINE_READ_SET', true), FILTER_VALIDATE_BOOL),
     ],
 
     /*
