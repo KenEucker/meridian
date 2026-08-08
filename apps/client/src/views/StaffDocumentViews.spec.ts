@@ -14,7 +14,11 @@
 // No server runs for any of it, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import {
+  installOfflineReadSet,
+  offlineReadSetPayload,
+} from "@/offline/offlineReadSetFixture";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory, type Router } from "vue-router";
 
@@ -175,7 +179,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -366,18 +370,59 @@ describe("the staff document library", () => {
 });
 
 /*
- * Search when the node cannot be reached (M18.9).
+ * Search when the node cannot be reached (M18.9, M18.50).
  *
  * The library is one of the pages technical spec 9.3 asks a device to hold, and
  * a held library that answers a typed word with "unable to load" is the failure
- * this whole change is about. The narrowed request is its own cache key, so the
- * first search typed offline is always a miss on its own key and falls back to
- * the broad copy, which the browser then filters.
+ * this whole change is about. Since M18.50 the copy searched is the offline read
+ * set's `policy_documents` and `procedure_documents` rather than a stored copy of
+ * a previous response, so the device holds the whole published library whether or
+ * not anybody opened the page while there was a node — and a search is a filter
+ * over rows it already has rather than a second cache key that always misses.
  */
 describe("searching the staff document library offline", () => {
+  async function installLibrary(): Promise<void> {
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        sections: {
+          policy_documents: [
+            {
+              id: CONDUCT_POLICY_ID,
+              organization_id: ORGANIZATION_ID,
+              scope_type: "organization",
+              scope_id: ORGANIZATION_ID,
+              title: "Volunteer Conduct",
+              slug: "volunteer-conduct",
+              markdown_source: "# Volunteer Conduct",
+              document_revision: 1,
+              fragment_revision: 0,
+              published_at: "2027-06-01T12:00:00+00:00",
+            },
+          ],
+          procedure_documents: [
+            {
+              id: RADIO_PROCEDURE_ID,
+              organization_id: ORGANIZATION_ID,
+              scope_type: "organization",
+              scope_id: ORGANIZATION_ID,
+              title: "Radio Procedure",
+              slug: "radio-procedure",
+              markdown_source: "# Radio Procedure",
+              document_revision: 2,
+              fragment_revision: 1,
+              published_at: "2027-06-01T12:00:00+00:00",
+            },
+          ],
+          document_fragments: [],
+        },
+        readiness: { context_event_id: null },
+      }),
+      { organizationId: ORGANIZATION_ID, eventId: null },
+    );
+  }
+
   it("matches against the copy this device holds instead of failing", async () => {
-    stubNode();
-    await mountLibrary();
+    await installLibrary();
 
     vi.stubGlobal(
       "fetch",
@@ -390,15 +435,14 @@ describe("searching the staff document library offline", () => {
 
     expect(wrapper.find(".staff-documents__error").exists()).toBe(false);
     expect(wrapper.text()).toContain("Radio Procedure");
-    expect(wrapper.text()).not.toContain("Getting To Signal Camp");
+    expect(wrapper.text()).not.toContain("Volunteer Conduct");
     expect(wrapper.get(".staff-documents__narrowed").text()).toContain(
-      "matched against the documents this device had already read",
+      "This node could not be reached",
     );
   });
 
   it("says a stored search found nothing rather than that nothing matches", async () => {
-    stubNode();
-    await mountLibrary();
+    await installLibrary();
 
     vi.stubGlobal(
       "fetch",

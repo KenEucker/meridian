@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import ControlBar from "@/components/ControlBar.vue";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
@@ -16,6 +17,7 @@ import {
   statusLabel,
   type ImsFieldReportListItem,
 } from "@/ims/incidentReadModel";
+import { LIVE_READ } from "@/offline/readFreshness";
 
 /**
  * `ims.field-reports` — the IC Field Report review list (M11.8; bound to the
@@ -44,6 +46,14 @@ const canView = computed(() => access.value.canViewFieldReports);
 const canTakeFieldReport = computed(() => access.value.canCreate);
 
 const allReports = ref<readonly ImsFieldReportListItem[]>([]);
+/**
+ * Which copy of the list is on screen (M18.50).
+ *
+ * The offline copy is this device's own reports rather than the event's, so a
+ * reader has to be told which one they are looking at before they conclude the
+ * event has had four Field Reports all day.
+ */
+const freshness = ref(LIVE_READ);
 const loadError = ref<string | null>(null);
 const loading = ref(false);
 
@@ -120,9 +130,13 @@ async function loadReports(): Promise<void> {
   loadError.value = null;
 
   try {
-    allReports.value = await getEventFieldReports(eventId);
+    const read = await getEventFieldReports(eventId);
+
+    allReports.value = [...read.reports];
+    freshness.value = read.freshness;
   } catch (error) {
     allReports.value = [];
+    freshness.value = LIVE_READ;
     loadError.value = meridianErrorMessage(
       error,
       "Unable to load Field Reports. Check the connection to this node and try again.",
@@ -371,6 +385,27 @@ function compareReports(
     </div>
 
     <template v-else>
+      <StaleReadNotice
+        :freshness="freshness"
+        label="This list of Field Reports"
+      />
+
+      <!--
+        What the stored copy covers, which is not what the request asked for
+        (M18.50). The offline read set carries the reader's own submitted
+        reports, not the event's, so a stale list is narrower as well as older —
+        and "no Field Reports this shift" is a conclusion somebody would
+        otherwise draw from it.
+      -->
+      <p
+        v-if="freshness.narrowed"
+        class="ims-fr-list__narrowed"
+        role="status"
+      >
+        These are the Field Reports this device is holding — the ones filed from
+        it and the ones filed by you. Reports filed elsewhere are not here.
+      </p>
+
       <ControlBar label="Field Report filters">
         <form data-control-group aria-label="Filter Field Reports">
           <label for="ims-fr-list-link">
@@ -559,6 +594,16 @@ function compareReports(
 </template>
 
 <style scoped>
+.ims-fr-list__narrowed {
+  margin: 0 0 var(--m-space-4);
+  padding: var(--m-space-3);
+  border-inline-start: 3px solid var(--m-status-warning);
+  border-radius: 4px;
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+}
+
 .ims-fr-list {
   width: 100%;
   display: grid;

@@ -16,7 +16,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import { routes } from "@/router";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { clearClientSession } from "@/session/clientSession";
 import {
   installLocalFieldSession,
@@ -74,7 +74,7 @@ function stubNode(reply: (call: NodeCall) => NodeReply): readonly NodeCall[] {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   selectSessionDepartment(DEPARTMENT_ID);
   configureMeridianApi({

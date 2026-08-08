@@ -9,7 +9,7 @@ import {
 } from "@/department-ops/equipmentLookup";
 import { getLogisticsDesk } from "@/department-ops/departmentOpsReadModel";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import type { EquipmentCheckoutCandidate } from "@/department-ops/types";
 
 function tracked(
@@ -161,14 +161,22 @@ describe("staged checkout lines", () => {
  * EQUIP-015's offline half.
  *
  * "Lookup shall resolve against the department inventory the surface already
- * holds, so it works on a node or device with no connectivity." The desk read
- * carries the scoped inventory; once it is on the device, a scan resolves with
- * the node unreachable. Scope was applied before the copy was made, so nothing
- * outside the department was ever in the cache to be found.
+ * holds, so it works on a node or device with no connectivity." The lookup
+ * itself never asks a node: it resolves against the inventory the desk read
+ * carried, and scope was applied before that inventory left the node, so nothing
+ * outside the department was ever in it to be found.
+ *
+ * What M18.50 changed is what happens to that inventory when the desk is read
+ * again with no node in reach. It is not answered from a stored copy of the
+ * desk's own response any more — the desk payload is the node's derived answers
+ * rather than records — so a re-read is refused and the surface reports the node
+ * it could not reach. The inventory a surface is already holding is unaffected,
+ * which is what EQUIP-015 is about, and restoring the re-read is a projection
+ * over `logistics_equipment_index` that M18.53's inventory scopes.
  */
 describe("lookup with the node unreachable", () => {
-  it("resolves a scanned tag against the cached desk inventory", async () => {
-    clearReadCache();
+  it("resolves a scanned tag against the inventory the desk is holding", async () => {
+    clearOfflineReadSet();
     configureMeridianApi({ baseUrl: "http://node.test", bearerToken: "t" });
 
     const payload = {
@@ -227,8 +235,8 @@ describe("lookup with the node unreachable", () => {
 
     expect(live.freshness.source).toBe("node");
 
-    // The node goes away. The desk opens on what it stored, and the scan still
-    // lands.
+    // The node goes away. Re-reading the desk is refused rather than answered
+    // from a stored copy of the desk's own response (M18.50).
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -236,21 +244,24 @@ describe("lookup with the node unreachable", () => {
       }),
     );
 
-    const cached = await getLogisticsDesk("event-1", "department-1");
+    await expect(getLogisticsDesk("event-1", "department-1")).rejects.toThrow(
+      /Failed to fetch/,
+    );
 
-    expect(cached.freshness.source).toBe("cache");
-
-    const inventory = cached.checkoutInventory;
+    // The scan still lands against the inventory the surface is holding, which
+    // is what EQUIP-015 asks for and needs no node.
+    const inventory = live.checkoutInventory;
     const result = lookUpEquipment(inventory, "RDO-12");
 
     expect(result.outcome).toBe("resolved");
     expect(result.item?.equipmentItemId).toBe("item-radio-12");
 
-    // And a tag from another department is not in the cache to be found, so it
-    // resolves to nothing without disclosing that it exists anywhere.
+    // And a tag from another department was never in this inventory to be
+    // found, so it resolves to nothing without disclosing that it exists
+    // anywhere.
     expect(lookUpEquipment(inventory, "GATE-01").outcome).toBe("none");
 
     vi.unstubAllGlobals();
-    clearReadCache();
+    clearOfflineReadSet();
   });
 });

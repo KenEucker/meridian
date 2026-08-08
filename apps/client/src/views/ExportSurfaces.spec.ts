@@ -17,7 +17,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { routes } from "@/router";
 import { clearClientSession, installClientSession } from "@/session/clientSession";
 import {
@@ -160,7 +160,7 @@ function setNavigatorOnline(onLine: boolean): void {
 const mounted: VueWrapper[] = [];
 
 beforeEach(() => {
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",

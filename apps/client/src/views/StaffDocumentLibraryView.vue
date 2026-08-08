@@ -200,8 +200,8 @@ function documentTypeLabel(document: ProductDocument): string {
         role="status"
       >
         This node could not be reached, so these results were matched against
-        the documents this device had already read. Something published since
-        will not be here.
+        the published documents this device is holding. Something published
+        since, and anything not published to you, will not be here.
       </p>
 
       <p v-if="loadError" class="staff-documents__error" role="alert">

@@ -15,7 +15,15 @@ import {
   recordNodeAnswered,
   recordNodeUnreachable,
 } from "@/offline/nodeReachability";
-import { LIVE_READ, readCache, type CachedRead } from "@/offline/readCache";
+import {
+  offlineReadSource,
+  type OfflineReadProjection,
+} from "@/offline/offlineReadProjection";
+import {
+  LIVE_READ,
+  storedRead,
+  type CachedRead,
+} from "@/offline/readFreshness";
 
 export class MeridianApiError extends Error {
   readonly status: number;
@@ -206,13 +214,23 @@ export function meridianErrorMessage(error: unknown, fallback: string): string {
 }
 
 /**
- * Read JSON, falling back to what this device stored last time (M18.9;
+ * Read JSON, falling back to what this device already holds offline (M18.50;
  * technical spec 9.3).
  *
  * "The device should cache as much authorized data as possible. Offline data may
  * be stale, but stale authorized data is better than no data." A read surface
- * joins that policy by calling this instead of {@link meridianJson}, and gets
- * back the freshness of what it is holding so it can say which copy is on screen.
+ * joins that policy by calling this instead of {@link meridianJson} *and*
+ * supplying an `offline` projection — the function that builds its payload out of
+ * the offline read set. It gets back the freshness of whichever copy answered, so
+ * it can say which one is on screen.
+ *
+ * **The store is not filled here any more.** Until M18.50 this wrote every
+ * successful response into a sixty-entry path-keyed cache, which meant a device
+ * held whatever its user had happened to open and nothing else: a volunteer who
+ * had never visited the shift board had no shift board offline. The set is now
+ * fetched whole, proactively, on login and reconnect and context switch (M18.49),
+ * and this function reads from it rather than filling it. A read with no
+ * projection is therefore a connected read, and says so by failing.
  *
  * The fallback turns on whether the node *answered*, not on whether it said yes.
  * A `MeridianApiError` carries a status, which means the node spoke: a refusal, a
@@ -222,56 +240,50 @@ export function meridianErrorMessage(error: unknown, fallback: string): string {
  * Anything else — a request that never completed — is the unreachable node this
  * exists for.
  *
- * `fallbackPath` is for a read that narrows: a search term, a state filter, a
- * team. Those go to the node, because the node searches everything the caller
- * may see and the browser only holds what it happened to ask for. But the
- * narrowed request is its own cache key, so the first search typed with no node
- * in reach is always a miss — and answering "unable to load" while the whole
- * list is sitting on screen is the behaviour this whole change exists to stop.
- * A caller passes the unnarrowed path, gets the broad copy back when its own is
- * missing, and narrows it itself. `freshness.narrowed` says that happened, so a
- * surface can say what its results actually cover.
+ * A narrowed read — a search term, a state filter, a team — no longer needs a
+ * second cache key to fall back to. The device holds the section rather than one
+ * page of one response, so a projection filters the rows itself. What it cannot
+ * do is cover what the set never carried, and `freshness.narrowed` is how it
+ * says so: the results are as complete as the copy this device holds, which is
+ * a different claim from the one the node would have made.
  *
- * Reads only. A command is not cached and never falls back: what may be held on
+ * Reads only. A command is never answered from the store: what may be held on
  * this device is decided by the outbox and the offline write scope
  * (technical spec 9.4, CLIENT-018), not here.
  */
 export async function meridianCachedJson<T>(
   path: string,
-  options: { readonly fallbackPath?: string } = {},
+  options: { readonly offline?: OfflineReadProjection<T> } = {},
 ): Promise<CachedRead<T>> {
   try {
-    const data = await meridianJson<T>(path);
-
-    readCache.write(path, data, new Date().toISOString());
-
-    return { data, freshness: LIVE_READ };
+    return { data: await meridianJson<T>(path), freshness: LIVE_READ };
   } catch (error) {
     if (error instanceof MeridianApiError) {
       throw error;
     }
 
-    const stored = readCache.read(path);
-
-    if (stored !== null) {
-      return {
-        data: stored.payload as T,
-        freshness: { source: "cache", cachedAt: stored.cachedAt, narrowed: false },
-      };
+    if (options.offline === undefined) {
+      throw error;
     }
 
-    const fallback =
-      options.fallbackPath === undefined || options.fallbackPath === path
-        ? null
-        : readCache.read(options.fallbackPath);
+    /*
+     * Null from either step is the same outcome: this device cannot answer. A
+     * missing source is a device holding no set or holding one past the event
+     * window it was composed for (11A.4); a null projection is a set that does
+     * not carry what this read needs. Neither is an empty answer to be rendered
+     * — the surface gets the transport failure it would have got anyway and
+     * reports the node it could not reach.
+     */
+    const source = offlineReadSource();
+    const answer = source === null ? null : options.offline(source);
 
-    if (fallback === null) {
+    if (answer === null || source === null) {
       throw error;
     }
 
     return {
-      data: fallback.payload as T,
-      freshness: { source: "cache", cachedAt: fallback.cachedAt, narrowed: true },
+      data: answer.data,
+      freshness: storedRead(source.storedAt, answer.narrowed === true),
     };
   }
 }

@@ -9,7 +9,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import App from "@/App.vue";
 import { configureMeridianApi } from "@/api/meridianApi";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -687,7 +687,7 @@ beforeEach(() => {
   // The desk's index is durable from M18.8, so it outlives a test unless a test
   // says otherwise. Cleared on both sides: a leftover index would let a test that
   // means to open on an unreachable node open on a roster instead.
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
   stubDepartmentOpsNode();
@@ -697,7 +697,7 @@ afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
   commandOutbox.clear();
-  clearReadCache();
+  clearOfflineReadSet();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
 });
@@ -1558,12 +1558,18 @@ describe("department operations surfaces", () => {
   });
 
   /*
-   * SLB-021's offline half (M18.8). The desk that has read its department once
-   * opens on that index with the node unreachable, searches it, and says it is
-   * doing so — a desk out of coverage that could look nobody up is a service
-   * station that has stopped serving.
+   * SLB-021's offline half, as it stands after M18.50.
+   *
+   * The desk no longer reopens on a stored copy of its own response. Its payload
+   * is the node's derived answers — what this caller may manage, whether a
+   * person may go off-site, whether a checkout is overdue — computed against the
+   * moment it was asked, and the offline read set carries the rows behind those
+   * answers rather than the answers. So a desk out of coverage says it is out of
+   * coverage rather than opening a roster nothing recomputed, and restoring
+   * SLB-021's offline search is a projection over `logistics_staff_index` and
+   * `logistics_equipment_index` that M18.53's surface inventory scopes.
    */
-  it("searches the stored department index when the node is unreachable", async () => {
+  it("says the desk needs a connection rather than reopening a stored index", async () => {
     await mountAt(logisticsPath());
 
     vi.stubGlobal(
@@ -1575,16 +1581,10 @@ describe("department operations surfaces", () => {
 
     const { wrapper } = await mountAt(logisticsPath());
 
-    expect(wrapper.find(".logistics__error").exists()).toBe(false);
-
-    const scope = wrapper.get(".logistics__cache");
-    expect(scope.attributes("data-source")).toBe("cache");
-    expect(scope.text()).toContain("This node could not be reached");
-    expect(scope.text()).toContain("the copy this device stored");
-
-    await openWorkspace(wrapper, "Vera Staff");
-
-    expect(wrapper.get(".logistics__workspace").text()).toContain("Vera Staff");
+    expect(wrapper.get(".logistics__error").text()).toContain(
+      "Unable to load this department's logistics desk",
+    );
+    expect(wrapper.find(".logistics__on-shift-list").exists()).toBe(false);
   });
 
   it("says the desk is live when the node answered", async () => {

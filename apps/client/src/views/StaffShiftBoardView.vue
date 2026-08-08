@@ -46,6 +46,15 @@ const connectivity = useConnectivity();
 const eventContext = computed(() => sessionEventContext.value);
 
 const board = ref<ShiftBoard | null>(null);
+
+/**
+ * Whether the board on screen is the copy this device holds (M18.50).
+ *
+ * Read by the rows as well as by the disclosure: a stored copy carries no
+ * verdict from the node, so a row must not print one it inferred from the
+ * absence of it.
+ */
+const stale = computed(() => board.value?.freshness.source === "cache");
 const timeZone = computed(() => sessionEventTimeZone.value);
 const loadError = ref<string | null>(null);
 const status = ref<string | null>(null);
@@ -279,8 +288,15 @@ void loadBoard();
           {{ warning.message }}
         </p>
 
+        <!--
+          Only off a live read (M18.50). "You cannot withdraw" is the node's
+          answer online and this device's inability to ask offline, and the two
+          have different remedies: one is a department lead, the other is a
+          connection. Inferring the first from a stored copy would send somebody
+          looking for the wrong person.
+        -->
         <p
-          v-if="shift.signedUp && !shift.canWithdraw"
+          v-if="shift.signedUp && !shift.canWithdraw && !stale"
           class="shift-board__reason"
         >
           The schedule is locked for this shift. Ask your department lead to

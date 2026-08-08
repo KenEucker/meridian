@@ -10,7 +10,11 @@
 // No server runs for any of it, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import {
+  installOfflineReadSet,
+  offlineReadSetPayload,
+} from "@/offline/offlineReadSetFixture";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
@@ -130,7 +134,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   installLocalFieldSession();
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -501,16 +505,48 @@ describe("the staff shift board", () => {
    * possible. Offline data may be stale, but stale authorized data is better
    * than no data." A staff member's own shifts are the first thing on that
    * list, and a board that answers "check the connection to this node" is the
-   * failure the rule is written against (M18.9).
+   * failure the rule is written against (M18.9, M18.50).
+   *
+   * The board comes off the offline read set now rather than off a stored copy
+   * of this endpoint's response, so the device holds it whether or not anybody
+   * opened the board while there was a node (M18.49).
    */
-  it("renders the shifts it stored when the node cannot be reached", async () => {
-    stubNode(() => ({
-      body: {
-        event: { id: EVENT_ID, name: "Local Field Event" },
-        shifts: [shiftPayload()],
-      },
-    }));
-    await mountView();
+  it("renders the shifts it holds offline when the node cannot be reached", async () => {
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        sections: {
+          events: [{ id: EVENT_ID, name: "Local Field Event" }],
+          shifts: [
+            {
+              id: HELD_SHIFT_ID,
+              event_id: EVENT_ID,
+              department_id: "dept-1",
+              eligible_team_id: "team-1",
+              title: "Gate Swing",
+              department_name_snapshot: "Gate",
+              team_name_snapshot: "Gate Crew",
+              starts_at: "2027-07-04T18:00:00+00:00",
+              ends_at: "2027-07-04T22:00:00+00:00",
+              capacity: 4,
+              signup_opens_at: null,
+              signup_closes_at: null,
+              schedule_lock_at: null,
+              cancelled_at: null,
+            },
+          ],
+          shift_assignments: [
+            {
+              id: "assignment-1",
+              shift_id: HELD_SHIFT_ID,
+              staff_id: "staff-self",
+              assignment_status: "confirmed",
+            },
+          ],
+        },
+        readiness: { context_event_id: EVENT_ID },
+      }),
+      { organizationId: null, eventId: EVENT_ID },
+    );
 
     vi.stubGlobal(
       "fetch",
@@ -523,9 +559,58 @@ describe("the staff shift board", () => {
 
     expect(wrapper.find(".shift-board__error").exists()).toBe(false);
     expect(wrapper.text()).toContain("Gate Swing");
+    expect(wrapper.text()).toContain("Signed up");
     expect(wrapper.get(".stale-read").text()).toContain(
       "This node could not be reached",
     );
+  });
+
+  /*
+   * A count is the one thing the set cannot carry: it holds this staff member's
+   * own assignment and nobody else's, so counting the rows it has would report
+   * every shift in the event as having exactly one person on it (SHIFT-007).
+   */
+  it("says the signed-up count is unavailable rather than printing a zero", async () => {
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        sections: {
+          events: [{ id: EVENT_ID, name: "Local Field Event" }],
+          shifts: [
+            {
+              id: HELD_SHIFT_ID,
+              event_id: EVENT_ID,
+              department_id: "dept-1",
+              eligible_team_id: "team-1",
+              title: "Gate Swing",
+              department_name_snapshot: "Gate",
+              team_name_snapshot: "Gate Crew",
+              starts_at: "2027-07-04T18:00:00+00:00",
+              ends_at: "2027-07-04T22:00:00+00:00",
+              capacity: 4,
+              signup_opens_at: null,
+              signup_closes_at: null,
+              schedule_lock_at: null,
+              cancelled_at: null,
+            },
+          ],
+          shift_assignments: [],
+        },
+        readiness: { context_event_id: EVENT_ID },
+      }),
+      { organizationId: null, eventId: EVENT_ID },
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const wrapper = await mountView();
+
+    expect(wrapper.text()).toContain("signed-up count unavailable offline");
+    expect(wrapper.text()).not.toContain("0 of 4 signed up");
   });
 
   it("states an unreachable node when the device stored no board", async () => {

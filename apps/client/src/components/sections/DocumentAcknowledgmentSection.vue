@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import StatusPill, { type StatusPillTone } from "@/components/StatusPill.vue";
 import WorkflowSection from "@/components/sections/WorkflowSection.vue";
 import {
@@ -11,6 +12,7 @@ import {
   type AcknowledgmentGating,
   type AcknowledgmentRequirement,
 } from "@/documents/documentAcknowledgmentModel";
+import { LIVE_READ } from "@/offline/readFreshness";
 import { useConnectivity } from "@/offline/useConnectivity";
 
 /**
@@ -68,6 +70,8 @@ const connectivity = useConnectivity();
 
 const requirements = ref<readonly AcknowledgmentRequirement[]>([]);
 const gating = ref<AcknowledgmentGating | null>(null);
+/** Which copy of the list is on screen (M18.50; UI contract 16.2). */
+const freshness = ref(LIVE_READ);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 const actionError = ref<string | null>(null);
@@ -117,9 +121,11 @@ async function reload(): Promise<void> {
 
     requirements.value = mine.requirements;
     gating.value = mine.gating;
+    freshness.value = mine.freshness;
   } catch (error) {
     requirements.value = [];
     gating.value = null;
+    freshness.value = LIVE_READ;
     loadError.value = meridianErrorMessage(
       error,
       "Unable to read your acknowledgments. Check the connection to this node and try again.",
@@ -215,6 +221,8 @@ void reload();
       {{ loadError }}
       <button type="button" @click="reload">Try again</button>
     </p>
+
+    <StaleReadNotice :freshness="freshness" label="This list" />
 
     <p v-if="isOffline" class="acks__notice" role="status">
       Acknowledging needs a connection to the node. It is not held on this device
@@ -324,11 +332,28 @@ void reload();
         not been shown, so at signup this is never collapsed.
       -->
       <div
-        v-if="isOpen(requirement)"
+        v-if="isOpen(requirement) && requirement.renderedHtml !== ''"
         class="acks__document"
         data-testid="acknowledgment-document"
         v-html="requirement.renderedHtml"
       />
+
+      <!--
+        A stored copy carries which document is outstanding, not the document
+        (M18.50). The set holds markdown and the render is the node's, with
+        referenced fragments resolved, so the alternative to this sentence is an
+        empty article standing where a policy should be.
+      -->
+      <p
+        v-else-if="isOpen(requirement)"
+        class="acks__document-unavailable"
+        data-testid="acknowledgment-document-unavailable"
+        role="status"
+      >
+        The text of this document needs a connection to this node. This device
+        holds which documents you are outstanding on, not the documents
+        themselves.
+      </p>
 
       <!--
         Absent, not disabled, once it is answered (CLIENT-005). An acknowledged
@@ -432,6 +457,12 @@ void reload();
 .acks__changed {
   margin: 0;
   color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.acks__document-unavailable {
+  margin: var(--m-space-3) 0 0;
+  color: var(--m-text-secondary);
   font-size: var(--m-text-sm);
 }
 

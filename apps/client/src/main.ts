@@ -5,7 +5,6 @@ import { followSessionBranding } from "@/branding/brandingContext";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { installOfflineReadSetRefreshTriggers } from "@/offline/offlineReadSetRefresh";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
-import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
 import { redirectWhenSignedOut, requiresSignIn, router } from "@/router";
 // Imported for its side effect: adopting the token this device already holds and
@@ -43,21 +42,14 @@ followSessionBranding();
 registerSessionContextReset((context) => {
   discardFieldReportsOutsideEvent(context.eventId);
   /*
-   * Every stored read goes, whole (M18.9; technical spec 9.3, CLIENT-014). The
-   * cache holds one user's authorized reads for one context, and there is no
-   * version of a department roster or a planning aggregate that belongs to the
-   * context being entered. The same registry runs on sign-out and on a
-   * shared-workstation session end, which is what keeps one person's department
-   * off the workstation the next person signs in to (technical spec 13.3).
-   */
-  clearReadCache();
-  /*
-   * And the offline read set, whole (M18.48; technical spec 9.3, 13.3;
+   * The offline read set goes, whole (M18.48, M18.50; technical spec 9.3, 13.3;
    * CLIENT-014, CLIENT-022). It is the composed answer to "what may this user
-   * read", and the person entering this context is not the person it was
-   * composed for — on a shared workstation, quite literally. Dropped in memory
-   * synchronously, so no surface can render a departed session's roster in the
-   * tick after it ended.
+   * read", it is the only device-local copy of domain data left since the
+   * sixty-entry read cache was deleted, and the person entering this context is
+   * not the person it was composed for — on a shared workstation, quite
+   * literally. Dropped in memory synchronously, so no surface can render a
+   * departed session's roster in the tick after it ended. The same registry runs
+   * on sign-out and on a shared-workstation session end (technical spec 13.3).
    */
   clearOfflineReadSet();
   /*

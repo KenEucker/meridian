@@ -17,7 +17,7 @@
 // No server runs for any of this, which is the requirement (CLIENT-024).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearReadCache } from "@/offline/readCache";
+import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import {
   installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
@@ -262,7 +262,7 @@ beforeEach(() => {
    * cases, and the unreachable-node cases below are about a device that is
    * holding nothing.
    */
-  clearReadCache();
+  clearOfflineReadSet();
   // The home directory and the department label follow the session (M16.6).
   installLocalFieldSession();
   selectSessionDepartment(DEPARTMENT_ID);

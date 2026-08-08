@@ -39,23 +39,25 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
-//  5. **All four reads are held on the device** (M18.8, M18.9; SLB-021;
-//     technical spec 9.3). "The device should cache as much authorized data as
-//     possible. Offline data may be stale, but stale authorized data is better
-//     than no data." Section 9.3 then names these very payloads: the desk's
-//     staff, equipment, and shift indexes; the Overview's selected-shift
-//     summaries, assignments, and equipment; the deployment options and current
-//     assignments; the identity-free plan-versus-actual rows.
+//  5. **All four reads are connected-only, and that is the open question this
+//     module carries** (M18.50; SLB-021; technical spec 9.3). Until M18.50 each
+//     of them fell back to a stored copy of its own response, and M18.50 deleted
+//     the cache that held those. The offline read set that replaced it carries
+//     `logistics_staff_index`, `logistics_equipment_index`,
+//     `logistics_shift_index`, the department-lead roster, and the planning
+//     aggregates — the rows behind these payloads — but not the payloads: what
+//     this caller may manage, whether a person may go off-site, whether a
+//     checkout is overdue, and every plan-versus-actual count are the node's
+//     answers computed against the moment it was asked.
 //
-//     M18.8 held only the desk, on the grounds that SLB-021 named it and the
-//     other three were "worth nothing stale". That was wrong, and it is the
-//     reason a lead out of coverage got four pages of "check the connection to
-//     this node" instead of the department they were standing in. Each read now
-//     carries the freshness of what it returned, so a surface showing a stored
-//     copy says which copy it is showing.
+//     So a lead out of coverage is told they are out of coverage rather than
+//     shown a desk nothing recomputed, and the projections that would compose
+//     these four from the rows are what M18.53's surface inventory scopes. Each
+//     read still carries the freshness of what it returned, so the disclosure is
+//     in place for the day a projection supplies one.
 
 import { meridianCachedJson } from "@/api/meridianApi";
-import type { ReadFreshness } from "@/offline/readCache";
+import type { ReadFreshness } from "@/offline/readFreshness";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
 import { clientSessionState } from "@/session/clientSession";
@@ -875,11 +877,13 @@ export async function getPlanningTable(
   const endpoint = base("planning", eventId, departmentId);
   const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
   /*
-   * With no node in reach, fall back to the unfiltered table this device holds
-   * and narrow it here (M18.9). The filters go to the node whenever there is
-   * one — the counts on a filtered row are that view's counts, computed by the
-   * node — but a lead who has read the table and then loses the node should be
-   * able to pick a team without the page going blank.
+   * Connected-only since M18.50. The Planning Table is plan-versus-actual
+   * arithmetic the node computes, not records a device holds, and technical spec
+   * 9.3 asks a planner's device for "identity-free aggregate rows" which the
+   * offline read set carries with their own freshness rather than as this
+   * payload. Until a projection composes this surface from those, a lead with no
+   * node in reach is told so rather than shown a table whose counts nothing
+   * recomputed.
    */
   const read = await meridianCachedJson<
     EnvelopePayload & {
@@ -907,7 +911,7 @@ export async function getPlanningTable(
         readonly status_label: string;
       }[];
     }
-  >(endpoint + suffix, { fallbackPath: endpoint });
+  >(endpoint + suffix);
   const payload = read.data;
 
   return {
