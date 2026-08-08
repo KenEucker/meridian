@@ -305,6 +305,58 @@ describe("hydrating at boot", () => {
     expect(store.held()).toBeNull();
   });
 
+  it("keeps the newer set when a refresh wins the race with hydration", async () => {
+    /*
+     * Boot issues a refresh now (M18.49), so a hydration and a replacement are
+     * routinely in flight together and one of them arrives second. The hydration
+     * must not install the older record — and, the part that would have been
+     * invisible, must not delete the newer one from disk on its way past. A drop
+     * takes the record with it because the session that authorized it ended; a
+     * replacement does not, because the record on disk is the newer set's own.
+     */
+    let releaseLoad = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseLoad = resolve;
+    });
+    let record: StoredOfflineReadSet | null = {
+      envelope: 1,
+      context: CONTEXT,
+      storedAt: "2027-06-01T12:00:00+00:00",
+      set: offlineReadSetPayload(),
+    };
+
+    const gated: OfflineReadSetStorage = {
+      load: async () => {
+        await gate;
+
+        return record;
+      },
+      save: (next) => {
+        record = next;
+
+        return Promise.resolve();
+      },
+      clear: () => {
+        record = null;
+
+        return Promise.resolve();
+      },
+    };
+
+    const booting = createOfflineReadSetStore(gated);
+    const hydrating = booting.hydrate();
+
+    await booting.replace(
+      offlineReadSetPayload({ version: "version-2" }),
+      CONTEXT,
+    );
+    releaseLoad();
+
+    expect(await hydrating).toBeNull();
+    expect(booting.version()).toBe("version-2");
+    expect(record?.set.version).toBe("version-2");
+  });
+
   it("holds nothing when durable storage cannot be read", async () => {
     const failing: OfflineReadSetStorage = {
       load: () => Promise.reject(new Error("No storage.")),

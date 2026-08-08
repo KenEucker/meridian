@@ -7,15 +7,21 @@
 // Hydration is asynchronous because IndexedDB is, and the revision ref below is
 // how a surface that rendered before it finished re-renders when it does.
 //
-// **What this module owns and what it does not.** It owns the store and the
-// conditional request that fills it: the two cannot sensibly be separated,
-// because `If-None-Match` is the version the store is holding and a pull that
-// did not know it would transfer the whole set on every refresh. It does not
-// own *when* to pull — login, reconnect, and context switch are M18.49's — nor
-// the 11A.4 staleness rule that refuses to serve a set past its event window,
-// nor the banner that reports refresh state. Nothing calls `pullOfflineReadSet`
-// yet; M18.49 is where it acquires its triggers and M18.50 is where the read
-// models start reading what it stored.
+// **What this module owns and what it does not.** It owns the store, the
+// conditional request that fills it, and the gate every read of it passes
+// through. The first two cannot sensibly be separated, because `If-None-Match`
+// is the version the store is holding and a pull that did not know it would
+// transfer the whole set on every refresh. The gate is here because it needs the
+// one thing only this module knows — whether what is held came off the wire or
+// off the disk (M18.49; technical spec 11A.4). It does not own *when* to pull:
+// login, reconnect, and context switch are `offlineReadSetRefresh.ts`, which
+// also reports refresh state to the banner.
+//
+// **Read through the gate, not through the store.** `offlineReadSetStore` is
+// exported for the specs and for the refresh module; a surface reads through
+// {@link readOfflineReadSetSection} and {@link searchOfflineReadSet}, which
+// refuse a set past its event window rather than serving rows composed for an
+// event that has closed. M18.50 moves the read models onto these.
 //
 // Dropping is registered by `main.ts` alongside the other context-scoped caches,
 // rather than here, so the list of what does not survive a switch stays readable
@@ -24,6 +30,12 @@
 import { ref } from "vue";
 
 import { meridianFetch } from "@/api/meridianApi";
+import type { OfflineReadSetRow } from "@/offline/offlineReadSet";
+import {
+  evaluateOfflineReadSet,
+  type OfflineReadSetSource,
+  type OfflineReadSetVerdict,
+} from "@/offline/offlineReadSetStaleness";
 import { createOfflineReadSetStore } from "@/offline/offlineReadSetStore";
 import {
   createOfflineReadSetStorage,
@@ -43,6 +55,17 @@ export const offlineReadSetStore = createOfflineReadSetStore(
  * recomputes.
  */
 export const offlineReadSetRevision = ref(0);
+
+/**
+ * Where the set the device is holding came from.
+ *
+ * Only 11A.4 cares, and it cares about one case: a set with no event context is
+ * the node's current answer when it has just arrived and is an unbounded stored
+ * copy the next morning. Tracked here rather than written into the stored record
+ * because it is a fact about this session, not about the record — a record that
+ * came off the wire is a record off the disk as soon as the process restarts.
+ */
+let heldSource: OfflineReadSetSource | null = null;
 
 export type OfflineReadSetPullOutcome =
   /** The node sent a new set and it replaced whatever was held. */
@@ -151,20 +174,42 @@ export async function pullOfflineReadSet(
     return { outcome: "unusable", detail: null };
   }
 
+  heldSource = "network";
   offlineReadSetRevision.value += 1;
 
   return { outcome: "refreshed", detail: null };
 }
 
 /**
+ * The read of the durable copy that is in progress, or the last one.
+ *
+ * Held rather than fired and forgotten, because the refresh issued at boot
+ * (M18.49) has to wait for it. `If-None-Match` is the version the store is
+ * holding, and a refresh that overtook hydration would hold no version, send no
+ * conditional header, and transfer the whole set — on every start, on precisely
+ * the connection this endpoint was made conditional for.
+ */
+let hydration: Promise<void> = Promise.resolve();
+
+/**
  * Read the durable copy into memory (import-time, and after a simulated restart).
  */
-export async function hydrateOfflineReadSet(): Promise<void> {
-  const record = await offlineReadSetStore.hydrate();
+export function hydrateOfflineReadSet(): Promise<void> {
+  hydration = (async () => {
+    const record = await offlineReadSetStore.hydrate();
 
-  if (record !== null) {
-    offlineReadSetRevision.value += 1;
-  }
+    if (record !== null) {
+      heldSource = "storage";
+      offlineReadSetRevision.value += 1;
+    }
+  })();
+
+  return hydration;
+}
+
+/** Resolves once this device knows what it was already holding. */
+export function offlineReadSetHydrated(): Promise<void> {
+  return hydration;
 }
 
 void hydrateOfflineReadSet();
@@ -178,11 +223,85 @@ void hydrateOfflineReadSet();
  */
 export function clearOfflineReadSet(): void {
   offlineReadSetStore.clear();
+  heldSource = null;
   offlineReadSetRevision.value += 1;
 }
 
 /** Reset store state between tests. */
 export function resetOfflineReadSet(): void {
   offlineReadSetStore.clear();
+  heldSource = null;
+  hydration = Promise.resolve();
   offlineReadSetRevision.value = 0;
+}
+
+/**
+ * Whether the set this device holds may be served, and why not when it may not.
+ *
+ * Evaluated against the moment it is asked rather than stamped at refresh time,
+ * because the thing that changes is the clock: an application left open through
+ * the end of an event window has to stop serving where it stands, not at its
+ * next restart.
+ */
+export function offlineReadSetVerdict(
+  now: Date = new Date(),
+): OfflineReadSetVerdict {
+  // Read reactively, so a computed built on top of this recomputes when a
+  // refresh replaces the set or a drop takes it away.
+  void offlineReadSetRevision.value;
+
+  const held = offlineReadSetStore.held();
+
+  if (held === null || heldSource === null) {
+    return evaluateOfflineReadSet(null, "storage", now);
+  }
+
+  return evaluateOfflineReadSet(held.set.readiness, heldSource, now);
+}
+
+/** Whether a surface may render from what this device holds. */
+export function offlineReadSetUsable(now: Date = new Date()): boolean {
+  return offlineReadSetVerdict(now).access === "granted";
+}
+
+/**
+ * One section's rows, or none where the set may not be served.
+ *
+ * Refusal is silence rather than an error, and that is the same shape a caller
+ * already handles: a section the node did not compose for this user is absent
+ * too. What tells the two apart is {@link offlineReadSetVerdict} — a surface
+ * that needs to say *why* it is showing nothing asks that, and the banner says
+ * it once for the whole application (M18.49; UI contract 11.13).
+ */
+export function readOfflineReadSetSection<T = OfflineReadSetRow>(
+  name: string,
+  now: Date = new Date(),
+): readonly T[] {
+  void offlineReadSetRevision.value;
+
+  return offlineReadSetUsable(now) ? offlineReadSetStore.section<T>(name) : [];
+}
+
+/** Whether the set carries this section at all, and may be served. */
+export function offlineReadSetCarries(
+  name: string,
+  now: Date = new Date(),
+): boolean {
+  void offlineReadSetRevision.value;
+
+  return offlineReadSetUsable(now) && offlineReadSetStore.carries(name);
+}
+
+/** Rows of one section matching a typed query, or none where the set may not be served. */
+export function searchOfflineReadSet<T = OfflineReadSetRow>(
+  name: string,
+  query: string,
+  fields: readonly string[],
+  now: Date = new Date(),
+): readonly T[] {
+  void offlineReadSetRevision.value;
+
+  return offlineReadSetUsable(now)
+    ? offlineReadSetStore.search<T>(name, query, fields)
+    : [];
 }

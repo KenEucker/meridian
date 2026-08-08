@@ -3,6 +3,7 @@ import { createApp } from "vue";
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
+import { installOfflineReadSetRefreshTriggers } from "@/offline/offlineReadSetRefresh";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { clearReadCache } from "@/offline/readCache";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
@@ -67,6 +68,19 @@ registerSessionContextReset((context) => {
    */
   resetEventHorizonPresence();
 });
+
+/*
+ * What fills the offline read set, and when (M18.49; CLIENT-001; technical spec
+ * 9.3, 11A.4).
+ *
+ * Sign-in, a context switch, and regaining connectivity, watched for the life of
+ * the application rather than for the life of a screen: a device holds its
+ * user's authorized data because it signed in, not because it visited the right
+ * surfaces first. Installed before the session resolves so the cached document a
+ * device boots with counts as the sign-in, and before the mount so no screen has
+ * to be showing for the set to arrive.
+ */
+installOfflineReadSetRefreshTriggers();
 
 /*
  * A client that loses its session goes to sign in, wherever it was standing
