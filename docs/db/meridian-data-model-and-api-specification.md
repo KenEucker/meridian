@@ -1261,6 +1261,18 @@ A section technical spec 9.3 names that this build cannot compose yet is reporte
 
 The endpoint writes nothing and records no audit event. What a device may hold is derived from what its user may read, and reading it is not an event.
 
+### 5.11 Node connectivity reporting
+
+Every `/api/*` response carries a `Meridian-Central-Reach` header naming what the answering node can reach beyond itself: `not_applicable`, `reachable`, `unreachable`, or `unknown` (technical spec 9.6).
+
+It is on every response rather than in a payload because it is asked of every request and answered by none of them. A device learns whether its node is there from the traffic it was already making, and this puts the second tier on the same traffic at the same moment, so the two signals cannot go stale at different rates. Refusals carry it too: a 401 is a node that answered, and what that node can reach is as true of that response as of a 200.
+
+The header names no organization, event, node, or address. It is a four-value statement about the answering node's own sync link, and an unauthenticated caller learns nothing from it that being able to reach the node at all does not already tell them.
+
+It is listed in the CORS exposed headers, because a browser hides response headers from cross-origin JavaScript and the client's development server is a different origin from the node. A client that cannot read it treats the tier as unreported and says nothing about central.
+
+Clients compose it with their own observation of the node into the connectivity states of UI implementation contract 11.13. Connected-only commands (5.6, 7.2) gate on whether a node is reachable and never on this header.
+
 ---
 
 ## 6. Permission Model

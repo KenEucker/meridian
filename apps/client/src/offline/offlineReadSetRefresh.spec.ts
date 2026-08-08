@@ -13,6 +13,10 @@ import { nextTick } from "vue";
 import { configureMeridianApi } from "@/api/meridianApi";
 import mainTs from "@/main.ts?raw";
 import {
+  recordCentralReach,
+  resetCentralReachability,
+} from "@/offline/centralReachability";
+import {
   recordNodeAnswered,
   recordNodeUnreachable,
   resetNodeReachability,
@@ -124,6 +128,7 @@ beforeEach(() => {
   resetOfflineReadSetRefresh();
   clearClientSession();
   resetNodeReachability();
+  resetCentralReachability();
   unregisterReset = registerSessionContextReset(() => {
     clearOfflineReadSet();
   });
@@ -139,6 +144,7 @@ afterEach(() => {
   resetOfflineReadSetRefresh();
   clearClientSession();
   resetNodeReachability();
+  resetCentralReachability();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
 });
@@ -206,6 +212,35 @@ describe("fetching the set proactively", () => {
      */
     stubNode();
     installClientSession(localFieldSessionDocument(), "network");
+    recordNodeUnreachable();
+
+    const stop = installOfflineReadSetRefreshTriggers();
+
+    await nextTick();
+    await refreshOfflineReadSet("requested");
+    readSetRequests = [];
+
+    recordNodeAnswered();
+    await nextTick();
+    await refreshOfflineReadSet("requested");
+
+    expect(readSetRequests.length).toBeGreaterThan(0);
+
+    stop();
+  });
+
+  it("fetches it when the node comes back with central still unreachable", async () => {
+    /*
+     * The trigger is regaining the *node*, not regaining `online` (M18.52). The
+     * set is composed by the node this device is pointed at, so a device that
+     * reaches its on-site node during an internet outage has everything it
+     * needs to be handed one — and a trigger written against the banner state
+     * would have gone quiet the moment the second tier started reporting
+     * `central_unreachable`.
+     */
+    stubNode();
+    installClientSession(localFieldSessionDocument(), "network");
+    recordCentralReach("unreachable");
     recordNodeUnreachable();
 
     const stop = installOfflineReadSetRefreshTriggers();

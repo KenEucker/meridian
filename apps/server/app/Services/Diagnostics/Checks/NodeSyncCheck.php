@@ -9,6 +9,7 @@ use App\Models\SyncConflict;
 use App\Services\Diagnostics\DiagnosticCategory;
 use App\Services\Diagnostics\DiagnosticCheck;
 use App\Services\Diagnostics\DiagnosticResult;
+use App\Services\Node\CentralReachability;
 use App\Services\Node\NodeSetupService;
 use App\Services\Node\NodeSyncHealth;
 use Throwable;
@@ -26,6 +27,7 @@ class NodeSyncCheck implements DiagnosticCheck
     public function __construct(
         private readonly NodeSetupService $nodes,
         private readonly NodeSyncHealth $syncHealth,
+        private readonly CentralReachability $centralReach,
     ) {}
 
     public function key(): string
@@ -64,9 +66,15 @@ class NodeSyncCheck implements DiagnosticCheck
 
         $sync = $this->syncHealth->describe($node);
         $openConflicts = $this->openConflicts();
+        $reach = $this->centralReach->describe();
 
         $details = [
             'status' => $sync['status'],
+            // What every device pointed at this node is being told about it
+            // (M18.52; technical spec 9.6). A technician asked why a client says
+            // "Central unreachable" is asking about this line.
+            'central_reach' => $reach['state'],
+            'central_reach_observed_at' => $reach['observed_at'],
             'queued' => $sync['queued'],
             'delivered' => $sync['delivered'],
             'undelivered' => $sync['undelivered'],

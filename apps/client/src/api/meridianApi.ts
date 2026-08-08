@@ -12,6 +12,10 @@
 
 import { resolveNodeUrl } from "@/app/nodeConnection";
 import {
+  CENTRAL_REACH_HEADER,
+  recordCentralReach,
+} from "@/offline/centralReachability";
+import {
   recordNodeAnswered,
   recordNodeUnreachable,
 } from "@/offline/nodeReachability";
@@ -163,6 +167,11 @@ export async function meridianFetch(
    * Recorded rather than probed. Nothing polls the node to keep this fresh; a
    * client that makes no requests learns nothing and reports Unknown, which is
    * the truth about it.
+   *
+   * The node's answer carries the second tier with it (M18.52): whether the node
+   * that just replied can itself reach central, which is the one thing about
+   * connectivity a device cannot find out for itself. Both are recorded off the
+   * same response, so the two tiers are always as fresh as each other.
    */
   try {
     const response = await fetch(`${config.baseUrl}${path}`, {
@@ -171,6 +180,7 @@ export async function meridianFetch(
     });
 
     recordNodeAnswered();
+    recordCentralReach(response.headers.get(CENTRAL_REACH_HEADER));
 
     return response;
   } catch (error) {

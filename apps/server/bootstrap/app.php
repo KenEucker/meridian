@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Middleware\ReportCentralReach;
 use App\Services\Node\EventAuthorityException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -12,13 +14,23 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    // Framework defaults, with nothing added. Meridian's own aliases went with
+    // Framework defaults, with one addition. Meridian's own aliases went with
     // the `local.field` shared-token middleware (M16.11); the API authenticates
     // through the `sanctum` and `workstation` guards, which are configured in
-    // config/auth.php rather than aliased here. The call itself is still
-    // required — it is what installs the default `web` and `api` middleware
-    // groups on the HTTP kernel.
-    ->withMiddleware()
+    // config/auth.php rather than aliased here. The call itself is also what
+    // installs the default `web` and `api` middleware groups on the HTTP kernel.
+    //
+    // `ReportCentralReach` tells every device what this node can reach beyond
+    // itself (M18.52; technical spec 9.6). It authorizes nothing and reads no
+    // request state. It is on the group rather than on routes because the tier
+    // is as true of a refusal as of a success, and a device that only learned it
+    // from certain endpoints would learn it at whatever rate it happened to call
+    // them — and it is *prepended* so it is still holding the response when a
+    // later middleware refuses one. A 401 from an expired token is exactly the
+    // moment a device should not stop being told what its node can reach.
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [ReportCentralReach::class]);
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),

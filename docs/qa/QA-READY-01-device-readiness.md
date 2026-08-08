@@ -110,12 +110,16 @@ cache, sync).
 15. Confirm the banner is a non-blocking status region (page content remains
     usable; no interruptive dialog).
 16. Restore network / Online and confirm the banner disappears again.
-17. Confirm richer sync labels (`Local node reachable`, `Central unreachable`,
-    `Queued`, `Sync conflict`, `Sync failed`) are not invented by the live
-    shell today; those states are covered by the automated Offline banner /
-    connectivity model tests from step 2. The two connectivity tiers are wired
-    to real node signals by M18.52; the queue and failure states by later
-    node-sync milestones.
+17. Confirm the shell stays silent on a development node even though the two
+    connectivity tiers are now live (M18.52). A development node reports that
+    it has no central beyond itself, so reaching it *is* `Online` and there is
+    nothing to say. `Local node reachable` and `Central unreachable` need a
+    paired on-site node and are checked in
+    [QA-SYNC-01](QA-SYNC-01-onsite-central-sync.md) section C, against a real
+    outage rather than a simulated one. `Sync conflict` is not a device state at
+    all — it belongs to the God-mode conflict queue — and the `Queued` and
+    `Sync failed` states are covered by the automated read-set refresh tests
+    from step 2.
 
 ### D. Server event-mode fail-closed (HTTPS and the offline read set) (M8.7, M18.51)
 

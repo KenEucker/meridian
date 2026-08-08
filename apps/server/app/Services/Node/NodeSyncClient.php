@@ -36,6 +36,11 @@ use Illuminate\Support\Facades\Http;
  * different from what merely failed to arrive: a peer's refusal is recorded
  * against the operation so it stops being offered every minute forever, while
  * an unreachable peer changes no operation state at all.
+ *
+ * It does record one thing about an unreachable peer, and about a reachable one:
+ * {@see CentralReachability}, which is what every device pointed at this node is
+ * told on every response so it can distinguish "my node is reachable" from
+ * "everything is reachable" (M18.52; technical spec 9.6).
  */
 class NodeSyncClient
 {
@@ -49,6 +54,7 @@ class NodeSyncClient
         private readonly NodeSetupService $nodes,
         private readonly NodePairingState $pairing,
         private readonly EventModeGuard $eventMode,
+        private readonly CentralReachability $centralReach,
     ) {}
 
     /**
@@ -222,14 +228,30 @@ class NodeSyncClient
      */
     private function post(string $url, NodeSyncRequest $request): NodeSyncResponse
     {
+        /*
+         * The one place that finds out whether central is there (M18.52;
+         * technical spec 9.6). Every device asking this node what it can reach
+         * is answered from what this call observed, so the observation is made
+         * where the request is made rather than inferred later from a queue
+         * depth — a node with nothing queued and no internet looks identical to
+         * a healthy one from the operation log.
+         *
+         * Any answer counts. A refusal proves there is a central node at that
+         * address as surely as an accepted exchange does; what `unreachable`
+         * means is that the request never completed.
+         */
         try {
             $response = Http::asJson()
                 ->acceptJson()
                 ->timeout((float) config('meridian.node.sync.request_timeout_seconds', 15))
                 ->post($url.self::SYNC_PATH, $request->toArray());
         } catch (ConnectionException $exception) {
+            $this->centralReach->recordUnreachable();
+
             throw NodeSyncException::peerUnreachable($exception->getMessage());
         }
+
+        $this->centralReach->recordReached();
 
         if (! $response->successful()) {
             throw NodeSyncException::peerRefused($this->refusalDetail($response));

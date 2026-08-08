@@ -21,7 +21,13 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    // The two-tier connectivity header (M18.52; technical spec 9.6). A browser
+    // hides response headers from cross-origin JavaScript unless they are named
+    // here, and the client's dev server is a different origin from the node it
+    // talks to. A device that cannot read it treats the tier as unreported and
+    // says nothing about central, so this is the difference between the client
+    // reporting `central_unreachable` in development and staying silent.
+    'exposed_headers' => [\App\Services\Node\CentralReachability::HEADER],
 
     'max_age' => 0,
 

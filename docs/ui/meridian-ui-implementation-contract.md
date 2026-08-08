@@ -1827,6 +1827,24 @@ Use these UI states consistently:
 | Sync conflict | Conflict needs handling |
 | Sync failed | Sync failed and may require action |
 
+Where each state comes from, so no surface has to guess and none may claim
+more than has been established (technical spec 9.6):
+
+| State | Established by |
+|---|---|
+| Online | The node answers, and it is the expected sync target or reports that it reached central |
+| Offline but usable | This device has no network, or its node is not answering |
+| Local node reachable | The node answers and does not know whether it reached central |
+| Central unreachable | The node answers and reports that it did not reach central |
+| Queued | A refresh is waiting on connectivity with nothing usable held |
+| Sync conflict | The sync conflict queue, which is resolved in God mode — not a device state |
+| Sync failed | The node answered a refresh and the answer was a refusal or unusable |
+
+Online is never reported on the strength of the device having a network, nor on
+the strength of its node answering alone. "Central or expected sync target
+reachable" is a claim about something the device has been told, and the two
+middle states exist for the cases where it has not been.
+
 ### 16.1A Node Connection Scale
 
 The seven states in 16.1 are what the UI *says*. This is what it *shows*: a
@@ -1870,6 +1888,7 @@ Rules:
 - Show queued actions where the user or role needs trust in them.
 - Sync repair belongs in advanced mode unless current work cannot continue.
 - Do not interrupt routine field work with sync noise.
+- "Online-only" below means a node is reachable, not that central is. An action is disabled because this device cannot reach a Meridian node; central being unreachable disables nothing (technical spec 9.6).
 - Incident creation and editing are online-only in Alpha 1.
 - Policy/procedure acknowledgments are online-only in Alpha 1.
 - Event application submission, including optional department interest, is online-only in Alpha 1.

@@ -25,7 +25,7 @@
 // the work, so issuing a command never blocks on the network.
 
 import { meridianJson } from "@/api/meridianApi";
-import { deviceConnectivity } from "@/offline/useConnectivity";
+import { deviceLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   describeCommand,
   type CommandDescriptor,
@@ -109,10 +109,17 @@ export function queueCommand(
 /**
  * Send a connected-only command, or refuse it where it stands.
  *
- * The device-network signal is the honest one this client has: it says whether
- * there is a network, not whether the node answered. A request that goes out and
- * fails is reported to the caller as a failure and is still not queued, because
- * the command is one the specification says cannot be held.
+ * The gate is the local tier and nothing else (M18.52). "Connected" here means a
+ * Meridian node is reachable, not that the whole deployment is healthy: an
+ * incident is created against the on-site node that will hold it, and refusing
+ * that because central's internet is down would take away the exact capability
+ * an on-site node exists to provide. What is refused is a command issued with no
+ * node to send it to — which is the refusal the catalog's reasons are written
+ * for, and the one the person is shown.
+ *
+ * A request that goes out and fails is reported to the caller as a failure and is
+ * still not queued, because the command is one the specification says cannot be
+ * held.
  */
 export async function sendConnectedCommand(
   input: SubmitCommandInput,
@@ -126,7 +133,7 @@ export async function sendConnectedCommand(
     );
   }
 
-  if (deviceConnectivity.value !== "online") {
+  if (!deviceLocalNodeReachable.value) {
     throw new ConnectedOnlyCommandError(
       descriptor,
       descriptor.connectedOnlyReason ??

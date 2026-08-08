@@ -38,7 +38,7 @@ import {
   type IncidentTimelineEntry,
   type NameReferenceChip,
 } from "@/ims/incidentReadModel";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 
 /**
  * `ims.incidents.create`, `ims.incidents.edit`, and `ims.incidents.show`
@@ -63,7 +63,7 @@ import { useConnectivity } from "@/offline/useConnectivity";
  * typed form stays on screen (UI contract 16.3).
  */
 const route = useRoute();
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 const context = computed(() => incidentSessionContext.value);
 const access = computed(() => incidentAccess.value);
 const canView = computed(() => access.value.canView);
@@ -138,7 +138,7 @@ const printBusy = ref(false);
 const offlineAutosaveMessage =
   "Incident create/edit requires server connection. Your typed form remains on this screen.";
 
-const isOfflineBlocked = computed(() => connectivity.value !== "online");
+const isOfflineBlocked = computed(() => !nodeReachable.value);
 const timelineEntries = computed(() =>
   visibleIncidentTimelineEntries(
     incident.value?.timelineEntries ?? [],

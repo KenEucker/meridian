@@ -34,7 +34,7 @@
 
 import { computed } from "vue";
 
-import { deviceConnectivity } from "@/offline/useConnectivity";
+import { deviceLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   clientSessionState,
   refreshClientSession,
@@ -289,13 +289,18 @@ export const sessionSwitchingUnavailableReason =
 
     /*
      * Both halves, because they are different failures with the same
-     * consequence (CLIENT-013). `deviceConnectivity` catches a device that knows
-     * it has no network; a session that is running from cache catches a device
-     * that has a network and still could not reach its node, which on an event
-     * site is the more common of the two.
+     * consequence (CLIENT-013). `deviceLocalNodeReachable` catches a device that
+     * knows it has no node; a session that is running from cache catches a
+     * device that has one and still could not get an answer from it, which on an
+     * event site is the more common of the two.
+     *
+     * The local tier, not the banner state (M18.52). A switch is resolved by the
+     * node this device is pointed at, so central being unreachable does not make
+     * one impossible — and a node that is locked to an event has already refused
+     * it above for the reason that actually applies.
      */
     if (
-      deviceConnectivity.value !== "online" ||
+      !deviceLocalNodeReachable.value ||
       clientSessionState.status !== "live"
     ) {
       return "disconnected";

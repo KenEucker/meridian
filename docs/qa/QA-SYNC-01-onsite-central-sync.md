@@ -128,12 +128,23 @@ by the feature tasks that emit those operations.
    ```
 10. Open `/admin/node-config` on the on-site node and confirm queued work is
     visible but is not marked as a fault by itself.
+10A. Open the shared client against the **on-site** node and sign in. With
+    central still blocked, confirm the app shell shows the banner **Central
+    unreachable** — "Local node may work but central sync is unavailable" — and
+    not **Online**. This is M18.52: the device asks the on-site node what it can
+    reach rather than assuming that reaching the node means reaching everything
+    (technical spec 9.6).
+10B. With that banner showing, create an incident from the same client. It must
+    be accepted. Connected-only work gates on whether a node is reachable, never
+    on whether central is; a refusal here is a defect, not a safety feature.
 11. Restart or unblock central.
 12. Run on the on-site profile:
     ```bash
     php artisan meridian:node-sync
     ```
 13. Refresh `/admin/node-config` on both nodes.
+13A. Make one request from the shared client — reload a surface — and confirm
+    the banner goes silent again, which is what **Online** looks like.
 
 ### D. Bidirectional receive/apply and refusal visibility
 
@@ -198,6 +209,9 @@ by the feature tasks that emit those operations.
   when the peer is reachable.
 - If central is unreachable, the command exits successfully with an outage
   explanation and leaves on-site operations queued for a later run.
+- A device working against the on-site node reports **Central unreachable**
+  during that outage rather than **Online**, and still accepts connected-only
+  work such as incident creation (M18.52; technical spec 9.6).
 - Queued work alone appears as a backlog, not as an attention/failure state.
 - Applied, unapplied, delivered, refused, last-sent, and last-received states
   are shown distinctly in God Mode Node Configuration.

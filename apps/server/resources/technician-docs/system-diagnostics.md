@@ -39,6 +39,33 @@ A health report on the Node Health screen is labelled **stale** when it is
 older than 30 minutes. Stale from a node that should be connected means the
 node stopped reporting — check that node directly.
 
+## Why a client says "Central unreachable"
+
+Devices report two things separately: whether they can reach this node, and
+whether this node can reach central. The second is not something a device can
+find out — it never talks to central — so this node tells it, on every API
+response.
+
+The **Node-to-node sync** check reports the same value as `central_reach`, with
+`central_reach_observed_at` beside it:
+
+| `central_reach` | What a device shows | What it means here |
+|---|---|---|
+| `not_applicable` | Online | This node is central, a development node, or has no node configured. There is nothing beyond it to reach. |
+| `reachable` | Online | The last exchange reached central. A refused exchange still counts — central answered. |
+| `unreachable` | Central unreachable | The last exchange did not complete. Expected on an on-site node with no internet. |
+| `unknown` | Local node reachable | This node pairs with central and has no recent observation. |
+
+`unknown` on a node that should be syncing usually means the scheduler is not
+running — check the **Scheduler heartbeat** check — or that pairing was never
+completed. The observation comes from the minutely sync run and stops standing
+after five minutes, so a node that has stopped running sync reports `unknown`
+rather than repeating what it last found.
+
+None of this disables work on a device. Connected-only actions turn on whether
+a device can reach *a node*; a desk working against this node keeps creating
+incidents through a central outage.
+
 ## Running diagnostics from the CLI
 
 ```bash

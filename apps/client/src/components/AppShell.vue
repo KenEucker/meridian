@@ -31,6 +31,7 @@ import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { offlineBannerState } from "@/offline/offlineReadSetRefresh";
 import {
   useConnectivity,
+  useLocalNodeReachable,
   useNodeConnectionStatus,
 } from "@/offline/useConnectivity";
 import CommandOutboxNotice from "@/outbox/CommandOutboxNotice.vue";
@@ -433,26 +434,28 @@ function handleStaffMenuOutsideClick(event: Event): void {
 // with the offline read set's refresh taken into account, so a refresh the node
 // refused reads as `sync_failed` and a device waiting on connectivity with
 // nothing to work from reads as `sync_queued`. It is one view-model rather than
-// a second indicator, which is why `connectivity` below is still the plain
-// signal — the outbox drain and the session reconnect key off whether the node
-// answered, and neither is a question about sync state.
+// a second indicator.
 //
-// `online` means the node has answered this device, not merely that the device
-// has a network, so the drain below fires on a transition that can actually
-// send. It used to fire on the platform's `online` event, which says nothing
-// about whether there is a Meridian on the other end.
+// The banner is what the shell *says*; `nodeReachable` is what it *acts* on
+// (M18.52). Draining the outbox and re-resolving the session are both work
+// against the node this device is pointed at, and neither has anything to do
+// with whether that node can reach central — a device at an on-site node with
+// the internet down should still send its queued check-ins to the node that
+// wants them. Keying either off `online` would have stopped them the moment the
+// second tier started reporting.
 //
-// When the node answers, drain the command outbox to it. One call for every
-// command the device holds (M16.10; technical spec 11A.5) —
-// Field Report photo uploads ride along behind it, because a photo can only be
-// attached to a report the node has already accepted (technical spec 18.2).
+// When the node becomes reachable, drain the command outbox to it. One call for
+// every command the device holds (M16.10; technical spec 11A.5) — Field Report
+// photo uploads ride along behind it, because a photo can only be attached to a
+// report the node has already accepted (technical spec 18.2).
 const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 const bannerState = computed(() => offlineBannerState(connectivity.value));
 
 watch(
-  connectivity,
-  (state, previous) => {
-    if (state === "online") {
+  nodeReachable,
+  (reachable, previous) => {
+    if (reachable) {
       void syncFieldReportOutbox();
     }
 
@@ -463,7 +466,7 @@ watch(
      * session; the guard is inside the call so the rule stays in one place with
      * the rest of the session behavior.
      */
-    void refreshClientSessionOnReconnect(state, previous);
+    void refreshClientSessionOnReconnect(reachable, previous);
   },
   { immediate: true },
 );
