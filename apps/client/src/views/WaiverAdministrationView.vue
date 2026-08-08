@@ -16,7 +16,7 @@ import {
   type WaiverAdministration,
   type WaiverDetail,
 } from "@/waivers/waiverAdminModel";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   sessionOrganizationId,
   sessionOrganizationLabel,
@@ -45,7 +45,7 @@ import {
  *     expired reads as lapsed, because that is the state WAIVER-006 turns
  *     into a credential block until renewed.
  */
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 
 const administration = ref<WaiverAdministration | null>(null);
 const loading = ref(false);
@@ -74,7 +74,7 @@ const createForm = ref({
   document: NO_DOCUMENT,
 });
 
-const isOffline = computed(() => connectivity.value !== "online");
+const isOffline = computed(() => !nodeReachable.value);
 
 const lede = computed(
   () =>

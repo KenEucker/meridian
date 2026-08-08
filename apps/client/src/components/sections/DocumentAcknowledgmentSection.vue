@@ -13,7 +13,7 @@ import {
   type AcknowledgmentRequirement,
 } from "@/documents/documentAcknowledgmentModel";
 import { LIVE_READ } from "@/offline/readFreshness";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 
 /**
  * What one person has been asked to acknowledge, and the control that answers
@@ -66,7 +66,7 @@ const props = withDefaults(
   },
 );
 
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 
 const requirements = ref<readonly AcknowledgmentRequirement[]>([]);
 const gating = ref<AcknowledgmentGating | null>(null);
@@ -79,7 +79,7 @@ const notice = ref<string | null>(null);
 const busyRequirementId = ref<string | null>(null);
 const openRequirementId = ref<string | null>(null);
 
-const isOffline = computed(() => connectivity.value !== "online");
+const isOffline = computed(() => !nodeReachable.value);
 
 /**
  * What this surface shows.

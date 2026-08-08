@@ -694,6 +694,25 @@ The read set is also scoped by the organization's active modules (section 15A.5)
 
 This is one authorization implementation rather than two. The rule the boundary rests on lives in PHP with the rest of the access services, so a permission change is made once and can be wrong in one place at most.
 
+## 9.6 Connectivity tiers
+
+Connectivity has two tiers and a device can observe only one of them.
+
+The first is whether the node this device is pointed at answers. A device learns that from the traffic it was already making: any response, a refusal included, proves there is a Meridian at that address, and a request that never completed proves nothing is.
+
+The second is whether that node can reach central. A device never talks to central (9.2) and must never claim to know anything about it. So the node reports it, on every API response, in the `Meridian-Central-Reach` header (data/API 5.11) with one of four values:
+
+- `not_applicable` — this node does not sync with a central node. It is central itself, or a development node, or no node is configured. The node the device is pointed at *is* the expected sync target.
+- `reachable` — this node's last exchange with central reached it. Any answer counts, a refusal included; what `unreachable` means is that nothing was at the other end.
+- `unreachable` — this node's last exchange did not reach central.
+- `unknown` — this node pairs with central and has no recent observation: it has just started, its scheduler is not running (22A.8), or pairing is unfinished.
+
+The node observes this rather than probing for it. Node sync runs on a schedule (10.2), and each run's exchange is the observation; an observation older than five runs no longer stands and the node reports `unknown`.
+
+The client composes both tiers into the seven states of UI implementation contract 11.13, and the composition is what makes `online` honest: it means "central or expected sync target reachable" and is reported only where that has been established. A reachable node reporting `unreachable` is `central_unreachable`; a reachable node reporting `unknown` is `local_node_reachable`; an unreachable node is `offline_usable` whatever it last said about central.
+
+Connected-only work (9.4) gates on the first tier alone. A write is refused because no node is reachable, never because central is unreachable — an incident created at an on-site node during an internet outage is the case this architecture exists for, and refusing it would remove the capability the on-site node was deployed to provide.
+
 ---
 
 # 10. Node-to-Node Sync

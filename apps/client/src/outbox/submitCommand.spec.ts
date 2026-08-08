@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { configureMeridianApi } from "@/api/meridianApi";
+import { configureMeridianApi, meridianFetch } from "@/api/meridianApi";
+import {
+  centralReachability,
+  recordCentralReach,
+  resetCentralReachability,
+} from "@/offline/centralReachability";
+import {
+  recordNodeUnreachable,
+  resetNodeReachability,
+} from "@/offline/nodeReachability";
 import { COMMAND_CATALOG, describeCommand } from "@/outbox/commandCatalog";
 import {
   commandOutbox,
@@ -40,6 +49,8 @@ afterEach(() => {
   resetCommandOutbox();
   configureMeridianApi(null);
   setDeviceOnLine(true);
+  resetNodeReachability();
+  resetCentralReachability();
   vi.unstubAllGlobals();
 });
 
@@ -149,6 +160,61 @@ describe("a command restricted to connected operation", () => {
         payload: { title: "Structure fire" },
       }),
     ).rejects.toThrow(ConnectedOnlyCommandError);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(commandOutbox.size).toBe(0);
+  });
+
+  /*
+   * Which tier the refusal reads (M18.52; UI contract 16.1).
+   *
+   * "Connected" is the local tier and only the local tier. An incident is
+   * created on the node that will hold it, so an on-site node with the internet
+   * down takes one; a device with no node to send to does not, and that is the
+   * refusal the catalog's reason is written for.
+   */
+  it("sends against a reachable node whose central is unreachable", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "incident-1" }), {
+          status: 201,
+          headers: {
+            "Content-Type": "application/json",
+            "Meridian-Central-Reach": "unreachable",
+          },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // The node answers and reports that it cannot reach central, which is the
+    // state the banner shows as "Central unreachable" while this desk keeps
+    // working.
+    await meridianFetch("/api/me");
+    expect(centralReachability.value).toBe("unreachable");
+
+    await expect(
+      sendConnectedCommand({
+        commandType: "create-incident",
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+        payload: { title: "Structure fire" },
+      }),
+    ).resolves.toEqual({ id: "incident-1" });
+  });
+
+  it("is refused when no node is reachable, even having heard central was fine", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    recordCentralReach("reachable");
+    recordNodeUnreachable();
+
+    await expect(
+      sendConnectedCommand({
+        commandType: "create-incident",
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+        payload: { title: "Structure fire" },
+      }),
+    ).rejects.toThrow(describeCommand("create-incident").connectedOnlyReason!);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(commandOutbox.size).toBe(0);

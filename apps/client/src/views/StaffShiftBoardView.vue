@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   sessionEventContext,
   sessionEventTimeZone,
@@ -42,7 +42,7 @@ import {
  *  3. **An overlap is a warning, not a wall** (SHIFT-014). It is printed beside
  *     a shift that is still offered, and again beside the signup that took it.
  */
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 const eventContext = computed(() => sessionEventContext.value);
 
 const board = ref<ShiftBoard | null>(null);
@@ -65,7 +65,7 @@ const busyShiftId = ref<string | null>(null);
  * to press. The list still reads from the last response rather than emptying:
  * knowing what you are down for is worth more than a blank screen.
  */
-const isOfflineBlocked = computed(() => connectivity.value !== "online");
+const isOfflineBlocked = computed(() => !nodeReachable.value);
 
 const lede = computed(() =>
   eventContext.value === null

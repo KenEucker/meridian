@@ -13,7 +13,7 @@ import {
   type AcknowledgmentReview,
   type ReviewedRequirement,
 } from "@/documents/documentAcknowledgmentModel";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 import { sessionOrganizationLabel } from "@/session/sessionContext";
 
 /**
@@ -42,7 +42,7 @@ import { sessionOrganizationLabel } from "@/session/sessionContext";
  *     consequence attached, and act on that assumption.
  */
 const authority = acknowledgmentReviewAuthority;
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 
 const review = ref<AcknowledgmentReview | null>(null);
 const loading = ref(false);
@@ -55,7 +55,7 @@ const expandedRequirementId = ref<string | null>(null);
 
 const form = ref({ document: "", scope: "", context: "" });
 
-const isOffline = computed(() => connectivity.value !== "online");
+const isOffline = computed(() => !nodeReachable.value);
 
 const lede = computed(() => {
   const held = authority.value;

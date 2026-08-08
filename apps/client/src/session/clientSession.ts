@@ -27,7 +27,6 @@
 import { computed, reactive, readonly } from "vue";
 
 import { MeridianApiError, meridianJson } from "@/api/meridianApi";
-import type { ConnectivityState } from "@/offline/syncStatus";
 import {
   clearCachedSession,
   readCachedSession,
@@ -319,23 +318,24 @@ export async function loadClientSession(
 /**
  * Refresh on regaining connectivity (CLIENT-010).
  *
- * Only on the transition into `online`: a device that is already online has
+ * Only on the transition into reaching a node: a device that already has one has
  * nothing to regain, and asking on every connectivity event would put a request
  * on the wire each time a phone changes access points.
+ *
+ * The node tier rather than the banner state (M18.52). `/api/me` is answered by
+ * the node this device is pointed at, so a device that reaches its on-site node
+ * with central unreachable can and should re-resolve its session — the
+ * permissions that may have been withdrawn are the ones that node holds.
  *
  * A client with no session skips. There is nothing to reduce and no credential to
  * refresh, and a client that has not signed in must not be given a reason to
  * call `/api/me` on every network change.
  */
 export async function refreshClientSessionOnReconnect(
-  connectivity: ConnectivityState,
-  previous: ConnectivityState | undefined,
+  nodeReachable: boolean,
+  previous: boolean | undefined,
 ): Promise<SessionRefreshOutcome> {
-  if (
-    connectivity !== "online" ||
-    previous === undefined ||
-    previous === "online"
-  ) {
+  if (!nodeReachable || previous === undefined || previous) {
     return "skipped";
   }
 

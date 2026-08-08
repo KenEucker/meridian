@@ -72,6 +72,7 @@
         "Where to look",
         "Reading the statuses",
         "Offline on-site nodes are not broken",
+        "Why a client says \"Central unreachable\"",
         "Running diagnostics from the CLI",
         "Exporting a support bundle",
         "The scheduler heartbeat",

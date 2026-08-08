@@ -7,6 +7,10 @@ import {
 } from "@/api/meridianApi";
 import { clearNodeUrl, setNodeUrl } from "@/app/nodeConnection";
 import {
+  centralReachability,
+  resetCentralReachability,
+} from "@/offline/centralReachability";
+import {
   nodeReachability,
   resetNodeReachability,
 } from "@/offline/nodeReachability";
@@ -15,6 +19,7 @@ afterEach(() => {
   configureMeridianApi(null);
   clearNodeUrl();
   resetNodeReachability();
+  resetCentralReachability();
   window.localStorage.clear();
   delete window.__MERIDIAN_RUNTIME_CONFIG__;
   vi.unstubAllGlobals();
@@ -100,5 +105,58 @@ describe("what a request teaches the client about its node", () => {
 
     await meridianFetch("/api/me");
     expect(nodeReachability.value).toBe("reachable");
+  });
+
+  /*
+   * The second tier rides the same responses (M18.52). The device cannot ask
+   * central anything, so the node it is pointed at reports what it can reach on
+   * every answer it gives, and both tiers are recorded off the one response.
+   */
+  it("records what the node says it can reach, from the same response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("{}", {
+            status: 200,
+            headers: { "Meridian-Central-Reach": "unreachable" },
+          }),
+      ),
+    );
+
+    await meridianFetch("/api/me");
+
+    expect(nodeReachability.value).toBe("reachable");
+    expect(centralReachability.value).toBe("unreachable");
+  });
+
+  it("takes the report off a refusal as readily as off a success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("", {
+            status: 401,
+            headers: { "Meridian-Central-Reach": "not_applicable" },
+          }),
+      ),
+    );
+
+    await meridianFetch("/api/me");
+
+    expect(centralReachability.value).toBe("not_applicable");
+  });
+
+  it("says nothing about central when the response carries no report", async () => {
+    // A node that does not report the tier, or a browser that cannot read the
+    // header cross-origin. Neither is a reason to invent an answer.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 200 })),
+    );
+
+    await meridianFetch("/api/me");
+
+    expect(centralReachability.value).toBe("unreported");
   });
 });

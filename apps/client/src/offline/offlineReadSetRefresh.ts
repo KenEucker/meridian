@@ -63,7 +63,7 @@ import {
   type ConnectivityState,
   type SyncActivity,
 } from "@/offline/syncStatus";
-import { deviceConnectivity } from "@/offline/useConnectivity";
+import { deviceLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   clientSessionState,
   sessionAccessGranted,
@@ -238,20 +238,23 @@ export function refreshOfflineReadSet(
 /**
  * Refresh on regaining connectivity (technical spec 11A.4).
  *
- * On the transition only. A device that is already online has nothing to regain,
- * and asking on every connectivity event would put a request on the wire each
- * time a phone changes access point. `undefined` is the first evaluation of the
- * watcher rather than a transition, and boot is covered by the sign-in trigger.
+ * On the transition only. A device that already has its node has nothing to
+ * regain, and asking on every connectivity event would put a request on the wire
+ * each time a phone changes access point. `undefined` is the first evaluation of
+ * the watcher rather than a transition, and boot is covered by the sign-in
+ * trigger.
+ *
+ * Regaining the *node* is what matters, not regaining `online` (M18.52). The set
+ * is composed by the node this device is pointed at, so a device that reaches
+ * its on-site node while central is unreachable has everything it needs to be
+ * handed one — and a trigger written against the banner state would have stopped
+ * firing the moment the second tier started reporting.
  */
 export function refreshOfflineReadSetOnReconnect(
-  connectivity: ConnectivityState,
-  previous: ConnectivityState | undefined,
+  nodeReachable: boolean,
+  previous: boolean | undefined,
 ): Promise<OfflineReadSetRefreshOutcome> {
-  if (
-    connectivity !== "online" ||
-    previous === undefined ||
-    previous === "online"
-  ) {
+  if (!nodeReachable || previous === undefined || previous) {
     return Promise.resolve("skipped");
   }
 
@@ -286,9 +289,12 @@ export function installOfflineReadSetRefreshTriggers(): () => void {
     { immediate: true },
   );
 
-  const stopConnectivity = watch(deviceConnectivity, (state, previous) => {
-    void refreshOfflineReadSetOnReconnect(state, previous);
-  });
+  const stopConnectivity = watch(
+    deviceLocalNodeReachable,
+    (reachable, previous) => {
+      void refreshOfflineReadSetOnReconnect(reachable, previous);
+    },
+  );
 
   return () => {
     stopContext();

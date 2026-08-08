@@ -12,7 +12,7 @@ import {
   revokeEventCredential,
   type EventCredentialRow,
 } from "@/credentials/eventCredentialAdminModel";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 
 /**
  * Event credential administration (M18.5; CRED-009 through CRED-014; UI
@@ -56,7 +56,7 @@ const props = withDefaults(
   { eventLabel: null, variant: "section" },
 );
 
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 
 const credentials = ref<readonly EventCredentialRow[]>([]);
 const loading = ref(false);
@@ -68,7 +68,7 @@ const pendingStaffId = ref<string | null>(null);
 const revokeReason = ref("");
 const busyStaffId = ref<string | null>(null);
 
-const isOffline = computed(() => connectivity.value !== "online");
+const isOffline = computed(() => !nodeReachable.value);
 
 const visibleCredentials = computed(() => {
   const needle = filter.value.trim().toLowerCase();

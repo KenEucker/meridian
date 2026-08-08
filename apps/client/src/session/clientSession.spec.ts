@@ -225,28 +225,24 @@ describe("client session", () => {
 
     vi.stubGlobal("fetch", respondWith(reduced));
 
-    expect(
-      await refreshClientSessionOnReconnect("online", "offline_usable"),
-    ).toBe("refreshed");
+    expect(await refreshClientSessionOnReconnect(true, false)).toBe(
+      "refreshed",
+    );
     expect(sessionCapabilities()).toEqual([]);
   });
 
-  it("does not ask again while it is already online", async () => {
+  it("does not ask again while the node is already reachable", async () => {
     const fetchMock = respondWith(fixtureSessionDocument());
 
     writeCachedSession(fixtureSessionDocument());
     bootClientSessionFromCache(insideWindow);
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await refreshClientSessionOnReconnect("online", "online")).toBe(
+    expect(await refreshClientSessionOnReconnect(true, true)).toBe("skipped");
+    expect(await refreshClientSessionOnReconnect(true, undefined)).toBe(
       "skipped",
     );
-    expect(await refreshClientSessionOnReconnect("online", undefined)).toBe(
-      "skipped",
-    );
-    expect(await refreshClientSessionOnReconnect("offline_usable", "online")).toBe(
-      "skipped",
-    );
+    expect(await refreshClientSessionOnReconnect(false, true)).toBe("skipped");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -254,9 +250,7 @@ describe("client session", () => {
     const fetchMock = respondWith(fixtureSessionDocument());
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(
-      await refreshClientSessionOnReconnect("online", "offline_usable"),
-    ).toBe("skipped");
+    expect(await refreshClientSessionOnReconnect(true, false)).toBe("skipped");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

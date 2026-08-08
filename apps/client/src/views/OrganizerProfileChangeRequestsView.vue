@@ -4,7 +4,7 @@ import { computed, ref } from "vue";
 import { MeridianApiError, meridianErrorMessage } from "@/api/meridianApi";
 import StatusPill from "@/components/StatusPill.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
-import { useConnectivity } from "@/offline/useConnectivity";
+import { useLocalNodeReachable } from "@/offline/useConnectivity";
 import {
   approveProfileChangeRequest,
   getProfileChangeReviewQueue,
@@ -37,7 +37,7 @@ import {
  *     and a caller holding it nowhere is told so rather than shown an empty
  *     table (CLIENT-005, CLIENT-006).
  */
-const connectivity = useConnectivity();
+const nodeReachable = useLocalNodeReachable();
 
 const queue = ref<readonly ReviewableChangeRequest[]>([]);
 const loading = ref(false);
@@ -50,7 +50,7 @@ const busyRequestId = ref<string | null>(null);
 /** One reason box per row, so two open rejections do not share a draft. */
 const reasons = ref<Record<string, string>>({});
 
-const isOffline = computed(() => connectivity.value !== "online");
+const isOffline = computed(() => !nodeReachable.value);
 
 const handleRequests = computed(() =>
   queue.value.filter((request) => request.kind === "handle"),
