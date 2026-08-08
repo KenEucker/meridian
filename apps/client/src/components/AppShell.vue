@@ -28,6 +28,7 @@ import {
 } from "@/components/workflowLinks";
 import { refreshEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
+import { offlineBannerState } from "@/offline/offlineReadSetRefresh";
 import {
   useConnectivity,
   useNodeConnectionStatus,
@@ -428,6 +429,14 @@ function handleStaffMenuOutsideClick(event: Event): void {
 // implementation contract section 16.2). Richer sync states are fed through the
 // same OfflineBanner view-model by later Alpha 1 milestones.
 //
+// M18.49 feeds the first two of those: `bannerState` is the connectivity state
+// with the offline read set's refresh taken into account, so a refresh the node
+// refused reads as `sync_failed` and a device waiting on connectivity with
+// nothing to work from reads as `sync_queued`. It is one view-model rather than
+// a second indicator, which is why `connectivity` below is still the plain
+// signal — the outbox drain and the session reconnect key off whether the node
+// answered, and neither is a question about sync state.
+//
 // `online` means the node has answered this device, not merely that the device
 // has a network, so the drain below fires on a transition that can actually
 // send. It used to fire on the platform's `online` event, which says nothing
@@ -438,6 +447,7 @@ function handleStaffMenuOutsideClick(event: Event): void {
 // Field Report photo uploads ride along behind it, because a photo can only be
 // attached to a report the node has already accepted (technical spec 18.2).
 const connectivity = useConnectivity();
+const bannerState = computed(() => offlineBannerState(connectivity.value));
 
 watch(
   connectivity,
@@ -1073,7 +1083,7 @@ onBeforeUnmount(() => {
         </nav>
       </div>
     </header>
-    <OfflineBanner class="app-shell__offline-banner" :state="connectivity" />
+    <OfflineBanner class="app-shell__offline-banner" :state="bannerState" />
 
     <!--
       Cached-permission state is not here. It lives on Settings, next to the

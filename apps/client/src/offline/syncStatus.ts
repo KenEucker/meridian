@@ -140,6 +140,53 @@ export function shouldShowOfflineBanner(state: ConnectivityState): boolean {
   return DESCRIPTORS[state].affectsWork;
 }
 
+/**
+ * What a background sync is doing, as far as the banner is concerned (M18.49).
+ *
+ * Not a fourth connectivity state and deliberately not one: contract 11.13 lists
+ * seven and this maps into two of them. It exists because "is the node
+ * reachable" and "is this device's data getting through" are different
+ * questions, and the second one was answered by nothing until the offline read
+ * set acquired its refresh triggers.
+ */
+export type SyncActivity =
+  /** Nothing outstanding. Whatever the device holds is what it should hold. */
+  | "settled"
+  /** Something is waiting for connectivity that has not come back. */
+  | "queued"
+  /** The node was reached and the exchange failed. Somebody has to act. */
+  | "failed";
+
+/**
+ * The banner state, once a sync activity is taken into account.
+ *
+ * Activity outranks connectivity, because connectivity is the *reason* and
+ * activity is the *consequence*, and the consequence is what the person reading
+ * the banner acts on. A device offline with a failed refresh is not helped by
+ * "Offline but usable" — its surfaces are not usable, which is the fact that
+ * needs saying (contract 16.2: show offline state where it affects current
+ * work).
+ *
+ * `settled` returns the connectivity state untouched, which is what keeps the
+ * banner silent for a device that is merely offline and working from a set it
+ * holds. Routine field work is not interrupted with sync noise for a refresh
+ * that will happen by itself when the node comes back.
+ */
+export function connectivityWithSyncActivity(
+  connectivity: ConnectivityState,
+  activity: SyncActivity,
+): ConnectivityState {
+  if (activity === "failed") {
+    return "sync_failed";
+  }
+
+  if (activity === "queued") {
+    return "sync_queued";
+  }
+
+  return connectivity;
+}
+
 /** One of contract 16.1A's four steps of notice, with the words to say. */
 export interface NodeConnectionStatus {
   readonly label: string;

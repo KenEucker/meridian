@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CONNECTIVITY_STATE_ORDER,
+  connectivityWithSyncActivity,
   describeConnectivityState,
   shouldShowOfflineBanner,
   type ConnectivityState,
@@ -80,5 +81,30 @@ describe("connectivity state model", () => {
       expect(shouldShowOfflineBanner(state)).toBe(true);
       expect(describeConnectivityState(state).affectsWork).toBe(true);
     }
+  });
+});
+
+// One view-model, not two indicators (M18.49; UI contract 11.13, 16.2).
+describe("folding a sync activity into the banner state", () => {
+  it("leaves the connectivity state alone when nothing is outstanding", () => {
+    for (const state of CONNECTIVITY_STATE_ORDER) {
+      expect(connectivityWithSyncActivity(state, "settled")).toBe(state);
+    }
+  });
+
+  it("reports a failed exchange over the connectivity that explains it", () => {
+    // Connectivity is the reason and the activity is the consequence, and the
+    // consequence is what the person reading the banner acts on. "Offline but
+    // usable" beside surfaces that are not usable would be the wrong sentence.
+    expect(connectivityWithSyncActivity("online", "failed")).toBe("sync_failed");
+    expect(connectivityWithSyncActivity("offline_usable", "failed")).toBe(
+      "sync_failed",
+    );
+  });
+
+  it("reports work waiting on connectivity as queued", () => {
+    expect(connectivityWithSyncActivity("offline_usable", "queued")).toBe(
+      "sync_queued",
+    );
   });
 });
