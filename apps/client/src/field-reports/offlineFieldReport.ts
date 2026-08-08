@@ -16,8 +16,8 @@
 // FRA numbering are M9.3; author list/create/detail surfaces are M9.4; photo
 // capture limits are M9.7; photo sync/storage is M9.8; server-side Name
 // Reference parsing is M9.6A. Persisting the record to the encrypted local
-// store and PowerSync, and signing the sync operation, are owned by later
-// Alpha 1 tasks.
+// store, and signing the sync operation, are owned by later Alpha 1 tasks; the
+// report reaches the node through the command outbox (technical spec 11A.5).
 // Injecting the id generator and clock keeps this deterministic in tests.
 
 /**

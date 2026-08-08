@@ -242,7 +242,7 @@ Run this section after a fresh seed. It repeats section E's decision through the
 
 ### I. Explicit non-goals for this script
 
-61. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or PowerSync operations.
+61. Confirm this script did not require Orchid credential screens, public API clients, offline queues, or device sync operations.
 62. Confirm physical credential issuance is out of scope.
 63. Confirm shift signup eligibility denials themselves are covered by `QA-SHIFT-01-shift-signup-eligibility.md`.
 64. Confirm the credential eligibility export in section G is server-generated and online-only, that it and the credential administration of section H are separate authorities on one page (`organizer.credentials`, M16.22 and M18.5), and that the remaining Alpha 1 exports and their consolidated script belong to M13.2 through M13.9 (`QA-EXPORT-01`).

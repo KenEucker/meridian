@@ -7,8 +7,8 @@ namespace App\Services\EventMode;
  *
  * When {@see $eventMode} is false the node is in development mode and is never
  * blocked. In event mode the node is blocked when any evaluated check fails, so
- * a node without browser-trusted HTTPS or a reachable PowerSync service fails
- * closed rather than starting insecurely.
+ * a node without browser-trusted HTTPS, or one that cannot serve the offline
+ * read set, fails closed rather than starting insecurely.
  */
 final class EventModeReadiness
 {

@@ -7,10 +7,10 @@
 //
 // The pending outbox (M9.2) only holds reports awaiting sync and drops them on
 // acceptance. This catalog keeps every finalized submission the author may
-// view on-device — pending or accepted — filtered by author. PowerSync
-// projection and the HTTP `GET /api/events/{event}/field-reports` read path
-// remain deferred; this is the local author-visibility seam those later tasks
-// can feed.
+// view on-device — pending or accepted — filtered by author. The offline read
+// set carries the author's own reports (M18.46) and the HTTP
+// `GET /api/events/{event}/field-reports` read path remains deferred; this is
+// the local author-visibility seam those feed.
 
 import {
   FIELD_REPORT_ACCEPTED,
@@ -211,7 +211,7 @@ export class AuthorFieldReportCatalog {
 
   /**
    * Replace catalog contents from a persisted snapshot. Used on device boot
-   * before auth/PowerSync durable storage lands.
+   * before authenticated durable storage lands.
    */
   replaceAll(reports: readonly OfflineFieldReport[]): void {
     this.reports.clear();

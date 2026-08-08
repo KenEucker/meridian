@@ -58,7 +58,6 @@ packages/
 deploy/
   docker/        Docker and Docker Compose configuration
   caddy/         Reverse proxy and certificate configuration
-  powersync/     PowerSync service configuration
   dns/           DNS configuration for on-site deployments
 ```
 
@@ -71,11 +70,9 @@ Capacitor iOS/Android packaging wrapper (see
 [apps/mobile/README.md](apps/mobile/README.md)), and `apps/kiosk` contains
 the Electron on-site wrapper shell (see
 [apps/kiosk/README.md](apps/kiosk/README.md)). The managed PostgreSQL
-database service lives under [deploy/docker](deploy/docker/README.md), and the
-PowerSync service configuration lives under
-[deploy/powersync](deploy/powersync/README.md). The `caddy` and `dns`
-deployment directories are placeholders until their later Alpha 1 tasks add
-deployment behavior.
+database service lives under [deploy/docker](deploy/docker/README.md). The
+`caddy` and `dns` deployment directories are placeholders until their later
+Alpha 1 tasks add deployment behavior.
 
 ## Developer Boot Path
 
@@ -84,8 +81,8 @@ and run its test suite, the `apps/client` shared Vue client builds and runs its
 smoke tests, `apps/mobile` validates the Capacitor packaging configuration,
 and the `apps/kiosk` Electron wrapper shell builds and runs its unit tests.
 A managed PostgreSQL database service ([deploy/docker](deploy/docker/README.md)),
-PostgreSQL development configuration, seed data, and the PowerSync service
-baseline are present; the complete multi-service deployment bundle (server
+PostgreSQL development configuration, and seed data are present; the complete
+multi-service deployment bundle (server
 container, reverse proxy, DNS, and a single top-level Compose file) and
 remaining product services arrive in later Alpha 1 tasks.
 

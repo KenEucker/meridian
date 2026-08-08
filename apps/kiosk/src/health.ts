@@ -7,7 +7,7 @@
  * values the wrapper itself knows (expected app version, HTTPS status) are
  * populated. Every other field is shown as a clearly labeled placeholder that
  * will be filled in by its owning Alpha 1 milestone (node identity M3.5,
- * events M4.2, PowerSync M8, devices M3.7, node sync M12).
+ * events M4.2, offline read set M18.46, devices M3.7, node sync M12).
  *
  * Following the kiosk guide section 12, the panel only reports status and
  * never blocks the wrapped Meridian UI; an unreachable server simply renders
@@ -112,7 +112,7 @@ export function buildHealthPanelModel(input: {
     { label: "Node role", ...serverValue(health?.environment) },
     { label: "Event name", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Sync status", value: PLACEHOLDER_VALUE, source: "placeholder" },
-    { label: "PowerSync status", value: PLACEHOLDER_VALUE, source: "placeholder" },
+    { label: "Offline read set status", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Connected devices", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Local discovery status", value: PLACEHOLDER_VALUE, source: "placeholder" },
     { label: "Certificate / HTTPS status", value: describeHttpsStatus(appUrl), source: "app" },

@@ -23,7 +23,7 @@ checks remain owned by the automated suites named below.
 
 This script does not add product behavior. It does not require incident
 attachment upload UI, richer M11.19 search/filter product work beyond the
-existing chip-driven and list filters, PowerSync conflict repair, node sync,
+existing chip-driven and list filters, sync conflict repair, node sync,
 or spreadsheet incident exports (INC-016).
 
 ## Requirements covered
@@ -304,7 +304,7 @@ ones; nothing here depends on a particular IMS number.
     control. Do not treat missing upload UI as a failure of this script.
 27. Confirm this script did not require richer M11.19-only search product
     work beyond existing list filters and Name Reference chip search, did not
-    require spreadsheet incident exports, PowerSync conflict repair UI, node
+    require spreadsheet incident exports, sync conflict repair UI, node
     sync, or Orchid/God Mode as the normal IC workflow.
 
 ## Expected results
@@ -383,7 +383,7 @@ ones; nothing here depends on a particular IMS number.
   types, states, or priorities that the node did not send, stop and file a
   blocking CLIENT-023 issue.
 - If the only failure is missing incident attachment upload UI, richer
-  M11.19 search product UI, spreadsheet exports, PowerSync, or node sync, mark
+  M11.19 search product UI, spreadsheet exports, device sync, or node sync, mark
   that check Not Applicable to M11.11 and report scope leakage rather than
   expanding this task.
 - If a reviewer cannot switch browser roles and treats that alone as a

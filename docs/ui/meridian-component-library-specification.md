@@ -21,7 +21,7 @@ For Alpha 1, Meridian UI spans multiple runtimes:
 - the shared Vue client implements offline-capable product workflows;
 - Capacitor and Electron package the shared Vue client for mobile and on-site command-center use;
 - required context, status, permission, and offline information must not exist only in client-side state;
-- PowerSync/offline state should be passed through documented view-model inputs, not ad hoc component checks;
+- offline and sync state should be passed through documented view-model inputs, not ad hoc component checks;
 - framework-neutral component names remain the design contract, while each runtime should expose stable local component APIs.
 
 ---
@@ -336,7 +336,7 @@ Required behavior:
 - shows document type, title, scope, and version;
 - renders sanitized Markdown;
 - renders referenced fragment text inline as normal document text;
-- supports offline reading from synced PowerSync data when the document is visible to the active user;
+- supports offline reading from the stored offline read set when the document is visible to the active user;
 - keeps scope and version perceivable without overwhelming the document content.
 
 ### 7.5 `FragmentReference`

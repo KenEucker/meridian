@@ -28,9 +28,8 @@ Exact patch versions are enforced by lockfiles and CI. This document defines the
 | Backend framework | Laravel 13.x | `laravel/framework:^13.0` | Primary application framework. Laravel business rules, authorization, validation, auditing, and mutation handling remain server-owned. |
 | PHP runtime | PHP 8.5.x target | `>=8.5 <8.6` for project runtime once available in all target environments | Laravel 13 requires PHP 8.3+, but Meridian should target PHP 8.5.x for active support and forward compatibility. PHP 8.4.x may be used only as a temporary local/dev fallback if needed. |
 | PHP dependency manager | Composer 2.10.x | Use latest stable `2.10.x`; commit `composer.lock` | Composer audit and dependency policy must run in CI. |
-| Database | PostgreSQL 18.x | Use current patched `18.x`; avoid floating `latest` tags | PostgreSQL is the canonical server database. Client-side SQLite exists only for offline sync/client state. |
-| Offline sync service | PowerSync Service 1.22.x | Prefer explicit Docker tag such as `journeyapps/powersync-service:1.22.0` until reviewed | Self-hosted sync service. PowerSync is sync infrastructure, not the source of business-rule truth. |
-| Offline sync web/client SDK | PowerSync JavaScript/Web Client SDK 1.38.x | Use latest compatible `1.38.x`; lock exact package version | Used for offline-first web/PWA/Electron client state. |
+| Database | PostgreSQL 18.x | Use current patched `18.x`; avoid floating `latest` tags | PostgreSQL is the canonical server database. |
+| Offline device sync | Laravel-composed offline read set + command outbox | No dependency; both are Meridian code | ADR-0003 retired PowerSync and its client SDK. The server composes the section 9.3 read set at `GET /api/offline-read-set`, the client stores it in browser-native IndexedDB, and writes queue through the command outbox. Adding a client database or replication library to this path is a baseline change and needs a decision first. |
 | God Mode / repair tooling | Orchid Platform 14.x | `orchid/platform:^14.0`, locked by Composer | Used for God Mode, configuration override, repair, and generic data administration, not as the primary product UI. |
 | API token issuance | Laravel Sanctum 4.x | `laravel/sanctum:^4.3`, locked by Composer | First-party Laravel package, MIT licensed. Named by technical spec 11.4 and data/API 5.4 as the issuer of the bearer tokens Meridian client applications authenticate with. Meridian uses the API-token half of Sanctum only: the stateful-SPA cookie mode and its `sanctum/csrf-cookie` route are disabled in `config/sanctum.php`, because AUTH-018 requires that clients not depend on a browser session cookie. |
 | JavaScript runtime | Node.js 24 LTS | `24.x`; prefer current patched 24.x in CI | Do not move to Node 26 until it is LTS and Meridian compatibility is verified. |
@@ -147,13 +146,13 @@ An exception must include:
 
 Business rules, validation, authorization, auditing, and mutation handling belong in Laravel.
 
-PowerSync is used for offline sync, local reads, and resilient client operation. It must not become the business-rule authority.
+The offline read set and the command outbox exist for local reads and resilient client operation. Neither may become the business-rule authority: the read set is composed by the same authorization the API answers from, and the outbox carries commands the server decides on.
 
 ### PostgreSQL is the canonical database
 
 PostgreSQL is the canonical server database for Meridian.
 
-Client-side SQLite exists because of PowerSync and offline operation. Client-side data must be treated as synced local state, not as the final authority for permission-sensitive decisions.
+Client-side storage exists because of offline operation. Client-side data must be treated as cached local state, not as the final authority for permission-sensitive decisions.
 
 ### Offline-first behavior is mandatory
 
@@ -348,7 +347,6 @@ The review should check:
 - Node LTS status
 - pnpm release status
 - PostgreSQL minor releases
-- PowerSync Service and SDK releases
 - Electron stable/security releases
 - Capacitor support status
 - Vite supported versions
@@ -416,7 +414,7 @@ Review this document:
 - before packaging the on-site Electron app
 - before pilot deployment
 - after any major security advisory
-- after Laravel, PHP, Node, PostgreSQL, PowerSync, Electron, Capacitor, Vite, Tailwind, Orchid, or Pest releases a new major version
+- after Laravel, PHP, Node, PostgreSQL, Electron, Capacitor, Vite, Tailwind, Orchid, or Pest releases a new major version
 
 ## Source references checked for this baseline
 
@@ -429,9 +427,6 @@ These references were checked when drafting this baseline on 2026-06-16:
 - Node.js releases: <https://nodejs.org/en/about/previous-releases>
 - Node.js 26 current release note: <https://nodejs.org/en/blog/release/v26.0.0>
 - PostgreSQL release notes: <https://www.postgresql.org/docs/release/>
-- PowerSync Service 1.22.0 release note: <https://releases.powersync.com/announcements/powersync-service>
-- PowerSync JavaScript/Web Client SDK 1.38.3 release note: <https://releases.powersync.com/announcements/powersync-js-web-client-sdk>
-- PowerSync local Docker documentation: <https://docs.powersync.com/tools/local-development>
 - Electron releases: <https://github.com/electron/electron/releases>
 - Electron release cadence: <https://electronjs.org/docs/latest/tutorial/electron-timelines>
 - Capacitor 8 update guide: <https://capacitorjs.com/docs/updating/8-0>

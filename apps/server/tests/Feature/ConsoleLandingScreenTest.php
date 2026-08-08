@@ -22,7 +22,7 @@ use App\Services\Console\ConsoleAttention;
 use App\Services\Console\ConsoleOrientation;
 use App\Services\Console\OrganizationalDataGapCheck;
 use App\Services\Console\SyncConflictAttentionCheck;
-use App\Services\PowerSync\PowerSyncHealthClient;
+use App\Services\Offline\OfflineReadSetProbe;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -39,10 +39,10 @@ class ConsoleLandingScreenTest extends TestCase
     {
         parent::setUp();
 
-        // The landing screen reports the event-mode PowerSync probe. Binding a
-        // reachable double keeps these assertions about Meridian rather than
-        // about whether a PowerSync container happens to be running.
-        $this->markPowerSyncAvailable();
+        // The landing screen reports the event-mode offline read set probe.
+        // Binding a servable double keeps these assertions about the landing
+        // screen rather than about how the test harness loads routes.
+        $this->markOfflineReadSetServable();
     }
 
     public function test_the_landing_screen_replaces_the_framework_welcome_content(): void
@@ -141,28 +141,28 @@ class ConsoleLandingScreenTest extends TestCase
         $this->assertContains(ConfigurationReadinessCheck::NODE_KEYS_MISSING, $keys);
     }
 
-    public function test_event_mode_https_and_powersync_failures_are_reported_as_configuration_items(): void
+    public function test_event_mode_https_and_read_set_failures_are_reported_as_configuration_items(): void
     {
         $this->localNode(Node::ROLE_CENTRAL);
         config()->set('app.url', 'http://meridian.test');
-        $this->markPowerSyncAvailable(false);
+        $this->markOfflineReadSetServable(false);
 
         $keys = $this->itemKeys(app(ConfigurationReadinessCheck::class)->items());
 
         $this->assertContains(ConfigurationReadinessCheck::SECURE_CONNECTION, $keys);
-        $this->assertContains(ConfigurationReadinessCheck::POWERSYNC, $keys);
+        $this->assertContains(ConfigurationReadinessCheck::OFFLINE_READ_SET, $keys);
     }
 
-    public function test_development_mode_does_not_report_secure_connection_or_powersync(): void
+    public function test_development_mode_does_not_report_secure_connection_or_the_read_set(): void
     {
         $this->localNode(Node::ROLE_DEVELOPMENT);
         config()->set('app.url', 'http://localhost');
-        $this->markPowerSyncAvailable(false);
+        $this->markOfflineReadSetServable(false);
 
         $keys = $this->itemKeys(app(ConfigurationReadinessCheck::class)->items());
 
         $this->assertNotContains(ConfigurationReadinessCheck::SECURE_CONNECTION, $keys);
-        $this->assertNotContains(ConfigurationReadinessCheck::POWERSYNC, $keys);
+        $this->assertNotContains(ConfigurationReadinessCheck::OFFLINE_READ_SET, $keys);
     }
 
     public function test_an_organization_without_departments_reports_only_that_gap(): void
@@ -370,9 +370,9 @@ class ConsoleLandingScreenTest extends TestCase
         ]);
     }
 
-    private function markPowerSyncAvailable(bool $available = true): void
+    private function markOfflineReadSetServable(bool $available = true): void
     {
-        $this->instance(PowerSyncHealthClient::class, new class($available) extends PowerSyncHealthClient
+        $this->instance(OfflineReadSetProbe::class, new class($available) extends OfflineReadSetProbe
         {
             public function __construct(private readonly bool $available) {}
 

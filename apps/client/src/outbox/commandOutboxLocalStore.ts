@@ -5,8 +5,8 @@
 // process restarting, and — per technical spec 13.3 — a shared-workstation
 // session ending. `localStorage` is the same device-local seam the Field Report
 // catalog and the attendance queue already used and moves onto encrypted local
-// storage with them when PowerSync lands; this task changes where the queue is,
-// not what backs it.
+// storage with them when that lands; this task changes where the queue is, not
+// what backs it.
 //
 // Two rules make the stored copy safe to boot from:
 //

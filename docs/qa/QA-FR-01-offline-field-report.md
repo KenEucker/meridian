@@ -48,9 +48,8 @@ smoke where delivered.
 Uploads authenticate with the device-bound bearer token the client holds after
 signing in (AUTH-018; technical spec 11.4), so this run starts by signing in as
 the seeded fixture user. The shared development token that used to authenticate
-this path was removed in M16.11. PowerSync transport, signed operation envelopes,
-node countersigning, and node-to-node blob sync remain owned by later sync
-tasks.
+this path was removed in M16.11. Signed operation envelopes, node
+countersigning, and node-to-node blob sync remain owned by later sync tasks.
 
 ## Personas
 
@@ -251,9 +250,8 @@ tasks.
 ### F. Explicit non-goals
 
 30. Confirm this script did not require incident creation/linking, incident
-    Name Reference chips, node-to-node blob sync, PowerSync transport,
-    downloadable failed-sync export, append photos, or HTTP append-command
-    sync for local appends.
+    Name Reference chips, node-to-node blob sync, downloadable failed-sync
+    export, append photos, or HTTP append-command sync for local appends.
 31. Confirm no photo delete/redact action exists, no image binaries are synced
     down as general device cache data, and no public storage path is exposed.
 32. Confirm Field Reports remain independent records with one immutable title,
@@ -277,9 +275,8 @@ tasks.
   non-IC leads do not gain visibility. Only `ic_lead` may download photos.
 - Name References remain source text and rebuildable derived index rows; they
   do not become identity/profile data or grant visibility.
-- Author detail exposes local append UI; HTTP append-command transport,
-  PowerSync transport, and node-to-node blob sync are not represented as
-  implemented sync paths.
+- Author detail exposes local append UI; HTTP append-command transport and
+  node-to-node blob sync are not represented as implemented sync paths.
 
 ## Evidence to capture
 
@@ -317,6 +314,6 @@ tasks.
 - If title text creates Name Reference rows, Name References reveal
   unauthorized reports, or the author UI implies mentions/profiles/
   notifications, stop and file a blocking NR-007/NR-011/NR-012 issue.
-- If a missing later IMS, append, PowerSync, node-sync, export, or incident
+- If a missing later IMS, append, device-sync, node-sync, export, or incident
   surface is the only failure, mark that check Not Applicable to M9.9 and
   report scope leakage rather than expanding this task.

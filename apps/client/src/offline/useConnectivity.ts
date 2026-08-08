@@ -36,10 +36,11 @@
 //     returns.
 //
 // The richer states (`local_node_reachable`, `central_unreachable`,
-// `sync_queued`, `sync_conflict`, `sync_failed`) need PowerSync client sync
-// state and Meridian node-sync signals owned by later Alpha 1 milestones. Those
-// milestones feed real values through this same view-model shape rather than
-// having the banner invent them.
+// `sync_queued`, `sync_conflict`, `sync_failed`) need Meridian node-sync signals
+// owned by later Alpha 1 milestones. Those milestones feed real values through
+// this same view-model shape rather than having the banner invent them. The two
+// connectivity tiers are M18.52's: ADR-0003 removed the device sync layer this
+// comment used to defer them to, so they are owned rather than orphaned.
 
 import { computed, onScopeDispose, ref, type Ref } from "vue";
 

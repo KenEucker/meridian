@@ -77,13 +77,15 @@ nodes writing the same records at once.
 ## Event mode will not start
 
 **Symptom.** The node refuses to boot or refuses a role change, citing HTTPS or
-PowerSync.
+the offline read set.
 
 Meridian fails closed here on purpose. Fix the cause:
 
 - HTTPS: the configured application URL must use HTTPS, and the certificate must
   be trusted by the devices in use.
-- PowerSync: the service must answer its liveness probe from the node.
+- Offline read set: the node must be able to serve it. A node that cannot is
+  usually one whose route or configuration caches are stale — clear them and
+  restart the server.
 
 If the event genuinely cannot have either, the node can run as `development` —
 but understand what that turns off, and do not use it for a real event with real

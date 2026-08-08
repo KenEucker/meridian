@@ -77,7 +77,7 @@ at this stage.
 - The wrapper opens the development Meridian Kiosk UI from Vite fullscreen/kiosk
   with no browser chrome, and Vue changes hot-update in the Electron window.
 - The health panel lists all technical spec 25.3 fields in order: local node
-  name, node role, event name, sync status, PowerSync status, connected
+  name, node role, event name, sync status, offline read set status, connected
   devices, local discovery status, certificate/HTTPS status, server version,
   client version, and Electron wrapper version.
 - "Server version" shows the running server version and "Node role" shows the
@@ -85,7 +85,7 @@ at this stage.
   version" both show the root `package.json` Meridian version; "Certificate /
   HTTPS status" reflects the configured URL scheme.
 - Fields owned by later milestones (local node name, event name, sync status,
-  PowerSync status, connected devices, local discovery status) show a clearly
+  offline read set status, connected devices, local discovery status) show a clearly
   labeled placeholder.
 - When the server is stopped, server-sourced fields show "Unavailable" and the
   wrapped UI does not block; when the server returns, the wrapped UI reloads

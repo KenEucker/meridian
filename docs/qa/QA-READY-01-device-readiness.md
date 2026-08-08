@@ -5,10 +5,11 @@
 Verify Milestone 8 device readiness and offline foundations for a human
 reviewer: the shared client shows an honest advisory readiness checklist, shared
 offline/sync status appears only when the device is offline, and event mode
-fails closed when required HTTPS, PowerSync, local encryption, or device
-signing capabilities are unavailable. This script closes the Milestone 8 QA
-gate. It does not exercise offline field writes, PowerSync client uploads, or
-later readiness signals (login, device trust, event selection, cache, sync).
+fails closed when required HTTPS, offline read set availability, local
+encryption, or device signing capabilities are unavailable. This script closes
+the Milestone 8 QA gate. It does not exercise offline field writes, device
+upload paths, or later readiness signals (login, device trust, event selection,
+cache, sync).
 
 ## Requirements covered
 
@@ -112,41 +113,53 @@ later readiness signals (login, device trust, event selection, cache, sync).
 17. Confirm richer sync labels (`Local node reachable`, `Central unreachable`,
     `Queued`, `Sync conflict`, `Sync failed`) are not invented by the live
     shell today; those states are covered by the automated Offline banner /
-    connectivity model tests from step 2 and are wired to real PowerSync /
-    node-sync signals in later milestones.
+    connectivity model tests from step 2. The two connectivity tiers are wired
+    to real node signals by M18.52; the queue and failure states by later
+    node-sync milestones.
 
-### D. Server event-mode fail-closed (HTTPS and PowerSync) (M8.7)
+### D. Server event-mode fail-closed (HTTPS and the offline read set) (M8.7, M18.51)
+
+M18.51 replaced the PowerSync liveness probe with a probe on whether this node
+can serve `GET /api/offline-read-set`. Nothing else about the gate changed: two
+server-owned checks, either of which fails event mode closed. The unservable
+case is forced by binding a stub probe, because there is no external service to
+switch off any more.
 
 18. From `apps/server`, confirm development mode never blocks even without
-    HTTPS or PowerSync:
+    HTTPS or a servable read set:
     ```bash
-    php artisan tinker --execute='config(["app.url" => "http://localhost", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_powersync" => true, "powersync.endpoint" => "http://powersync.test", "powersync.liveness_path" => "/probes/liveness"]); Illuminate\Support\Facades\Http::fake(["http://powersync.test/probes/liveness" => Illuminate\Support\Facades\Http::response([], 503)]); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_DEVELOPMENT); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='config(["app.url" => "http://localhost", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_offline_read_set" => true]); app()->instance(App\Services\Offline\OfflineReadSetProbe::class, new class extends App\Services\Offline\OfflineReadSetProbe { public function __construct() {} public function isAvailable(): bool { return false; } }); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_DEVELOPMENT); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
 19. Confirm HTTPS validation fails closed for an event role when `APP_URL` is
-    plain HTTP:
+    plain HTTP, with the read set servable:
     ```bash
-    php artisan tinker --execute='config(["app.url" => "http://onsite.example.org", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_powersync" => true, "powersync.endpoint" => "http://powersync.test", "powersync.liveness_path" => "/probes/liveness"]); Illuminate\Support\Facades\Http::fake(["http://powersync.test/probes/liveness" => Illuminate\Support\Facades\Http::response(["status" => "ok"])]); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_ONSITE); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='config(["app.url" => "http://onsite.example.org", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_offline_read_set" => true]); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_ONSITE); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
-20. Confirm PowerSync unavailability fails closed for an event role when the
-    liveness probe fails:
+20. Confirm an unservable offline read set fails closed for an event role:
     ```bash
-    php artisan tinker --execute='config(["app.url" => "https://onsite.example.org", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_powersync" => true, "powersync.endpoint" => "http://powersync.test", "powersync.liveness_path" => "/probes/liveness"]); Illuminate\Support\Facades\Http::fake(["http://powersync.test/probes/liveness" => Illuminate\Support\Facades\Http::response([], 503)]); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_ONSITE); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
+    php artisan tinker --execute='config(["app.url" => "https://onsite.example.org", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_offline_read_set" => true]); app()->instance(App\Services\Offline\OfflineReadSetProbe::class, new class extends App\Services\Offline\OfflineReadSetProbe { public function __construct() {} public function isAvailable(): bool { return false; } }); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_ONSITE); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
     ```
-21. Optional (destructive to an empty install only): on a database with no
+21. Confirm a normally configured event node passes both checks, so the read-set
+    check is something a real node satisfies rather than a rule only a stub can
+    fail:
+    ```bash
+    php artisan tinker --execute='config(["app.url" => "https://onsite.example.org", "meridian.event_mode.enabled" => null, "meridian.event_mode.require_https" => true, "meridian.event_mode.require_offline_read_set" => true]); $r = app(App\Services\EventMode\EventModeGuard::class)->evaluate(App\Models\Node::ROLE_ONSITE); print(json_encode(["event_mode" => $r->eventMode, "blocked" => $r->blocked(), "reasons" => $r->reasons()], JSON_PRETTY_PRINT).PHP_EOL);'
+    ```
+22. Optional (destructive to an empty install only): on a database with no
     active node, open `/setup`, submit an `onsite` (or `central` /
-    `standalone`) role while `APP_URL` is plain HTTP or PowerSync is down, and
-    confirm setup shows an event-mode safeguard error and creates no node.
-    Prefer a dedicated empty database; do not wipe a shared QA database unless
-    that is intentional. Automated coverage for this path is
-    `EventModeSetupFailClosedTest` from step 3.
+    `standalone`) role while `APP_URL` is plain HTTP, and confirm setup shows an
+    event-mode safeguard error and creates no node. Prefer a dedicated empty
+    database; do not wipe a shared QA database unless that is intentional.
+    Automated coverage for this path is `EventModeSetupFailClosedTest` from
+    step 3.
 
 ### E. Client event-mode fail-closed (encryption and signing) (M8.7)
 
-22. Confirm the client event-mode gate automated tests passed in step 2
+23. Confirm the client event-mode gate automated tests passed in step 2
     (`apps/client/src/readiness/eventMode.spec.ts`): event mode is ready only
     when both local encryption and device signing are available, and each
     missing capability is reported as a blocker with a human-readable reason.
-23. Confirm the readiness surface from section B already exposes the same
+24. Confirm the readiness surface from section B already exposes the same
     capability signals as checklist items **Encryption active** and
     **Device signing available** (Ready / Not ready with reason text). There is
     no separate event-mode blocking UI for offline writes in this milestone;
@@ -168,14 +181,17 @@ later readiness signals (login, device trust, event selection, cache, sync).
 - OfflineBanner is silent while online and shows **Offline but usable** /
   **Local work can continue.** when the device is offline, without blocking
   the page.
-- Development-role event-mode evaluation is not blocked without HTTPS/PowerSync.
+- Development-role event-mode evaluation is not blocked without HTTPS or a
+  servable offline read set.
 - Onsite (event) evaluation is blocked with an HTTPS reason when `APP_URL` is
-  HTTP, and blocked with a PowerSync reason when liveness fails.
+  HTTP, and blocked with an offline read set reason when the probe reports the
+  set is unservable.
+- A normally configured onsite node passes both checks with no reasons.
 - Client event mode fails closed when encryption or signing is unavailable
   (automated evidence); readiness UI surfaces those capability states honestly.
-- Non-goals for this script: offline field-report/attendance writes, PowerSync
-  client upload, wiring pending readiness items, organizer-visible readiness,
-  M15 packaging/secret safeguards, and Electron health-panel PowerSync fields.
+- Non-goals for this script: offline field-report/attendance writes, device
+  upload paths, wiring pending readiness items, organizer-visible readiness,
+  M15 packaging/secret safeguards, and Electron health-panel sync fields.
 
 ## Evidence to capture
 
@@ -184,14 +200,14 @@ later readiness signals (login, device trust, event selection, cache, sync).
   lede.
 - Screenshot of the app shell while online (no offline banner) and while
   offline (Offline but usable banner).
-- Terminal JSON output from the three tinker event-mode evaluations in
+- Terminal JSON output from the four tinker event-mode evaluations in
   section D.
 
 ## Failure notes
 
 Record the failed step, exact error text or unexpected UI label, operating
 system, Node.js and pnpm versions, PHP version, whether the shared client was
-served from a secure context, the `APP_URL` / PowerSync endpoint used for
+served from a secure context, the `APP_URL` used for
 server checks, and whether automated EventMode or mobile readiness tests also
 failed. If encryption or device signing shows Not ready on localhost, capture
 the checklist detail reason before continuing. If `/setup` creates a node while

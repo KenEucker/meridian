@@ -45,8 +45,8 @@ use Tests\TestCase;
  *
  * These are the composition and scope assertions `Tests\Support\PowerSyncRules`
  * and `PowerSyncPermissionScopedReplicationTest` made against the sync rules,
- * ported onto the endpoint that replaces them. The rules YAML is retired by
- * M18.51; what it proved is not, and it is proved here the same way — by
+ * ported onto the endpoint that replaces them. M18.51 retired the rules YAML;
+ * what it proved is not retired, and it is proved here the same way — by
  * executing the thing that decides what a device receives and asserting which
  * records come back, rather than by reading a definition as text.
  *

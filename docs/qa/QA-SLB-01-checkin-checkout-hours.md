@@ -18,7 +18,7 @@ searching, and holds nothing for a department this device has not read.
 
 This script covers the Alpha 1 human QA gate for check-in/check-out/hours. It
 does not add or require staff self-service check-in, credit calculation,
-PowerSync conflict repair UI, signed node-operation envelopes, or new product
+sync conflict repair UI, signed node-operation envelopes, or new product
 behavior beyond existing Department Operations surfaces and domain commands.
 
 Section H additionally verifies the Milestone 13 actual hours worked export
@@ -414,7 +414,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
 47. Open the Planning Table and confirm the shift detail beside the chart shows
     counts and hours only — no name, no roster, and no signup list (SLB-019).
 48. Confirm this script did not require credit calculation, equipment offline
-    sync, incident creation, Field Report review, PowerSync conflict repair UI,
+    sync, incident creation, Field Report review, sync conflict repair UI,
     or direct God Mode attendance editing.
 
 ### H. Actual hours worked export (M13.4)
@@ -622,6 +622,6 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - If a successful export writes no audit event, or the audit does not record the
   scope, row count, and total minutes, stop and file a blocking data/API section
   8 issue.
-- If this script appears to require credits, PowerSync conflict repair UI,
+- If this script appears to require credits, sync conflict repair UI,
   signed node-operation envelopes, or direct God Mode edits, report scope
   leakage; those are deferred to their owning tasks.

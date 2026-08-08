@@ -3,19 +3,20 @@ name: meridian-database
 # Managed Meridian PostgreSQL database service.
 #
 # This container runs the canonical Meridian PostgreSQL 18 database with logical
-# replication enabled and provisions the prerequisites every dependent system
-# needs on first boot: the PowerSync least-privilege replication role, the
-# dedicated PowerSync bucket-storage database and owner role, and the logical
-# replication publication PowerSync consumes. Laravel migrations and seeders run
-# against this database with the existing `php artisan` tooling; PowerSync
-# connects to it through deploy/powersync.
+# replication enabled. Laravel migrations and seeders run against it with the
+# existing `php artisan` tooling.
+#
+# It provisions no sync roles, no bucket-storage database, and no publication.
+# ADR-0003 retired PowerSync, and those three existed only for it; logical
+# replication itself stays switched on because node-to-node sync (technical spec
+# section 10) is separate from device sync and always was.
 
 services:
   postgres:
     image: postgres:18
     restart: unless-stopped
-    # wal_level=logical is required for PowerSync logical replication. The wal
-    # sender/replication slot limits leave headroom for the PowerSync slot.
+    # wal_level=logical keeps logical replication available for node sync. The
+    # wal sender/replication slot limits leave headroom for a node slot.
     command:
       - "postgres"
       - "-c"
@@ -28,21 +29,12 @@ services:
       POSTGRES_DB: ${DB_DATABASE:-meridian}
       POSTGRES_USER: ${DB_USERNAME:-meridian}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in deploy/docker/.env}
-      # Consumed by the init script in postgres/initdb.
-      POWERSYNC_REPLICATION_USER: ${POWERSYNC_REPLICATION_USER:-powersync_replication}
-      POWERSYNC_REPLICATION_PASSWORD: ${POWERSYNC_REPLICATION_PASSWORD:?Set POWERSYNC_REPLICATION_PASSWORD in deploy/docker/.env}
-      POWERSYNC_STORAGE_DB: ${POWERSYNC_STORAGE_DB:-powersync_storage}
-      POWERSYNC_STORAGE_USER: ${POWERSYNC_STORAGE_USER:-powersync_storage}
-      POWERSYNC_STORAGE_PASSWORD: ${POWERSYNC_STORAGE_PASSWORD:?Set POWERSYNC_STORAGE_PASSWORD in deploy/docker/.env}
-      POWERSYNC_PUBLICATION: ${POWERSYNC_PUBLICATION:-powersync}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       # postgres:18 stores data in a major-version subdirectory, so the mount
       # point is /var/lib/postgresql (not /var/lib/postgresql/data).
       - meridian-postgres-data:/var/lib/postgresql
-      # Init scripts run only when the data volume is empty (first boot).
-      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -56,8 +48,8 @@ volumes:
   meridian-postgres-data:
     name: meridian-postgres-data
 
-# A named network so the PowerSync stack (deploy/powersync) can optionally attach
-# as an external network and reach this service by its `postgres` hostname.
+# A named network so another Compose stack can optionally attach as an external
+# network and reach this service by its `postgres` hostname.
 networks:
   default:
     name: meridian

@@ -3,7 +3,7 @@
 // Technical spec 18.2 / 18.5: photo sync is separate from the text record and
 // verifies checksums. This module drains the durable pending photo store through
 // an injected uploader so unit tests can exercise success/failure without a
-// live HTTP transport. PowerSync/node envelopes remain later sync tasks.
+// live HTTP transport. Signed node envelopes remain a later sync task.
 
 import {
   listPendingFieldReportPhotoRecords,

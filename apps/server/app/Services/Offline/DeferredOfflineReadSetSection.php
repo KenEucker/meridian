@@ -10,9 +10,9 @@ use App\Domain\Modules\ModuleKey;
  * A section of technical spec 9.3 that this build cannot compose yet, named in
  * the response rather than left out of it.
  *
- * `deploy/powersync/sync-config.yaml` made the same call — it ends with a
- * comment listing what it deferred and why — and the reason holds under any
- * transport. A client reading a set with no `notes` key cannot tell "you
+ * The retired sync rules made the same call — they ended with a comment listing
+ * what they deferred and why — and the reason holds under any transport. A
+ * client reading a set with no `notes` key cannot tell "you
  * authored none" from "this build has no Notes", and those are different facts
  * for a device deciding what it can show a person with no signal.
  *

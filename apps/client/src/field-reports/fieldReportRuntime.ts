@@ -3,8 +3,7 @@
 // Holds the M9.4 author catalog so submit, list, and detail share one device
 // state. Catalog contents are hydrated from and written to a temporary
 // localStorage seam so refresh keeps author submissions visible. Pending Field
-// Report photos use durable encrypted storage (M9.8). PowerSync transport
-// remains a later Alpha 1 sync task.
+// Report photos use durable encrypted storage (M9.8).
 //
 // Since M16.10 the catalog is display state and nothing more: what is still owed
 // to the node lives in the shared command outbox, which each report's device

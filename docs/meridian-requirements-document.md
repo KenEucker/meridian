@@ -4896,7 +4896,7 @@ The God Mode landing screen shall surface items requiring attention in three gro
 
 ### GOD-006
 
-Deployment and configuration readiness shall report node configuration completeness, node role and pairing state, presence of required secrets, secure connection policy status, and PowerSync connectivity.
+Deployment and configuration readiness shall report node configuration completeness, node role and pairing state, presence of required secrets, secure connection policy status, and the node's ability to serve the offline read set.
 
 ### GOD-007
 
@@ -5580,7 +5580,7 @@ Bootstrap-locked variables - the application key, primary database credentials, 
 
 ### SYS-011
 
-System configuration overrides and secret values shall never be replicated through PowerSync device sync.
+System configuration overrides and secret values shall never reach a device through device sync.
 
 ### SYS-012
 
@@ -5668,7 +5668,7 @@ Checks shall be read-only against Meridian state and non-destructive against ext
 
 ### SYS-033
 
-Diagnostics shall cover, where applicable to the install: application runtime and build state, security configuration warnings, override loading, database availability and latency, cache and session stores, queue backlog and failed jobs, scheduler liveness, storage writability and disk space, required providers/bindings/routes, PowerSync reachability, node-to-node sync state, node identity and keys, and configured external integrations.
+Diagnostics shall cover, where applicable to the install: application runtime and build state, security configuration warnings, override loading, database availability and latency, cache and session stores, queue backlog and failed jobs, scheduler liveness, storage writability and disk space, required providers/bindings/routes, offline read set availability, node-to-node sync state, node identity and keys, and configured external integrations.
 
 ### SYS-034
 

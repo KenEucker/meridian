@@ -52,7 +52,7 @@ When implementation behavior conflicts with the requirements document, the requi
 The technical specification defines the Alpha 1 architecture and technical direction. It is the source of truth for:
 
 - monorepo topology;
-- Laravel, Orchid, PostgreSQL, Vue, Capacitor, Electron, PowerSync, and Docker Compose choices;
+- Laravel, Orchid, PostgreSQL, Vue, Capacitor, Electron, and Docker Compose choices;
 - device trust, local encryption, and signatures;
 - central/on-site node pairing and sync;
 - offline write scope;
@@ -220,7 +220,7 @@ Examples:
 - Docker Compose environment;
 - node setup flow;
 - device key registration;
-- PowerSync integration;
+- offline read set endpoint and client store;
 - Electron health shell.
 
 ### 4.3 Workflow slice
@@ -360,7 +360,7 @@ Before coding, answer:
 - Which actor cannot?
 - Does the behavior differ online/offline?
 - Does this touch central/on-site sync?
-- Does this touch PowerSync?
+- Does this touch the offline read set?
 - Does this affect exports?
 - Does this require migration or seed data?
 
@@ -1228,7 +1228,7 @@ Examples:
 
 #### Sync tests
 
-Use for PowerSync and node sync behavior.
+Use for device sync and node sync behavior.
 
 Examples:
 
@@ -1731,7 +1731,7 @@ Slices:
 4. Device signing.
 5. Local encryption.
 6. Readiness checklist.
-7. PowerSync service integration.
+7. Offline read set endpoint and client store.
 
 Acceptance evidence:
 
@@ -1938,7 +1938,7 @@ A technical decision change is needed when architecture changes.
 
 Examples:
 
-- replacing PowerSync;
+- replacing the device sync mechanism;
 - switching away from Laravel/Orchid;
 - adding a plugin platform to Alpha 1;
 - changing node sync from operation sync to raw database replication.
@@ -2000,7 +2000,7 @@ Security/event-mode:
 - [ ] Dev auth disabled outside development.
 - [ ] Default secrets refused or regenerated.
 - [ ] HTTPS validation passes in event mode.
-- [ ] PowerSync availability validation passes in event mode.
+- [ ] Offline read set availability validation passes in event mode.
 - [ ] Local encryption validation passes.
 - [ ] Device signing validation passes.
 

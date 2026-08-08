@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  * A designation attaches an existing operational grant to a named team: it
  * creates and owns a `team_grants` row rather than becoming a second authority
  * path, so every existing permission check, the effective role resolver, and
- * PowerSync replication keep reading the one source they already read
+ * the offline read set keep reading the one source they already read
  * (TEAM-010). A department designates zero or one team per section 4.8A
  * function, the same team may hold more than one designation (TEAM-012), and
  * an organization designates the Staff Coordinator team within its configured

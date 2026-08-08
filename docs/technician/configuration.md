@@ -54,8 +54,9 @@ role, and central node URL as database overrides.
 Two things happen that are easy to miss:
 
 - Changing the node role re-evaluates the event-mode safeguards. If the new role
-  is not `development` and HTTPS or PowerSync validation fails, the save is
-  refused and the reason is shown. That is the safeguard working.
+  is not `development` and HTTPS validation fails, or the node cannot serve the
+  offline read set, the save is refused and the reason is shown. That is the
+  safeguard working.
 - Changing the central node URL invalidates pairing. The status becomes *Pairing
   recheck required* until you pair again.
 
@@ -68,7 +69,9 @@ explicitly forces it on or off.
 In event mode the server enforces two checks and fails closed on either:
 
 - The configured application URL must use HTTPS.
-- PowerSync must answer its liveness probe.
+- The node must be able to serve the offline read set devices cache from. This
+  replaced a PowerSync liveness probe: PowerSync was retired, and event mode now
+  gates on the thing offline readiness actually needs.
 
 Local encryption and device signing are checked on the client, not here.
 
@@ -78,8 +81,8 @@ clients and the Electron health panel can notice drift.
 ## Where to see the effect
 
 The God Mode landing screen reports node configuration completeness, node role
-and pairing state, required secrets, secure connection policy, and PowerSync
-connectivity. If you changed something and want to know whether it helped, that
+and pairing state, required secrets, secure connection policy, and offline read
+set availability. If you changed something and want to know whether it helped, that
 list is the fastest answer. It reads state and repairs nothing.
 
 ## The full configuration catalogue
@@ -136,7 +139,7 @@ CLI output. You can replace a secret, disable it, or remove it; you cannot
 read it back. If you need to know whether a secret is correct, test the
 behavior that uses it.
 
-Overrides are node-local. They are never distributed through PowerSync or
+Overrides are node-local. They never reach a device's offline read set or travel
 node-to-node sync, central overrides are not copied to on-site nodes, and an
 offline node keeps its overrides working.
 

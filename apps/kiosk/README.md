@@ -10,7 +10,7 @@ health panel displays server/node placeholders and the root Meridian version.
 
 The wrapper intentionally does **not** manage Docker Compose, block accidental
 close, or include emergency export in Alpha 1 (technical spec 3.3, 25.1).
-Authentication, real node identity, sync state, PowerSync state, connected
+Authentication, real node identity, sync state, offline read set state, connected
 devices, and version-mismatch warnings arrive with their owning Alpha 1
 milestones; the health panel shows them as clearly labeled placeholders for now.
 
