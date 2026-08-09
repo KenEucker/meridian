@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import {
   filterRoster,
@@ -120,7 +121,10 @@ async function load(): Promise<void> {
     roster.value = null;
     loadError.value = meridianErrorMessage(
       error,
-      "The department staff list could not be read.",
+      connectionRequiredMessage(
+        "The department staff list",
+        "which fields a reader may see — emergency contacts among them (VOL-012) — is decided by the node on the read rather than held on this device",
+      ),
     );
   } finally {
     loading.value = false;

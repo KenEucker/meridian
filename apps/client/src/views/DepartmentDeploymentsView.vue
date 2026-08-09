@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import {
   archiveDeployment,
@@ -106,7 +107,10 @@ async function load(): Promise<void> {
     page.value = null;
     loadError.value = meridianErrorMessage(
       error,
-      "The department's deployments could not be read.",
+      connectionRequiredMessage(
+        "The department's deployments",
+        "a deployment reports who is standing at it now, which is a live count rather than a stored one",
+      ),
     );
   } finally {
     loading.value = false;

@@ -121,8 +121,13 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
       "My Field Reports",
     );
     expect(wrapper.text()).toContain("Emberfall 2026");
+    /*
+     * M18.53 replaced "you have not submitted any" with what is actually true
+     * of this list: the catalog behind it is this device's own, so an empty one
+     * says nothing about what the author filed from anywhere else.
+     */
     expect(wrapper.text()).toContain(
-      "You have not submitted any Field Reports yet.",
+      "No Field Reports have been submitted from this device.",
     );
   });
 
@@ -337,8 +342,11 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
 
     const { wrapper } = await mountAt("/staff/field-reports/other-author-report");
 
+    // The authority sentence stands; M18.53 put the device-local fact in front
+    // of it, because a report filed elsewhere is missing for that reason and
+    // not for this one.
     expect(wrapper.text()).toContain(
-      "You can only view Field Reports you authored.",
+      "You can only open Field Reports you authored.",
     );
     expect(wrapper.text()).not.toContain("Other author body");
     expect(wrapper.text()).not.toContain("Other author title");
@@ -394,8 +402,13 @@ describe("Field Report author list/detail surfaces (M9.4)", () => {
 
     expect(router.currentRoute.value.name).toBe("staff.field-reports.index");
     expect(authorFieldReportCatalog.size).toBe(0);
+    /*
+     * M18.53 replaced "you have not submitted any" with what is actually true
+     * of this list: the catalog behind it is this device's own, so an empty one
+     * says nothing about what the author filed from anywhere else.
+     */
     expect(wrapper.text()).toContain(
-      "You have not submitted any Field Reports yet.",
+      "No Field Reports have been submitted from this device.",
     );
   });
 

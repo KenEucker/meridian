@@ -1882,6 +1882,21 @@ Rules:
 
 ### 16.2 Offline UI Rules
 
+Every surface in the shared client is held to one of two outcomes with no third:
+it renders from what the device is holding, or it states plainly that it needs a
+connection. A surface that cannot work offline is not a defect — an export is a
+file the node generates, a dashboard and the Event Horizon are compiled when they
+are asked for, an audit trail is never sent to a device — but a spinner that
+never resolves, a panel that renders blank, and a transport failure printed as
+though the screen were broken all are.
+
+Which surface takes which outcome is recorded rather than left to be discovered:
+`apps/client/src/offline/offlineSurfaceInventory.ts` names every routed surface,
+its outcome, and the reason, and the audit spec beside it mounts each one against
+a node that does not answer. A surface that is offline-capable discloses its
+stored copy through the freshness conventions above; a surface that is not names
+what is unavailable and why it cannot be held on the device.
+
 - Show offline state only where it affects current work.
 - Do not imply current central truth when data may be stale.
 - Disable or hide unavailable actions honestly.

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   getEventParticipation,
   getOrganizationParticipation,
@@ -184,9 +185,20 @@ async function load(): Promise<void> {
       chosenEventSlug.value = null;
     }
   } catch (error) {
+    /*
+     * The node's own 404 is what says a link leads nowhere, and it is the only
+     * thing that may (M18.53). An applicant holds no session and no read set, so
+     * a device that cannot reach a node has nothing to answer from — and telling
+     * somebody the organization they were pointed at does not exist, when the
+     * truth is that their phone has no signal, sends them to argue with whoever
+     * gave them the link.
+     */
     loadError.value = meridianErrorMessage(
       error,
-      "This link does not lead anywhere we can find.",
+      connectionRequiredMessage(
+        "This page",
+        "an application is made against the node, and somebody applying holds nothing on their device for it to be composed from",
+      ),
     );
   } finally {
     loading.value = false;

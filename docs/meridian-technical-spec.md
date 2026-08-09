@@ -660,6 +660,18 @@ Incidents should not be greedily synced.
 
 Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. The offline read set must not become the business-rule engine for Name Reference visibility or search authorization.
 
+### 9.3A What each surface does with the set
+
+What this section describes is what a device *holds*. Which surfaces can answer from it is a separate fact, and it is recorded rather than inferred: `apps/client/src/offline/offlineSurfaceInventory.ts` names every routed surface in the shared client, whether it renders offline or requires a connection, and why.
+
+There is no third outcome. A surface that cannot work offline is not a defect — an export is a file the node generates, a dashboard and the Event Horizon are compiled at read time and are not records, an audit trail is history a device is never sent — but it must say so, naming what is unavailable and why. A spinner that never resolves, a blank panel, and a transport failure printed as though the screen were broken are defects, and the audit spec beside the inventory mounts every surface against a node that does not answer to keep them out.
+
+A surface joining or leaving the offline-capable list is a change to what Meridian promises somebody standing where there is no signal, and it changes in that file first.
+
+Two surfaces compile on the device rather than rendering a stored response, and each is bounded by what it can honestly answer. The Event Horizon compiles the document acknowledgment kind and names the other four as unevaluated (HORIZON-016): the set holds nothing for waivers, trainings, or coverage gaps, and carries only the shifts a member already holds, so a compiled signup list could never show one with a place left. The Logistics Desk composes from the section 9.3 Logistics indexes and derives each card's check-in, check-out, and no-show verdicts by the same rule the node applies, from the same four facts — an assignment, presence, attendance state, and the shift's window. Authority is never derived in either: what a caller may do is read from the session document, which is the node's own answer.
+
+This is the one place a client re-reads a rule the node owns, and it is bounded deliberately. A derived verdict must use the node's own derivation over rows the device holds; anything resting on a fact the device does not hold — eligibility for an unscheduled addition, the hours correction grace period, what equipment is available to hand over — is refused offline rather than guessed at.
+
 ## 9.4 Offline write scope
 
 Alpha 1 offline writes include:

@@ -4,6 +4,10 @@ import { RouterLink } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
+  connectionRequiredMessage,
+  nodeDidNotAnswer,
+} from "@/offline/connectionRequired";
+import {
   getMarketingSurface,
   submitOrganizationInterest,
   type MarketingSurfaceAvailability,
@@ -41,6 +45,8 @@ const emit = defineEmits<{ (event: "unavailable"): void }>();
 
 const surface = ref<MarketingSurfaceAvailability | null>(null);
 const loading = ref(true);
+/** Whether nothing answered, as opposed to a node saying it does not serve this. */
+const unreachable = ref(false);
 
 const organizationName = ref("");
 const contactName = ref("");
@@ -71,14 +77,31 @@ const canSubmit = computed(
 
 async function load(): Promise<void> {
   loading.value = true;
+  unreachable.value = false;
 
   try {
     surface.value = await getMarketingSurface();
-  } catch {
-    // A node that does not serve the surface answers 404, and there is nothing
-    // to say about it: the page is not there. Whoever mounted this decides
-    // where the visitor goes instead.
+  } catch (error) {
     surface.value = null;
+
+    /*
+     * Two failures, and until M18.53 they were the same failure (CLIENT-001,
+     * UI-020).
+     *
+     * A node that does not serve the surface answers 404, and there is nothing
+     * to say about it: the page is not there, and whoever mounted this decides
+     * where the visitor goes instead. A node that does not answer at all is a
+     * different fact, and treating it as the first left this page rendering
+     * *nothing* — the template has no branch for a null surface, so a visitor
+     * out of coverage at `/platform` got a blank screen and no reason for it.
+     * A blank page is the one thing an offline surface may not be.
+     */
+    if (nodeDidNotAnswer(error)) {
+      unreachable.value = true;
+
+      return;
+    }
+
     emit("unavailable");
   } finally {
     loading.value = false;
@@ -137,6 +160,16 @@ onMounted(() => {
 <template>
   <main class="marketing" aria-labelledby="marketing-heading">
     <p v-if="loading" class="marketing__notice" role="status">Loading…</p>
+
+    <p v-else-if="unreachable" class="marketing__notice" role="status">
+      {{
+        connectionRequiredMessage(
+          "This page",
+          "whether a Meridian node offers it at all is the node's own answer, and this one gave none",
+        )
+      }}
+      <button type="button" @click="load">Try again</button>
+    </p>
 
     <template v-else-if="surface !== null">
       <header class="marketing__masthead">

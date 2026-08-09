@@ -63,6 +63,29 @@ const fromCache = computed(
 );
 
 /**
+ * The kinds a device-compiled list could not evaluate, as a sentence fragment
+ * (HORIZON-016).
+ *
+ * Named rather than counted. "Waivers, Trainings and Team coverage could not be
+ * checked" tells somebody which parts of their readiness they still have to
+ * find out about; "3 kinds were not checked" tells them only that they should
+ * worry. Empty on a live read, where the node evaluated everything it offered.
+ */
+const unevaluatedLabels = computed(() => {
+  const labels = (horizon.value?.unevaluatedKinds ?? []).map(
+    (kind) => kind.label,
+  );
+
+  if (labels.length === 0) {
+    return "";
+  }
+
+  return labels.length === 1
+    ? labels[0]
+    : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+});
+
+/**
  * The all-clear is earned, never assumed (19C.9): only a live read with zero
  * outstanding items may say it, because a stored copy cannot establish that
  * nothing appeared since it was taken.
@@ -201,9 +224,13 @@ void load();
           age rather than pretending to a live answer.
         -->
         <p v-if="fromCache" class="event-horizon__notice" role="status">
-          This device could not reach the node, so this list is the stored copy
-          named above. Items that appeared or completed since then are not
-          reflected, and "nothing outstanding" cannot be established from it.
+          This device could not reach the node, so this list was compiled from
+          what it is holding. Anything that changed since is not reflected, and
+          "nothing outstanding" cannot be established from it.
+          <template v-if="unevaluatedLabels">
+            {{ unevaluatedLabels }} could not be checked at all — this device
+            does not hold what they are decided from.
+          </template>
         </p>
 
         <p v-if="showAllClear" class="event-horizon__all-clear" role="status">

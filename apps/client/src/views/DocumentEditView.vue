@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   createDocument,
   createDocumentFragment,
@@ -100,6 +101,25 @@ const canMaintain = computed(() => {
     ? (library.value?.access.canMaintain ?? false)
     : (savedDocument.value?.canMaintain ?? false);
 });
+
+/**
+ * Whether the answer about authority is a stored copy's rather than the node's
+ * (M18.53).
+ *
+ * The library read works offline — the read set carries the published documents
+ * — but a stored copy cannot establish what this caller *maintains*, so the
+ * projection reports `canMaintain: false` for every scope. Read straight into
+ * `canMaintain` that becomes "you do not have authority here", which is a claim
+ * about the reader rather than about the connection, and the wrong one: their
+ * standing has not changed, this device just cannot confirm it.
+ *
+ * So the workspace says what is actually true. The authoring surface needs a
+ * node; the library beside it does not, and neither statement stands in for the
+ * other.
+ */
+const authorityUnconfirmed = computed(
+  () => library.value !== null && library.value.freshness.source === "cache",
+);
 
 const loaded = computed(
   () =>
@@ -313,7 +333,10 @@ async function load(): Promise<void> {
   } catch (caught) {
     loadError.value = meridianErrorMessage(
       caught,
-      "Unable to load this document.",
+      connectionRequiredMessage(
+        "This document",
+        "a document is served as the node's render with its fragments resolved, and the rendered text is not held on this device",
+      ),
     );
   }
 }
@@ -549,6 +572,19 @@ async function download(format: string): Promise<void> {
 
     <p v-else-if="!loaded" class="document-edit__hint" role="status">
       Loading the document workspace.
+    </p>
+
+    <p
+      v-else-if="authorityUnconfirmed"
+      class="document-edit__restricted"
+      role="status"
+    >
+      {{
+        connectionRequiredMessage(
+          "The document workspace",
+          "the scopes you maintain are the node's answer and cannot be established from the copy this device is holding",
+        )
+      }}
     </p>
 
     <p v-else-if="!canMaintain" class="document-edit__restricted" role="status">

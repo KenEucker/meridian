@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import ReportingExportSection from "@/components/sections/ReportingExportSection.vue";
 import WorkflowPageShell from "@/components/WorkflowPageShell.vue";
 import {
@@ -115,7 +116,10 @@ async function load(): Promise<void> {
     review.value = null;
     loadError.value = meridianErrorMessage(
       error,
-      "The department's credits could not be read.",
+      connectionRequiredMessage(
+        "The department's credits",
+        "the credit ledger is frozen accounting the node holds, and the worked hours carrying no entry are counted against it at read time",
+      ),
     );
   } finally {
     loading.value = false;

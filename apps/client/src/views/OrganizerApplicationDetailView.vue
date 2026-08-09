@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   decideApplication,
   getApplication,
@@ -94,7 +95,10 @@ async function load(): Promise<void> {
     application.value = null;
     loadError.value = meridianErrorMessage(
       error,
-      "That application could not be read.",
+      connectionRequiredMessage(
+        "That application",
+        "an application is filed by somebody who is not yet staff, so nothing about it is in a staff member's offline read set",
+      ),
     );
   } finally {
     loading.value = false;
