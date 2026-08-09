@@ -30,6 +30,7 @@ use App\Services\Training\TrainingService;
 use App\Services\Waiver\WaiverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class UnscheduledShiftAdditionTest extends TestCase
@@ -399,6 +400,112 @@ class UnscheduledShiftAdditionTest extends TestCase
 
         $this->assertTrue($outcome->hasOverlapWarnings());
         $this->assertSame((string) $overlappingShift->id, (string) $outcome->warnings[0]->overlappingShift->id);
+    }
+
+    /**
+     * The capacity question M18.54 had to settle before queueing this command
+     * (SLB-008; SHIFT-007).
+     *
+     * `ShiftEligibilityService::assertCapacityForSelfSignup` is the domain's
+     * only capacity guard and it is self-signup's alone, so a Logistics addition
+     * over capacity is already permitted at a connected desk. That is what makes
+     * queueing it safe without an override: the offline answer and the online one
+     * are the same answer, and neither of them is "the shift is full".
+     */
+    public function test_an_addition_beyond_capacity_is_accepted_rather_than_refused(): void
+    {
+        [$shift, $staff, $shiftLead] = $this->unscheduledScenario();
+
+        $shift->forceFill(['capacity' => 1])->save();
+        ShiftAssignment::factory()->create([
+            'shift_id' => $shift->id,
+            'staff_id' => Staff::factory()->create()->id,
+            'assignment_status' => ShiftAssignment::STATUS_SIGNED_UP,
+            'assigned_by_user_id' => null,
+            'removed_at' => null,
+        ]);
+
+        $outcome = app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:00:00'),
+        );
+
+        $this->assertSame(ShiftAssignment::STATUS_ASSIGNED, $outcome->assignment->assignment_status);
+        $this->assertSame(
+            2,
+            ShiftAssignment::query()->where('shift_id', $shift->id)->whereNull('removed_at')->count(),
+        );
+    }
+
+    /**
+     * A queued addition carries the device's key and the operator's moment
+     * (M18.54; data/API 5.3), and the audit entry names both — which is what
+     * tells a reviewer months later that the timestamp on the assignment is when
+     * somebody recorded it rather than when the queue drained.
+     */
+    public function test_a_queued_addition_records_its_operation_uuid_and_the_moment_it_was_recorded(): void
+    {
+        [$shift, $staff, $shiftLead] = $this->unscheduledScenario();
+        $operationUuid = (string) Str::uuid();
+        $recordedAt = Carbon::parse('2026-07-01 10:00:00');
+
+        $outcome = app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 14:00:00'),
+            operationUuid: $operationUuid,
+            recordedAt: $recordedAt,
+        );
+
+        $this->assertFalse($outcome->replayed);
+        $this->assertSame($operationUuid, $outcome->assignment->unscheduled_operation_uuid);
+        $this->assertTrue($outcome->assignment->created_at->equalTo($recordedAt));
+
+        $audit = AuditEvent::query()
+            ->where('action', 'shift_assignment.unscheduled_added')
+            ->where('entity_id', $outcome->assignment->id)
+            ->firstOrFail();
+
+        $this->assertSame($operationUuid, $audit->after_json['operation_uuid']);
+        $this->assertSame($recordedAt->toIso8601String(), $audit->after_json['added_at']);
+    }
+
+    /**
+     * The same command arriving twice is one assignment and one audit entry, and
+     * the second delivery is reported as the replay it is rather than refused as
+     * a duplicate (M18.54; CLIENT-016).
+     */
+    public function test_a_replayed_addition_returns_the_assignment_it_already_made(): void
+    {
+        [$shift, $staff, $shiftLead] = $this->unscheduledScenario();
+        $operationUuid = (string) Str::uuid();
+
+        $first = app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:00:00'),
+            operationUuid: $operationUuid,
+        );
+
+        $replay = app(UnscheduledShiftAdditionService::class)->addStaffToShift(
+            shift: $shift,
+            staff: $staff,
+            actor: $shiftLead,
+            moment: Carbon::parse('2026-07-01 10:05:00'),
+            operationUuid: $operationUuid,
+        );
+
+        $this->assertTrue($replay->replayed);
+        $this->assertSame((string) $first->assignment->id, (string) $replay->assignment->id);
+        $this->assertSame(1, ShiftAssignment::query()->count());
+        $this->assertSame(
+            1,
+            AuditEvent::query()->where('action', 'shift_assignment.unscheduled_added')->count(),
+        );
     }
 
     /**

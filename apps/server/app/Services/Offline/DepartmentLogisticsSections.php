@@ -154,6 +154,7 @@ final class DepartmentLogisticsSections implements OfflineReadSetContributor
         }
 
         $teamLabels = $this->teamLabels($departmentId, $staffIds);
+        $eligibleTeamIds = $this->eligibleTeamIds($departmentId, $staffIds);
 
         return $this->rows(
             Staff::query()->whereKey($staffIds)->orderBy('legal_name'),
@@ -172,6 +173,18 @@ final class DepartmentLogisticsSections implements OfflineReadSetContributor
                 // holding a third rendered copy of them.
                 'handle' => $member->handle,
                 'team_label' => $teamLabels[(string) $member->getKey()] ?? null,
+                /*
+                 * The teams whose shifts this person may be added to (M18.54;
+                 * SLB-008). The label above is what a desk reads; this is what
+                 * it decides with, and they are not the same list — a label
+                 * names every crew somebody is on, while an addition turns on
+                 * an active membership of an active team held under their
+                 * active department membership. `TeamMembership::
+                 * onEligibleShiftTeam` is that rule, and it is asked here so a
+                 * desk with no signal offers the addition on exactly the
+                 * condition the node offers it on.
+                 */
+                'eligible_team_ids' => $eligibleTeamIds[(string) $member->getKey()] ?? [],
                 'archived_at' => $this->moment($member->archived_at),
             ],
         );
@@ -489,6 +502,57 @@ final class DepartmentLogisticsSections implements OfflineReadSetContributor
         }
 
         return $labels;
+    }
+
+    /**
+     * Which teams' shifts each of these staff members may be added to (SLB-008).
+     *
+     * The eligibility half `UnscheduledShiftAdditionService` and the Logistics
+     * read both resolve through `onEligibleShiftTeam`, asked once per desk and
+     * carried on the staff row rather than as a section of its own: it is a
+     * handful of ids per person, and a device that had to join two sections to
+     * decide whether to draw one button is the reason a client reaches for a
+     * query engine.
+     *
+     * This is not the whole of eligibility and does not pretend to be. Do Not
+     * Staff, organization standing, required trainings, and required waivers are
+     * decided by the node when the command arrives, which is why the addition it
+     * offers may still be refused (technical spec 9.4).
+     *
+     * @param  list<string>  $staffIds
+     * @return array<string, list<string>>
+     */
+    private function eligibleTeamIds(string $departmentId, array $staffIds): array
+    {
+        $membershipIds = DepartmentMembership::query()
+            ->active()
+            ->where('department_id', $departmentId)
+            ->whereIn('staff_id', $staffIds)
+            ->where('status', DepartmentMembership::STATUS_ACTIVE)
+            ->pluck('id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ->all();
+
+        if ($membershipIds === []) {
+            return [];
+        }
+
+        $teams = [];
+
+        foreach (
+            TeamMembership::query()
+                ->onEligibleShiftTeam($membershipIds)
+                ->whereIn('staff_id', $staffIds)
+                ->orderBy('id')
+                ->get() as $membership
+        ) {
+            $teams[(string) $membership->staff_id][] = (string) $membership->team_id;
+        }
+
+        return array_map(
+            fn (array $ids): array => array_values(array_unique($ids)),
+            $teams,
+        );
     }
 
     /**

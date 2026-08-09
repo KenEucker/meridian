@@ -6,6 +6,7 @@ use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\Device;
+use App\Models\DeviceTrust;
 use App\Models\Event;
 use App\Models\EventCredential;
 use App\Models\EventDepartmentAssignment;
@@ -19,6 +20,7 @@ use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
 use App\Services\Auth\ApiTokenIssuer;
+use App\Services\Session\SessionResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -115,6 +117,10 @@ class SessionResolutionTest extends TestCase
             'departments',
             'teams',
             'context',
+            // The device this request's token is bound to, and its trust for
+            // this caller (AUTH-024). A fact about the credential rather than a
+            // navigation decision, which is what the loop below still checks.
+            'device',
             'refreshed_at',
         ], array_keys((array) $response->json()));
 
@@ -147,6 +153,136 @@ class SessionResolutionTest extends TestCase
         $this->me($mine['user'], ['event_id' => (string) $theirs['event']->getKey()])
             ->assertNotFound()
             ->assertJsonPath('reason_code', 'event_context_unavailable');
+    }
+
+    /**
+     * Device trust travels on the session document (AUTH-021, AUTH-024;
+     * technical spec 12.2, 14; data/API 12.2).
+     *
+     * The readiness checklist lists "device trusted" as one of its eight items
+     * and had nothing to answer with on a personal device: trust is a
+     * `device_trusts` row and no endpoint published it. It belongs here because
+     * the document is already per-caller and already cached durably, so a device
+     * in a field reads its own trust from the node's last answer.
+     */
+    public function test_the_session_reports_trust_for_the_device_its_token_is_bound_to(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $device = Device::factory()->create(['device_label' => "Dana's phone"]);
+        $trust = DeviceTrust::factory()->create([
+            'user_id' => $scenario['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->addWeeks(6),
+            'revoked_at' => null,
+        ]);
+
+        $response = $this->meFrom($scenario['user'], $device);
+
+        $response->assertOk();
+        $response->assertJsonPath('device.id', (string) $device->getKey());
+        $response->assertJsonPath('device.label', "Dana's phone");
+        $response->assertJsonPath('device.trusted', true);
+        $response->assertJsonPath('device.trust_state', 'trusted');
+        $response->assertJsonPath(
+            'device.trusted_until',
+            $trust->expires_at?->toIso8601String(),
+        );
+    }
+
+    /**
+     * A revoked device stays revoked through a sign-in, and the session says so.
+     *
+     * `DeviceTrustService` refuses to renew a revoked pair on purpose — "a
+     * sign-in undoing it would make revocation last exactly until its holder
+     * opened the app" — and this is the property the readiness item reports.
+     * It is also why revoked reads differently from lapsed for the person: this
+     * one is not fixed by signing in again.
+     */
+    public function test_a_revoked_device_reports_revoked_even_after_signing_in_from_it(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $device = Device::factory()->create();
+
+        DeviceTrust::factory()->create([
+            'user_id' => $scenario['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->addWeeks(6),
+            'revoked_at' => now()->subHour(),
+        ]);
+
+        $this->meFrom($scenario['user'], $device)
+            ->assertJsonPath('device.trusted', false)
+            ->assertJsonPath('device.trust_state', 'revoked');
+    }
+
+    /**
+     * A lapsed trust reads expired rather than trusted (AUTH-024).
+     *
+     * Resolved directly rather than over HTTP, because issuing a token *is* the
+     * sign-in that renews trust — the state this covers is the one a device
+     * reaches by running for six weeks on a cached session without signing in
+     * again, which no request can reproduce.
+     */
+    public function test_a_lapsed_trust_reports_expired_rather_than_trusted(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $device = Device::factory()->create();
+
+        DeviceTrust::factory()->create([
+            'user_id' => $scenario['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->subDay(),
+            'revoked_at' => null,
+        ]);
+
+        $document = app(SessionResolver::class)->resolve($scenario['user'], null, $device);
+
+        $this->assertFalse($document['device']['trusted']);
+        $this->assertSame('expired', $document['device']['trust_state']);
+    }
+
+    /**
+     * Trust is per user/device pair (technical spec 12.1), so somebody else's
+     * trust for this hardware is not this caller's. A shared laptop two people
+     * sign in from holds two rows, and each reads their own.
+     */
+    public function test_another_users_trust_for_the_same_device_is_not_this_callers(): void
+    {
+        $mine = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $theirs = $this->scenario(PermissionCatalog::ROLE_LEAD_ORGANIZER);
+        $device = Device::factory()->create();
+
+        // Theirs is active; this caller's own is revoked. A resolver reading the
+        // wrong row would report the device as trusted for somebody it is not.
+        DeviceTrust::factory()->create([
+            'user_id' => $theirs['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->addWeeks(6),
+            'revoked_at' => null,
+        ]);
+        DeviceTrust::factory()->create([
+            'user_id' => $mine['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->addWeeks(6),
+            'revoked_at' => now()->subHour(),
+        ]);
+
+        $this->meFrom($mine['user'], $device)
+            ->assertJsonPath('device.trusted', false)
+            ->assertJsonPath('device.trust_state', 'revoked');
+    }
+
+    /**
+     * A shared-workstation session names no device, and the checklist reads that
+     * as "nothing was asked" rather than as a device that failed a check.
+     */
+    public function test_a_session_resolved_without_a_device_carries_none(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+
+        $document = app(SessionResolver::class)->resolve($scenario['user']);
+
+        $this->assertNull($document['device']);
     }
 
     public function test_the_endpoint_requires_a_bearer_token(): void
@@ -434,6 +570,17 @@ class SessionResolutionTest extends TestCase
 
         return $this->withHeader('Authorization', 'Bearer '.$this->tokenFor($user))
             ->getJson(route('api.me', $query));
+    }
+
+    /** `GET /api/me` from a named device, for the device-trust assertions. */
+    private function meFrom(User $user, Device $device): TestResponse
+    {
+        $this->app['auth']->forgetGuards();
+
+        $token = app(ApiTokenIssuer::class)->issue($user, $device)->plainTextToken;
+
+        return $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson(route('api.me'));
     }
 
     private function tokenFor(User $user): string

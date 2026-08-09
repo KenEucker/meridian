@@ -5,9 +5,12 @@ import {
   buildReadinessChecklist,
   resolveReadinessChecklist,
   summarizeReadiness,
+  type ReadinessCacheSignal,
   type ReadinessChecklistInputs,
+  type ReadinessDeviceSignal,
   type ReadinessItemKey,
   type ReadinessSessionSignal,
+  type ReadinessSyncSignal,
   type ReadinessWorkstationSignal,
 } from "@/readiness/checklist";
 import type { DeviceSigningReadiness } from "@/readiness/deviceSigning";
@@ -145,6 +148,59 @@ function trustedWorkstation(
   };
 }
 
+/** A personal device the node holds an active trust for (AUTH-024). */
+function trustedDevice(
+  overrides: Partial<ReadinessDeviceSignal> = {},
+): ReadinessDeviceSignal {
+  return {
+    named: true,
+    trusted: true,
+    state: "trusted",
+    label: "Dana's phone",
+    trustedUntil: "2027-08-15T00:00:00.000Z",
+    cached: false,
+    ...overrides,
+  };
+}
+
+/** A session that names no device, which is what a workstation key does. */
+function noDevice(): ReadinessDeviceSignal {
+  return {
+    named: false,
+    trusted: false,
+    state: "untrusted",
+    label: null,
+    trustedUntil: null,
+    cached: false,
+  };
+}
+
+/** A read set held and still inside the window it may be served in. */
+function usableCache(
+  overrides: Partial<ReadinessCacheSignal> = {},
+): ReadinessCacheSignal {
+  return {
+    usable: true,
+    held: true,
+    reason: null,
+    storedAt: "2027-07-04T18:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Refreshed, with nothing left in the outbox. */
+function syncedUp(
+  overrides: Partial<ReadinessSyncSignal> = {},
+): ReadinessSyncSignal {
+  return {
+    refreshedAt: "2027-07-04T18:00:00.000Z",
+    failedAt: null,
+    unsentCommands: 0,
+    rejectedCommands: 0,
+    ...overrides,
+  };
+}
+
 function inputs(
   overrides: Partial<ReadinessChecklistInputs> = {},
 ): ReadinessChecklistInputs {
@@ -154,6 +210,9 @@ function inputs(
     node: configuredNode(),
     session: liveSession(),
     workstation: personalDevice(),
+    device: trustedDevice(),
+    cache: usableCache(),
+    sync: syncedUp(),
     ...overrides,
   };
 }
@@ -224,26 +283,222 @@ describe("buildReadinessChecklist", () => {
     expect(byKey.deviceSigningAvailable.detail).toBe(unavailableSigning().reason);
   });
 
-  it("reports items without an implemented signal as pending, never as ready", () => {
+  /**
+   * Every one of the eight items has a signal behind it now. The three that
+   * used to report "Not available yet in this build" — device trust on a
+   * personal device, the local cache, and the last sync — are answered from the
+   * session document, the offline read set store, and the two sync directions.
+   */
+  it("answers every section 14 item rather than reporting any as unimplemented", () => {
     const items = buildReadinessChecklist(inputs());
-    const pendingKeys = items
-      .filter((item) => item.status === "pending")
-      .map((item) => item.key);
 
-    // `deviceTrusted` is pending here because the default input is a personal
-    // device, whose trust no endpoint publishes (data/API 12.2). It carries its
-    // own reason rather than the generic one, because "this build cannot ask"
-    // and "this feature does not exist" are different things to read.
-    expect(pendingKeys).toEqual([
-      "deviceTrusted",
-      "localCacheComplete",
-      "lastSyncCompleted",
-    ]);
+    expect(items.filter((item) => item.status === "pending")).toEqual([]);
     for (const item of items) {
-      if (item.status === "pending" && item.key !== "deviceTrusted") {
-        expect(item.detail).toBe("Not available yet in this build.");
-      }
+      expect(item.detail).not.toBe("Not available yet in this build.");
     }
+  });
+
+  /**
+   * `pending` survives for the case it was always for: a signal that has not
+   * answered yet. A session naming no device is not a device that failed a
+   * check, and saying so as a failure would send a technician after hardware
+   * that is fine.
+   */
+  it("reports a session that names no device as pending rather than as a failure", () => {
+    const items = buildReadinessChecklist(inputs({ device: noDevice() }));
+    const trusted = items.find((item) => item.key === "deviceTrusted")!;
+
+    expect(trusted.status).toBe("pending");
+    expect(trusted.detail).toBe("This session names no device to report trust for.");
+  });
+});
+
+/**
+ * `device trusted` on a personal device (AUTH-021, AUTH-024; data/API 12.2).
+ *
+ * The node establishes trust at sign-in and gives it six weeks from the last
+ * one, so what the item has to distinguish is never-trusted, lapsed, and
+ * revoked: the first two are fixed by signing in and the third is not.
+ */
+describe("personal device trust", () => {
+  it("is ready when the node holds an active trust, and names when it lapses", () => {
+    const items = buildReadinessChecklist(inputs());
+    const trusted = items.find((item) => item.key === "deviceTrusted")!;
+
+    expect(trusted.status).toBe("ready");
+    expect(trusted.detail).toContain("Dana's phone is trusted for your account");
+    expect(trusted.detail).toContain("2027-08-15T00:00:00.000Z");
+  });
+
+  it("says the trust is the node's last answer when the session is cached", () => {
+    const items = buildReadinessChecklist(
+      inputs({ device: trustedDevice({ cached: true }) }),
+    );
+
+    expect(items.find((item) => item.key === "deviceTrusted")!.detail).toContain(
+      "could not be reached to confirm",
+    );
+  });
+
+  it("tells a lapsed trust from a revoked one, because one is fixable by signing in", () => {
+    const lapsed = buildReadinessChecklist(
+      inputs({
+        device: trustedDevice({ trusted: false, state: "expired" }),
+      }),
+    ).find((item) => item.key === "deviceTrusted")!;
+
+    expect(lapsed.status).toBe("not-ready");
+    expect(lapsed.detail).toContain("Signing in again renews it");
+
+    const revoked = buildReadinessChecklist(
+      inputs({
+        device: trustedDevice({ trusted: false, state: "revoked" }),
+      }),
+    ).find((item) => item.key === "deviceTrusted")!;
+
+    expect(revoked.status).toBe("not-ready");
+    expect(revoked.detail).toContain("An administrator has to restore it");
+  });
+
+  /*
+   * A machine that is a shared workstation is still answered by the workstation
+   * signal, whatever the session says about a device. The two are different
+   * kinds of trust and 13.1 keeps them apart.
+   */
+  it("leaves a shared workstation to the workstation signal", () => {
+    const items = buildReadinessChecklist(
+      inputs({ workstation: trustedWorkstation(), device: noDevice() }),
+    );
+    const trusted = items.find((item) => item.key === "deviceTrusted")!;
+
+    expect(trusted.status).toBe("ready");
+    expect(trusted.detail).toContain("onsite-command-1");
+  });
+});
+
+/**
+ * `local cache complete` (M18.46 through M18.50; technical spec 9.3, 11A.4).
+ *
+ * Complete is "the set the node composed for this caller, still inside the
+ * window it may be served in" — never a list of sections, because the set is
+ * composed per caller and a staff member holding no Logistics index is holding
+ * exactly what they should.
+ */
+describe("local cache complete", () => {
+  it("is ready when the device holds a servable set, and says when it was stored", () => {
+    const item = buildReadinessChecklist(inputs()).find(
+      (entry) => entry.key === "localCacheComplete",
+    )!;
+
+    expect(item.status).toBe("ready");
+    expect(item.detail).toContain("2027-07-04T18:00:00.000Z");
+  });
+
+  it("is not ready when the device holds nothing yet", () => {
+    const item = buildReadinessChecklist(
+      inputs({
+        cache: usableCache({
+          usable: false,
+          held: false,
+          reason: "nothing_held",
+          storedAt: null,
+        }),
+      }),
+    ).find((entry) => entry.key === "localCacheComplete")!;
+
+    expect(item.status).toBe("not-ready");
+    expect(item.detail).toContain("holds no offline copy yet");
+  });
+
+  /*
+   * A set past its event window is not a stale copy to disclose — 11A.4 refuses
+   * to serve it, so every surface on the device is already answering as though
+   * it holds nothing, and the checklist says the same thing they do.
+   */
+  it("is not ready when the set is past the window it may be served in", () => {
+    const item = buildReadinessChecklist(
+      inputs({
+        cache: usableCache({ usable: false, reason: "event_window_ended" }),
+      }),
+    ).find((entry) => entry.key === "localCacheComplete")!;
+
+    expect(item.status).toBe("not-ready");
+    expect(item.detail).toContain("event that has ended");
+  });
+});
+
+/**
+ * `last sync completed`, in both directions (M18.49 pulling, M16.10 pushing).
+ *
+ * One item, because the person reading it is asking one question: is this
+ * device's work where it needs to be.
+ */
+describe("last sync completed", () => {
+  it("is ready when the set has refreshed and the outbox is empty", () => {
+    const item = buildReadinessChecklist(inputs()).find(
+      (entry) => entry.key === "lastSyncCompleted",
+    )!;
+
+    expect(item.status).toBe("ready");
+    expect(item.detail).toContain("Everything recorded here has been sent");
+    expect(item.detail).toContain("2027-07-04T18:00:00.000Z");
+  });
+
+  it("is not ready while the device is still holding work, and says how much", () => {
+    const one = buildReadinessChecklist(
+      inputs({ sync: syncedUp({ unsentCommands: 1 }) }),
+    ).find((entry) => entry.key === "lastSyncCompleted")!;
+
+    expect(one.status).toBe("not-ready");
+    expect(one.detail).toBe(
+      "1 action recorded on this device has not reached the node yet.",
+    );
+
+    const several = buildReadinessChecklist(
+      inputs({ sync: syncedUp({ unsentCommands: 3 }) }),
+    ).find((entry) => entry.key === "lastSyncCompleted")!;
+
+    expect(several.detail).toBe(
+      "3 actions recorded on this device have not reached the node yet.",
+    );
+  });
+
+  /*
+   * A refusal outranks unsent work: it will not clear on its own, and the point
+   * of saying it here is that it is waiting in the outbox for a person.
+   */
+  it("reports a refusal ahead of unsent work", () => {
+    const item = buildReadinessChecklist(
+      inputs({ sync: syncedUp({ unsentCommands: 2, rejectedCommands: 1 }) }),
+    ).find((entry) => entry.key === "lastSyncCompleted")!;
+
+    expect(item.status).toBe("not-ready");
+    expect(item.detail).toBe(
+      "1 action the node refused is waiting for you to deal with it.",
+    );
+  });
+
+  it("is not ready when the device has never synced", () => {
+    const item = buildReadinessChecklist(
+      inputs({ sync: syncedUp({ refreshedAt: null }) }),
+    ).find((entry) => entry.key === "lastSyncCompleted")!;
+
+    expect(item.status).toBe("not-ready");
+    expect(item.detail).toBe("This device has not synced with the node yet.");
+  });
+
+  /*
+   * A failed attempt after a successful one does not undo the successful one.
+   * The device did sync; it also tried again and could not, and both are worth
+   * saying to somebody deciding whether to walk back into coverage.
+   */
+  it("keeps a completed sync ready while naming a later failed attempt", () => {
+    const item = buildReadinessChecklist(
+      inputs({ sync: syncedUp({ failedAt: "2027-07-04T19:00:00.000Z" }) }),
+    ).find((entry) => entry.key === "lastSyncCompleted")!;
+
+    expect(item.status).toBe("ready");
+    expect(item.detail).toContain("A later attempt did not reach the node");
   });
 });
 
@@ -302,15 +557,21 @@ describe("device trusted", () => {
 
   it("does not read a device-bound token as trust on a personal device", () => {
     // A token proves this device may call the node; trust is the separate
-    // six-week relationship in `device_trusts`. Reporting one as the other
-    // would be a false pass on the item most worth not faking.
+    // six-week relationship in `device_trusts`. The item follows the node's own
+    // verdict, so a signed-in device whose trust the node does not hold reads
+    // not-ready — reporting the token as trust would be a false pass on the
+    // item least worth faking.
     const items = buildReadinessChecklist(
-      inputs({ workstation: personalDevice(), session: liveSession() }),
+      inputs({
+        workstation: personalDevice(),
+        session: liveSession(),
+        device: trustedDevice({ trusted: false, state: "untrusted" }),
+      }),
     );
     const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
 
-    expect(byKey.deviceTrusted.status).toBe("pending");
-    expect(byKey.deviceTrusted.detail).toContain("not published to a client");
+    expect(byKey.loggedIn.status).toBe("ready");
+    expect(byKey.deviceTrusted.status).toBe("not-ready");
   });
 });
 
@@ -406,7 +667,7 @@ describe("summarizeReadiness", () => {
   it("counts items by status", () => {
     const summary = summarizeReadiness(buildReadinessChecklist(inputs()));
 
-    expect(summary).toEqual({ ready: 5, notReady: 0, pending: 3, total: 8 });
+    expect(summary).toEqual({ ready: 8, notReady: 0, pending: 0, total: 8 });
   });
 
   it("counts a failing capability as not ready", () => {
@@ -414,7 +675,7 @@ describe("summarizeReadiness", () => {
       buildReadinessChecklist(inputs({ localEncryption: unavailableEncryption() })),
     );
 
-    expect(summary).toEqual({ ready: 4, notReady: 1, pending: 3, total: 8 });
+    expect(summary).toEqual({ ready: 7, notReady: 1, pending: 0, total: 8 });
   });
 });
 

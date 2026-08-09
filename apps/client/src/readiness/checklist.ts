@@ -21,20 +21,33 @@
 // two more: `logged in` and `event selected` are facts about the session the
 // client holds, not features waiting to be built.
 //
-// `device trusted` is answered for one kind of device and pending for the other,
-// which is the honest shape of what exists. Technical spec 13.1 calls a shared
-// workstation "a special kind of trusted device", and since M18.32 the node
-// publishes that trust: the Kiosk pinned-context read answers for a trusted,
-// unrevoked workstation and 404s for anything else. A personal device's trust
-// lives in `device_trusts` (data/API 12.2) and no endpoint publishes it, so a
-// client cannot know, and the item says so rather than guessing from the
-// device-bound token — a token proves this device may call the node, not that
-// the user established trust with it.
+// `device trusted` is answered for both kinds of device. Technical spec 13.1
+// calls a shared workstation "a special kind of trusted device", and since
+// M18.32 the node publishes that trust through the Kiosk pinned-context read. A
+// personal device's trust lives in `device_trusts` (data/API 12.2), and the
+// session document now carries the node's answer for the device this session's
+// token is bound to — which is what the item reads, rather than inferring trust
+// from the token itself. A token proves this device may call the node; trust is
+// the separate six-week relationship AUTH-024 keeps on its own lifetime, and
+// reading one as the other would be a false pass on the item least worth faking.
 //
-// `local cache complete` and `last sync completed` still depend on work owned by
-// later Alpha 1 milestones and are reported honestly as `pending`.
+// `local cache complete` and `last sync completed` were pending until the work
+// behind them landed, and it has. The read set (M18.46 through M18.50) is what a
+// complete local cache means, and the two directions of sync — the set coming
+// down and the command outbox going up — are what "last sync completed" means
+// together. Both are read from the modules that own them rather than recomputed
+// here; this file decides only how to say what they report.
 
 import { nodeConnection, type NodeConnection } from "@/app/nodeConnection";
+import { offlineReadSetRefreshStatus } from "@/offline/offlineReadSetRefresh";
+import {
+  offlineReadSetStoredAt,
+  offlineReadSetVerdict,
+} from "@/offline/offlineReadSetRuntime";
+import {
+  commandOutbox,
+  commandOutboxRevision,
+} from "@/outbox/commandOutboxRuntime";
 import {
   checkDeviceSigningReadiness,
   type DeviceSigningReadiness,
@@ -121,10 +134,9 @@ export interface ReadinessSessionSignal {
  * What this machine is, as far as device trust goes (M18.32; technical spec
  * 13.1).
  *
- * Only a shared workstation can answer today. `isSharedWorkstation` is whether
- * this machine claims to be one at all — a personal device does not, and gets a
- * pending item rather than a failing one, because "not a shared workstation" is
- * not a trust problem.
+ * `isSharedWorkstation` is whether this machine claims to be one at all. A
+ * personal device does not, and is answered by {@link ReadinessDeviceSignal}
+ * instead — "not a shared workstation" was never a trust problem.
  */
 export interface ReadinessWorkstationSignal {
   /** Whether this machine is configured as a shared workstation. */
@@ -137,9 +149,70 @@ export interface ReadinessWorkstationSignal {
 }
 
 /**
- * Readiness signals available today. Local encryption (M8.3), device signing
- * (M8.4), the node connection, the session (M16.5), and shared-workstation
- * trust (M18.32) are wired; the remaining items resolve to `pending`.
+ * The node's answer about the device this session's credential is bound to
+ * (AUTH-021, AUTH-024; technical spec 12.2; data/API 12.2).
+ *
+ * `named` is false when the session carries no device block at all: a
+ * shared-workstation session names no device, and so does a document stored by
+ * a build from before the node published one. Both are "nothing was asked",
+ * which is a different answer from "asked and refused".
+ */
+export interface ReadinessDeviceSignal {
+  readonly named: boolean;
+  readonly trusted: boolean;
+  readonly state: "trusted" | "untrusted" | "expired" | "revoked";
+  readonly label: string | null;
+  readonly trustedUntil: string | null;
+  /** True when the answer came from the durable copy rather than the node. */
+  readonly cached: boolean;
+}
+
+/**
+ * What this device holds of its authorized read set (M18.46 through M18.50;
+ * CLIENT-021; technical spec 9.3, 11A.4).
+ *
+ * "Complete" is the set the node composed *for this caller*, not a fixed list of
+ * sections: the set is composed per request from the caller's own effective
+ * roles and the organization's active modules, so a device holding no Logistics
+ * index may be holding exactly what it should. Anything else would report a
+ * staff member's correct cache as incomplete forever.
+ */
+export interface ReadinessCacheSignal {
+  /** Whether a set is held and may still be served (the 11A.4 window rule). */
+  readonly usable: boolean;
+  /** Whether anything is held at all, usable or not. */
+  readonly held: boolean;
+  /** Why it may not be served, when it may not. */
+  readonly reason: "nothing_held" | "event_window_ended" | "no_event_context" | null;
+  /** When the device took delivery of what it holds. */
+  readonly storedAt: string | null;
+}
+
+/**
+ * Both directions of sync, which is what makes "last sync completed" one item
+ * rather than two (M18.49 for the pull, M16.10 for the push).
+ *
+ * A device whose read set refreshed a minute ago and whose outbox holds three
+ * unsent check-ins has not completed a sync in any sense its owner cares about,
+ * and a checklist that reported it ready would be answering a question nobody
+ * asked.
+ */
+export interface ReadinessSyncSignal {
+  /** Device time of the last read-set refresh that reached the node. */
+  readonly refreshedAt: string | null;
+  /** Device time of the last refresh attempt that did not. */
+  readonly failedAt: string | null;
+  /** Commands this device is still the only copy of. */
+  readonly unsentCommands: number;
+  /** Commands the node refused, waiting for somebody to deal with them. */
+  readonly rejectedCommands: number;
+}
+
+/**
+ * Every readiness signal, all eight items' worth. Local encryption (M8.3),
+ * device signing (M8.4), the node connection, the session (M16.5),
+ * shared-workstation trust (M18.32), personal device trust, the offline read
+ * set, and the two directions of sync.
  */
 export interface ReadinessChecklistInputs {
   readonly localEncryption: LocalEncryptionReadiness;
@@ -147,6 +220,9 @@ export interface ReadinessChecklistInputs {
   readonly node: NodeConnection;
   readonly session: ReadinessSessionSignal;
   readonly workstation: ReadinessWorkstationSignal;
+  readonly device: ReadinessDeviceSignal;
+  readonly cache: ReadinessCacheSignal;
+  readonly sync: ReadinessSyncSignal;
 }
 
 const READINESS_ITEM_ORDER: readonly ReadinessItemKey[] = [
@@ -174,14 +250,13 @@ const READINESS_ITEM_LABEL: Readonly<Record<ReadinessItemKey, string>> = {
 /**
  * Detail shown for items whose backing signal is not implemented yet. Kept
  * neutral and honest so the checklist never implies a failure or a false pass.
+ *
+ * No item resolves here any more. It stays because `pending` is a state the
+ * checklist keeps for a signal that has not answered *yet* — a workstation
+ * mid-boot, a session naming no device — and those are cases with their own
+ * words, not this one.
  */
 const PENDING_DETAIL = "Not available yet in this build.";
-
-/** Items that resolve to `pending` until their owning milestone wires them up. */
-const PENDING_ITEMS: readonly ReadinessItemKey[] = [
-  "localCacheComplete",
-  "lastSyncCompleted",
-];
 
 /**
  * `logged in` is whether this device holds permissions it may act on.
@@ -259,12 +334,12 @@ function eventSelectedItem(
  * gets refused is genuinely not ready — that is a technician's problem, and the
  * one case on this checklist where "device trusted" can honestly fail.
  *
- * A **personal device** cannot answer. Trust is a `device_trusts` row per
- * user/device pair (data/API 12.2) and no endpoint publishes it. The
- * device-bound API token is deliberately not read as a substitute: a token
- * proves this device may call the node, and trust is the separate six-week
- * relationship AUTH-024 keeps on its own lifetime. Reporting the token as trust
- * would be a false pass on the item most worth not faking.
+ * A **personal device** is answered by the session document, which now carries
+ * the node's own verdict for the device its token is bound to. The token is
+ * still not read as a substitute for that verdict: a token proves this device
+ * may call the node, and trust is the separate six-week relationship AUTH-024
+ * keeps on its own lifetime. Reporting the token as trust would be a false pass
+ * on the item least worth faking.
  *
  * A stored answer still reads ready. The node being unreachable is the ordinary
  * state of a machine on site, readiness is advisory and must not nag (spec 14),
@@ -273,13 +348,10 @@ function eventSelectedItem(
  */
 function deviceTrustedItem(
   workstation: ReadinessWorkstationSignal,
+  device: ReadinessDeviceSignal,
 ): ReadinessChecklistItem {
   if (!workstation.isSharedWorkstation) {
-    return toItem(
-      "deviceTrusted",
-      "pending",
-      "Personal device trust is not published to a client yet in this build.",
-    );
+    return personalDeviceTrustedItem(device);
   }
 
   if (workstation.trusted === null) {
@@ -314,11 +386,180 @@ function deviceTrustedItem(
 }
 
 /**
+ * `device trusted` for a personal device (AUTH-021, AUTH-024; data/API 12.2).
+ *
+ * The node establishes trust at sign-in and gives it six weeks from the last
+ * one, so the three ways it can be absent are three different sentences for the
+ * person reading them: never established, lapsed — which signing in again
+ * fixes — and revoked, which it does not.
+ *
+ * A session naming no device is `pending` rather than a failure. That is the
+ * shared-workstation session key, and the document a build from before the node
+ * published this stored; neither is a device that failed a check.
+ */
+function personalDeviceTrustedItem(
+  device: ReadinessDeviceSignal,
+): ReadinessChecklistItem {
+  if (!device.named) {
+    return toItem(
+      "deviceTrusted",
+      "pending",
+      "This session names no device to report trust for.",
+    );
+  }
+
+  const named = device.label === null || device.label === "" ? "This device" : device.label;
+
+  if (device.trusted) {
+    const until =
+      device.trustedUntil === null
+        ? `${named} is trusted for your account.`
+        : `${named} is trusted for your account until ${device.trustedUntil}.`;
+
+    return toItem(
+      "deviceTrusted",
+      "ready",
+      device.cached
+        ? `${until} This is the node's last answer; it could not be reached to confirm.`
+        : until,
+    );
+  }
+
+  switch (device.state) {
+    case "revoked":
+      return toItem(
+        "deviceTrusted",
+        "not-ready",
+        `${named} has been revoked for your account. An administrator has to restore it.`,
+      );
+    case "expired":
+      return toItem(
+        "deviceTrusted",
+        "not-ready",
+        `Trust for ${named} has lapsed. Signing in again renews it.`,
+      );
+    default:
+      return toItem(
+        "deviceTrusted",
+        "not-ready",
+        `${named} is not trusted for your account yet. Signing in from it establishes trust.`,
+      );
+  }
+}
+
+/**
+ * `local cache complete` (M18.46 through M18.50; CLIENT-021; technical spec 9.3,
+ * 11A.4).
+ *
+ * Complete means the device holds the set the node composed for this caller and
+ * may still serve it. It deliberately does not mean "holds every section": the
+ * set is composed per request from the caller's own effective roles and the
+ * organization's active modules (9.5), so a staff member with no Logistics scope
+ * holding no Logistics index is holding a complete cache. Checking for sections
+ * would report their correct device as incomplete for the life of the install.
+ *
+ * A set past its event window reads not-ready rather than ready-but-stale,
+ * because that is what the store does with it — 11A.4 refuses to serve one, so
+ * every surface on the device is already answering as though it holds nothing.
+ */
+function localCacheItem(cache: ReadinessCacheSignal): ReadinessChecklistItem {
+  if (cache.usable) {
+    return toItem(
+      "localCacheComplete",
+      "ready",
+      cache.storedAt === null
+        ? "This device holds the data it is authorized to work from offline."
+        : `Stored ${cache.storedAt}. This device holds the data it is authorized to work from offline.`,
+    );
+  }
+
+  if (!cache.held || cache.reason === "nothing_held") {
+    return toItem(
+      "localCacheComplete",
+      "not-ready",
+      "This device holds no offline copy yet. Connect to the node to fetch one.",
+    );
+  }
+
+  if (cache.reason === "event_window_ended") {
+    return toItem(
+      "localCacheComplete",
+      "not-ready",
+      "The copy this device holds is for an event that has ended. Connect to the node to refresh it.",
+    );
+  }
+
+  return toItem(
+    "localCacheComplete",
+    "not-ready",
+    "This device cannot confirm which event its offline copy belongs to. Connect to the node to refresh it.",
+  );
+}
+
+/**
+ * `last sync completed`, in both directions (M18.49 for the pull, M16.10 for the
+ * push).
+ *
+ * One item covering two flows, because the person reading it is asking one
+ * question: is this device's work where it needs to be. A read set refreshed a
+ * minute ago says nothing about three check-ins still sitting in the outbox, and
+ * a device with an empty outbox that has not refreshed since last Tuesday is
+ * working from a week-old roster.
+ *
+ * Unsent work is `not-ready` and says how much. A refusal is `not-ready` too and
+ * is the more urgent of the two, because it will not clear on its own: the
+ * outbox notice is where it gets resolved, and this item's job is to say it is
+ * there. Neither is a nag — section 14 rules those out, and stating a count once
+ * on a screen somebody opened is not one.
+ */
+function lastSyncItem(sync: ReadinessSyncSignal): ReadinessChecklistItem {
+  if (sync.rejectedCommands > 0) {
+    return toItem(
+      "lastSyncCompleted",
+      "not-ready",
+      `${countOf(sync.rejectedCommands, "action")} the node refused ${sync.rejectedCommands === 1 ? "is" : "are"} waiting for you to deal with ${sync.rejectedCommands === 1 ? "it" : "them"}.`,
+    );
+  }
+
+  if (sync.unsentCommands > 0) {
+    return toItem(
+      "lastSyncCompleted",
+      "not-ready",
+      `${countOf(sync.unsentCommands, "action")} recorded on this device ${sync.unsentCommands === 1 ? "has" : "have"} not reached the node yet.`,
+    );
+  }
+
+  if (sync.refreshedAt === null) {
+    return toItem(
+      "lastSyncCompleted",
+      "not-ready",
+      sync.failedAt === null
+        ? "This device has not synced with the node yet."
+        : `The last attempt to sync did not reach the node (${sync.failedAt}).`,
+    );
+  }
+
+  const detail = `Everything recorded here has been sent. Last synced ${sync.refreshedAt}.`;
+
+  return toItem(
+    "lastSyncCompleted",
+    "ready",
+    sync.failedAt === null
+      ? detail
+      : `${detail} A later attempt did not reach the node.`,
+  );
+}
+
+/** "1 action" / "3 actions", so a count reads as a sentence rather than a stat. */
+function countOf(count: number, noun: string): string {
+  return count === 1 ? `1 ${noun}` : `${count} ${noun}s`;
+}
+
+/**
  * `trusted server known` is about knowing which node this device works
  * against, which is now a real signal: a device is either pointed at a node or
  * falling back to a development default. Establishing *trust* with that node
- * is device trust, which is the separate `deviceTrusted` item and is still
- * pending.
+ * is device trust, which is the separate `deviceTrusted` item.
  */
 function nodeItem(node: NodeConnection): ReadinessChecklistItem {
   if (node.source === "default") {
@@ -383,12 +624,15 @@ export function buildReadinessChecklist(
       return eventSelectedItem(inputs.session);
     }
     if (key === "deviceTrusted") {
-      return deviceTrustedItem(inputs.workstation);
+      return deviceTrustedItem(inputs.workstation, inputs.device);
     }
-    if (PENDING_ITEMS.includes(key)) {
-      return toItem(key, "pending", PENDING_DETAIL);
+    if (key === "localCacheComplete") {
+      return localCacheItem(inputs.cache);
     }
-    // Unreachable: every key is either a capability item or pending.
+    if (key === "lastSyncCompleted") {
+      return lastSyncItem(inputs.sync);
+    }
+    // Unreachable: every one of the eight keys is answered above.
     return toItem(key, "pending", PENDING_DETAIL);
   });
 }
@@ -536,6 +780,84 @@ export function resolveReadinessWorkstationSignal(): ReadinessWorkstationSignal 
 }
 
 /**
+ * The node's answer about this session's device (AUTH-024).
+ *
+ * Read off the session document, which is where the node put it, and marked
+ * `cached` when the document itself is the stored copy — the same distinction
+ * `logged in` already draws, for the same reason: a device in a field is
+ * normally working from the last answer it was given, and saying so is not the
+ * same as doubting it.
+ */
+export function resolveReadinessDeviceSignal(): ReadinessDeviceSignal {
+  const device = clientSessionState.document?.device ?? null;
+
+  if (device === null || device === undefined) {
+    return {
+      named: false,
+      trusted: false,
+      state: "untrusted",
+      label: null,
+      trustedUntil: null,
+      cached: false,
+    };
+  }
+
+  return {
+    named: true,
+    trusted: device.trusted,
+    state: device.trust_state,
+    label: device.label,
+    trustedUntil: device.trusted_until,
+    cached: clientSessionState.status === "cached",
+  };
+}
+
+/**
+ * What this device holds of its read set, asked of the store that owns it.
+ *
+ * The verdict is evaluated against the moment it is asked rather than stamped at
+ * refresh time, so a readiness screen left open past the end of an event window
+ * stops claiming a usable cache where it stands.
+ */
+export function resolveReadinessCacheSignal(
+  now: Date = new Date(),
+): ReadinessCacheSignal {
+  const verdict = offlineReadSetVerdict(now);
+  const storedAt = offlineReadSetStoredAt();
+
+  return {
+    usable: verdict.access === "granted",
+    held: storedAt !== null,
+    reason: verdict.reason,
+    storedAt,
+  };
+}
+
+/**
+ * Both directions of sync: what the read set last did, and what the outbox is
+ * still holding.
+ *
+ * The outbox is counted rather than timestamped. `unsent` is the queue's own
+ * word for work this device is the only copy of — queued and sending, never
+ * rejected — and a rejection is counted separately because it is the one that
+ * will not clear without a person.
+ */
+export function resolveReadinessSyncSignal(): ReadinessSyncSignal {
+  const refresh = offlineReadSetRefreshStatus.value;
+
+  // The revision is the Vue dependency for anything reading the queue, so a
+  // computed built on this recomputes when a command is queued or settles.
+  void commandOutboxRevision.value;
+
+  return {
+    refreshedAt: refresh.refreshedAt,
+    failedAt: refresh.failedAt,
+    unsentCommands: commandOutbox.unsent().length,
+    rejectedCommands: commandOutbox.byStatus("rejected").length,
+  };
+}
+
+/**
  * Probe the current client scope and build the readiness checklist in one call.
  * Defaults to the real platform (`globalThis`) while tests inject a scope.
  */
@@ -548,5 +870,8 @@ export function resolveReadinessChecklist(
     node: nodeConnection.value,
     session: resolveReadinessSessionSignal(),
     workstation: resolveReadinessWorkstationSignal(),
+    device: resolveReadinessDeviceSignal(),
+    cache: resolveReadinessCacheSignal(),
+    sync: resolveReadinessSyncSignal(),
   });
 }

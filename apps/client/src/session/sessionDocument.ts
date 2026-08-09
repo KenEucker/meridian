@@ -107,6 +107,30 @@ export interface SessionContext {
   readonly switching_available: boolean;
 }
 
+/** Why the node does not hold this device as trusted, when it does not. */
+export type SessionDeviceTrustState =
+  | "trusted"
+  | "untrusted"
+  | "expired"
+  | "revoked";
+
+/**
+ * The device this session's credential is bound to, and its trust for this user
+ * (AUTH-021, AUTH-024; technical spec 12.2, 14; data/API 12.2).
+ *
+ * Absent when the credential names no device — a shared-workstation session key
+ * is a machine's credential, and the readiness checklist answers for a
+ * workstation from the pinned-context read instead.
+ */
+export interface SessionDevice {
+  readonly id: string;
+  readonly label: string | null;
+  readonly trusted: boolean;
+  readonly trust_state: SessionDeviceTrustState;
+  /** When the six-week trust window closes, when there is a trust at all. */
+  readonly trusted_until: string | null;
+}
+
 export interface SessionDocument {
   readonly user: SessionUser;
   readonly roles: readonly SessionRole[];
@@ -116,6 +140,15 @@ export interface SessionDocument {
   readonly departments: readonly SessionDepartment[];
   readonly teams: readonly SessionTeam[];
   readonly context: SessionContext;
+  /**
+   * Optional, and validated no further than its own shape.
+   *
+   * A document stored by a build from before this field existed is still a
+   * usable document, and throwing one away would cost a device its permissions
+   * to gain nothing. A client that finds no device block reports the item as
+   * unanswered rather than as a device that failed a check.
+   */
+  readonly device?: SessionDevice | null;
   /** Server time of resolution, shown as the last refresh (CLIENT-009). */
   readonly refreshed_at: string;
 }
@@ -199,6 +232,29 @@ function isIdentified(value: unknown): boolean {
 }
 
 /**
+ * The device block, which a document may carry, may carry as null, or may not
+ * carry at all.
+ *
+ * All three are valid documents. What is not valid is a block that is present
+ * and malformed: readiness reports "device trusted" from `trusted`, and a
+ * client that read a missing or non-boolean field as false would show a
+ * technician a failing trust check on a device the node has no complaint about.
+ */
+function isSessionDevice(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.trusted === "boolean" &&
+    typeof value.trust_state === "string" &&
+    isNullableString(value.trusted_until)
+  );
+}
+
+/**
  * Whether a value read back from durable storage is a session document this
  * client can establish permissions from.
  *
@@ -225,6 +281,7 @@ export function isSessionDocument(value: unknown): value is SessionDocument {
     Array.isArray(value.teams) &&
     value.teams.every(isIdentified) &&
     isSessionContext(value.context) &&
+    isSessionDevice(value.device) &&
     typeof value.refreshed_at === "string"
   );
 }

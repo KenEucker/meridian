@@ -72,6 +72,10 @@ export function logisticsStaffIndexRows(
       preferred_name: index % 3 === 0 ? given : null,
       handle: `${given.toLowerCase()}${index}`,
       team_label: TEAM_LABELS[index % TEAM_LABELS.length]!,
+      // The teams whose shifts this person may be added to (M18.54; SLB-008).
+      // One apiece here, which is what the measurement is meant to reflect: a
+      // department member is usually on one crew.
+      eligible_team_ids: [`team-${index % TEAM_LABELS.length}`],
       archived_at: null,
     };
   });

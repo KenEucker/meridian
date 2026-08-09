@@ -18,7 +18,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { getLogisticsDesk } from "@/department-ops/departmentOpsReadModel";
+import {
+  addStaffToShift,
+  getLogisticsDesk,
+  setDepartmentPresence,
+} from "@/department-ops/departmentOpsReadModel";
+import {
+  commandOutbox,
+  resetCommandOutbox,
+} from "@/outbox/commandOutboxRuntime";
 import {
   installOfflineReadSet,
   offlineReadSetPayload,
@@ -50,7 +58,11 @@ function unreachableNode(): void {
   );
 }
 
-function staffRow() {
+/**
+ * @param eligibleTeamIds `null` composes the row the way a set from before
+ *   M18.54 carries it: with no eligible teams on it at all.
+ */
+function staffRow(eligibleTeamIds: readonly string[] | null = ["team-1"]) {
   return {
     id: `${EVENT_ID}:${DEPARTMENT_ID}:${STAFF_ID}`,
     event_id: EVENT_ID,
@@ -60,6 +72,11 @@ function staffRow() {
     preferred_name: "Robin",
     handle: "robin",
     team_label: "Dirt",
+    // `TeamMembership::onEligibleShiftTeam`, as the node resolved it when the
+    // set was composed (M18.54). The shift below is this team's.
+    ...(eligibleTeamIds === null
+      ? {}
+      : { eligible_team_ids: eligibleTeamIds }),
     archived_at: null,
   };
 }
@@ -84,6 +101,11 @@ interface DeskOptions {
   readonly assigned?: boolean;
   readonly attendanceState?: string | null;
   readonly checkouts?: readonly Record<string, unknown>[];
+  /**
+   * The teams whose shifts this person may be added to (M18.54; SLB-008).
+   * `null` leaves the field off the row, as a pre-M18.54 set does.
+   */
+  readonly eligibleTeamIds?: readonly string[] | null;
 }
 
 async function installDesk(options: DeskOptions = {}): Promise<void> {
@@ -92,7 +114,7 @@ async function installDesk(options: DeskOptions = {}): Promise<void> {
       sections: {
         events: [{ id: EVENT_ID, name: "Local Field Event" }],
         departments: [{ id: DEPARTMENT_ID, name: "Rangers" }],
-        logistics_staff_index: [staffRow()],
+        logistics_staff_index: [staffRow(options.eligibleTeamIds)],
         logistics_presence: [
           {
             id: "presence-1",
@@ -326,9 +348,9 @@ describe("the Logistics Desk with no node in reach", () => {
   });
 
   /*
-   * The three the device refuses to answer rather than deriving. Each is a fact
-   * the device does not hold: eligibility for an unscheduled addition, the
-   * node's correction grace period, and what is available to hand over.
+   * The two the device still refuses to answer rather than deriving: the node's
+   * correction grace period, and what is available to hand over. The addition
+   * left this list in M18.54 and has its own cases below.
    */
   it("refuses the connected-only controls rather than guessing at them", async () => {
     await installDesk({ assigned: false });
@@ -336,10 +358,74 @@ describe("the Logistics Desk with no node in reach", () => {
 
     const { desk, card } = await readCard();
 
-    expect(card.canAddToShift).toBe(false);
-    expect(card.addToShiftBlockedReason).toContain("needs a connection");
     expect(card.canCorrectHours).toBe(false);
+    expect(card.hoursWorkedId).toBeNull();
     expect(desk.checkoutInventory).toEqual([]);
+  });
+
+  /*
+   * The unscheduled addition, offline (M18.54; SLB-008). The offer is the node's
+   * own four-part rule — unassigned, on-site, the shift started, an eligible
+   * team membership — and the device now holds every one of those facts.
+   */
+  it("offers the addition on the node's own rule", async () => {
+    await installDesk({ assigned: false, presence: "on_site" });
+    unreachableNode();
+
+    const { card } = await readCard();
+
+    expect(card.canAddToShift).toBe(true);
+    expect(card.addToShiftBlockedReason).toBeNull();
+  });
+
+  it("refuses the addition for a shift belonging to another team, in the node's words", async () => {
+    await installDesk({
+      assigned: false,
+      presence: "on_site",
+      eligibleTeamIds: ["team-other"],
+    });
+    unreachableNode();
+
+    const { card } = await readCard();
+
+    expect(card.canAddToShift).toBe(false);
+    expect(card.addToShiftBlockedReason).toBe(
+      "This shift is for the Dirt team, and they are not a member of it.",
+    );
+  });
+
+  /*
+   * A set composed before M18.54 carries no eligible teams. The device reads
+   * that as "no eligible team" rather than as permission it was never given: the
+   * refusal is fixed by refreshing the set, where a wrongly offered addition is
+   * a refusal at the node with somebody standing at the desk.
+   */
+  it("withholds the addition from a set that predates the eligible-team rows", async () => {
+    await installDesk({
+      assigned: false,
+      presence: "on_site",
+      eligibleTeamIds: null,
+    });
+    unreachableNode();
+
+    const { card } = await readCard();
+
+    expect(card.canAddToShift).toBe(false);
+  });
+
+  /*
+   * The card for an unassigned shift is dropped for somebody who is not on site,
+   * which is what `DepartmentOperationsReadController::shiftCards` does — a
+   * button offering an addition the node refuses is worse than no card, and the
+   * two desks now show the same thing.
+   */
+  it("drops an unassigned card for somebody who is not on site", async () => {
+    await installDesk({ assigned: false, presence: "off_site" });
+    unreachableNode();
+
+    const desk = await getLogisticsDesk(EVENT_ID, DEPARTMENT_ID);
+
+    expect(desk.staffWorkspaces[STAFF_ID]!.shiftCards).toEqual([]);
   });
 
   /*
@@ -365,5 +451,117 @@ describe("the Logistics Desk with no node in reach", () => {
     await expect(getLogisticsDesk(EVENT_ID, DEPARTMENT_ID)).rejects.toThrow(
       /Failed to fetch/,
     );
+  });
+});
+
+/*
+ * The on-site pairing M18.54 had to resolve (SLB-008, SLB-015).
+ *
+ * `UnscheduledShiftAdditionService` refuses an addition for anybody not already
+ * marked on-site. A desk that queued the addition but not the mark would offer
+ * work that rejects every time, so both are offline writes — and the desk has to
+ * compose from the queue as well as from the stored rows, or an operator would
+ * mark somebody on-site, watch the pill stay off-site, and be told the addition
+ * cannot be offered because they are not here.
+ */
+describe("the desk composed from the queue as well as the rows", () => {
+  afterEach(() => {
+    resetCommandOutbox();
+  });
+
+  it("counts a queued on-site mark as presence, which is what unlocks the addition", async () => {
+    await installDesk({ assigned: false, presence: "off_site" });
+    unreachableNode();
+
+    // Off-site in the stored rows: no card at all, exactly as the node would
+    // have composed it.
+    const before = await getLogisticsDesk(EVENT_ID, DEPARTMENT_ID);
+    expect(before.staffWorkspaces[STAFF_ID]!.presenceState).toBe("off_site");
+    expect(before.staffWorkspaces[STAFF_ID]!.shiftCards).toEqual([]);
+
+    await setDepartmentPresence(
+      {
+        eventId: EVENT_ID,
+        eventLabel: "Local Field Event",
+        departmentId: DEPARTMENT_ID,
+        departmentLabel: "Rangers",
+        timeZone: "UTC",
+        asOf: NOW,
+      },
+      STAFF_ID,
+      "on_site",
+    );
+
+    const after = await getLogisticsDesk(EVENT_ID, DEPARTMENT_ID);
+    const workspace = after.staffWorkspaces[STAFF_ID]!;
+
+    expect(workspace.presenceState).toBe("on_site");
+    expect(workspace.shiftCards[0]!.canAddToShift).toBe(true);
+  });
+
+  /*
+   * And the addition itself, once queued, is an assignment as far as this screen
+   * is concerned: the card stops offering to make it again and starts offering
+   * the check-in it was made for.
+   */
+  it("counts a queued addition as an assignment", async () => {
+    await installDesk({ assigned: false, presence: "on_site" });
+    unreachableNode();
+
+    await addStaffToShift(
+      {
+        eventId: EVENT_ID,
+        eventLabel: "Local Field Event",
+        departmentId: DEPARTMENT_ID,
+        departmentLabel: "Rangers",
+        timeZone: "UTC",
+        asOf: NOW,
+      },
+      STAFF_ID,
+      SHIFT_ID,
+    );
+
+    const desk = await getLogisticsDesk(EVENT_ID, DEPARTMENT_ID);
+    const card = desk.staffWorkspaces[STAFF_ID]!.shiftCards[0]!;
+
+    expect(card.canAddToShift).toBe(false);
+    expect(card.attendanceState).toBe("scheduled");
+    expect(card.canCheckIn).toBe(true);
+  });
+
+  /*
+   * A refused addition is not a record (CLIENT-017). The outbox holds it in
+   * front of the person who issued it, and the desk goes back to offering the
+   * addition rather than showing an assignment the node does not have.
+   */
+  it("does not count a refused addition as an assignment", async () => {
+    await installDesk({ assigned: false, presence: "on_site" });
+    unreachableNode();
+
+    await addStaffToShift(
+      {
+        eventId: EVENT_ID,
+        eventLabel: "Local Field Event",
+        departmentId: DEPARTMENT_ID,
+        departmentLabel: "Rangers",
+        timeZone: "UTC",
+        asOf: NOW,
+      },
+      STAFF_ID,
+      SHIFT_ID,
+    );
+
+    const queued = commandOutbox.all().at(-1)!;
+    commandOutbox.markRejected(
+      queued.idempotencyKey,
+      NOW,
+      "Required training must be complete before unscheduled shift addition.",
+    );
+
+    const desk = await getLogisticsDesk(EVENT_ID, DEPARTMENT_ID);
+    const card = desk.staffWorkspaces[STAFF_ID]!.shiftCards[0]!;
+
+    expect(card.assignmentId).toBeNull();
+    expect(card.canAddToShift).toBe(true);
   });
 });

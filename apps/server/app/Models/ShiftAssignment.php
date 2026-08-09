@@ -32,6 +32,13 @@ class ShiftAssignment extends Model
         'assigned_by_user_id',
         'assignment_status',
         'removed_at',
+        /*
+         * The device-generated key an unscheduled addition was queued under
+         * (M18.54; data/API 5.3). Null on every assignment made any other way —
+         * a signup, a lead's roster edit, an import — because those are not
+         * commands a device held.
+         */
+        'unscheduled_operation_uuid',
     ];
 
     /**

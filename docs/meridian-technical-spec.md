@@ -670,7 +670,9 @@ A surface joining or leaving the offline-capable list is a change to what Meridi
 
 Two surfaces compile on the device rather than rendering a stored response, and each is bounded by what it can honestly answer. The Event Horizon compiles the document acknowledgment kind and names the other four as unevaluated (HORIZON-016): the set holds nothing for waivers, trainings, or coverage gaps, and carries only the shifts a member already holds, so a compiled signup list could never show one with a place left. The Logistics Desk composes from the section 9.3 Logistics indexes and derives each card's check-in, check-out, and no-show verdicts by the same rule the node applies, from the same four facts — an assignment, presence, attendance state, and the shift's window. Authority is never derived in either: what a caller may do is read from the session document, which is the node's own answer.
 
-This is the one place a client re-reads a rule the node owns, and it is bounded deliberately. A derived verdict must use the node's own derivation over rows the device holds; anything resting on a fact the device does not hold — eligibility for an unscheduled addition, the hours correction grace period, what equipment is available to hand over — is refused offline rather than guessed at.
+This is the one place a client re-reads a rule the node owns, and it is bounded deliberately. A derived verdict must use the node's own derivation over rows the device holds; anything resting on a fact the device does not hold — the hours correction grace period, what equipment is available to hand over — is refused offline rather than guessed at.
+
+The unscheduled addition sits on the line and shows where the line is. Whether the desk *offers* it is four facts the device holds — no live assignment, the person on-site, the shift started, an eligible team membership — and is derived by the node's own rule, which is why the set carries the eligible teams a member may be added under rather than leaving the device to infer them from a team label. Whether the node will *take* it is eligibility, and that is never derived: it is decided when the command arrives, and a refusal comes back with the node's reason on it. The two questions were always separate — `can_add_to_shift` has been the loose side of an approximation since the online desk was built — and offline changes only who is asking, not what is answered.
 
 ## 9.4 Offline write scope
 
@@ -681,6 +683,20 @@ Alpha 1 offline writes include:
 - Check-in.
 - Check-out.
 - Mark no-show.
+- The Logistics unscheduled shift addition (SLB-008).
+- Marking a department staff member on-site (SLB-015).
+
+The last two were added in M18.54 and are worth the reasoning, because the case against them looked stronger than it was.
+
+An unscheduled addition turns on eligibility — Do Not Staff, department membership, team eligibility, required trainings and waivers — and none of that is answerable on a device. It does not have to be. The node decides every one of those when the command arrives and refuses in its own words, and the operator reads the refusal through the outbox (CLIENT-017). What the alternative was is the point: an operator at a desk with no connectivity lost the work to paper, and a queued addition that is either accepted or returned with the node's reason is better than a note in a pocket. Capacity is not an obstacle at all. `ShiftEligibilityService::assertCapacityForSelfSignup` is the domain's only capacity guard and it is self-signup's alone, so a Logistics addition over capacity is already permitted online and needs no override to remain permitted offline.
+
+The on-site mark is the addition's precondition — an addition for somebody not already marked on-site is refused — so queueing one without the other would have produced a write that rejects every time. It qualifies on its own footing too: it records what an operator saw, every rule behind it is the node's to check on arrival, and marking somebody on-site who already is changes nothing and reports so, which makes a repeated delivery safe.
+
+Marking somebody **off-site** is not an offline write and the asymmetry is deliberate. SLB-018 refuses it on the strength of every checked-in shift and every open equipment checkout in the department, which is a whole the device does not hold; a queued off-site mark would be an operator told their work was captured and the node refusing it hours later.
+
+Self-signup for a shift stays connected-only for the capacity reason above: a signup queued against yesterday's board is somebody believing they hold a shift that filled overnight, where a Logistics addition is an operator recording, with the person in front of them, work that is already happening.
+
+An offline-writable command carries the device-generated operation UUID as its idempotency key (11A.5), and the record it produces stores that key, so a delivery repeated after a lost reply is the same command rather than a duplicate. It also carries the moment the operator recorded it, so the record says when the work happened rather than when the queue drained.
 
 Policy/procedure acknowledgments are not creatable offline in Alpha 1. Acknowledgments require server connection and are accepted through Laravel before they appear in synced state.
 
@@ -1261,6 +1277,15 @@ last sync completed
 trusted server known
 device signing available
 ```
+
+Every item has a signal behind it. Six are answered by probes and by the session document a client already holds: `logged in` and `event selected` from the session, `device trusted` from the workstation pinned-context read for a shared workstation and from the session document's `device` block for a personal one (data/API 5.5), `encryption active` and `device signing available` from the platform capability probes, and `trusted server known` from the node this device is pointed at.
+
+The remaining two are answered by the offline machinery:
+
+- `local cache complete` is the offline read set (section 9.3): the device holds the set the node composed **for that caller**, and it is still inside the window it may be served in (11A.4). It is deliberately not a list of sections — the set is composed per request from the caller's own effective roles and the organization's active modules (9.5), so a staff member holding no Logistics index is holding a complete cache, and a checklist that looked for sections would report their correct device as incomplete forever.
+- `last sync completed` covers both directions: the read set coming down and the command outbox going up (11A.5). A device whose set refreshed a minute ago and whose outbox holds three unsent check-ins has not completed a sync in any sense its owner cares about. A refusal outranks unsent work, because a refusal will not clear on its own.
+
+Readiness reports what it is told and never infers. A device-bound token is not read as device trust, an unreachable node is not read as a failure, and a signal that has not answered yet reads as pending rather than as a check that failed.
 
 Users are encouraged, but not required, to prepare their devices before the event.
 

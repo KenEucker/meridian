@@ -672,7 +672,10 @@ checked into a department shift or still holding department equipment that has
 not been returned or marked missing or damaged (SLB-017, SLB-018). Marking
 somebody into the state they are already in is accepted and records no state
 change, so a desk that presses the button twice does not produce two audit
-entries.
+entries. `mark-staff-on-site` accepts an optional `marked_at`, the moment the
+operator recorded it, because it is an offline write (7.2) and a mark made at
+02:10 and delivered at 06:00 happened at 02:10. That it is idempotent by
+construction is what makes it safe to queue without a key of its own.
 
 The unscheduled shift addition command (`add-staff-to-shift`) is the Logistics
 Window's "add to shift" (SLB-008). It is authorized by the same attendance
@@ -685,6 +688,18 @@ has not marked on-site is refused, and the Logistics read offers their workspace
 no unassigned shift cards at all (requirements 5.8). Overlapping assignments are accepted with a warning
 rather than refused (technical spec 20.5), and the warnings travel back with the
 acceptance so the desk can show them.
+
+It is an offline write (7.2), so it accepts two optional fields a queued command
+carries: `operation_uuid`, the device-generated idempotency key, and
+`device_created_at`, the moment the operator recorded it. The key is stored on
+the assignment as `unscheduled_operation_uuid`; an addition arriving under a key
+already applied returns that assignment with `replayed: true` rather than the
+already-assigned refusal, so a reply lost on a field network does not come back
+to the operator as a refusal of work that succeeded. A second addition of the
+same person under a *different* key is not a replay and is still refused. None of
+the eligibility rules above are relaxed for a queued command; a refusal is
+returned with the service's own message and the client holds it, with that
+reason, until somebody acts on it (CLIENT-017).
 
 The hours correction command (`correct-hours`) is the Logistics Desk's edit to a
 recorded actual start and end (SLB-007, SLB-031, SLB-032; HOURS-007). It
@@ -1058,6 +1073,7 @@ Returns, for the calling user:
 - `events`: events the user holds an association with, and which one the node is locked to when it is locked
 - `departments` and `teams`: the user's associations within the resolved context
 - `context`: the resolved organization, event, and department, and whether context switching is available
+- `device`: the device this request's token is bound to, and its trust for this user — `id`, `label`, `trusted`, `trust_state` (`trusted`, `untrusted`, `expired`, or `revoked`), and `trusted_until`. Null when the credential names no device, which is what a shared-workstation session key does
 - `refreshed_at`: server time of resolution, used by the client to display permission staleness
 
 The response returns codes, not navigation. It carries no screen list, menu structure, or precomputed surface availability. Clients derive navigation from `capabilities`, which keeps the permission catalog the single source of truth.
@@ -1065,6 +1081,8 @@ The response returns codes, not navigation. It carries no screen list, menu stru
 Each entry in `roles` also carries the capability codes that role alone brings, because authority is scoped — a person may run logistics for one department and be ordinary staff in another — and the client holds no copy of the role-to-capability mapping to narrow the flat list for itself. Both lists are read from the same catalog the server enforces from.
 
 Each entry in `events` carries the event's own window and its active event window, which is what bounds the staleness of a cached session in 11A.4.
+
+`device` reports trust, not identity the client supplied. The device is taken from the caller's own token binding (12.5) rather than from anything in the request, so there is no parameter for whose device to report, for the same reason there is none for whose session. It answers the "device trusted" item of the readiness checklist (technical spec 14), which had no signal for a personal device before this: trust lives in `device_trusts` (12.2) and nothing published it. `trusted` is `DeviceTrust::isActive()` — the same predicate the Field Report services refuse an untrusted origin device with — so a client and the writes it will attempt cannot disagree about what trust means. The four `trust_state` values are distinguished because they mean different things to the person reading them: `expired` is renewed by signing in again and `revoked` is not.
 
 Association is defined per record type: an organization by a `staff_organization_statuses` row, a department or team by a membership that is not archived, and an event by any of a department assignment to a department the user belongs to, a team grant scoped to that event on a team they belong to, or an unrevoked `event_credentials` row. The organizations of the listed departments and events are always listed too, so a client is never left displaying an organization it was not told about.
 
@@ -1514,6 +1532,11 @@ Department Logistics users may additionally cache:
 - check-in/check-out/no-show state for those department shifts
 - department equipment state and open checkouts they are permitted to manage
 - future shift signups needed for the selected staff workspace
+- the teams each department member may be added to a shift under, so a desk with
+  no signal offers the unscheduled addition on the same condition the node
+  offers it on (M18.54; SLB-008). This is not the team label beside somebody's
+  name: the label names every crew they are on, and this is the eligibility rule
+  `TeamMembership::onEligibleShiftTeam` resolves.
 
 Department Operations users may additionally cache:
 
@@ -1564,6 +1587,29 @@ Alpha 1 offline writes include:
 - check-in
 - check-out
 - mark no-show
+- `add-staff-to-shift`, the Logistics unscheduled addition (SLB-008)
+- `mark-staff-on-site` (SLB-015)
+
+The last two were added in M18.54; technical spec 9.4 carries the reasoning.
+In short: the addition's eligibility check is the node's and refuses on replay
+in its own words, which is a better outcome than the work being lost to paper at
+a desk with no connectivity; capacity is not an obstacle because the only
+capacity guard in the domain is self-signup's; and the on-site mark is the
+addition's precondition, so queueing one without the other would have produced a
+write that rejects every time.
+
+`mark-staff-off-site` is **not** an offline write. SLB-018 refuses it on the
+strength of every checked-in shift and every open equipment checkout in the
+department, which no device holds a whole copy of. Neither is `sign-up-for-shift`,
+for the capacity reason above.
+
+An offline-writable command carries the device-generated operation UUID as its
+idempotency key (5.3, 5.6) and the moment the operator recorded it. The record
+the node writes stores that key — `shift_assignments.unscheduled_operation_uuid`
+for the addition — so a delivery repeated after a lost reply returns the same
+record rather than a duplicate refusal, and the record is stamped with the
+operator's moment rather than the drain's. `mark-staff-on-site` needs no key of
+its own: marking somebody on-site who already is changes nothing and says so.
 
 Supported offline writes are available wherever the corresponding product
 surface is available and the device has the required synced local data. Offline
