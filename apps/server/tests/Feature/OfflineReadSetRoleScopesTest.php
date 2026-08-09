@@ -398,6 +398,32 @@ class OfflineReadSetRoleScopesTest extends TestCase
     }
 
     /**
+     * The eligible teams the desk decides an addition by (M18.54; SLB-008).
+     *
+     * `TeamMembership::onEligibleShiftTeam` is the rule
+     * `UnscheduledShiftAdditionService` and the Logistics read both resolve
+     * through, and the set carries its answer so a desk with no signal offers
+     * the addition on exactly the condition the node offers it on. The team
+     * *label* is not that answer — it names every crew somebody is on — which is
+     * why this is a separate field rather than a string to be parsed.
+     */
+    public function test_the_staff_index_carries_the_teams_an_addition_may_name(): void
+    {
+        $this->grant(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS, $this->rangerLeads);
+
+        $sections = $this->sectionsFor($this->samUser);
+
+        $vera = collect($sections['logistics_staff_index'])
+            ->firstWhere('staff_id', $this->vera->id);
+
+        $this->assertNotNull($vera);
+        $this->assertSame([$this->dirt->id], $vera['eligible_team_ids']);
+        // The shift the desk is offering belongs to that same team, which is
+        // what makes the device's answer the node's answer.
+        $this->assertSame($this->dirt->id, $this->shift->eligible_team_id);
+    }
+
+    /**
      * A returned checkout is history and an online report's business. What a
      * desk with no signal needs is what is still owed back.
      */

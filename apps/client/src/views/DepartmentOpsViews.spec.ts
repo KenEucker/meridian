@@ -587,6 +587,18 @@ function holdCommand(held: Promise<void>): void {
   heldCommand = held;
 }
 
+/** The node's refusal, when a test wants one (M18.54). */
+let commandRefusal: string | null = null;
+
+/**
+ * A command that never reaches the node (M18.54).
+ *
+ * The reads still answer, which is what isolates the case under test: what
+ * happens to a queued write when there is nothing at the other end, rather than
+ * what the desk renders with no set to render from.
+ */
+let commandsUnreachable = false;
+
 function stubDepartmentOpsNode(): void {
   configureMeridianApi({
     baseUrl: "http://node.test",
@@ -599,13 +611,41 @@ function stubDepartmentOpsNode(): void {
       const url = new URL(String(input), "http://node.test");
 
       if (init?.method === "POST") {
-        commands.push({
-          path: url.pathname,
-          body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>,
-        });
+        const body = JSON.parse(String(init.body ?? "{}")) as Record<
+          string,
+          unknown
+        >;
+
+        commands.push({ path: url.pathname, body });
 
         if (heldCommand !== null) {
           await heldCommand;
+        }
+
+        if (commandsUnreachable) {
+          throw new TypeError("Failed to fetch");
+        }
+
+        if (commandRefusal !== null) {
+          return json({ message: commandRefusal }, 422);
+        }
+
+        /*
+         * The addition answers with the assignment the node made and the
+         * overlap warnings that travel with it (M18.54; technical spec 20.5).
+         * Queued now rather than sent inline, so this is the answer the drain
+         * reads and the desk collects afterwards.
+         */
+        if (url.pathname.endsWith("/add-staff-to-shift")) {
+          return json(
+            {
+              shift_assignment_id: "aaaaaaa1-0000-4000-8000-000000000001",
+              operation_uuid: body.operation_uuid,
+              warnings: [],
+              replayed: false,
+            },
+            201,
+          );
         }
 
         return json({ warnings: [] }, 201);
@@ -682,6 +722,8 @@ async function openWorkspace(
 beforeEach(() => {
   commands = [];
   heldCommand = null;
+  commandRefusal = null;
+  commandsUnreachable = false;
   ariHoldsEquipment = false;
   commandOutbox.clear();
   // The desk's index is durable from M18.8, so it outlives a test unless a test
@@ -1312,6 +1354,63 @@ describe("department operations surfaces", () => {
       shift_id: DAY_SHIFT_ID,
       staff_id: ARI_STAFF_ID,
     });
+    // Queued since M18.54 and drained at once where there is a node, so the
+    // desk still reports what the node did rather than what it is holding.
+    expect(commands[0]!.body.operation_uuid).toEqual(expect.any(String));
+    expect(wrapper.text()).toContain("Ari Ranger added to the shift.");
+    expect(commandOutbox.byStatus("accepted")).toHaveLength(1);
+  });
+
+  /*
+   * The refusal M18.54 accepts as the trade (SLB-008). Eligibility is not a
+   * question a device can answer, so a queued addition may come back refused —
+   * and the desk prints the node's own sentence in front of the operator who
+   * made it rather than leaving it to be found in the outbox later.
+   */
+  it("prints the node's refusal of an addition it would not take", async () => {
+    commandRefusal =
+      "Required training must be complete before unscheduled shift addition.";
+
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Add to shift")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Required training must be complete before unscheduled shift addition.",
+    );
+    // Held as a refusal until somebody deals with it, not dropped (CLIENT-017).
+    expect(commandOutbox.byStatus("rejected")).toHaveLength(1);
+  });
+
+  /*
+   * And the case the whole task exists for: no node in reach, and the work is
+   * captured rather than lost to paper. What the desk must not say is "added to
+   * the shift" — nobody else can see this roster yet (UI contract 16.3).
+   */
+  it("holds an addition on the device when the node cannot be reached, and says so", async () => {
+    const { wrapper } = await mountAt(logisticsPath());
+
+    await openWorkspace(wrapper, "Ari Ranger");
+
+    commandsUnreachable = true;
+
+    await wrapper
+      .get(".logistics__workspace")
+      .findAll("button")
+      .find((button) => button.text() === "Add to shift")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("held on this device");
+    expect(wrapper.text()).not.toContain("Ari Ranger added to the shift.");
+    expect(commandOutbox.pending()).toHaveLength(1);
+    expect(commandOutbox.pending()[0]!.commandType).toBe("add-staff-to-shift");
   });
 
   /*

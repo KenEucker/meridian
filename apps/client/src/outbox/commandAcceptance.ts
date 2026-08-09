@@ -24,6 +24,7 @@
 import type { MeridianCommandType } from "@/outbox/commandCatalog";
 import type { OutboxCommand } from "@/outbox/commandOutbox";
 import { applyLocalFieldReportAcceptance } from "@/field-reports/submitFieldReport";
+import { recordShiftAdditionWarnings } from "@/department-ops/shiftAdditionWarnings";
 
 export class CommandAcceptanceError extends Error {
   constructor(message: string) {
@@ -98,6 +99,48 @@ function acceptAttendanceOperation(
   requireString(record, "server_received_at");
 }
 
+/**
+ * An unscheduled addition leaves the node's advisory warnings behind for the
+ * desk that made it (M18.54; SLB-008; technical spec 20.5).
+ *
+ * The acceptance carries the assignment the node holds — whether it made it now
+ * or had already made it under this key — and its overlap warnings. There is no
+ * local record to reconcile: the assignment is the node's, and what is worth
+ * keeping is the sentence about an overlapping shift that the operator is owed.
+ *
+ * The operation UUID is checked when the answer carries one, for the reason
+ * attendance checks its own: an acceptance about a different command would mark
+ * this one settled and drop unsent work. It is not *required*, because a node
+ * that took the addition has taken it whether or not it echoed the key back, and
+ * re-sending is harmless anyway — the key makes a second delivery the same
+ * command.
+ */
+function acceptShiftAddition(command: OutboxCommand, response: unknown): void {
+  const record = asRecord(response);
+
+  if (
+    typeof record.operation_uuid === "string" &&
+    record.operation_uuid !== command.idempotencyKey
+  ) {
+    throw new CommandAcceptanceError(
+      "The node answered about a different shift addition.",
+    );
+  }
+
+  const warnings = Array.isArray(record.warnings) ? record.warnings : [];
+
+  recordShiftAdditionWarnings(
+    command.idempotencyKey,
+    warnings.flatMap((warning) =>
+      typeof warning === "object" &&
+      warning !== null &&
+      typeof (warning as { message?: unknown }).message === "string"
+        ? [(warning as { message: string }).message]
+        : [],
+    ),
+  );
+}
+
 const HANDLERS: Partial<
   Record<MeridianCommandType, CommandAcceptanceHandler>
 > = {
@@ -105,6 +148,7 @@ const HANDLERS: Partial<
   "check-in-staff": acceptAttendanceOperation,
   "check-out-staff": acceptAttendanceOperation,
   "mark-no-show": acceptAttendanceOperation,
+  "add-staff-to-shift": acceptShiftAddition,
 };
 
 /**

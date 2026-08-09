@@ -672,7 +672,10 @@ checked into a department shift or still holding department equipment that has
 not been returned or marked missing or damaged (SLB-017, SLB-018). Marking
 somebody into the state they are already in is accepted and records no state
 change, so a desk that presses the button twice does not produce two audit
-entries.
+entries. `mark-staff-on-site` accepts an optional `marked_at`, the moment the
+operator recorded it, because it is an offline write (7.2) and a mark made at
+02:10 and delivered at 06:00 happened at 02:10. That it is idempotent by
+construction is what makes it safe to queue without a key of its own.
 
 The unscheduled shift addition command (`add-staff-to-shift`) is the Logistics
 Window's "add to shift" (SLB-008). It is authorized by the same attendance
@@ -685,6 +688,18 @@ has not marked on-site is refused, and the Logistics read offers their workspace
 no unassigned shift cards at all (requirements 5.8). Overlapping assignments are accepted with a warning
 rather than refused (technical spec 20.5), and the warnings travel back with the
 acceptance so the desk can show them.
+
+It is an offline write (7.2), so it accepts two optional fields a queued command
+carries: `operation_uuid`, the device-generated idempotency key, and
+`device_created_at`, the moment the operator recorded it. The key is stored on
+the assignment as `unscheduled_operation_uuid`; an addition arriving under a key
+already applied returns that assignment with `replayed: true` rather than the
+already-assigned refusal, so a reply lost on a field network does not come back
+to the operator as a refusal of work that succeeded. A second addition of the
+same person under a *different* key is not a replay and is still refused. None of
+the eligibility rules above are relaxed for a queued command; a refusal is
+returned with the service's own message and the client holds it, with that
+reason, until somebody acts on it (CLIENT-017).
 
 The hours correction command (`correct-hours`) is the Logistics Desk's edit to a
 recorded actual start and end (SLB-007, SLB-031, SLB-032; HOURS-007). It
@@ -1514,6 +1529,11 @@ Department Logistics users may additionally cache:
 - check-in/check-out/no-show state for those department shifts
 - department equipment state and open checkouts they are permitted to manage
 - future shift signups needed for the selected staff workspace
+- the teams each department member may be added to a shift under, so a desk with
+  no signal offers the unscheduled addition on the same condition the node
+  offers it on (M18.54; SLB-008). This is not the team label beside somebody's
+  name: the label names every crew they are on, and this is the eligibility rule
+  `TeamMembership::onEligibleShiftTeam` resolves.
 
 Department Operations users may additionally cache:
 
@@ -1564,6 +1584,29 @@ Alpha 1 offline writes include:
 - check-in
 - check-out
 - mark no-show
+- `add-staff-to-shift`, the Logistics unscheduled addition (SLB-008)
+- `mark-staff-on-site` (SLB-015)
+
+The last two were added in M18.54; technical spec 9.4 carries the reasoning.
+In short: the addition's eligibility check is the node's and refuses on replay
+in its own words, which is a better outcome than the work being lost to paper at
+a desk with no connectivity; capacity is not an obstacle because the only
+capacity guard in the domain is self-signup's; and the on-site mark is the
+addition's precondition, so queueing one without the other would have produced a
+write that rejects every time.
+
+`mark-staff-off-site` is **not** an offline write. SLB-018 refuses it on the
+strength of every checked-in shift and every open equipment checkout in the
+department, which no device holds a whole copy of. Neither is `sign-up-for-shift`,
+for the capacity reason above.
+
+An offline-writable command carries the device-generated operation UUID as its
+idempotency key (5.3, 5.6) and the moment the operator recorded it. The record
+the node writes stores that key — `shift_assignments.unscheduled_operation_uuid`
+for the addition — so a delivery repeated after a lost reply returns the same
+record rather than a duplicate refusal, and the record is stamped with the
+operator's moment rather than the drain's. `mark-staff-on-site` needs no key of
+its own: marking somebody on-site who already is changes nothing and says so.
 
 Supported offline writes are available wherever the corresponding product
 surface is available and the device has the required synced local data. Offline

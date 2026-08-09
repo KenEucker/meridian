@@ -14,6 +14,7 @@ use App\Models\PermissionRole;
 use App\Models\Shift;
 use App\Models\ShiftAssignment;
 use App\Models\Staff;
+use App\Models\StaffOrganizationStatus;
 use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
@@ -21,6 +22,7 @@ use App\Models\User;
 use App\Services\Membership\DepartmentMembershipService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -199,6 +201,163 @@ class DepartmentOperationsCommandHttpTest extends TestCase
                 'message',
                 'Staff must be marked on-site with this department before unscheduled shift addition.',
             );
+
+        $this->assertDatabaseCount('shift_assignments', 0);
+    }
+
+    /**
+     * The addition as a queued write (M18.54; technical spec 9.4, data/API 7.2).
+     *
+     * A device holds it, sends it later, and may send it twice when a reply is
+     * lost on a field network. The operation UUID is what makes the second
+     * delivery the same command: the same assignment comes back, nothing is
+     * written a second time, and the operator is not shown "already assigned"
+     * for work they made once.
+     */
+    public function test_a_replayed_addition_is_the_same_command_rather_than_a_duplicate(): void
+    {
+        $scenario = $this->scenario();
+
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'staff_id' => $scenario['staff']->id,
+        ]);
+
+        $operationUuid = (string) Str::uuid();
+        $payload = [
+            'shift_id' => $scenario['shift']->id,
+            'staff_id' => $scenario['staff']->id,
+            'operation_uuid' => $operationUuid,
+            // Recorded at the desk half an hour before the queue drained.
+            'device_created_at' => '2027-07-04T17:30:00+00:00',
+        ];
+
+        $first = $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/add-staff-to-shift', $payload)
+            ->assertCreated()
+            ->assertJsonPath('replayed', false)
+            ->assertJsonPath('operation_uuid', $operationUuid);
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/add-staff-to-shift', $payload)
+            ->assertCreated()
+            ->assertJsonPath('replayed', true)
+            ->assertJsonPath(
+                'shift_assignment_id',
+                $first->json('shift_assignment_id'),
+            );
+
+        $this->assertDatabaseCount('shift_assignments', 1);
+
+        // The moment the operator recorded it, not the moment it arrived
+        // (SLB-008 reads this to tell an unscheduled addition from a signup).
+        $this->assertSame(
+            '2027-07-04T17:30:00+00:00',
+            ShiftAssignment::query()->firstOrFail()->created_at?->toIso8601String(),
+        );
+    }
+
+    /**
+     * A second addition of the same person under a *different* key is not a
+     * replay: somebody else got there first, and the refusal is real.
+     */
+    public function test_a_second_addition_under_a_new_key_is_still_refused_as_already_assigned(): void
+    {
+        $scenario = $this->scenario();
+
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'staff_id' => $scenario['staff']->id,
+        ]);
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/add-staff-to-shift', [
+                'shift_id' => $scenario['shift']->id,
+                'staff_id' => $scenario['staff']->id,
+                'operation_uuid' => (string) Str::uuid(),
+            ])
+            ->assertCreated();
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/add-staff-to-shift', [
+                'shift_id' => $scenario['shift']->id,
+                'staff_id' => $scenario['staff']->id,
+                'operation_uuid' => (string) Str::uuid(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This staff member is already assigned to the shift.');
+
+        $this->assertDatabaseCount('shift_assignments', 1);
+    }
+
+    /**
+     * The on-site mark as a queued write (M18.54), which is the other half of
+     * the pairing: an addition is refused for anybody not already marked
+     * on-site, so a device that could queue the addition and not the mark would
+     * hold work that rejects every time.
+     *
+     * Idempotent by construction — a second delivery changes nothing and says
+     * so — and stamped with the moment the operator marked it.
+     */
+    public function test_a_queued_on_site_mark_records_the_operators_moment_and_replays_safely(): void
+    {
+        $scenario = $this->scenario();
+
+        $payload = [
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'staff_id' => $scenario['staff']->id,
+            'marked_at' => '2027-07-04T17:15:00+00:00',
+        ];
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/mark-staff-on-site', $payload)
+            ->assertCreated()
+            ->assertJsonPath('created_state_change', true)
+            ->assertJsonPath('marked_on_site_at', '2027-07-04T17:15:00+00:00');
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/mark-staff-on-site', $payload)
+            ->assertCreated()
+            ->assertJsonPath('created_state_change', false);
+
+        $this->assertDatabaseCount('event_department_presences', 1);
+    }
+
+    /**
+     * The trade M18.54 accepts, end to end (SLB-008).
+     *
+     * Eligibility is not a question a device can answer, so a queued addition
+     * for somebody the shift may not take is refused when it arrives — with the
+     * node's own sentence, which is what the outbox holds in front of the person
+     * who issued it (CLIENT-017). Nothing is written.
+     */
+    public function test_an_ineligible_queued_addition_is_refused_in_the_services_own_words(): void
+    {
+        $scenario = $this->scenario();
+
+        EventDepartmentPresence::factory()->onSite()->create([
+            'event_id' => $scenario['event']->id,
+            'department_id' => $scenario['department']->id,
+            'staff_id' => $scenario['staff']->id,
+        ]);
+
+        StaffOrganizationStatus::factory()->create([
+            'organization_id' => $scenario['event']->organization_id,
+            'staff_id' => $scenario['staff']->id,
+            'status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF,
+        ]);
+
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/add-staff-to-shift', [
+                'shift_id' => $scenario['shift']->id,
+                'staff_id' => $scenario['staff']->id,
+                'operation_uuid' => (string) Str::uuid(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Do Not Staff records cannot be added to shifts.');
 
         $this->assertDatabaseCount('shift_assignments', 0);
     }

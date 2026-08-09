@@ -16,6 +16,12 @@ SLB-021's offline half: a desk that has read its department once still searches
 staff, equipment, and shifts with the node unreachable, says which copy it is
 searching, and holds nothing for a department this device has not read.
 
+Since M18.54 two more of the desk's writes are offline writes — the unscheduled
+shift addition and the on-site mark it depends on — so section E also walks what
+an operator with no signal can now record: somebody marked on-site and put on a
+running shift, held on the device, sent when a node returns, and either accepted
+or returned with the node's own reason.
+
 This script covers the Alpha 1 human QA gate for check-in/check-out/hours. It
 does not add or require staff self-service check-in, credit calculation,
 sync conflict repair UI, signed node-operation envelopes, or new product
@@ -53,7 +59,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
 - UI Implementation Contract sections 12.5 and 16.2
 - Kiosk and Field Hardware UX Guide section 5
 - Meridian Alpha 1 tasks M10.2 through M10.6, M10.11, M13.4, M16.21, M18.3,
-  M18.4, and M18.8
+  M18.4, M18.8, and M18.54
 
 ## Environment
 
@@ -146,6 +152,7 @@ rows, unauthorized actors are refused, and each successful export is audited.
    ```bash
    corepack pnpm --filter @meridian/client run test -- \
      src/department-ops/departmentOpsReadModel.spec.ts \
+     src/department-ops/storedLogisticsDesk.spec.ts \
      src/views/DepartmentOpsViews.spec.ts \
      src/shift-board/offlineAttendanceOperation.spec.ts \
      src/outbox/commandOutbox.spec.ts \
@@ -288,12 +295,28 @@ rows, unauthorized actors are refused, and each successful export is audited.
     no-show.
 27. Confirm the action remains locally represented as queued/pending sync and
     the UI does not imply current central truth while offline.
-27a. Still offline, try to mark somebody on-site, add somebody to a shift, or
+27a. Still offline, try to mark somebody off-site, correct a set of hours, or
      hand out a piece of equipment. Confirm each is refused where it stands with
-     a sentence naming the work — "Marking someone on-site needs a connection to
-     the node" and its siblings — and that nothing is queued for it. Attendance
-     queues and the rest does not, which is the line data/API 7.2 draws
+     a sentence naming the work — "Marking someone off-site needs a connection to
+     the node" and its siblings — and that nothing is queued for it. Some of the
+     desk's writes queue and some do not, and this is the line data/API 7.2 draws
      (CLIENT-018).
+27b. Still offline, open the workspace of a seeded department member who is not
+     on site — Nora Newstaff, or anybody the desk shows as off-site — and mark
+     them **on-site**. Confirm the presence pill moves to on-site immediately and
+     the mark is held as queued work rather than refused (M18.54; SLB-015).
+27c. Still offline and on that same workspace, find the running Ranger Dirt shift
+     they are not assigned to and press **Add to shift**. Confirm the desk says
+     the addition is *held on this device and will be sent when a node is
+     reachable*, and does not claim they were added to the shift. Confirm the
+     card stops offering the addition and starts offering check-in against it,
+     because the device is now holding an assignment the node has not seen yet
+     (M18.54; SLB-008).
+27d. Still offline, open the workspace of somebody whose crew does not work that
+     shift — Mira Commandstaff against a Dirt shift — and confirm the addition is
+     not offered and the card prints the node's own sentence about the shift
+     belonging to another team. The offer is derived from the node's rule; it is
+     not a device deciding what it likes.
 28. Record the queued operation UUID from the UI, local pending queue, or
     browser storage evidence before reconnecting.
 29. Reload the page while still offline.
@@ -325,6 +348,20 @@ rows, unauthorized actors are refused, and each successful export is audited.
     sync.
 33. Confirm the queued action is accepted once, clears from pending state, and
     updates the server-side attendance/hours state.
+33a. Confirm the on-site mark and the shift addition queued in 27b and 27c were
+     accepted too, in that order, and that the desk now shows the assignment as
+     the node's rather than as this device's. Check the assignment carries the
+     device's key and the moment it was made rather than the moment it drained:
+     ```bash
+     php artisan tinker --execute='App\Models\ShiftAssignment::query()->whereNotNull("unscheduled_operation_uuid")->latest("created_at")->get(["id","shift_id","staff_id","unscheduled_operation_uuid","created_at"])->each(fn ($row) => print($row->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
+     ```
+33b. Repeat one addition for somebody the shift may not take — Debbie DNS, or a
+     staff member missing the shift's required training — while offline, then
+     reconnect. Confirm the node refuses it, the desk prints the refusal in the
+     node's own words, and the refusal stays in the outbox until somebody
+     dismisses it rather than disappearing (M18.54; CLIENT-017). This is the
+     trade the task accepts: eligibility is not answerable on a device, and a
+     refusal an operator reads is better than work that was never captured.
 34. From `apps/server`, inspect accepted operation provenance:
     ```bash
     php artisan tinker --execute='App\Models\AttendanceOperation::query()->latest("created_at")->limit(10)->get(["operation_uuid", "operation_type", "staff_id", "shift_id", "source_context", "origin_device_id", "origin_node_id", "device_created_at", "server_received_at"])->each(fn ($operation) => print($operation->toJson(JSON_PRETTY_PRINT).PHP_EOL));'
@@ -503,9 +540,16 @@ froze, so run it after those sections rather than on a freshly seeded database.
 - Department Logistics can mark eligible staff on-site and off-site, and add an
   on-site staff member to a started shift they were not assigned to, both through
   the node rather than in the browser.
-- Presence, shift addition, equipment handoff, and hours correction are refused
-  where they stand when the node is unreachable, while check-in, check-out, and
-  no-show queue.
+- Marking somebody off-site, handing equipment over, and correcting hours are
+  refused where they stand when the node is unreachable, while check-in,
+  check-out, no-show, marking somebody on-site, and the unscheduled shift
+  addition queue (M18.54; technical spec 9.4).
+- An addition made with no node in reach is reported as held on this device
+  rather than as added to the shift, is offered on the node's own rule rather
+  than on a guess, and arrives with the device's operation key and the moment the
+  operator recorded it. A replayed delivery produces one assignment, and an
+  addition the node refuses comes back with its reason and stays until somebody
+  acts on it.
 - The Planning Table shows aggregates only, with no staff identity anywhere on
   it.
 - Check-out creates one canonical `hours_worked` record tied to event,

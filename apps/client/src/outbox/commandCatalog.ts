@@ -15,14 +15,20 @@
 // prevent.
 //
 // The connected-only entries below start with the four families technical spec
-// 11A.5 names by hand and now include the rest of the department operations
-// desk (M16.21). Each carries the reason the refusal states, so a person who
-// issues one where it cannot be sent is told what happened in words about their
-// work rather than a generic failure. The first of them were registered before
-// the surfaces that issue them existed, so the rule was under test before there
-// was a screen that could break it; the IMS surfaces bound in M16.20 and the
+// 11A.5 names by hand and include most of the department operations desk
+// (M16.21). Each carries the reason the refusal states, so a person who issues
+// one where it cannot be sent is told what happened in words about their work
+// rather than a generic failure. The first of them were registered before the
+// surfaces that issue them existed, so the rule was under test before there was
+// a screen that could break it; the IMS surfaces bound in M16.20 and the
 // Logistics Window bound in M16.21 issue theirs through `sendConnectedCommand`
 // and are refused from here.
+//
+// The list of offline writes is closed by 7.2 and has been opened twice, both
+// times by an amendment to the specification rather than by a judgement made
+// here: data/API 5.8A added the Event Horizon's two preference commands
+// (M18.44), and M18.54 added the Logistics unscheduled addition and the on-site
+// mark it depends on. That is the only way onto this list.
 
 /** Every command this client can submit today. */
 export type MeridianCommandType =
@@ -31,11 +37,11 @@ export type MeridianCommandType =
   | "check-in-staff"
   | "check-out-staff"
   | "mark-no-show"
-  // The rest of the department operations desk (M16.21). Attendance is the only
-  // part of it data/API 7.2 lists as an offline write.
+  // The Logistics addition and the on-site mark it depends on (M18.54).
   | "mark-staff-on-site"
-  | "mark-staff-off-site"
   | "add-staff-to-shift"
+  // The rest of the department operations desk (M16.21).
+  | "mark-staff-off-site"
   | "correct-hours"
   // Event credential administration (M18.5).
   | "revoke-credential"
@@ -178,36 +184,53 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "No-show",
     ),
     /*
-     * The Logistics Window's other writes (M16.21).
+     * The Logistics Window's other writes (M16.21; M18.54).
      *
-     * Attendance is offline-writable and everything around it is not, which
-     * looks inconsistent until you read what each one turns on. Check-in,
-     * check-out, and no-show are recorded against a shift the device already
-     * holds, and data/API 7.2 lists exactly those. Presence is refused on the
-     * strength of every shift and every equipment checkout in the department,
-     * an unscheduled addition weighs trainings, waivers, and organization
-     * status, and equipment handoff turns on whether an item is still where the
-     * node last saw it. None of those are questions a device can answer for
-     * itself, so each is sent now or refused now rather than queued against an
-     * answer that may already be wrong.
+     * The desk's line between queued and connected-only used to fall between
+     * attendance and everything else. M18.54 moved it, and the two commands that
+     * moved with it are the unscheduled addition and the on-site mark.
+     *
+     * **The addition** (SLB-008) is the work an operator loses to paper when the
+     * node is unreachable: somebody turns up at two in the morning, is put on a
+     * running shift, and the desk cannot record it. What made it look
+     * unqueueable is eligibility — Do Not Staff, department membership, team
+     * eligibility, required trainings and waivers — and none of that is
+     * answerable on a device. But it does not have to be: the node decides it on
+     * arrival and refuses in its own words, and a refusal the operator reads is
+     * better than work that was never captured. Capacity is not the obstacle it
+     * looks like either, because the domain's only capacity guard is
+     * `assertCapacityForSelfSignup` and a Logistics addition over capacity is
+     * already permitted online.
+     *
+     * **The on-site mark** is the addition's precondition, and queueing one
+     * without the other would have left an offline addition for anybody not
+     * already marked on-site refused every time. It qualifies on its own
+     * footing: it records what the operator saw, every rule behind it is the
+     * node's to check on arrival, and marking somebody on-site twice changes
+     * nothing — so a replayed delivery is safe without a key of its own.
+     *
+     * **Off-site did not move**, and the asymmetry is the point. SLB-018 refuses
+     * it on the strength of every checked-in shift and every open equipment
+     * checkout in the department, which is a whole the device does not hold; one
+     * held here would be an operator told their work was captured and the node
+     * refusing it hours later. Equipment handoff stays for the same kind of
+     * reason: it turns on whether an item is still where the node last saw it.
      */
-    "mark-staff-on-site": connectedOnly(
+    "mark-staff-on-site": offlineWrite(
       "mark-staff-on-site",
       "/api/commands/mark-staff-on-site",
       "On-site",
-      "Marking someone on-site needs a connection to the node. It cannot be held on this device for later.",
+    ),
+    "add-staff-to-shift": offlineWrite(
+      "add-staff-to-shift",
+      "/api/commands/add-staff-to-shift",
+      "Shift addition",
     ),
     "mark-staff-off-site": connectedOnly(
       "mark-staff-off-site",
       "/api/commands/mark-staff-off-site",
       "Off-site",
       "Marking someone off-site needs a connection to the node. It cannot be held on this device for later.",
-    ),
-    "add-staff-to-shift": connectedOnly(
-      "add-staff-to-shift",
-      "/api/commands/add-staff-to-shift",
-      "Shift addition",
-      "Adding someone to a shift needs a connection to the node. It cannot be held on this device for later.",
     ),
     /*
      * Hours correction (M18.4; SLB-007, SLB-031; HOURS-007, HOURS-008).
@@ -247,11 +270,14 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
     /*
      * The shift board's two writes (M18.2; SHIFT-011, SHIFT-013).
      *
-     * Connected-only for the same reason the unscheduled addition above is.
-     * Whether a shift will take somebody turns on trainings, waivers, department
-     * status, and a capacity that other people are filling while this device is
-     * away; a signup queued against yesterday's board is a shift somebody
-     * believes they hold and nobody has them down for. Withdrawal is here too,
+     * Connected-only, and M18.54 left them that way while moving the Logistics
+     * addition. The two look alike and are not: capacity is guarded for
+     * self-signup alone (`ShiftEligibilityService::assertCapacityForSelfSignup`),
+     * and it is a number other people are filling while this device is away. A
+     * signup queued against yesterday's board is somebody believing they hold a
+     * shift that filled up overnight — where the Logistics addition is an
+     * operator recording, in front of the person, work that is already
+     * happening. Withdrawal is here too,
      * because the cutoff it is measured against is the node's clock, and a
      * withdrawal delivered after the schedule locks is a shift somebody stopped
      * planning to work and is still on the roster for.

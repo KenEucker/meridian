@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import {
+  addStaffToShift,
   assertNoStaffIdentities,
   currentLogisticsShifts,
   deploymentLabel,
@@ -23,6 +24,7 @@ import {
   type LogisticsStaffWorkspace,
   type PlanningRow,
 } from "@/department-ops/departmentOpsReadModel";
+import { takeShiftAdditionWarnings } from "@/department-ops/shiftAdditionWarnings";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { LIVE_READ } from "@/offline/readFreshness";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
@@ -622,19 +624,133 @@ describe("department operations commands", () => {
     expect(queued[0]!.payload.origin_node_id).toBeUndefined();
   });
 
-  it("refuses presence where it cannot be sent rather than queueing it", async () => {
+  /*
+   * The pairing M18.54 had to resolve. An addition is refused for anybody not
+   * already marked on-site, and marking somebody on-site used to be
+   * connected-only — so an offline addition rejected every time. Both are queued
+   * now, and in the order the operator did them, which is the order the node
+   * applies them in.
+   */
+  it("queues an on-site mark, with the moment the operator marked it", async () => {
+    configureMeridianApi({
+      baseUrl: "http://node.test",
+      bearerToken: "device-token",
+    });
+    setNavigatorOnline(false);
+
+    try {
+      await setDepartmentPresence(CONTEXT, "staff-1", "on_site");
+
+      const queued = commandOutbox.all();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]!.commandType).toBe("mark-staff-on-site");
+      expect(queued[0]!.status).toBe("queued");
+      expect(queued[0]!.payload).toMatchObject({
+        event_id: CONTEXT.eventId,
+        department_id: CONTEXT.departmentId,
+        staff_id: "staff-1",
+      });
+      expect(typeof queued[0]!.payload.marked_at).toBe("string");
+    } finally {
+      setNavigatorOnline(true);
+    }
+  });
+
+  it("queues a shift addition and reports that the device is holding it", async () => {
+    configureMeridianApi({
+      baseUrl: "http://node.test",
+      bearerToken: "device-token",
+    });
+    setNavigatorOnline(false);
+
+    try {
+      const outcome = await addStaffToShift(CONTEXT, "staff-1", "shift-day");
+
+      expect(outcome.state).toBe("queued");
+      expect(outcome.warnings).toEqual([]);
+
+      const queued = commandOutbox.all();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]!.commandType).toBe("add-staff-to-shift");
+      // The key the node stores on the assignment, so a delivery repeated after
+      // a lost reply is the same command (data/API 5.3).
+      expect(queued[0]!.payload).toMatchObject({
+        shift_id: "shift-day",
+        staff_id: "staff-1",
+        operation_uuid: queued[0]!.idempotencyKey,
+      });
+      expect(typeof queued[0]!.payload.device_created_at).toBe("string");
+    } finally {
+      setNavigatorOnline(true);
+    }
+  });
+
+  /*
+   * The node's overlap warning survives the queue (technical spec 20.5).
+   *
+   * Overlapping assignments are warned about rather than refused, and the
+   * warning is the node's — it knows every shift the person is on. Before M18.54
+   * the desk read it off the command's own response; now the response arrives at
+   * the drain instead, and the warning has to find its way back to the operator
+   * who made the addition rather than being dropped in a different call stack.
+   */
+  it("carries the node's overlap warning back to the desk that queued the addition", async () => {
     configureMeridianApi({
       baseUrl: "http://node.test",
       bearerToken: "device-token",
     });
 
-    // Offline: a connected-only command is refused at issue, in the words the
-    // catalog states (CLIENT-018).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              shift_assignment_id: "assignment-1",
+              operation_uuid: (
+                JSON.parse(String(init?.body ?? "{}")) as {
+                  operation_uuid?: string;
+                }
+              ).operation_uuid,
+              warnings: [
+                { code: "shift_overlap", message: "Overlaps Swing Patrol." },
+              ],
+            }),
+            { status: 201, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const outcome = await addStaffToShift(CONTEXT, "staff-1", "shift-day");
+
+    expect(outcome.state).toBe("accepted");
+    expect(outcome.warnings).toEqual(["Overlaps Swing Patrol."]);
+
+    // Taken rather than left behind: a warning is about one addition at one
+    // moment, and re-showing it against the next would be a claim about a shift
+    // nobody asked about.
+    expect(takeShiftAdditionWarnings(commandOutbox.all()[0]!.idempotencyKey)).toEqual(
+      [],
+    );
+  });
+
+  /*
+   * Off-site did not move with the other two, and this is the test that says so
+   * (SLB-018). It is refused on the strength of every open checkout and every
+   * checked-in shift in the department, which is state the device holds no whole
+   * copy of.
+   */
+  it("refuses an off-site mark where it cannot be sent rather than queueing it", async () => {
+    configureMeridianApi({
+      baseUrl: "http://node.test",
+      bearerToken: "device-token",
+    });
+
     setNavigatorOnline(false);
 
     try {
       await expect(
-        setDepartmentPresence(CONTEXT, "staff-1", "on_site"),
+        setDepartmentPresence(CONTEXT, "staff-1", "off_site"),
       ).rejects.toThrow(/needs a connection to the node/);
 
       expect(commandOutbox.all()).toHaveLength(0);

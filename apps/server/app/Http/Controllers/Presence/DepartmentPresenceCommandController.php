@@ -22,10 +22,24 @@ use Illuminate\Support\Carbon;
  * and off-site buttons moved a value in the browser and no record anywhere.
  * These two routes are the transport, and every rule stays where it was.
  *
- * Presence is connected-only. Data/API 7.2 closes the set of Alpha 1 offline
- * writes at Field Reports, check-in, check-out, and no-show, and going off-site
- * is refused on the strength of shifts and equipment the device cannot see the
- * whole of.
+ * The two halves are not the same command as far as offline goes, and M18.54
+ * split them deliberately.
+ *
+ * **On-site is an Alpha 1 offline write** (technical spec 9.4, data/API 7.2).
+ * It records what an operator saw — this person is standing here — and every
+ * rule it is decided against is one the node holds when the command arrives:
+ * the department belongs to the event's organization, the caller may manage
+ * presence, the staff member is an active department member. It is idempotent
+ * by construction: marking somebody on-site who is already on-site changes
+ * nothing and reports so, which is what makes a replayed delivery safe without
+ * a key of its own. `marked_at` is the device's moment, so a mark made at 02:10
+ * and delivered at 06:00 is recorded at 02:10.
+ *
+ * **Off-site stays connected-only.** SLB-018 refuses it on the strength of
+ * every open equipment checkout and every checked-in shift in the department,
+ * which is state the device holds no whole copy of; a queued off-site mark
+ * would be one an operator was told was captured and the node then refused
+ * hours later.
  */
 final class DepartmentPresenceCommandController extends Controller
 {

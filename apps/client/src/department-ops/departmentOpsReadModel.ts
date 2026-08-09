@@ -25,15 +25,16 @@
 //     own answer and the same one the commands enforce, in place of the
 //     fixture's `LOCAL_CAPABILITIES` flags. A client that fails to hide an
 //     action is still refused (CLIENT-006).
-//  3. **Attendance queues; the rest does not.** Check-in, check-out, and
-//     no-show are Alpha 1 offline writes (data/API 7.2) and go through the
-//     command outbox with the device-generated operation UUID as their
-//     idempotency key. Presence, unscheduled additions, deployments, equipment
-//     handoff, and hours correction are connected-only and are refused where
-//     they stand (CLIENT-018). Correction is the one of those that writes an
-//     attendance operation like its queued siblings and still cannot be held:
-//     the grace period it is measured against is the node's, and it closes
-//     whether or not a device is reachable.
+//  3. **Attendance, the on-site mark, and the addition queue; the rest does
+//     not.** Check-in, check-out, and no-show have been Alpha 1 offline writes
+//     since the beginning (data/API 7.2), and M18.54 added the unscheduled
+//     addition and the on-site mark it depends on. All five go through the
+//     command outbox with a device-generated operation UUID as their idempotency
+//     key. Off-site, deployments, equipment handoff, and hours correction are
+//     connected-only and are refused where they stand (CLIENT-018) — each turns
+//     on state the device holds no whole copy of: every open checkout in the
+//     department, what is available to hand over, a grace period the node's
+//     clock owns and closes whether or not a device is reachable.
 //  4. **Nothing is derived here that the node already decided.** Shift
 //     lifecycle, whether a card offers check-in, whether someone may leave
 //     site, and every planning aggregate arrive computed. What is left in this
@@ -50,8 +51,10 @@
 //     that issues all three would not render without a node. `storedLogisticsDesk`
 //     composes the payload from `logistics_staff_index`, presence, the shift
 //     index, assignments, attendance, and open checkouts, deriving each card's
-//     verdicts by the node's own rule and refusing the three it cannot answer —
-//     the unscheduled addition, hours correction, and equipment handoff.
+//     verdicts by the node's own rule and refusing the ones it cannot answer.
+//     M18.54 moved the unscheduled addition onto the offered side of that line —
+//     the offer is the node's own four-part rule and the device now holds all
+//     four facts — leaving hours correction and equipment handoff refused.
 //
 //     Department Overview, the Operations Center, and the Planning Table stay
 //     connected-only and say so. Their payloads are compiled rather than
@@ -63,8 +66,11 @@
 
 import { meridianCachedJson } from "@/api/meridianApi";
 import { storedLogisticsDesk } from "@/department-ops/storedLogisticsDesk";
+import { takeShiftAdditionWarnings } from "@/department-ops/shiftAdditionWarnings";
 import type { ReadFreshness } from "@/offline/readFreshness";
-import { sendConnectedCommand } from "@/outbox/submitCommand";
+import { commandOutbox } from "@/outbox/commandOutboxRuntime";
+import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
+import { queueCommand, sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
 import { clientSessionState } from "@/session/clientSession";
 import { submitAttendanceOperation } from "@/shift-board/submitAttendanceOperation";
@@ -1064,43 +1070,140 @@ export function queueMarkNoShow(input: AttendanceCommandInput): void {
   });
 }
 
-/** Mark a department member on-site or off-site (SLB-015 through SLB-018). */
+/**
+ * Mark a department member on-site or off-site (SLB-015 through SLB-018).
+ *
+ * The two halves take different paths since M18.54. On-site is an Alpha 1
+ * offline write (technical spec 9.4): it records what the operator saw, the node
+ * decides every rule behind it when the command arrives, and marking somebody
+ * on-site who already is changes nothing — so it is queued, and drained at once
+ * where there is a node, exactly like the Event Horizon's preference commands.
+ * `marked_at` is the moment the operator marked it rather than the moment the
+ * queue drained, which is the same reason a check-in carries `device_created_at`.
+ *
+ * Off-site stays connected-only. SLB-018 refuses it on the strength of every
+ * checked-in shift and every open equipment checkout in the department, and a
+ * device holds no whole copy of either.
+ */
 export async function setDepartmentPresence(
   context: DepartmentOpsContext,
   staffId: string,
   state: DepartmentPresenceState,
 ): Promise<void> {
-  await sendConnectedCommand({
-    commandType: state === "on_site" ? "mark-staff-on-site" : "mark-staff-off-site",
-    idempotencyKey: `${state}-${context.eventId}-${context.departmentId}-${staffId}`,
-    payload: {
-      event_id: context.eventId,
-      department_id: context.departmentId,
-      staff_id: staffId,
-    },
+  const payload = {
+    event_id: context.eventId,
+    department_id: context.departmentId,
+    staff_id: staffId,
+  };
+
+  if (state === "off_site") {
+    await sendConnectedCommand({
+      commandType: "mark-staff-off-site",
+      idempotencyKey: `off_site-${context.eventId}-${context.departmentId}-${staffId}`,
+      payload,
+      eventId: context.eventId,
+      detail: staffId,
+    });
+
+    return;
+  }
+
+  queueCommand({
+    commandType: "mark-staff-on-site",
+    idempotencyKey: deskOperationUuid(),
+    payload: { ...payload, marked_at: new Date().toISOString() },
     eventId: context.eventId,
     detail: staffId,
   });
+
+  await syncCommandOutbox();
 }
 
-/** Add an on-site staff member to a shift they were not assigned to (SLB-008). */
+/** What became of an addition by the time the desk's own call returned. */
+export interface ShiftAdditionOutcome {
+  /**
+   * What became of it. `queued` is the offline case and is not a failure; it is
+   * work this device is now the only copy of, and the outbox notice reports it
+   * until the node settles it.
+   */
+  readonly state: "accepted" | "queued" | "rejected";
+  /** The node's refusal, in its own words, when it refused. */
+  readonly reason: string | null;
+  /** The node's overlap warnings; empty until it has answered (technical spec 20.5). */
+  readonly warnings: readonly string[];
+}
+
+/**
+ * Add an on-site staff member to a shift they were not assigned to (SLB-008).
+ *
+ * An Alpha 1 offline write since M18.54 (technical spec 9.4, data/API 7.2). The
+ * operator at a desk with no signal used to lose this to paper; now it is held
+ * on the device and sent when there is a node, and what the node decides about
+ * it — including a refusal, because eligibility is not answerable here — comes
+ * back through the outbox with the reason on it (CLIENT-017).
+ *
+ * Drained immediately, so a desk that does have a node behaves as it did before:
+ * the node answers within the same call, its overlap warnings are shown, and the
+ * re-read that follows shows the assignment. Reports which of the two happened,
+ * because "added to the shift" and "held on this device" are different sentences
+ * and an operator is owed the true one (UI implementation contract 16.3).
+ */
 export async function addStaffToShift(
   context: DepartmentOpsContext,
   staffId: string,
   shiftId: string,
-): Promise<readonly string[]> {
-  const result = await sendConnectedCommand({
+): Promise<ShiftAdditionOutcome> {
+  const operationUuid = deskOperationUuid();
+
+  queueCommand({
     commandType: "add-staff-to-shift",
-    idempotencyKey: `add-to-shift-${shiftId}-${staffId}`,
-    payload: { shift_id: shiftId, staff_id: staffId },
+    idempotencyKey: operationUuid,
+    payload: {
+      shift_id: shiftId,
+      staff_id: staffId,
+      operation_uuid: operationUuid,
+      device_created_at: new Date().toISOString(),
+    },
     eventId: context.eventId,
     detail: staffId,
   });
 
-  const warnings = (result as { warnings?: { message: string }[] } | null)
-    ?.warnings;
+  await syncCommandOutbox();
 
-  return (warnings ?? []).map((warning) => warning.message);
+  const settled = commandOutbox.get(operationUuid);
+  const warnings = takeShiftAdditionWarnings(operationUuid);
+
+  if (settled === undefined || settled.status === "accepted") {
+    return { state: "accepted", reason: null, warnings };
+  }
+
+  if (settled.status === "rejected") {
+    return { state: "rejected", reason: settled.statusReason, warnings };
+  }
+
+  return { state: "queued", reason: null, warnings };
+}
+
+/**
+ * A UUID for one desk command.
+ *
+ * The device mints it before it has a node to ask, which is what makes the
+ * command replay-safe: the node stores it on the assignment and a second
+ * delivery of the same key is the same command rather than a duplicate
+ * (data/API 5.3). A platform with no UUID generator is told so here rather than
+ * queueing work under a key the node will not accept.
+ */
+function deskOperationUuid(): string {
+  const cryptoScope = (globalThis as { crypto?: { randomUUID?: () => string } })
+    .crypto;
+
+  if (typeof cryptoScope?.randomUUID !== "function") {
+    throw new Error(
+      "This device cannot generate the operation identifier this command needs.",
+    );
+  }
+
+  return cryptoScope.randomUUID();
 }
 
 /**

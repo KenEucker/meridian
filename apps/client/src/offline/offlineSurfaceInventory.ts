@@ -173,7 +173,7 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       route: "events.departments.logistics",
       outcome: "renders-offline",
       basis:
-        "the 9.3 Logistics indexes, composed into the desk on the device: presence, the shifts in front of it, and each person's attendance, with the card verdicts derived by the node's own rule from the same four facts it reads. Adding somebody to a shift, correcting hours, and handing equipment over stay refused — the desk cannot answer eligibility, the correction grace period is the node's clock, and availability is not confirmable from a stored copy",
+        "the 9.3 Logistics indexes, composed into the desk on the device: presence, the shifts in front of it, and each person's attendance, with the card verdicts derived by the node's own rule from the same four facts it reads. Since M18.54 the addition and the on-site mark are offline writes too, so the desk offers both against the node's own offering rule and queues them; eligibility is still the node's and refuses on replay. Correcting hours and handing equipment over stay refused — the correction grace period is the node's clock, and availability is not confirmable from a stored copy",
       offlineText: "This node could not be reached",
     },
     {

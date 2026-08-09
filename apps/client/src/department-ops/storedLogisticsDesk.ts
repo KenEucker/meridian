@@ -25,23 +25,41 @@
 // invented `can_manage_attendance` would be a device granting itself a
 // capability, which is a different act from re-reading a rule.
 //
-// **Three verdicts are refused offline rather than derived**, each because the
+// **Two verdicts are refused offline rather than derived**, each because the
 // fact behind it is not on the device:
 //
-//   - `can_add_to_shift` — the unscheduled addition is connected-only until
-//     M18.54 makes it an offline write, and its eligibility check (Do Not Staff,
-//     memberships, trainings, waivers) is not answerable here anyway.
 //   - `can_correct_hours` — the correction grace period is the node's clock and
 //     closes whether or not a device is reachable.
 //   - the equipment handoff controls, which are connected-only (CLIENT-018) and
 //     already refuse where they stand.
 //
+// **`can_add_to_shift` joined the derived side in M18.54**, when the unscheduled
+// addition became an offline write (technical spec 9.4). What is derived is the
+// node's *offering* rule and only that: no live assignment, the person on-site,
+// the shift started, and an eligible team membership — four facts the device now
+// holds, the last of them because M18.54 put `eligible_team_ids` on the staff
+// index for it. What is not derived, and never was, is eligibility: Do Not
+// Staff, department standing, required trainings and waivers are the node's, and
+// a queued addition it refuses comes back with its reason on it (CLIENT-017).
+// That is the same division the online desk already makes — `can_add_to_shift`
+// has always been the loose side of an approximation, with
+// `UnscheduledShiftAdditionService` weighing the rest.
+//
+// **Two queues are unioned into the rows** (M18.50; data/API 5.6). A pending
+// on-site mark counts as presence and a pending addition counts as an
+// assignment, because the operator who queued them is looking at this screen and
+// the work is real — it is simply not at the node yet. Without that, an operator
+// with no signal would mark somebody on-site, watch the pill stay off-site, and
+// be told the addition cannot be offered because they are not here. Only queued
+// and sending commands count; a refusal is not a record (CLIENT-017).
+//
 // What is on screen is disclosed as a stored copy through the freshness the seam
 // reports, exactly as every other projection's is.
 
-import type {
-  OfflineReadProjection,
-  OfflineReadSource,
+import {
+  unionPendingByDeviceId,
+  type OfflineReadProjection,
+  type OfflineReadSource,
 } from "@/offline/offlineReadProjection";
 import {
   departmentHasCapability,
@@ -56,8 +74,22 @@ const CHECKED_IN_BLOCK =
   "Staff must be checked out from department shifts before being marked off-site.";
 const OPEN_EQUIPMENT_BLOCK =
   "Staff must return or resolve checked-out department equipment before being marked off-site.";
-const ADD_TO_SHIFT_OFFLINE_BLOCK =
-  "Adding somebody to a shift needs a connection to the node: eligibility is checked there.";
+/*
+ * The two reasons the node prints when it does not offer the addition
+ * (`DepartmentOperationsReadController::addToShiftBlockedReason`), in its words.
+ * The archived-team variant stays the node's alone: the device holds no archived
+ * flag for a team, and guessing at one would name the wrong obstacle.
+ */
+const NOT_STARTED_BLOCK =
+  "This shift has not started yet. Staff can be added once it is running.";
+const NOT_ELIGIBLE_BLOCK = "This shift is for another team.";
+
+/** The node's team-named variant of the same refusal, when the shift names one. */
+function notEligibleBlock(team: string | null): string {
+  return team === null
+    ? NOT_ELIGIBLE_BLOCK
+    : `This shift is for the ${team} team, and they are not a member of it.`;
+}
 
 /** `logistics_staff_index`, as `DepartmentLogisticsSections::staffIndex` writes it. */
 interface StoredStaffRow {
@@ -68,6 +100,15 @@ interface StoredStaffRow {
   readonly preferred_name: string | null;
   readonly handle: string | null;
   readonly team_label: string | null;
+  /**
+   * The teams whose shifts this person may be added to (M18.54; SLB-008).
+   *
+   * Optional because a set composed before M18.54 does not carry it, and a
+   * device holding one of those must read "no eligible team" rather than
+   * assuming eligibility it was never told about — the refusal is recoverable
+   * by refreshing the set; a wrongly offered addition is a refusal at the node.
+   */
+  readonly eligible_team_ids?: readonly string[];
   readonly archived_at: string | null;
 }
 
@@ -285,16 +326,64 @@ export function storedLogisticsDesk<T>(
       ),
     );
 
+    /*
+     * On-site marks this device is still holding (M18.54). Later than any stored
+     * row by construction — the queue is what happened after the set was handed
+     * over — so they overwrite rather than being unioned in. Nothing here can
+     * move somebody the other way: off-site is connected-only, so a queued mark
+     * only ever says "this person is standing here".
+     */
+    for (const command of source.pending("mark-staff-on-site")) {
+      if (
+        command.payload.event_id === eventId &&
+        command.payload.department_id === departmentId &&
+        typeof command.payload.staff_id === "string"
+      ) {
+        presence.set(command.payload.staff_id, "on_site");
+      }
+    }
+
     const shifts = here(
       source.section<StoredShiftRow>("logistics_shift_index"),
     ).filter((row) => row.cancelled_at === null);
 
     const shiftById = new Map(shifts.map((row): [string, StoredShiftRow] => [row.id, row]));
 
+    /*
+     * Stored assignments plus the additions this device is holding (M18.54;
+     * technical spec 17.2; data/API 5.3). A pending addition is an assignment as
+     * far as this screen is concerned: the operator made it, the card should
+     * stop offering to make it again, and check-in should be offered against it
+     * — which is the whole point of adding somebody to a running shift.
+     *
+     * The identity is the shift and the staff member rather than a row id,
+     * because that is what makes the two copies the same assignment. A device
+     * that queued an addition and has since been handed a set containing it
+     * holds two rows describing one fact, and only one of them is the node's.
+     */
+    const pendingAssignments: StoredAssignmentRow[] = [];
+
+    for (const command of source.pending("add-staff-to-shift")) {
+      const { shift_id: shiftId, staff_id: staffId } = command.payload;
+
+      if (typeof shiftId === "string" && typeof staffId === "string") {
+        pendingAssignments.push({
+          id: command.key,
+          shift_id: shiftId,
+          staff_id: staffId,
+          assignment_status: "assigned",
+        });
+      }
+    }
+
     const assignmentsByStaff = groupBy(
-      source
-        .section<StoredAssignmentRow>("logistics_shift_assignments")
-        .filter((row) => shiftById.has(row.shift_id)),
+      unionPendingByDeviceId(
+        source
+          .section<StoredAssignmentRow>("logistics_shift_assignments")
+          .filter((row) => shiftById.has(row.shift_id)),
+        pendingAssignments.filter((row) => shiftById.has(row.shift_id)),
+        (row) => `${row.shift_id}:${row.staff_id}`,
+      ),
       (row) => row.staff_id,
     );
 
@@ -354,8 +443,18 @@ export function storedLogisticsDesk<T>(
         (row) => row.current_state === "checked_in",
       );
       const holdingBlocks = held.some(blocksOffSite);
+      /*
+       * `TeamMembership::onEligibleShiftTeam` as the node asked it when the set
+       * was composed. A shift naming no eligible team takes nobody by addition,
+       * which is the same answer the node gives: its lookup is keyed by team id
+       * and a null one matches nothing.
+       */
+      const eligibleTeamIds = new Set(member.eligible_team_ids ?? []);
+      const eligibleForShift = (shift: StoredShiftRow): boolean =>
+        shift.eligible_team_id !== null &&
+        eligibleTeamIds.has(shift.eligible_team_id);
 
-      const cards = shifts.map((shift) => {
+      const cards = shifts.flatMap((shift) => {
         const assignment =
           assignments.find((row) => row.shift_id === shift.id) ?? null;
         const state =
@@ -363,6 +462,20 @@ export function storedLogisticsDesk<T>(
           null;
         const started =
           shift.starts_at !== null && now >= new Date(shift.starts_at);
+        const ended = shift.ends_at !== null && now > new Date(shift.ends_at);
+
+        /*
+         * `DepartmentOperationsReadController::shiftCards` drops an unassigned
+         * card unless the person is on-site and the shift has not ended, and the
+         * offline desk now drops it too (M18.54). Before the addition could be
+         * made here there was nothing to offer on those cards anyway; now there
+         * is, and a card offering it to somebody who is not on site would be a
+         * button the node refuses — while one that simply is not there matches
+         * what the same desk shows with a connection.
+         */
+        if (assignment === null && !(onSite && !ended)) {
+          return [];
+        }
 
         return {
           shift_id: shift.id,
@@ -387,14 +500,22 @@ export function storedLogisticsDesk<T>(
             started &&
             (state === null || state === "scheduled"),
           /*
-           * Refused rather than derived. The unscheduled addition is
-           * connected-only until M18.54, and its eligibility check — Do Not
-           * Staff, memberships, required trainings and waivers — is not
-           * answerable on a device at all.
+           * The node's offering rule, from the four facts this device holds
+           * (M18.54; SLB-008). Eligibility beyond the team — Do Not Staff,
+           * department standing, required trainings and waivers — is the node's
+           * and is decided when the queued command arrives, exactly as it is for
+           * an addition made at a connected desk.
            */
-          can_add_to_shift: false,
+          can_add_to_shift:
+            assignment === null && onSite && started && eligibleForShift(shift),
           add_to_shift_blocked_reason:
-            assignment === null ? ADD_TO_SHIFT_OFFLINE_BLOCK : null,
+            assignment !== null
+              ? null
+              : !started
+                ? NOT_STARTED_BLOCK
+                : eligibleForShift(shift)
+                  ? null
+                  : notEligibleBlock(shift.team_name_snapshot),
           /*
            * The hours a correction would edit are the node's, and so is the
            * grace period it is measured against — it closes whether or not a

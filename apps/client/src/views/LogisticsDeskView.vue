@@ -68,10 +68,12 @@ import type {
  * every write is followed by a re-read, because a command answers with the
  * record it changed and not with what that change did to the rest of the screen.
  *
- * Attendance is queued and the rest is not. Check-in, check-out, and no-show are
- * Alpha 1 offline writes (data/API 7.2) and go into the command outbox, so a
- * desk with no node keeps working; presence, shift additions, and equipment
- * handoff are refused where they stand rather than held (CLIENT-018).
+ * Most of the desk's writes are queued and the rest are not. Check-in,
+ * check-out, and no-show have been Alpha 1 offline writes since the beginning
+ * (data/API 7.2), and M18.54 added the unscheduled addition and the on-site mark
+ * it depends on, so the whole of "somebody turned up and is working this shift"
+ * can now be recorded with no node in reach. Off-site, equipment handoff, and
+ * hours correction are refused where they stand rather than held (CLIENT-018).
  *
  * The index behind the search is durable from M18.8, which is the other half of
  * "a desk with no node keeps working": the read is stored on the device and the
@@ -394,7 +396,12 @@ const busy = computed(() => pendingWork.value !== null);
  */
 async function run(
   work: () => Promise<void>,
-  success: string,
+  /**
+   * What to say afterwards. A function for the commands whose answer is not
+   * known until the work has run — an offline write may have been taken by the
+   * node or may be held on the device, and those are different sentences.
+   */
+  success: string | (() => string),
   pending = "Working",
 ): Promise<void> {
   if (busy.value) {
@@ -407,7 +414,7 @@ async function run(
   try {
     await work();
     await loadDesk();
-    status.value = success;
+    status.value = typeof success === "string" ? success : success();
   } catch (error) {
     status.value = meridianErrorMessage(
       error,
@@ -768,28 +775,48 @@ function returnItem(
   );
 }
 
+/**
+ * Add somebody to a running shift (SLB-008).
+ *
+ * An offline write since M18.54, so there are three answers rather than two and
+ * the desk says which one it got. Accepted is the ordinary case at a connected
+ * desk. Held is the one this task exists for: the work is on the device and will
+ * go when there is a node, and saying "added to the shift" there would be a
+ * claim about a roster nobody else can see yet. Refused is the node's own
+ * sentence — usually eligibility, which no device can answer — and it is printed
+ * here as well as held in the outbox, because the operator is standing at the
+ * desk now.
+ */
 function addToShift(shiftId: string): void {
   const member = workspace.value;
 
   if (member === null || context.value === null) return;
 
-  void run(async () => {
-    const warnings = await addStaffToShift(
-      context.value!,
-      member.staffId,
-      shiftId,
-    );
+  let outcome = "";
 
-    // Overlapping assignments are warned about rather than refused (technical
-    // spec 20.5), so the node's warning is what the desk shows.
-    if (warnings.length > 0) {
-      overlapWarnings.value = warnings;
-    } else {
-      overlapWarnings.value = [];
-    }
-  },
-  `${member.displayName} added to the shift.`,
-  `Adding ${member.displayName} to the shift`);
+  void run(
+    async () => {
+      const addition = await addStaffToShift(
+        context.value!,
+        member.staffId,
+        shiftId,
+      );
+
+      // Overlapping assignments are warned about rather than refused (technical
+      // spec 20.5), so the node's warning is what the desk shows.
+      overlapWarnings.value = addition.warnings;
+
+      outcome =
+        addition.state === "accepted"
+          ? `${member.displayName} added to the shift.`
+          : addition.state === "queued"
+            ? `${member.displayName}'s shift addition is held on this device and will be sent when a node is reachable.`
+            : (addition.reason ??
+              `The node refused ${member.displayName}'s shift addition.`);
+    },
+    () => outcome,
+    `Adding ${member.displayName} to the shift`,
+  );
 }
 
 const overlapWarnings = ref<readonly string[]>([]);
