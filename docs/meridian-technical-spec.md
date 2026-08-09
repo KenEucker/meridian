@@ -1278,6 +1278,15 @@ trusted server known
 device signing available
 ```
 
+Every item has a signal behind it. Six are answered by probes and by the session document a client already holds: `logged in` and `event selected` from the session, `device trusted` from the workstation pinned-context read for a shared workstation and from the session document's `device` block for a personal one (data/API 5.5), `encryption active` and `device signing available` from the platform capability probes, and `trusted server known` from the node this device is pointed at.
+
+The remaining two are answered by the offline machinery:
+
+- `local cache complete` is the offline read set (section 9.3): the device holds the set the node composed **for that caller**, and it is still inside the window it may be served in (11A.4). It is deliberately not a list of sections — the set is composed per request from the caller's own effective roles and the organization's active modules (9.5), so a staff member holding no Logistics index is holding a complete cache, and a checklist that looked for sections would report their correct device as incomplete forever.
+- `last sync completed` covers both directions: the read set coming down and the command outbox going up (11A.5). A device whose set refreshed a minute ago and whose outbox holds three unsent check-ins has not completed a sync in any sense its owner cares about. A refusal outranks unsent work, because a refusal will not clear on its own.
+
+Readiness reports what it is told and never infers. A device-bound token is not read as device trust, an unreachable node is not read as a failure, and a signal that has not answered yet reads as pending rather than as a check that failed.
+
 Users are encouraged, but not required, to prepare their devices before the event.
 
 ---

@@ -1073,6 +1073,7 @@ Returns, for the calling user:
 - `events`: events the user holds an association with, and which one the node is locked to when it is locked
 - `departments` and `teams`: the user's associations within the resolved context
 - `context`: the resolved organization, event, and department, and whether context switching is available
+- `device`: the device this request's token is bound to, and its trust for this user — `id`, `label`, `trusted`, `trust_state` (`trusted`, `untrusted`, `expired`, or `revoked`), and `trusted_until`. Null when the credential names no device, which is what a shared-workstation session key does
 - `refreshed_at`: server time of resolution, used by the client to display permission staleness
 
 The response returns codes, not navigation. It carries no screen list, menu structure, or precomputed surface availability. Clients derive navigation from `capabilities`, which keeps the permission catalog the single source of truth.
@@ -1080,6 +1081,8 @@ The response returns codes, not navigation. It carries no screen list, menu stru
 Each entry in `roles` also carries the capability codes that role alone brings, because authority is scoped — a person may run logistics for one department and be ordinary staff in another — and the client holds no copy of the role-to-capability mapping to narrow the flat list for itself. Both lists are read from the same catalog the server enforces from.
 
 Each entry in `events` carries the event's own window and its active event window, which is what bounds the staleness of a cached session in 11A.4.
+
+`device` reports trust, not identity the client supplied. The device is taken from the caller's own token binding (12.5) rather than from anything in the request, so there is no parameter for whose device to report, for the same reason there is none for whose session. It answers the "device trusted" item of the readiness checklist (technical spec 14), which had no signal for a personal device before this: trust lives in `device_trusts` (12.2) and nothing published it. `trusted` is `DeviceTrust::isActive()` — the same predicate the Field Report services refuse an untrusted origin device with — so a client and the writes it will attempt cannot disagree about what trust means. The four `trust_state` values are distinguished because they mean different things to the person reading them: `expired` is renewed by signing in again and `revoked` is not.
 
 Association is defined per record type: an organization by a `staff_organization_statuses` row, a department or team by a membership that is not archived, and an event by any of a department assignment to a department the user belongs to, a team grant scoped to that event on a team they belong to, or an unrevoked `event_credentials` row. The organizations of the listed departments and events are always listed too, so a client is never left displaying an organization it was not told about.
 

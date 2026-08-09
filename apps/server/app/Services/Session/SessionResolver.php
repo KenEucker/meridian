@@ -7,6 +7,8 @@ namespace App\Services\Session;
 use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
+use App\Models\Device;
+use App\Models\DeviceTrust;
 use App\Models\Event;
 use App\Models\EventCredential;
 use App\Models\EventDepartmentAssignment;
@@ -67,12 +69,20 @@ class SessionResolver
      * @param  string|null  $requestedEventId  the event the client wants its
      *                                         roles resolved at, which must be
      *                                         one of the caller's own
+     * @param  Device|null  $device  the device this request came from, when the
+     *                               credential names one. Only its trust for
+     *                               this user is reported, and only to that
+     *                               user's own client.
      * @return array<string, mixed>
      *
      * @throws SessionContextException when the requested event is not a context
      *                                 this caller may resolve on this node
      */
-    public function resolve(User $user, ?string $requestedEventId = null): array
+    public function resolve(
+        User $user,
+        ?string $requestedEventId = null,
+        ?Device $device = null,
+    ): array
     {
         $staff = $user->staffProfiles()->get();
         $staffIds = $staff->map(fn (Staff $profile): string => (string) $profile->getKey())->all();
@@ -106,10 +116,81 @@ class SessionResolver
             'departments' => $departments->values()->all(),
             'teams' => $teams->values()->all(),
             'context' => $this->context($contextEvent, $lockedEventId, $organizations, $departments, $events),
+            'device' => $this->device($user, $device),
             // Server time of resolution, which is what a client operating from
             // cache displays as its last refresh (CLIENT-009).
             'refreshed_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Whether this request's device is trusted for this user (AUTH-021,
+     * AUTH-024; technical spec 12.1, 12.2, 14; data/API 12.2).
+     *
+     * Device trust is a `device_trusts` row per user/device pair, and until now
+     * no endpoint published it — so the readiness checklist, which lists
+     * "device trusted" as one of its eight items, had nothing to answer with and
+     * reported it as unavailable on every personal device.
+     *
+     * It belongs on the session document rather than on a route of its own for
+     * two reasons. The document is already per-caller and already cached
+     * durably, so a device in a field with no signal reads its own trust from
+     * the last answer the node gave rather than losing the item the moment it
+     * needs it most. And the question is about the credential this request
+     * arrived on: a token is bound to a device (AUTH-021), so the caller's own
+     * token names the only device there is an answer for. There is no parameter
+     * for whose device to report, for the same reason there is none for whose
+     * session.
+     *
+     * Null when the credential names no device — a shared-workstation session
+     * key is a machine's credential rather than a device-bound token, and the
+     * checklist answers for a workstation from the pinned-context read instead
+     * (M18.32). Null is "this session names no device", not "not trusted".
+     *
+     * `trusted` is the same predicate the Field Report services enforce with,
+     * asked from `DeviceTrust::isActive()` so a client and the writes it will
+     * attempt cannot disagree about what trust means. `expires_at` travels with
+     * it because AUTH-024 gives trust a six-week life the person can see coming.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function device(User $user, ?Device $device): ?array
+    {
+        if (! $device instanceof Device) {
+            return null;
+        }
+
+        $trust = DeviceTrust::query()
+            ->with('device')
+            ->where('user_id', $user->getKey())
+            ->where('device_id', $device->getKey())
+            ->first();
+
+        return [
+            'id' => (string) $device->getKey(),
+            'label' => $device->device_label,
+            'trusted' => $trust instanceof DeviceTrust && $trust->isActive(),
+            /*
+             * Why it is not trusted, when it is not, in the three shapes that
+             * differ for the person reading it: nothing on record, a lapsed
+             * window they can renew by signing in, and a revocation they cannot.
+             */
+            'trust_state' => $this->trustState($trust),
+            'trusted_until' => $trust?->expires_at?->toIso8601String(),
+        ];
+    }
+
+    private function trustState(?DeviceTrust $trust): string
+    {
+        if (! $trust instanceof DeviceTrust) {
+            return 'untrusted';
+        }
+
+        if ($trust->isRevoked()) {
+            return 'revoked';
+        }
+
+        return $trust->isActive() ? 'trusted' : 'expired';
     }
 
     /**

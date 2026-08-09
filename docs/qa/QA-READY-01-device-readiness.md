@@ -93,9 +93,30 @@ cache, sync).
 10. On a normal localhost secure context, confirm **Encryption active** and
     **Device signing available** show **Ready** (local encryption and device
     signing capability probes succeed).
-11. Confirm the other six items show **Pending** with detail
-    `Not available yet in this build.` (honest pending, not a false pass or
-    nagging failure).
+11. Confirm no item reports `Not available yet in this build.` Every one of the
+    eight has a signal behind it since M18.54, and a checklist saying otherwise
+    is reporting a wiring failure rather than a device state.
+11a. On a device signed in normally, confirm **Logged in**, **Event selected**,
+     and **Trusted server known** are **Ready**, and that **Device trusted**
+     names this device and the date its trust runs to (AUTH-024). Signing in is
+     what establishes trust, so a device that just signed in is trusted.
+11b. Confirm **Local cache complete** is **Ready** and names the moment this
+     device stored its copy. This is the set the node composed *for this
+     caller*: a staff member holding no Logistics index holds a complete cache,
+     and the item must not report otherwise.
+11c. Confirm **Last sync completed** is **Ready** and says everything recorded
+     here has been sent.
+11d. Queue an offline write without sending it — from the Logistics desk, mark
+     somebody on-site with DevTools set to Offline — then return to
+     `/readiness` and confirm **Last sync completed** is **Not ready** and says
+     how many actions have not reached the node. Restore the network, let the
+     outbox drain, and confirm it returns to **Ready**.
+11e. Clear the stored read set (sign out and back in with the network off, or
+     clear site data) and confirm **Local cache complete** reports **Not ready**
+     with `holds no offline copy yet` rather than a false pass.
+11f. Revoke this device from God Mode, refresh the session, and confirm
+     **Device trusted** reports **Not ready** and says an administrator has to
+     restore it — the one trust state signing in again does not fix.
 12. Confirm there is no organizer, admin, or shared-team surface that displays
     this checklist in this build.
 
@@ -178,8 +199,18 @@ switch off any more.
   (`EventModeFailClosedTest`, `EventModeSetupFailClosedTest`).
 - `/readiness` shows the eight technical-spec section 14 items in order with
   textual Ready / Not ready / Pending status.
-- On localhost, encryption and device signing are Ready; the other six items
-  are Pending with `Not available yet in this build.`
+- On localhost with a signed-in device, all eight items report a real answer and
+  none reports `Not available yet in this build.`
+- **Device trusted** follows the node's own `device_trusts` verdict, names the
+  device and the date its trust runs to, and tells a lapsed trust from a revoked
+  one — the first is renewed by signing in and the second is not.
+- **Local cache complete** is Ready for a device holding the set composed for its
+  own caller, and Not ready when it holds nothing or holds a set past the event
+  window it may be served in.
+- **Last sync completed** covers both directions: it is Not ready while the
+  outbox holds unsent work, names how many actions are waiting, reports a
+  refusal ahead of unsent work, and returns to Ready once the queue drains and
+  the read set has refreshed.
 - The checklist copy states readiness is advisory, user-only, not
   organizer-visible, and non-expiring.
 - OfflineBanner is silent while online and shows **Offline but usable** /
@@ -194,8 +225,8 @@ switch off any more.
 - Client event mode fails closed when encryption or signing is unavailable
   (automated evidence); readiness UI surfaces those capability states honestly.
 - Non-goals for this script: offline field-report/attendance writes, device
-  upload paths, wiring pending readiness items, organizer-visible readiness,
-  M15 packaging/secret safeguards, and Electron health-panel sync fields.
+  upload paths, organizer-visible readiness, M15 packaging/secret safeguards,
+  and Electron health-panel sync fields.
 
 ## Evidence to capture
 
