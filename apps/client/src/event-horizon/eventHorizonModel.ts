@@ -8,16 +8,27 @@
 //
 // Three properties are load-bearing:
 //
-//  1. **The node decides everything about the list.** Which kinds are present,
-//     each item's state, the words that explain it, and the order it renders
-//     in are all the node's answers (HORIZON-006: "the client renders that
-//     order and does not sort"). Nothing here re-derives a state or re-ranks a
-//     row, because a client that did would be a second reading of readiness
-//     that can only drift from the one the rules enforce (CLIENT-006).
-//  2. **The read is cached like every other Alpha 1 read** (HORIZON-016), so a
-//     device out of coverage renders the copy it holds with the staleness
-//     disclosed rather than an empty page — and never presents "nothing
-//     outstanding" it has not actually established (19C.9).
+//  1. **Where there is a node, the node decides everything about the list.**
+//     Which kinds are present, each item's state, the words that explain it,
+//     and the order it renders in are all the node's answers (HORIZON-006:
+//     "the client renders that order and does not sort"). Nothing here
+//     re-derives a state or re-ranks a row off a live read, because a client
+//     that did would be a second reading of readiness that can only drift from
+//     the one the rules enforce (CLIENT-006).
+//  2. **Where there is not, the device compiles what it holds** (HORIZON-016),
+//     which is the one place the rule above gives way and does so because the
+//     requirement says to: "shall compile from the permission-scoped data the
+//     device already holds when no node is reachable, shall disclose that it is
+//     incomplete rather than reaching past the sync boundary". The drift the
+//     first property guards against is bounded by keeping that compile to the
+//     single kind the read set can actually answer, wording its items exactly
+//     as the node words them, and naming the other four as unevaluated rather
+//     than guessing at them. A partial list never reads as a complete one, and
+//     "nothing outstanding" is still never presented off a copy (19C.9).
+//
+//     M18.43 satisfied this from a cache of the node's own last response;
+//     M18.50 deleted that cache and left the surface stating it needed a
+//     connection, which the M18.53 audit found and this closes.
 //  3. **The two preference commands are offline writes** by data/API 5.8A's
 //     own word. The node re-checks the HORIZON-013 guard when the queue
 //     drains, so a hide held past a new outstanding item is refused there.
@@ -30,6 +41,7 @@ import { computed, reactive, type ComputedRef } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 
 import { holdsMeridianCredential, meridianCachedJson } from "@/api/meridianApi";
+import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
 import type { ReadFreshness } from "@/offline/readFreshness";
 import { queueCommand } from "@/outbox/submitCommand";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
@@ -84,6 +96,16 @@ export interface EventHorizon {
   readonly outstandingCount: number;
   readonly kinds: readonly EventHorizonKind[];
   readonly items: readonly EventHorizonItem[];
+  /**
+   * The kinds this answer could not evaluate (HORIZON-016).
+   *
+   * Always empty on a live read: the node evaluates every kind the viewer holds
+   * or omits it from `kinds` entirely. It fills only when the list was compiled
+   * on the device, and it is what stops a partial list reading as a complete
+   * one — "you have nothing outstanding" and "the one thing this device could
+   * check found nothing" are different sentences.
+   */
+  readonly unevaluatedKinds: readonly EventHorizonKind[];
   readonly freshness: ReadFreshness;
 }
 
@@ -127,7 +149,68 @@ interface EventHorizonPayload {
     readonly governed_by?: string | null;
   }[];
   readonly items?: readonly EventHorizonItemPayload[];
+  /**
+   * Offline only. The node never sends this — it has no kind it cannot
+   * evaluate — and the projection below is its only writer.
+   */
+  readonly unevaluated_kinds?: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly module?: string | null;
+    readonly governed_by?: string | null;
+  }[];
 }
+
+/**
+ * The five item kinds, mirrored from the server's `EventHorizonCatalog`.
+ *
+ * A duplication, and a deliberate one. Offline there is no response to read the
+ * catalogue out of, and naming what could not be evaluated is the whole point of
+ * the disclosure — "four kinds were not checked" is actionable in a way that
+ * "this list may be incomplete" is not.
+ *
+ * It is a safe duplication because the catalogue is fixed: technical spec 21D.2
+ * gives it no registration API and no table, and `EventHorizonContractTest`
+ * asserts both the five entries and the absence of an `event_horizon_item_kinds`
+ * table. A kind added there without being added here shows up as a kind this
+ * device silently fails to name, which is why the ids are spelled out rather
+ * than derived.
+ */
+const EVENT_HORIZON_KINDS: readonly EventHorizonKind[] = Object.freeze([
+  {
+    id: "document_acknowledgment",
+    label: "Document acknowledgments",
+    module: "documents",
+    governedBy: "POL-043 through POL-047",
+  },
+  {
+    id: "waiver",
+    label: "Waivers",
+    module: "documents",
+    governedBy: "WAIVER-003 through WAIVER-006, CRED-005",
+  },
+  {
+    id: "training",
+    label: "Trainings",
+    module: "qualifications",
+    governedBy: "TRAIN-002, TRAIN-008, SHIFT-005",
+  },
+  {
+    id: "shift_signup",
+    label: "Shift signup",
+    module: "scheduling",
+    governedBy: "SHIFT-004, SHIFT-007, SHIFT-008, SHIFT-011, SHIFT-018",
+  },
+  {
+    id: "coverage_gap",
+    label: "Team coverage",
+    module: "scheduling",
+    governedBy: "SHIFT-007, requirements 4.7",
+  },
+]);
+
+/** The one kind the offline read set carries enough to answer. */
+const OFFLINE_EVALUABLE_KIND = "document_acknowledgment";
 
 /**
  * What the workflow menu needs to know without fetching (19C.2): whether the
@@ -152,7 +235,25 @@ export function resetEventHorizonPresence(): void {
   eventHorizonPresence.hidden = false;
 }
 
+/**
+ * Update the menu summary — from a live answer only (19C.2, HORIZON-010).
+ *
+ * A device-compiled list is deliberately not allowed to put the entry in the
+ * menu. The presentation window needs the organization's configured lead-up
+ * days, which no device holds, so an offline compile reports the window as
+ * applying because it cannot rule it out — and letting that decide the menu
+ * would have Meridian *offering* the Event Horizon outside the window it is
+ * supposed to appear in, which is the requirement's whole point.
+ *
+ * Following the entry, or typing the address, still renders the compiled list.
+ * The distinction is between what this client offers unprompted and what it
+ * shows somebody who asked.
+ */
 function rememberPresence(horizon: EventHorizon): void {
+  if (horizon.freshness.source === "cache") {
+    return;
+  }
+
   eventHorizonPresence.eventId = horizon.eventId;
   eventHorizonPresence.present = horizon.window.applies && horizon.presentable;
   eventHorizonPresence.hidden = horizon.hidden;
@@ -191,16 +292,215 @@ function toItem(payload: EventHorizonItemPayload): EventHorizonItem {
   };
 }
 
+/** One acknowledgment requirement, as the read set carries it. */
+interface StoredRequirementRow {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly scope_type: string;
+  readonly scope_id: string;
+  readonly document_type: string;
+  readonly document_id: string;
+}
+
+interface StoredAcknowledgmentRow {
+  readonly document_type: string;
+  readonly document_id: string;
+  readonly scope_type: string;
+  readonly scope_id: string;
+}
+
+interface StoredDocumentRow {
+  readonly id: string;
+  readonly title: string;
+}
+
+interface StoredNamedRow {
+  readonly id: string;
+  readonly name: string | null;
+}
+
+/**
+ * The readiness list, compiled on the device (HORIZON-016).
+ *
+ * "The Event Horizon shall compile from the permission-scoped data the device
+ * already holds when no node is reachable, shall disclose that it is incomplete
+ * rather than reaching past the sync boundary, and shall persist no compiled
+ * result." All three clauses are load-bearing, and the second is why this is
+ * short.
+ *
+ * **One kind of the five, and that is a fact about the read set rather than a
+ * shortcut.** Acknowledgments are compilable because the set carries all three
+ * halves of the question — what was required, what was accepted, and the
+ * published documents both refer to. The other four are not:
+ *
+ *   - waivers and trainings have no section in technical spec 9.3 at all;
+ *   - coverage gaps are a lead's read of other people's shifts, which a member's
+ *     set does not carry;
+ *   - **shift signup is the one worth being explicit about.** The set carries
+ *     `shifts`, but only the shifts this member is *already assigned to*
+ *     (`RegularStaffSections` derives them from their own assignments), and it
+ *     carries no assignment counts. So a device can establish "you are on this
+ *     shift" and can never see a shift with a place left — which is the entire
+ *     outstanding half of the kind. Compiling the complete half alone would put
+ *     a list on screen that shows only shifts already held, and that reads as
+ *     "nothing to sign up for": a false all-clear assembled out of true rows,
+ *     which is exactly what 19C.9 forbids.
+ *
+ * So four kinds are reported as unevaluated and none of their items is guessed
+ * at. Nothing is persisted: this composes on read from the set and the outbox,
+ * the same as every other projection.
+ *
+ * Ordering is the client's here and only here (HORIZON-006 gives it to the
+ * server). Outstanding before complete, then title, so two compiles of the same
+ * set cannot differ — the server's deadline ordering has nothing to sort by,
+ * since an acknowledgment carries no due date.
+ */
+function storedEventHorizon(
+  eventId: string,
+): OfflineReadProjection<EventHorizonPayload> {
+  return (source) => {
+    if (!source.carries("document_acknowledgment_requirements")) {
+      return null;
+    }
+
+    const documents = new Map<string, StoredDocumentRow>([
+      ...source
+        .section<StoredDocumentRow>("policy_documents")
+        .map((row): [string, StoredDocumentRow] => [`policy:${row.id}`, row]),
+      ...source
+        .section<StoredDocumentRow>("procedure_documents")
+        .map((row): [string, StoredDocumentRow] => [
+          `procedure:${row.id}`,
+          row,
+        ]),
+    ]);
+
+    const departmentNames = new Map<string, string>(
+      source
+        .section<StoredNamedRow>("departments")
+        .map((row): [string, string] => [row.id, row.name ?? "your department"]),
+    );
+
+    const acknowledgments = source.section<StoredAcknowledgmentRow>(
+      "document_acknowledgments",
+    );
+
+    const items = source
+      .section<StoredRequirementRow>("document_acknowledgment_requirements")
+      .flatMap<EventHorizonItemPayload>((requirement) => {
+        const document = documents.get(
+          `${requirement.document_type}:${requirement.document_id}`,
+        );
+
+        // The node sends only published documents in this caller's audience, so
+        // a requirement with no document here is one this device cannot name.
+        if (document === undefined) {
+          return [];
+        }
+
+        const accepted = acknowledgments.some(
+          (acknowledgment) =>
+            acknowledgment.document_type === requirement.document_type &&
+            acknowledgment.document_id === requirement.document_id &&
+            acknowledgment.scope_type === requirement.scope_type &&
+            acknowledgment.scope_id === requirement.scope_id,
+        );
+
+        // The node's own wording, so a stored row and a live one read the same.
+        const scopeName =
+          requirement.scope_type === "department"
+            ? (departmentNames.get(requirement.scope_id) ?? "your department")
+            : "the organization";
+
+        return [
+          {
+            kind: OFFLINE_EVALUABLE_KIND,
+            identity: `document-acknowledgment:${requirement.id}`,
+            state: accepted ? "complete" : "outstanding",
+            title: document.title,
+            evaluation: accepted
+              ? "You acknowledged this document, and the version you accepted is on record."
+              : `${scopeName.charAt(0).toUpperCase()}${scopeName.slice(1)} asks you to acknowledge this document and you have not yet.`,
+            completion: accepted
+              ? "Nothing — this is done."
+              : "Read the document and record your acknowledgment.",
+            due_at: null,
+            action: {
+              surface: "staff.document-acknowledgments",
+              label: "Open your acknowledgments",
+            },
+          },
+        ];
+      })
+      .sort((left, right) => {
+        if (left.state !== right.state) {
+          return left.state === "outstanding" ? -1 : 1;
+        }
+
+        return left.title.localeCompare(right.title);
+      });
+
+    return {
+      data: {
+        context: {
+          event_id: eventId,
+          as_of: source.storedAt ?? "",
+        },
+        /*
+         * The presentation window is the node's (HORIZON-010, HORIZON-011): it
+         * needs the organization's configured lead-up days, which no device
+         * holds. Rather than re-deriving it from a default that may not be this
+         * organization's, the stored answer does not re-decide whether the
+         * surface is offered — a reader who reached this page keeps the list
+         * they came for, and the menu's presence stays whatever the last live
+         * read established. `offline_unconfirmed` says which of the two this is.
+         */
+        window: { applies: true, reason: "offline_unconfirmed" },
+        presentable: true,
+        hidden: false,
+        /*
+         * Hiding is refused off a stored copy for the reason 19C.9 gives: the
+         * device cannot establish that nothing is outstanding, and HORIZON-013
+         * only allows hiding when nothing is.
+         */
+        can_hide: false,
+        outstanding_count: items.filter((item) => item.state === "outstanding")
+          .length,
+        kinds: [
+          {
+            id: OFFLINE_EVALUABLE_KIND,
+            label: "Document acknowledgments",
+            module: "documents",
+            governed_by: "POL-043 through POL-047",
+          },
+        ],
+        items,
+        unevaluated_kinds: EVENT_HORIZON_KINDS.filter(
+          (kind) => kind.id !== OFFLINE_EVALUABLE_KIND,
+        ).map((kind) => ({
+          id: kind.id,
+          label: kind.label,
+          module: kind.module,
+          governed_by: kind.governedBy,
+        })),
+      },
+      narrowed: true,
+    };
+  };
+}
+
 /**
  * Read one event's readiness list.
  *
- * Cached (HORIZON-016): a member standing where there is no signal still needs
- * to know what they have outstanding, and the surface disclosing the copy's
- * age is what keeps the stored answer honest (19C.9).
+ * Compiled on the device when no node answers (HORIZON-016): a member standing
+ * where there is no signal still needs to know what they have outstanding, and
+ * the surface disclosing both the copy's age and what it could not evaluate is
+ * what keeps that answer honest (19C.9).
  */
 export async function fetchEventHorizon(eventId: string): Promise<EventHorizon> {
   const { data, freshness } = await meridianCachedJson<EventHorizonPayload>(
     `/api/events/${eventId}/event-horizon`,
+    { offline: storedEventHorizon(eventId) },
   );
 
   const horizon: EventHorizon = {
@@ -226,6 +526,12 @@ export async function fetchEventHorizon(eventId: string): Promise<EventHorizon> 
       governedBy: kind.governed_by ?? "",
     })),
     items: (data.items ?? []).map(toItem),
+    unevaluatedKinds: (data.unevaluated_kinds ?? []).map((kind) => ({
+      id: kind.id,
+      label: kind.label,
+      module: kind.module ?? "",
+      governedBy: kind.governed_by ?? "",
+    })),
     freshness,
   };
 

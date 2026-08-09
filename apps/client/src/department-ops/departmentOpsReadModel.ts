@@ -39,24 +39,30 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
-//  5. **All four reads are connected-only, and that is the open question this
-//     module carries** (M18.50; SLB-021; technical spec 9.3). Until M18.50 each
-//     of them fell back to a stored copy of its own response, and M18.50 deleted
-//     the cache that held those. The offline read set that replaced it carries
-//     `logistics_staff_index`, `logistics_equipment_index`,
-//     `logistics_shift_index`, the department-lead roster, and the planning
-//     aggregates — the rows behind these payloads — but not the payloads: what
-//     this caller may manage, whether a person may go off-site, whether a
-//     checkout is overdue, and every plan-versus-actual count are the node's
-//     answers computed against the moment it was asked.
+//  5. **The Logistics Desk composes offline; the other three do not yet**
+//     (M18.50, M18.53; SLB-021; technical spec 9.3). Until M18.50 each of the
+//     four fell back to a stored copy of its own response, and M18.50 deleted
+//     the cache that held those, leaving all four connected-only.
 //
-//     So a lead out of coverage is told they are out of coverage rather than
-//     shown a desk nothing recomputed, and the projections that would compose
-//     these four from the rows are what M18.53's surface inventory scopes. Each
-//     read still carries the freshness of what it returned, so the disclosure is
-//     in place for the day a projection supplies one.
+//     M18.53 moved the desk onto the rows the offline read set already carried,
+//     because more than a screen was missing: check-in, check-out, and mark
+//     no-show are Alpha 1 offline writes (technical spec 9.4) and the surface
+//     that issues all three would not render without a node. `storedLogisticsDesk`
+//     composes the payload from `logistics_staff_index`, presence, the shift
+//     index, assignments, attendance, and open checkouts, deriving each card's
+//     verdicts by the node's own rule and refusing the three it cannot answer —
+//     the unscheduled addition, hours correction, and equipment handoff.
+//
+//     Department Overview, the Operations Center, and the Planning Table stay
+//     connected-only and say so. Their payloads are compiled rather than
+//     composed: exception lists, deployment counts, and every plan-versus-actual
+//     aggregate are the node's answers against the moment it was asked, and the
+//     read set carries no section for them. Each read carries the freshness of
+//     what it returned, so the disclosure is in place for the day a projection
+//     supplies one.
 
 import { meridianCachedJson } from "@/api/meridianApi";
+import { storedLogisticsDesk } from "@/department-ops/storedLogisticsDesk";
 import type { ReadFreshness } from "@/offline/readFreshness";
 import { sendConnectedCommand } from "@/outbox/submitCommand";
 import { deviceId } from "@/session/deviceIdentity";
@@ -727,7 +733,9 @@ export async function getLogisticsDesk(
       readonly checkout_inventory?: CheckoutCandidatePayload[];
       readonly staff_workspaces?: Record<string, WorkspacePayload>;
     }
-  >(base("logistics", eventId, departmentId));
+  >(base("logistics", eventId, departmentId), {
+    offline: storedLogisticsDesk(eventId, departmentId),
+  });
   const payload = read.data;
 
   const workspaces: Record<string, LogisticsStaffWorkspace> = {};

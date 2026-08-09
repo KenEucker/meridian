@@ -668,6 +668,10 @@ There is no third outcome. A surface that cannot work offline is not a defect �
 
 A surface joining or leaving the offline-capable list is a change to what Meridian promises somebody standing where there is no signal, and it changes in that file first.
 
+Two surfaces compile on the device rather than rendering a stored response, and each is bounded by what it can honestly answer. The Event Horizon compiles the document acknowledgment kind and names the other four as unevaluated (HORIZON-016): the set holds nothing for waivers, trainings, or coverage gaps, and carries only the shifts a member already holds, so a compiled signup list could never show one with a place left. The Logistics Desk composes from the section 9.3 Logistics indexes and derives each card's check-in, check-out, and no-show verdicts by the same rule the node applies, from the same four facts — an assignment, presence, attendance state, and the shift's window. Authority is never derived in either: what a caller may do is read from the session document, which is the node's own answer.
+
+This is the one place a client re-reads a rule the node owns, and it is bounded deliberately. A derived verdict must use the node's own derivation over rows the device holds; anything resting on a fact the device does not hold — eligibility for an unscheduled addition, the hours correction grace period, what equipment is available to hand over — is refused offline rather than guessed at.
+
 ## 9.4 Offline write scope
 
 Alpha 1 offline writes include:

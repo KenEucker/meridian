@@ -16,6 +16,10 @@ import { createRouter, createWebHistory, type Router } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
+import {
+  installOfflineReadSet,
+  offlineReadSetPayload,
+} from "@/offline/offlineReadSetFixture";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { resetCommandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
@@ -326,19 +330,152 @@ describe("the Event Horizon surface", () => {
   });
 
   /*
-   * M18.43 rendered this surface from a stored copy of its own response, and
-   * M18.50 deleted the store that held it. The Event Horizon is compiled on read
-   * (M18.38) — its items are the node's evaluations against the moment it was
-   * asked, not records — so the offline read set carries nothing to compose it
-   * from, and until it carries a compiled section a device with no node in reach
-   * is told so rather than shown an evaluation nobody re-ran.
-   *
-   * The surface's stored-copy handling (19C.9) is left standing: the disclosure,
-   * the withheld all-clear, and the withheld hide control are all driven by the
-   * freshness the seam reports, so they come back with the projection rather than
-   * having to be written again.
+   * M18.43 rendered this surface from a stored copy of its own response and
+   * M18.50 deleted that store, which left the surface stating it needed a
+   * connection — the gap the M18.53 audit found. It now compiles from the read
+   * set (HORIZON-016), and this is the case where there is nothing to compile
+   * from: no set at all means no answer, and saying so is the honest outcome.
    */
-  it("says it needs a connection rather than compiling an answer of its own", async () => {
+  /**
+   * A read set carrying the acknowledgment sections, which is all the offline
+   * compile can answer from (HORIZON-016).
+   */
+  async function installAcknowledgmentSet(
+    acknowledged: boolean,
+  ): Promise<void> {
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        sections: {
+          organizations: [{ id: "org-1", name: "Northwood Collective" }],
+          departments: [],
+          policy_documents: [
+            {
+              id: "policy-1",
+              organization_id: "org-1",
+              scope_type: "organization",
+              scope_id: "org-1",
+              title: "Fire Safety Policy",
+              slug: "fire-safety",
+              markdown_source: "# Fire Safety",
+              document_revision: 1,
+              fragment_revision: 0,
+              published_at: "2027-06-01T12:00:00+00:00",
+            },
+          ],
+          procedure_documents: [],
+          document_acknowledgment_requirements: [
+            {
+              id: "req-1",
+              organization_id: "org-1",
+              scope_type: "organization",
+              scope_id: "org-1",
+              document_type: "policy",
+              document_id: "policy-1",
+              requirement_context: "signup",
+            },
+          ],
+          document_acknowledgments: acknowledged
+            ? [
+                {
+                  id: "ack-1",
+                  document_type: "policy",
+                  document_id: "policy-1",
+                  scope_type: "organization",
+                  scope_id: "org-1",
+                  document_revision: 1,
+                  fragment_revision: 0,
+                  acknowledged_at: "2027-06-02T09:00:00+00:00",
+                },
+              ]
+            : [],
+        },
+        readiness: {
+          context_event_id: EVENT_ID,
+          usable_until: "2099-01-01T00:00:00+00:00",
+        },
+      }),
+      { organizationId: "org-1", eventId: EVENT_ID },
+    );
+  }
+
+  /*
+   * HORIZON-016's first clause: the list compiles from what the device holds.
+   * The acknowledgment kind is the one the read set can answer — requirements,
+   * acknowledgments, and the published documents both refer to all travel.
+   */
+  it("compiles the acknowledgment kind from the read set with no node", async () => {
+    await installAcknowledgmentSet(false);
+    stubUnreachableNode();
+
+    const { wrapper } = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Fire Safety Policy");
+    expect(text).toContain("Outstanding");
+    // The node's own wording, so a compiled row and a live one read the same.
+    expect(text).toContain(
+      "The organization asks you to acknowledge this document and you have not yet.",
+    );
+    expect(text).not.toContain("Unable to load the Event Horizon");
+  });
+
+  /*
+   * HORIZON-016's second clause: it discloses that it is incomplete rather than
+   * reaching past the sync boundary. Naming the four kinds is what keeps a list
+   * of one kind from reading as the whole of somebody's readiness.
+   */
+  it("names the kinds it could not evaluate", async () => {
+    await installAcknowledgmentSet(false);
+    stubUnreachableNode();
+
+    const { wrapper } = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Waivers, Trainings, Shift signup and Team coverage");
+    expect(text).toContain("could not be checked at all");
+  });
+
+  /*
+   * 19C.9, and the reason the shift-signup kind is not compiled at all: the read
+   * set carries only the shifts this member is already assigned to, so a device
+   * can see the ones they hold and never one with a place left. A list of
+   * complete rows with no outstanding ones would be a false all-clear assembled
+   * out of true rows.
+   */
+  it("withholds the all-clear from a compiled list with nothing outstanding", async () => {
+    await installAcknowledgmentSet(true);
+    stubUnreachableNode();
+
+    const { wrapper } = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Fire Safety Policy");
+    expect(text).not.toContain(
+      "Nothing outstanding — everything below is complete.",
+    );
+    expect(wrapper.find(".event-horizon__hide").exists()).toBe(false);
+  });
+
+  /*
+   * The menu is what Meridian offers unprompted, and the presentation window it
+   * turns on (HORIZON-010) needs the organization's lead-up days, which no
+   * device holds. A compiled list renders for somebody who asked for it and
+   * never puts the entry in the menu on a window it could not establish.
+   */
+  it("does not put the entry in the menu off a compiled list", async () => {
+    await installAcknowledgmentSet(false);
+    stubUnreachableNode();
+
+    await mountView();
+
+    const { eventHorizonPresence } = await import(
+      "@/event-horizon/eventHorizonModel"
+    );
+
+    expect(eventHorizonPresence.present).toBe(false);
+  });
+
+  it("says it needs a connection when this device holds no set", async () => {
     stubNode(() => ({
       body: horizonPayload({
         can_hide: true,

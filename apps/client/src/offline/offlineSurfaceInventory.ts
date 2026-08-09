@@ -171,10 +171,10 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     },
     {
       route: "events.departments.logistics",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "the Logistics Desk reads presence, attendance, and open checkouts as they stand now; the 9.3 Logistics indexes are in the read set but no read model on this desk has been moved onto them yet",
-      offlineText: "Check the connection to this node",
+        "the 9.3 Logistics indexes, composed into the desk on the device: presence, the shifts in front of it, and each person's attendance, with the card verdicts derived by the node's own rule from the same four facts it reads. Adding somebody to a shift, correcting hours, and handing equipment over stay refused — the desk cannot answer eligibility, the correction grace period is the node's clock, and availability is not confirmable from a stored copy",
+      offlineText: "This node could not be reached",
     },
     {
       route: "events.departments.operations",
@@ -341,10 +341,10 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     },
     {
       route: "staff.event-horizon",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "the readiness list is the node's evaluations against the moment it was asked, not records (M18.38), so the read set carries nothing to compose it from — HORIZON-016's on-device compilation is not built, and until it is the surface says so rather than presenting an evaluation nobody re-ran",
-      offlineText: "Check the connection to this node",
+        "the acknowledgment kind compiled on the device from the read set (HORIZON-016), with waivers, trainings, shift signup, and team coverage named as kinds it could not evaluate — the read set holds nothing for the first three, and carries only the shifts this member already holds for the fourth, so a compiled signup list could never show a shift with a place left",
+      offlineText: "could not be checked at all",
     },
     {
       route: "staff.profile.edit",

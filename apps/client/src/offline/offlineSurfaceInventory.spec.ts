@@ -181,6 +181,62 @@ function storedSections(): Record<string, readonly Record<string, unknown>[]> {
       },
     ],
     document_acknowledgments: [],
+
+    /*
+     * The Logistics Desk's own rows (M18.47), which the desk projection composes
+     * the whole surface from — the staff at the desk, where they are, the shifts
+     * in front of it, and who is assigned to them.
+     */
+    logistics_staff_index: [
+      {
+        id: `${EVENT_ID}:${DEPARTMENT_ID}:${LOCAL_FIELD_FIXTURE.staffId}`,
+        event_id: EVENT_ID,
+        department_id: DEPARTMENT_ID,
+        staff_id: LOCAL_FIELD_FIXTURE.staffId,
+        legal_name: "Robin Field",
+        preferred_name: "Robin",
+        handle: "robin",
+        team_label: "Dirt",
+        archived_at: null,
+      },
+    ],
+    logistics_presence: [
+      {
+        id: "presence-1",
+        event_id: EVENT_ID,
+        department_id: DEPARTMENT_ID,
+        staff_id: LOCAL_FIELD_FIXTURE.staffId,
+        current_state: "on_site",
+        marked_on_site_at: "2027-07-04T17:00:00+00:00",
+        marked_off_site_at: null,
+      },
+    ],
+    logistics_shift_index: [
+      {
+        id: ROUTE_PARAMS.shiftId,
+        event_id: EVENT_ID,
+        department_id: DEPARTMENT_ID,
+        eligible_team_id: LOCAL_FIELD_TEAM_IDS.rangersDirt,
+        title: "Gate A — Day",
+        team_name_snapshot: "Dirt",
+        starts_at: "2027-07-04T18:00:00+00:00",
+        ends_at: "2027-07-04T22:00:00+00:00",
+        capacity: 4,
+        cancelled_at: null,
+      },
+    ],
+    logistics_shift_assignments: [
+      {
+        id: "assignment-1",
+        shift_id: ROUTE_PARAMS.shiftId,
+        staff_id: LOCAL_FIELD_FIXTURE.staffId,
+        assignment_status: "confirmed",
+      },
+    ],
+    logistics_attendance: [],
+    logistics_equipment_index: [],
+    logistics_equipment_checkouts: [],
+    logistics_future_signups: [],
   };
 }
 
@@ -425,10 +481,12 @@ describe("the recorded offline surface inventory", () => {
       "auth.code.entry",
       "readiness",
       "settings.about",
+      "events.departments.logistics",
       "events.departments.documents.index",
       "events.departments.branding",
       "events.departments.teams.create",
       "staff.me",
+      "staff.event-horizon",
       "staff.shifts.index",
       "signup.documents.acknowledge",
       "staff.documents.acknowledgments",
