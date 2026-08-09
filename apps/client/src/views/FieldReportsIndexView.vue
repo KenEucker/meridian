@@ -70,10 +70,26 @@ function syncLabel(report: OfflineFieldReport): string {
       Field Reports.
     </p>
 
+    <!--
+      What this list is, said plainly (M18.53).
+
+      The catalog behind it is this device's own: a Field Report is written
+      where there is no signal and lives here until the node takes it, and this
+      surface has never had a node read to widen it (M9.4). Left unsaid, an
+      empty list reads as "you have filed nothing" — which is a claim about the
+      author rather than about the device, and is wrong for anybody who filed
+      from a phone and is now standing at a desk.
+    -->
+    <p v-else-if="reports.length === 0" class="field-reports__scope" role="status">
+      No Field Reports have been submitted from this device. Field Reports
+      submitted from another device are held on that one until the node has
+      them, and are read from Incident Command's own list rather than from here.
+    </p>
+
     <StaffCardList
       v-else
       label="Field Reports"
-      :empty="reports.length === 0"
+      :empty="false"
       empty-message="You have not submitted any Field Reports yet."
     >
       <StaffListCard
@@ -95,7 +111,8 @@ function syncLabel(report: OfflineFieldReport): string {
 </template>
 
 <style scoped>
-.field-reports__unavailable {
+.field-reports__unavailable,
+.field-reports__scope {
   margin: 0;
   color: var(--m-text-muted);
 }

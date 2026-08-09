@@ -308,9 +308,19 @@ async function onRetrySync(): Promise<void> {
 
     <template v-else-if="!report || !submission">
       <h1 id="fr-detail-heading" class="fr-detail__heading">Field Report</h1>
+      <!--
+        Two reasons this screen can be empty, and only one of them is about
+        authority (M18.53). This page reads the catalog on this device and never
+        asks the node (M9.4), so a report filed from a phone is genuinely not
+        here — and telling its author they may only read what they authored is
+        both untrue and unhelpful. Both facts are stated, in the order somebody
+        standing here would want them.
+      -->
       <p class="fr-detail__unavailable" role="status">
-        This Field Report is not available. You can only view Field Reports you
-        authored.
+        This Field Report is not on this device. A report is read from the
+        device it was submitted from until the node has it; Incident Command
+        reads the event's reports from its own list. You can only open Field
+        Reports you authored.
       </p>
     </template>
 

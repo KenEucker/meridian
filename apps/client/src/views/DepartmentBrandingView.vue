@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   BRANDING_SLOTS,
   BrandingRejectedError,
@@ -121,8 +123,13 @@ function handleRejection(error: unknown): void {
     return;
   }
 
-  blockedReason.value =
-    error instanceof Error ? error.message : "Unable to reach the server.";
+  blockedReason.value = meridianErrorMessage(
+    error,
+    connectionRequiredMessage(
+      "The contrast check",
+      "it is run against the node so that a palette and the rules it is checked by cannot drift apart",
+    ),
+  );
 }
 
 async function onPreview(): Promise<void> {

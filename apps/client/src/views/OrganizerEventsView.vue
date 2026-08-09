@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   assignDepartmentToEvent,
   createEvent,
@@ -260,7 +261,10 @@ async function load(): Promise<void> {
   } catch (error) {
     loadError.value = meridianErrorMessage(
       error,
-      "Events could not be read.",
+      connectionRequiredMessage(
+        "This organization's events",
+        "event administration reads the active event window that decides which node holds an event's records, which is a fact only a node can state",
+      ),
     );
   } finally {
     loading.value = false;

@@ -660,6 +660,14 @@ Incidents should not be greedily synced.
 
 Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. The offline read set must not become the business-rule engine for Name Reference visibility or search authorization.
 
+### 9.3A What each surface does with the set
+
+What this section describes is what a device *holds*. Which surfaces can answer from it is a separate fact, and it is recorded rather than inferred: `apps/client/src/offline/offlineSurfaceInventory.ts` names every routed surface in the shared client, whether it renders offline or requires a connection, and why.
+
+There is no third outcome. A surface that cannot work offline is not a defect — an export is a file the node generates, a dashboard and the Event Horizon are compiled at read time and are not records, an audit trail is history a device is never sent — but it must say so, naming what is unavailable and why. A spinner that never resolves, a blank panel, and a transport failure printed as though the screen were broken are defects, and the audit spec beside the inventory mounts every surface against a node that does not answer to keep them out.
+
+A surface joining or leaving the offline-capable list is a change to what Meridian promises somebody standing where there is no signal, and it changes in that file first.
+
 ## 9.4 Offline write scope
 
 Alpha 1 offline writes include:

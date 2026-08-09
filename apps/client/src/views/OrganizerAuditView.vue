@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import { getAuditReview, type AuditReview } from "@/audit/auditReviewModel";
 import { sessionOrganizationId } from "@/session/sessionContext";
 
@@ -78,7 +79,10 @@ async function load(): Promise<void> {
   } catch (error) {
     loadError.value = meridianErrorMessage(
       error,
-      "The audit record could not be read.",
+      connectionRequiredMessage(
+        "The audit record",
+        "an audit trail is the organization's history and is never sent to a device",
+      ),
     );
   } finally {
     loading.value = false;

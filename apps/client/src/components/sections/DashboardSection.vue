@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import ContentGrid from "@/components/ContentGrid.vue";
 import DashboardWidgetCard from "@/components/DashboardWidgetCard.vue";
 import StaleReadNotice from "@/components/StaleReadNotice.vue";
@@ -53,9 +54,19 @@ async function load(): Promise<void> {
     dashboard.value = await fetchDashboard(props.eventId, props.departmentId);
   } catch (error) {
     dashboard.value = null;
+    /*
+     * A dashboard is compiled by the node when it is asked for, so there is
+     * nothing on the device to fall back to and nothing to be gained by
+     * pretending otherwise (M18.53). What the reader is owed is the difference
+     * between a broken screen and a missing connection, which is why the
+     * sentence names both what is unavailable and why it cannot be held here.
+     */
     failure.value = meridianErrorMessage(
       error,
-      "This dashboard could not be read.",
+      connectionRequiredMessage(
+        "This dashboard",
+        "a dashboard is compiled by the node when it is asked for rather than stored on this device",
+      ),
     );
   } finally {
     loading.value = false;

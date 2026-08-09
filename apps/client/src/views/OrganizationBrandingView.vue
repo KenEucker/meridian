@@ -7,6 +7,8 @@ import {
   type BrandingPalette,
 } from "@meridian/ui-tokens/branding";
 
+import { meridianErrorMessage } from "@/api/meridianApi";
+import { connectionRequiredMessage } from "@/offline/connectionRequired";
 import {
   BRANDING_SLOTS,
   BrandingRejectedError,
@@ -102,10 +104,20 @@ async function refreshEvents(): Promise<void> {
   try {
     events.value = await listEventBranding(props.organizationId);
   } catch (error) {
-    eventsError.value =
-      error instanceof Error
-        ? error.message
-        : "Unable to load this organization's events.";
+    /*
+     * The node's sentence where the node spoke, and this surface's where it did
+     * not (M18.53). `error.message` on a request that never completed is
+     * `Failed to fetch`, which is what a browser says to a developer: it reads
+     * as a broken screen rather than as a missing connection, and it was being
+     * rendered mid-page between the logo controls.
+     */
+    eventsError.value = meridianErrorMessage(
+      error,
+      connectionRequiredMessage(
+        "This organization's events",
+        "which events carry a logo of their own is the node's answer and is not held on this device",
+      ),
+    );
   }
 }
 
@@ -204,8 +216,13 @@ function handleRejection(error: unknown): void {
     return;
   }
 
-  blockedReason.value =
-    error instanceof Error ? error.message : "Unable to reach the server.";
+  blockedReason.value = meridianErrorMessage(
+    error,
+    connectionRequiredMessage(
+      "The contrast check",
+      "it is run against the node so that a palette and the rules it is checked by cannot drift apart",
+    ),
+  );
 }
 
 async function onPreview(): Promise<void> {
