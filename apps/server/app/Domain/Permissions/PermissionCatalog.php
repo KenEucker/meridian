@@ -88,6 +88,8 @@ final class PermissionCatalog
 
     public const PERMISSION_DEPARTMENT_SCHEDULE_MANAGE = 'department.schedule.manage';
 
+    public const PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE = 'department.shift_additions.override';
+
     public const PERMISSION_DEPARTMENT_ADMINISTER = 'department.administer';
 
     public const PERMISSION_DEPARTMENT_TRAININGS_MANAGE = 'department.trainings.manage';
@@ -193,6 +195,7 @@ final class PermissionCatalog
             self::PERMISSION_DEPARTMENT_EQUIPMENT_MANAGE => 'Check department equipment in and out.',
             self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN => 'Assign current or planned shift deployments.',
             self::PERMISSION_DEPARTMENT_SCHEDULE_MANAGE => 'View identity-free Planning Table aggregates comparing plan versus actual.',
+            self::PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE => 'Re-issue a refused unscheduled shift addition as an override, for the refusal reasons the specification lists as overridable.',
             self::PERMISSION_DEPARTMENT_ADMINISTER => 'Administer permitted department details and teams (team membership assignment remains a separate workflow).',
             self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE => 'Create and maintain department trainings, prerequisites, rosters, and completion records.',
             self::PERMISSION_ORGANIZATION_INCIDENT_TYPES_MANAGE => 'Maintain the organization incident type list: add, rename, archive, and restore.',
@@ -345,6 +348,22 @@ final class PermissionCatalog
      * they are two jobs — declaring when an event runs, and reading who changed
      * what — and an organization that wanted to hand one to somebody would be
      * handing over the other with it.
+     * M18.55 adds department.shift_additions.override to department lead,
+     * department_administration, and the two organizer roles — and deliberately
+     * not to department_logistics, which is the role that issues the addition in
+     * the first place. That asymmetry is the capability. A refusal the same desk
+     * that hit it may wave away is not a rule, it is a confirmation dialog; the
+     * override exists because the *authority over the department* is sometimes
+     * standing at that desk, and where they are not, an addition stays refused
+     * until somebody who holds that authority decides otherwise. shift_lead does
+     * not hold it either: a team-scoped grant is a narrower authority than the
+     * department-wide eligibility rules being overridden, and a shift lead
+     * overriding a training requirement their department set would be the tail
+     * deciding for the dog. What the capability does not carry is any widening
+     * of *which* refusals are negotiable — that list is
+     * `ShiftAdditionRefusalReason`'s and holds at every authority in this
+     * catalog, up to and including god_mode, which is why do_not_staff appears
+     * in no branch here.
      * Roles without an entry intentionally have no catalog permissions yet and
      * are populated by their owning milestones.
      *
@@ -358,6 +377,7 @@ final class PermissionCatalog
             ],
             self::ROLE_DEPARTMENT_LEAD => [
                 self::PERMISSION_DEPARTMENT_ATTENDANCE_MANAGE,
+                self::PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE,
                 self::PERMISSION_DEPARTMENT_ADMINISTER,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
                 self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
@@ -405,6 +425,7 @@ final class PermissionCatalog
                 self::PERMISSION_DEPARTMENT_DEPLOYMENTS_ASSIGN,
             ],
             self::ROLE_DEPARTMENT_ADMINISTRATION => [
+                self::PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE,
                 self::PERMISSION_DEPARTMENT_ADMINISTER,
                 self::PERMISSION_DEPARTMENT_TRAININGS_MANAGE,
                 self::PERMISSION_DEPARTMENT_BRANDING_MANAGE,
@@ -442,6 +463,7 @@ final class PermissionCatalog
                 self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
                 self::PERMISSION_ORGANIZATION_EVENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_AUDIT_REVIEW,
+                self::PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE,
             ],
             self::ROLE_LEAD_ORGANIZER => [
                 self::PERMISSION_POLICIES_VIEW_PUBLISHED,
@@ -464,6 +486,7 @@ final class PermissionCatalog
                 self::PERMISSION_STAFF_PROFILE_CHANGE_REQUESTS_REVIEW,
                 self::PERMISSION_ORGANIZATION_EVENTS_MANAGE,
                 self::PERMISSION_ORGANIZATION_AUDIT_REVIEW,
+                self::PERMISSION_DEPARTMENT_SHIFT_ADDITIONS_OVERRIDE,
             ],
         ];
     }
@@ -474,5 +497,30 @@ final class PermissionCatalog
     public static function roleHasPermission(string $roleCode, string $permissionCode): bool
     {
         return in_array($permissionCode, self::rolePermissions()[$roleCode] ?? [], true);
+    }
+
+    /**
+     * Every effective role that carries a capability.
+     *
+     * The inverse of {@see roleHasPermission}, for the department-scoped checks
+     * that resolve a grant *by role* rather than by asking a resolved role what
+     * it holds. Before this existed those checks wrote their role list out by
+     * hand beside a capability that already named the same set, which is two
+     * copies of one answer and one of them silently wrong the day a role is
+     * added to the mapping above.
+     *
+     * @return list<string>
+     */
+    public static function rolesWithPermission(string $permissionCode): array
+    {
+        $roleCodes = [];
+
+        foreach (self::rolePermissions() as $roleCode => $permissionCodes) {
+            if (in_array($permissionCode, $permissionCodes, true)) {
+                $roleCodes[] = $roleCode;
+            }
+        }
+
+        return $roleCodes;
     }
 }

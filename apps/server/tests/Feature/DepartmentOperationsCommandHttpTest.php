@@ -200,6 +200,85 @@ class DepartmentOperationsCommandHttpTest extends TestCase
             ->assertJsonPath(
                 'message',
                 'Staff must be marked on-site with this department before unscheduled shift addition.',
+            )
+            // The code beside the sentence (M18.55). The client decides whether
+            // to offer an override from this; a rule written about the sentence
+            // would break the day somebody rewords the sentence.
+            ->assertJsonPath('reason_code', 'staff_not_on_site');
+
+        $this->assertDatabaseCount('shift_assignments', 0);
+    }
+
+    /**
+     * Overriding a refusal over the wire (M18.55; CLIENT-017A).
+     *
+     * The desk operator hits the refusal and cannot resolve it — Logistics
+     * issues additions and does not override their refusals. The department
+     * lead standing beside them can, and the record afterwards says both that
+     * the node refused and that a named person chose to proceed.
+     */
+    public function test_a_department_lead_overrides_a_refused_addition_over_the_wire(): void
+    {
+        $scenario = $this->scenario();
+        $lead = $this->departmentLeadUserFor($scenario['department']);
+        $refusedOperationUuid = (string) Str::uuid();
+        $overrideOperationUuid = (string) Str::uuid();
+
+        $payload = [
+            'shift_id' => $scenario['shift']->id,
+            'staff_id' => $scenario['staff']->id,
+            'overridden_operation_uuid' => $refusedOperationUuid,
+            'overridden_reason_code' => 'staff_not_on_site',
+            'operation_uuid' => $overrideOperationUuid,
+        ];
+
+        // The desk that hit the refusal cannot wave it away.
+        $this->actingAsClient($scenario['logistics'])
+            ->postJson('/api/commands/override-shift-addition', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'You are not authorized to override a refused shift addition for this department.',
+            );
+
+        $this->actingAsClient($lead)
+            ->postJson('/api/commands/override-shift-addition', $payload)
+            ->assertCreated()
+            ->assertJsonPath('assignment_status', ShiftAssignment::STATUS_ASSIGNED)
+            ->assertJsonPath('overridden_reason_code', 'staff_not_on_site')
+            ->assertJsonPath('override_of_operation_uuid', $refusedOperationUuid)
+            // A distinct command: the assignment's own key is the override's,
+            // not the refused command's.
+            ->assertJsonPath('operation_uuid', $overrideOperationUuid);
+
+        $this->assertDatabaseHas('shift_assignments', [
+            'staff_id' => $scenario['staff']->id,
+            'overridden_reason_code' => 'staff_not_on_site',
+            'override_of_operation_uuid' => $refusedOperationUuid,
+        ]);
+    }
+
+    public function test_the_override_endpoint_refuses_do_not_staff(): void
+    {
+        $scenario = $this->scenario();
+        $lead = $this->departmentLeadUserFor($scenario['department']);
+        StaffOrganizationStatus::factory()->create([
+            'organization_id' => $scenario['event']->organization_id,
+            'staff_id' => $scenario['staff']->id,
+            'status' => StaffOrganizationStatus::STATUS_DO_NOT_STAFF,
+        ]);
+
+        $this->actingAsClient($lead)
+            ->postJson('/api/commands/override-shift-addition', [
+                'shift_id' => $scenario['shift']->id,
+                'staff_id' => $scenario['staff']->id,
+                'overridden_operation_uuid' => (string) Str::uuid(),
+                'overridden_reason_code' => 'do_not_staff',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'A refusal for `do_not_staff` cannot be overridden. It is not a decision this desk makes.',
             );
 
         $this->assertDatabaseCount('shift_assignments', 0);
@@ -409,6 +488,35 @@ class DepartmentOperationsCommandHttpTest extends TestCase
             'staff' => $staff,
             'logistics' => $this->logisticsUserFor($department->defaultTeam),
         ];
+    }
+
+    /** The authority the M18.55 override answers to, which Logistics is not. */
+    private function departmentLeadUserFor(Department $department): User
+    {
+        $team = Team::factory()->for($department)->create([
+            'name' => $department->name.' Leads',
+        ]);
+        $user = User::factory()->create();
+        $staff = Staff::factory()->create();
+        $user->staffProfiles()->attach($staff->id);
+        $departmentMembership = DepartmentMembership::factory()
+            ->for($department)
+            ->for($staff)
+            ->create();
+        TeamMembership::factory()->create([
+            'team_id' => $team->id,
+            'staff_id' => $staff->id,
+            'department_membership_id' => $departmentMembership->id,
+        ]);
+        TeamGrant::factory()->create([
+            'team_id' => $team->id,
+            'permission_role_id' => PermissionRole::query()
+                ->where('code', 'department_lead')
+                ->firstOrFail()
+                ->id,
+        ]);
+
+        return $user;
     }
 
     private function logisticsUserFor(Team $team): User

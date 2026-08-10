@@ -18,6 +18,13 @@
 //    whether the node saw it. It comes back as `queued`, and the idempotency key
 //    is what makes sending it again the same command rather than a second one
 //    (data/API 5.3).
+//
+// A field the entry does not carry is filled in rather than treated as a
+// structural mismatch. The two rules above are about entries that are *wrong*;
+// an entry written by an earlier build is merely older, and dropping a queued
+// check-in because this version of the client added a column to the shape would
+// be losing work over a schema. M18.55's three override fields are the first to
+// arrive that way, and they read back as null — which is what they were.
 
 import { isCommandType } from "@/outbox/commandCatalog";
 import type { CommandStatus, OutboxCommand } from "@/outbox/commandOutbox";
@@ -68,7 +75,10 @@ function isStoredCommand(value: unknown): value is OutboxCommand {
     isNullableString(command.detail) &&
     isNullableString(command.lastAttemptAt) &&
     isNullableString(command.settledAt) &&
-    isNullableString(command.statusReason)
+    isNullableString(command.statusReason) &&
+    isNullableString(command.statusReasonCode) &&
+    isNullableString(command.overridesIdempotencyKey) &&
+    isNullableString(command.overriddenByIdempotencyKey)
   );
 }
 
@@ -84,7 +94,18 @@ function readStoredCommand(value: unknown): OutboxCommand | null {
     return null;
   }
 
-  const candidate = { ...(value as Record<string, unknown>) };
+  const candidate: Record<string, unknown> = {
+    /*
+     * Fields an entry written before M18.55 has never heard of. Defaulted ahead
+     * of validation so an older queue survives the upgrade; an entry that does
+     * carry them keeps whatever it carries, including a value of the wrong type,
+     * which the check below still rejects.
+     */
+    statusReasonCode: null,
+    overridesIdempotencyKey: null,
+    overriddenByIdempotencyKey: null,
+    ...(value as Record<string, unknown>),
+  };
 
   if (candidate.status === "sending") {
     candidate.status = "queued";

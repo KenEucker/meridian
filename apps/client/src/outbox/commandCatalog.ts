@@ -28,7 +28,17 @@
 // times by an amendment to the specification rather than by a judgement made
 // here: data/API 5.8A added the Event Horizon's two preference commands
 // (M18.44), and M18.54 added the Logistics unscheduled addition and the on-site
-// mark it depends on. That is the only way onto this list.
+// mark it depends on. That is the only way onto this list. M18.55's override is
+// the third and does not widen it: it is the addition's own resolution path
+// under a different authority, and a command that resolves an offline write
+// that cannot itself be held offline would be a resolution path that only works
+// where the refusal it resolves would not have happened.
+//
+// A descriptor also says how a refusal of its command may be *resolved*
+// (M18.55). For all but one the answer is "it cannot be, beyond dismissal",
+// which is CLIENT-017's floor; `add-staff-to-shift` carries an override
+// descriptor naming the command, the capability, and the short list of refusal
+// reasons an authority may set aside.
 
 /** Every command this client can submit today. */
 export type MeridianCommandType =
@@ -40,6 +50,8 @@ export type MeridianCommandType =
   // The Logistics addition and the on-site mark it depends on (M18.54).
   | "mark-staff-on-site"
   | "add-staff-to-shift"
+  // Resolving a refused addition on an authority's own decision (M18.55).
+  | "override-shift-addition"
   // The rest of the department operations desk (M16.21).
   | "mark-staff-off-site"
   | "correct-hours"
@@ -105,6 +117,39 @@ export type MeridianCommandType =
   | "override-locked-map-data"
   | "designate-placement-department";
 
+/**
+ * How a refusal of one command may be resolved by issuing another (M18.55;
+ * CLIENT-017A; technical spec 11A.5).
+ *
+ * A refused command's only outcome used to be dismissal. Where a descriptor
+ * carries this, it has a second: a caller holding `capability` may re-issue it
+ * as `commandType`, naming the refusal being overridden.
+ *
+ * **The two lists are the guard rails and both are deliberately narrow.**
+ * `overridableReasonCodes` is the refusal reasons that may be overridden at all,
+ * and `capability` is who may do it. Neither is inferred: a command with no
+ * `override` here has no resolution path beyond dismissal, which is the default
+ * and is what every command in this catalog but one still has.
+ *
+ * **This copy decides what to render, not what happens.** The node holds the
+ * same allowlist and the same capability rule and applies them to the request;
+ * this one exists so a control is not offered where it can only be refused. The
+ * two can only disagree in the direction of a person being offered an override
+ * the node then declines, which is a poor experience rather than an authority
+ * failure — the reverse, a client that could grant something, is not possible,
+ * because nothing here is sent to the node as a claim about authority.
+ */
+export interface CommandOverrideDescriptor {
+  /** The distinct command that carries the override. */
+  readonly commandType: MeridianCommandType;
+  /** The capability code the session must hold for the control to be offered. */
+  readonly capability: string;
+  /** The refusal reason codes this command's refusals may be overridden for. */
+  readonly overridableReasonCodes: readonly string[];
+  /** What the control says, in the words of the work rather than the mechanism. */
+  readonly actionLabel: string;
+}
+
 export interface CommandDescriptor {
   readonly type: MeridianCommandType;
   /** The command endpoint from data/API 5.2. */
@@ -123,6 +168,11 @@ export interface CommandDescriptor {
    * explain (UI operating guide 17.7).
    */
   readonly connectedOnlyReason: string | null;
+  /**
+   * How a refusal of this command may be resolved besides dismissal (M18.55).
+   * `null` for every command that has no such path, which is all but one.
+   */
+  readonly override: CommandOverrideDescriptor | null;
 }
 
 export class UnknownCommandError extends Error {
@@ -136,6 +186,7 @@ function offlineWrite(
   type: MeridianCommandType,
   path: string,
   label: string,
+  override: CommandOverrideDescriptor | null = null,
 ): CommandDescriptor {
   return Object.freeze({
     type,
@@ -143,6 +194,7 @@ function offlineWrite(
     label,
     offlineWritable: true,
     connectedOnlyReason: null,
+    override,
   });
 }
 
@@ -158,8 +210,42 @@ function connectedOnly(
     label,
     offlineWritable: false,
     connectedOnlyReason,
+    override: null,
   });
 }
+
+/**
+ * The capability an override of a Logistics addition answers to.
+ *
+ * Held by department leads, department administration, and organizers, and
+ * deliberately not by the Logistics role that issues the addition in the first
+ * place — a refusal the same desk that hit it may wave away is a confirmation
+ * dialog rather than a rule.
+ */
+export const CAPABILITY_SHIFT_ADDITIONS_OVERRIDE =
+  "department.shift_additions.override";
+
+/**
+ * Which refusals of a Logistics addition an authority may override.
+ *
+ * The node's `ShiftAdditionRefusalReason` is authoritative and this is a copy of
+ * its overridable subset. Three are on it and the reasoning is the node's to
+ * state; what matters here is what is *not*, because a client that offered a
+ * control for one of them would be inviting a person to make a decision that is
+ * not theirs. `do_not_staff` is off it at every authority — an organization's
+ * exclusion decision is not overturned from a desk — and so are
+ * `missing_required_waiver`, which nobody can execute on somebody else's behalf,
+ * and `no_department_membership`, which is the boundary the overriding authority
+ * is itself scoped by and has an ordinary fix.
+ */
+export const OVERRIDABLE_SHIFT_ADDITION_REASONS: readonly string[] =
+  Object.freeze([
+    // In the node's own check order, so this list and
+    // `ShiftAdditionRefusalReason::overridableCodes()` read the same.
+    "staff_not_on_site",
+    "missing_required_training",
+    "not_eligible_team_member",
+  ]);
 
 const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
   Object.freeze({
@@ -225,6 +311,36 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "add-staff-to-shift",
       "/api/commands/add-staff-to-shift",
       "Shift addition",
+      {
+        commandType: "override-shift-addition",
+        capability: CAPABILITY_SHIFT_ADDITIONS_OVERRIDE,
+        overridableReasonCodes: OVERRIDABLE_SHIFT_ADDITION_REASONS,
+        actionLabel: "Add anyway",
+      },
+    ),
+    /*
+     * The override (M18.55; CLIENT-017A).
+     *
+     * An offline write, on the same footing as the addition it resolves. The
+     * argument is the same one M18.54 made and it applies with more force here:
+     * the refusal is already known, the decision to proceed has already been
+     * made by somebody standing at the desk, and the alternative to holding it
+     * is that a lead who overrode a refusal at two in the morning finds out at
+     * six that the device never sent it. Every rule is still the node's — the
+     * allowlist, the capability, and every eligibility check but the one named
+     * — and all of them are re-decided when the queue drains, so an override
+     * queued by somebody whose grant was withdrawn in between comes back
+     * refused rather than applied.
+     *
+     * It carries its own key like any other queued command. That key is not the
+     * refused command's, and the difference is the whole design: two keys, two
+     * commands, and a record that says the node refused and a named person then
+     * chose to proceed.
+     */
+    "override-shift-addition": offlineWrite(
+      "override-shift-addition",
+      "/api/commands/override-shift-addition",
+      "Shift addition override",
     ),
     "mark-staff-off-site": connectedOnly(
       "mark-staff-off-site",

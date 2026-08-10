@@ -142,6 +142,7 @@ async function runSync(): Promise<SyncCommandOutboxResult> {
         sending.idempotencyKey,
         new Date().toISOString(),
       );
+      settleOverriddenCommand(sending.overridesIdempotencyKey);
       results.push({
         idempotencyKey: sending.idempotencyKey,
         commandType: sending.commandType,
@@ -159,6 +160,7 @@ async function runSync(): Promise<SyncCommandOutboxResult> {
           sending.idempotencyKey,
           new Date().toISOString(),
           message,
+          rejectionReasonCode(error),
         );
         results.push({
           idempotencyKey: sending.idempotencyKey,
@@ -181,6 +183,55 @@ async function runSync(): Promise<SyncCommandOutboxResult> {
   }
 
   return summarize(results, null);
+}
+
+/**
+ * The refused command an accepted override resolves (M18.55; CLIENT-017A).
+ *
+ * Dropped from the queue at the moment the override lands, and this is the one
+ * place that has the fact needed to do it: the override succeeded, so the work
+ * the refusal was about is on the node's roster. Leaving the refusal on screen
+ * afterwards would be a warning about work that has now happened — which trains
+ * a person to ignore the indicator, exactly what UI implementation contract 16.2
+ * is written against.
+ *
+ * This is not the silent discard CLIENT-017 forbids. The refusal was shown, a
+ * person read it, and that person's own act is what removed it; nothing here
+ * decides anything on their behalf. Note it survives an override that is
+ * *refused* — that override is a new rejection with its own reason, and the
+ * original stays put underneath it, marked as already acted on.
+ */
+function settleOverriddenCommand(overriddenKey: string | null): void {
+  if (overriddenKey === null) {
+    return;
+  }
+
+  commandOutbox.dismiss(overriddenKey);
+}
+
+/**
+ * The node's refusal reason as a code, where it gave one.
+ *
+ * A refusal body carries the sentence in `message` and, since M18.55, a
+ * `reason_code` beside it. Read defensively: a node that predates the field, an
+ * error page that is not JSON, and a framework validation failure are all
+ * refusals with no code, and the answer for all three is null — which reads
+ * downstream as "not overridable", the safe direction.
+ */
+function rejectionReasonCode(error: unknown): string | null {
+  if (!(error instanceof MeridianApiError)) {
+    return null;
+  }
+
+  const body = error.body;
+
+  if (typeof body !== "object" || body === null) {
+    return null;
+  }
+
+  const code = (body as { reason_code?: unknown }).reason_code;
+
+  return typeof code === "string" && code !== "" ? code : null;
 }
 
 /** Whether the node decided against the command, as opposed to not answering. */

@@ -39,6 +39,15 @@ class ShiftAssignment extends Model
          * commands a device held.
          */
         'unscheduled_operation_uuid',
+        /*
+         * The refused command this addition was made over, and the one reason
+         * that was waived (M18.55; CLIENT-017A). Null together on every
+         * assignment that was not made over a refusal, which is nearly all of
+         * them — an override is the exception the record is meant to make
+         * legible, not the ordinary path.
+         */
+        'override_of_operation_uuid',
+        'overridden_reason_code',
     ];
 
     /**
