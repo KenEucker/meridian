@@ -87,6 +87,7 @@ import StaffDashboardView from "@/views/StaffDashboardView.vue";
 import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
 import StaffProfileRequestsView from "@/views/StaffProfileRequestsView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
+import StaffWorkstationCodeView from "@/views/StaffWorkstationCodeView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import WaiverAdministrationView from "@/views/WaiverAdministrationView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
@@ -163,6 +164,17 @@ function refuseWorkstationSwitch() {
  */
 function requirePinnedKioskContext() {
   return kioskContextPinned.value ? true : { name: "kiosk.setup" };
+}
+
+/**
+ * `staff.workstation-code` exists in Field and Admin modes and not in Kiosk
+ * (M18.61; UI contract 12.3). Exported with the mode as an argument so the
+ * rule can be asserted for a mode the test build is not.
+ */
+export function workstationCodeRouteGuard(
+  uiMode: string = meridianAppConfig.uiMode,
+): true | { name: string } {
+  return uiMode === "kiosk" ? { name: "kiosk.home" } : true;
 }
 
 function legacyShiftBoardRedirect(surface: string) {
@@ -615,6 +627,24 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/documents/:documentType/:documentId",
     name: "staff.documents.show",
     component: StaffDocumentDetailView,
+  },
+  /*
+   * Sign in to a shared workstation from the device in your hand (M18.61;
+   * AUTH-026 through AUTH-028, AUTH-033, AUTH-034; UI contract 12.3
+   * `staff.workstation-code`). Self-scoped like Me: whose grant and whose
+   * code these are is the session's answer, and the route carries nothing.
+   *
+   * Absent in Kiosk mode by guard rather than by omission: the shared router
+   * serves all three modes, and a kiosk offering the surface that signs its
+   * own users in *elsewhere* would be a workstation impersonating a phone.
+   * Field and Admin keep it — Admin because an organizer at a desk is still a
+   * person who walks up to kiosks.
+   */
+  {
+    path: "/staff/workstation-code",
+    name: "staff.workstation-code",
+    component: StaffWorkstationCodeView,
+    beforeEnter: () => workstationCodeRouteGuard(),
   },
   {
     path: "/staff/field-reports",

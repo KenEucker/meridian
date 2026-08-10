@@ -491,6 +491,7 @@ describe("the recorded offline surface inventory", () => {
       "signup.documents.acknowledge",
       "staff.documents.acknowledgments",
       "staff.documents.index",
+      "staff.workstation-code",
       "staff.field-reports.index",
       "staff.field-reports.create",
       "staff.field-reports.show",

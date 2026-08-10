@@ -31,6 +31,7 @@ import {
   installCollectedWorkstationSession,
   workstationSessionState,
 } from "@/session/workstationSession";
+import { buildWorkstationSignInQrText } from "@/support/workstationSignInQr";
 
 /** How often the locked Kiosk asks whether anybody granted its request. */
 export const SIGN_IN_POLL_INTERVAL_MS = 3_000;
@@ -93,31 +94,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
-}
-
-/**
- * The text a phone's camera reads: workstation id, issuing node identity, and
- * request id (technical spec 13.4). All three are public — the QR grants
- * nothing, which is what makes a photograph of the screen harmless.
- */
-function buildQrText(input: {
-  readonly workstationId: string;
-  readonly nodeId: string | null;
-  readonly nodeName: string | null;
-  readonly requestId: string;
-}): string {
-  const parts = [
-    "meridian:workstation-sign-in?v=1",
-    `&w=${encodeURIComponent(input.workstationId)}`,
-    `&n=${encodeURIComponent(input.nodeId ?? "")}`,
-    `&r=${encodeURIComponent(input.requestId)}`,
-  ];
-
-  if (input.nodeName !== null) {
-    parts.push(`&nn=${encodeURIComponent(input.nodeName.slice(0, 24))}`);
-  }
-
-  return parts.join("");
 }
 
 function becomeUnavailable(reason: string): void {
@@ -191,7 +167,7 @@ export async function presentWorkstationSignIn(): Promise<void> {
     state.workstationName = workstation === null ? null : asString(workstation.name);
     state.shortCode = workstation === null ? null : asString(workstation.short_code);
     state.nodeName = node === null ? null : asString(node.name);
-    state.qrText = buildQrText({
+    state.qrText = buildWorkstationSignInQrText({
       workstationId,
       nodeId: node === null ? null : asString(node.id),
       nodeName: node === null ? null : asString(node.name),

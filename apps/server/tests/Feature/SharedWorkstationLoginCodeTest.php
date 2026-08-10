@@ -878,6 +878,54 @@ class SharedWorkstationLoginCodeTest extends TestCase
     }
 
     /**
+     * The typed fallback for a dead camera (M18.61; technical spec 13.4): the
+     * workstation's displayed short code, entered on the phone, resolves the
+     * workstation within the caller's event and produces an ordinary targeted
+     * code.
+     */
+    public function test_a_short_code_resolves_the_workstation_within_the_callers_event(): void
+    {
+        $workstation = $this->workstation();
+        $user = User::factory()->create();
+
+        $response = $this->requestCode($this->signedIn($user), [
+            // Typed as a person types it: with the presentation dash, in lower
+            // case.
+            'shared_workstation_short_code' => strtolower(
+                substr((string) $workstation->short_code, 0, 4).'-'.substr((string) $workstation->short_code, 4),
+            ),
+            'event_id' => $workstation->event_id,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('shared_workstation.id', $workstation->getKey())
+            ->assertJsonPath('shared_workstation.name', $workstation->name);
+
+        $record = SharedWorkstationLoginCode::query()->sole();
+        $this->assertSame((string) $workstation->getKey(), (string) $record->shared_workstation_id);
+    }
+
+    public function test_an_unknown_short_code_is_refused(): void
+    {
+        $workstation = $this->workstation();
+
+        $this->requestCode($this->signedIn(User::factory()->create()), [
+            'shared_workstation_short_code' => 'WRONGONE',
+            'event_id' => $workstation->event_id,
+        ])
+            ->assertStatus(404)
+            ->assertJsonPath('reason', SharedWorkstationLoginException::REASON_WORKSTATION_UNKNOWN);
+
+        // A short code with no event to resolve in is refused rather than
+        // searched globally: it is only unique within one event.
+        $this->requestCode($this->signedIn(User::factory()->create()), [
+            'shared_workstation_short_code' => (string) $workstation->short_code,
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('reason', SharedWorkstationLoginException::REASON_EVENT_CONTEXT_MISSING);
+    }
+
+    /**
      * AUTH-031: the audit entry for a use names the redeeming workstation for
      * both kinds of code, which is the property that makes the looser scope
      * reviewable afterwards.

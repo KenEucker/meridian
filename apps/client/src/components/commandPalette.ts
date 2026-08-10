@@ -142,6 +142,26 @@ export function useCommandPaletteResults(
       return results;
     }
 
+    /*
+     * Workstation sign-in (M18.61; UI contract 12.3 `staff.workstation-code`).
+     * A palette entry rather than a menu entry, plus the link on Me: the
+     * moment somebody wants this they are standing at a kiosk, and the palette
+     * is the fastest way there by name. Absent in Kiosk mode by construction —
+     * this branch never runs there — because a workstation does not sign its
+     * users in elsewhere.
+     */
+    results.push({
+      id: "navigation:Staff:Workstation Sign-in",
+      type: "navigation",
+      group: "Staff",
+      label: "Workstation Sign-in",
+      description:
+        "Sign in to a shared workstation: scan its code, or generate a login code.",
+      shortcut: null,
+      to: { name: "staff.workstation-code" },
+      run: null,
+    });
+
     results.push(...departmentSwitchActions(router));
 
     /*

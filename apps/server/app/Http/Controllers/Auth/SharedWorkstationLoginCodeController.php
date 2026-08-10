@@ -10,6 +10,7 @@ use App\Models\SharedWorkstation;
 use App\Models\User;
 use App\Services\Auth\SharedWorkstationLoginCodeService;
 use App\Services\Auth\SharedWorkstationLoginException;
+use App\Support\TypableCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -43,8 +44,13 @@ class SharedWorkstationLoginCodeController extends Controller
             // Optional since M18.58: a code issued with no workstation binds to
             // the first trusted workstation that redeems it (AUTH-031).
             'shared_workstation_id' => ['sometimes', 'nullable', 'string', 'max:64'],
-            // The caller's current event context, which scopes an unbound code.
-            // Ignored when a workstation is named: its pinned event wins.
+            // The typed fallback for a dead camera (M18.61; technical spec
+            // 13.4): the short_code the locked Kiosk displays, resolved within
+            // the caller's event since that is the scope it is unique in.
+            'shared_workstation_short_code' => ['sometimes', 'nullable', 'string', 'max:32'],
+            // The caller's current event context, which scopes an unbound code
+            // and resolves a short code. Ignored when a workstation id is
+            // named: its pinned event wins.
             'event_id' => ['sometimes', 'nullable', 'string', 'max:64'],
             // Accepted only so it can be refused: see the class docblock.
             'user_id' => ['sometimes', 'nullable', 'string', 'max:64'],
@@ -62,6 +68,19 @@ class SharedWorkstationLoginCodeController extends Controller
 
         if (($validated['shared_workstation_id'] ?? null) !== null) {
             $workstation = SharedWorkstation::query()->find($validated['shared_workstation_id']);
+
+            if (! $workstation instanceof SharedWorkstation) {
+                return $this->refusal(SharedWorkstationLoginException::workstationUnknown());
+            }
+        } elseif (($validated['shared_workstation_short_code'] ?? null) !== null) {
+            if (($validated['event_id'] ?? null) === null) {
+                return $this->refusal(SharedWorkstationLoginException::eventContextMissing());
+            }
+
+            $workstation = SharedWorkstation::query()
+                ->where('event_id', $validated['event_id'])
+                ->where('short_code', TypableCode::normalize((string) $validated['shared_workstation_short_code']))
+                ->first();
 
             if (! $workstation instanceof SharedWorkstation) {
                 return $this->refusal(SharedWorkstationLoginException::workstationUnknown());
