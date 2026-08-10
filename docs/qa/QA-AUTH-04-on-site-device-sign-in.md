@@ -47,8 +47,11 @@ Five things are being proved.
 ## Setup data
 
 - A seeded database (`pnpm run server:migrate:seed`), signed in as any seeded staff persona in the Field client.
-- A trusted, pinned shared workstation: `php artisan meridian:shared-workstation` provisions one against the seeded event and prints its id. Set the Kiosk's identity in its browser console — `localStorage.setItem('meridian.workstation.id', '<workstation-uuid>')` — and reload.
-- Note the workstation's `short_code`: it is displayed on the locked Kiosk beside the QR, and on the God Mode Shared Workstations screen.
+- A trusted, pinned shared workstation: `php artisan meridian:shared-workstation` provisions one against the seeded event and prints its id.
+- **The workstation identifier**, which the Kiosk setup screen asks for. Read it from the **Identifier** column on the God Mode **Shared Workstations** screen, or from the provisioning command's output. It is not a credential (AUTH-030) — signing in still needs a login code issued to a named person at a trusted workstation.
+- Set the Kiosk's identity by typing that identifier into the **Workstation identifier** field on `/kiosk/setup` and pressing **Save and check with the node**. (`pnpm run kiosk:workstation` injects it through the Electron preload instead, so the field is only needed for a browser-run Kiosk.)
+- Note the workstation's `short_code`: it is displayed on the locked Kiosk beside the QR, and in the **Workstation code** column on the same God Mode screen.
+- **After any `migrate:fresh --seed`, both values change.** Every UUID regenerates, so a Kiosk holding the old identifier reports that the node knows no such workstation, and the identifier has to be re-read and re-entered.
 
 ## Steps
 

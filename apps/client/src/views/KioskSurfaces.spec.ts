@@ -48,6 +48,8 @@ const node = {
   department: null as { id: string; name: string } | null,
   canManageAttendance: true,
   reauthStatus: 200,
+  /** False makes the pinned-context read a 404: an id this node does not hold. */
+  knownWorkstation: true,
 };
 
 function json(body: unknown, status = 200): Response {
@@ -211,7 +213,9 @@ function stubNode(): void {
       }
 
       if (path.startsWith("/api/kiosk/workstations/")) {
-        return json(pinnedContextPayload());
+        return node.knownWorkstation
+          ? json(pinnedContextPayload())
+          : json({ message: "Not found." }, 404);
       }
 
       if (path.endsWith("/logistics")) {
@@ -245,6 +249,7 @@ beforeEach(async () => {
   node.department = { id: DEPARTMENT_ID, name: "Logistics" };
   node.canManageAttendance = true;
   node.reauthStatus = 200;
+  node.knownWorkstation = true;
 
   window.localStorage.clear();
   resetWorkstationSession();
@@ -390,6 +395,45 @@ describe("kiosk.setup", () => {
     expect(wrapper.find("#kiosk-setup-event-select").text()).toContain(
       "Winterlight 2027",
     );
+  });
+
+  it("tells a machine with no identifier to enter one, not that the node refused", async () => {
+    // `resolveKioskContext` reports "unknown" both for a 404 and for having no
+    // id to ask with, and the two send a person to different fixes: the first
+    // is the node's verdict, the second is an empty field on this screen.
+    configureSharedWorkstationId(null);
+    resetKioskContext();
+    await resolveKioskContext();
+
+    const router = buildRouter();
+    await router.push({ name: "kiosk.setup" });
+    await router.isReady();
+
+    const wrapper = mount(KioskSetupView, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("no workstation identifier yet");
+    expect(wrapper.text()).not.toContain(
+      "holds no trusted shared workstation with that identifier",
+    );
+  });
+
+  it("reports the node's refusal of an identifier it does not hold", async () => {
+    node.knownWorkstation = false;
+    resetKioskContext();
+    await resolveKioskContext();
+
+    const router = buildRouter();
+    await router.push({ name: "kiosk.setup" });
+    await router.isReady();
+
+    const wrapper = mount(KioskSetupView, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "holds no trusted shared workstation with that identifier",
+    );
+    expect(wrapper.text()).not.toContain("no workstation identifier yet");
   });
 });
 
