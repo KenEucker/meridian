@@ -87,6 +87,7 @@ import StaffDashboardView from "@/views/StaffDashboardView.vue";
 import StaffProfileEditView from "@/views/StaffProfileEditView.vue";
 import StaffProfileRequestsView from "@/views/StaffProfileRequestsView.vue";
 import StaffShiftBoardView from "@/views/StaffShiftBoardView.vue";
+import StaffWorkstationCodeView from "@/views/StaffWorkstationCodeView.vue";
 import TeamOverviewView from "@/views/TeamOverviewView.vue";
 import WaiverAdministrationView from "@/views/WaiverAdministrationView.vue";
 import { selectSessionDepartment } from "@/session/sessionAccess";
@@ -163,6 +164,17 @@ function refuseWorkstationSwitch() {
  */
 function requirePinnedKioskContext() {
   return kioskContextPinned.value ? true : { name: "kiosk.setup" };
+}
+
+/**
+ * `staff.workstation-code` exists in Field and Admin modes and not in Kiosk
+ * (M18.61; UI contract 12.3). Exported with the mode as an argument so the
+ * rule can be asserted for a mode the test build is not.
+ */
+export function workstationCodeRouteGuard(
+  uiMode: string = meridianAppConfig.uiMode,
+): true | { name: string } {
+  return uiMode === "kiosk" ? { name: "kiosk.home" } : true;
 }
 
 function legacyShiftBoardRedirect(surface: string) {
@@ -616,6 +628,24 @@ export const routes: RouteRecordRaw[] = [
     name: "staff.documents.show",
     component: StaffDocumentDetailView,
   },
+  /*
+   * Sign in to a shared workstation from the device in your hand (M18.61;
+   * AUTH-026 through AUTH-028, AUTH-033, AUTH-034; UI contract 12.3
+   * `staff.workstation-code`). Self-scoped like Me: whose grant and whose
+   * code these are is the session's answer, and the route carries nothing.
+   *
+   * Absent in Kiosk mode by guard rather than by omission: the shared router
+   * serves all three modes, and a kiosk offering the surface that signs its
+   * own users in *elsewhere* would be a workstation impersonating a phone.
+   * Field and Admin keep it — Admin because an organizer at a desk is still a
+   * person who walks up to kiosks.
+   */
+  {
+    path: "/staff/workstation-code",
+    name: "staff.workstation-code",
+    component: StaffWorkstationCodeView,
+    beforeEnter: () => workstationCodeRouteGuard(),
+  },
   {
     path: "/staff/field-reports",
     name: "staff.field-reports.index",
@@ -989,14 +1019,67 @@ export function requiresSignIn(name: unknown): boolean {
   return !holdsMeridianCredential() && clientSessionState.document === null;
 }
 
+/**
+ * A Kiosk never lands on the personal sign-in surfaces (M18.65; AUTH-030;
+ * technical spec 13.3; UI contract 12.8).
+ *
+ * The shared client serves all three modes from one router, so a Kiosk opening
+ * at `/` reaches `RootView` — which, holding no personal credential, offers the
+ * marketing page and then the email magic-link login. That is the wrong screen
+ * on a shared workstation twice over: the machine cannot complete it (a Kiosk
+ * holds a workstation session key, not a bearer token), and completing it would
+ * establish a *personal* device session on a machine strangers stand in front
+ * of, which AUTH-030 exists to prevent.
+ *
+ * So the three personal entry points redirect to the Kiosk's own front door.
+ * `kiosk.home`'s guards take it from there: to setup while the machine is
+ * unpinned (UI-019), and to `kiosk.workstation-login` while it is locked —
+ * which is the screen that offers both ways in, the scannable code and the
+ * typed one.
+ */
+const PERSONAL_SIGN_IN_ROUTES: readonly string[] = ["home", "login", "auth.code.entry"];
+
+export function kioskLandingRedirect(
+  name: unknown,
+  uiMode: string = meridianAppConfig.uiMode,
+): { name: string } | null {
+  if (uiMode !== "kiosk" || typeof name !== "string") {
+    return null;
+  }
+
+  return PERSONAL_SIGN_IN_ROUTES.includes(name) ? { name: "kiosk.home" } : null;
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes,
 });
 
-router.beforeEach((to) =>
-  requiresSignIn(to.name) ? { name: "login" } : true,
-);
+/**
+ * The navigation guards every Meridian router runs, in one place.
+ *
+ * Registered on the application's router below, and by tests on theirs, so what
+ * a test exercises is the guard the application installs rather than a second
+ * copy of the rule. `uiMode` is a parameter for the same reason
+ * {@see workstationCodeRouteGuard}'s is: a mode fixed at build time is still
+ * something a test has to be able to state.
+ */
+export function registerNavigationGuards(
+  target: Router = router,
+  uiMode: string = meridianAppConfig.uiMode,
+): void {
+  target.beforeEach((to) => {
+    const kioskLanding = kioskLandingRedirect(to.name, uiMode);
+
+    if (kioskLanding !== null) {
+      return kioskLanding;
+    }
+
+    return requiresSignIn(to.name) ? { name: "login" } : true;
+  });
+}
+
+registerNavigationGuards();
 
 /**
  * Move a client to sign in the moment it stops holding a session (AUTH-023).

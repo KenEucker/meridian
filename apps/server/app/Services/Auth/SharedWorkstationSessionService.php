@@ -5,6 +5,7 @@ namespace App\Services\Auth;
 use App\Models\AuditEvent;
 use App\Models\SharedWorkstation;
 use App\Models\SharedWorkstationSession;
+use App\Models\SharedWorkstationSignInRequest;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use Illuminate\Support\Carbon;
@@ -68,23 +69,64 @@ class SharedWorkstationSessionService
         // under a lock so two people racing one code cannot both be let in.
         $record = $this->loginCodes->redeem($workstation, $code);
 
+        return $this->establish($workstation, (string) $record->user_id, (string) $record->event_id, [
+            'login_code_id' => $record->getKey(),
+        ]);
+    }
+
+    /**
+     * Exchange a collected sign-in request for a session at this workstation
+     * (M18.59; AUTH-035; technical spec 13.4).
+     *
+     * The same session a typed code produces, with the same rules: no API token,
+     * no device trust, the key returned once and held in memory only. The
+     * provenance differs — `sign_in_request_id` instead of `login_code_id` — so
+     * the record says which path signed the person in.
+     *
+     * Granting, expiry, single-collection, and the opener-only rule are all
+     * {@see SharedWorkstationSignInRequestService::collect()}'s; by the time
+     * this runs, the request has been spent under a lock.
+     */
+    public function startFromSignInRequest(
+        SharedWorkstation $workstation,
+        SharedWorkstationSignInRequest $request,
+    ): EstablishedSharedWorkstationSession {
+        return $this->establish($workstation, (string) $request->granted_by_user_id, (string) $request->event_id, [
+            'sign_in_request_id' => $request->getKey(),
+        ]);
+    }
+
+    /**
+     * The one path every session is established through, whatever credential
+     * proved the person: close what the workstation still had open, create the
+     * session, and hand the raw key back exactly once.
+     *
+     * @param  array<string, string>  $provenance  which credential established it
+     */
+    private function establish(
+        SharedWorkstation $workstation,
+        string $userId,
+        string $eventId,
+        array $provenance,
+    ): EstablishedSharedWorkstationSession {
         $sessionKey = SharedWorkstationSessionKey::generate();
         $startedAt = now();
 
-        $session = DB::transaction(function () use ($workstation, $record, $sessionKey, $startedAt): SharedWorkstationSession {
+        $session = DB::transaction(function () use ($workstation, $userId, $eventId, $provenance, $sessionKey, $startedAt): SharedWorkstationSession {
             $this->closeOpenSessions($workstation, $startedAt);
 
             /** @var SharedWorkstationSession $session */
             $session = SharedWorkstationSession::query()->create([
                 'shared_workstation_id' => $workstation->getKey(),
-                'user_id' => $record->user_id,
-                // From the code, which took it from the workstation's pinned
-                // Kiosk context (technical spec 13.1) — never from the request.
-                'event_id' => $record->event_id,
-                'login_code_id' => $record->getKey(),
+                'user_id' => $userId,
+                // From the credential, which took it from the workstation's
+                // pinned Kiosk context (technical spec 13.1) — never from the
+                // request.
+                'event_id' => $eventId,
                 'session_key_hash' => SharedWorkstationSessionKey::hash($sessionKey),
                 'started_at' => $startedAt,
                 'last_activity_at' => $startedAt,
+                ...$provenance,
             ]);
 
             return $session;
@@ -129,6 +171,31 @@ class SharedWorkstationSessionService
             throw SharedWorkstationLoginException::reauthenticationMismatch();
         }
 
+        return $this->confirmReauthentication($session, $workstation, [
+            'login_code_id' => $record->getKey(),
+        ]);
+    }
+
+    /**
+     * Stamp a confirmed re-authentication, identically whichever path proved
+     * the person (M18.62; AUTH-036; technical spec 13.4).
+     *
+     * One method, called by the typed path above and by the scan path's
+     * collection, so a privileged action's audit trail does not depend on how
+     * the person proved they were standing there: the same `reauthenticated_at`,
+     * the same activity slide, and the same audit action. Only the provenance
+     * key differs — the login code, or the sign-in request.
+     *
+     * Public for the scan path's collector; who may confirm is decided before
+     * this runs, at redemption or at grant.
+     *
+     * @param  array<string, string>  $provenance  which credential confirmed it
+     */
+    public function confirmReauthentication(
+        SharedWorkstationSession $session,
+        SharedWorkstation $workstation,
+        array $provenance,
+    ): SharedWorkstationSession {
         $confirmedAt = now();
 
         $session->forceFill([
@@ -148,7 +215,7 @@ class SharedWorkstationSessionService
                 'shared_workstation_session_id' => $session->getKey(),
                 'shared_workstation_id' => $workstation->getKey(),
                 'user_id' => $session->user_id,
-                'login_code_id' => $record->getKey(),
+                ...$provenance,
                 'reauthenticated_at' => $confirmedAt->toIso8601String(),
             ],
             sourceContext: AuditEvent::SOURCE_API,

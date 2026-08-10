@@ -4222,7 +4222,7 @@ Token issuance, expiry, and revocation shall be audited. Raw token values shall 
 
 ### AUTH-026
 
-The shared-workstation login codes described in the technical specification section 13.2 shall be generatable both by God mode and by the user the code is for, from a device on which that user already holds a valid session.
+The shared-workstation login codes described in the technical specification section 13.2 shall be generatable both by God mode and by the user the code is for, from a device on which that user already holds a valid session. A code may be generated for a named trusted shared workstation, or with no workstation named as described in AUTH-031.
 
 ### AUTH-027
 
@@ -4239,6 +4239,34 @@ Login code generation shall be rate limited per user and per node, and failed lo
 ### AUTH-030
 
 A successful login code entry shall establish a shared-workstation session as described in the technical specification section 13.3. It shall not issue a personal device token and shall not establish a trusted personal device session.
+
+### AUTH-031
+
+A shared-workstation login code shall be issuable without naming a workstation. An unbound code shall remain scoped to one user and one event, shall be redeemable only at a trusted shared workstation whose pinned event matches the code's event, and shall bind to the first trusted workstation that redeems it. Redemption shall record which workstation the code was used at, for unbound and workstation-bound codes alike.
+
+### AUTH-032
+
+A trusted shared workstation pinned to an organization and event may open a sign-in request and present it as a scannable code. A sign-in request shall expire, shall grant at most once, and shall be collectable only by the workstation that opened it.
+
+### AUTH-033
+
+A device on which a user holds a valid session may grant a sign-in request for that user only. Granting a request on behalf of another user shall not be possible.
+
+### AUTH-034
+
+A sign-in request shall name the node that issued it. A grant presented to a node other than the request's issuing node shall be refused.
+
+### AUTH-035
+
+A granted sign-in request, once collected by the workstation that opened it, shall establish a shared-workstation session as described in AUTH-030 and the technical specification section 13.3, and nothing more. It shall not issue a personal device token, shall not establish a trusted personal device session, and shall grant no authority beyond the granting user's own.
+
+### AUTH-036
+
+Where a sign-in request is opened for re-authentication of a live shared-workstation session, only a grant from that session's own user shall confirm it. A grant from any other user shall be refused and shall transfer nothing.
+
+### AUTH-037
+
+Opening, granting, and collecting sign-in requests shall each be rate limited. Opening, granting, and collection shall be audited. Request secrets — the pickup secret held by the opening workstation and the session key a collection returns — shall never be written to logs, audit entries, or exports.
 
 ---
 

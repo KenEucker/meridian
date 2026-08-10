@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\ApiToken;
 use App\Models\Device;
+use App\Models\Event;
 use App\Models\SharedWorkstation;
 use App\Models\User;
 use App\Services\Auth\SharedWorkstationLoginCodeService;
 use App\Services\Auth\SharedWorkstationLoginException;
+use App\Support\TypableCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,7 +41,17 @@ class SharedWorkstationLoginCodeController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'shared_workstation_id' => ['required', 'string', 'max:64'],
+            // Optional since M18.58: a code issued with no workstation binds to
+            // the first trusted workstation that redeems it (AUTH-031).
+            'shared_workstation_id' => ['sometimes', 'nullable', 'string', 'max:64'],
+            // The typed fallback for a dead camera (M18.61; technical spec
+            // 13.4): the short_code the locked Kiosk displays, resolved within
+            // the caller's event since that is the scope it is unique in.
+            'shared_workstation_short_code' => ['sometimes', 'nullable', 'string', 'max:32'],
+            // The caller's current event context, which scopes an unbound code
+            // and resolves a short code. Ignored when a workstation id is
+            // named: its pinned event wins.
+            'event_id' => ['sometimes', 'nullable', 'string', 'max:64'],
             // Accepted only so it can be refused: see the class docblock.
             'user_id' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
@@ -51,14 +63,38 @@ class SharedWorkstationLoginCodeController extends Controller
             return $this->refusal(SharedWorkstationLoginException::selfServiceScope());
         }
 
-        $workstation = SharedWorkstation::query()->find($validated['shared_workstation_id']);
+        $workstation = null;
+        $event = null;
 
-        if (! $workstation instanceof SharedWorkstation) {
-            return $this->refusal(SharedWorkstationLoginException::workstationUnknown());
+        if (($validated['shared_workstation_id'] ?? null) !== null) {
+            $workstation = SharedWorkstation::query()->find($validated['shared_workstation_id']);
+
+            if (! $workstation instanceof SharedWorkstation) {
+                return $this->refusal(SharedWorkstationLoginException::workstationUnknown());
+            }
+        } elseif (($validated['shared_workstation_short_code'] ?? null) !== null) {
+            if (($validated['event_id'] ?? null) === null) {
+                return $this->refusal(SharedWorkstationLoginException::eventContextMissing());
+            }
+
+            $workstation = SharedWorkstation::query()
+                ->where('event_id', $validated['event_id'])
+                ->where('short_code', TypableCode::normalize((string) $validated['shared_workstation_short_code']))
+                ->first();
+
+            if (! $workstation instanceof SharedWorkstation) {
+                return $this->refusal(SharedWorkstationLoginException::workstationUnknown());
+            }
+        } elseif (($validated['event_id'] ?? null) !== null) {
+            $event = Event::query()->find($validated['event_id']);
+
+            if (! $event instanceof Event) {
+                return $this->refusal(SharedWorkstationLoginException::eventUnknown());
+            }
         }
 
         try {
-            $issued = $this->loginCodes->generateForSelf($user, $workstation, $this->sessionDevice($request));
+            $issued = $this->loginCodes->generateForSelf($user, $workstation, $this->sessionDevice($request), $event);
         } catch (SharedWorkstationLoginException $exception) {
             return $this->refusal($exception);
         }
@@ -74,13 +110,15 @@ class SharedWorkstationLoginCodeController extends Controller
                 'id' => $user->getKey(),
                 'name' => $user->name,
             ],
-            'shared_workstation' => [
+            // Null for an unbound code: it binds to the first trusted
+            // workstation that redeems it (AUTH-031), and the client says so.
+            'shared_workstation' => $workstation instanceof SharedWorkstation ? [
                 'id' => $workstation->getKey(),
                 'name' => $workstation->name,
-            ],
+            ] : null,
             // Echoed so the client can show which event the code will sign the
-            // person in to. It comes from the workstation's pinned Kiosk context
-            // (technical spec 13.1), never from the request.
+            // person in to. For a targeted code it comes from the workstation's
+            // pinned Kiosk context (technical spec 13.1), never from the request.
             'event_id' => $issued->record->event_id,
         ], 201);
     }

@@ -96,6 +96,11 @@ class SharedWorkstationLoginCode extends Model
     }
 
     /**
+     * An unbound code (AUTH-031) has no workstation until redemption stamps one,
+     * so the trusted-workstation condition applies only to codes that name one;
+     * where an unbound code may be redeemed is the redeeming workstation's own
+     * trust check.
+     *
      * @param  Builder<SharedWorkstationLoginCode>  $query
      * @return Builder<SharedWorkstationLoginCode>
      */
@@ -105,7 +110,21 @@ class SharedWorkstationLoginCode extends Model
             ->whereNull('shared_workstation_login_codes.used_at')
             ->whereNull('shared_workstation_login_codes.revoked_at')
             ->where('shared_workstation_login_codes.expires_at', '>', now())
-            ->whereHas('sharedWorkstation', fn (Builder $query): Builder => $query->trusted());
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('shared_workstation_login_codes.shared_workstation_id')
+                    ->orWhereHas('sharedWorkstation', fn (Builder $query): Builder => $query->trusted());
+            });
+    }
+
+    /**
+     * A code issued with no workstation named, still waiting to bind to the
+     * first trusted workstation that redeems it (AUTH-031). A spent code is
+     * never unbound: redemption stamps the workstation it was used at.
+     */
+    public function isUnbound(): bool
+    {
+        return $this->shared_workstation_id === null;
     }
 
     public function isUsed(): bool
@@ -147,6 +166,12 @@ class SharedWorkstationLoginCode extends Model
             return __('Expired');
         }
 
+        // An unbound code names no workstation to distrust; the trust check
+        // runs at whichever workstation eventually redeems it (AUTH-031).
+        if ($this->isUnbound()) {
+            return __('Active');
+        }
+
         $workstation = $this->relationLoaded('sharedWorkstation')
             ? $this->sharedWorkstation
             : $this->sharedWorkstation()->first();
@@ -162,6 +187,10 @@ class SharedWorkstationLoginCode extends Model
     {
         if ($this->isUsed() || $this->isRevoked() || $this->isExpired($at)) {
             return false;
+        }
+
+        if ($this->isUnbound()) {
+            return true;
         }
 
         $workstation = $this->relationLoaded('sharedWorkstation')

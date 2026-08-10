@@ -69,8 +69,18 @@ const selectedEvent = computed<KioskContextOption | null>(
  * Distinct from an unreachable node, which leaves the stored answer standing:
  * "this workstation is not on record" is a verdict and "the node did not answer"
  * is not, and a technician needs to know which one they are looking at.
+ *
+ * Also distinct from a machine that never presented an identifier at all —
+ * `resolveKioskContext` reports "unknown" for both, but "the node refused this
+ * id" and "there is no id to ask with" send a person to different fixes, and a
+ * message blaming the node for an empty field sends them to the wrong one.
  */
-const unknownToNode = computed(() => kioskContextState.status === "unknown");
+const unknownToNode = computed(
+  () => kioskContextState.status === "unknown" && workstationId.value !== null,
+);
+const noIdentifier = computed(
+  () => kioskContextState.status === "unknown" && workstationId.value === null,
+);
 const readingStored = computed(() => kioskContextState.status === "stored");
 
 function saveWorkstationId(): void {
@@ -138,10 +148,20 @@ void resolveKioskContext();
         {{ context.workstationName || "Unnamed workstation" }}
       </p>
 
-      <p v-if="unknownToNode" class="kiosk-setup__notice" role="status">
+      <p v-if="noIdentifier" class="kiosk-setup__notice" role="status">
+        This machine has no workstation identifier yet, so it has nothing to ask
+        the node about. Enter the identifier of a trusted shared workstation
+        below — it is the <strong>Identifier</strong> column on God Mode's
+        Shared Workstations screen.
+      </p>
+
+      <p v-else-if="unknownToNode" class="kiosk-setup__notice" role="status">
         This node holds no trusted shared workstation with that identifier. A
         technician registers the machine in God Mode, and pairing a device is not
-        something the Kiosk can do for itself.
+        something the Kiosk can do for itself. Check the identifier against the
+        <strong>Identifier</strong> column on God Mode's Shared Workstations
+        screen — after a reseeded development database every identifier changes,
+        and the old one names nothing.
       </p>
 
       <p v-else-if="readingStored" class="kiosk-setup__notice" role="status">

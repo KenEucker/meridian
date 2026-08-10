@@ -32,6 +32,7 @@ class SharedWorkstation extends Model
         'event_id',
         'department_id',
         'name',
+        'short_code',
         'trusted',
         'context_pinned_at',
         'context_pinned_by_user_id',
@@ -78,6 +79,11 @@ class SharedWorkstation extends Model
     public function loginCodes(): HasMany
     {
         return $this->hasMany(SharedWorkstationLoginCode::class);
+    }
+
+    public function signInRequests(): HasMany
+    {
+        return $this->hasMany(SharedWorkstationSignInRequest::class);
     }
 
     /**

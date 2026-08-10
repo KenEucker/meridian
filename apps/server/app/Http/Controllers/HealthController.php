@@ -37,9 +37,14 @@ class HealthController extends Controller
             'timestamp' => now()->toIso8601String(),
             // Node identity, so the desktop wrapper can tell whether it is
             // locked to an event and whose organization it is serving
-            // (BRAND-003A, technical spec 25.3). Identifiers only: no names,
-            // no configuration, nothing an unauthenticated caller could not
-            // already infer from being able to reach this node at all.
+            // (BRAND-003A, technical spec 25.3). Identifiers, plus the node's
+            // own id and name since M18.61: a device refusing a foreign-node
+            // workstation QR has to say which node *it* is using (AUTH-034),
+            // and the machine label a technician gave this install is the only
+            // name it has. Nothing else here is a name, and nothing is
+            // configuration an unauthenticated caller could act on.
+            'node_id' => $node?->getKey(),
+            'node_name' => $node?->node_name,
             'node_role' => $node?->node_role,
             'organization_id' => $node?->organization_id,
             'event_id' => $node?->event_id,

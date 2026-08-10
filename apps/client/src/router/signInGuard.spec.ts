@@ -4,7 +4,12 @@ import { flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { redirectWhenSignedOut, requiresSignIn, routes } from "@/router";
+import {
+  kioskLandingRedirect,
+  redirectWhenSignedOut,
+  requiresSignIn,
+  routes,
+} from "@/router";
 import {
   clearClientSession,
   installClientSession,
@@ -31,6 +36,36 @@ beforeEach(signedOut);
 afterEach(() => {
   configureMeridianApi(null);
   clearClientSession();
+});
+
+describe("the kiosk landing", () => {
+  /*
+   * A Kiosk opening at `/` used to reach `RootView`, which — holding no
+   * personal credential — offered the marketing page and then the email
+   * magic-link login. Wrong twice over: the machine cannot complete that login
+   * (it holds a workstation session key, not a bearer token), and completing it
+   * would put a personal device session on a machine strangers stand in front
+   * of, which AUTH-030 exists to prevent.
+   */
+  it("sends the personal sign-in surfaces to the kiosk's own front door", () => {
+    expect(kioskLandingRedirect("home", "kiosk")).toEqual({ name: "kiosk.home" });
+    expect(kioskLandingRedirect("login", "kiosk")).toEqual({ name: "kiosk.home" });
+    expect(kioskLandingRedirect("auth.code.entry", "kiosk")).toEqual({
+      name: "kiosk.home",
+    });
+  });
+
+  it("leaves the kiosk's own surfaces alone", () => {
+    expect(kioskLandingRedirect("kiosk.workstation-login", "kiosk")).toBeNull();
+    expect(kioskLandingRedirect("kiosk.setup", "kiosk")).toBeNull();
+    expect(kioskLandingRedirect("kiosk.home", "kiosk")).toBeNull();
+  });
+
+  it("changes nothing in field and admin, where personal sign-in is the point", () => {
+    expect(kioskLandingRedirect("home", "field")).toBeNull();
+    expect(kioskLandingRedirect("login", "field")).toBeNull();
+    expect(kioskLandingRedirect("login", "admin")).toBeNull();
+  });
 });
 
 describe("requiring sign-in", () => {

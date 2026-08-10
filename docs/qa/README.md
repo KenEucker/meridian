@@ -88,6 +88,16 @@ The three God Mode scripts split by *content*, *appearance*, and *records*:
 |---|---|---|
 | [`QA-KIOSK-01-kiosk-surfaces.md`](QA-KIOSK-01-kiosk-surfaces.md) | The six screens in UI contract 12.8 and the rule that decides whether any of them are reachable: a workstation with no pinned organization and event puts its Kiosk in setup, and stays there with a client session naming a perfectly good event on the same machine, because UI-020 rules out inferring context from the authenticated user, cached event data, the network, the viewport, and the last route alike; the first pin made from God Mode, where a department that does not work the chosen event is refused by name, and the ordinary move made by an organizer from the Kiosk itself on `organization.events.manage`, both audited, both ending the live session because it was signed in to the previous context; the desk's shift board recording check-in, check-out, and no-show against the workstation's own scope, queuing with the node stopped and syncing once, and offering no control at all to somebody the node grants no attendance authority; a handover that states the queued count and what is abandoned before it ends the session, with code entry unreachable while one is live; and re-authentication confirming the signed-in user with a fresh login code, refusing a valid code belonging to anybody else, and handing nothing over when it does | M16.9, M18.28, M18.32 |
 
+## Alpha 1 On-site device sign-in script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-AUTH-04-on-site-device-sign-in.md`](QA-AUTH-04-on-site-device-sign-in.md) | The Part G gate: the locked Kiosk presenting a sign-in request as a QR beside its name and `short_code`, replacing an expired request rather than leaving a stale square and falling back to the typed field with a plain statement when the node cannot be reached; the phone's scan-confirm-grant path signing in exactly the granting user at exactly the workstation that opened the request, once, with the pickup secret never leaving the machine so a photographed QR buys nobody the session; the `short_code` fallback issuing a targeted code and the no-target path issuing an unbound code that binds where first used, each shown once with the statement that it will not be shown again; a foreign-node scan refused with both node identities named and nothing issued; and scan re-authentication accepting only the session's own user's grant and stamping `reauthenticated_at` identically to the typed path, so a privileged action's audit trail does not depend on how the person proved they were standing there. Carries QA-AUTH-04 rather than the plan's QA-AUTH-02, which the Google OAuth script already holds | M18.63 |
+
+QA-AUTH-01 exercises workstation login codes only through the God Mode
+console; this script is the path a person walks with the phone in their
+pocket, built by M18.58 through M18.62.
+
 ## Alpha 1 Command palette script
 
 | ID | Coverage | Owning task |

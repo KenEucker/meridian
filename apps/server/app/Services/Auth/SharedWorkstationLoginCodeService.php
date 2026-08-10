@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\AuditEvent;
 use App\Models\Device;
+use App\Models\Event;
 use App\Models\SharedWorkstation;
 use App\Models\SharedWorkstationLoginCode;
 use App\Models\User;
@@ -79,12 +80,16 @@ class SharedWorkstationLoginCodeService
      * A user generates a code for themselves on a device where they already hold
      * a session (AUTH-026, AUTH-027, AUTH-028).
      *
+     * With no workstation named, the code is unbound (AUTH-031) and `$event` —
+     * the caller's current event context — is what scopes it.
+     *
      * @throws SharedWorkstationLoginException
      */
     public function generateForSelf(
         User $user,
-        SharedWorkstation $workstation,
+        ?SharedWorkstation $workstation,
         ?Device $actorDevice = null,
+        ?Event $event = null,
     ): IssuedSharedWorkstationLoginCode {
         return $this->generate(
             subject: $user,
@@ -93,6 +98,7 @@ class SharedWorkstationLoginCodeService
             authority: self::AUTHORITY_SELF_SERVICE,
             actorDevice: $actorDevice,
             sourceContext: AuditEvent::SOURCE_API,
+            event: $event,
         );
     }
 
@@ -108,7 +114,8 @@ class SharedWorkstationLoginCodeService
     public function generateForUser(
         User $subject,
         User $operator,
-        SharedWorkstation $workstation,
+        ?SharedWorkstation $workstation,
+        ?Event $event = null,
     ): IssuedSharedWorkstationLoginCode {
         return $this->generate(
             subject: $subject,
@@ -117,6 +124,7 @@ class SharedWorkstationLoginCodeService
             authority: self::AUTHORITY_GOD_MODE,
             actorDevice: null,
             sourceContext: AuditEvent::SOURCE_ORCHID,
+            event: $event,
         );
     }
 
@@ -142,13 +150,33 @@ class SharedWorkstationLoginCodeService
 
         $record = DB::transaction(function () use ($workstation, $codeHash): ?SharedWorkstationLoginCode {
             $found = SharedWorkstationLoginCode::query()
-                ->where('shared_workstation_id', $workstation->getKey())
                 ->where('code_hash', $codeHash)
+                // A targeted code redeems only at the workstation it names. An
+                // unbound one (AUTH-031) redeems at any trusted workstation
+                // whose pinned event equals the code's event — and only there,
+                // so an unpinned workstation matches nothing.
+                ->where(function ($query) use ($workstation): void {
+                    $query->where('shared_workstation_id', $workstation->getKey());
+
+                    if ($workstation->event_id !== null) {
+                        $query->orWhere(function ($query) use ($workstation): void {
+                            $query
+                                ->whereNull('shared_workstation_id')
+                                ->where('event_id', $workstation->event_id);
+                        });
+                    }
+                })
                 ->active()
                 ->lockForUpdate()
                 ->first();
 
-            $found?->forceFill(['used_at' => now()])->save();
+            // Redemption stamps the workstation the code was actually used at
+            // (AUTH-031) — a no-op for a targeted code, and the fact that makes
+            // an unbound one reviewable afterwards.
+            $found?->forceFill([
+                'used_at' => now(),
+                'shared_workstation_id' => $workstation->getKey(),
+            ])->save();
 
             return $found;
         });
@@ -216,22 +244,31 @@ class SharedWorkstationLoginCodeService
      *
      * Public because the rules it enforces belong to every caller, not only to
      * the two wrappers above: a self-service code is refused for anyone but the
-     * generating user (AUTH-028), the workstation must be trusted and pinned to an
-     * event this node holds, and the rate limits apply either way.
+     * generating user (AUTH-028), a named workstation must be trusted and pinned
+     * to an event this node holds, and the rate limits apply either way.
+     *
+     * With no workstation named the code is unbound (AUTH-031): it binds to the
+     * first trusted workstation that redeems it, and `$event` — the generating
+     * caller's current event context, since there is no pinned context to take
+     * one from — is what scopes it. A named workstation's pinned event always
+     * wins over a passed `$event`, so the two cannot disagree.
      *
      * @param  string  $authority  which authority in technical spec 13.2 this is
      * @param  Device|null  $actorDevice  the device the generating session is on,
      *                                    recorded as the audit actor device
+     * @param  Event|null  $event  the event an unbound code is scoped to;
+     *                             ignored when a workstation is named
      *
      * @throws SharedWorkstationLoginException
      */
     public function generate(
         User $subject,
         User $generatedBy,
-        SharedWorkstation $workstation,
+        ?SharedWorkstation $workstation,
         string $authority,
         ?Device $actorDevice = null,
         string $sourceContext = AuditEvent::SOURCE_API,
+        ?Event $event = null,
     ): IssuedSharedWorkstationLoginCode {
         // AUTH-028: a self-service code is scoped to the generating user. This is
         // also enforced by the API endpoint carrying no user field at all, but the
@@ -240,8 +277,16 @@ class SharedWorkstationLoginCodeService
             throw SharedWorkstationLoginException::selfServiceScope();
         }
 
-        $this->requireTrustedWorkstation($workstation);
-        $this->requirePinnedEvent($workstation);
+        if ($workstation instanceof SharedWorkstation) {
+            $this->requireTrustedWorkstation($workstation);
+            $this->requirePinnedEvent($workstation);
+
+            $event = $workstation->event()->firstOrFail();
+        } elseif (! $event instanceof Event || ! $event->exists) {
+            // An unbound code still scopes to one event (AUTH-031), and with no
+            // pinned context to take one from, the caller has to say which.
+            throw SharedWorkstationLoginException::eventContextMissing();
+        }
 
         if ($subject->isDisabled()) {
             throw SharedWorkstationLoginException::accountDisabled();
@@ -256,41 +301,44 @@ class SharedWorkstationLoginCodeService
             $subject,
             $generatedBy,
             $workstation,
+            $event,
             $authority,
             $actorDevice,
             $sourceContext,
             $plaintextCode,
             $generatedAt,
         ): SharedWorkstationLoginCode {
-            $superseded = $this->retireOutstandingCodes($subject, $workstation, $generatedBy, $sourceContext);
+            $superseded = $this->retireOutstandingCodes($subject, $workstation, $event, $generatedBy, $sourceContext);
 
             /** @var SharedWorkstationLoginCode $record */
             $record = SharedWorkstationLoginCode::query()->create([
                 'user_id' => $subject->getKey(),
-                'event_id' => $workstation->event_id,
-                'shared_workstation_id' => $workstation->getKey(),
+                'event_id' => $event->getKey(),
+                'shared_workstation_id' => $workstation?->getKey(),
                 'code_hash' => SharedWorkstationLoginCodeGenerator::hash($plaintextCode),
                 'expires_at' => SharedWorkstationLoginCode::expiresAtFrom($generatedAt),
                 'generated_by_user_id' => $generatedBy->getKey(),
             ]);
 
             // Audited in the same transaction as the code, so a code cannot exist
-            // unrecorded (data/API 12.4, "generation and use are audited").
+            // unrecorded (data/API 12.4, "generation and use are audited"). A
+            // null workstation records that the code was issued unbound; the
+            // use entry later names where it was redeemed (AUTH-031).
             $this->audit->recordForEntity(
                 entity: $record,
                 action: self::AUDIT_GENERATED,
                 actorUser: $generatedBy,
                 actorDevice: $actorDevice,
-                organizationId: $workstation->organization_id,
-                eventId: $workstation->event_id,
-                departmentId: $workstation->department_id,
+                organizationId: $workstation?->organization_id ?? $event->organization_id,
+                eventId: $event->getKey(),
+                departmentId: $workstation?->department_id,
                 after: [
                     // Identifiers and scope only. The code itself exists in the
                     // response to the request that generated it and nowhere else.
                     'login_code_id' => $record->getKey(),
                     'user_id' => $subject->getKey(),
-                    'event_id' => $workstation->event_id,
-                    'shared_workstation_id' => $workstation->getKey(),
+                    'event_id' => $event->getKey(),
+                    'shared_workstation_id' => $workstation?->getKey(),
                     'generated_by_user_id' => $generatedBy->getKey(),
                     'expires_at' => $record->expires_at?->toIso8601String(),
                     'superseded_login_code_ids' => $superseded->all(),
@@ -307,7 +355,8 @@ class SharedWorkstationLoginCodeService
 
     /**
      * A code generated for a user at a workstation replaces any code they still
-     * hold for that same workstation.
+     * hold for that same workstation, and an unbound code replaces any unbound
+     * code they still hold for the same event.
      *
      * Someone who has forgotten a code generates another, and a six-week credential
      * left live behind it would be a second way in that nobody is tracking. This
@@ -317,13 +366,18 @@ class SharedWorkstationLoginCodeService
      */
     private function retireOutstandingCodes(
         User $subject,
-        SharedWorkstation $workstation,
+        ?SharedWorkstation $workstation,
+        Event $event,
         User $generatedBy,
         string $sourceContext,
     ): Collection {
         $outstanding = SharedWorkstationLoginCode::query()
             ->where('user_id', $subject->getKey())
-            ->where('shared_workstation_id', $workstation->getKey())
+            ->when(
+                $workstation instanceof SharedWorkstation,
+                fn ($query) => $query->where('shared_workstation_id', $workstation->getKey()),
+                fn ($query) => $query->whereNull('shared_workstation_id')->where('event_id', $event->getKey()),
+            )
             ->active()
             ->get();
 
@@ -348,7 +402,9 @@ class SharedWorkstationLoginCodeService
             entity: $code,
             action: self::AUDIT_REVOKED,
             actorUser: $operator,
-            organizationId: $workstation?->organization_id,
+            // An unbound code has no workstation to take an organization from,
+            // so its event's organization scopes the entry instead.
+            organizationId: $workstation?->organization_id ?? $code->event()->first()?->organization_id,
             eventId: $code->event_id,
             departmentId: $workstation?->department_id,
             after: [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Orchid\Screens\SharedWorkstationLoginCode;
 
+use App\Models\Event;
 use App\Models\SharedWorkstation;
 use App\Models\SharedWorkstationLoginCode;
 use App\Models\User;
@@ -65,7 +66,7 @@ class SharedWorkstationLoginCodeListScreen extends Screen
 
     public function description(): ?string
     {
-        return 'Human-typable codes that sign a known user in to a trusted shared workstation. Codes are scoped to one user, one event, and one workstation, are valid for six weeks, and are stored only as hashes — a code is shown once when it is generated and never again.';
+        return 'Human-typable codes that sign a known user in to a trusted shared workstation. Codes are scoped to one user and one event, name one workstation or none — an unbound code binds to the first trusted workstation it is used at — are valid for six weeks, and are stored only as hashes: a code is shown once when it is generated and never again.';
     }
 
     /**
@@ -112,7 +113,8 @@ class SharedWorkstationLoginCodeListScreen extends Screen
     }
 
     /**
-     * Generate a code for another user (AUTH-026, AUTH-028).
+     * Generate a code for another user (AUTH-026, AUTH-028), targeted at a
+     * workstation or unbound (AUTH-031).
      */
     public function generate(Request $request, SharedWorkstationLoginCodeService $loginCodes): RedirectResponse
     {
@@ -120,11 +122,11 @@ class SharedWorkstationLoginCodeListScreen extends Screen
 
         $validated = $request->validate([
             'login_code.user_id' => ['required', 'string', 'max:64'],
-            'login_code.shared_workstation_id' => ['required', 'string', 'max:64'],
+            'login_code.shared_workstation_id' => ['nullable', 'string', 'max:64'],
+            'login_code.event_id' => ['nullable', 'string', 'max:64'],
         ]);
 
         $subject = User::query()->find($validated['login_code']['user_id']);
-        $workstation = SharedWorkstation::query()->find($validated['login_code']['shared_workstation_id']);
 
         if (! $subject instanceof User) {
             Toast::warning(__('That user is no longer on record.'));
@@ -132,14 +134,29 @@ class SharedWorkstationLoginCodeListScreen extends Screen
             return $this->back();
         }
 
-        if (! $workstation instanceof SharedWorkstation) {
-            Toast::warning(__('That workstation is no longer on record.'));
+        $workstation = null;
+        $event = null;
 
-            return $this->back();
+        if (($validated['login_code']['shared_workstation_id'] ?? null) !== null) {
+            $workstation = SharedWorkstation::query()->find($validated['login_code']['shared_workstation_id']);
+
+            if (! $workstation instanceof SharedWorkstation) {
+                Toast::warning(__('That workstation is no longer on record.'));
+
+                return $this->back();
+            }
+        } elseif (($validated['login_code']['event_id'] ?? null) !== null) {
+            $event = Event::query()->find($validated['login_code']['event_id']);
+
+            if (! $event instanceof Event) {
+                Toast::warning(__('That event is no longer on record.'));
+
+                return $this->back();
+            }
         }
 
         try {
-            $issued = $loginCodes->generateForUser($subject, $operator, $workstation);
+            $issued = $loginCodes->generateForUser($subject, $operator, $workstation, $event);
         } catch (SharedWorkstationLoginException $exception) {
             return $this->back()->withErrors([
                 'login_code.shared_workstation_id' => $exception->getMessage(),
@@ -150,10 +167,16 @@ class SharedWorkstationLoginCodeListScreen extends Screen
             'name' => $subject->name,
         ]));
 
+        // The flash says which kind was issued (M18.58): a targeted code names
+        // its workstation, an unbound one says where it will bind instead.
         return $this->back()
             ->with('meridian.generated_workstation_login_code', $issued->formattedCode())
             ->with('meridian.generated_workstation_login_code_user', $subject->name)
-            ->with('meridian.generated_workstation_login_code_workstation', $workstation->name)
+            ->with('meridian.generated_workstation_login_code_workstation', $workstation instanceof SharedWorkstation
+                ? $workstation->name
+                : __('any trusted workstation pinned to :event — it binds to the first one it is used at', [
+                    'event' => $event?->name,
+                ]))
             ->with('meridian.generated_workstation_login_code_expires_at', $issued->record->expires_at?->toDayDateTimeString());
     }
 

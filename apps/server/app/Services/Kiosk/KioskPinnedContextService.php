@@ -14,6 +14,7 @@ use App\Models\SharedWorkstationSession;
 use App\Models\User;
 use App\Services\Audit\AuditService;
 use App\Services\Auth\SharedWorkstationSessionService;
+use App\Support\TypableCode;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -106,6 +107,12 @@ final class KioskPinnedContextService
                 'organization_id' => $organizationId,
                 'event_id' => (string) $event->getKey(),
                 'department_id' => $department?->getKey(),
+                // The typed fallback for a dead camera (M18.59; technical spec
+                // 13.4; data/API 12.3): assigned when the workstation is pinned,
+                // because that is when "unique per event" has an event to be
+                // unique in. Kept stable across re-pins unless it collides in
+                // the new event.
+                'short_code' => $this->shortCodeFor($workstation, (string) $event->getKey()),
                 'context_pinned_at' => now(),
                 'context_pinned_by_user_id' => $actor->getKey(),
             ])->save();
@@ -144,6 +151,37 @@ final class KioskPinnedContextService
             ->where('department_id', $department->getKey())
             ->whereNull('archived_at')
             ->exists();
+    }
+
+    /**
+     * A `short_code` for the workstation, unique within the event it is being
+     * pinned to (data/API 12.3).
+     *
+     * The same typable alphabet the login code and the mailed API code use,
+     * because it is read off a locked screen and typed into a phone. It
+     * identifies the workstation and is not a credential: knowing it buys
+     * exactly what knowing the workstation's name buys.
+     */
+    private function shortCodeFor(SharedWorkstation $workstation, string $eventId): string
+    {
+        $current = (string) ($workstation->short_code ?? '');
+
+        for ($attempt = 0; $attempt < 25; $attempt++) {
+            $candidate = $current !== '' && $attempt === 0 ? $current : TypableCode::generate();
+
+            $collides = SharedWorkstation::query()
+                ->where('event_id', $eventId)
+                ->where('short_code', $candidate)
+                ->whereKeyNot($workstation->getKey())
+                ->exists();
+
+            if (! $collides) {
+                return $candidate;
+            }
+        }
+
+        // 25 straight collisions in a 30^8 space means the table, not the dice.
+        throw new \RuntimeException('Could not assign a unique workstation short code for this event.');
     }
 
     /**

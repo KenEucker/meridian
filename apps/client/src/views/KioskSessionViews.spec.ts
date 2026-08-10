@@ -4,13 +4,14 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import KioskSessionBar from "@/components/KioskSessionBar.vue";
+import KioskAppShell from "@/components/shells/KioskAppShell.vue";
 import { resetFieldReportRuntime } from "@/field-reports/fieldReportRuntime";
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import {
   reloadCommandOutboxFromLocalStore,
   resetCommandOutbox,
 } from "@/outbox/commandOutboxRuntime";
-import { routes } from "@/router";
+import { registerNavigationGuards, routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import {
@@ -18,6 +19,7 @@ import {
   resolveKioskContext,
 } from "@/session/kioskContext";
 import { configureSharedWorkstationId } from "@/session/workstationIdentity";
+import { resetWorkstationSignIn } from "@/session/workstationSignIn";
 import {
   enterWorkstationLoginCode,
   evaluateWorkstationSession,
@@ -56,6 +58,34 @@ function stubNode(): void {
 
       if (path === "/api/me") {
         return json(localFieldSessionDocument());
+      }
+
+      if (method === "POST" && path.endsWith("/sign-in-requests")) {
+        // The scan path's open (M18.60): a request the locked view presents
+        // as a QR. Never granted in these tests — the typed path is what they
+        // exercise — so the poll only ever answers pending.
+        return json(
+          {
+            sign_in_request: {
+              id: "request-1",
+              purpose: "sign_in",
+              expires_at: "2027-06-01T12:02:00+00:00",
+            },
+            pickup_secret: "pickup-secret-1",
+            shared_workstation: {
+              id: WORKSTATION_ID,
+              name: "Gate A Workstation",
+              short_code: "K3M7PQRS",
+            },
+            node: { id: "node-1", name: "onsite-command-1" },
+            event_id: "event-1",
+          },
+          201,
+        );
+      }
+
+      if (method === "POST" && path.endsWith("/collect")) {
+        return json({ status: "pending" });
       }
 
       if (path.startsWith("/api/kiosk/workstations/")) {
@@ -114,8 +144,17 @@ function pinnedContextPayload() {
   };
 }
 
+/**
+ * A router with the application's own navigation guards installed, declared as
+ * the Kiosk artifact — which is what decides that the personal sign-in routes
+ * redirect to the Kiosk's front door (M18.65).
+ */
 function buildRouter() {
-  return createRouter({ history: createWebHistory(), routes });
+  const router = createRouter({ history: createWebHistory(), routes });
+
+  registerNavigationGuards(router, "kiosk");
+
+  return router;
 }
 
 async function signIn(): Promise<void> {
@@ -129,6 +168,7 @@ beforeEach(async () => {
   node.expiresAt = "2027-06-01T12:05:00+00:00";
   window.localStorage.clear();
   resetWorkstationSession();
+  resetWorkstationSignIn();
   resetKioskContext();
   clearClientSession();
   configureSharedWorkstationId(WORKSTATION_ID);
@@ -140,6 +180,7 @@ beforeEach(async () => {
 afterEach(async () => {
   configureSharedWorkstationId(null);
   resetWorkstationSession();
+  resetWorkstationSignIn();
   resetKioskContext();
   clearClientSession();
   await resetFieldReportRuntime();
@@ -150,9 +191,7 @@ afterEach(async () => {
 });
 
 describe("the kiosk session bar", () => {
-  it("shows the active user prominently while a session is live", async () => {
-    // Technical spec 13.3: "The active user is shown prominently at all times."
-    // In the shell chrome, not behind a menu.
+  it("offers the control that ends the session while one is live", async () => {
     await signIn();
 
     const router = buildRouter();
@@ -161,8 +200,40 @@ describe("the kiosk session bar", () => {
 
     const wrapper = mount(KioskSessionBar, { global: { plugins: [router] } });
 
-    expect(wrapper.find(".kiosk-session__name").text()).toBe("Dana Reyes");
     expect(wrapper.find(".kiosk-session__end").text()).toBe("End session");
+  });
+
+  it("sits beside the shell's user control and names the user only once", async () => {
+    // M18.66: the shell's user control already renders the active user's name
+    // on every screen, so a bar repeating it was the same fact twice in one
+    // piece of chrome — and it put the control that ends the session in the
+    // content area, where it read as part of whatever screen was open.
+    await signIn();
+
+    const router = buildRouter();
+    await router.push({ name: "kiosk.home" });
+    await router.isReady();
+
+    const wrapper = mount(KioskAppShell, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const actions = wrapper.find(".app-shell__actions");
+    const main = wrapper.find("main.app-shell__main");
+    const endSession = wrapper.find(".kiosk-session__end");
+
+    // The control lives in the header's action row, with the user control.
+    expect(endSession.exists()).toBe(true);
+    expect(actions.element.contains(endSession.element)).toBe(true);
+    expect(main.element.contains(endSession.element)).toBe(false);
+
+    // The name is the shell's to render, and it renders it once: the header
+    // carries the active user's label — resolved from the session document the
+    // workstation key authenticates — and the session controls carry none.
+    expect(wrapper.find(".app-shell__user-label").exists()).toBe(true);
+    expect(wrapper.find(".app-shell__user-label").text()).not.toBe("");
+    expect(wrapper.findAll(".kiosk-session__name")).toHaveLength(0);
+
+    wrapper.unmount();
   });
 
   it("shows nothing at all while the workstation is locked", async () => {
@@ -223,6 +294,50 @@ describe("the kiosk session bar", () => {
   });
 });
 
+describe("where a kiosk lands when it opens", () => {
+  /*
+   * What the desktop wrapper does at boot: loads the client at `/`. The three
+   * personal sign-in routes redirect to `kiosk.home`, whose guards then decide
+   * between setup and the workstation login — so a Kiosk never reaches the
+   * email magic-link screen it cannot complete (AUTH-030), and a machine that
+   * has not been told which workstation it is lands where that is fixed.
+   */
+  it("opens on setup when no workstation identifier has been set", async () => {
+    configureSharedWorkstationId(null);
+    resetKioskContext();
+    await resolveKioskContext();
+
+    const router = buildRouter();
+    await router.push("/");
+    await router.isReady();
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("kiosk.setup");
+  });
+
+  it("opens on the workstation login when the machine is pinned and locked", async () => {
+    const router = buildRouter();
+    await router.push("/");
+    await router.isReady();
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("kiosk.workstation-login");
+  });
+
+  it("never lands on the personal email sign-in screen", async () => {
+    const router = buildRouter();
+
+    for (const target of ["/", "/login", "/login/code"]) {
+      await router.push(target);
+      await flushPromises();
+
+      expect(router.currentRoute.value.name).not.toBe("login");
+      expect(router.currentRoute.value.name).not.toBe("auth.code.entry");
+      expect(String(router.currentRoute.value.name)).toMatch(/^kiosk\./);
+    }
+  });
+});
+
 describe("kiosk.workstation-login", () => {
   it("signs in and lands on the workstation dashboard", async () => {
     const router = buildRouter();
@@ -238,6 +353,66 @@ describe("kiosk.workstation-login", () => {
 
     expect(workstationSessionState.user?.name).toBe("Dana Reyes");
     expect(router.currentRoute.value.name).toBe("kiosk.home");
+  });
+
+  it("presents the sign-in QR beside the workstation's name and short code", async () => {
+    // M18.60: the locked state opens a sign-in request and renders it as a
+    // scannable code, with the typed fallback identifier readable beside it
+    // because the point of the fallback is that it works when the camera does
+    // not (technical spec 13.4).
+    const router = buildRouter();
+    await router.push({ name: "kiosk.workstation-login" });
+    await router.isReady();
+
+    const wrapper = mount(KioskWorkstationLoginView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="workstation-sign-in-qr"]').exists()).toBe(true);
+    expect(wrapper.find(".workstation-login__scan-name").text()).toBe(
+      "Gate A Workstation",
+    );
+    expect(wrapper.find('[data-testid="workstation-short-code"]').text()).toContain(
+      "K3M7PQRS",
+    );
+
+    // The typed field stands beside the QR, not behind it.
+    expect(wrapper.find(".workstation-login__form").exists()).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it("falls back to the code field with a stated reason when the node is unreachable", async () => {
+    // The M18.53 rule with no exception: a node that cannot be reached leaves
+    // the typed field standing with a plain statement of what is unavailable —
+    // never a spinner that never resolves and never a blank square.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    const router = buildRouter();
+    await router.push({ name: "kiosk.workstation-login" });
+    await router.isReady();
+
+    const wrapper = mount(KioskWorkstationLoginView, {
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="workstation-sign-in-qr"]').exists()).toBe(false);
+
+    const notice = wrapper.find('[data-testid="workstation-sign-in-unavailable"]');
+    expect(notice.exists()).toBe(true);
+    expect(notice.text()).toContain("could not reach the node");
+    expect(notice.text()).toContain("Enter a login code instead");
+
+    expect(wrapper.find(".workstation-login__form").exists()).toBe(true);
+
+    wrapper.unmount();
   });
 
   it("offers no field on a machine that is not a trusted workstation", async () => {

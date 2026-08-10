@@ -28,6 +28,7 @@ class SharedWorkstationFactory extends Factory
             'event_id' => fake()->uuid(),
             'department_id' => null,
             'name' => fake()->unique()->slug(3),
+            'short_code' => \App\Support\TypableCode::generate(),
             'trusted' => true,
             'context_pinned_at' => now(),
             'context_pinned_by_user_id' => null,

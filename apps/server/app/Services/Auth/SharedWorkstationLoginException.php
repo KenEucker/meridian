@@ -27,6 +27,12 @@ class SharedWorkstationLoginException extends RuntimeException
     /** A user tried to generate a code for somebody else (AUTH-028). */
     public const REASON_SELF_SERVICE_SCOPE = 'self_service_scope';
 
+    /** An unbound code was requested with no event to scope it to (AUTH-031). */
+    public const REASON_EVENT_CONTEXT_MISSING = 'event_context_missing';
+
+    /** The event an unbound code would be scoped to is not on this node. */
+    public const REASON_EVENT_UNKNOWN = 'event_unknown';
+
     /** The account the code would be for is disabled. */
     public const REASON_ACCOUNT_DISABLED = 'account_disabled';
 
@@ -86,6 +92,29 @@ class SharedWorkstationLoginException extends RuntimeException
             self::REASON_WORKSTATION_CONTEXT_UNPINNED,
             'That workstation has no pinned event on this node. Pin its Kiosk context before generating login codes for it.',
             409,
+        );
+    }
+
+    /**
+     * AUTH-031: an unbound code still scopes to one user and one event. With no
+     * workstation named there is no pinned context to take the event from, so a
+     * request naming neither is refused rather than guessed at.
+     */
+    public static function eventContextMissing(): self
+    {
+        return new self(
+            self::REASON_EVENT_CONTEXT_MISSING,
+            'A login code with no workstation needs an event to be scoped to. Name a workstation or an event.',
+            422,
+        );
+    }
+
+    public static function eventUnknown(): self
+    {
+        return new self(
+            self::REASON_EVENT_UNKNOWN,
+            'That event is not on record on this node.',
+            404,
         );
     }
 

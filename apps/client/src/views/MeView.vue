@@ -382,6 +382,14 @@ async function restoreEventHorizon(): Promise<void> {
       <RouterLink :to="{ name: 'staff.field-reports.index' }">
         My Field Reports
       </RouterLink>
+      <!--
+        Sign in to a shared workstation (M18.61; UI contract 12.3). Here and in
+        the command palette rather than in the Staff menu: the moment somebody
+        wants it they are standing at a kiosk, and Me is their page.
+      -->
+      <RouterLink :to="{ name: 'staff.workstation-code' }">
+        Workstation Sign-in
+      </RouterLink>
       <RouterLink :to="{ name: 'readiness' }">Device Readiness</RouterLink>
       <RouterLink :to="{ name: 'settings.about' }">Account and Device</RouterLink>
     </nav>

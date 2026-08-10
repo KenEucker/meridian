@@ -65,7 +65,7 @@ class SharedWorkstationListScreen extends Screen
 
     public function description(): ?string
     {
-        return 'Trusted shared workstations on this node and the Kiosk context each is pinned to. A workstation with no pinned organization and event puts its Kiosk into setup; it cannot be signed in to, because a login code is scoped to a pinned event.';
+        return 'Trusted shared workstations on this node and the Kiosk context each is pinned to. A workstation with no pinned organization and event puts its Kiosk into setup; it cannot be signed in to, because a login code is scoped to a pinned event. The identifier is what a machine in setup asks for — read it from here and type it into that machine. It is not a credential: signing in still needs a login code issued to a named person at a trusted workstation.';
     }
 
     /**

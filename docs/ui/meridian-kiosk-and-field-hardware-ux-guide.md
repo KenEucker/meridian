@@ -77,6 +77,20 @@ The self-service path exists for the situation that has no other answer. On-site
 
 A user generates a code only for themselves. Generating one on someone else's behalf is God mode's job.
 
+A code does not have to name a workstation. A user who generates one with no target gets a code that works at the first trusted workstation it is entered at, within the code's event; the record then says where it was used. Naming a workstation still scopes the code to that workstation alone.
+
+### 4.1A The scan path
+
+Typing a code is the fallback. The primary on-site interaction is a scan (technical spec 13.4):
+
+- the locked workstation shows a QR, its own name, and its `short_code`;
+- the staff member scans the QR with the Meridian app on their phone, confirms the named workstation and event, and taps to grant;
+- the workstation signs them in.
+
+The QR carries only public identifiers — workstation, node, request — so a photograph of the screen lets someone sign *themselves* in there and nothing else; the session key is only ever handed to the workstation that asked for it.
+
+When the camera is dead, denied, or scratched into uselessness, the person types the workstation's displayed `short_code` into their phone instead, or falls back to generating a code with no target and typing it at the workstation. When the phone cannot reach the workstation's node — a phone pointed at central, standing in front of an on-site machine — the app refuses with both node identities named rather than issuing a code into the wrong database.
+
 ### 4.2 Entering a code
 
 Code entry is a field interaction before it is a security interaction. Assume gloves, dust, glare, and a queue of people waiting.

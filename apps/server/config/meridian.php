@@ -419,6 +419,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Workstation Sign-in Requests
+    |--------------------------------------------------------------------------
+    |
+    | The scan path onto a shared workstation (technical spec 13.4; AUTH-032
+    | through AUTH-037). A locked Kiosk opens a sign-in request and renders it
+    | as a QR; a phone holding a session grants it; the Kiosk collects the
+    | grant with a pickup secret only it holds. The TTL bounds how long one QR
+    | stays scannable — the Kiosk replaces an expired request with a fresh one
+    | — and the two rate limits bound the unauthenticated open per workstation
+    | and the authenticated grant per user.
+    |
+    */
+
+    'workstation_sign_in_requests' => [
+        'ttl_seconds' => (int) env(
+            'MERIDIAN_WORKSTATION_SIGN_IN_REQUEST_TTL_SECONDS',
+            \App\Services\Auth\SharedWorkstationSignInRequestService::DEFAULT_TTL_SECONDS,
+        ),
+        'open_per_workstation_per_minute' => (int) env(
+            'MERIDIAN_WORKSTATION_SIGN_IN_REQUEST_OPEN_PER_MINUTE',
+            \App\Services\Auth\SharedWorkstationSignInRequestThrottle::DEFAULT_OPEN_PER_WORKSTATION,
+        ),
+        'grant_per_user_per_minute' => (int) env(
+            'MERIDIAN_WORKSTATION_SIGN_IN_REQUEST_GRANT_PER_USER_PER_MINUTE',
+            \App\Services\Auth\SharedWorkstationSignInRequestThrottle::DEFAULT_GRANT_PER_USER,
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | OAuth Authentication
     |--------------------------------------------------------------------------
     |

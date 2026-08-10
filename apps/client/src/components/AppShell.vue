@@ -988,6 +988,18 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+
+          <!--
+            The shared-workstation session's controls (M18.66, M18.68;
+            technical spec 13.3). Beside the user control rather than in a strip
+            of their own: that control already shows the active user's name, so
+            a second bar naming them again was duplicate chrome, and the control
+            that ends a session belongs with the other session controls.
+
+            Empty in every mode but Kiosk, which is the only one with a
+            shared-workstation session to end.
+          -->
+          <slot name="session" />
         </div>
       </div>
 
