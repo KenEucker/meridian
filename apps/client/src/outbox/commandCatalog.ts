@@ -63,6 +63,8 @@ export type MeridianCommandType =
   // The Event Horizon's own view state (M18.44; HORIZON-012; data/API 5.8A).
   | "hide-event-horizon"
   | "show-event-horizon"
+  // Hiding a page from your own navigation (M18.69).
+  | "set-page-visibility"
   // Staff self-service on their own profile (M18.20, M18.20B, M18.20C).
   | "update-my-profile"
   | "request-handle-change"
@@ -431,6 +433,24 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "show-event-horizon",
       "/api/commands/show-event-horizon",
       "Restore Event Horizon",
+    ),
+    /*
+     * Hiding a page from your own navigation (M18.69).
+     *
+     * Connected-only, unlike the two preference commands above it, and the
+     * difference is where the preference lives rather than how important it
+     * is. An Event Horizon dismissal is about one event on one screen and
+     * data/API 5.8A names it queueable outright. This one is stored on the
+     * account so it follows the reader to their next device — and a queued
+     * change is a menu that disagrees with itself everywhere else until the
+     * queue drains, which is a worse answer than being told to try again with
+     * signal. Settings is a connected surface in every mode that offers it.
+     */
+    "set-page-visibility": connectedOnly(
+      "set-page-visibility",
+      "/api/commands/set-page-visibility",
+      "Page visibility",
+      "Changing which pages appear needs a connection to the node, because the setting is stored on your account rather than on this device.",
     ),
     /*
      * The staff member's own profile (M18.20; VOL-015). Connected-only for the

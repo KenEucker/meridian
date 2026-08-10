@@ -345,6 +345,10 @@ export function localFieldSessionDocument(
       node_locked_event_id: LOCAL_FIELD_FIXTURE.eventId,
       switching_available: false,
     },
+    // A reader who has hidden nothing (M18.69), stated for the same reason the
+    // other session fixture states it: these specs are about what capability
+    // codes permit, and a preference is a question a spec asking it should set.
+    preferences: { hidden_pages: [] },
     refreshed_at: new Date(0).toISOString(),
     ...overrides,
   };

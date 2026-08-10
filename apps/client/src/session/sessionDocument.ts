@@ -131,6 +131,18 @@ export interface SessionDevice {
   readonly trusted_until: string | null;
 }
 
+/**
+ * What this user has asked not to be shown (M18.69).
+ *
+ * Page keys, not routes. The node stores the reader's own answer and hands it
+ * back; which routes a key covers is this client's business, and a page named
+ * here is still reachable by address — a preference is not a permission
+ * (CLIENT-006).
+ */
+export interface SessionPreferences {
+  readonly hidden_pages: readonly string[];
+}
+
 export interface SessionDocument {
   readonly user: SessionUser;
   readonly roles: readonly SessionRole[];
@@ -149,6 +161,14 @@ export interface SessionDocument {
    * unanswered rather than as a device that failed a check.
    */
   readonly device?: SessionDevice | null;
+  /**
+   * Optional on the same terms as `device`, and for the same reason: a
+   * document written by a build from before this field existed is still a
+   * usable document. A client that finds none falls back to the defaults it
+   * knows, which is the same answer the node would have given a user who has
+   * decided nothing.
+   */
+  readonly preferences?: SessionPreferences | null;
   /** Server time of resolution, shown as the last refresh (CLIENT-009). */
   readonly refreshed_at: string;
 }
@@ -255,6 +275,24 @@ function isSessionDevice(value: unknown): boolean {
 }
 
 /**
+ * The preferences block, which a document may carry, may carry as null, or may
+ * not carry at all — the same three valid shapes the device block has.
+ *
+ * A malformed one is tolerated rather than rejected, which is where this
+ * differs from `device`. Trust is a claim about a credential and a client that
+ * guessed at it would show a technician a failing check; a hidden-page list is
+ * a display preference, and throwing away a whole session's permissions over an
+ * unreadable one would be a device signed out to protect a menu.
+ */
+function isSessionPreferences(value: unknown): boolean {
+  if (value === null || value === undefined) {
+    return true;
+  }
+
+  return isRecord(value);
+}
+
+/**
  * Whether a value read back from durable storage is a session document this
  * client can establish permissions from.
  *
@@ -282,6 +320,7 @@ export function isSessionDocument(value: unknown): value is SessionDocument {
     value.teams.every(isIdentified) &&
     isSessionContext(value.context) &&
     isSessionDevice(value.device) &&
+    isSessionPreferences(value.preferences) &&
     typeof value.refreshed_at === "string"
   );
 }
