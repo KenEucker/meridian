@@ -739,6 +739,176 @@ class SharedWorkstationLoginCodeTest extends TestCase
         );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Untargeted codes (M18.58; AUTH-031; technical spec 13.2, Untargeted codes)
+    |--------------------------------------------------------------------------
+    */
+
+    public function test_an_unbound_code_redeems_at_any_trusted_workstation_pinned_to_its_event(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+
+        // A second trusted workstation pinned to the same event, which the code
+        // never named and may still be redeemed at.
+        $other = SharedWorkstation::factory()->create([
+            'organization_id' => $event->organization_id,
+            'event_id' => $event->getKey(),
+        ]);
+
+        $subject = User::factory()->create();
+
+        $issued = $this->service()->generateForUser($subject, User::factory()->create(), null, $event);
+
+        $this->assertNull($issued->record->shared_workstation_id);
+        $this->assertSame($event->getKey(), $issued->record->event_id);
+
+        $redeemed = $this->service()->redeem($other, $issued->plaintextCode);
+
+        $this->assertSame($subject->getKey(), $redeemed->user_id);
+    }
+
+    public function test_an_unbound_code_is_refused_at_a_workstation_pinned_to_a_different_event(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+
+        $elsewhere = $this->workstation(); // its own event
+
+        $issued = $this->service()->generateForUser(
+            User::factory()->create(),
+            User::factory()->create(),
+            null,
+            $event,
+        );
+
+        $this->attemptAndFail($elsewhere, $issued->plaintextCode);
+
+        $this->assertNull($issued->record->fresh()->used_at);
+    }
+
+    public function test_redeeming_an_unbound_code_stamps_the_workstation_and_spends_it(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+
+        $other = SharedWorkstation::factory()->create([
+            'organization_id' => $event->organization_id,
+            'event_id' => $event->getKey(),
+        ]);
+
+        $issued = $this->service()->generateForUser(
+            User::factory()->create(),
+            User::factory()->create(),
+            null,
+            $event,
+        );
+
+        $this->service()->redeem($workstation, $issued->plaintextCode);
+
+        // The record now says where the code was actually used (AUTH-031).
+        $record = $issued->record->fresh();
+        $this->assertSame((string) $workstation->getKey(), (string) $record->shared_workstation_id);
+        $this->assertNotNull($record->used_at);
+
+        // Spent means spent everywhere, including at the sibling workstation.
+        $this->attemptAndFail($other, $issued->plaintextCode);
+    }
+
+    public function test_an_unbound_code_needs_an_event(): void
+    {
+        try {
+            $this->service()->generateForUser(
+                User::factory()->create(),
+                User::factory()->create(),
+                null,
+                null,
+            );
+            $this->fail('An unbound code with no event should be refused.');
+        } catch (SharedWorkstationLoginException $exception) {
+            $this->assertSame(SharedWorkstationLoginException::REASON_EVENT_CONTEXT_MISSING, $exception->reason);
+        }
+    }
+
+    public function test_an_unbound_code_replaces_the_users_outstanding_unbound_code_for_the_event(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+        $subject = User::factory()->create();
+        $operator = User::factory()->create();
+
+        $first = $this->service()->generateForUser($subject, $operator, null, $event);
+        $second = $this->service()->generateForUser($subject, $operator, null, $event);
+
+        $this->assertNotNull($first->record->fresh()->revoked_at);
+        $this->assertNull($second->record->fresh()->revoked_at);
+    }
+
+    public function test_a_user_generates_an_unbound_code_for_themselves_over_the_api(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+        $user = User::factory()->create();
+
+        $response = $this->requestCode($this->signedIn($user), [
+            'event_id' => $event->getKey(),
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('shared_workstation', null)
+            ->assertJsonPath('event_id', $event->getKey());
+
+        $record = SharedWorkstationLoginCode::query()->sole();
+        $this->assertNull($record->shared_workstation_id);
+
+        // And the code it returned works at a trusted workstation pinned to
+        // that event.
+        $code = (string) $response->json('code');
+        $redeemed = $this->service()->redeem($workstation, $code);
+        $this->assertSame($user->getKey(), $redeemed->user_id);
+    }
+
+    public function test_an_api_request_naming_neither_workstation_nor_event_is_refused(): void
+    {
+        $response = $this->requestCode($this->signedIn(User::factory()->create()), []);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('reason', SharedWorkstationLoginException::REASON_EVENT_CONTEXT_MISSING);
+    }
+
+    /**
+     * AUTH-031: the audit entry for a use names the redeeming workstation for
+     * both kinds of code, which is the property that makes the looser scope
+     * reviewable afterwards.
+     */
+    public function test_the_use_audit_names_the_redeeming_workstation_for_both_kinds(): void
+    {
+        $workstation = $this->workstation();
+        $event = $workstation->event()->firstOrFail();
+        $operator = User::factory()->create();
+
+        $targeted = $this->service()->generateForUser(User::factory()->create(), $operator, $workstation);
+        $this->service()->redeem($workstation, $targeted->plaintextCode);
+
+        $unbound = $this->service()->generateForUser(User::factory()->create(), $operator, null, $event);
+        $this->service()->redeem($workstation, $unbound->plaintextCode);
+
+        $entries = AuditEvent::query()
+            ->where('action', SharedWorkstationLoginCodeService::AUDIT_USED)
+            ->orderBy('created_at')
+            ->get();
+
+        $this->assertCount(2, $entries);
+
+        foreach ($entries as $entry) {
+            $this->assertSame(
+                (string) $workstation->getKey(),
+                (string) $entry->after_json['shared_workstation_id'],
+            );
+        }
+    }
+
     private function attemptAndFail(SharedWorkstation $workstation, string $guess): void
     {
         try {

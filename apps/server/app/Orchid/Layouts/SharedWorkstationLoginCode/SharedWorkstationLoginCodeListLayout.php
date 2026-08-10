@@ -52,9 +52,16 @@ final class SharedWorkstationLoginCodeListLayout extends Table
                 }),
 
             TD::make('shared_workstation', __('Workstation'))
-                ->render(fn (SharedWorkstationLoginCode $code) => e(
-                    (string) ($code->sharedWorkstation?->name ?? __('Unknown workstation'))
-                )),
+                ->render(function (SharedWorkstationLoginCode $code) {
+                    // An unbound code names no workstation until redemption
+                    // stamps the one it was used at (AUTH-031), so a null here
+                    // on an unspent code is a kind, not a gap in the record.
+                    if ($code->isUnbound()) {
+                        return __('Unbound — binds where first used');
+                    }
+
+                    return e((string) ($code->sharedWorkstation?->name ?? __('Unknown workstation')));
+                }),
 
             TD::make('event', __('Event'))
                 ->render(fn (SharedWorkstationLoginCode $code) => e(
