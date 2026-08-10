@@ -1227,6 +1227,10 @@ Both generation paths produce the same kind of code and are subject to every con
 
 A successful code entry establishes a shared workstation session as described in section 13.3. It does not issue an API token under section 11.4.
 
+### Untargeted codes
+
+A code may be generated without naming a workstation (AUTH-031). An unbound code is still scoped to one user and one event — without a target workstation to take the event from, the event comes from the generating caller's current event context — and redeems only at a trusted shared workstation whose pinned event matches the code's event. Redemption binds the code to the workstation it was actually used at, and the use audit entry names that workstation for unbound and targeted codes alike, which is what keeps the looser scope reviewable afterwards. A targeted code still redeems only at the workstation it names.
+
 ## 13.3 Shared workstation session behavior
 
 Shared workstation sessions time out after 5 minutes of inactivity or when the
@@ -1280,6 +1284,96 @@ Kiosk switch, re-authentication, safe-timeout, and setup/support surfaces are
 available in Meridian Kiosk. Meridian Admin may configure, review, and support
 those Kiosk surfaces, but Admin mode must not become a quick switcher for its
 own session.
+
+## 13.4 On-site device sign-in
+
+Section 13.2 gives a staff member a typed path onto a shared workstation. This
+section specifies the discovery step 13.2 left unstated — how the phone learns
+which workstation it is standing at — and the scan path that makes sign-in a
+two-tap interaction rather than a transcription exercise (AUTH-031 through
+AUTH-037).
+
+### Workstation identity a person can use
+
+Every shared workstation carries, alongside its name:
+
+- a `short_code`: a short human-typable identifier, unique per event, generated
+  at provisioning through the same typable-code support the login code and the
+  mailed API code use. It identifies the workstation; it is not a credential and
+  grants nothing.
+
+The locked Kiosk displays the workstation's name and `short_code`. The
+`short_code` is the typed fallback for a dead or denied camera: a person who
+cannot scan enters it on their phone to identify the workstation instead.
+
+### Sign-in requests
+
+A trusted shared workstation pinned to an organization and event may open a
+**sign-in request** (AUTH-032). Opening is an unauthenticated call keyed by the
+workstation id the machine already holds — the same reasoning as the pinned
+Kiosk context read, because a locked workstation has no credential to ask with.
+A request for an untrusted, revoked, or unpinned workstation is refused rather
+than opened.
+
+Opening returns:
+
+- a request id, which is public: it travels in the QR;
+- a **pickup secret**, held only by the opening workstation and never shown or
+  transmitted anywhere else;
+- an expiry;
+- the issuing node's identity.
+
+The request id grants nothing by itself. The pickup secret is what later
+collects the session key, and the request-id/pickup-secret split is the reason
+an unauthenticated open route is safe to expose: everything a bystander can
+photograph is the public half.
+
+The locked Kiosk renders the request as a QR carrying the workstation id, the
+issuing node's identity, and the request id. An expired request is replaced with
+a fresh one rather than left rendered.
+
+### Granting
+
+A device on which a user holds a valid session grants a request through an
+authenticated call against the request id, for its own user only — the grant
+carries no user field, so there is structurally nothing to name another person
+in (AUTH-033). A grant is accepted once: a second grant against the same
+request is refused.
+
+A request names its issuing node, and a device presents a grant only to the
+node that issued the request; a grant presented to a different node is refused
+(AUTH-034). The client-side half of the same rule: a device whose API base is
+one node, scanning a workstation whose QR names another, refuses locally with
+both node identities named rather than issuing anything into the wrong
+database.
+
+### Collection
+
+The workstation collects with its pickup secret. A grant is collectable once,
+and only by the workstation that opened the request — so a shoulder-surfed QR
+lets somebody sign *themselves* in at that workstation and never take the
+session. Collection of a granted sign-in request establishes a shared
+workstation session under 13.3 and nothing more (AUTH-035): no API token, no
+device trust, and the session key is held in memory only, exactly as a typed
+entry's is.
+
+### Re-authentication by scan
+
+A live session's re-authentication (13.3, UI contract 18.2) may run over the
+same request mechanism, with the request's purpose recorded as re-authentication
+and the request bound to the live session. Only a grant from the session's own
+user confirms it; a grant from anybody else is refused and hands nothing over
+(AUTH-036). A re-authentication request cannot be collected as a sign-in, nor a
+sign-in request as a re-authentication. `reauthenticated_at` is recorded
+identically whichever path — typed code or grant — confirmed the person.
+
+### Limits and secrecy
+
+Opening is rate limited per workstation, and granting per user (AUTH-037),
+alongside the 13.2 limits that already bound code generation and entry.
+Opening, granting, and collection are audited. Request secrets — the pickup
+secret and the collected session key — are never logged, audited, or exported;
+audit entries reference the request by identifier.
 
 ---
 

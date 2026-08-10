@@ -4905,6 +4905,7 @@ Key fields:
 - `event_id`, nullable
 - `department_id`, nullable
 - `name`
+- `short_code`
 - `trusted`
 - `context_pinned_at`
 - `context_pinned_by_user_id`, nullable
@@ -4923,6 +4924,7 @@ Rules:
 - inactivity timeout is 5 minutes for MVP; the session it bounds is `shared_workstation_sessions` in 12.6
 - timeout abandons unsaved work while saved local queued operations remain queued for sync
 - Admin mode may configure, review, and support Kiosk context/session surfaces but does not provide quick switching for Admin's own session
+- `short_code` is a short human-typable workstation identifier, unique per event, generated at provisioning through the shared typable-code support (technical spec 13.4); it identifies the workstation on the pinned-context read and the locked Kiosk display, is the typed fallback for a dead camera, and is not a credential
 
 ### 12.4 `shared_workstation_login_codes`
 
@@ -4933,7 +4935,7 @@ Key fields:
 - `id`
 - `user_id`
 - `event_id`
-- `shared_workstation_id`
+- `shared_workstation_id`, nullable until redemption for an unbound code
 - `code_hash`
 - `expires_at`
 - `generated_by_user_id`
@@ -4945,7 +4947,10 @@ Rules:
 
 - raw login codes are not logged
 - generation and use are audited
-- codes are scoped to one user, event, and trusted shared workstation
+- codes are scoped to one user and one event; a code may name one trusted shared workstation at generation, or name none (AUTH-031)
+- an unbound code redeems only at a trusted workstation whose pinned event equals the code's event, and redemption stamps `shared_workstation_id` with the workstation the code was actually used at
+- the use audit entry names the redeeming workstation for bound and unbound codes alike
+- a code generated with no workstation takes its event from the generating caller's current event context rather than from a pinned workstation context
 - codes are valid for 6 weeks
 - a successful code entry establishes a shared workstation session under 12.6 and does not issue an API token under 12.5
 
@@ -4957,6 +4962,38 @@ Generation authority:
 - a user may not generate a code on behalf of another user
 - generation is rate limited per user and per node
 - code entry attempts are rate limited per workstation, and failures are audited after a threshold
+
+### 12.4A `shared_workstation_sign_in_requests`
+
+Represents a sign-in request a locked trusted workstation opens and presents as
+a scannable code (technical spec 13.4; AUTH-032 through AUTH-037).
+
+Key fields:
+
+- `id`, the request id; public, travels in the QR
+- `shared_workstation_id`
+- `event_id`, from the workstation's pinned context at opening
+- `purpose`: `sign_in` or `reauthentication`
+- `shared_workstation_session_id`, nullable; the live session a re-authentication request is bound to, null for a sign-in request
+- `pickup_secret_hash`; only a keyed hash of the pickup secret is stored
+- `granted_by_user_id`, nullable until granted
+- `granted_at`, nullable
+- `collected_at`, nullable
+- `expires_at`
+- `created_at`
+
+Rules:
+
+- opening is unauthenticated and keyed by the workstation id the machine already holds, for the same reason the pinned-context read is; a request for an untrusted, revoked, or unpinned workstation is refused rather than opened
+- opening returns the request id, the pickup secret, the expiry, and the issuing node's identity; the pickup secret is returned once, to the opener, and nowhere else
+- granting is authenticated, against the request id, always for the granting user themselves; the grant carries no user field (AUTH-033)
+- a request grants at most once and is collectable at most once, only by presenting the pickup secret (AUTH-032)
+- a grant presented to a node other than the request's issuing node is refused (AUTH-034)
+- collecting a granted `sign_in` request establishes a shared workstation session under 12.6 and nothing more (AUTH-035)
+- collecting a granted `reauthentication` request stamps `reauthenticated_at` on the bound session under 12.6, identically to a typed re-authentication, and only a grant from that session's own user is accepted (AUTH-036); a `reauthentication` request cannot be collected as a sign-in nor the reverse
+- an expired request can be neither granted nor collected
+- opening is rate limited per workstation and granting per user (AUTH-037), alongside the request-level route throttles
+- opening, granting, and collection are audited; the pickup secret and the collected session key never appear in logs, audit entries, or exports
 
 ### 12.5 API tokens
 
