@@ -9,12 +9,14 @@ use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
+use App\Models\Node;
 use App\Models\Organization;
 use App\Models\SharedWorkstation;
 use App\Models\User;
 use App\Services\Events\EventAdministrationAccess;
 use App\Services\Kiosk\KioskPinnedContextException;
 use App\Services\Kiosk\KioskPinnedContextService;
+use App\Services\Node\NodeSetupService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +50,7 @@ final class KioskWorkstationContextController extends Controller
     public function __construct(
         private readonly EventAdministrationAccess $access,
         private readonly KioskPinnedContextService $pinnedContext,
+        private readonly NodeSetupService $nodes,
     ) {}
 
     /**
@@ -158,12 +161,25 @@ final class KioskWorkstationContextController extends Controller
         $event = $workstation->event()->first();
         $department = $workstation->department()->first();
 
+        $node = $this->nodes->activeNode();
+
         return [
             'shared_workstation' => [
                 'id' => (string) $workstation->getKey(),
                 'name' => (string) $workstation->name,
+                // The typed fallback for a dead camera (M18.59; technical spec
+                // 13.4): displayed on the locked Kiosk beside the QR. It
+                // identifies the workstation and grants nothing.
+                'short_code' => $workstation->short_code,
                 'trusted' => true,
             ],
+            // The node this workstation answers to, so the Kiosk can put the
+            // issuing node into the QR and a phone pointed elsewhere refuses
+            // before issuing anything (AUTH-034).
+            'node' => $node instanceof Node ? [
+                'id' => (string) $node->getKey(),
+                'name' => (string) $node->node_name,
+            ] : null,
             // UI-019 in one field: an organization and an event, both present.
             // A department is optional and never part of the verdict.
             'pinned' => $workstation->hasPinnedKioskContext(),

@@ -5034,7 +5034,8 @@ Key fields:
 - `shared_workstation_id`
 - `user_id`
 - `event_id`
-- `login_code_id`
+- `login_code_id`, nullable for a session a collected sign-in request established
+- `sign_in_request_id`, nullable for a session a typed code established; exactly one of the two is set
 - `session_key_hash`
 - `started_at`
 - `last_activity_at`
@@ -5046,7 +5047,7 @@ Key fields:
 Rules:
 
 - the raw session key is never stored; only a keyed hash, so a leaked database or backup hands out no live sessions
-- `event_id` comes from the code, which took it from the workstation's pinned Kiosk context in 12.3, and never from a request
+- `event_id` comes from the credential — the code, or the sign-in request under 12.4A — which took it from the workstation's pinned Kiosk context in 12.3, and never from a request
 - expiry is derived from `last_activity_at` rather than stamped, so there is one 5-minute rule and no second copy of it to drift
 - every authenticated request slides `last_activity_at`; the session is over 5 minutes after the last slide whether or not anything has yet observed it
 - a session observed past its window is ended and stamped at the moment it expired, not at the moment it was noticed, so a workstation nobody touched for an hour records an hour of nobody being signed in

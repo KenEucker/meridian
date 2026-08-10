@@ -64,6 +64,10 @@ class SharedWorkstationSession extends Model
         'user_id',
         'event_id',
         'login_code_id',
+        // The collected sign-in request behind a session the scan path
+        // established (M18.59; AUTH-035). Exactly one of this and
+        // `login_code_id` is set.
+        'sign_in_request_id',
         'session_key_hash',
         'started_at',
         'last_activity_at',
@@ -110,6 +114,11 @@ class SharedWorkstationSession extends Model
     public function loginCode(): BelongsTo
     {
         return $this->belongsTo(SharedWorkstationLoginCode::class, 'login_code_id');
+    }
+
+    public function signInRequest(): BelongsTo
+    {
+        return $this->belongsTo(SharedWorkstationSignInRequest::class, 'sign_in_request_id');
     }
 
     /**

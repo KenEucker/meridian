@@ -7,6 +7,7 @@ use App\Http\Controllers\Audit\AuditReviewController;
 use App\Http\Controllers\Auth\ApiAuthController;
 use App\Http\Controllers\Auth\SharedWorkstationLoginCodeController;
 use App\Http\Controllers\Auth\SharedWorkstationSessionController;
+use App\Http\Controllers\Auth\WorkstationSignInGrantController;
 use App\Http\Controllers\Branding\BrandingCommandController;
 use App\Http\Controllers\Branding\BrandingReadController;
 use App\Http\Controllers\Credentials\EventCredentialAdminController;
@@ -43,6 +44,7 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Incidents\IncidentTypeAdminController;
 use App\Http\Controllers\Kiosk\KioskWorkstationContextController;
+use App\Http\Controllers\Kiosk\WorkstationSignInRequestController;
 use App\Http\Controllers\Marketing\OrganizationInterestController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
@@ -226,6 +228,35 @@ Route::post('/auth/shared-workstation-session/reauthentication', [SharedWorkstat
  */
 Route::get('/kiosk/workstations/{sharedWorkstation}', [KioskWorkstationContextController::class, 'show'])
     ->name('api.kiosk.workstations.show');
+
+/*
+ * Workstation sign-in requests: the scan path (M18.59; AUTH-032 through
+ * AUTH-037; technical spec 13.4; data/API 12.4A).
+ *
+ * Open and collect are the locked workstation's, unauthenticated for the same
+ * reason the pinned-context read above is — a locked machine has no credential
+ * to ask with. What makes that safe, where the M18.32 precedent only
+ * disclosed a pinned context, is the request-id/pickup-secret split: the QR
+ * carries only public identifiers, and the secret that later collects a
+ * session key is handed once to the opener and never displayed. Both routes
+ * are rate limited on top of the domain's per-workstation open limit; collect
+ * is looser because it is the poll a waiting Kiosk makes every few seconds.
+ *
+ * The grant is the authenticated half: a phone holding a session grants for
+ * its own user only (AUTH-033), and carries the node identity it scanned so a
+ * grant aimed at the wrong node is refused with both nodes named (AUTH-034).
+ */
+Route::post('/kiosk/workstations/{sharedWorkstation}/sign-in-requests', [WorkstationSignInRequestController::class, 'store'])
+    ->middleware('throttle:30,1')
+    ->name('api.kiosk.workstations.sign-in-requests.store');
+
+Route::post('/kiosk/workstations/{sharedWorkstation}/sign-in-requests/{signInRequest}/collect', [WorkstationSignInRequestController::class, 'collect'])
+    ->middleware('throttle:120,1')
+    ->name('api.kiosk.workstations.sign-in-requests.collect');
+
+Route::post('/auth/workstation-sign-in-requests/{signInRequest}/grant', [WorkstationSignInGrantController::class, 'store'])
+    ->middleware(['auth:sanctum', 'throttle:20,1'])
+    ->name('api.auth.workstation-sign-in-requests.grant');
 
 Route::get('/kiosk/workstations/{sharedWorkstation}/pinned-context/options', [KioskWorkstationContextController::class, 'options'])
     ->middleware('auth:sanctum,workstation')
