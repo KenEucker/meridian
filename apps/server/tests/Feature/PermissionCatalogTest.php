@@ -188,7 +188,12 @@ class PermissionCatalogTest extends TestCase
         // M13.6 / REPORT-005, CREDIT-005: and their own department's credits
         // earned, which reads a frozen ledger (CREDIT-004) without granting the
         // authority to run or redo a calculation.
+        // M18.55 / CLIENT-017A: and the authority to override a refused
+        // Logistics shift addition, which department_logistics deliberately does
+        // not hold — the role that issues the addition is not the role that
+        // decides its refusal was wrong.
         $this->assertSame([
+            'department.shift_additions.override',
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',
@@ -205,6 +210,7 @@ class PermissionCatalogTest extends TestCase
         // department.attendance.manage — and only that — of the Logistics set.
         $this->assertSame([
             'department.attendance.manage',
+            'department.shift_additions.override',
             'department.administer',
             'department.trainings.manage',
             'department.branding.manage',

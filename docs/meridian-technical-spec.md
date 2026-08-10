@@ -1004,6 +1004,38 @@ The client shows which commands are queued, which have been accepted, and which 
 
 Commands this specification restricts to connected operation — incident creation in section 19, policy and procedure acknowledgments in section 21, event application submission, and map editing in section 21A — are refused at queue time rather than queued and rejected later. Queueing a command that can never succeed offline would misrepresent to the user that their work was captured.
 
+### Resolving a rejected command
+
+Surfacing a refusal and keeping it until a person acts on it is the floor, not the whole of it. Dismissal was the only act available to that person, and the person reading a refusal is frequently the one holding the authority to decide the node's answer was wrong for the situation.
+
+A caller holding the authority resolves a rejected command by re-issuing it as an **override**.
+
+An override is a **distinct command referencing the refused one**, not a retry under the same idempotency key. The record then holds both facts — the node refused this, and a named person then chose to proceed — rather than collapsing them into an acceptance that reads as though nothing was ever in question. The record the node writes stores the refused command's key and the reason code that was waived, and the audit entry carries its own action so an override is a row a reviewer can filter for rather than a payload field they have to read for.
+
+An override is gated three ways, and all three are decided by the node when the command arrives rather than by the client that offered the control:
+
+1. **The refusal reason is on an explicit allowlist.** Not every refusal is negotiable. A command with no allowlist has no resolution path beyond dismissal, which remains the answer for every command but the one below.
+2. **The caller holds a capability the refused command itself does not need.** The authority to make a kind of work is not the authority to decide a refusal of it was wrong.
+3. **Every other rule still applies.** An override waives exactly one named reason. Where a second rule also refuses the command, it refuses the override too, and that second refusal is its own decision for somebody to make.
+
+An override of a reason the command is not actually refused for is itself refused, so an override in the audit trail always records one that happened.
+
+**The one command with a resolution path in Alpha 1** is `add-staff-to-shift`, the Logistics unscheduled addition (data/API 5.6, 7.2). Its capability is `department.shift_additions.override`, held by department leads, department administration, and organizers, and deliberately not by the `department_logistics` role that issues the addition — a refusal the same desk that hit it may wave away is a confirmation dialog rather than a rule. Its overridable reasons are:
+
+| Refusal reason | Overridable | Why |
+|---|---|---|
+| `staff_not_on_site` | yes | Presence is the one fact on this list the node cannot observe and the operator can: they are looking at the person. |
+| `missing_required_training` | yes | A training requirement is the department's own operational rule, set by the same authority that holds the capability; the common field case is a completion recorded on paper. |
+| `not_eligible_team_member` | yes | Team eligibility is a scheduling convenience the department drew for itself, and the overriding authority is the one that drew it. |
+| `do_not_staff` | **no, at any authority** | An organization's exclusion decision about a person, made deliberately and recorded at organization scope. Not a decision a desk reverses. |
+| `missing_required_waiver` | **no** | A waiver is executed by the person it binds. An override would not produce a waived requirement; it would produce a shift worked with no waiver on record and no way to obtain one retroactively. |
+| `no_department_membership` | **no** | The boundary the overriding authority's own scope is drawn from, and unlike the three above it has an ordinary fix that takes seconds. |
+| `department_ineligible` | **no** | The membership exists and the organization has marked it unusable, which is a fact about standing rather than a judgement about tonight. |
+
+The override is itself an offline write, on the same footing as the addition it resolves: the refusal is already known, the decision has already been made by somebody standing at the desk, and a resolution that only worked where the node is reachable would never work where the refusal it resolves was queued.
+
+**This is not the sync conflict path.** MOD-017 sends a refused queued write into the sync conflict queue, which resolves in God Mode (section 10.3), and its rationale is that the submitting device may be long gone. The override is the opposite situation: the device is at the desk with a person looking at it, and the authority to proceed anyway belongs to that person rather than to a technician in a console. Two resolution paths, divided by who holds the authority and who is present.
+
 ## 11A.6 Authenticated downloads
 
 A bearer token cannot be attached to a plain browser navigation, so authenticated file retrieval does not place credentials in a link.

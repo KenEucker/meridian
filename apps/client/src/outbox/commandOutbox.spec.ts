@@ -221,6 +221,9 @@ describe("the durable copy", () => {
         lastAttemptAt: QUEUED_AT,
         settledAt: null,
         statusReason: null,
+        statusReasonCode: null,
+        overridesIdempotencyKey: null,
+        overriddenByIdempotencyKey: null,
       },
     ]);
 

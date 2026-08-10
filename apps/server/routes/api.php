@@ -433,6 +433,21 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.add-staff-to-shift');
 
     /*
+     * The second outcome a refused addition can have (M18.55; CLIENT-017A).
+     *
+     * Its own command rather than a parameter of the one above, because it is
+     * its own act: it names the refusal it overrides, it answers to
+     * `department.shift_additions.override` on top of the attendance authority
+     * the addition already needs, and the record it writes says both that the
+     * node refused and that a named person then chose to proceed. Not to be
+     * confused with the MOD-017 sync-conflict path, which resolves in God Mode
+     * for operations whose submitting device is long gone; this one is for the
+     * device that is still standing at the desk.
+     */
+    Route::post('/commands/override-shift-addition', [ShiftAssignmentCommandController::class, 'overrideUnscheduledStaff'])
+        ->name('api.commands.override-shift-addition');
+
+    /*
      * Staff self-service on their own schedule (M18.2; SHIFT-011, SHIFT-013,
      * SHIFT-018). The neighbours above act on somebody else and are authorized
      * accordingly; these two act on the caller's own staff profile, which is

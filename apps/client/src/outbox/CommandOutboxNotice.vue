@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import { describeCommand } from "@/outbox/commandCatalog";
 import type { OutboxCommand } from "@/outbox/commandOutbox";
@@ -7,7 +7,13 @@ import {
   commandOutbox,
   commandOutboxRevision,
 } from "@/outbox/commandOutboxRuntime";
-import { dismissCommand, retryCommand } from "@/outbox/submitCommand";
+import {
+  CommandOverrideError,
+  dismissCommand,
+  overrideCommand,
+  retryCommand,
+} from "@/outbox/submitCommand";
+import { sessionHasCapability } from "@/session/clientSession";
 
 /*
  * What the client says about the commands it is holding (M16.10; CLIENT-017;
@@ -32,6 +38,16 @@ import { dismissCommand, retryCommand } from "@/outbox/submitCommand";
  * screen is exactly the sync noise routine field work is not to be interrupted
  * with (contract 16.2). The full list, accepted included, is on the device
  * diagnostics surface, which is where sync detail belongs (operating guide 17.4).
+ *
+ * **A refusal has three answers here since M18.55** (CLIENT-017A): try again,
+ * dismiss, and — where the command has an override path, the node named a
+ * reason on the allowlist, and this session holds the capability — do it anyway
+ * on the reader's own authority. The third is offered rarely and by design.
+ * Most commands have no override path at all; most refusals of the one that
+ * does are not on its allowlist; and the capability is not held by the role that
+ * issues the command. Where it is not offered, nothing is rendered disabled: an
+ * absent control says the decision is not this person's, and a greyed one
+ * invites them to wonder what they are missing.
  */
 
 const outbox = computed(() => {
@@ -40,12 +56,34 @@ const outbox = computed(() => {
   return {
     queued: commandOutbox.unsent(),
     accepted: commandOutbox.byStatus("accepted"),
-    rejected: commandOutbox.byStatus("rejected"),
+    /*
+     * The refusals still waiting on somebody. One already overridden is left
+     * out — it is not resolved until the node answers the override, but it is
+     * no longer a decision anybody is being asked for, and listing it beside
+     * the ones that are would ask for the same decision twice.
+     */
+    rejected: commandOutbox.unresolvedRejections(),
+    overridden: commandOutbox
+      .byStatus("rejected")
+      .filter((command) => command.overriddenByIdempotencyKey !== null),
   };
 });
 
+/**
+ * What went wrong with an override attempt, keyed by the refused command.
+ *
+ * The three conditions are checked before the control is rendered, so this
+ * should stay empty — but "should" is doing work there, because a grant can be
+ * withdrawn between the render and the click. Shown rather than swallowed, for
+ * the same reason the refusal itself is.
+ */
+const overrideErrors = ref<Record<string, string>>({});
+
 const visible = computed(
-  () => outbox.value.queued.length > 0 || outbox.value.rejected.length > 0,
+  () =>
+    outbox.value.queued.length > 0 ||
+    outbox.value.rejected.length > 0 ||
+    outbox.value.overridden.length > 0,
 );
 
 const tone = computed(() =>
@@ -57,12 +95,24 @@ const label = computed(() =>
 );
 
 const meaning = computed(() => {
-  const { queued, rejected } = outbox.value;
+  const { queued, rejected, overridden } = outbox.value;
 
   if (rejected.length > 0) {
     return rejected.length === 1
       ? "The node refused 1 command. It will not be sent again."
       : `The node refused ${rejected.length} commands. They will not be sent again.`;
+  }
+
+  /*
+   * Overrides are queued commands and are normally counted below with the rest
+   * of the queue. This branch is for the moment they are not — an override sent
+   * and settled while its refusal is still held — so the notice never says "0
+   * commands are held" while showing a list of them.
+   */
+  if (queued.length === 0 && overridden.length > 0) {
+    return overridden.length === 1
+      ? "1 refusal was overridden on your authority."
+      : `${overridden.length} refusals were overridden on your authority.`;
   }
 
   return queued.length === 1
@@ -88,6 +138,50 @@ function describe(command: OutboxCommand): string {
   return command.detail === null
     ? commandLabel
     : `${commandLabel} — ${command.detail}`;
+}
+
+/**
+ * Whether this reader may override this refusal, and what the control says.
+ *
+ * All three conditions in one answer, because they are one question from the
+ * reader's side: either doing it anyway is available to them or it is not. The
+ * node re-decides every one of them when the override arrives; this only decides
+ * what to render.
+ */
+function overrideAction(command: OutboxCommand): string | null {
+  const { override } = describeCommand(command.commandType);
+
+  if (override === null || command.statusReasonCode === null) {
+    return null;
+  }
+
+  if (!override.overridableReasonCodes.includes(command.statusReasonCode)) {
+    return null;
+  }
+
+  return sessionHasCapability(override.capability) ? override.actionLabel : null;
+}
+
+/**
+ * Issue the override, on this reader's authority.
+ *
+ * The refusal stays on screen until the node accepts the override, moved into
+ * the "override queued" list. That is the honest state: what has happened so far
+ * is that somebody decided, not that the node agreed.
+ */
+function override(command: OutboxCommand): void {
+  try {
+    overrideCommand(command.idempotencyKey);
+    delete overrideErrors.value[command.idempotencyKey];
+  } catch (error) {
+    overrideErrors.value = {
+      ...overrideErrors.value,
+      [command.idempotencyKey]:
+        error instanceof CommandOverrideError
+          ? error.message
+          : "The override could not be recorded on this device.",
+    };
+  }
 }
 
 function dismiss(command: OutboxCommand): void {
@@ -132,7 +226,23 @@ function retry(command: OutboxCommand): void {
           <span class="command-outbox__item-reason">
             {{ command.statusReason ?? "The node gave no reason." }}
           </span>
+          <span
+            v-if="overrideErrors[command.idempotencyKey]"
+            class="command-outbox__item-reason"
+            data-outbox-override-error
+          >
+            {{ overrideErrors[command.idempotencyKey] }}
+          </span>
           <span class="command-outbox__item-actions">
+            <button
+              v-if="overrideAction(command)"
+              type="button"
+              class="command-outbox__action command-outbox__action--override"
+              data-outbox-override
+              @click="override(command)"
+            >
+              {{ overrideAction(command) }}
+            </button>
             <button
               type="button"
               class="command-outbox__action"
@@ -147,6 +257,29 @@ function retry(command: OutboxCommand): void {
             >
               Dismiss
             </button>
+          </span>
+        </li>
+      </ul>
+
+      <!--
+        Refusals somebody has already overridden. Kept on screen and stated
+        plainly, because the override is queued rather than applied: what has
+        happened is that a named person decided, and the node has not answered
+        yet. It leaves this list the moment the override is accepted, and if the
+        override is itself refused, that refusal appears above with its own
+        reason.
+      -->
+      <ul v-if="outbox.overridden.length > 0" class="command-outbox__list">
+        <li
+          v-for="command in outbox.overridden"
+          :key="command.idempotencyKey"
+          class="command-outbox__item"
+          data-outbox-overridden
+        >
+          <span class="command-outbox__item-name">{{ describe(command) }}</span>
+          <span class="command-outbox__item-reason">
+            Refused, and overridden on your authority. The override is waiting to
+            reach the node.
           </span>
         </li>
       </ul>
@@ -243,6 +376,18 @@ function retry(command: OutboxCommand): void {
   font-size: var(--m-text-sm);
   font-weight: 800;
   cursor: pointer;
+}
+
+/*
+ * The override reads as the weightier of the three, because it is: the other two
+ * send the same work again or drop it, and this one proceeds past a refusal on
+ * the reader's own authority. Weight is carried by the border rather than by a
+ * fill, so it stands out among its neighbours without becoming the default
+ * action of a warning notice.
+ */
+.command-outbox__action--override {
+  border-color: var(--m-status-warning);
+  color: var(--m-text-primary);
 }
 
 .command-outbox__action:focus-visible {

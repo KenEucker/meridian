@@ -112,6 +112,17 @@ Milestone 18 tasks that already carry their own scripts are referenced from
 |---|---|---|
 | [`QA-HORIZON-01-event-horizon.md`](QA-HORIZON-01-event-horizon.md) | The Part E gate: the readiness list compiled on read from the five fixed kinds with nothing persisted and nothing configurable beyond the lead-up window; presentation only within the organization's configured lead-up through the close of the operations window, moving when the event moves because it is held in days; unreadable kinds absent rather than unknown, with the coverage gap kind reaching only teams the viewer leads and carrying no staff names; expired waivers and trainings reading outstanding with expiry named, an earlier-version acknowledgment staying complete, full and closed shifts producing no item, and a held shift reading complete rather than disappearing; server-decided ordering rendered without a sort control; action links entering their surfaces under those surfaces' own authorization; the whole-surface dismissal refused server-side while anything is outstanding, invisible to others and to the audit trail, restorable from Me, and not surviving a new outstanding item; and offline rendering disclosed as a stored copy that never claims "nothing outstanding" it has not established | M18.45 |
 
+## Alpha 1 Offline reads script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-OFFLINE-01-offline-reads.md`](QA-OFFLINE-01-offline-reads.md) | The Part F gate: the authorized read set fetched on sign-in, reconnect, and context switch rather than by browsing, stored whole and replaced whole, dropped on sign-out and on switch, answered `304` when unchanged, with no `localStorage` key left holding domain data; the surface audit held to two outcomes and no third, where a connection-required screen names what is unavailable and why and no read-only surface renders a spinner that never resolves, a blank panel, or a raw fetch error; the two connectivity tiers reported as themselves, so a reachable on-site node with central down reads `central_unreachable` rather than `online` and still accepts an incident, while no node reachable refuses one in those words; the M18.55 resolution path, where a Logistics operator gets dismissal and retry on a refusal and a department lead also gets an override that is a distinct command naming the refused one, waives exactly one reason, and is recorded on the assignment and in the audit trail, with `do_not_staff` offering no control at any authority; and PowerSync gone from configuration and application code with event mode gating on the read set check | M18.56 |
+
+Offline *writes* are covered where the work is: `QA-FR-01` for the Field Report
+queue, `QA-SLB-01` for attendance and the M18.54 Logistics addition. This script
+covers reading with no node, and the one refusal outcome M18.54's addition made
+reachable.
+
 ## Scripts added ahead of their milestones
 
 | ID | Coverage | Owning task |

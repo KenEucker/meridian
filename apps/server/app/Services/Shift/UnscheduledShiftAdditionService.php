@@ -2,6 +2,7 @@
 
 namespace App\Services\Shift;
 
+use App\Domain\Commands\ShiftAdditionRefusalReason;
 use App\Models\AuditEvent;
 use App\Models\DepartmentMembership;
 use App\Models\EventDepartmentPresence;
@@ -38,6 +39,23 @@ use Illuminate\Support\Facades\DB;
  * duplicate. Without that, a reply lost on a field network would come back to
  * the operator as "already assigned to the shift" — a refusal reporting a
  * success, which is the one answer worse than either.
+ *
+ * **A refusal has a second possible outcome since M18.55** (CLIENT-017A). Until
+ * then the only thing a person could do with one was read it and dismiss it,
+ * and the person reading it is often the one holding the authority to decide
+ * the node's answer was wrong for the situation. `overrideRefusedAddition` is
+ * that decision, and three properties keep it from being a way around the rules
+ * above rather than a recorded exception to one of them:
+ *
+ *  1. **It waives exactly one named reason**, and only a reason
+ *     `ShiftAdditionRefusalReason` lists as overridable. Everything else is
+ *     checked as it always was, so an addition overridden past a missing
+ *     training and still lacking a waiver comes back refused for the waiver.
+ *  2. **It needs an authority the addition itself does not.** The caller holds
+ *     the ordinary attendance authority *and* `department.shift_additions.override`,
+ *     which the Logistics role that issues additions does not carry.
+ *  3. **It is a distinct command that names the refused one**, so the
+ *     assignment and its audit entry hold both facts rather than one.
  */
 class UnscheduledShiftAdditionService
 {
@@ -47,6 +65,7 @@ class UnscheduledShiftAdditionService
         private readonly ShiftEligibilityService $eligibility,
         private readonly ShiftOverlapService $overlaps,
         private readonly CredentialEligibilityService $credentials,
+        private readonly ShiftAdditionOverrideAccess $overrideAccess,
     ) {}
 
     /**
@@ -74,10 +93,82 @@ class UnscheduledShiftAdditionService
         ?string $operationUuid = null,
         ?Carbon $recordedAt = null,
     ): ShiftAssignmentOutcome {
+        return $this->apply($shift, $staff, $actor, $moment, $operationUuid, $recordedAt, null);
+    }
+
+    /**
+     * Add the staff member despite one refusal, on a named person's authority
+     * (M18.55; CLIENT-017A; technical spec 11A.5).
+     *
+     * A distinct command rather than a retry of the refused one, which is the
+     * whole design: the refused command's key travels in as
+     * `$overriddenOperationUuid` and is written onto the assignment beside the
+     * reason it waived, so months later the record says the node refused this
+     * and a named person then chose to proceed. Re-sending the original under
+     * its own key would have produced an assignment that reads as though the
+     * refusal never happened.
+     *
+     * Refused three ways, and each names what was actually wrong. A reason the
+     * specification does not list as overridable is refused at every authority,
+     * `do_not_staff` first among them — an organization's exclusion decision is
+     * not a desk's to reverse. A caller without
+     * `department.shift_additions.override` for the shift's department is
+     * refused as unauthorized, and holding the attendance authority alone is not
+     * enough, because the role that issues additions is not the role that
+     * overrides their refusals. And an override of a reason this addition would
+     * not have been refused for is refused as having nothing to override, so an
+     * override entry in the audit trail always means one actually happened.
+     *
+     * @param  ShiftAdditionRefusalReason  $overriddenReason  The one reason
+     *                                                        being waived.
+     *                                                        Every other rule
+     *                                                        is checked exactly
+     *                                                        as it always was.
+     * @param  string  $overriddenOperationUuid  The refused command's own
+     *                                           idempotency key, which is the
+     *                                           only identifier a refusal ever
+     *                                           had: the node wrote no row for
+     *                                           it, because it refused it.
+     *
+     * @throws UnscheduledShiftAdditionException
+     */
+    public function overrideRefusedAddition(
+        Shift $shift,
+        Staff $staff,
+        User $actor,
+        ShiftAdditionRefusalReason $overriddenReason,
+        string $overriddenOperationUuid,
+        ?Carbon $moment = null,
+        ?string $operationUuid = null,
+        ?Carbon $recordedAt = null,
+    ): ShiftAssignmentOutcome {
+        return $this->apply(
+            $shift,
+            $staff,
+            $actor,
+            $moment,
+            $operationUuid,
+            $recordedAt,
+            new ShiftAdditionOverride($overriddenReason, $overriddenOperationUuid),
+        );
+    }
+
+    /**
+     * @throws UnscheduledShiftAdditionException
+     */
+    private function apply(
+        Shift $shift,
+        Staff $staff,
+        User $actor,
+        ?Carbon $moment,
+        ?string $operationUuid,
+        ?Carbon $recordedAt,
+        ?ShiftAdditionOverride $override,
+    ): ShiftAssignmentOutcome {
         $moment ??= Carbon::now();
         $recordedAt ??= $moment;
 
-        return DB::transaction(function () use ($shift, $staff, $actor, $moment, $operationUuid, $recordedAt): ShiftAssignmentOutcome {
+        return DB::transaction(function () use ($shift, $staff, $actor, $moment, $operationUuid, $recordedAt, $override): ShiftAssignmentOutcome {
             $shift = Shift::query()
                 ->with(['event', 'department'])
                 ->whereKey($shift->getKey())
@@ -109,6 +200,10 @@ class UnscheduledShiftAdditionService
                 throw UnscheduledShiftAdditionException::unauthorized();
             }
 
+            if ($override !== null) {
+                $this->assertOverrideAllowed($shift, $actor, $override);
+            }
+
             if ($shift->isCancelled()) {
                 throw UnscheduledShiftAdditionException::cancelledShift();
             }
@@ -117,7 +212,7 @@ class UnscheduledShiftAdditionService
                 throw UnscheduledShiftAdditionException::shiftNotStarted();
             }
 
-            $this->assertStaffEligibleForUnscheduledAddition($shift, $staff, $moment);
+            $this->assertStaffEligibleForUnscheduledAddition($shift, $staff, $moment, $override?->reason);
 
             $existingAssignment = ShiftAssignment::query()
                 ->where('shift_id', $shift->id)
@@ -139,6 +234,8 @@ class UnscheduledShiftAdditionService
                 'assignment_status' => ShiftAssignment::STATUS_ASSIGNED,
                 'removed_at' => null,
                 'unscheduled_operation_uuid' => $operationUuid,
+                'override_of_operation_uuid' => $override?->overriddenOperationUuid,
+                'overridden_reason_code' => $override?->reason->value,
             ]);
             $assignment->created_at = $recordedAt;
             $assignment->updated_at = $recordedAt;
@@ -146,7 +243,16 @@ class UnscheduledShiftAdditionService
 
             $this->audit->recordForEntity(
                 entity: $assignment,
-                action: 'shift_assignment.unscheduled_added',
+                /*
+                 * A different action for an override, rather than the same one
+                 * with a field set (requirements 2.4). An audit trail is read by
+                 * filtering it, and "show me the additions somebody overrode a
+                 * refusal to make" is the question this whole path exists to be
+                 * answerable.
+                 */
+                action: $override === null
+                    ? 'shift_assignment.unscheduled_added'
+                    : 'shift_assignment.unscheduled_added_by_override',
                 actorUser: $actor,
                 organizationId: $shift->event?->organization_id,
                 eventId: $shift->event_id,
@@ -165,10 +271,57 @@ class UnscheduledShiftAdditionService
     }
 
     /**
+     * Every eligibility rule, with at most one of them waived.
+     *
+     * Written as a list of refusals rather than as a sequence of throws so the
+     * override path can leave exactly one out and still be refused by the rest
+     * (M18.55). Before that this method threw at the first problem and there was
+     * no way to ask "what else is wrong" without asking it twice; the ordinary
+     * path is unchanged, because throwing the first of a list is what it always
+     * did.
+     *
+     * @param  ShiftAdditionRefusalReason|null  $waived  The reason an override
+     *                                                   has authority to set
+     *                                                   aside. Null on the
+     *                                                   ordinary path, which
+     *                                                   waives nothing.
+     *
      * @throws UnscheduledShiftAdditionException
      */
-    private function assertStaffEligibleForUnscheduledAddition(Shift $shift, Staff $staff, Carbon $moment): void
+    private function assertStaffEligibleForUnscheduledAddition(
+        Shift $shift,
+        Staff $staff,
+        Carbon $moment,
+        ?ShiftAdditionRefusalReason $waived = null,
+    ): void {
+        $refusals = $this->eligibilityRefusals($shift, $staff, $moment);
+
+        if ($waived !== null && ! $this->refusalsInclude($refusals, $waived)) {
+            /*
+             * The override named a reason this addition is not refused for. It
+             * is refused rather than quietly applied as an ordinary addition,
+             * because an override entry that recorded a waiver of a rule that
+             * was never in the way would make the audit trail a worse record
+             * than no override path at all.
+             */
+            throw UnscheduledShiftAdditionException::nothingToOverride($waived);
+        }
+
+        foreach ($refusals as $refusal) {
+            if ($waived === null || $refusal->reason !== $waived) {
+                throw $refusal;
+            }
+        }
+    }
+
+    /**
+     * The refusals this addition currently earns, in check order.
+     *
+     * @return list<UnscheduledShiftAdditionException>
+     */
+    private function eligibilityRefusals(Shift $shift, Staff $staff, Carbon $moment): array
     {
+        $refusals = [];
         $organizationId = $shift->event?->organization_id;
 
         if ($organizationId !== null) {
@@ -178,7 +331,7 @@ class UnscheduledShiftAdditionService
                 ->first();
 
             if ($organizationStatus?->status === StaffOrganizationStatus::STATUS_DO_NOT_STAFF) {
-                throw UnscheduledShiftAdditionException::doNotStaff();
+                $refusals[] = UnscheduledShiftAdditionException::doNotStaff();
             }
         }
 
@@ -189,7 +342,16 @@ class UnscheduledShiftAdditionService
             ->first();
 
         if ($departmentMembership === null) {
-            throw UnscheduledShiftAdditionException::noDepartmentMembership();
+            /*
+             * The end of the road rather than one more entry on the list. Every
+             * rule below is asked *of the membership* — the requirements it
+             * carries, the teams it reaches — so there is nothing further to
+             * evaluate, and a membership is not a refusal an override may waive
+             * in any case.
+             */
+            $refusals[] = UnscheduledShiftAdditionException::noDepartmentMembership();
+
+            return $refusals;
         }
 
         $isOnSite = EventDepartmentPresence::query()
@@ -200,13 +362,16 @@ class UnscheduledShiftAdditionService
             ->exists();
 
         if (! $isOnSite) {
-            throw UnscheduledShiftAdditionException::staffNotOnSite();
+            $refusals[] = UnscheduledShiftAdditionException::staffNotOnSite();
         }
 
-        try {
-            $this->eligibility->assertMeetsAssignmentRequirements($shift, $staff, $departmentMembership, $moment);
-        } catch (ShiftSignupException $exception) {
-            throw $this->unscheduledExceptionFor($exception);
+        /*
+         * The whole list rather than the first of it, because an override waives
+         * one reason and the rest still have to refuse. Asked as an assertion,
+         * a waived missing training would hide a missing waiver behind it.
+         */
+        foreach ($this->eligibility->assignmentRequirementFailures($shift, $staff, $departmentMembership, $moment) as $failure) {
+            $refusals[] = $this->unscheduledExceptionFor($failure);
         }
 
         // The same rule the Logistics Desk decides whether to offer the addition
@@ -218,7 +383,53 @@ class UnscheduledShiftAdditionService
             ->exists();
 
         if (! $hasEligibleTeamMembership) {
-            throw UnscheduledShiftAdditionException::notEligibleTeamMember();
+            $refusals[] = UnscheduledShiftAdditionException::notEligibleTeamMember();
+        }
+
+        return $refusals;
+    }
+
+    /**
+     * @param  list<UnscheduledShiftAdditionException>  $refusals
+     */
+    private function refusalsInclude(array $refusals, ShiftAdditionRefusalReason $reason): bool
+    {
+        foreach ($refusals as $refusal) {
+            if ($refusal->reason === $reason) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether this override may be made at all, before anything about the staff
+     * member is weighed.
+     *
+     * Two questions in a fixed order, and the order is deliberate. The
+     * allowlist is asked first, so a caller attempting to override
+     * `do_not_staff` is told that reason is not overridable rather than that
+     * they lack authority — the second would be a true sentence that implies a
+     * false one, namely that somebody more senior could.
+     *
+     * @throws UnscheduledShiftAdditionException
+     */
+    private function assertOverrideAllowed(Shift $shift, User $actor, ShiftAdditionOverride $override): void
+    {
+        if (! $override->reason->isOverridable()) {
+            throw UnscheduledShiftAdditionException::reasonNotOverridable($override->reason);
+        }
+
+        $event = $shift->event;
+        $department = $shift->department;
+
+        if ($event === null || $department === null) {
+            throw UnscheduledShiftAdditionException::overrideUnauthorized();
+        }
+
+        if (! $this->overrideAccess->canOverrideShiftAddition($actor, $event, $department)) {
+            throw UnscheduledShiftAdditionException::overrideUnauthorized();
         }
     }
 
@@ -252,6 +463,16 @@ class UnscheduledShiftAdditionService
              * operator recorded it rather than when the node heard about it.
              */
             'operation_uuid' => $assignment->unscheduled_operation_uuid,
+            /*
+             * Both halves of an override, in the entry a reviewer reads
+             * (requirements 2.4; CLIENT-017A). The actor and the moment are the
+             * audit record's own; what it could not otherwise say is *what was
+             * overridden* — the reason code the node refused on — and *which
+             * command* the refusal belonged to. Null on an ordinary addition,
+             * which overrode nothing.
+             */
+            'overridden_reason_code' => $assignment->overridden_reason_code,
+            'override_of_operation_uuid' => $assignment->override_of_operation_uuid,
             'overlap_warning_count' => count($warnings),
         ];
     }

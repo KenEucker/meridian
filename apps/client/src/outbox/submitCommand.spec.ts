@@ -61,6 +61,10 @@ describe("the command catalog", () => {
     // amendment rather than by a judgement made in the catalog: 5.8A added the
     // Event Horizon's two preference commands (M18.44), and M18.54 added the
     // Logistics unscheduled addition and the on-site mark it depends on.
+    // M18.55's override is the third and widens nothing: it is that same
+    // addition's resolution path under a different authority, and a resolution
+    // that could only be issued where the node is reachable would be one that
+    // never works where the refusal it resolves was queued.
     // Anything else is connected-only, which is why the catalog is default-deny
     // rather than default-queue.
     expect(
@@ -74,8 +78,37 @@ describe("the command catalog", () => {
       "mark-no-show",
       "mark-staff-on-site",
       "add-staff-to-shift",
+      "override-shift-addition",
       "hide-event-horizon",
       "show-event-horizon",
+    ]);
+  });
+
+  it("offers a resolution path for one command and no other", () => {
+    // The override is the exception, not a facility every refusal gains
+    // (CLIENT-017A). A command with no descriptor here keeps CLIENT-017's floor
+    // — surfaced, and dismissed by a person — and that is the right answer for
+    // every command in this catalog but one.
+    expect(
+      COMMAND_CATALOG.filter((command) => command.override !== null).map(
+        (command) => command.type,
+      ),
+    ).toEqual(["add-staff-to-shift"]);
+  });
+
+  it("keeps do_not_staff off the override allowlist", () => {
+    // Not overridable at any authority: an organization's exclusion decision
+    // about a person is not reversed from a Logistics desk at two in the
+    // morning. The waiver and the department membership are off it too, for
+    // reasons the node's `ShiftAdditionRefusalReason` records.
+    const addition = COMMAND_CATALOG.find(
+      (command) => command.type === "add-staff-to-shift",
+    );
+
+    expect(addition?.override?.overridableReasonCodes).toEqual([
+      "staff_not_on_site",
+      "missing_required_training",
+      "not_eligible_team_member",
     ]);
   });
 

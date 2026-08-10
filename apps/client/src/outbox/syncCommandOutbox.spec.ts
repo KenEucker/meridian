@@ -11,7 +11,7 @@ import {
   reloadCommandOutboxFromLocalStore,
   resetCommandOutbox,
 } from "@/outbox/commandOutboxRuntime";
-import { queueCommand } from "@/outbox/submitCommand";
+import { overrideCommand, queueCommand } from "@/outbox/submitCommand";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
 import { submitAttendanceOperation } from "@/shift-board/submitAttendanceOperation";
 
@@ -272,6 +272,176 @@ describe("syncCommandOutbox", () => {
     // did not take.
     reloadCommandOutboxFromLocalStore();
     expect(commandOutbox.get(noShow.operationUuid)?.status).toBe("rejected");
+  });
+
+  it("records the node's refusal reason code alongside its sentence", async () => {
+    // Both halves, because they answer different questions (M18.55). The
+    // sentence is what a person reads; the code is what the override path is
+    // decided from, and a rule written about a sentence breaks the day somebody
+    // rewords the sentence.
+    queueCommand({
+      commandType: "add-staff-to-shift",
+      idempotencyKey: "77777777-7777-4777-8777-777777777777",
+      payload: { shift_id: "shift-1", staff_id: "staff-1" },
+      eventId: "event-1",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              message:
+                "Staff must be marked on-site with this department before unscheduled shift addition.",
+              reason_code: "staff_not_on_site",
+            }),
+            { status: 422, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await syncCommandOutbox();
+
+    const rejected = commandOutbox.get("77777777-7777-4777-8777-777777777777");
+
+    expect(rejected?.statusReason).toContain("marked on-site");
+    expect(rejected?.statusReasonCode).toBe("staff_not_on_site");
+  });
+
+  it("reads a refusal that carries no reason code as having none", async () => {
+    // A node predating the field, an error page that is not JSON, a framework
+    // validation failure. All three are refusals with no code, and null reads
+    // downstream as "not overridable" — the safe direction.
+    queueCommand({
+      commandType: "add-staff-to-shift",
+      idempotencyKey: "88888888-8888-4888-8888-888888888888",
+      payload: { shift_id: "shift-1", staff_id: "staff-1" },
+      eventId: "event-1",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "No." }), {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+
+    await syncCommandOutbox();
+
+    expect(
+      commandOutbox.get("88888888-8888-4888-8888-888888888888")
+        ?.statusReasonCode,
+    ).toBeNull();
+  });
+
+  it("drops the refusal an accepted override resolved", async () => {
+    // Not the silent discard CLIENT-017 forbids: the refusal was shown, a
+    // person read it, and that person's own override is what removed it. What
+    // would be wrong is leaving a warning on screen about work that has now
+    // landed on the node's roster.
+    queueCommand({
+      commandType: "add-staff-to-shift",
+      idempotencyKey: "99999999-9999-4999-8999-999999999999",
+      payload: { shift_id: "shift-1", staff_id: "staff-1" },
+      eventId: "event-1",
+    });
+    commandOutbox.markSending(
+      "99999999-9999-4999-8999-999999999999",
+      "2027-07-04T02:10:01.000Z",
+    );
+    commandOutbox.markRejected(
+      "99999999-9999-4999-8999-999999999999",
+      "2027-07-04T02:10:02.000Z",
+      "Staff must be marked on-site with this department before unscheduled shift addition.",
+      "staff_not_on_site",
+    );
+
+    const queued = overrideCommand("99999999-9999-4999-8999-999999999999", {
+      holdsCapability: () => true,
+      newIdempotencyKey: () => "aaaaaaaa-9999-4999-8999-999999999999",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              shift_assignment_id: "assignment-1",
+              shift_id: "shift-1",
+              staff_id: "staff-1",
+              assignment_status: "assigned",
+              overridden_reason_code: "staff_not_on_site",
+              override_of_operation_uuid:
+                "99999999-9999-4999-8999-999999999999",
+              replayed: false,
+              warnings: [],
+            }),
+            { status: 201, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await syncCommandOutbox();
+
+    expect(commandOutbox.get(queued.idempotencyKey)?.status).toBe("accepted");
+    expect(
+      commandOutbox.get("99999999-9999-4999-8999-999999999999"),
+    ).toBeUndefined();
+  });
+
+  it("keeps the refusal underneath an override the node also refused", async () => {
+    // The override is a new command with its own verdict. When the node refuses
+    // that too — a grant withdrawn between issuing and draining, a second
+    // eligibility rule the first override did not waive — the original refusal
+    // stays put rather than being cleared by a resolution that did not happen.
+    queueCommand({
+      commandType: "add-staff-to-shift",
+      idempotencyKey: "bbbbbbbb-9999-4999-8999-999999999999",
+      payload: { shift_id: "shift-1", staff_id: "staff-1" },
+      eventId: "event-1",
+    });
+    commandOutbox.markSending(
+      "bbbbbbbb-9999-4999-8999-999999999999",
+      "2027-07-04T02:10:01.000Z",
+    );
+    commandOutbox.markRejected(
+      "bbbbbbbb-9999-4999-8999-999999999999",
+      "2027-07-04T02:10:02.000Z",
+      "Staff must be marked on-site with this department before unscheduled shift addition.",
+      "staff_not_on_site",
+    );
+    overrideCommand("bbbbbbbb-9999-4999-8999-999999999999", {
+      holdsCapability: () => true,
+      newIdempotencyKey: () => "cccccccc-9999-4999-8999-999999999999",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              message:
+                "You are not authorized to override a refused shift addition for this department.",
+              reason_code: "unauthorized",
+            }),
+            { status: 422, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await syncCommandOutbox();
+
+    expect(
+      commandOutbox.get("cccccccc-9999-4999-8999-999999999999")?.status,
+    ).toBe("rejected");
+    expect(
+      commandOutbox.get("bbbbbbbb-9999-4999-8999-999999999999")?.status,
+    ).toBe("rejected");
   });
 
   it("keeps a command whose credential lapsed rather than rejecting it", async () => {

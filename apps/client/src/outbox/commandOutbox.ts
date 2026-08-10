@@ -57,6 +57,37 @@ export interface OutboxCommand {
    * command, the transport failure for one that went back to the queue.
    */
   readonly statusReason: string | null;
+  /**
+   * The node's refusal as a code rather than a sentence, where it gave one
+   * (M18.55).
+   *
+   * The sentence above is what a person reads and is the only thing this queue
+   * needed while the only thing anybody could do with a refusal was dismiss it.
+   * Deciding whether an *override* may be offered is a rule, and a rule written
+   * about a sentence breaks the day somebody rewords the sentence. Null for a
+   * refusal that carried no code and for every other status.
+   */
+  readonly statusReasonCode: string | null;
+  /**
+   * On an override, the refused command it resolves (CLIENT-017A).
+   *
+   * The override is a distinct command rather than a retry under the refused
+   * command's key, which is what lets the record hold both facts — the node
+   * refused this, and a named person then chose to proceed. This is the link
+   * between the two on the device; the node holds its own copy on the record it
+   * writes.
+   */
+  readonly overridesIdempotencyKey: string | null;
+  /**
+   * On a refused command, the override somebody issued for it.
+   *
+   * The refusal stays in the queue rather than disappearing when an override is
+   * issued, because until the node answers the override, the refusal is still
+   * the last thing that actually happened. What this changes is that it is no
+   * longer *outstanding*: it has been acted on, so it is not offered for a
+   * second override and is not counted among the refusals demanding attention.
+   */
+  readonly overriddenByIdempotencyKey: string | null;
 }
 
 export class CommandOutboxError extends Error {
@@ -73,6 +104,8 @@ export interface EnqueueCommandInput {
   readonly queuedAt: string;
   readonly eventId?: string | null;
   readonly detail?: string | null;
+  /** Set when this command is an override of a refused one (M18.55). */
+  readonly overridesIdempotencyKey?: string | null;
 }
 
 const SETTLED: readonly CommandStatus[] = ["accepted", "rejected"];
@@ -115,6 +148,9 @@ export class CommandOutbox {
       lastAttemptAt: null,
       settledAt: null,
       statusReason: null,
+      statusReasonCode: null,
+      overridesIdempotencyKey: input.overridesIdempotencyKey ?? null,
+      overriddenByIdempotencyKey: null,
     });
 
     this.commands.set(command.idempotencyKey, command);
@@ -176,6 +212,7 @@ export class CommandOutbox {
       attempts: command.attempts + 1,
       lastAttemptAt: at,
       statusReason: null,
+      statusReasonCode: null,
     });
   }
 
@@ -188,6 +225,7 @@ export class CommandOutbox {
       status: "accepted",
       settledAt: at,
       statusReason: null,
+      statusReasonCode: null,
     });
   }
 
@@ -196,11 +234,19 @@ export class CommandOutbox {
    *
    * Kept, with the reason, until somebody dismisses it. A refusal the user never
    * sees is the failure mode CLIENT-017 names.
+   *
+   * The reason arrives twice over: as the sentence the node wrote, which is what
+   * a person is shown, and — where the node gave one — as a code, which is what
+   * the override path is decided from (M18.55). Neither substitutes for the
+   * other. A code with no sentence would leave a person reading an identifier,
+   * and a sentence with no code would leave every refusal either all negotiable
+   * or none.
    */
   markRejected(
     idempotencyKey: string,
     at: string,
     reason: string,
+    reasonCode: string | null = null,
   ): OutboxCommand {
     const command = this.require(idempotencyKey);
 
@@ -209,7 +255,55 @@ export class CommandOutbox {
       status: "rejected",
       settledAt: at,
       statusReason: reason,
+      statusReasonCode: reasonCode,
     });
+  }
+
+  /**
+   * Record that somebody issued an override for a refused command (M18.55;
+   * CLIENT-017A).
+   *
+   * The refusal keeps its status and its reason. Nothing about what the node
+   * decided is rewritten — the override is a *second* command, and until the
+   * node answers that one, the refusal is still what happened. What this records
+   * is that a person has acted on it, which is what stops it being offered for a
+   * second override and what takes it out of the count of refusals still waiting
+   * on somebody.
+   */
+  markOverridden(idempotencyKey: string, overrideKey: string): OutboxCommand {
+    const command = this.require(idempotencyKey);
+
+    if (command.status !== "rejected") {
+      throw new CommandOutboxError(
+        "Only a command the node refused can be overridden.",
+      );
+    }
+
+    if (command.overriddenByIdempotencyKey !== null) {
+      throw new CommandOutboxError(
+        "This refusal has already been overridden.",
+      );
+    }
+
+    return this.replace({
+      ...command,
+      overriddenByIdempotencyKey: overrideKey,
+    });
+  }
+
+  /**
+   * Refusals nobody has acted on yet.
+   *
+   * What a surface reports and what a person is asked to deal with. A refusal
+   * somebody has already overridden is excluded — it is not resolved, because
+   * the node has not answered the override, but it is no longer anybody's to
+   * decide, and listing it beside the ones that are would ask for the same
+   * decision twice.
+   */
+  unresolvedRejections(): readonly OutboxCommand[] {
+    return this.byStatus("rejected").filter(
+      (command) => command.overriddenByIdempotencyKey === null,
+    );
   }
 
   /**
@@ -246,11 +340,25 @@ export class CommandOutbox {
       );
     }
 
+    /*
+     * A refusal somebody has overridden is not one to send again (M18.55). The
+     * override is already queued and does the same work under an authority this
+     * one was never issued with; putting the original back on the wire beside it
+     * would be two commands racing to add the same person to the same shift, and
+     * the one that lost would come back refused as "already assigned".
+     */
+    if (command.overriddenByIdempotencyKey !== null) {
+      throw new CommandOutboxError(
+        "This refusal has been overridden. The override is what will be sent.",
+      );
+    }
+
     return this.replace({
       ...command,
       status: "queued",
       settledAt: null,
       statusReason: null,
+      statusReasonCode: null,
     });
   }
 

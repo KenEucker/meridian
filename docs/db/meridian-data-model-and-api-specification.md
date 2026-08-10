@@ -1102,6 +1102,47 @@ The client surfaces queued, accepted, and rejected commands. A rejected command 
 
 Commands restricted to connected operation are refused at queue time rather than queued and rejected later. In Alpha 1 these are incident creation, policy and procedure acknowledgment, event application submission, and map editing. Offline-writable commands remain those listed in 7.2.
 
+A command refusal carries both a message and a machine-readable `reason_code`:
+
+```json
+{
+  "message": "Staff must be marked on-site with this department before unscheduled shift addition.",
+  "reason_code": "staff_not_on_site"
+}
+```
+
+The message is what a person reads. The code is what the override path below is decided from — a rule written about a sentence breaks the day somebody rewords the sentence. A refusal with no code is read as not overridable, which is the safe direction and what a client sees from a validation failure, a non-JSON error page, or any refusal a command has not been given codes for.
+
+**Resolving a rejected command (M18.55; CLIENT-017A).** A caller holding the authority resolves a refusal by re-issuing the command as an override:
+
+```text
+POST /api/commands/override-shift-addition
+```
+
+```json
+{
+  "shift_id": "…",
+  "staff_id": "…",
+  "overridden_operation_uuid": "…",
+  "overridden_reason_code": "staff_not_on_site",
+  "operation_uuid": "…",
+  "device_created_at": "2027-07-04T02:10:00+00:00"
+}
+```
+
+Rules, all decided by the node rather than by the client that offered the control:
+
+- the override is a **distinct command under its own `operation_uuid`**, naming the refused command's key in `overridden_operation_uuid`. It is not a retry under the refused key: the record must hold both facts, that the node refused and that a named person then chose to proceed
+- `overridden_reason_code` must be one the technical spec lists as overridable for that command. `do_not_staff` is refused at every authority
+- the caller must hold `department.shift_additions.override` for the shift's department, **in addition to** the attendance authority the addition itself requires
+- exactly one reason is waived. Every other rule refuses the override as it would have refused the addition
+- an override of a reason the command is not actually refused for is refused, so an override in the audit trail always records one that happened
+- the assignment stores `override_of_operation_uuid` and `overridden_reason_code`, and the audit entry uses its own action, `shift_assignment.unscheduled_added_by_override`
+
+`override-shift-addition` is an offline write (7.2). It is the addition's own resolution path, and one that only worked where the node is reachable would never work where the refusal it resolves was queued.
+
+This is not the MOD-017 sync conflict path, which resolves in God Mode for operations whose submitting device may be long gone. This one is for the device still standing at the desk.
+
 ### 5.7 Authenticated downloads
 
 A bearer token cannot be attached to a plain browser navigation, so authenticated file retrieval does not place credentials in a link.
@@ -1589,6 +1630,7 @@ Alpha 1 offline writes include:
 - mark no-show
 - `add-staff-to-shift`, the Logistics unscheduled addition (SLB-008)
 - `mark-staff-on-site` (SLB-015)
+- `override-shift-addition`, which resolves a refusal of the addition above (M18.55; CLIENT-017A)
 
 The last two were added in M18.54; technical spec 9.4 carries the reasoning.
 In short: the addition's eligibility check is the node's and refuses on replay
@@ -1610,6 +1652,14 @@ for the addition — so a delivery repeated after a lost reply returns the same
 record rather than a duplicate refusal, and the record is stamped with the
 operator's moment rather than the drain's. `mark-staff-on-site` needs no key of
 its own: marking somebody on-site who already is changes nothing and says so.
+
+`override-shift-addition` was added in M18.55 and widens the list by nothing:
+it is the addition's own resolution path under a different authority, and a
+resolution that could only be issued where the node is reachable would never
+work where the refusal it resolves was queued. It carries its own key, which is
+not the refused command's — that key travels in `overridden_operation_uuid`, and
+the two being different is what makes the record hold both facts. Section 5.6
+carries the rules.
 
 Supported offline writes are available wherever the corresponding product
 surface is available and the device has the required synced local data. Offline
