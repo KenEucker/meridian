@@ -4,13 +4,14 @@ import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
 import KioskSessionBar from "@/components/KioskSessionBar.vue";
+import KioskAppShell from "@/components/shells/KioskAppShell.vue";
 import { resetFieldReportRuntime } from "@/field-reports/fieldReportRuntime";
 import { submitFieldReport } from "@/field-reports/submitFieldReport";
 import {
   reloadCommandOutboxFromLocalStore,
   resetCommandOutbox,
 } from "@/outbox/commandOutboxRuntime";
-import { routes } from "@/router";
+import { registerNavigationGuards, routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import {
@@ -143,8 +144,17 @@ function pinnedContextPayload() {
   };
 }
 
+/**
+ * A router with the application's own navigation guards installed, declared as
+ * the Kiosk artifact — which is what decides that the personal sign-in routes
+ * redirect to the Kiosk's front door (M18.65).
+ */
 function buildRouter() {
-  return createRouter({ history: createWebHistory(), routes });
+  const router = createRouter({ history: createWebHistory(), routes });
+
+  registerNavigationGuards(router, "kiosk");
+
+  return router;
 }
 
 async function signIn(): Promise<void> {
@@ -194,6 +204,34 @@ describe("the kiosk session bar", () => {
 
     expect(wrapper.find(".kiosk-session__name").text()).toBe("Dana Reyes");
     expect(wrapper.find(".kiosk-session__end").text()).toBe("End session");
+  });
+
+  it("sits in the shell's header rather than on top of the routed surface", async () => {
+    // M18.66: rendered into the content area it read as a container floating
+    // over the page, and the control that ends the session appeared to belong
+    // to whatever screen was open. It is chrome, so it lives in the chrome.
+    await signIn();
+
+    const router = buildRouter();
+    await router.push({ name: "kiosk.home" });
+    await router.isReady();
+
+    const wrapper = mount(KioskAppShell, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const bar = wrapper.find('[data-testid="kiosk-session-bar"]');
+    expect(bar.exists()).toBe(true);
+
+    const header = wrapper.find("header.app-shell__top-bar");
+    const main = wrapper.find("main.app-shell__main");
+
+    expect(header.element.contains(bar.element)).toBe(true);
+    expect(main.element.contains(bar.element)).toBe(false);
+
+    // And the control that ends the session went with it.
+    expect(header.find(".kiosk-session__end").exists()).toBe(true);
+
+    wrapper.unmount();
   });
 
   it("shows nothing at all while the workstation is locked", async () => {
@@ -251,6 +289,50 @@ describe("the kiosk session bar", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.name).toBe("kiosk.safe-timeout");
+  });
+});
+
+describe("where a kiosk lands when it opens", () => {
+  /*
+   * What the desktop wrapper does at boot: loads the client at `/`. The three
+   * personal sign-in routes redirect to `kiosk.home`, whose guards then decide
+   * between setup and the workstation login — so a Kiosk never reaches the
+   * email magic-link screen it cannot complete (AUTH-030), and a machine that
+   * has not been told which workstation it is lands where that is fixed.
+   */
+  it("opens on setup when no workstation identifier has been set", async () => {
+    configureSharedWorkstationId(null);
+    resetKioskContext();
+    await resolveKioskContext();
+
+    const router = buildRouter();
+    await router.push("/");
+    await router.isReady();
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("kiosk.setup");
+  });
+
+  it("opens on the workstation login when the machine is pinned and locked", async () => {
+    const router = buildRouter();
+    await router.push("/");
+    await router.isReady();
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("kiosk.workstation-login");
+  });
+
+  it("never lands on the personal email sign-in screen", async () => {
+    const router = buildRouter();
+
+    for (const target of ["/", "/login", "/login/code"]) {
+      await router.push(target);
+      await flushPromises();
+
+      expect(router.currentRoute.value.name).not.toBe("login");
+      expect(router.currentRoute.value.name).not.toBe("auth.code.entry");
+      expect(String(router.currentRoute.value.name)).toMatch(/^kiosk\./);
+    }
   });
 });
 

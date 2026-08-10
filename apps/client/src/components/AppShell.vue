@@ -1085,6 +1085,19 @@ onBeforeUnmount(() => {
           </RouterLink>
         </nav>
       </div>
+
+      <!--
+        The shared-workstation session (M18.66; technical spec 13.3). Inside the
+        header rather than above the routed surface, so "the active user is
+        shown prominently at all times" is a property of the shell's chrome
+        rather than of a container floating at the top of the content — and so
+        the control that ends the session sits with the other session controls
+        instead of appearing to belong to whatever screen is open.
+
+        Empty in every mode but Kiosk, which is the only one with a
+        shared-workstation session to show.
+      -->
+      <slot name="session" />
     </header>
     <OfflineBanner class="app-shell__offline-banner" :state="bannerState" />
 

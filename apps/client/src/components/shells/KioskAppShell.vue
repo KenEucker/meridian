@@ -8,11 +8,14 @@ import KioskSessionBar from "@/components/KioskSessionBar.vue";
 import { kioskContextPinned, resolveKioskContext } from "@/session/kioskContext";
 
 /*
- * The session bar sits here rather than inside `AppShell`, above the routed
- * surface and outside anything a surface can collapse or scroll away. "The active
- * user is shown prominently at all times" (technical spec 13.3) is not a property
- * a screen can be trusted to preserve, and only Kiosk has a shared-workstation
- * session to show.
+ * The session bar fills `AppShell`'s `session` slot, which puts it inside the
+ * shell's header rather than at the top of the routed surface. "The active user
+ * is shown prominently at all times" (technical spec 13.3) is not a property a
+ * screen can be trusted to preserve, and only Kiosk has a shared-workstation
+ * session to show — but a bar sitting in the content area reads as part of
+ * whatever screen is open, and puts the control that ends the session there
+ * too. In the header it is chrome, beside the other session controls, and still
+ * outside anything a surface can collapse or scroll away.
  *
  * The shell is also where the Kiosk asks the node what this machine is pinned to
  * (M18.32; UI-019, UI-020). It happens here because it is a property of the
@@ -47,7 +50,10 @@ watch(kioskContextPinned, async (pinned) => {
 
 <template>
   <AppShell :config="config">
-    <KioskSessionBar />
+    <template #session>
+      <KioskSessionBar />
+    </template>
+
     <slot />
   </AppShell>
 </template>

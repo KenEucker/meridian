@@ -39,6 +39,31 @@ export const SIGN_IN_POLL_INTERVAL_MS = 3_000;
 /** How many ticks an unavailable presentation waits before asking again. */
 const RETRY_TICKS = 5;
 
+/**
+ * Whether a refusal is the node's verdict about *this request* — it is spent,
+ * expired, or was never one — as opposed to a refusal about the moment: a rate
+ * limit, a node error, a connection that dropped.
+ *
+ * The distinction is why the QR does not thrash. A transient refusal says
+ * nothing about the request, which is still open on the node and may be granted
+ * a second later, so the square stays up and the next poll tries again.
+ * Replacing it would throw away a live request, and — because opening is itself
+ * rate limited (AUTH-037) — would turn one refused poll into a refused open,
+ * which is how a single rate limit becomes a loop that empties the budget.
+ */
+function isVerdictAboutRequest(status: number): boolean {
+  return status === 404 || status === 410;
+}
+
+/**
+ * How many consecutive transient failures back the polling off.
+ *
+ * A node that is refusing or unreachable is not helped by being asked every
+ * three seconds, and a Kiosk that keeps its QR up through a hiccup is behaving
+ * correctly. The request outlives a few skipped polls.
+ */
+const TRANSIENT_BACKOFF_TICKS = 4;
+
 export type WorkstationSignInStatus =
   /** Nothing presented: no workstation identity, or a session is live. */
   | "idle"
@@ -74,6 +99,11 @@ let pickupSecret: string | null = null;
 let ticksUntilRetry = 0;
 
 let polling = false;
+
+/** Consecutive transient poll failures, for the backoff above. */
+let transientFailures = 0;
+
+let ticksUntilPoll = 0;
 
 const state = reactive<WorkstationSignInState>({
   status: "idle",
@@ -229,6 +259,14 @@ export async function tickWorkstationSignIn(
     return "waiting";
   }
 
+  // Backing off after transient failures. The request is still live; this only
+  // decides how often it is asked about.
+  if (ticksUntilPoll > 0) {
+    ticksUntilPoll -= 1;
+
+    return "waiting";
+  }
+
   polling = true;
 
   try {
@@ -248,6 +286,8 @@ export async function tickWorkstationSignIn(
       },
     );
 
+    transientFailures = 0;
+
     if (isRecord(payload) && payload.status === "collected") {
       const installed = await installCollectedWorkstationSession(payload);
 
@@ -258,14 +298,22 @@ export async function tickWorkstationSignIn(
 
     return "waiting";
   } catch (error) {
-    if (error instanceof MeridianApiError) {
-      // The node's verdict on this request — spent, expired, or unknown. A
-      // fresh one replaces it.
+    if (error instanceof MeridianApiError && isVerdictAboutRequest(error.status)) {
+      // The node's verdict on this request — spent, expired, or never one. A
+      // fresh request replaces it.
+      transientFailures = 0;
       await presentWorkstationSignIn();
+
+      return "waiting";
     }
 
-    // An unreachable node during a poll is not a reason to tear the QR down:
-    // the request may still be granted, and the next poll may get through.
+    // Everything else is about the moment rather than the request: a rate
+    // limit, a node error, a connection that dropped. The request is still
+    // open and may still be granted, so the QR stays exactly where it is and
+    // the next poll — after a backoff — tries again.
+    transientFailures += 1;
+    ticksUntilPoll = Math.min(transientFailures, TRANSIENT_BACKOFF_TICKS);
+
     return "waiting";
   } finally {
     polling = false;
@@ -277,6 +325,8 @@ export function resetWorkstationSignIn(): void {
   pickupSecret = null;
   ticksUntilRetry = 0;
   polling = false;
+  transientFailures = 0;
+  ticksUntilPoll = 0;
 
   state.status = "idle";
   state.requestId = null;

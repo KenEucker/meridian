@@ -138,13 +138,19 @@ watch(
 </template>
 
 <style scoped>
+/*
+ * A strip of the shell's header rather than a panel of its own (M18.66). It
+ * carries no background or border: it sits inside the header, and a raised
+ * surface with its own border inside another one is what made it read as a
+ * container floating over the page.
+ */
 .kiosk-session {
   display: flex;
   align-items: center;
   gap: var(--m-space-3);
-  padding: var(--m-space-2) var(--m-space-4);
-  border-bottom: 1px solid var(--m-border-default);
-  background: var(--m-surface-raised);
+  padding: 0 var(--m-space-4) var(--m-space-2);
+  border-top: 1px solid var(--m-border-subtle, var(--m-border-default));
+  padding-top: var(--m-space-2);
 }
 
 .kiosk-session__user {

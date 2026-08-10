@@ -1019,14 +1019,67 @@ export function requiresSignIn(name: unknown): boolean {
   return !holdsMeridianCredential() && clientSessionState.document === null;
 }
 
+/**
+ * A Kiosk never lands on the personal sign-in surfaces (M18.65; AUTH-030;
+ * technical spec 13.3; UI contract 12.8).
+ *
+ * The shared client serves all three modes from one router, so a Kiosk opening
+ * at `/` reaches `RootView` — which, holding no personal credential, offers the
+ * marketing page and then the email magic-link login. That is the wrong screen
+ * on a shared workstation twice over: the machine cannot complete it (a Kiosk
+ * holds a workstation session key, not a bearer token), and completing it would
+ * establish a *personal* device session on a machine strangers stand in front
+ * of, which AUTH-030 exists to prevent.
+ *
+ * So the three personal entry points redirect to the Kiosk's own front door.
+ * `kiosk.home`'s guards take it from there: to setup while the machine is
+ * unpinned (UI-019), and to `kiosk.workstation-login` while it is locked —
+ * which is the screen that offers both ways in, the scannable code and the
+ * typed one.
+ */
+const PERSONAL_SIGN_IN_ROUTES: readonly string[] = ["home", "login", "auth.code.entry"];
+
+export function kioskLandingRedirect(
+  name: unknown,
+  uiMode: string = meridianAppConfig.uiMode,
+): { name: string } | null {
+  if (uiMode !== "kiosk" || typeof name !== "string") {
+    return null;
+  }
+
+  return PERSONAL_SIGN_IN_ROUTES.includes(name) ? { name: "kiosk.home" } : null;
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes,
 });
 
-router.beforeEach((to) =>
-  requiresSignIn(to.name) ? { name: "login" } : true,
-);
+/**
+ * The navigation guards every Meridian router runs, in one place.
+ *
+ * Registered on the application's router below, and by tests on theirs, so what
+ * a test exercises is the guard the application installs rather than a second
+ * copy of the rule. `uiMode` is a parameter for the same reason
+ * {@see workstationCodeRouteGuard}'s is: a mode fixed at build time is still
+ * something a test has to be able to state.
+ */
+export function registerNavigationGuards(
+  target: Router = router,
+  uiMode: string = meridianAppConfig.uiMode,
+): void {
+  target.beforeEach((to) => {
+    const kioskLanding = kioskLandingRedirect(to.name, uiMode);
+
+    if (kioskLanding !== null) {
+      return kioskLanding;
+    }
+
+    return requiresSignIn(to.name) ? { name: "login" } : true;
+  });
+}
+
+registerNavigationGuards();
 
 /**
  * Move a client to sign in the moment it stops holding a session (AUTH-023).

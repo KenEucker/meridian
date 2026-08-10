@@ -30,6 +30,18 @@ export const REAUTH_POLL_INTERVAL_MS = 3_000;
 /** How many ticks an unavailable presentation waits before asking again. */
 const RETRY_TICKS = 5;
 
+/** How many consecutive transient failures back the polling off. */
+const TRANSIENT_BACKOFF_TICKS = 4;
+
+/**
+ * Whether a refusal is the node's verdict about *this request* rather than
+ * about the moment. Same reasoning as the sign-in presentation's: replacing a
+ * live request over a rate limit turns one refused poll into a refused open.
+ */
+function isVerdictAboutRequest(status: number): boolean {
+  return status === 404 || status === 410;
+}
+
 export type WorkstationReauthPresentationStatus =
   | "idle"
   | "opening"
@@ -50,6 +62,10 @@ let pickupSecret: string | null = null;
 let ticksUntilRetry = 0;
 
 let polling = false;
+
+let transientFailures = 0;
+
+let ticksUntilPoll = 0;
 
 const state = reactive<WorkstationReauthPresentationState>({
   status: "idle",
@@ -193,6 +209,12 @@ export async function tickWorkstationReauth(
     return "waiting";
   }
 
+  if (ticksUntilPoll > 0) {
+    ticksUntilPoll -= 1;
+
+    return "waiting";
+  }
+
   polling = true;
 
   try {
@@ -204,6 +226,8 @@ export async function tickWorkstationReauth(
       },
     );
 
+    transientFailures = 0;
+
     if (isRecord(payload) && payload.status === "collected") {
       const applied = applyWorkstationSessionDocument(payload);
 
@@ -214,9 +238,15 @@ export async function tickWorkstationReauth(
 
     return "waiting";
   } catch (error) {
-    if (error instanceof MeridianApiError) {
+    if (error instanceof MeridianApiError && isVerdictAboutRequest(error.status)) {
+      transientFailures = 0;
       await presentWorkstationReauth();
+
+      return "waiting";
     }
+
+    transientFailures += 1;
+    ticksUntilPoll = Math.min(transientFailures, TRANSIENT_BACKOFF_TICKS);
 
     return "waiting";
   } finally {
@@ -229,6 +259,8 @@ export function resetWorkstationReauth(): void {
   pickupSecret = null;
   ticksUntilRetry = 0;
   polling = false;
+  transientFailures = 0;
+  ticksUntilPoll = 0;
 
   state.status = "idle";
   state.requestId = null;

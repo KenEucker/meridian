@@ -36,6 +36,8 @@ const node = {
   granted: false,
   reachable: true,
   expiresAt: "2027-06-01T12:02:00+00:00",
+  /** What the collect poll answers with: 200, or a status to refuse with. */
+  collectStatus: 200,
 };
 
 function json(body: unknown, status = 200): Response {
@@ -84,6 +86,13 @@ function stubNode(): void {
       }
 
       if (method === "POST" && path.endsWith("/collect")) {
+        if (node.collectStatus !== 200) {
+          return json(
+            { message: node.collectStatus === 429 ? "Too Many Attempts." : "Gone." },
+            node.collectStatus,
+          );
+        }
+
         if (!node.granted) {
           return json({ status: "pending" });
         }
@@ -137,6 +146,7 @@ beforeEach(() => {
   node.granted = false;
   node.reachable = true;
   node.expiresAt = "2027-06-01T12:02:00+00:00";
+  node.collectStatus = 200;
 
   window.localStorage.clear();
   window.sessionStorage.clear();
@@ -209,6 +219,50 @@ describe("presenting a sign-in request", () => {
 });
 
 describe("the request lifecycle", () => {
+  it("keeps the QR up when a poll is rate limited rather than opening another request", async () => {
+    // The amplifier this guards against: a 429 says nothing about the request,
+    // which is still open and may be granted a second later. Replacing it
+    // turned one refused poll into a refused open, and opening is itself rate
+    // limited (AUTH-037) — so a single rate limit became a loop that emptied
+    // the budget and flickered the screen with no interaction at all.
+    await presentWorkstationSignIn();
+
+    const openedWith = node.openCount;
+    node.collectStatus = 429;
+
+    for (let tick = 0; tick < 4; tick++) {
+      await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    }
+
+    expect(node.openCount).toBe(openedWith);
+    expect(workstationSignInState.status).toBe("presenting");
+    expect(workstationSignInState.requestId).toBe("request-1");
+
+    // And the grant that arrives afterwards is still collectable: the request
+    // was never thrown away.
+    node.collectStatus = 200;
+    node.granted = true;
+
+    let outcome: string = "waiting";
+    for (let tick = 0; tick < 6 && outcome !== "signed_in"; tick++) {
+      outcome = await tickWorkstationSignIn(new Date("2027-06-01T12:00:20+00:00"));
+    }
+
+    expect(outcome).toBe("signed_in");
+  });
+
+  it("opens a fresh request when the node says this one is gone", async () => {
+    // A 404 or 410 *is* a verdict about the request: spent, expired, or never
+    // one. That is the case a replacement is for.
+    await presentWorkstationSignIn();
+    node.collectStatus = 404;
+
+    await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+
+    expect(workstationSignInState.requestId).toBe("request-2");
+    expect(workstationSignInState.status).toBe("presenting");
+  });
+
   it("replaces an expired request rather than leaving a stale square rendered", async () => {
     await presentWorkstationSignIn();
     expect(workstationSignInState.requestId).toBe("request-1");
