@@ -209,6 +209,25 @@ Route::post('/auth/shared-workstation-session/reauthentication', [SharedWorkstat
     ->name('api.auth.shared-workstation-session.reauthenticate');
 
 /*
+ * Re-authentication by scan (M18.62; AUTH-036; technical spec 13.4).
+ *
+ * The same request mechanism as sign-in, with the purpose recorded as
+ * re-authentication and the request bound to the live session — which is why
+ * both routes sit behind the workstation guard where the sign-in pair cannot:
+ * a machine confirming its session holds one to confirm. The grant stays on
+ * the shared grant route; only the session's own user's grant confirms, and a
+ * request opened for one purpose cannot be collected as the other. Collection
+ * stamps `reauthenticated_at` identically to the typed path.
+ */
+Route::post('/auth/shared-workstation-session/reauthentication-requests', [SharedWorkstationSessionController::class, 'openReauthenticationRequest'])
+    ->middleware(['auth:workstation', 'throttle:30,1'])
+    ->name('api.auth.shared-workstation-session.reauthentication-requests.store');
+
+Route::post('/auth/shared-workstation-session/reauthentication-requests/{signInRequest}/collect', [SharedWorkstationSessionController::class, 'collectReauthenticationRequest'])
+    ->middleware(['auth:workstation', 'throttle:120,1'])
+    ->name('api.auth.shared-workstation-session.reauthentication-requests.collect');
+
+/*
  * The Kiosk pinned context (M18.32; UI-019 through UI-021; technical spec 13.1).
  *
  * The read carries no credential on purpose. UI-020 forbids a Kiosk from

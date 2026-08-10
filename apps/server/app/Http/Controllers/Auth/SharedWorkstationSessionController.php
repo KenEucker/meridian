@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Node;
 use App\Models\SharedWorkstation;
 use App\Models\SharedWorkstationSession;
+use App\Models\SharedWorkstationSignInRequest;
 use App\Models\User;
 use App\Services\Auth\SharedWorkstationLoginException;
 use App\Services\Auth\SharedWorkstationSessionKey;
 use App\Services\Auth\SharedWorkstationSessionService;
+use App\Services\Auth\SharedWorkstationSignInRequestException;
+use App\Services\Auth\SharedWorkstationSignInRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -109,6 +113,111 @@ class SharedWorkstationSessionController extends Controller
     }
 
     /**
+     * Open a re-authentication request for the live session, presented as a
+     * scannable code (M18.62; AUTH-036; technical spec 13.4).
+     *
+     * Behind the workstation guard like the typed confirmation above, because
+     * what is being confirmed is the session the caller already holds. The
+     * request is bound to that session, so only its own user's grant confirms
+     * it, and it cannot be collected as a sign-in.
+     */
+    public function openReauthenticationRequest(
+        Request $request,
+        SharedWorkstationSignInRequestService $requests,
+    ): JsonResponse {
+        $session = $this->currentSession($request);
+
+        if (! $session instanceof SharedWorkstationSession) {
+            return $this->refusal(SharedWorkstationLoginException::noActiveSession());
+        }
+
+        $workstation = $session->sharedWorkstation()->first();
+
+        if (! $workstation instanceof SharedWorkstation) {
+            return $this->refusal(SharedWorkstationLoginException::noActiveSession());
+        }
+
+        try {
+            $opened = $requests->openForReauthentication($workstation, $session);
+        } catch (SharedWorkstationSignInRequestException $exception) {
+            return $this->requestRefusal($exception);
+        }
+
+        $node = $requests->localNode();
+
+        return response()->json([
+            'sign_in_request' => [
+                'id' => $opened->record->getKey(),
+                'purpose' => $opened->record->purpose,
+                'expires_at' => $opened->record->expires_at?->toIso8601String(),
+            ],
+            // Once, to the machine that will poll with it (AUTH-037).
+            'pickup_secret' => $opened->pickupSecret,
+            'shared_workstation' => [
+                'id' => $workstation->getKey(),
+                'name' => $workstation->name,
+                'short_code' => $workstation->short_code,
+            ],
+            'node' => $node instanceof Node ? [
+                'id' => $node->getKey(),
+                'name' => $node->node_name,
+            ] : null,
+            'event_id' => $opened->record->event_id,
+        ], 201);
+    }
+
+    /**
+     * Poll for the re-authentication grant with the pickup secret.
+     *
+     * A collected grant answers with the same session payload the typed path
+     * answers with, `reauthenticated_at` stamped identically — the audit trail
+     * of a privileged action does not depend on how the person proved they
+     * were standing there (M18.62).
+     */
+    public function collectReauthenticationRequest(
+        Request $request,
+        SharedWorkstationSignInRequest $signInRequest,
+        SharedWorkstationSignInRequestService $requests,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'pickup_secret' => ['required', 'string', 'max:128'],
+        ]);
+
+        $session = $this->currentSession($request);
+
+        if (! $session instanceof SharedWorkstationSession) {
+            return $this->refusal(SharedWorkstationLoginException::noActiveSession());
+        }
+
+        $workstation = $session->sharedWorkstation()->first();
+
+        // A request bound to some other session is not this caller's to
+        // collect, and is the same unknown a wrong secret is.
+        if (
+            ! $workstation instanceof SharedWorkstation
+            || (string) $signInRequest->shared_workstation_session_id !== (string) $session->getKey()
+        ) {
+            return $this->requestRefusal(SharedWorkstationSignInRequestException::requestUnknown());
+        }
+
+        try {
+            $confirmed = $requests->collectReauthentication(
+                $workstation,
+                $signInRequest,
+                (string) $validated['pickup_secret'],
+            );
+        } catch (SharedWorkstationSignInRequestException $exception) {
+            return $this->requestRefusal($exception);
+        }
+
+        if (! $confirmed instanceof SharedWorkstationSession) {
+            return response()->json(['status' => 'pending']);
+        }
+
+        return response()->json(['status' => 'collected'] + $this->sessionPayload($confirmed));
+    }
+
+    /**
      * The user ending their own session, which is what technical spec 13.3
      * requires before another user may sign in at the same workstation.
      */
@@ -182,6 +291,18 @@ class SharedWorkstationSessionController extends Controller
     }
 
     private function refusal(SharedWorkstationLoginException $exception): JsonResponse
+    {
+        $response = response()->json([
+            'message' => $exception->getMessage(),
+            'reason' => $exception->reason,
+        ], $exception->status);
+
+        return $exception->retryAfterSeconds === null
+            ? $response
+            : $response->header('Retry-After', (string) $exception->retryAfterSeconds);
+    }
+
+    private function requestRefusal(SharedWorkstationSignInRequestException $exception): JsonResponse
     {
         $response = response()->json([
             'message' => $exception->getMessage(),

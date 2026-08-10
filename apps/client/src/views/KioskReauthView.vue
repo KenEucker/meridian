@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import { encodeQrMatrix, qrMatrixToSvgPath, type QrMatrix } from "@/support/qrCode";
+import {
+  presentWorkstationReauth,
+  REAUTH_POLL_INTERVAL_MS,
+  resetWorkstationReauth,
+  tickWorkstationReauth,
+  workstationReauthState,
+} from "@/session/workstationReauthSignIn";
 import {
   reauthenticateWorkstationSession,
   workstationSessionState,
@@ -9,7 +17,7 @@ import {
 
 /*
  * `kiosk.reauth` — confirming the active user before a privileged action
- * (M18.32; UI implementation contract 12.8, 18.2; UI-017).
+ * (M18.32; M18.62; UI implementation contract 12.8, 18.2; UI-017; AUTH-036).
  *
  * "Privileged actions may require re-authentication." On a machine strangers
  * stand in front of, that means proving the person at the keyboard is still the
@@ -17,15 +25,20 @@ import {
  * session bar already shows.
  *
  * Alpha 1 has no separate Meridian PIN and 18.2 rules one out as an independent
- * central credential, so what is asked for is a fresh login code: already scoped
- * to this user, this event, and this workstation, single use, and generated in
- * seconds from the phone in somebody's pocket against a node with no route to
- * central (AUTH-027). Nothing new is invented and nothing new is stored.
+ * central credential. Two ways to prove it, over the same credentials sign-in
+ * uses:
  *
- * The node decides. It checks the code against the session's own user, so a
- * valid code belonging to somebody else confirms nothing — and the refusal says
- * to use Switch user, because a handover is an explicit end (technical spec
- * 13.3).
+ *  - **Scan.** The screen presents a re-authentication request as a QR, over
+ *    the same mechanism sign-in uses, bound to this live session (M18.62).
+ *    Only a grant from the session's own user confirms; anybody else's is
+ *    refused on their own phone and hands nothing over.
+ *  - **Type.** A fresh login code: already scoped to this user, this event,
+ *    and this workstation, single use, and generated in seconds from the phone
+ *    in somebody's pocket against a node with no route to central (AUTH-027).
+ *
+ * Either way the node decides, and `reauthenticated_at` is recorded
+ * identically — a privileged action's audit trail does not depend on how the
+ * person proved they were standing there.
  *
  * Where it returns to is a route name carried in the query, and it is only ever
  * followed when the node confirmed. A `return` naming an unknown route lands on
@@ -41,6 +54,53 @@ const confirmed = ref(false);
 const user = computed(() => workstationSessionState.user);
 const entering = computed(() => workstationSessionState.entering);
 const canSubmit = computed(() => code.value.trim() !== "" && !entering.value);
+
+const qrMatrix = computed<QrMatrix | null>(() => {
+  const text = workstationReauthState.qrText;
+
+  if (text === null) {
+    return null;
+  }
+
+  try {
+    return encodeQrMatrix(text);
+  } catch {
+    return null;
+  }
+});
+
+const qrPath = computed(() => (qrMatrix.value === null ? "" : qrMatrixToSvgPath(qrMatrix.value)));
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function finishConfirmed(): Promise<void> {
+  confirmed.value = true;
+
+  await router.push(returnRoute.value);
+}
+
+onMounted(async () => {
+  await presentWorkstationReauth();
+
+  pollTimer = setInterval(() => {
+    void (async () => {
+      const outcome = await tickWorkstationReauth();
+
+      if (outcome === "confirmed") {
+        await finishConfirmed();
+      }
+    })();
+  }, REAUTH_POLL_INTERVAL_MS);
+});
+
+onBeforeUnmount(() => {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  resetWorkstationReauth();
+});
 
 /** The surface that asked for the confirmation, when it named itself. */
 const returnTo = computed<string | null>(() => {
@@ -73,9 +133,7 @@ async function submit(): Promise<void> {
     return;
   }
 
-  confirmed.value = true;
-
-  await router.push(returnRoute.value);
+  await finishConfirmed();
 }
 
 function cancel(): void {
@@ -91,8 +149,38 @@ function cancel(): void {
 
     <p class="kiosk-reauth__lede">
       This action needs {{ user?.name ?? "the signed-in user" }} to confirm.
-      Generate a login code on your own device and enter it here. It confirms
-      this session; it does not start a new one.
+      Scan the code with the Meridian app on your phone, or generate a login
+      code on your own device and enter it here. Either confirms this session;
+      neither starts a new one.
+    </p>
+
+    <figure
+      v-if="workstationReauthState.status === 'presenting' && qrMatrix !== null"
+      class="kiosk-reauth__scan"
+      data-testid="kiosk-reauth-qr"
+    >
+      <svg
+        class="kiosk-reauth__qr"
+        :viewBox="`0 0 ${qrMatrix.size} ${qrMatrix.size}`"
+        role="img"
+        aria-label="Confirmation code for the Meridian app"
+        shape-rendering="crispEdges"
+      >
+        <path :d="qrPath" />
+      </svg>
+      <figcaption class="kiosk-reauth__scan-hint">
+        Scan with the Meridian app as {{ user?.name ?? "the signed-in user" }}.
+        A grant from anybody else is refused.
+      </figcaption>
+    </figure>
+
+    <p
+      v-else-if="workstationReauthState.status === 'unavailable'"
+      class="kiosk-reauth__scan-unavailable"
+      data-testid="kiosk-reauth-scan-unavailable"
+      role="status"
+    >
+      {{ workstationReauthState.unavailableReason }}
     </p>
 
     <form class="kiosk-reauth__form" @submit.prevent="submit">
@@ -154,6 +242,43 @@ function cancel(): void {
 .kiosk-reauth__lede {
   margin: 0 0 var(--m-space-4);
   color: var(--m-text-muted);
+}
+
+.kiosk-reauth__scan {
+  display: grid;
+  justify-items: center;
+  gap: var(--m-space-2);
+  margin: 0 0 var(--m-space-4);
+  padding: var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-md);
+  background: var(--m-surface-raised);
+}
+
+/* White-backed whatever the theme does: cameras need the contrast. */
+.kiosk-reauth__qr {
+  width: min(50vw, 13rem);
+  height: auto;
+  padding: var(--m-space-2);
+  border-radius: 4px;
+  background: #fff;
+  fill: #000;
+}
+
+.kiosk-reauth__scan-hint {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  text-align: center;
+}
+
+.kiosk-reauth__scan-unavailable {
+  margin: 0 0 var(--m-space-4);
+  padding: var(--m-space-3) var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-left: 4px solid var(--m-status-neutral);
+  border-radius: var(--m-radius-md);
+  background: var(--m-surface-raised);
+  color: var(--m-text-secondary);
 }
 
 .kiosk-reauth__form {

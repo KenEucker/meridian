@@ -346,6 +346,31 @@ export async function installCollectedWorkstationSession(
 }
 
 /**
+ * Take a session document the node answered elsewhere — the scan path's
+ * collected re-authentication (M18.62) — into the live session's state.
+ *
+ * The key does not change hands: this updates what the session says about
+ * itself (`reauthenticated_at`, the slid deadline) for a session this
+ * workstation already holds. With no live session there is nothing to update
+ * and nothing is installed.
+ */
+export function applyWorkstationSessionDocument(payload: unknown): boolean {
+  if (sessionKey === null || state.status !== "active") {
+    return false;
+  }
+
+  const parsed = readSessionPayload(payload);
+
+  if (parsed === null) {
+    return false;
+  }
+
+  install(parsed);
+
+  return true;
+}
+
+/**
  * Confirm that the person at the keyboard is still the signed-in user (M18.32;
  * UI-017; UI contract 12.8 `kiosk.reauth`, 18.2).
  *

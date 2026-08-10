@@ -171,6 +171,31 @@ class SharedWorkstationSessionService
             throw SharedWorkstationLoginException::reauthenticationMismatch();
         }
 
+        return $this->confirmReauthentication($session, $workstation, [
+            'login_code_id' => $record->getKey(),
+        ]);
+    }
+
+    /**
+     * Stamp a confirmed re-authentication, identically whichever path proved
+     * the person (M18.62; AUTH-036; technical spec 13.4).
+     *
+     * One method, called by the typed path above and by the scan path's
+     * collection, so a privileged action's audit trail does not depend on how
+     * the person proved they were standing there: the same `reauthenticated_at`,
+     * the same activity slide, and the same audit action. Only the provenance
+     * key differs — the login code, or the sign-in request.
+     *
+     * Public for the scan path's collector; who may confirm is decided before
+     * this runs, at redemption or at grant.
+     *
+     * @param  array<string, string>  $provenance  which credential confirmed it
+     */
+    public function confirmReauthentication(
+        SharedWorkstationSession $session,
+        SharedWorkstation $workstation,
+        array $provenance,
+    ): SharedWorkstationSession {
         $confirmedAt = now();
 
         $session->forceFill([
@@ -190,7 +215,7 @@ class SharedWorkstationSessionService
                 'shared_workstation_session_id' => $session->getKey(),
                 'shared_workstation_id' => $workstation->getKey(),
                 'user_id' => $session->user_id,
-                'login_code_id' => $record->getKey(),
+                ...$provenance,
                 'reauthenticated_at' => $confirmedAt->toIso8601String(),
             ],
             sourceContext: AuditEvent::SOURCE_API,

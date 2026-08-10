@@ -49,6 +49,9 @@ class SharedWorkstationSignInRequestException extends RuntimeException
     /** The account that granted, or would grant, is disabled. */
     public const REASON_ACCOUNT_DISABLED = 'account_disabled';
 
+    /** The session a re-authentication request was bound to is over (AUTH-036). */
+    public const REASON_SESSION_GONE = 'no_active_workstation_session';
+
     /** Opening or granting has been rate limited (AUTH-037). */
     public const REASON_RATE_LIMITED = 'sign_in_request_rate_limited';
 
@@ -158,6 +161,15 @@ class SharedWorkstationSignInRequestException extends RuntimeException
             self::REASON_ACCOUNT_DISABLED,
             'This account is disabled and cannot sign in.',
             403,
+        );
+    }
+
+    public static function sessionGone(): self
+    {
+        return new self(
+            self::REASON_SESSION_GONE,
+            'The session this confirmation was for has ended. Sign in again instead.',
+            401,
         );
     }
 

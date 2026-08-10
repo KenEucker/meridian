@@ -297,6 +297,120 @@ class SharedWorkstationSignInRequestService
     }
 
     /**
+     * A workstation holding a live session opens a request whose purpose is
+     * re-authentication (M18.62; AUTH-036; technical spec 13.4).
+     *
+     * The same mechanism as a sign-in request, bound to the live session so
+     * only that session's own user can confirm it — the rule the typed path
+     * already enforces at redemption, applied here at grant.
+     *
+     * @throws SharedWorkstationSignInRequestException
+     */
+    public function openForReauthentication(
+        SharedWorkstation $workstation,
+        SharedWorkstationSession $session,
+    ): OpenedSharedWorkstationSignInRequest {
+        if (! $session->isActive() || (string) $session->shared_workstation_id !== (string) $workstation->getKey()) {
+            throw SharedWorkstationSignInRequestException::sessionGone();
+        }
+
+        return $this->open($workstation, SharedWorkstationSignInRequest::PURPOSE_REAUTHENTICATION, $session);
+    }
+
+    /**
+     * Collect a granted re-authentication request (M18.62; AUTH-036).
+     *
+     * Null while ungranted, exactly as {@see collect()}. A collected grant
+     * stamps `reauthenticated_at` on the bound session through the same method
+     * the typed path stamps through, so the record does not depend on how the
+     * person proved they were standing there. No session key changes hands:
+     * this confirms the session the workstation already holds.
+     *
+     * @throws SharedWorkstationSignInRequestException
+     */
+    public function collectReauthentication(
+        SharedWorkstation $workstation,
+        SharedWorkstationSignInRequest $request,
+        string $pickupSecret,
+    ): ?SharedWorkstationSession {
+        $this->requireTrustedWorkstation($workstation);
+        $this->requireOwnRequest($workstation, $request, $pickupSecret);
+
+        // A request opened for one purpose cannot be collected as the other
+        // (AUTH-036): a sign-in request confirms nobody.
+        if ($request->purpose !== SharedWorkstationSignInRequest::PURPOSE_REAUTHENTICATION) {
+            throw SharedWorkstationSignInRequestException::purposeMismatch();
+        }
+
+        if ($request->isCollected()) {
+            throw SharedWorkstationSignInRequestException::requestUnknown();
+        }
+
+        if ($request->isExpired()) {
+            throw SharedWorkstationSignInRequestException::requestExpired();
+        }
+
+        if (! $request->isGranted()) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($workstation, $request): SharedWorkstationSession {
+            /** @var SharedWorkstationSignInRequest $locked */
+            $locked = SharedWorkstationSignInRequest::query()
+                ->whereKey($request->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->isCollected()) {
+                throw SharedWorkstationSignInRequestException::requestUnknown();
+            }
+
+            $locked->forceFill(['collected_at' => now()])->save();
+
+            $session = $locked->session()->first();
+
+            // The session may have timed out between grant and collection. The
+            // request is spent either way; a confirmation of a session that is
+            // over confirms nothing.
+            if (! $session instanceof SharedWorkstationSession || ! $session->isActive()) {
+                throw SharedWorkstationSignInRequestException::sessionGone();
+            }
+
+            // Re-checked under the lock: grant enforced this, and the record
+            // it enforced it against is the one being consumed (AUTH-036).
+            if ($locked->granted_by_user_id === null
+                || (string) $locked->granted_by_user_id !== (string) $session->user_id) {
+                throw SharedWorkstationSignInRequestException::grantScope();
+            }
+
+            $confirmed = $this->sessions->confirmReauthentication($session, $workstation, [
+                'sign_in_request_id' => (string) $locked->getKey(),
+            ]);
+
+            $this->audit->recordForEntity(
+                entity: $locked,
+                action: self::AUDIT_COLLECTED,
+                actorUser: $confirmed->user()->first(),
+                actorDevice: $workstation->device()->first(),
+                organizationId: $workstation->organization_id,
+                eventId: $locked->event_id,
+                departmentId: $workstation->department_id,
+                after: [
+                    'sign_in_request_id' => $locked->getKey(),
+                    'shared_workstation_id' => $workstation->getKey(),
+                    'event_id' => $locked->event_id,
+                    'purpose' => $locked->purpose,
+                    'granted_by_user_id' => $locked->granted_by_user_id,
+                    'shared_workstation_session_id' => $confirmed->getKey(),
+                ],
+                sourceContext: AuditEvent::SOURCE_API,
+            );
+
+            return $confirmed;
+        });
+    }
+
+    /**
      * The identity a request travels under: this install's own node (AUTH-034).
      */
     public function localNode(): ?Node
