@@ -16,6 +16,11 @@ import {
   installClientSession,
 } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
+import { resetHiddenPageAnswers } from "@/session/hiddenPages";
+import {
+  recordNodeUnreachable,
+  resetNodeReachability,
+} from "@/offline/nodeReachability";
 import { fixtureSessionDocument } from "@/session/sessionDocumentFixture";
 import AboutView from "@/views/AboutView.vue";
 
@@ -53,6 +58,8 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   clearClientSession();
+  resetHiddenPageAnswers();
+  resetNodeReachability();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
   window.localStorage.clear();
@@ -144,6 +151,93 @@ describe("cached-permission state on Settings", () => {
     expect(wrapper.get(".about__permissions-empty").text()).toContain(
       "This device holds no session",
     );
+  });
+});
+
+/*
+ * Which pages appear, from Settings (M18.69).
+ *
+ * The section is the only way to reach the preference, so what has to be
+ * readable here is the state on arrival, the write, and — the one that costs a
+ * reader real time when it is missing — the refusal. The setting lives on the
+ * account, so a device with no node cannot change it, and a control that
+ * silently snapped back would leave them clicking it again.
+ */
+describe("page visibility on Settings", () => {
+  it("shows the state the session holds", async () => {
+    installClientSession(
+      fixtureSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const [show, hide] = wrapper
+      .get(".about__pages")
+      .findAll(".about__theme-toggle button");
+
+    expect(show.text()).toBe("Show");
+    expect(show.attributes("aria-pressed")).toBe("false");
+    expect(hide.attributes("aria-pressed")).toBe("true");
+  });
+
+  it("writes the change to the node and follows its answer", async () => {
+    installClientSession(
+      fixtureSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ hidden_pages: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+
+    await wrapper.get(".about__pages").findAll(".about__theme-toggle button")[0].trigger("click");
+    await flushPromises();
+
+    const [show, hide] = wrapper
+      .get(".about__pages")
+      .findAll(".about__theme-toggle button");
+
+    expect(show.attributes("aria-pressed")).toBe("true");
+    expect(hide.attributes("aria-pressed")).toBe("false");
+    expect(wrapper.find(".about__pages-error").exists()).toBe(false);
+  });
+
+  it("says so when the change cannot be made", async () => {
+    installClientSession(
+      fixtureSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    recordNodeUnreachable();
+
+    await wrapper.get(".about__pages").findAll(".about__theme-toggle button")[0].trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".about__pages-error").text()).toContain(
+      "needs a connection to the node",
+    );
+    // And the control still says what the account holds, rather than the state
+    // the click asked for and did not get.
+    expect(
+      wrapper
+        .get(".about__pages")
+        .findAll(".about__theme-toggle button")[1]
+        .attributes("aria-pressed"),
+    ).toBe("true");
   });
 });
 

@@ -50,6 +50,7 @@ final class DevelopmentScenarioCatalog
      *     department_code: string|null,
      *     team_code: string|null,
      *     crew_team_code?: string|null,
+     *     additional_departments?: list<array{department_code: string, team_code: string}>,
      *     department_status: string|null,
      *     grants: list<array{role: string, event_scoped: bool}>
      * }>
@@ -310,6 +311,44 @@ final class DevelopmentScenarioCatalog
                     ['role' => 'department_lead', 'event_scoped' => false],
                     ['role' => 'department_logistics', 'event_scoped' => false],
                 ],
+            ],
+            /*
+             * The person who works more than one department.
+             *
+             * Every persona above holds exactly one, and a second team inside
+             * it at most — which meant the department switcher, the department
+             * context in the masthead, and every surface that reads "the
+             * department you are currently in" could not be exercised at all
+             * against this scenario. There was nothing to switch to.
+             *
+             * Three departments rather than two, because two makes a toggle and
+             * three makes a list: with two, a switcher that always moves to
+             * "the other one" looks correct, and the bug where it ignores which
+             * one you picked does not appear until there is a third.
+             *
+             * He is an ordinary member in all three, deliberately. Authority in
+             * this catalog lives on the `*_LEADS` teams and applies to everyone
+             * on them, so putting Milo on one to make his navigation differ per
+             * department would quietly add a second holder of roles this
+             * scenario documents as belonging to one persona each — and the
+             * permission-boundary tests that rest on that are worth more than
+             * the convenience. What he proves is the switch itself: same
+             * person, three departments, and the interface following which one
+             * he is standing in.
+             */
+            [
+                'key' => 'milo',
+                'user_name' => 'Milo Multidept',
+                'email' => 'milo.multidept@northwood-collective.test',
+                'org_status' => 'active',
+                'department_code' => 'RANGERS',
+                'team_code' => 'DIRT',
+                'additional_departments' => [
+                    ['department_code' => 'GATE', 'team_code' => 'OPERATOR'],
+                    ['department_code' => 'DPW', 'team_code' => 'LOGISTICS'],
+                ],
+                'department_status' => null,
+                'grants' => [],
             ],
         ];
     }

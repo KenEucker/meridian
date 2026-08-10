@@ -18,6 +18,12 @@ import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingField
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import { clientSessionState } from "@/session/clientSession";
 import {
+  HIDEABLE_PAGES,
+  pageHidden,
+  setPageHidden,
+  type HideablePage,
+} from "@/session/hiddenPages";
+import {
   resolveReadinessChecklist,
   summarizeReadiness,
 } from "@/readiness/checklist";
@@ -218,6 +224,42 @@ const configSchemaVersion = computed(() =>
     : String(serverHealth.value.config_schema_version),
 );
 
+/*
+ * The pages this reader has put away (M18.69).
+ *
+ * The setting is on the account rather than on the device, so it follows them
+ * to the next machine they sign in on — which also means it needs the node, and
+ * a refusal has to be said out loud rather than left as a control that quietly
+ * snapped back.
+ */
+const hideablePages = HIDEABLE_PAGES;
+const pageVisibilityBusy = ref<string | null>(null);
+const pageVisibilityError = ref<string | null>(null);
+
+function isPageShown(page: HideablePage): boolean {
+  return !pageHidden(page.key);
+}
+
+async function setPageShown(page: HideablePage, shown: boolean): Promise<void> {
+  if (pageVisibilityBusy.value !== null || isPageShown(page) === shown) {
+    return;
+  }
+
+  pageVisibilityBusy.value = page.key;
+  pageVisibilityError.value = null;
+
+  try {
+    await setPageHidden(page.key, !shown);
+  } catch (error) {
+    pageVisibilityError.value =
+      error instanceof Error
+        ? error.message
+        : "The node did not accept the change.";
+  } finally {
+    pageVisibilityBusy.value = null;
+  }
+}
+
 function readPreferredTheme(): ThemeChoice {
   if (typeof window === "undefined") {
     return "dark";
@@ -346,6 +388,64 @@ watch(
           </button>
         </div>
       </div>
+    </section>
+
+    <!--
+      Which pages appear in the navigation (M18.69).
+
+      Its own section rather than a row under Display, because Display is about
+      how this device draws things and this is about what the reader's account
+      shows them everywhere. Hiding a page takes it out of both menus and off
+      Home; it never takes away the page itself, which is what the note under
+      the heading says plainly — somebody who hides a dashboard and then follows
+      a link to one should not think the product is broken.
+    -->
+    <section class="about__pages" aria-labelledby="about-pages-heading">
+      <h2 id="about-pages-heading" class="about__subheading">Pages</h2>
+      <p class="about__section-note">
+        What appears in your menus and on Home. Saved to your account, so it
+        follows you to any device you sign in on. A hidden page still exists and
+        still opens from a link.
+      </p>
+
+      <div
+        v-for="page in hideablePages"
+        :key="page.key"
+        class="about__setting-row"
+      >
+        <div>
+          <h3>{{ page.label }}</h3>
+          <p>{{ page.description }}</p>
+        </div>
+        <div class="about__theme-toggle" :aria-label="page.label">
+          <button
+            type="button"
+            :aria-pressed="isPageShown(page)"
+            :disabled="pageVisibilityBusy !== null"
+            @click="setPageShown(page, true)"
+          >
+            Show
+          </button>
+          <button
+            type="button"
+            :aria-pressed="!isPageShown(page)"
+            :disabled="pageVisibilityBusy !== null"
+            @click="setPageShown(page, false)"
+          >
+            Hide
+          </button>
+        </div>
+      </div>
+
+      <!--
+        Said out loud rather than left as a control that snapped back. The
+        setting lives on the account, so a device with no node cannot change it,
+        and "nothing happened" is the one response that would leave the reader
+        guessing.
+      -->
+      <p v-if="pageVisibilityError" class="about__pages-error" role="alert">
+        {{ pageVisibilityError }}
+      </p>
     </section>
 
     <!--
@@ -545,9 +645,22 @@ watch(
 
 .about__settings,
 .about__device,
+.about__pages,
 .about__permissions,
 .about__about {
   margin-top: var(--m-space-6);
+}
+
+.about__section-note {
+  margin: var(--m-space-2) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.about__pages-error {
+  margin: var(--m-space-3) 0 0;
+  color: var(--m-status-danger);
+  font-size: var(--m-text-sm);
 }
 
 .about__permissions :deep(.session-permissions),
@@ -665,6 +778,13 @@ watch(
 .about__theme-toggle button[aria-pressed="true"] {
   background: var(--m-action-primary-bg);
   color: var(--m-action-primary-text);
+}
+
+/* Matches the refresh button: the pressed state still reads while the write is
+   in flight, so the control says what it holds rather than going blank. */
+.about__theme-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .about__theme-toggle button:focus-visible {

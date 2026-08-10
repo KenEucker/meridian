@@ -107,6 +107,17 @@ return [
     'changelog' => [
         'path' => env('MERIDIAN_CHANGELOG_PATH', resource_path('changelog/changelog.json')),
 
+        /*
+         * Where a pull request number can be read in full (GOD-019).
+         *
+         * Derived from the repository below when unset, rather than stored on
+         * each entry: the packaged file is generated from git history, which
+         * knows numbers and not addresses, and a URL written into every entry
+         * would be a second copy to go stale the day the repository moves.
+         * Set this only for a host the default cannot be built for.
+         */
+        'repository_url' => env('MERIDIAN_CHANGELOG_REPOSITORY_URL'),
+
         'refresh' => [
             'enabled' => filter_var(env('MERIDIAN_CHANGELOG_REFRESH_ENABLED', true), FILTER_VALIDATE_BOOL),
             'repository' => env('MERIDIAN_CHANGELOG_REPOSITORY', 'KenEucker/meridian'),

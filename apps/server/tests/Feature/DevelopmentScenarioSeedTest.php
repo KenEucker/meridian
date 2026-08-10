@@ -76,9 +76,50 @@ class DevelopmentScenarioSeedTest extends TestCase
 
         // Twelve personas carry authority, one per documented role. The rest
         // are the bodies the operational scenario needs in order to have
-        // somebody standing in each of the desk's states at the same time.
-        $this->assertCount(18, User::query()->where('email', 'like', '%@northwood-collective.test')->get());
-        $this->assertCount(18, Staff::query()->where('email', 'like', '%@northwood-collective.test')->get());
+        // somebody standing in each of the desk's states at the same time, plus
+        // the one who works three departments at once.
+        $this->assertCount(19, User::query()->where('email', 'like', '%@northwood-collective.test')->get());
+        $this->assertCount(19, Staff::query()->where('email', 'like', '%@northwood-collective.test')->get());
+    }
+
+    /**
+     * The persona department switching is exercised with (M18.69).
+     *
+     * Three active memberships in three departments, all ordinary. The last
+     * assertion is the one that matters beyond the count: if Milo picked up a
+     * role from a team he was added to, the scenario has stopped documenting
+     * one holder per role and the permission-boundary tests above are resting
+     * on something that is no longer true.
+     */
+    public function test_the_multi_department_persona_is_an_ordinary_member_of_three_departments(): void
+    {
+        $this->seedScenario();
+
+        $organization = Organization::query()
+            ->where('slug', DevelopmentScenarioCatalog::ORGANIZATION_SLUG)
+            ->firstOrFail();
+
+        $milo = Staff::query()
+            ->where('email', 'milo.multidept@northwood-collective.test')
+            ->firstOrFail();
+
+        $departmentCodes = $milo->departmentMemberships()
+            ->whereNull('archived_at')
+            ->whereHas('department', fn ($query) => $query->where('organization_id', $organization->id))
+            ->with('department')
+            ->get()
+            ->map(fn ($membership): string => (string) $membership->department?->code)
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->assertSame(['DPW', 'GATE', 'RANGERS'], $departmentCodes);
+
+        $this->assertSame(
+            [],
+            (new EffectiveRoleResolver)->resolveForStaff($milo)->pluck('roleCode')->all(),
+            'Milo Multidept switches departments and must hold no roles in any of them.',
+        );
     }
 
     public function test_seeded_personas_have_expected_statuses_memberships_and_permission_grants(): void
@@ -263,7 +304,7 @@ class DevelopmentScenarioSeedTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $this->assertSame(
-            18,
+            19,
             User::query()->where('email', 'like', '%@northwood-collective.test')->count(),
         );
 

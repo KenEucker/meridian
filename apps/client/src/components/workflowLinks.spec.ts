@@ -187,13 +187,22 @@ describe("navigation without a permitting capability", () => {
       "Dashboard",
       "Shifts",
       "My Field Reports",
-      // M18.6: acknowledgments are personal too, and gated by no capability —
-      // being asked to read a document is a fact about somebody rather than a
-      // permission granted to them.
-      "Acknowledgments",
-      "Documents",
       "Trainings",
     ]);
+
+    /*
+     * M18.69: Acknowledgments and the document library are personal pages and
+     * gated by no capability — being asked to read a document is a fact about
+     * somebody rather than a permission granted to them — but neither is a
+     * place anybody works out of, so they are listed on Home and kept out of
+     * the menu.
+     */
+    expect(sectionLabels("You")).toContain("Acknowledgments");
+    expect(sectionLabels("You")).toContain("Documents");
+    expect(useStaffLinks().value.map((link) => link.label)).not.toContain(
+      "Acknowledgments",
+    );
+
     expect(sectionLabels("Device")).toEqual(["Readiness", "Health"]);
   });
 
@@ -203,9 +212,9 @@ describe("navigation without a permitting capability", () => {
     // holding a department with teams — the same reason the shift board is not.
     install(sessionWith({ capabilities: ["department.administer"] }));
 
-    const documents = useStaffLinks().value.find(
-      (link) => link.label === "Documents",
-    );
+    const documents = useNavigationSections()
+      .value.find((section) => section.title === "You")
+      ?.links.find((link) => link.label === "Documents");
 
     expect(documents?.to.name).toBe("staff.documents.index");
     expect(documents?.to.params).toBeUndefined();
@@ -569,5 +578,101 @@ describe("navigation across the user's departments", () => {
       "Incidents",
       "Admin",
     ]);
+  });
+});
+
+/**
+ * Pages the reader has put away (M18.69).
+ *
+ * The cases above install a document that hides nothing, so they read the
+ * capability derivation on its own. These read the other half: the same
+ * derivation with a preference applied on top, which is the order the module
+ * works in — permitted first, wanted second.
+ *
+ * The dashboards are the interesting entry because one key covers four routes
+ * across three sections, which is the case where a filter that ran per-list
+ * instead of per-route would let one of them through.
+ */
+describe("navigation the reader has hidden", () => {
+  it("hides the dashboards from every surface at once", () => {
+    installClientSession(
+      localFieldSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+    );
+    selectSessionDepartment("66666666-6666-4666-8666-666666666666");
+
+    expect(useWorkflowLinks().value.map((link) => link.label)).toEqual([
+      "Overview",
+      "Planning",
+      "Logistics",
+      "Operations",
+      "Incidents",
+      "Admin",
+    ]);
+    expect(useStaffLinks().value.map((link) => link.label)).not.toContain(
+      "Dashboard",
+    );
+    expect(everyNavigationLabel()).not.toContain("Incident Command dashboard");
+    expect(everyNavigationLabel()).not.toContain("Organizer dashboard");
+  });
+
+  /*
+   * The whole point of the preference. A page that is hidden is still a page
+   * the session permits, so nothing about authority may move — otherwise a
+   * reader tidying their menu would be quietly narrowing what they can do.
+   */
+  it("takes nothing else away with them", () => {
+    installClientSession(localFieldSessionDocument(), "network");
+    selectSessionDepartment("66666666-6666-4666-8666-666666666666");
+
+    const shown = everyNavigationLabel();
+
+    clearClientSession();
+    installClientSession(
+      localFieldSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+    );
+    selectSessionDepartment("66666666-6666-4666-8666-666666666666");
+
+    const hidden = everyNavigationLabel();
+
+    // Compared as sets, because `everyNavigationLabel` reads the menus and the
+    // Home directory and a page appears in both.
+    const lost = [...new Set(shown.filter((label) => !hidden.includes(label)))];
+
+    expect(lost.sort()).toEqual(["Dashboard", "Incident Command dashboard"]);
+    expect(hidden.filter((label) => !shown.includes(label))).toEqual([]);
+  });
+
+  /*
+   * A session document from a node that predates the field, or a cached one
+   * written by an older build. The reader gets the defaults rather than an
+   * empty set, so the menu does not change shape depending on which build last
+   * wrote the cache.
+   */
+  it("falls back to the catalog defaults when the document carries no preferences", () => {
+    installClientSession(
+      localFieldSessionDocument({ preferences: undefined }),
+      "network",
+    );
+    selectSessionDepartment("66666666-6666-4666-8666-666666666666");
+
+    expect(useWorkflowLinks().value.map((link) => link.label)).not.toContain(
+      "Dashboard",
+    );
+  });
+
+  /* A section emptied by the preference goes rather than standing as a heading
+     over nothing. */
+  it("drops a section the preference has emptied", () => {
+    installClientSession(
+      localFieldSessionDocument({ preferences: { hidden_pages: ["dashboard"] } }),
+      "network",
+    );
+    selectSessionDepartment("66666666-6666-4666-8666-666666666666");
+
+    for (const section of useNavigationSections().value) {
+      expect(section.links.length).toBeGreaterThan(0);
+    }
   });
 });

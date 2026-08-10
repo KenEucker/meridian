@@ -196,8 +196,6 @@ class DevelopmentScenarioSeeder extends Seeder
      */
     private function seedPersonas(Organization $organization, array $teamsByCode, array $departmentsByCode): void
     {
-        $membershipService = app(DepartmentMembershipService::class);
-
         foreach (DevelopmentScenarioCatalog::personas() as $persona) {
             $user = User::query()->updateOrCreate(
                 ['email' => $persona['email']],
@@ -236,7 +234,6 @@ class DevelopmentScenarioSeeder extends Seeder
             }
 
             $team = $this->resolveTeam($persona, $teamsByCode, $departmentsByCode);
-            $department = $team->department()->firstOrFail();
             $departmentStatus = $persona['department_status'] ?? 'active';
 
             /*
@@ -250,41 +247,29 @@ class DevelopmentScenarioSeeder extends Seeder
                 ? $teamsByCode[$persona['crew_team_code']] ?? null
                 : null;
 
-            $existingMembership = $staff->departmentMemberships()
-                ->where('department_id', $department->id)
-                ->whereNull('archived_at')
-                ->first();
+            $this->ensureMembership(
+                $staff,
+                $user,
+                array_values(array_filter([$team, $crewTeam])),
+                $departmentStatus,
+            );
 
-            if ($existingMembership === null) {
-                $membershipService->createWithTeams(
+            /*
+             * The departments this persona works beyond their first (M18.69).
+             *
+             * Written the same way and with the same status, because a second
+             * department is not a lesser one — somebody who Rangers and also
+             * works Gate is an ordinary member of both, and a scenario that
+             * seeded the second as provisional would be testing the switcher
+             * against a state the switcher does not produce.
+             */
+            foreach ($persona['additional_departments'] ?? [] as $additional) {
+                $this->ensureMembership(
                     $staff,
-                    $department,
-                    array_values(array_filter([$team, $crewTeam])),
-                    $departmentStatus,
-                    $departmentStatus === 'ineligible'
-                        ? 'Department eligibility review pending.'
-                        : null,
                     $user,
+                    [$teamsByCode[$additional['team_code']]],
+                    $departmentStatus,
                 );
-            } else {
-                $existingMembership->forceFill([
-                    'status' => $departmentStatus,
-                    'status_reason' => $departmentStatus === 'ineligible'
-                        ? 'Department eligibility review pending.'
-                        : null,
-                ])->save();
-
-                foreach (array_filter([$team, $crewTeam]) as $membershipTeam) {
-                    $existingMembership->teamMemberships()
-                        ->where('team_id', $membershipTeam->id)
-                        ->whereNull('archived_at')
-                        ->first()
-                        ?? $existingMembership->teamMemberships()->create([
-                            'team_id' => $membershipTeam->id,
-                            'staff_id' => $staff->id,
-                            'membership_role' => 'member',
-                        ]);
-                }
             }
 
             // shift_lead applies only to designated lead memberships (M11.17).
@@ -294,6 +279,64 @@ class DevelopmentScenarioSeeder extends Seeder
                     ->whereNull('archived_at')
                     ->update(['membership_role' => 'lead']);
             }
+        }
+    }
+
+    /**
+     * One staff member's membership of the department the given teams belong
+     * to, created or brought up to date.
+     *
+     * Idempotent in both directions: a department the staff member is already
+     * in has its status corrected and any missing team membership added, rather
+     * than a second membership row appearing on the next seed run.
+     *
+     * @param  list<Team>  $teams  teams within a single department, the first of
+     *                             which names the department the membership is in
+     */
+    private function ensureMembership(
+        Staff $staff,
+        User $user,
+        array $teams,
+        string $departmentStatus,
+    ): void {
+        $department = $teams[0]->department()->firstOrFail();
+        $statusReason = $departmentStatus === 'ineligible'
+            ? 'Department eligibility review pending.'
+            : null;
+
+        $existingMembership = $staff->departmentMemberships()
+            ->where('department_id', $department->id)
+            ->whereNull('archived_at')
+            ->first();
+
+        if ($existingMembership === null) {
+            app(DepartmentMembershipService::class)->createWithTeams(
+                $staff,
+                $department,
+                $teams,
+                $departmentStatus,
+                $statusReason,
+                $user,
+            );
+
+            return;
+        }
+
+        $existingMembership->forceFill([
+            'status' => $departmentStatus,
+            'status_reason' => $statusReason,
+        ])->save();
+
+        foreach ($teams as $membershipTeam) {
+            $existingMembership->teamMemberships()
+                ->where('team_id', $membershipTeam->id)
+                ->whereNull('archived_at')
+                ->first()
+                ?? $existingMembership->teamMemberships()->create([
+                    'team_id' => $membershipTeam->id,
+                    'staff_id' => $staff->id,
+                    'membership_role' => 'member',
+                ]);
         }
     }
 

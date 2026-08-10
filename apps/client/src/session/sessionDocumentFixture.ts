@@ -106,6 +106,16 @@ export function fixtureSessionDocument(
       node_locked_event_id: event.id,
       switching_available: false,
     },
+    /*
+     * A reader who has hidden nothing (M18.69).
+     *
+     * Stated rather than left off, because leaving it off means the catalog's
+     * defaults apply and the fixture's navigation changes shape every time a
+     * page is given a new default. The specs built on this fixture are about
+     * what capability codes permit; a preference is a separate question, and
+     * one a spec asking it should set for itself.
+     */
+    preferences: { hidden_pages: [] },
     refreshed_at: "2026-09-11T18:30:00+00:00",
     ...overrides,
   };

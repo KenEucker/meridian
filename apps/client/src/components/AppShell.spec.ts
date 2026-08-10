@@ -756,8 +756,7 @@ describe("AppShell menu behavior", () => {
     });
 
     // The Rangers department lead holds every department capability the seeded
-    // session carries, and still lands under the combine threshold at twelve
-    // items.
+    // session carries, and still lands under the combine threshold.
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
 
@@ -771,10 +770,9 @@ describe("AppShell menu behavior", () => {
       "Dashboard",
       "Shifts",
       "My Field Reports",
-      "Acknowledgments",
-      // M18.7: the document library is personal too, so the lead who maintains
-      // one department's documents still reads the ones published to them here.
-      "Documents",
+      // M18.69: Acknowledgments and the document library are personal pages
+      // and still on Home, but neither is a place anybody works out of, so
+      // neither is in the menu.
       // M18.28: the department's own dashboard, ahead of the workflows inside it.
       "Dashboard",
       "Overview",
@@ -800,9 +798,9 @@ describe("AppShell menu behavior", () => {
       .find((button) => button.text().includes("Gate"))!
       .trigger("click");
 
-    // In Gate the user is a plain member holding no capability at all: seven
-    // personal and member items total, so splitting them across two dropdowns
-    // would only make the reader guess.
+    // In Gate the user is a plain member holding no capability at all, so what
+    // is left is their personal and member items — few enough that splitting
+    // them across two dropdowns would only make the reader guess.
     expect(wrapper.find(".app-shell__staff-menu").exists()).toBe(false);
     expect(wrapper.get(".app-shell__workflow-button").text()).toContain("Menu");
 
@@ -814,8 +812,6 @@ describe("AppShell menu behavior", () => {
       "Dashboard",
       "Shifts",
       "My Field Reports",
-      "Acknowledgments",
-      "Documents",
       "Trainings",
     ]);
   });
@@ -851,8 +847,6 @@ describe("AppShell menu behavior", () => {
       "Dashboard",
       "Shifts",
       "My Field Reports",
-      "Acknowledgments",
-      "Documents",
       "Trainings",
       "Team",
     ]);

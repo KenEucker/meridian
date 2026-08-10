@@ -78,6 +78,7 @@ import {
   sessionOrganizationId,
   sessionSwitchingAvailable,
 } from "@/session/sessionContext";
+import { visibleLinks } from "@/session/hiddenPages";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -144,7 +145,7 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
     if (params === null) {
       // Incidents is event-scoped rather than department-scoped, so it is the
       // one workflow that survives having no department route to build.
-      return incidentLinks(department);
+      return visibleLinks(incidentLinks(department));
     }
 
     const isDepartmentLead = departmentHasRole(department, ROLE_DEPARTMENT_LEAD);
@@ -248,7 +249,16 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       });
     }
 
-    return links;
+    /*
+     * The reader's own preference, applied last (M18.69).
+     *
+     * Last on purpose: everything above decides what this person is permitted
+     * to reach, and this decides what they want to look at. Filtering earlier
+     * would tangle the two and make a display preference read like an
+     * authority decision — and it is the capability checks, not this, that
+     * CLIENT-005 is about.
+     */
+    return visibleLinks(links);
   });
 }
 
@@ -315,16 +325,67 @@ function imsDirectoryLinks(
 }
 
 /**
+ * Personal pages reached from the home directory rather than from the menu.
+ *
+ * These are still the reader's own pages and still belong on Home — Home is the
+ * full map of what somebody can reach. They are kept out of the menu on the
+ * same reasoning that keeps IMS Field Reports out of the tab bar: the menu
+ * names the places a person works out of, and neither of these is one. Reading
+ * a policy and checking what you have already accepted are things somebody does
+ * once, from a link or from Home, not a hub they sit in for a stretch of the
+ * event — and a menu that lists them is a menu with two more entries to scan
+ * every time somebody is looking for the one they use hourly.
+ * {@see useNavigationSections} keeps them in the "You" section.
+ */
+function staffDirectoryLinks(): WorkflowLink[] {
+  return [
+    /*
+     * Acknowledgments (M18.6; POL-023, POL-043). Personal, like Me and My
+     * Field Reports, and gated by no capability: being asked to read a
+     * document is a fact about a person rather than a permission somebody
+     * grants them. The page says plainly when nobody has asked them anything,
+     * which is the honest empty state — a missing entry would leave a staff
+     * member with no way to check what they accepted.
+     */
+    {
+      label: "Acknowledgments",
+      description: "Documents you were asked to read, and the version you accepted.",
+      to: { name: "staff.documents.acknowledgments" },
+    },
+    /*
+     * The document library (M18.7; POL-006, POL-008 through POL-012). This is
+     * where a member's Documents entry now leads, and it is here for everybody
+     * rather than only for members without an Admin workflow: a policy is
+     * published to a person, so reading one is personal work even for the lead
+     * who maintains a different one. The department library it replaced could
+     * only show one department's documents at a time, from inside the surface
+     * for maintaining them; leads still reach that library from Admin, where
+     * authoring lives.
+     */
+    {
+      label: "Documents",
+      pageLabel: "Policies & Procedures",
+      description: "Policies and procedures published to you.",
+      to: { name: "staff.documents.index" },
+    },
+  ];
+}
+
+/**
  * The Staff menu: the pages that belong to the person rather than to a
  * workflow.
  *
  * Me is always here for a signed-in user, and Event Info and the shift board sit
  * next to it whenever the session resolved an event. My Field Reports belongs
  * here too: authoring a Field Report is something a person does, not something a
- * department workflow owns, and every role can do it. So is reading a policy, so
- * the document library is here for everybody. Leads stop there, because their
- * Trainings page is reached from inside the Planning workflow they already work
- * out of; members get it here, since they have no workflow to reach it from.
+ * department workflow owns, and every role can do it. Leads stop there, because
+ * their Trainings page is reached from inside the Planning workflow they already
+ * work out of; members get it here, since they have no workflow to reach it
+ * from.
+ *
+ * Acknowledgments and the document library are not here. They are personal
+ * pages and they are on Home, but they are not places somebody works out of —
+ * see {@see staffDirectoryLinks}.
  */
 export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   const eventContext = useEventContext();
@@ -412,42 +473,11 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       );
     }
 
-    links.push(
-      {
-        label: "My Field Reports",
-        description: "Field report author workspace.",
-        to: { name: "staff.field-reports.index" },
-      },
-      /*
-       * Acknowledgments (M18.6; POL-023, POL-043). Personal, like Me and My
-       * Field Reports, and gated by no capability: being asked to read a
-       * document is a fact about a person rather than a permission somebody
-       * grants them. The page says plainly when nobody has asked them anything,
-       * which is the honest empty state — a missing entry would leave a staff
-       * member with no way to check what they accepted.
-       */
-      {
-        label: "Acknowledgments",
-        description: "Documents you were asked to read, and the version you accepted.",
-        to: { name: "staff.documents.acknowledgments" },
-      },
-      /*
-       * The document library (M18.7; POL-006, POL-008 through POL-012). This is
-       * where a member's Documents entry now leads, and it is here for everybody
-       * rather than only for members without an Admin workflow: a policy is
-       * published to a person, so reading one is personal work even for the lead
-       * who maintains a different one. The department library it replaced could
-       * only show one department's documents at a time, from inside the surface
-       * for maintaining them; leads still reach that library from Admin, where
-       * authoring lives.
-       */
-      {
-        label: "Documents",
-        pageLabel: "Policies & Procedures",
-        description: "Policies and procedures published to you.",
-        to: { name: "staff.documents.index" },
-      },
-    );
+    links.push({
+      label: "My Field Reports",
+      description: "Field report author workspace.",
+      to: { name: "staff.field-reports.index" },
+    });
 
     if (
       params === null ||
@@ -455,7 +485,7 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       department.teams.length === 0 ||
       departmentHasCapability(department, CAPABILITY_DEPARTMENT_ADMINISTER)
     ) {
-      return links;
+      return visibleLinks(links);
     }
 
     links.push({
@@ -464,7 +494,9 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       to: { name: "events.departments.trainings.index", params },
     });
 
-    return links;
+    // The reader's own preference, applied after the checks that built the
+    // list. See the note at the end of `useWorkflowLinks`.
+    return visibleLinks(links);
   });
 }
 
@@ -525,7 +557,8 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       {
         title: "You",
         description: "Your profile, event information, and personal pages.",
-        links: staffLinks.value,
+        // The menu's personal pages plus the two that are only listed here.
+        links: [...staffLinks.value, ...staffDirectoryLinks()],
       },
     ];
 
@@ -609,8 +642,10 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       });
     }
 
+    // Read from the section rather than from the menu list, so a page listed
+    // only on Home still counts as already listed.
     const staffRouteNames = new Set(
-      staffLinks.value.map((link) => link.to.name),
+      sections[0].links.map((link) => link.to.name),
     );
     const departmentPages: WorkflowLink[] = [];
 
@@ -1065,6 +1100,21 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
       ],
     });
 
-    return sections;
+    /*
+     * The reader's own preference, applied to the whole directory at once
+     * (M18.69).
+     *
+     * Home is the full map of what somebody can reach, so hiding a page has to
+     * take it off the map as well as out of the menus — a preference that only
+     * cleaned up the tab bar would leave the tile it was meant to remove sitting
+     * on the first screen the reader sees.
+     *
+     * A section left with nothing in it goes too. A heading over an empty grid
+     * describes a group the reader has emptied on purpose, and the honest
+     * rendering of that is nothing at all.
+     */
+    return sections
+      .map((section) => ({ ...section, links: visibleLinks(section.links) }))
+      .filter((section) => section.links.length > 0);
   });
 }
