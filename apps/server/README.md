@@ -170,12 +170,21 @@ re-running it does not duplicate these accounts or reset a password you changed.
 | `debbie.dns@northwood-collective.test` | Debbie DNS | none | none — organization status `do_not_staff` |
 | `pat.prospective@northwood-collective.test` | Pat Prospective | none | none — organization status `prospective` |
 | `ira.ineligible@northwood-collective.test` | Ira Ineligible | Gate / Default | none — department status `ineligible` |
+| `milo.multidept@northwood-collective.test` | Milo Multidept | Rangers / Dirt, Gate / Operator, DPW / Logistics | none — plain staff in all three |
 
 Sam carries every department capability at once, so one sign-in reaches all of
-the department administration surfaces. The last three personas exist to
+the department administration surfaces. The last four personas exist to
 exercise refusals rather than access: Debbie is barred from staffing, Pat has
 not been accepted into the organization, and Ira's department membership is
 ineligible. Signing in as any of them and finding a surface open is a finding.
+
+Milo is the only persona in more than one department, and he is the one to sign
+in as to exercise department switching — the switcher in the masthead, the
+department context beside it, and every surface that reads "the department you
+are currently in". He holds no roles anywhere, because the `*_LEADS` teams
+carrying this scenario's authority grant it to everyone on them: giving Milo a
+lead role in one of his three departments would add a second holder of a role
+the table above documents as belonging to one persona.
 
 Gwen Godmode is seeded without a `god_mode` grant because node-scoped direct
 user roles remain deferred to a later task. Today she signs in as an ordinary
