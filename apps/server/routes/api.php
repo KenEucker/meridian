@@ -46,6 +46,7 @@ use App\Http\Controllers\Incidents\IncidentTypeAdminController;
 use App\Http\Controllers\Kiosk\KioskWorkstationContextController;
 use App\Http\Controllers\Kiosk\WorkstationSignInRequestController;
 use App\Http\Controllers\Marketing\OrganizationInterestController;
+use App\Http\Controllers\Navigation\PageVisibilityController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
@@ -522,6 +523,17 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::post('/commands/show-event-horizon', [EventHorizonPreferenceController::class, 'showSurface'])
         ->name('api.commands.show-event-horizon');
+
+    /*
+     * Hiding a page from your own navigation (M18.69). Self-scoped like the
+     * preference commands above and unaudited for the same reason: what a
+     * person chooses to see in their own menu is not a record of anything
+     * operational (technical spec 21D.10). The command carries a page key and
+     * an answer and names no subject, so there is nothing here for anyone to
+     * do to anyone else's menu.
+     */
+    Route::post('/commands/set-page-visibility', [PageVisibilityController::class, 'update'])
+        ->name('api.commands.set-page-visibility');
 
     /*
      * Staff self-service on their own profile (M18.20; VOL-015, VOL-016,

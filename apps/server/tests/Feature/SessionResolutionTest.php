@@ -121,8 +121,25 @@ class SessionResolutionTest extends TestCase
             // this caller (AUTH-024). A fact about the credential rather than a
             // navigation decision, which is what the loop below still checks.
             'device',
+            /*
+             * What this caller has asked not to be shown (M18.69), which is a
+             * different kind of thing from everything above it.
+             *
+             * The rule this test exists to hold is that the node does not
+             * decide what the menu contains — a precomputed surface list would
+             * be a second permission model, divergent from the catalog the
+             * server enforces from. A preference decides nothing: it carries
+             * page keys the user themselves chose, the node never applies them,
+             * and every page named in it stays reachable by address and
+             * enforced on arrival (CLIENT-006). The assertions below are what
+             * keep the two apart — the payload holds keys the *user* named and
+             * still no route, screen, or surface the *node* named.
+             */
+            'preferences',
             'refreshed_at',
         ], array_keys((array) $response->json()));
+
+        $this->assertSame(['hidden_pages'], array_keys((array) $response->json('preferences')));
 
         foreach ($this->keysOf((array) $response->json()) as $key) {
             $this->assertDoesNotMatchRegularExpression(

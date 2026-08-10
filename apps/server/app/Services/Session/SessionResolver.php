@@ -20,6 +20,7 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\Navigation\PageVisibilityService;
 use App\Services\Node\NodeSetupService;
 use App\Services\Permissions\EffectiveRole;
 use App\Services\Permissions\EffectiveRoleResolver;
@@ -57,6 +58,7 @@ class SessionResolver
     public function __construct(
         private readonly EffectiveRoleResolver $roles,
         private readonly NodeSetupService $nodes,
+        private readonly PageVisibilityService $pages,
     ) {}
 
     /**
@@ -117,6 +119,29 @@ class SessionResolver
             'teams' => $teams->values()->all(),
             'context' => $this->context($contextEvent, $lockedEventId, $organizations, $departments, $events),
             'device' => $this->device($user, $device),
+            /*
+             * What this user has asked not to be shown (M18.69).
+             *
+             * Not a navigation decision, and the distinction is the whole
+             * reason it may sit here. Everything else in this document answers
+             * "what is this person permitted to reach", and the class comment
+             * above is emphatic that the node does not answer "what should the
+             * menu contain" — a client works that out from capability codes.
+             * This answers a third question that only the person can answer:
+             * of the pages they may reach, which have they chosen to put away.
+             * The node stores that answer and hands it back. It does not apply
+             * it, does not know which routes it covers, and a page hidden here
+             * is still fully reachable by address, because a preference is not
+             * a permission (CLIENT-006).
+             *
+             * It rides on the session rather than on a read of its own so the
+             * menu is right on first paint, and so a client working from cache
+             * keeps the reader's own preference instead of showing them a
+             * layout they turned off the last time they had signal.
+             */
+            'preferences' => [
+                'hidden_pages' => $this->pages->hiddenPagesFor($user),
+            ],
             // Server time of resolution, which is what a client operating from
             // cache displays as its last refresh (CLIENT-009).
             'refreshed_at' => now()->toIso8601String(),
