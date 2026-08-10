@@ -1864,9 +1864,26 @@ onBeforeUnmount(() => {
     display: none;
   }
 
+  /*
+   * The bar wraps rather than overflowing.
+   *
+   * Every tab is `flex: 0 0 auto` and `white-space: nowrap`, which is what
+   * keeps a label from being hyphenated mid-word — and with no wrap it also
+   * meant the row could not give: a session carrying enough workflows simply
+   * ran past the nav's own border and out of the top bar. The number of tabs
+   * is not a constant this bar gets to assume. It is however many hubs the
+   * reader's capabilities open, it grows every time a milestone adds a
+   * surface, and it is largest for exactly the person who can least afford a
+   * menu that has visibly broken.
+   *
+   * So the row takes a second line when it needs one. That is the cheap
+   * failure: two rows of tabs is a taller bar, where an overflowing row is
+   * tabs that cannot be clicked at all.
+   */
   .app-shell__tabs,
   .app-shell__workflow-menu[data-open="true"] .app-shell__tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--m-space-1);
     padding: var(--m-space-1);
     box-shadow: none;
