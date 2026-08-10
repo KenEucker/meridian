@@ -628,8 +628,8 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       route: "kiosk.workstation-login",
       outcome: "renders-offline",
       basis:
-        "the code entry form; the node is asked only when a code is submitted",
-      offlineText: "Enter your login code",
+        "the code entry form; the node is asked only when a code is submitted. The scan-to-sign-in QR (M18.60) needs the node to open a request, so with no node in reach the surface states that scan is unavailable and the typed field stands — the fallback the M18.53 rule requires, never a spinner or a blank square",
+      offlineText: "Login code",
     },
     {
       route: "kiosk.switch-user",

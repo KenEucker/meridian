@@ -312,6 +312,40 @@ export async function enterWorkstationLoginCode(input: {
 }
 
 /**
+ * Install the session a collected sign-in request established (M18.60;
+ * AUTH-035; technical spec 13.4).
+ *
+ * The scan path's counterpart to `enterWorkstationLoginCode`: the collect
+ * response carries the same session document a code entry returns, and the
+ * session it installs follows every rule the typed one does — key in memory
+ * only, never persisted, client session refreshed at the pinned event.
+ */
+export async function installCollectedWorkstationSession(
+  payload: unknown,
+): Promise<boolean> {
+  if (state.status === "active") {
+    return false;
+  }
+
+  const parsed = readSessionPayload(payload);
+
+  if (parsed === null || parsed.sessionKey === null) {
+    return false;
+  }
+
+  sessionKey = parsed.sessionKey;
+  lastTouchAt = null;
+  install(parsed);
+
+  // Not persisted, exactly as the typed path: a session document on disk is
+  // how the previous user comes back on screen for whoever restarts the
+  // machine.
+  await refreshClientSession({ eventId: parsed.eventId, persist: false });
+
+  return true;
+}
+
+/**
  * Confirm that the person at the keyboard is still the signed-in user (M18.32;
  * UI-017; UI contract 12.8 `kiosk.reauth`, 18.2).
  *
