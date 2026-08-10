@@ -33,6 +33,68 @@ final class Changelog
     }
 
     /**
+     * Where one entry's pull request can be read in full (GOD-019).
+     *
+     * Built from configuration and the number rather than stored per entry.
+     * The packaged file is generated from git history, which carries numbers
+     * and not addresses, so a stored URL would be absent from exactly the
+     * entries that render on a node with no network — and present-but-wrong on
+     * every entry generated before the repository moved.
+     *
+     * Null when no repository is configured, which is a real state: a build
+     * with refresh switched off and the repository blanked has nothing honest
+     * to point at, and the page says the number without pretending to be a
+     * link. The address is not reachable offline either way. That is fine — the
+     * page renders and reads completely without it (GOD-021), and this is the
+     * one thing on it that is worth following when there *is* a network.
+     */
+    public function pullRequestUrl(int $number): ?string
+    {
+        if ($number <= 0) {
+            return null;
+        }
+
+        $configured = config('meridian.changelog.repository_url');
+
+        if (is_string($configured) && $configured !== '') {
+            return rtrim($configured, '/')."/pull/{$number}";
+        }
+
+        $repository = config('meridian.changelog.refresh.repository');
+
+        if (! is_string($repository) || trim($repository, '/') === '') {
+            return null;
+        }
+
+        return 'https://github.com/'.trim($repository, '/')."/pull/{$number}";
+    }
+
+    /**
+     * The releases with each entry's pull request address attached.
+     *
+     * Resolved here rather than in the view, so the template has a value to
+     * print instead of configuration to reason about.
+     *
+     * @param  list<array{version: string, entries: list<array<string, mixed>>}>  $releases
+     * @return list<array{version: string, entries: list<array<string, mixed>>}>
+     */
+    public function withPullRequestUrls(array $releases): array
+    {
+        return array_map(
+            fn (array $release): array => [
+                'version' => $release['version'],
+                'entries' => array_map(
+                    fn (array $entry): array => $entry + [
+                        'url' => $this->pullRequestUrl((int) ($entry['number'] ?? 0)),
+                    ],
+                    $release['entries'],
+                ),
+            ],
+            $releases,
+        );
+    }
+
+    /**
      * The packaged baseline, grouped by the Meridian version each change
      * shipped in, newest version first.
      *

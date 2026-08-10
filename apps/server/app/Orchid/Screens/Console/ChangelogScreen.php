@@ -28,7 +28,9 @@ class ChangelogScreen extends Screen
      */
     public function query(Changelog $changelog, ChangelogRefresh $refresh): iterable
     {
-        $releases = $changelog->merge($changelog->releases(), $refresh->entries());
+        $releases = $changelog->withPullRequestUrls(
+            $changelog->merge($changelog->releases(), $refresh->entries()),
+        );
 
         // Requested only after the page has been rendered from what is already
         // on disk and in cache, so a slow source repository cannot delay it.

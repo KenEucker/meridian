@@ -31,9 +31,27 @@
             <ul class="list-unstyled">
                 @foreach ($release['entries'] as $entry)
                     <li class="mb-3">
+                        {{--
+                            The number links to the pull request it names
+                            (GOD-019). Built from configuration rather than
+                            stored per entry, and printed as plain text when
+                            this build has no repository configured to point
+                            at. The link is inert on a node with no network,
+                            which costs the page nothing: everything on it is
+                            already here (GOD-021).
+                        --}}
                         <div>
                             <strong>{{ $entry['title'] }}</strong>
-                            <span class="text-muted">#{{ $entry['number'] }}</span>
+                            @if (! empty($entry['url']))
+                                <a
+                                    class="text-muted"
+                                    href="{{ $entry['url'] }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >#{{ $entry['number'] }}</a>
+                            @else
+                                <span class="text-muted">#{{ $entry['number'] }}</span>
+                            @endif
                         </div>
                         <div class="text-muted small">
                             {{ $entry['author'] ?? 'unknown' }} — merged {{ $entry['merged_at'] ?? 'unknown' }}

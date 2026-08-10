@@ -311,6 +311,52 @@ class ConsoleChangelogTest extends TestCase
         $response->assertSee('No changelog is packaged with this build.');
     }
 
+    /**
+     * Each entry links to the pull request it names (GOD-019).
+     *
+     * Derived from the configured repository rather than stored per entry: the
+     * packaged file is generated from git history, which carries numbers and
+     * not addresses.
+     */
+    public function test_each_entry_links_to_its_pull_request(): void
+    {
+        $this->packageBaseline();
+
+        $this->actingAs($this->godModeUser())
+            ->get(route('platform.changelog'))
+            ->assertOk()
+            ->assertSee('https://github.com/KenEucker/meridian/pull/152', false);
+    }
+
+    public function test_a_configured_repository_url_wins_over_the_derived_one(): void
+    {
+        config()->set('meridian.changelog.repository_url', 'https://git.example.test/meridian/');
+
+        $this->assertSame(
+            'https://git.example.test/meridian/pull/152',
+            app(Changelog::class)->pullRequestUrl(152),
+        );
+    }
+
+    /**
+     * A build with nothing to point at says the number and stops.
+     *
+     * The alternative is a link to `https://github.com//pull/152`, which is a
+     * page that does not exist dressed as one that does.
+     */
+    public function test_an_entry_is_not_linked_when_no_repository_is_configured(): void
+    {
+        config()->set('meridian.changelog.repository_url', null);
+        config()->set('meridian.changelog.refresh.repository', '');
+        $this->packageBaseline();
+
+        $response = $this->actingAs($this->godModeUser())->get(route('platform.changelog'));
+
+        $response->assertOk();
+        $response->assertSee('#152');
+        $response->assertDontSee('/pull/152', false);
+    }
+
     public function test_the_changelog_page_requires_its_god_mode_permission(): void
     {
         $user = User::factory()->create(['permissions' => ['platform.index' => true]]);
