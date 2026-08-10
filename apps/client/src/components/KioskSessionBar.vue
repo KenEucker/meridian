@@ -11,17 +11,21 @@ import {
 } from "@/session/workstationSession";
 
 /*
- * The shared-workstation session, always on screen (M16.9; technical spec 13.3;
- * kiosk guide 4.4).
+ * The shared-workstation session's controls (M16.9, M18.66; technical spec
+ * 13.3; kiosk guide 4.4).
  *
- * Three requirements meet in one component because they are the same loop:
+ * Two requirements, and neither of them is a second header:
  *
- *  1. "The active user is shown prominently at all times." Not in a menu behind
- *     an avatar — a shared workstation that is unclear about who is signed in is
- *     worse than one that is signed out.
- *  2. "Users must explicitly end their session before switching users." The
- *     control is here rather than in a user menu, next to the name it ends.
- *  3. Warn before the timeout and offer a way to continue.
+ *  1. "Users must explicitly end their session before switching users." The
+ *     control sits beside the shell's user control, which is where the other
+ *     session controls are and where somebody looks for it.
+ *  2. Warn before the timeout and offer a way to continue.
+ *
+ * "The active user is shown prominently at all times" is satisfied by the shell
+ * itself: the header's user control renders the active user's name, visibly and
+ * on every screen. This component used to render it a second time in a bar of
+ * its own, which was the same fact twice in one piece of chrome — so the name
+ * is the shell's to show and this is only the controls.
  *
  * The clock ticks here rather than in the session module so the countdown stops
  * when nothing is rendering it. Activity is read from the events that mean a
@@ -38,7 +42,6 @@ const now = ref(Date.now());
 let ticking: number | undefined;
 
 const active = computed(() => workstationSessionState.status === "active");
-const userLabel = computed(() => workstationSessionState.user?.name ?? null);
 
 /** Whole seconds left, for the warning. Never negative: zero is the timeout. */
 const secondsLeft = computed(() => {
@@ -104,11 +107,6 @@ watch(
 
 <template>
   <div v-if="active" class="kiosk-session" data-testid="kiosk-session-bar">
-    <p class="kiosk-session__user">
-      <span class="kiosk-session__label">Signed in</span>
-      <strong class="kiosk-session__name">{{ userLabel ?? "Unknown user" }}</strong>
-    </p>
-
     <div
       v-if="workstationSessionState.expiring"
       class="kiosk-session__warning"
@@ -139,38 +137,12 @@ watch(
 
 <style scoped>
 /*
- * A strip of the shell's header rather than a panel of its own (M18.66). It
- * carries no background or border: it sits inside the header, and a raised
- * surface with its own border inside another one is what made it read as a
- * container floating over the page.
+ * Controls in the header's action row, beside the user control (M18.66). No
+ * background, no border, no container: it is two buttons among the shell's
+ * other buttons, not a bar of its own.
  */
 .kiosk-session {
-  display: flex;
-  align-items: center;
-  gap: var(--m-space-3);
-  padding: 0 var(--m-space-4) var(--m-space-2);
-  border-top: 1px solid var(--m-border-subtle, var(--m-border-default));
-  padding-top: var(--m-space-2);
-}
-
-.kiosk-session__user {
-  display: grid;
-  gap: 0.1rem;
-  margin: 0 auto 0 0;
-  min-width: 0;
-}
-
-.kiosk-session__label {
-  color: var(--m-text-muted);
-  font-size: var(--m-text-xs);
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-/* Prominent is the requirement, so the name is the largest thing in the bar. */
-.kiosk-session__name {
-  font-size: var(--m-text-lg);
-  font-weight: 900;
+  display: contents;
 }
 
 .kiosk-session__warning {
@@ -186,6 +158,7 @@ watch(
 
 .kiosk-session__continue,
 .kiosk-session__end {
+  cursor: pointer;
   min-height: 2.75rem;
   padding: 0 var(--m-space-3);
   border: 1px solid var(--m-border-default);

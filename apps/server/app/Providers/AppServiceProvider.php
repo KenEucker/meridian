@@ -13,6 +13,7 @@ use App\Models\OrchidAttachment;
 use App\Models\Organization;
 use App\Models\PolicyDocument;
 use App\Models\ProcedureDocument;
+use App\Models\SharedWorkstation;
 use App\Models\User;
 use App\Policies\DeviceTrustPolicy;
 use App\Policies\FieldReportPolicy;
@@ -26,10 +27,12 @@ use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
 use App\Services\Notifications\NotificationOperationApplier;
 use App\Services\SystemConfig\ApplySystemConfigOverrides;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
 use Orchid\Attachment\Models\Attachment as OrchidPlatformAttachment;
@@ -157,6 +160,8 @@ class AppServiceProvider extends ServiceProvider
         // boundary covers governance content (technical spec 10.2, 21.10).
         $this->app->make(GovernanceWriteGuard::class)->register();
 
+        $this->registerKioskRateLimiters();
+
         // Valid node-local database overrides are applied over the (possibly
         // cached) file configuration, so application code keeps reading
         // config() and the precedence stays database, then environment/.env,
@@ -164,5 +169,77 @@ class AppServiceProvider extends ServiceProvider
         // unreadable override table leaves the node on environment
         // configuration and surfaces through diagnostics (SYS-022).
         $this->app->make(ApplySystemConfigOverrides::class)->apply();
+    }
+
+    /**
+     * Named limiters for the Kiosk's sign-in request routes (M18.67; AUTH-037).
+     *
+     * These need buckets of their own, and the reason is a property of Laravel's
+     * default rather than of these routes. `throttle:n,1` resolves an
+     * unauthenticated caller's signature to `sha1(domain|ip)` — the *route is
+     * not part of the key* — so every unauthenticated route on a node shares one
+     * counter per client address, and the route with the lowest limit is the
+     * first to refuse.
+     *
+     * A locked Kiosk polls for its grant every few seconds, which is a great
+     * many requests from one address by design. Left on the default those polls
+     * drained the shared bucket and the node then refused *login* — the one
+     * thing a workstation must always be able to attempt — with a rate limit
+     * nobody had reached. A person entering their first code was told "Too Many
+     * Attempts".
+     *
+     * Keyed per workstation, so a busy Kiosk bounds only itself: it cannot
+     * exhaust another machine's budget, and it cannot touch the login, magic
+     * link, or node-pairing routes at all. The domain limits in
+     * {@see SharedWorkstationSignInRequestThrottle} are unchanged and still the
+     * ones AUTH-037 names; these bound how hard one machine may ask before any
+     * state is read.
+     */
+    private function registerKioskRateLimiters(): void
+    {
+        $perWorkstation = static function (Request $request, int $perMinute): Limit {
+            $workstation = $request->route('sharedWorkstation');
+
+            $key = $workstation instanceof SharedWorkstation
+                ? (string) $workstation->getKey()
+                : (string) ($request->route('sharedWorkstation') ?? $request->ip());
+
+            return Limit::perMinute($perMinute)->by('workstation:'.$key);
+        };
+
+        // Opening. Bounded tightly: a Kiosk opens one request per expiry, and a
+        // person retrying a refused presentation adds a few.
+        RateLimiter::for(
+            'kiosk-sign-in-request-open',
+            static fn (Request $request): Limit => $perWorkstation($request, 30),
+        );
+
+        // Collecting. The poll a waiting Kiosk makes every few seconds, which is
+        // why it is the loosest of the three and why it must not share.
+        RateLimiter::for(
+            'kiosk-sign-in-request-collect',
+            static fn (Request $request): Limit => $perWorkstation($request, 180),
+        );
+
+        // Re-authentication runs behind the workstation guard, so the caller is
+        // a resolved user and the default signature would be that user's — which
+        // the same polling would drain for every other request they make.
+        RateLimiter::for(
+            'kiosk-reauthentication-request',
+            static fn (Request $request): Limit => Limit::perMinute(180)
+                ->by('workstation-session:'.((string) ($request->user()?->getAuthIdentifier() ?? $request->ip()))),
+        );
+
+        // Entering a login code. Its own bucket for the opposite reason to the
+        // polls: this is the request a workstation must always be able to make,
+        // and on the shared signature anything else noisy from the same address
+        // could refuse somebody's first attempt. Keyed by the workstation the
+        // code is being entered at, which is also the scope AUTH-029's domain
+        // limit counts in, so the two bound the same thing.
+        RateLimiter::for(
+            'kiosk-workstation-session',
+            static fn (Request $request): Limit => Limit::perMinute(20)
+                ->by('workstation:'.((string) ($request->input('shared_workstation_id') ?? $request->ip()))),
+        );
     }
 }

@@ -5,6 +5,7 @@ import { useRouter } from "vue-router";
 import { encodeQrMatrix, qrMatrixToSvgPath, type QrMatrix } from "@/support/qrCode";
 import { sharedWorkstationId } from "@/session/workstationIdentity";
 import {
+  noteWorkstationPresence,
   presentWorkstationSignIn,
   resetWorkstationSignIn,
   SIGN_IN_POLL_INTERVAL_MS,
@@ -34,6 +35,13 @@ import {
  *
  * Either way, no personal device token is issued and this machine becomes
  * nobody's trusted device.
+ *
+ * The scan half sleeps when nobody is there (M18.68). It is awake for a couple
+ * of minutes after the workstation locks — the handover case, where the next
+ * person scans a screen they never touched — and then stops: no QR, no live
+ * request, nothing on the wire. Touching the screen, typing, or moving a
+ * pointer wakes it, which is the same interaction entering a code already
+ * required.
  *
  * The field is entered "with gloves and under glare" (kiosk guide 12), so the
  * code is one large, wide-tracked, case-insensitive field rather than eight
@@ -87,9 +95,33 @@ async function tick(): Promise<void> {
   }
 }
 
+/**
+ * Somebody is at the machine (M18.68). Wakes a sleeping presentation and
+ * extends the awake window otherwise; opening a request is the module's
+ * decision, not every event's.
+ */
+function wake(): void {
+  void noteWorkstationPresence();
+}
+
+/*
+ * Listened for on the window rather than on this section, because the person
+ * who walks up may touch anywhere on a fullscreen Kiosk — and because the
+ * events that matter here are exactly the ones that reach the document:
+ * `pointerdown` covers touch and mouse alike, and `keydown` covers somebody who
+ * goes straight for the code field.
+ *
+ * Passive, so a Kiosk on a slow machine never delays a touch to run this.
+ */
+const WAKE_EVENTS = ["pointerdown", "keydown"] as const;
+
 onMounted(async () => {
   if (workstationId.value === null) {
     return;
+  }
+
+  for (const event of WAKE_EVENTS) {
+    window.addEventListener(event, wake, { passive: true });
   }
 
   await presentWorkstationSignIn();
@@ -100,6 +132,10 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  for (const event of WAKE_EVENTS) {
+    window.removeEventListener(event, wake);
+  }
+
   if (pollTimer !== null) {
     clearInterval(pollTimer);
     pollTimer = null;
@@ -199,6 +235,25 @@ async function submit(): Promise<void> {
       >
         {{ workstationSignInState.unavailableReason }}
       </p>
+
+      <!--
+        Asleep (M18.68): no QR, no live request, nothing on the wire. The
+        button is a courtesy rather than the mechanism — any touch, key, or
+        pointer anywhere wakes it, including reaching for the code field — so
+        it is here to say the option exists, not to gate it.
+      -->
+      <button
+        v-else-if="workstationSignInState.status === 'asleep'"
+        class="workstation-login__wake"
+        type="button"
+        data-testid="workstation-sign-in-asleep"
+        @click="wake"
+      >
+        Sign in with your phone
+        <span class="workstation-login__wake-hint">
+          Tap to show a code you can scan
+        </span>
+      </button>
 
       <form class="workstation-login__form" @submit.prevent="submit">
         <label class="workstation-login__label" for="workstation-login-code">
@@ -312,6 +367,34 @@ async function submit(): Promise<void> {
   font-size: var(--m-text-sm);
 }
 
+/* Touch-sized, like everything else on this screen: gloves, glare, a queue. */
+.workstation-login__wake {
+  cursor: pointer;
+  display: grid;
+  gap: var(--m-space-1);
+  width: 100%;
+  min-height: 5rem;
+  margin: 0 0 var(--m-space-4);
+  padding: var(--m-space-3) var(--m-space-4);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-md);
+  background: var(--m-surface-raised);
+  color: var(--m-text-primary);
+  font-size: var(--m-text-lg);
+  font-weight: 900;
+}
+
+.workstation-login__wake-hint {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  font-weight: 600;
+}
+
+.workstation-login__wake:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
 .workstation-login__scan-unavailable {
   margin: 0 0 var(--m-space-4);
   padding: var(--m-space-3) var(--m-space-4);
@@ -358,6 +441,7 @@ async function submit(): Promise<void> {
 }
 
 .workstation-login__submit {
+  cursor: pointer;
   min-height: 3.5rem;
   border: 1px solid var(--m-border-default);
   border-radius: 8px;

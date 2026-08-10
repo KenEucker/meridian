@@ -6,7 +6,7 @@
 // scans it and grants; this module polls for the grant with the pickup secret
 // only this machine holds, and opens the session on collection.
 //
-// Three rules govern the lifecycle, and each is a requirement rather than a
+// Four rules govern the lifecycle, and each is a requirement rather than a
 // preference:
 //
 //  1. **An expired request is replaced, not left rendered** (M18.60). The QR
@@ -22,6 +22,22 @@
 //     never written to storage — the same discipline `workstationSession`
 //     applies to the session key, and the reason a restarted Kiosk holds
 //     nothing (technical spec 13.3).
+//  4. **It sleeps when nobody is there** (M18.68). A scannable QR needs a live
+//     request behind it, so "always scannable" first meant "always polling":
+//     a machine alone in a room re-opened a request every two minutes and
+//     asked about it every three seconds, all night, on behalf of nobody.
+//
+//     So the presentation is awake for a window rather than forever. It wakes
+//     when the workstation locks — which is the case where no-touch matters,
+//     the handover: one person ends their session, the next walks up within a
+//     minute and scans a screen they never touched — and it sleeps when that
+//     window passes with nothing happening. Asleep it holds no request and
+//     makes no requests at all; the surface offers to wake it, and any touch,
+//     key, or pointer does.
+//
+//     The typed path is untouched by this and always was: entering a code
+//     means focusing a field and typing, which is itself the interaction that
+//     wakes the scan path.
 
 import { reactive, readonly } from "vue";
 
@@ -64,15 +80,31 @@ function isVerdictAboutRequest(status: number): boolean {
  */
 const TRANSIENT_BACKOFF_TICKS = 4;
 
+/**
+ * How long the presentation stays awake with nothing happening (M18.68).
+ *
+ * Long enough to cover a handover — somebody ends their session and walks off,
+ * the next person arrives and scans without touching anything — and short
+ * enough that a machine nobody came back to stops asking. Measured from the
+ * last thing that happened rather than from the last request, so a person
+ * standing there scanning keeps it awake.
+ */
+export const SIGN_IN_AWAKE_WINDOW_MS = 120_000;
+
 export type WorkstationSignInStatus =
   /** Nothing presented: no workstation identity, or a session is live. */
   | "idle"
-  /** An open call is in flight. */
+  /** Awake but nothing opened yet, or an open call is in flight. */
   | "opening"
   /** A request is on screen, waiting to be scanned and granted. */
   | "presenting"
   /** The node refused or could not be reached; the typed field is the path. */
-  | "unavailable";
+  | "unavailable"
+  /**
+   * Nobody has been here for a while, so there is no live request and nothing
+   * on the wire. The surface offers to wake it and any interaction does.
+   */
+  | "asleep";
 
 interface WorkstationSignInState {
   status: WorkstationSignInStatus;
@@ -104,6 +136,12 @@ let polling = false;
 let transientFailures = 0;
 
 let ticksUntilPoll = 0;
+
+/**
+ * When somebody was last plausibly here: the workstation locking, or an
+ * interaction with the locked screen. Null while asleep.
+ */
+let awakeSince: number | null = null;
 
 const state = reactive<WorkstationSignInState>({
   status: "idle",
@@ -138,19 +176,72 @@ function becomeUnavailable(reason: string): void {
 }
 
 /**
+ * Record that somebody is here, and wake the presentation if it was asleep
+ * (M18.68).
+ *
+ * Called when the workstation locks and on any interaction with the locked
+ * screen. Waking opens a request; staying awake only extends the window, so a
+ * person tapping around does not open a request per tap.
+ */
+export async function noteWorkstationPresence(now: Date = new Date()): Promise<void> {
+  if (workstationSessionState.status === "active" || sharedWorkstationId.value === null) {
+    return;
+  }
+
+  const wasAsleep = awakeSince === null;
+  awakeSince = now.getTime();
+
+  if (wasAsleep) {
+    await presentWorkstationSignIn();
+  }
+}
+
+/** Whether the awake window has passed with nothing happening. */
+function hasSleptThrough(now: Date): boolean {
+  return awakeSince !== null && now.getTime() - awakeSince >= SIGN_IN_AWAKE_WINDOW_MS;
+}
+
+/**
+ * Stop presenting and stop asking (M18.68).
+ *
+ * Nothing is on the wire in this state and no request is live. The one the
+ * machine held is left to expire on the node by itself — telling the node
+ * would be one more request, for a row that expires in two minutes anyway.
+ */
+function sleep(): void {
+  pickupSecret = null;
+  awakeSince = null;
+  ticksUntilRetry = 0;
+  ticksUntilPoll = 0;
+  transientFailures = 0;
+
+  state.status = "asleep";
+  state.requestId = null;
+  state.expiresAt = null;
+  state.qrText = null;
+  state.unavailableReason = null;
+}
+
+/**
  * Open a sign-in request and put its QR on screen.
  *
  * A node that refuses or cannot be reached leaves the surface on the typed
  * field with a statement of what is unavailable — never a spinner and never a
  * blank square (M18.53, M18.60).
  */
-export async function presentWorkstationSignIn(): Promise<void> {
+export async function presentWorkstationSignIn(now: Date = new Date()): Promise<void> {
   const workstationId = sharedWorkstationId.value;
 
   if (workstationId === null || workstationSessionState.status === "active") {
     resetWorkstationSignIn();
 
     return;
+  }
+
+  // Presenting is itself a reason to be awake: the first call after the
+  // workstation locks starts the window.
+  if (awakeSince === null) {
+    awakeSince = now.getTime();
   }
 
   if (state.status === "opening") {
@@ -231,11 +322,25 @@ export async function tickWorkstationSignIn(
     return "waiting";
   }
 
+  // Asleep is asleep: no request, no poll, nothing on the wire until somebody
+  // turns up (M18.68).
+  if (state.status === "asleep") {
+    return "waiting";
+  }
+
+  // The awake window has passed with nothing happening. Whatever the screen
+  // was showing — a live QR, or the unavailable notice — it stops here.
+  if (hasSleptThrough(now)) {
+    sleep();
+
+    return "waiting";
+  }
+
   if (state.status === "unavailable") {
     ticksUntilRetry -= 1;
 
     if (ticksUntilRetry <= 0) {
-      await presentWorkstationSignIn();
+      await presentWorkstationSignIn(now);
     }
 
     return "waiting";
@@ -250,7 +355,7 @@ export async function tickWorkstationSignIn(
   const expiresAt = state.expiresAt === null ? Number.NaN : Date.parse(state.expiresAt);
 
   if (!Number.isNaN(expiresAt) && expiresAt <= now.getTime()) {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(now);
 
     return "waiting";
   }
@@ -302,7 +407,7 @@ export async function tickWorkstationSignIn(
       // The node's verdict on this request — spent, expired, or never one. A
       // fresh request replaces it.
       transientFailures = 0;
-      await presentWorkstationSignIn();
+      await presentWorkstationSignIn(now);
 
       return "waiting";
     }
@@ -327,6 +432,7 @@ export function resetWorkstationSignIn(): void {
   polling = false;
   transientFailures = 0;
   ticksUntilPoll = 0;
+  awakeSince = null;
 
   state.status = "idle";
   state.requestId = null;

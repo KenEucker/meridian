@@ -191,9 +191,7 @@ afterEach(async () => {
 });
 
 describe("the kiosk session bar", () => {
-  it("shows the active user prominently while a session is live", async () => {
-    // Technical spec 13.3: "The active user is shown prominently at all times."
-    // In the shell chrome, not behind a menu.
+  it("offers the control that ends the session while one is live", async () => {
     await signIn();
 
     const router = buildRouter();
@@ -202,14 +200,14 @@ describe("the kiosk session bar", () => {
 
     const wrapper = mount(KioskSessionBar, { global: { plugins: [router] } });
 
-    expect(wrapper.find(".kiosk-session__name").text()).toBe("Dana Reyes");
     expect(wrapper.find(".kiosk-session__end").text()).toBe("End session");
   });
 
-  it("sits in the shell's header rather than on top of the routed surface", async () => {
-    // M18.66: rendered into the content area it read as a container floating
-    // over the page, and the control that ends the session appeared to belong
-    // to whatever screen was open. It is chrome, so it lives in the chrome.
+  it("sits beside the shell's user control and names the user only once", async () => {
+    // M18.66: the shell's user control already renders the active user's name
+    // on every screen, so a bar repeating it was the same fact twice in one
+    // piece of chrome — and it put the control that ends the session in the
+    // content area, where it read as part of whatever screen was open.
     await signIn();
 
     const router = buildRouter();
@@ -219,17 +217,21 @@ describe("the kiosk session bar", () => {
     const wrapper = mount(KioskAppShell, { global: { plugins: [router] } });
     await flushPromises();
 
-    const bar = wrapper.find('[data-testid="kiosk-session-bar"]');
-    expect(bar.exists()).toBe(true);
-
-    const header = wrapper.find("header.app-shell__top-bar");
+    const actions = wrapper.find(".app-shell__actions");
     const main = wrapper.find("main.app-shell__main");
+    const endSession = wrapper.find(".kiosk-session__end");
 
-    expect(header.element.contains(bar.element)).toBe(true);
-    expect(main.element.contains(bar.element)).toBe(false);
+    // The control lives in the header's action row, with the user control.
+    expect(endSession.exists()).toBe(true);
+    expect(actions.element.contains(endSession.element)).toBe(true);
+    expect(main.element.contains(endSession.element)).toBe(false);
 
-    // And the control that ends the session went with it.
-    expect(header.find(".kiosk-session__end").exists()).toBe(true);
+    // The name is the shell's to render, and it renders it once: the header
+    // carries the active user's label — resolved from the session document the
+    // workstation key authenticates — and the session controls carry none.
+    expect(wrapper.find(".app-shell__user-label").exists()).toBe(true);
+    expect(wrapper.find(".app-shell__user-label").text()).not.toBe("");
+    expect(wrapper.findAll(".kiosk-session__name")).toHaveLength(0);
 
     wrapper.unmount();
   });

@@ -5,8 +5,11 @@ import { clearClientSession } from "@/session/clientSession";
 import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
 import { configureSharedWorkstationId } from "@/session/workstationIdentity";
 import {
+  noteWorkstationPresence,
   presentWorkstationSignIn,
   resetWorkstationSignIn,
+  SIGN_IN_AWAKE_WINDOW_MS,
+  SIGN_IN_POLL_INTERVAL_MS,
   tickWorkstationSignIn,
   workstationSignInState,
 } from "@/session/workstationSignIn";
@@ -26,6 +29,18 @@ import {
  * memory and never written to disk — the same rule the typed path has held
  * since M16.9.
  */
+
+/**
+ * One clock for the whole spec. The awake window (M18.68) makes the module
+ * time-relative, so presenting at one instant and ticking at another that is
+ * minutes away would sleep the presentation mid-test.
+ */
+const NOW = new Date("2027-06-01T12:00:00+00:00");
+
+/** `NOW` plus some seconds, for readability at the call sites. */
+function at(seconds: number): Date {
+  return new Date(NOW.getTime() + seconds * 1_000);
+}
 
 const WORKSTATION_ID = "workstation-gate-a";
 const SESSION_KEY = "kQ7mVt2ZrBdN4xLpWyH3sCfJ8gEaU6nToXvI1bYh";
@@ -126,6 +141,11 @@ function stubNode(): void {
   );
 }
 
+/** How many calls the node has been sent, for asserting silence. */
+function fetchCalls(): number {
+  return (globalThis.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+}
+
 /** Every value this device has written anywhere it survives a restart. */
 function storedValues(): string[] {
   const values: string[] = [];
@@ -171,7 +191,7 @@ afterEach(() => {
 
 describe("presenting a sign-in request", () => {
   it("opens a request and presents its QR beside the name and short code", async () => {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
     expect(workstationSignInState.status).toBe("presenting");
     expect(workstationSignInState.requestId).toBe("request-1");
@@ -191,7 +211,7 @@ describe("presenting a sign-in request", () => {
     // leaves a statement, not a spinner that never resolves.
     node.reachable = false;
 
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
     expect(workstationSignInState.status).toBe("unavailable");
     expect(workstationSignInState.qrText).toBeNull();
@@ -205,13 +225,13 @@ describe("presenting a sign-in request", () => {
 
   it("retries an unavailable presentation on a later tick", async () => {
     node.reachable = false;
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
     node.reachable = true;
 
     // The retry waits a few ticks so an unreachable node is not hammered.
     for (let tick = 0; tick < 5; tick++) {
-      await tickWorkstationSignIn();
+      await tickWorkstationSignIn(NOW);
     }
 
     expect(workstationSignInState.status).toBe("presenting");
@@ -225,13 +245,13 @@ describe("the request lifecycle", () => {
     // turned one refused poll into a refused open, and opening is itself rate
     // limited (AUTH-037) — so a single rate limit became a loop that emptied
     // the budget and flickered the screen with no interaction at all.
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
     const openedWith = node.openCount;
     node.collectStatus = 429;
 
     for (let tick = 0; tick < 4; tick++) {
-      await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+      await tickWorkstationSignIn(at(10));
     }
 
     expect(node.openCount).toBe(openedWith);
@@ -245,7 +265,7 @@ describe("the request lifecycle", () => {
 
     let outcome: string = "waiting";
     for (let tick = 0; tick < 6 && outcome !== "signed_in"; tick++) {
-      outcome = await tickWorkstationSignIn(new Date("2027-06-01T12:00:20+00:00"));
+      outcome = await tickWorkstationSignIn(at(20));
     }
 
     expect(outcome).toBe("signed_in");
@@ -254,22 +274,27 @@ describe("the request lifecycle", () => {
   it("opens a fresh request when the node says this one is gone", async () => {
     // A 404 or 410 *is* a verdict about the request: spent, expired, or never
     // one. That is the case a replacement is for.
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
     node.collectStatus = 404;
 
-    await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    await tickWorkstationSignIn(at(10));
 
     expect(workstationSignInState.requestId).toBe("request-2");
     expect(workstationSignInState.status).toBe("presenting");
   });
 
   it("replaces an expired request rather than leaving a stale square rendered", async () => {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
     expect(workstationSignInState.requestId).toBe("request-1");
 
     node.expiresAt = "2027-06-01T12:06:00+00:00";
 
-    await tickWorkstationSignIn(new Date("2027-06-01T12:02:01+00:00"));
+    // Somebody is here — otherwise the awake window (M18.68) closes at the same
+    // two minutes the request expires at, and sleeping is the right answer
+    // rather than refreshing.
+    await noteWorkstationPresence(at(115));
+
+    await tickWorkstationSignIn(at(121));
 
     expect(workstationSignInState.status).toBe("presenting");
     expect(workstationSignInState.requestId).toBe("request-2");
@@ -277,9 +302,9 @@ describe("the request lifecycle", () => {
   });
 
   it("keeps waiting while the request is granted by nobody", async () => {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
-    const outcome = await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    const outcome = await tickWorkstationSignIn(at(10));
 
     expect(outcome).toBe("waiting");
     expect(workstationSignInState.status).toBe("presenting");
@@ -287,12 +312,110 @@ describe("the request lifecycle", () => {
   });
 });
 
+describe("sleeping when nobody is there", () => {
+  /*
+   * M18.68. A scannable QR needs a live request behind it, so "always
+   * scannable" first meant "always polling": a machine alone in a room
+   * re-opened a request every two minutes and asked about it every three
+   * seconds, all night, for nobody.
+   */
+  const AWAKE = NOW;
+  const AFTER_WINDOW = new Date(AWAKE.getTime() + SIGN_IN_AWAKE_WINDOW_MS + 1_000);
+
+  it("keeps the QR up through the handover window with no interaction at all", async () => {
+    // The case no-touch exists for: one person ends their session, the next
+    // walks up within a minute and scans a screen they never touched.
+    await presentWorkstationSignIn(AWAKE);
+
+    const stillInside = new Date(AWAKE.getTime() + SIGN_IN_AWAKE_WINDOW_MS - 1_000);
+    await tickWorkstationSignIn(stillInside);
+
+    expect(workstationSignInState.status).toBe("presenting");
+    expect(workstationSignInState.qrText).not.toBeNull();
+  });
+
+  it("sleeps once the window passes, holding no request and asking nothing", async () => {
+    await presentWorkstationSignIn(AWAKE);
+    const openedWhileAwake = node.openCount;
+
+    await tickWorkstationSignIn(AFTER_WINDOW);
+
+    expect(workstationSignInState.status).toBe("asleep");
+    expect(workstationSignInState.qrText).toBeNull();
+    expect(workstationSignInState.requestId).toBeNull();
+
+    // And it stays quiet: no polls, no opens, however long it is left.
+    const callsWhenAsleep = fetchCalls();
+
+    for (let tick = 0; tick < 20; tick++) {
+      await tickWorkstationSignIn(
+        new Date(AFTER_WINDOW.getTime() + tick * SIGN_IN_POLL_INTERVAL_MS),
+      );
+    }
+
+    expect(fetchCalls()).toBe(callsWhenAsleep);
+    expect(node.openCount).toBe(openedWhileAwake);
+  });
+
+  it("wakes on a touch, opening a fresh request", async () => {
+    await presentWorkstationSignIn(AWAKE);
+    await tickWorkstationSignIn(AFTER_WINDOW);
+    expect(workstationSignInState.status).toBe("asleep");
+
+    node.expiresAt = new Date(AFTER_WINDOW.getTime() + 120_000).toISOString();
+    await noteWorkstationPresence(AFTER_WINDOW);
+
+    expect(workstationSignInState.status).toBe("presenting");
+    expect(workstationSignInState.qrText).toContain("r=request-2");
+
+    // And it polls again, because somebody is here.
+    node.granted = true;
+    const outcome = await tickWorkstationSignIn(
+      new Date(AFTER_WINDOW.getTime() + SIGN_IN_POLL_INTERVAL_MS),
+    );
+
+    expect(outcome).toBe("signed_in");
+  });
+
+  it("extends the window on interaction rather than opening a request per touch", async () => {
+    await presentWorkstationSignIn(AWAKE);
+    const opened = node.openCount;
+
+    // Somebody standing there, tapping around.
+    for (let touch = 1; touch <= 5; touch++) {
+      await noteWorkstationPresence(new Date(AWAKE.getTime() + touch * 10_000));
+    }
+
+    expect(node.openCount).toBe(opened);
+    expect(workstationSignInState.status).toBe("presenting");
+
+    // The window now runs from the last touch, not from the first present.
+    await tickWorkstationSignIn(
+      new Date(AWAKE.getTime() + 50_000 + SIGN_IN_AWAKE_WINDOW_MS - 1_000),
+    );
+
+    expect(workstationSignInState.status).toBe("presenting");
+  });
+
+  it("stops an unavailable presentation retrying forever", async () => {
+    // The other loop that used to run all night: a node that cannot be reached
+    // was retried every fifteen seconds indefinitely.
+    node.reachable = false;
+    await presentWorkstationSignIn(AWAKE);
+    expect(workstationSignInState.status).toBe("unavailable");
+
+    await tickWorkstationSignIn(AFTER_WINDOW);
+
+    expect(workstationSignInState.status).toBe("asleep");
+  });
+});
+
 describe("collection", () => {
   it("opens the session when the grant is collected", async () => {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
     node.granted = true;
 
-    const outcome = await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    const outcome = await tickWorkstationSignIn(at(10));
 
     expect(outcome).toBe("signed_in");
     expect(workstationSessionState.status).toBe("active");
@@ -306,10 +429,10 @@ describe("collection", () => {
   it("holds the collected session key in memory and writes it nowhere", async () => {
     // M16.9's rule, unchanged by the path: "the session locks immediately if
     // the app restarts" is a property of where the key is kept.
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
     node.granted = true;
 
-    await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    await tickWorkstationSignIn(at(10));
 
     expect(workstationSessionState.status).toBe("active");
 
@@ -320,11 +443,11 @@ describe("collection", () => {
   });
 
   it("presents nothing while a session is live", async () => {
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
     node.granted = true;
-    await tickWorkstationSignIn(new Date("2027-06-01T12:00:10+00:00"));
+    await tickWorkstationSignIn(at(10));
 
-    await presentWorkstationSignIn();
+    await presentWorkstationSignIn(NOW);
 
     expect(workstationSignInState.status).toBe("idle");
   });

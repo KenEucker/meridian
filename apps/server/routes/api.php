@@ -181,7 +181,7 @@ Route::post('/auth/shared-workstation-login-code', [SharedWorkstationLoginCodeCo
  * action behind the timeout warning, and resolving a session is activity.
  */
 Route::post('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'store'])
-    ->middleware('throttle:20,1')
+    ->middleware('throttle:kiosk-workstation-session')
     ->name('api.auth.shared-workstation-session.store');
 
 Route::get('/auth/shared-workstation-session', [SharedWorkstationSessionController::class, 'show'])
@@ -220,11 +220,11 @@ Route::post('/auth/shared-workstation-session/reauthentication', [SharedWorkstat
  * stamps `reauthenticated_at` identically to the typed path.
  */
 Route::post('/auth/shared-workstation-session/reauthentication-requests', [SharedWorkstationSessionController::class, 'openReauthenticationRequest'])
-    ->middleware(['auth:workstation', 'throttle:30,1'])
+    ->middleware(['auth:workstation', 'throttle:kiosk-reauthentication-request'])
     ->name('api.auth.shared-workstation-session.reauthentication-requests.store');
 
 Route::post('/auth/shared-workstation-session/reauthentication-requests/{signInRequest}/collect', [SharedWorkstationSessionController::class, 'collectReauthenticationRequest'])
-    ->middleware(['auth:workstation', 'throttle:120,1'])
+    ->middleware(['auth:workstation', 'throttle:kiosk-reauthentication-request'])
     ->name('api.auth.shared-workstation-session.reauthentication-requests.collect');
 
 /*
@@ -266,11 +266,11 @@ Route::get('/kiosk/workstations/{sharedWorkstation}', [KioskWorkstationContextCo
  * grant aimed at the wrong node is refused with both nodes named (AUTH-034).
  */
 Route::post('/kiosk/workstations/{sharedWorkstation}/sign-in-requests', [WorkstationSignInRequestController::class, 'store'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:kiosk-sign-in-request-open')
     ->name('api.kiosk.workstations.sign-in-requests.store');
 
 Route::post('/kiosk/workstations/{sharedWorkstation}/sign-in-requests/{signInRequest}/collect', [WorkstationSignInRequestController::class, 'collect'])
-    ->middleware('throttle:120,1')
+    ->middleware('throttle:kiosk-sign-in-request-collect')
     ->name('api.kiosk.workstations.sign-in-requests.collect');
 
 Route::post('/auth/workstation-sign-in-requests/{signInRequest}/grant', [WorkstationSignInGrantController::class, 'store'])
