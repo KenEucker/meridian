@@ -40,6 +40,7 @@ import {
   resolveWindowIconUrl,
   type BrandingManifest,
 } from "./branding";
+import { desktopAppVersionArgument } from "./desktopRuntimeConfig";
 import { buildHealthPanelModel, fetchServerHealth, renderHealthPanelHtml } from "./health";
 import { startClientStaticServer, type ClientStaticServer } from "./staticClientServer";
 
@@ -92,6 +93,11 @@ function createMainWindow(appUrl: string): BrowserWindow {
       // any page script runs (M18.32). See `preload.ts` for why that ordering is
       // the whole point.
       preload: join(__dirname, "preload.js"),
+      // And which version of the wrapper is serving it (M19.1; technical spec
+      // 26.3). Resolved at startup rather than known at build time, so it
+      // travels as a renderer argument instead of an environment variable the
+      // preload's process was spawned without.
+      additionalArguments: [desktopAppVersionArgument(currentMeridianVersion)],
     },
   });
 

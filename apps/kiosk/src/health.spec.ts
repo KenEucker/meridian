@@ -21,6 +21,9 @@ const SPEC_25_3_FIELDS = [
   "Local discovery status",
   "Certificate / HTTPS status",
   "Server version",
+  // The node's other build fact, beside the version it reports (M19.1;
+  // technical spec 26.3).
+  "Config schema version",
   "Client version",
   "Electron wrapper version",
 ];
@@ -55,6 +58,7 @@ describe("buildHealthPanelModel", () => {
 
     const byLabel = Object.fromEntries(model.fields.map((field) => [field.label, field]));
     expect(byLabel["Server version"]).toMatchObject({ value: "1.2.3", source: "server" });
+    expect(byLabel["Config schema version"]).toMatchObject({ value: "1", source: "server" });
     expect(byLabel["Node role"]).toMatchObject({ value: "onsite", source: "server" });
     expect(byLabel["Client version"]).toMatchObject({ value: "0.2.0", source: "app" });
     expect(byLabel["Electron wrapper version"]).toMatchObject({ value: "0.1.0", source: "app" });
@@ -115,6 +119,7 @@ describe("buildHealthPanelModel", () => {
     expect(model.reachable).toBe(false);
     expect(model.connectionLabel).toContain("unreachable");
     expect(byLabel["Server version"].value).toBe(UNAVAILABLE_VALUE);
+    expect(byLabel["Config schema version"].value).toBe(UNAVAILABLE_VALUE);
     expect(byLabel["Node role"].value).toBe(UNAVAILABLE_VALUE);
     // App-known fields are still available offline.
     expect(byLabel["Client version"].value).toBe("0.2.0");

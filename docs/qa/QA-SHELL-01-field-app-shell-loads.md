@@ -17,6 +17,7 @@ behavior are expected at this stage.
 - UI Implementation Contract: Section 4 Global UI Rules (app shell; no
   persistent left sidebar as primary navigation)
 - UI Implementation Contract: Section 5 Fixed UI Mode Contract
+- Technical spec: Section 26.3 Versioning (the Settings version metadata)
 
 ## Environment
 
@@ -44,6 +45,8 @@ behavior are expected at this stage.
    and confirm the home placeholder loads inside the app shell.
 6. Navigate to an unknown path such as `http://localhost:5173/nope` and confirm
    the Not Found placeholder is shown with a link back home.
+7. Open `http://localhost:5173/settings/about` and read the **Versions**
+   section (M19.1; technical spec 26.3).
 
 ## Expected results
 
@@ -56,12 +59,20 @@ behavior are expected at this stage.
 - `/` shows the Home placeholder heading "Meridian Field".
 - An unknown path shows the "Page not found" placeholder with a working link
   back home.
+- The Versions section names the app as Meridian Field, shows the client bundle
+  version as the root `package.json` Meridian version, and shows the UI mode and
+  deployment target as Field and mobile. With no node running, "Server version"
+  and "Config schema version" read "Unavailable" rather than showing a value.
+- No mobile app version row and no desktop app version row appear in a browser:
+  those rows are present only inside Meridian's packaged apps, and a browser
+  session has no installed app version to report.
 
 ## Evidence to capture
 
 - Terminal output from the smoke test and the production build.
 - A screenshot of the Home placeholder inside the app shell.
 - A screenshot of the Not Found placeholder.
+- A screenshot of the Settings Versions section.
 
 ## Failure notes
 

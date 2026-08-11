@@ -35,6 +35,12 @@ import {
   summarizeReadiness,
 } from "@/readiness/checklist";
 import { useNodeConnectionStatus } from "@/offline/useConnectivity";
+import { resolveMeridianAppConfig } from "@/app/appConfig";
+import {
+  describeVersions,
+  readDesktopAppVersion,
+  readNativePlatform,
+} from "@/app/appVersions";
 import { describeCommand } from "@/outbox/commandCatalog";
 import {
   commandOutbox,
@@ -224,11 +230,24 @@ const lastServerTimestamp = computed(
 const serverEnvironment = computed(
   () => serverHealth.value?.environment ?? "Unavailable",
 );
-const configSchemaVersion = computed(() =>
-  serverHealth.value?.config_schema_version === null ||
-  serverHealth.value?.config_schema_version === undefined
-    ? "Unavailable"
-    : String(serverHealth.value.config_schema_version),
+/*
+ * The version metadata this build and this node carry (technical spec 26.3).
+ *
+ * Reactive on the health payload, so the two server rows fill in with the same
+ * refresh that answers the rest of the page rather than needing their own.
+ * The app config is resolved here rather than imported as the module-level
+ * constant because a wrapper may name the artifact at runtime, and this section
+ * is precisely where somebody checks which artifact they are looking at.
+ */
+const versionRows = computed(() =>
+  describeVersions({
+    config: resolveMeridianAppConfig(),
+    clientVersion: CLIENT_VERSION,
+    desktopAppVersion: readDesktopAppVersion(),
+    nativePlatform: readNativePlatform(),
+    serverVersion: serverHealth.value?.server_version ?? null,
+    configSchemaVersion: serverHealth.value?.config_schema_version ?? null,
+  }),
 );
 
 /*
@@ -779,22 +798,31 @@ watch(
           <dd>{{ serverEnvironment }}</dd>
         </div>
         <div>
-          <dt>Config schema</dt>
-          <dd>{{ configSchemaVersion }}</dd>
-        </div>
-        <div>
           <dt>Server timestamp</dt>
           <dd>{{ lastServerTimestamp }}</dd>
         </div>
       </dl>
     </section>
 
+    <!--
+      Version metadata (M19.1; technical spec 26.3).
+
+      One list rather than a version on each surface it belongs to: the question
+      is asked as "what is this machine running", and answering it in one place
+      is what makes it answerable over a radio. The config schema version moved
+      here from the server details above for the same reason — it is a version,
+      and it was the only one living apart from the others.
+    -->
     <section class="about__about" aria-labelledby="about-app-heading">
-      <h2 id="about-app-heading" class="about__subheading">About Meridian</h2>
-      <dl class="about__meta" aria-label="Application version">
-        <div>
-          <dt>Client version</dt>
-          <dd>{{ CLIENT_VERSION }}</dd>
+      <h2 id="about-app-heading" class="about__subheading">Versions</h2>
+      <p class="about__section-note">
+        What this device is running, and what its node answered with. The mobile
+        and desktop rows appear only inside Meridian's packaged apps.
+      </p>
+      <dl class="about__meta" aria-label="Version metadata">
+        <div v-for="row in versionRows" :key="row.label">
+          <dt>{{ row.label }}</dt>
+          <dd>{{ row.value }}</dd>
         </div>
       </dl>
     </section>

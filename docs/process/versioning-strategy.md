@@ -48,6 +48,30 @@ regenerating must therefore be one commit, not two.
 A future artifact that embeds the root version inherits this rule and must be
 added to the same workflow step.
 
+## Where Versions Are Displayed
+
+Technical spec 26.3 requires the running version metadata to be visible. Alpha 1
+shows it in three places, all resolved from the root version:
+
+| Surface | Shows |
+|---|---|
+| God Mode console footer | The server build version (GOD-032, GOD-033). |
+| Shared client, Settings → Versions | The app, the mobile or desktop app version when running inside a packaged app, the client bundle version, the UI mode, the deployment target, and the server and config schema versions read from `GET /api/health`. |
+| Electron health panel (`Ctrl+Shift+H`) | The server and config schema versions, the client version, and the Electron wrapper version (technical spec 25.3). |
+
+The desktop wrapper states its own version to the client through its preload
+rather than letting the client assume the bundle's version is the wrapper's; the
+two are separate artifacts and the case worth seeing is the one where they
+disagree. The mobile app has no version of its own to state: it is the packaged
+Meridian Field artifact, whose version is baked in at build time from the root
+manifest, and native project versions must be stamped from the same value when
+release packaging adds them.
+
+Docker image tags and the version-mismatch rules in technical spec 26.3 — node
+pairing rejecting incompatible major versions, clients warning on an
+incompatible server, and Electron warning on an unexpected local server version
+— are not part of this display and arrive with their own tasks.
+
 ## Beta and Release Promotion
 
 Promotion between lifecycle stages is manual:
