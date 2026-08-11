@@ -63,6 +63,7 @@ const DATABASE_ENV_EXAMPLE = 'deploy/docker/.env.example';
 const CADDY_SNIPPET = 'deploy/caddy/meridian.snippet';
 const CADDYFILE = 'deploy/caddy/Caddyfile';
 const CADDYFILE_ONSITE = 'deploy/caddy/Caddyfile.onsite';
+const CADDYFILE_WILDCARD = 'deploy/caddy/Caddyfile.wildcard';
 const ENTRYPOINT = 'deploy/docker/entrypoint.sh';
 
 /** Every file the bundle ships. A missing one is a bundle that cannot be used. */
@@ -77,6 +78,7 @@ const REQUIRED_FILES = [
   'deploy/docker/README.md',
   CADDYFILE,
   CADDYFILE_ONSITE,
+  CADDYFILE_WILDCARD,
   CADDY_SNIPPET,
   'deploy/caddy/README.md',
   'deploy/dns/onsite-dnsmasq.conf',
@@ -383,6 +385,24 @@ function checkDeploymentEnvExample() {
       `${DEPLOYMENT_ENV_EXAMPLE} sets SESSION_DOMAIN. A host-only cookie is what keeps organization subdomains isolated from one another (technical spec 8.7).`,
     );
   }
+
+  // The wildcard proxy configuration reads these; a sample that does not carry
+  // them leaves the operator to discover the names inside a Caddyfile.
+  for (const key of ['MERIDIAN_WILDCARD_TLS_CERTIFICATE', 'MERIDIAN_WILDCARD_TLS_KEY']) {
+    if (!values.has(key)) {
+      fail(`${DEPLOYMENT_ENV_EXAMPLE} does not document ${key}, which ${CADDYFILE_WILDCARD} serves the wildcard host from.`);
+    }
+  }
+
+  // And the stack has to hand them to the proxy container, or setting them in
+  // the env file does nothing.
+  const web = serviceBlocks(compose).get('web') ?? '';
+
+  for (const key of ['MERIDIAN_WILDCARD_TLS_CERTIFICATE', 'MERIDIAN_WILDCARD_TLS_KEY']) {
+    if (!web.includes(key)) {
+      fail(`${DEPLOYMENT_COMPOSE} does not pass ${key} to the web service.`);
+    }
+  }
 }
 
 function checkImageTag() {
@@ -418,11 +438,11 @@ function checkCaddyConfiguration() {
     fail(`${CADDY_SNIPPET} does not proxy PHP to the server container.`);
   }
 
-  for (const file of [CADDYFILE, CADDYFILE_ONSITE]) {
+  for (const file of [CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD]) {
     const source = read(file);
 
     if (!source.includes('import /etc/caddy/meridian.snippet')) {
-      fail(`${file} does not import the shared Meridian snippet, so its behavior can drift from the other Caddyfile.`);
+      fail(`${file} does not import the shared Meridian snippet, so its behavior can drift from the other Caddyfiles.`);
     }
 
     if (!source.includes('import meridian-app')) {
@@ -462,6 +482,33 @@ function checkCaddyConfiguration() {
     fail(`${CADDYFILE} disables automatic certificate issuance, which is the only way an internet-reachable node gets one.`);
   }
 
+  // The wildcard configuration serves organization subdomains beside the
+  // deployment root (technical spec 8.7): the root site keeps ACME — so it must
+  // not disable issuance — and the wildcard host serves the pre-provisioned
+  // wildcard certificate, because a CA issues a wildcard only against a DNS-01
+  // challenge the stock proxy image cannot answer.
+  const wildcard = read(CADDYFILE_WILDCARD);
+
+  if (!/^\*\.\{\$MERIDIAN_SITE_ADDRESS\}\s*\{/m.test(wildcard)) {
+    fail(
+      `${CADDYFILE_WILDCARD} does not declare the wildcard site *.{$MERIDIAN_SITE_ADDRESS}, which is what serves organization subdomains (technical spec 8.7).`,
+    );
+  }
+
+  if (!/^\{\$MERIDIAN_SITE_ADDRESS\}\s*\{/m.test(wildcard)) {
+    fail(`${CADDYFILE_WILDCARD} does not serve the deployment root beside the wildcard host.`);
+  }
+
+  if (!/tls\s+\{\$MERIDIAN_WILDCARD_TLS_CERTIFICATE\}\s+\{\$MERIDIAN_WILDCARD_TLS_KEY\}/.test(wildcard)) {
+    fail(
+      `${CADDYFILE_WILDCARD} does not serve the pre-provisioned wildcard certificate for the wildcard host (technical spec 8.7).`,
+    );
+  }
+
+  if (/auto_https\s+disable_certs/.test(wildcard)) {
+    fail(`${CADDYFILE_WILDCARD} disables automatic certificate issuance, which the deployment-root site still needs.`);
+  }
+
   // Whether a Caddyfile actually parses is a question only Caddy can answer, and
   // the `web` image build asks it. This asserts the build still does: without that
   // step a malformed proxy configuration ships and is discovered when a container
@@ -474,11 +521,41 @@ function checkCaddyConfiguration() {
     );
   }
 
-  for (const file of [CADDYFILE, CADDYFILE_ONSITE]) {
+  for (const file of [CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD]) {
     const name = file.split('/').pop();
 
     if (!dockerfile.includes(`/etc/caddy/${name}`)) {
       fail(`${DOCKERFILE} does not adapt /etc/caddy/${name}, so that configuration is never parsed at build time.`);
+    }
+  }
+}
+
+/**
+ * The deployment documentation half of the wildcard host handling (technical
+ * spec 8, 8.7, 26): the bundle's own READMEs have to say how the subdomain
+ * form is served — the wildcard DNS record, the wildcard Caddyfile and its
+ * certificate, and the `*.localhost` development shape — because a wildcard
+ * that exists only as configuration is a wildcard the next operator deletes.
+ */
+function checkSubdomainDocumentation() {
+  const caddyReadme = read('deploy/caddy/README.md');
+  const dnsReadme = read('deploy/dns/README.md');
+
+  if (!caddyReadme.includes('Caddyfile.wildcard')) {
+    fail('deploy/caddy/README.md does not document Caddyfile.wildcard, the configuration that serves organization subdomains.');
+  }
+
+  if (!caddyReadme.includes('MERIDIAN_WILDCARD_TLS_CERTIFICATE')) {
+    fail('deploy/caddy/README.md does not document the wildcard certificate variables.');
+  }
+
+  if (!/\*\.<deployment-domain>|\*\.meridian\.example\.org/.test(dnsReadme)) {
+    fail('deploy/dns/README.md does not document the wildcard DNS record for organization subdomains (technical spec 8.7).');
+  }
+
+  for (const [file, source] of [['deploy/caddy/README.md', caddyReadme], ['deploy/dns/README.md', dnsReadme]]) {
+    if (!source.includes('*.localhost')) {
+      fail(`${file} does not document the \`*.localhost\` development shape (technical spec 8.7).`);
     }
   }
 }
@@ -653,6 +730,7 @@ function main() {
   checkDeploymentEnvExample();
   checkImageTag();
   checkCaddyConfiguration();
+  checkSubdomainDocumentation();
   checkDnsTemplates();
   checkEntrypoint();
 

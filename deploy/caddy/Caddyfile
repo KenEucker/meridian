@@ -9,10 +9,12 @@
 # it serves a certificate provisioned before the event (technical spec 8.3).
 #
 # Organization subdomains resolve at `<organization-slug>.<deployment-domain>`
-# (technical spec 8.7). This file serves the deployment root only. The wildcard
-# host and its certificate handling arrive with M19.10, and adding `*.example.org`
-# here before then would ask Caddy for a certificate the DNS provider is not yet
-# configured to prove.
+# (technical spec 8.7). This file serves the deployment root only, where the
+# root-path form of organization addressing works. To serve the subdomain form
+# as well, run `Caddyfile.wildcard` instead (MERIDIAN_CADDYFILE): it adds the
+# wildcard host with a pre-provisioned wildcard certificate, which is the part
+# ACME over HTTP cannot obtain — a wildcard needs the DNS-01 challenge and a
+# DNS provider decision this file cannot make.
 {
 	# Where the certificate authority sends expiry and problem notices. ACME
 	# issuance works without it; finding out about a renewal failure does not.

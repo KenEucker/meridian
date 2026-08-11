@@ -83,13 +83,38 @@ proxy image at all.
 ## Organization subdomains
 
 Organizations are addressable at `<organization-slug>.<deployment-domain>` as well
-as at their root path (technical spec 8.7). Serving the subdomain form needs a
-wildcard host and a wildcard or per-organization certificate, which is M19.10.
-These files serve the deployment root, where the root-path form works today.
+as at their root path (technical spec 8.7). `Caddyfile` and `Caddyfile.onsite`
+serve one hostname, where the root-path form works; `Caddyfile.wildcard` serves
+the subdomain form beside it. Select it with `MERIDIAN_CADDYFILE` in the
+deployment environment.
 
-Adding `*.example.org` here before that task would ask Caddy for a wildcard
-certificate, which requires the DNS-01 challenge and a DNS provider module
-configured with credentials — a deployment decision, not a line in a Caddyfile.
+`Caddyfile.wildcard` serves two sites from the shared `(meridian-app)` body:
+
+1. `<deployment-domain>` — certificate over ACME, exactly as `Caddyfile` does.
+2. `*.<deployment-domain>` — a pre-provisioned wildcard certificate, named by
+   `MERIDIAN_WILDCARD_TLS_CERTIFICATE` and `MERIDIAN_WILDCARD_TLS_KEY` and
+   placed in the `MERIDIAN_TLS_DIRECTORY` mount.
+
+The wildcard certificate is pre-provisioned because a CA issues a wildcard only
+against the DNS-01 challenge, which needs DNS provider API credentials — a
+deployment decision, not a line in a Caddyfile, and the stock Caddy image
+carries no DNS provider modules. Obtain it with the provider's own tooling or
+any ACME client with a DNS plugin, and renew it on a calendar: a lapsed
+wildcard takes every organization subdomain down at once. A certificate whose
+SANs cover the root and the wildcard may be used for both sites.
+
+Per-organization certificates (one per subdomain, ordinary HTTP-01) are the
+spec's stated alternative; they would need on-demand issuance wired to an
+allowlist of active organization slugs, which Meridian does not ship. Use the
+wildcard.
+
+The proxy needs no per-organization configuration either way: which
+organization a request addresses is the server's decision, made from the Host
+header, and an unknown subdomain is the server's 404 (ORG-024).
+
+In development there is no proxy and no certificate: browsers resolve
+`*.localhost` to loopback on their own, so `http://northwood.localhost:8000`
+reaches the dev server directly (see `deploy/dns/README.md`).
 
 ## Local discovery
 

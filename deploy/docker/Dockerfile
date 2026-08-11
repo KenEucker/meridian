@@ -209,9 +209,10 @@ FROM caddy:2-alpine AS web
 # "Primary script unknown" error rather than a page.
 COPY --from=vendor /var/www/meridian/apps/server/public /var/www/meridian/apps/server/public
 
-# Both configurations, and the snippet they import. `MERIDIAN_CADDYFILE` chooses
-# which one runs; an event node runs Caddyfile.onsite.
-COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/meridian.snippet /etc/caddy/
+# Every configuration, and the snippet they import. `MERIDIAN_CADDYFILE`
+# chooses which one runs: an event node runs Caddyfile.onsite, and a node
+# serving organization subdomains runs Caddyfile.wildcard.
+COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/Caddyfile.wildcard deploy/caddy/meridian.snippet /etc/caddy/
 
 # Ask Caddy whether its own configuration parses, at build time, so a malformed
 # Caddyfile is a failed build rather than a container that will not start on an
@@ -225,12 +226,14 @@ COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/meridian.
 # exists only on an event node. The values below exist only to satisfy
 # substitution during the parse; nothing is kept.
 RUN set -eux; \
-    for config in /etc/caddy/Caddyfile /etc/caddy/Caddyfile.onsite; do \
+    for config in /etc/caddy/Caddyfile /etc/caddy/Caddyfile.onsite /etc/caddy/Caddyfile.wildcard; do \
         MERIDIAN_SITE_ADDRESS=meridian.example.org \
         MERIDIAN_SERVER_UPSTREAM=server:9000 \
         MERIDIAN_ACME_EMAIL=meridian@example.org \
         MERIDIAN_TLS_CERTIFICATE=/etc/caddy/tls/node.crt \
         MERIDIAN_TLS_KEY=/etc/caddy/tls/node.key \
+        MERIDIAN_WILDCARD_TLS_CERTIFICATE=/etc/caddy/tls/wildcard.crt \
+        MERIDIAN_WILDCARD_TLS_KEY=/etc/caddy/tls/wildcard.key \
         caddy adapt --config "$config" --adapter caddyfile > /dev/null; \
     done
 
