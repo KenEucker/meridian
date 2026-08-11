@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ReportCentralReach;
+use App\Services\EventMode\EventModeNotReadyException;
 use App\Services\Node\EventAuthorityException;
 use App\Services\Secrets\DefaultSecretsException;
 use Illuminate\Foundation\Application;
@@ -73,6 +74,29 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => $exception->getMessage(),
                     'reason_code' => 'default_secrets',
                     'secrets' => $exception->readiness->failedNames(),
+                ], 503);
+            }
+
+            return response($exception->getMessage(), 503);
+        });
+
+        // A node in event mode refusing to serve because a fail-closed check
+        // fails (technical spec 8.2, 8.6, 26.2): HTTPS validation, or the
+        // offline read set. Thrown from boot enforcement before routing, so
+        // `/up` gets the same answer — a node that will not serve must not
+        // report itself healthy. 503 for the same reason as the secrets
+        // refusal: the node is not broken, it is misconfigured, and it serves
+        // the moment the finding is resolved. Reasons name checks and never
+        // values, so the message is safe with APP_DEBUG off.
+        $exceptions->render(function (EventModeNotReadyException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                    'reason_code' => 'event_mode_not_ready',
+                    'checks' => array_map(
+                        static fn ($check): string => $check->key,
+                        $exception->readiness->failures(),
+                    ),
                 ], 503);
             }
 

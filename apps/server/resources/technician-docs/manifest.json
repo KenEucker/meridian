@@ -22,6 +22,7 @@
         "Roles a deployment can take",
         "Bring up a node",
         "Secrets",
+        "Event-mode fail-closed checks",
         "Before an event",
         "Backups",
         "Moving or rebuilding a node",

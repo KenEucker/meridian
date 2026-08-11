@@ -19,7 +19,7 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | Path | What it is |
 |---|---|
 | [`docker/Dockerfile`](docker/Dockerfile) | The `server` and `web` images. Multi-stage, built from the repository root. |
-| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, secret generation and refusal, config caches. |
+| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, secret generation and refusal, config caches, event-mode fail-closed checks. |
 | [`docker/compose.deployment.yaml`](docker/compose.deployment.yaml) | The deployment stack: database, server, queue worker, scheduler, proxy. |
 | [`docker/.env.deployment.example`](docker/.env.deployment.example) | The deployment's configuration, with fake values. |
 | [`docker/compose.yaml`](docker/compose.yaml) | The development database service, on the loopback interface. |
@@ -144,7 +144,9 @@ It asserts the bundle's files are present, base images are pinned, the Compose
 stack builds Dockerfile targets that exist, the image tag is the root version, the
 deployment database publishes no host port, the sample environment carries no
 secrets and is complete enough to render the stack, no proxy configuration serves
-plain HTTP, and the DNS templates carry documentation names and private addresses
+plain HTTP and the shared site body tells browsers to refuse the plain-HTTP form,
+the entrypoint runs the server's event-mode fail-closed checks after the caches
+it builds, and the DNS templates carry documentation names and private addresses
 only.
 
 The Docker half is opt-in, and runs as its own CI step:

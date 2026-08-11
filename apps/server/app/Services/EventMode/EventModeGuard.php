@@ -7,6 +7,7 @@ use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodeSetupService;
 use App\Services\Offline\OfflineReadSetProbe;
 use App\Services\Secrets\SecretSafeguard;
+use Throwable;
 
 /**
  * Evaluates and enforces event-mode fail-closed safeguards on the server
@@ -31,6 +32,14 @@ use App\Services\Secrets\SecretSafeguard;
  *
  * Local encryption and device signing are client-side checks and are evaluated
  * on the client (technical spec 8.6). Development mode never blocks.
+ *
+ * The checks hold in two places. Setup fails closed when a node is being
+ * configured into an event role ({@see ensureReady}, technical spec 8.6), and a
+ * node already in one fails closed at boot ({@see enforceAtBoot}, technical
+ * spec 26.2) — a node whose application URL was later edited to plain HTTP must
+ * stop serving, not keep the promise its setup once passed. Like the secret
+ * safeguards, the boot refusal covers only the processes that serve; `artisan`
+ * stays usable because the repair lives there.
  */
 class EventModeGuard
 {
@@ -99,6 +108,27 @@ class EventModeGuard
         }
     }
 
+    /**
+     * The boot hook: a node in event mode refuses to serve while a required
+     * check fails (technical spec 26.2 "fail closed if HTTPS validation fails
+     * in event mode", "fail closed if the offline read set cannot be served").
+     *
+     * Which processes are refused is one decision, not two: the same rule the
+     * secret safeguards apply — HTTP, the queue worker, and the scheduler are
+     * refused; every other `artisan` invocation is a tool for fixing the node
+     * and keeps working.
+     *
+     * @throws EventModeNotReadyException
+     */
+    public function enforceAtBoot(): void
+    {
+        if (! $this->secrets->bootEnforcementApplies()) {
+            return;
+        }
+
+        $this->ensureReady();
+    }
+
     private function evaluateHttps(): EventModeCheck
     {
         $appUrl = (string) config('app.url', '');
@@ -158,7 +188,15 @@ class EventModeGuard
      */
     private function effectiveNodeRole(): string
     {
-        $node = $this->nodes->activeNode();
+        try {
+            $node = $this->nodes->activeNode();
+        } catch (Throwable) {
+            // A boot before the database exists still has to answer this. File
+            // config is the boot layer (technical spec 7.3) and is what a
+            // deployment sets, so degrade to it rather than failing the boot on
+            // a question about the boot.
+            $node = null;
+        }
 
         foreach ($this->configResolver->valuesFor($node) as $value) {
             if ($value['key'] === 'node_role') {
