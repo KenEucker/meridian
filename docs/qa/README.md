@@ -22,6 +22,16 @@ scripts/process/check.sh
 
 On Windows, open Git Bash in the repository and run this command there so the same POSIX script is used across Windows, Linux, and macOS. Do not use Windows PowerShell, `cmd.exe`, or the WSL `bash.exe` shim for this check.
 
+## Alpha 1 Release candidate QA index
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-RC-01-release-candidate-index.md`](QA-RC-01-release-candidate-index.md) | The release candidate gate: the development process section 20 Release Readiness Checklist made runnable, with every line mapped to its owning QA script or automated evidence; the ordered critical-script run table following development plan section 6; the two milestone 19 gate checks (organization addressing, modules-off operation) run directly until their consolidated coverage lands; and the closure steps — failure documentation, critical-issue triage, and the second-person install/deployment dry run whose evidence form M19.7 defines | M19.6 |
+
+`QA-MOD-01-organization-modules.md` (M19.19) and `QA-PUBLIC-01` (M20.6) enter
+the index's run table when they land; until then the index records them as
+blocking a release candidate rather than omitting them.
+
 ## Alpha 1 Branding script
 
 | ID | Coverage | Owning task |
