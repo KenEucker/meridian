@@ -36,6 +36,16 @@ Route::get('branding/{organization}/manifest.json', [BrandingManifestController:
 Route::get('branding/assets/{attachment}', [BrandingAssetController::class, 'show'])
     ->name('branding.asset');
 
+// The same pair resolved by request host (M19.9; ORG-023, BRAND-003; technical
+// spec 8.7): on an organization subdomain the host answers with that
+// organization's branding profile and no organization segment in the path; at
+// the deployment root it answers with Meridian's own identity, which is what
+// BRAND-003 requires of every surface that carries no organization.
+Route::get('branding/tokens.css', [BrandingStylesheetController::class, 'showForHost'])
+    ->name('branding.host.stylesheet');
+Route::get('branding/manifest.json', [BrandingManifestController::class, 'showForHost'])
+    ->name('branding.host.manifest');
+
 Route::get('setup', [NodeSetupController::class, 'show'])->name('setup.show');
 Route::post('setup', [NodeSetupController::class, 'store'])->name('setup.store');
 
