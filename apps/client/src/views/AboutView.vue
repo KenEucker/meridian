@@ -17,6 +17,7 @@ import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
 import {
+  COMBINED_NAVIGATION_MAX_ITEMS,
   useStaffLinks,
   useWorkflowLinks,
 } from "@/components/workflowLinks";
@@ -292,7 +293,6 @@ const workflowMenuPages = useWorkflowLinks();
 type MenuPageRow = {
   readonly key: string;
   readonly label: string;
-  readonly description: string;
 };
 
 const menuPageRows = computed<MenuPageRow[]>(() => {
@@ -305,21 +305,47 @@ const menuPageRows = computed<MenuPageRow[]>(() => {
       continue;
     }
 
-    rows.set(key, {
-      key,
-      label: link.pageLabel ?? link.label,
-      description: link.description ?? "",
-    });
+    rows.set(key, { key, label: link.pageLabel ?? link.label });
   }
 
   return [...rows.values()];
 });
+
+/**
+ * How many of these a menu will carry.
+ *
+ * The same number the shell splits its menus at, and it is the right ceiling
+ * for the same reason it is the right split: it was calibrated one item above
+ * the fullest standing a session carries, so a reader who has never touched
+ * this screen is never over it. Somebody who gains a page past the ceiling is
+ * asked which one to give up rather than handed a menu that quietly scrolls.
+ */
+const menuPageLimit = COMBINED_NAVIGATION_MAX_ITEMS;
+
+const menuPagesChosen = computed(
+  () => menuPageRows.value.filter((page) => pageInMenu(page.key)).length,
+);
+
+const menuPagesFull = computed(() => menuPagesChosen.value >= menuPageLimit);
 
 const menuPageBusy = ref<string | null>(null);
 const menuPageError = ref<string | null>(null);
 
 function isPageInMenu(key: string): boolean {
   return pageInMenu(key);
+}
+
+/**
+ * A box the reader cannot tick right now, and why.
+ *
+ * Only ever the unticked ones at the ceiling: a full menu is changed by taking
+ * something out first, and disabling the ticked boxes too would leave somebody
+ * with a full menu and no way to change it at all.
+ */
+function menuPageDisabled(key: string): boolean {
+  return (
+    menuPageBusy.value !== null || (menuPagesFull.value && !pageInMenu(key))
+  );
 }
 
 async function setInMenu(key: string, inMenu: boolean): Promise<void> {
@@ -552,34 +578,46 @@ watch(
         look the same on any device you sign in on.
       </p>
 
-      <div
-        v-for="page in menuPageRows"
-        :key="page.key"
-        class="about__setting-row"
-      >
-        <div>
-          <h3>{{ page.label }}</h3>
-          <p>{{ page.description }}</p>
-        </div>
-        <div class="about__theme-toggle" :aria-label="page.label">
-          <button
-            type="button"
-            :aria-pressed="isPageInMenu(page.key)"
-            :disabled="menuPageBusy !== null"
-            @click="setInMenu(page.key, true)"
-          >
-            In menu
-          </button>
-          <button
-            type="button"
-            :aria-pressed="!isPageInMenu(page.key)"
-            :disabled="menuPageBusy !== null"
-            @click="setInMenu(page.key, false)"
-          >
-            Home only
-          </button>
-        </div>
-      </div>
+      <!--
+        Checkboxes rather than a pair of buttons per page, and a plain list
+        rather than a row each.
+
+        Fourteen of anything is a screen somebody scrolls, and the two-button
+        rows this replaced spent that scroll on saying "in menu / home only"
+        fourteen times over. A checkbox says the same thing in the shape a
+        reader already knows, and it is short enough that the whole menu is one
+        glance — which is the thing being decided here.
+      -->
+      <p v-if="menuPageRows.length > 0" class="about__menus-count">
+        {{ menuPagesChosen }} of {{ menuPageLimit }} in your menus
+      </p>
+
+      <ul v-if="menuPageRows.length > 0" class="about__menus-list">
+        <li v-for="page in menuPageRows" :key="page.key">
+          <label>
+            <input
+              type="checkbox"
+              :checked="isPageInMenu(page.key)"
+              :disabled="menuPageDisabled(page.key)"
+              @change="
+                setInMenu(
+                  page.key,
+                  ($event.target as HTMLInputElement).checked,
+                )
+              "
+            />
+            <span>{{ page.label }}</span>
+          </label>
+        </li>
+      </ul>
+
+      <!--
+        Said where the boxes went quiet, rather than left for the reader to work
+        out from a control that stopped responding.
+      -->
+      <p v-if="menuPagesFull" class="about__menus-count" role="status">
+        Your menus are full. Take one out to add another.
+      </p>
 
       <!--
         A reader with no session has no menu to describe, and one whose pages
@@ -804,6 +842,56 @@ watch(
   margin: var(--m-space-2) 0 0;
   color: var(--m-text-muted);
   font-size: var(--m-text-sm);
+}
+
+.about__menus-count {
+  margin: var(--m-space-3) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+/* Two columns where there is room for them, so a full menu is one glance
+   rather than a scroll. */
+.about__menus-list {
+  display: grid;
+  gap: var(--m-space-1) var(--m-space-4);
+  margin: var(--m-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 32rem) {
+  .about__menus-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.about__menus-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  /* A thumb-sized target on a phone, which is where this screen is read. */
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.about__menus-list input {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--m-action-primary-bg);
+}
+
+.about__menus-list input:disabled {
+  cursor: not-allowed;
+}
+
+.about__menus-list input:disabled + span {
+  color: var(--m-text-muted);
+}
+
+.about__menus-list input:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
 }
 
 .about__pages-error,

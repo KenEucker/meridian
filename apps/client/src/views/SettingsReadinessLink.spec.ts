@@ -10,6 +10,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
+import { COMBINED_NAVIGATION_MAX_ITEMS } from "@/components/workflowLinks";
 import { routes } from "@/router";
 import {
   clearClientSession,
@@ -261,7 +262,18 @@ describe("menu contents on Settings", () => {
     });
   }
 
-  it("lists the reader's own menu entries and says which are in it", async () => {
+  function boxes(wrapper: VueWrapper) {
+    return wrapper.get(".about__menus").findAll("input[type=checkbox]");
+  }
+
+  function labels(wrapper: VueWrapper): string[] {
+    return wrapper
+      .get(".about__menus")
+      .findAll(".about__menus-list li")
+      .map((row) => row.text());
+  }
+
+  it("lists the reader's own menu entries and ticks the ones in it", async () => {
     installClientSession(
       sessionWithMenu(["shift-board"]),
       "network",
@@ -269,21 +281,39 @@ describe("menu contents on Settings", () => {
     );
 
     const wrapper = await mountSettings();
-    const rows = wrapper.get(".about__menus").findAll(".about__setting-row");
-    const labels = rows.map((row) => row.get("h3").text());
+    const rowLabels = labels(wrapper);
 
-    expect(labels).toContain("Me");
-    expect(labels).toContain("Shift Board");
+    expect(rowLabels).toContain("Me");
+    expect(rowLabels).toContain("Shift Board");
     // One row per page rather than one per route: the dashboards are one page
     // seen from several standings.
-    expect(new Set(labels).size).toBe(labels.length);
+    expect(new Set(rowLabels).size).toBe(rowLabels.length);
 
-    const shiftBoard = rows[labels.indexOf("Shift Board")];
-    const [inMenu, homeOnly] = shiftBoard.findAll(".about__theme-toggle button");
+    const shiftBoard = boxes(wrapper)[rowLabels.indexOf("Shift Board")];
 
-    expect(inMenu.text()).toBe("In menu");
-    expect(inMenu.attributes("aria-pressed")).toBe("false");
-    expect(homeOnly.attributes("aria-pressed")).toBe("true");
+    expect((shiftBoard.element as HTMLInputElement).checked).toBe(false);
+    expect((boxes(wrapper)[rowLabels.indexOf("Me")].element as HTMLInputElement).checked).toBe(
+      true,
+    );
+  });
+
+  /* The count is the thing being decided, so it is said rather than left to be
+     counted off the boxes. */
+  it("says how much of the menu is spent", async () => {
+    installClientSession(
+      sessionWithMenu(["shift-board"]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const chosen = boxes(wrapper).filter(
+      (box) => (box.element as HTMLInputElement).checked,
+    ).length;
+
+    expect(wrapper.get(".about__menus-count").text()).toBe(
+      `${chosen} of ${COMBINED_NAVIGATION_MAX_ITEMS} in your menus`,
+    );
   });
 
   it("writes the change to the node and follows its answer", async () => {
@@ -306,21 +336,16 @@ describe("menu contents on Settings", () => {
       ),
     );
 
-    const buttons = wrapper
-      .get(".about__menus")
-      .findAll(".about__setting-row")[0]
-      .findAll(".about__theme-toggle button");
+    const me = boxes(wrapper)[labels(wrapper).indexOf("Me")];
 
-    await buttons[1].trigger("click");
+    (me.element as HTMLInputElement).checked = false;
+    await me.trigger("change");
     await flushPromises();
 
-    const settled = wrapper
-      .get(".about__menus")
-      .findAll(".about__setting-row")[0]
-      .findAll(".about__theme-toggle button");
-
-    expect(settled[0].attributes("aria-pressed")).toBe("false");
-    expect(settled[1].attributes("aria-pressed")).toBe("true");
+    expect(
+      (boxes(wrapper)[labels(wrapper).indexOf("Me")].element as HTMLInputElement)
+        .checked,
+    ).toBe(false);
     expect(wrapper.find(".about__menus-error").exists()).toBe(false);
   });
 
@@ -335,33 +360,27 @@ describe("menu contents on Settings", () => {
 
     recordNodeUnreachable();
 
-    await wrapper
-      .get(".about__menus")
-      .findAll(".about__setting-row")[0]
-      .findAll(".about__theme-toggle button")[1]
-      .trigger("click");
+    const me = boxes(wrapper)[labels(wrapper).indexOf("Me")];
+
+    (me.element as HTMLInputElement).checked = false;
+    await me.trigger("change");
     await flushPromises();
 
     expect(wrapper.get(".about__menus-error").text()).toContain(
       "needs a connection to the node",
     );
-    // And the control still says what the account holds, rather than the state
-    // the click asked for and did not get.
+    // And the box still says what the account holds, rather than the state the
+    // click asked for and did not get.
     expect(
-      wrapper
-        .get(".about__menus")
-        .findAll(".about__setting-row")[0]
-        .findAll(".about__theme-toggle button")[0]
-        .attributes("aria-pressed"),
-    ).toBe("true");
+      (boxes(wrapper)[labels(wrapper).indexOf("Me")].element as HTMLInputElement)
+        .checked,
+    ).toBe(true);
   });
 
   it("says the menus are empty when the device holds no session", async () => {
     const wrapper = await mountSettings();
 
-    expect(wrapper.get(".about__menus").findAll(".about__setting-row")).toEqual(
-      [],
-    );
+    expect(boxes(wrapper)).toEqual([]);
     expect(wrapper.get(".about__menus").text()).toContain(
       "Your menus are empty",
     );
