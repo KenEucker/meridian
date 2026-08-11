@@ -70,6 +70,13 @@ through Laravel. Unpackaged Electron development also loads this Vite dev
 server by default. The production build still writes to `apps/client/dist`;
 Laravel, packaged Electron, and Capacitor consume that same build output.
 
+Running the Laravel server without the Vite dev server is fine: it confirms the
+dev server is answering before it uses it, and serves the last build from
+`apps/client/dist/admin` when nothing is. Those responses carry
+`X-Meridian-Client-Source: build-fallback`, which is the thing to check when an
+edit does not appear — the build is only as new as the last
+`corepack pnpm run client:build`. Start Vite and the next reload picks it up.
+
 ### Field Report photo upload (local QA)
 
 Photos upload to the Laravel server over `POST /api/commands/*` under the bearer
