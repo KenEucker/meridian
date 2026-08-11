@@ -141,6 +141,20 @@ class SessionResolver
              */
             'preferences' => [
                 'hidden_pages' => $this->pages->hiddenPagesFor($user),
+                /*
+                 * And which of the pages they kept have been taken out of the
+                 * menus (M18.69).
+                 *
+                 * A separate answer rather than more entries in the list above,
+                 * because it is a separate question with a milder answer: a
+                 * page named here is still on the home directory, still linked,
+                 * and still reachable. The reader has said they do not work out
+                 * of it, not that they are done with it. Sending the two lists
+                 * merged would leave a client unable to tell a shortened menu
+                 * from a hidden page, and unable to render the control that
+                 * changes either one.
+                 */
+                'menu_hidden_pages' => $this->pages->menuHiddenPagesFor($user),
             ],
             // Server time of resolution, which is what a client operating from
             // cache displays as its last refresh (CLIENT-009).

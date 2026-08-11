@@ -107,7 +107,7 @@ export function fixtureSessionDocument(
       switching_available: false,
     },
     /*
-     * A reader who has hidden nothing (M18.69).
+     * A reader who has hidden nothing and trimmed nothing (M18.69).
      *
      * Stated rather than left off, because leaving it off means the catalog's
      * defaults apply and the fixture's navigation changes shape every time a
@@ -115,7 +115,7 @@ export function fixtureSessionDocument(
      * what capability codes permit; a preference is a separate question, and
      * one a spec asking it should set for itself.
      */
-    preferences: { hidden_pages: [] },
+    preferences: { hidden_pages: [], menu_hidden_pages: [] },
     refreshed_at: "2026-09-11T18:30:00+00:00",
     ...overrides,
   };

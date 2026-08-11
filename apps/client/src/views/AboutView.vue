@@ -16,6 +16,10 @@ import {
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
+import {
+  useStaffLinks,
+  useWorkflowLinks,
+} from "@/components/workflowLinks";
 import { clientSessionState } from "@/session/clientSession";
 import {
   HIDEABLE_PAGES,
@@ -23,6 +27,11 @@ import {
   setPageHidden,
   type HideablePage,
 } from "@/session/hiddenPages";
+import {
+  menuPageKeyFor,
+  pageInMenu,
+  setPageInMenu,
+} from "@/session/menuPages";
 import {
   resolveReadinessChecklist,
   summarizeReadiness,
@@ -260,6 +269,79 @@ async function setPageShown(page: HideablePage, shown: boolean): Promise<void> {
   }
 }
 
+/*
+ * What this reader keeps in their menus (M18.69).
+ *
+ * The rows are built from the reader's own menus rather than from a fixed list,
+ * so somebody is only ever offered entries their session actually has, and each
+ * row is named with the words the menu uses for it. A catalog of labels here
+ * would be a second place for the same page to be called something, and the
+ * first thing to drift.
+ *
+ * The two menus are listed as one set. The shell already merges them under the
+ * threshold, so "which menu is this in" is a question with a moving answer, and
+ * not one worth making a reader hold while they decide what they work out of.
+ *
+ * Deduplicated by page key. The dashboards are one page under four routes, and
+ * a reader holding two of those standings should find one control rather than
+ * the same control twice.
+ */
+const staffMenuPages = useStaffLinks();
+const workflowMenuPages = useWorkflowLinks();
+
+type MenuPageRow = {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+};
+
+const menuPageRows = computed<MenuPageRow[]>(() => {
+  const rows = new Map<string, MenuPageRow>();
+
+  for (const link of [...staffMenuPages.value, ...workflowMenuPages.value]) {
+    const key = menuPageKeyFor(link.to.name);
+
+    if (key === null || rows.has(key)) {
+      continue;
+    }
+
+    rows.set(key, {
+      key,
+      label: link.pageLabel ?? link.label,
+      description: link.description ?? "",
+    });
+  }
+
+  return [...rows.values()];
+});
+
+const menuPageBusy = ref<string | null>(null);
+const menuPageError = ref<string | null>(null);
+
+function isPageInMenu(key: string): boolean {
+  return pageInMenu(key);
+}
+
+async function setInMenu(key: string, inMenu: boolean): Promise<void> {
+  if (menuPageBusy.value !== null || pageInMenu(key) === inMenu) {
+    return;
+  }
+
+  menuPageBusy.value = key;
+  menuPageError.value = null;
+
+  try {
+    await setPageInMenu(key, inMenu);
+  } catch (error) {
+    menuPageError.value =
+      error instanceof Error
+        ? error.message
+        : "The node did not accept the change.";
+  } finally {
+    menuPageBusy.value = null;
+  }
+}
+
 function readPreferredTheme(): ThemeChoice {
   if (typeof window === "undefined") {
     return "dark";
@@ -445,6 +527,72 @@ watch(
       -->
       <p v-if="pageVisibilityError" class="about__pages-error" role="alert">
         {{ pageVisibilityError }}
+      </p>
+    </section>
+
+    <!--
+      What the menus carry (M18.69).
+
+      Under Pages and separate from it, because it is the milder version of the
+      same decision and the order says so: first what you keep at all, then what
+      you work out of. Taking a page out of the menus leaves it on Home, which
+      the note says outright — a reader who trims their menu down to the four
+      pages they use hourly has to know the rest are still somewhere, or the
+      control is one nobody dares to touch.
+
+      The rows are the reader's own menu entries rather than a fixed list, so
+      nobody is offered a page their session does not have.
+    -->
+    <section class="about__menus" aria-labelledby="about-menus-heading">
+      <h2 id="about-menus-heading" class="about__subheading">Menus</h2>
+      <p class="about__section-note">
+        Which of your pages appear in the menus at the top of the screen.
+        Everything here stays on Home whether or not it is in a menu, and still
+        opens from a link or from search. Saved to your account, so your menus
+        look the same on any device you sign in on.
+      </p>
+
+      <div
+        v-for="page in menuPageRows"
+        :key="page.key"
+        class="about__setting-row"
+      >
+        <div>
+          <h3>{{ page.label }}</h3>
+          <p>{{ page.description }}</p>
+        </div>
+        <div class="about__theme-toggle" :aria-label="page.label">
+          <button
+            type="button"
+            :aria-pressed="isPageInMenu(page.key)"
+            :disabled="menuPageBusy !== null"
+            @click="setInMenu(page.key, true)"
+          >
+            In menu
+          </button>
+          <button
+            type="button"
+            :aria-pressed="!isPageInMenu(page.key)"
+            :disabled="menuPageBusy !== null"
+            @click="setInMenu(page.key, false)"
+          >
+            Home only
+          </button>
+        </div>
+      </div>
+
+      <!--
+        A reader with no session has no menu to describe, and one whose pages
+        are all hidden has emptied it on purpose. Either way the honest thing to
+        render is a sentence rather than a heading over nothing.
+      -->
+      <p v-if="menuPageRows.length === 0" class="about__section-note">
+        Your menus are empty. Pages appear here once you are signed in to an
+        event.
+      </p>
+
+      <p v-if="menuPageError" class="about__menus-error" role="alert">
+        {{ menuPageError }}
       </p>
     </section>
 
@@ -646,6 +794,7 @@ watch(
 .about__settings,
 .about__device,
 .about__pages,
+.about__menus,
 .about__permissions,
 .about__about {
   margin-top: var(--m-space-6);
@@ -657,7 +806,8 @@ watch(
   font-size: var(--m-text-sm);
 }
 
-.about__pages-error {
+.about__pages-error,
+.about__menus-error {
   margin: var(--m-space-3) 0 0;
   color: var(--m-status-danger);
   font-size: var(--m-text-sm);

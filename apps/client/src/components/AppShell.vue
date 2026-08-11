@@ -23,8 +23,8 @@ import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
   useCombinedNavigation,
   useShowStaffMenu,
-  useStaffLinks,
-  useWorkflowLinks,
+  useStaffMenuLinks,
+  useWorkflowMenuLinks,
 } from "@/components/workflowLinks";
 import { refreshEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
@@ -184,8 +184,11 @@ const workflowMenuOpen = ref(false);
 const userElement = ref<HTMLElement | null>(null);
 const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
-const workflowLinks = useWorkflowLinks();
-const staffLinks = useStaffLinks();
+// The menus draw from the reader's own trimming of them (M18.69). Home builds
+// from the untrimmed lists, which is the difference between a shorter menu and
+// a hidden page.
+const workflowLinks = useWorkflowMenuLinks();
+const staffLinks = useStaffMenuLinks();
 const navigation = useCombinedNavigation();
 const showStaffMenu = useShowStaffMenu();
 // A short nav reads better as one list than as two dropdowns the reader has to

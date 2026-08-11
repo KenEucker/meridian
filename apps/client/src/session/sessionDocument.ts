@@ -132,15 +132,26 @@ export interface SessionDevice {
 }
 
 /**
- * What this user has asked not to be shown (M18.69).
+ * What this user has asked not to be shown, and what they have asked not to be
+ * shown *in their menus* (M18.69).
  *
- * Page keys, not routes. The node stores the reader's own answer and hands it
- * back; which routes a key covers is this client's business, and a page named
- * here is still reachable by address — a preference is not a permission
- * (CLIENT-006).
+ * Page keys, not routes. The node stores the reader's own answers and hands
+ * them back; which routes a key covers is this client's business, and a page
+ * named in either list is still reachable by address — a preference is not a
+ * permission (CLIENT-006).
  */
 export interface SessionPreferences {
   readonly hidden_pages: readonly string[];
+  /**
+   * Of the pages the reader kept, the ones they do not work out of (M18.69).
+   *
+   * A separate list because it is a separate question with a milder answer: a
+   * page named here is out of the menus and still on Home, still linked, and
+   * still reachable. Optional on its own terms — a node carrying the block
+   * above without this one is a build from between the two, and the answer for
+   * a reader who has decided nothing is an empty list either way.
+   */
+  readonly menu_hidden_pages?: readonly string[];
 }
 
 export interface SessionDocument {

@@ -79,6 +79,7 @@ import {
   sessionSwitchingAvailable,
 } from "@/session/sessionContext";
 import { visibleLinks } from "@/session/hiddenPages";
+import { menuLinks } from "@/session/menuPages";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -500,18 +501,50 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   });
 }
 
+/*
+ * The two menus as the shell actually draws them (M18.69).
+ *
+ * Everything above answers "what may this person reach and what have they kept"
+ * — one list, and the one Home renders from. These two answer the narrower
+ * question the menus ask: of those pages, which does this reader work out of.
+ *
+ * The filter belongs here rather than inside the builders because it is the
+ * only place it is true. A page taken out of a menu is still on Home, still in
+ * the command palette, and still reachable; folding it into `useStaffLinks` or
+ * `useWorkflowLinks` would take it off the map as well, which is the other
+ * preference and not this one.
+ */
+
+/** The Workflows menu: the workflow hubs this reader kept in it. */
+export function useWorkflowMenuLinks(): ComputedRef<WorkflowLink[]> {
+  const links = useWorkflowLinks();
+
+  return computed(() => menuLinks(links.value));
+}
+
+/** The Staff menu: the personal pages this reader kept in it. */
+export function useStaffMenuLinks(): ComputedRef<WorkflowLink[]> {
+  const links = useStaffLinks();
+
+  return computed(() => menuLinks(links.value));
+}
+
 /**
  * Whether the app shell renders Staff and Workflows as one menu or two.
  *
  * Under the threshold the shell shows a single list, because splitting a short
  * list across two dropdowns makes the reader guess which one holds the page.
+ *
+ * Counted after the reader's own trimming, which is the count that matters:
+ * the threshold is about how long a list somebody has to read, and a reader who
+ * has taken five entries out of their menus is reading the shorter one.
  */
 export function useCombinedNavigation(): ComputedRef<{
   readonly combined: boolean;
   readonly links: readonly WorkflowLink[];
 }> {
-  const workflowLinks = useWorkflowLinks();
-  const staffLinks = useStaffLinks();
+  const workflowLinks = useWorkflowMenuLinks();
+  const staffLinks = useStaffMenuLinks();
 
   return computed(() => {
     const links = [...staffLinks.value, ...workflowLinks.value];
@@ -529,7 +562,7 @@ export function useCombinedNavigation(): ComputedRef<{
  */
 export function useShowStaffMenu(): ComputedRef<boolean> {
   const navigation = useCombinedNavigation();
-  const staffLinks = useStaffLinks();
+  const staffLinks = useStaffMenuLinks();
 
   return computed(() => !navigation.value.combined && staffLinks.value.length > 0);
 }

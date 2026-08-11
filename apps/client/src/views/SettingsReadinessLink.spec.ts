@@ -17,6 +17,8 @@ import {
 } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 import { resetHiddenPageAnswers } from "@/session/hiddenPages";
+import { resetMenuPageAnswers } from "@/session/menuPages";
+import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
 import {
   recordNodeUnreachable,
   resetNodeReachability,
@@ -58,7 +60,9 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   clearClientSession();
+  resetSelectedSessionDepartment();
   resetHiddenPageAnswers();
+  resetMenuPageAnswers();
   resetNodeReachability();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
@@ -238,6 +242,129 @@ describe("page visibility on Settings", () => {
         .findAll(".about__theme-toggle button")[1]
         .attributes("aria-pressed"),
     ).toBe("true");
+  });
+});
+
+/*
+ * What the menus carry, from Settings (M18.69).
+ *
+ * The rows are the reader's own menu entries, so what has to be readable here
+ * is that they are built from the session rather than from a fixed list, that
+ * the control says which side it is on, and that a refusal is said out loud —
+ * the same three things the Pages section owes, for a preference stored the
+ * same way.
+ */
+describe("menu contents on Settings", () => {
+  function sessionWithMenu(menuHidden: readonly string[]) {
+    return fixtureSessionDocument({
+      preferences: { hidden_pages: [], menu_hidden_pages: menuHidden },
+    });
+  }
+
+  it("lists the reader's own menu entries and says which are in it", async () => {
+    installClientSession(
+      sessionWithMenu(["shift-board"]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const rows = wrapper.get(".about__menus").findAll(".about__setting-row");
+    const labels = rows.map((row) => row.get("h3").text());
+
+    expect(labels).toContain("Me");
+    expect(labels).toContain("Shift Board");
+    // One row per page rather than one per route: the dashboards are one page
+    // seen from several standings.
+    expect(new Set(labels).size).toBe(labels.length);
+
+    const shiftBoard = rows[labels.indexOf("Shift Board")];
+    const [inMenu, homeOnly] = shiftBoard.findAll(".about__theme-toggle button");
+
+    expect(inMenu.text()).toBe("In menu");
+    expect(inMenu.attributes("aria-pressed")).toBe("false");
+    expect(homeOnly.attributes("aria-pressed")).toBe("true");
+  });
+
+  it("writes the change to the node and follows its answer", async () => {
+    installClientSession(
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ menu_hidden_pages: ["me"] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+
+    const buttons = wrapper
+      .get(".about__menus")
+      .findAll(".about__setting-row")[0]
+      .findAll(".about__theme-toggle button");
+
+    await buttons[1].trigger("click");
+    await flushPromises();
+
+    const settled = wrapper
+      .get(".about__menus")
+      .findAll(".about__setting-row")[0]
+      .findAll(".about__theme-toggle button");
+
+    expect(settled[0].attributes("aria-pressed")).toBe("false");
+    expect(settled[1].attributes("aria-pressed")).toBe("true");
+    expect(wrapper.find(".about__menus-error").exists()).toBe(false);
+  });
+
+  it("says so when the change cannot be made", async () => {
+    installClientSession(
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    recordNodeUnreachable();
+
+    await wrapper
+      .get(".about__menus")
+      .findAll(".about__setting-row")[0]
+      .findAll(".about__theme-toggle button")[1]
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get(".about__menus-error").text()).toContain(
+      "needs a connection to the node",
+    );
+    // And the control still says what the account holds, rather than the state
+    // the click asked for and did not get.
+    expect(
+      wrapper
+        .get(".about__menus")
+        .findAll(".about__setting-row")[0]
+        .findAll(".about__theme-toggle button")[0]
+        .attributes("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("says the menus are empty when the device holds no session", async () => {
+    const wrapper = await mountSettings();
+
+    expect(wrapper.get(".about__menus").findAll(".about__setting-row")).toEqual(
+      [],
+    );
+    expect(wrapper.get(".about__menus").text()).toContain(
+      "Your menus are empty",
+    );
   });
 });
 
