@@ -834,6 +834,9 @@ describe("AppShell menu behavior", () => {
       "Operations",
       "Incidents",
       "Admin",
+      // M18.75: the Directory, present because the stubbed node confirmed the
+      // organization offers it (DIR-002, DIR-005).
+      "Directory",
     ]);
   });
 
@@ -866,6 +869,9 @@ describe("AppShell menu behavior", () => {
       "Shifts",
       "My Field Reports",
       "Trainings",
+      // M18.75: the Directory belongs to a plain member exactly as it does to
+      // a lead — the entry is association-permitted (DIR-002, DIR-024).
+      "Directory",
     ]);
   });
 
@@ -902,6 +908,8 @@ describe("AppShell menu behavior", () => {
       "My Field Reports",
       "Trainings",
       "Team",
+      // M18.75: the Directory (DIR-002).
+      "Directory",
     ]);
   });
 

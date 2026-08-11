@@ -80,6 +80,7 @@ import DepartmentTeamsListView from "@/views/DepartmentTeamsListView.vue";
 import DepartmentTrainingDetailView from "@/views/DepartmentTrainingDetailView.vue";
 import DepartmentTrainingEditView from "@/views/DepartmentTrainingEditView.vue";
 import DepartmentTrainingListView from "@/views/DepartmentTrainingListView.vue";
+import DirectoryView from "@/views/DirectoryView.vue";
 import EventHorizonView from "@/views/EventHorizonView.vue";
 import PlanningTableView from "@/views/PlanningTableView.vue";
 import ReadinessView from "@/views/ReadinessView.vue";
@@ -540,6 +541,20 @@ export const routes: RouteRecordRaw[] = [
     path: "/staff/event-horizon",
     name: "staff.event-horizon",
     component: EventHorizonView,
+  },
+  /*
+   * The Directory (M18.75; DIR-001 through DIR-005; UI contract 12.3, 19D).
+   *
+   * One route for event and organization context alike: which population the
+   * chart reads is the session's resolution, never the address's. Always
+   * registered, and the surface decides its own absence — an organization that
+   * has disabled the Directory answers 404, and the page renders not-found
+   * copy rather than an empty state or an explanation (DIR-005).
+   */
+  {
+    path: "/directory",
+    name: "directory",
+    component: DirectoryView,
   },
   /*
    * Edit your own profile (M18.20; VOL-014 through VOL-016; UI contract 12.3

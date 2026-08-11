@@ -39,6 +39,7 @@ import { routerKey, type RouteLocationRaw, type Router } from "vue-router";
 
 import type { MeridianAppConfig } from "@/app/appConfig";
 import { useNavigationSections } from "@/components/workflowLinks";
+import { directoryMenuPresent } from "@/directory/directoryModel";
 import { signOut, signedIn } from "@/session/apiLogin";
 import { kioskContextPinned } from "@/session/kioskContext";
 import {
@@ -255,6 +256,22 @@ function kioskResults(): CommandPaletteResult[] {
           "End this session so the next person can sign in.",
         ),
       );
+
+      /*
+       * The Directory (M18.75; DIR-002): in Kiosk too, because a wall display
+       * is exactly where somebody asks "who is where". Present only where the
+       * node has confirmed the organization offers it (DIR-005), and only for
+       * a live session — the chart is the signed-in viewer's answer.
+       */
+      if (directoryMenuPresent()) {
+        results.push(
+          kioskNavigation(
+            "directory",
+            "Directory",
+            "The organization chart: departments, teams, and who is where.",
+          ),
+        );
+      }
     } else {
       results.push(
         kioskNavigation(

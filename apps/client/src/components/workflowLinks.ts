@@ -30,6 +30,7 @@
 
 import { computed, type ComputedRef } from "vue";
 
+import { directoryMenuPresent } from "@/directory/directoryModel";
 import { useEventHorizonMenuPresence } from "@/event-horizon/eventHorizonModel";
 import {
   departmentReportingExportAuthority,
@@ -145,8 +146,10 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
 
     if (params === null) {
       // Incidents is event-scoped rather than department-scoped, so it is the
-      // one workflow that survives having no department route to build.
-      return visibleLinks(incidentLinks(department));
+      // one workflow that survives having no department route to build — and
+      // the Directory survives with it, because it is organization-scoped and
+      // belongs to anybody (DIR-002).
+      return visibleLinks([...incidentLinks(department), ...directoryLinks()]);
     }
 
     const isDepartmentLead = departmentHasRole(department, ROLE_DEPARTMENT_LEAD);
@@ -250,6 +253,8 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       });
     }
 
+    links.push(...directoryLinks());
+
     /*
      * The reader's own preference, applied last (M18.69).
      *
@@ -261,6 +266,30 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
      */
     return visibleLinks(links);
   });
+}
+
+/**
+ * The Directory (M18.75; DIR-002, DIR-005; UI contract 19D.2).
+ *
+ * Association-permitted, like Me: the chart belongs to anybody with a session,
+ * and what a viewer sees inside it is the node's visibility answer rather than
+ * a reason to gate the entry. The one gate is the organization's own setting —
+ * present only where the node has confirmed the organization offers a
+ * Directory, and absent otherwise with no entry explaining why (DIR-005).
+ */
+function directoryLinks(): WorkflowLink[] {
+  if (!directoryMenuPresent()) {
+    return [];
+  }
+
+  return [
+    {
+      label: "Directory",
+      description:
+        "The organization chart: departments, teams, and who is where.",
+      to: { name: "directory" },
+    },
+  ];
 }
 
 /**

@@ -347,6 +347,18 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       offlineText: "could not be checked at all",
     },
     {
+      /*
+       * M18.75 lands the surface connection-required; M18.77 extends the
+       * offline read set with the authorized Directory projection and flips
+       * this entry to renders-offline (DIR-037; technical spec 21E.8).
+       */
+      route: "directory",
+      outcome: "connection-required",
+      basis:
+        "the chart is the visibility rule's answer for this viewer (DIR-017), and the authorized projection does not travel in the read set until M18.77",
+      offlineText: "Check the connection to this node",
+    },
+    {
       route: "staff.profile.edit",
       outcome: "connection-required",
       basis:
