@@ -286,6 +286,18 @@ const showsPersonalSignIn = computed(
 );
 
 /*
+ * The way to sign yourself in at a shared workstation (M18.71; M18.61).
+ *
+ * The same two conditions the surface itself has: the route exists in Field and
+ * Admin and not in Kiosk (`workstationCodeRouteGuard`), and there has to be a
+ * session, because the whole action is this login granting itself a seat
+ * somewhere else.
+ */
+const showsWorkstationSignIn = computed(
+  () => appConfig.value.uiMode !== "kiosk" && signedIn.value,
+);
+
+/*
  * Switching users belongs to a shared workstation and to nowhere else (M18.32;
  * UI-017; technical spec 13.3).
  *
@@ -838,6 +850,29 @@ onBeforeUnmount(() => {
                 @click="closeUserMenu"
               >
                 Settings
+              </RouterLink>
+              <!--
+                Signing yourself in at a shared workstation (M18.71; M18.61;
+                AUTH-026 through AUTH-028).
+
+                In the user menu because that is what it is about — this login,
+                and where it is signed in — and because the moment somebody
+                wants it they are standing at a kiosk with their phone out,
+                which is a worse moment to be navigating to Me first. Me still
+                lists it; this is a second door to one page, not a second page.
+
+                Absent on a Kiosk, where the route does not exist: a shared
+                workstation signs in by typed code at its own keyboard, and an
+                entry leading somewhere the guard sends straight back is an
+                entry that wastes a tap.
+              -->
+              <RouterLink
+                v-if="showsWorkstationSignIn"
+                role="menuitem"
+                :to="{ name: 'staff.workstation-code' }"
+                @click="closeUserMenu"
+              >
+                Workstation sign-in
               </RouterLink>
               <RouterLink
                 v-if="showsWorkstationSwitch"
