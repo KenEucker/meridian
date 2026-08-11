@@ -28,6 +28,16 @@ function yearsLabel(): string {
     ? "1 year of service"
     : `${props.person.yearsOfService} years of service`;
 }
+
+/**
+ * A person who has not chosen a handle yet renders as exactly that. The
+ * handle is the only person-identifying text this surface may carry
+ * (DIR-027), so no other name may stand in for a missing one — but a blank
+ * entry would read as a rendering bug rather than as a fact about the record.
+ */
+function hasHandle(): boolean {
+  return props.person.handle.trim() !== "";
+}
 </script>
 
 <template>
@@ -43,12 +53,15 @@ function yearsLabel(): string {
         alt=""
       />
       <span v-else class="directory-person__lettermark">
-        {{ lettermarkFor(person.handle) }}
+        {{ hasHandle() ? lettermarkFor(person.handle) : "?" }}
       </span>
     </span>
     <span class="directory-person__text">
-      <span class="directory-person__handle">
-        {{ person.handle }}
+      <span
+        class="directory-person__handle"
+        :class="{ 'directory-person__handle--unset': !hasHandle() }"
+      >
+        {{ hasHandle() ? person.handle : "No handle yet" }}
         <mark v-if="highlighted" class="directory-person__match">
           Search match
         </mark>
@@ -108,6 +121,12 @@ function yearsLabel(): string {
 
 .directory-person__handle {
   font-weight: 700;
+}
+
+.directory-person__handle--unset {
+  color: var(--m-text-muted);
+  font-style: italic;
+  font-weight: 400;
 }
 
 .directory-person__match {

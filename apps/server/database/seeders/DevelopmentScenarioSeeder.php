@@ -211,6 +211,15 @@ class DevelopmentScenarioSeeder extends Seeder
                 [
                     'legal_name' => $persona['user_name'],
                     'preferred_name' => explode(' ', $persona['user_name'])[0],
+                    /*
+                     * The operational handle (VOL-009), first name for every
+                     * persona — distinct across the catalog. The Directory
+                     * carries the handle and nothing else about a person
+                     * (DIR-027), so without one the seeded personas render as
+                     * nameless entries and QA-DIR-01's handle searches have
+                     * nothing to find (M18.78).
+                     */
+                    'handle' => explode(' ', $persona['user_name'])[0],
                 ],
             );
 
