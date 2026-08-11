@@ -3,6 +3,7 @@
 use App\Http\Middleware\ReportCentralReach;
 use App\Http\Middleware\ResolveOrganizationHost;
 use App\Services\EventMode\EventModeNotReadyException;
+use App\Services\Modules\ModuleInactiveException;
 use App\Services\Node\EventAuthorityException;
 use App\Services\Secrets\DefaultSecretsException;
 use Illuminate\Foundation\Application;
@@ -75,6 +76,24 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response($exception->getMessage(), 409);
+        });
+
+        // A request to capability the organization does not run (M19.12;
+        // MOD-012, MOD-013; technical spec 15A.4; data/API 5.9).
+        //
+        // 404 rather than 403, and identical for every caller: an inactive
+        // module is absent from the product rather than withheld from a person,
+        // and the gate answers before any permission is consulted. The reason
+        // names the module because module state is an organization's own
+        // configuration and not a secret from its members — it is what lets the
+        // client say "your organization does not use Scheduling" instead of
+        // showing a permission denial for something nobody can reach.
+        $exceptions->render(function (ModuleInactiveException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json($exception->payload(), 404);
+            }
+
+            return response($exception->getMessage(), 404);
         });
 
         // A node refusing to boot on default secrets (technical spec 26.2). It

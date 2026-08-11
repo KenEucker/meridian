@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Modules\ModuleKey;
 use App\Http\Controllers\Application\ApplicantPortalController;
 use App\Http\Controllers\Application\EventApplicationController;
 use App\Http\Controllers\Auth\DiscordOAuthController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use App\Http\Controllers\Staffing\StaffProfileChangeRequestController;
+use App\Http\Middleware\EnforceActiveModule;
 use App\Http\Middleware\EnforceOrganizationHostScope;
 use Illuminate\Support\Facades\Route;
 
@@ -200,9 +202,11 @@ Route::middleware('auth')->group(function (): void {
  */
 Route::middleware('signed:relative')->group(function (): void {
     Route::get('downloads/events/{event}/exports/credential-eligibility', [ReportingExportController::class, 'signedCredentialEligibility'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('downloads.exports.credential-eligibility');
 
     Route::get('downloads/events/{event}/exports/shift-roster', [ReportingExportController::class, 'signedShiftRoster'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('downloads.exports.shift-roster');
 
     Route::get('downloads/events/{event}/exports/staff-contact', [ReportingExportController::class, 'signedStaffContact'])
@@ -215,19 +219,24 @@ Route::middleware('signed:relative')->group(function (): void {
         ->name('downloads.exports.credits-earned');
 
     Route::get('downloads/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'signedDownload'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('downloads.incidents.pdf');
 
     Route::get('downloads/policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'signedPolicy'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('downloads.policy-documents.export');
 
     Route::get('downloads/procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'signedProcedure'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('downloads.procedure-documents.export');
 
     Route::get('field-report-photos/{attachment}/preview', [FieldReportPhotoController::class, 'preview'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('field-report-photos.preview');
     Route::get('field-report-photos/{attachment}/download', [FieldReportPhotoController::class, 'download'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('field-report-photos.download');
 
     /*
