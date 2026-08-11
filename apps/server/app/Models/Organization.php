@@ -212,6 +212,19 @@ class Organization extends Model
         return $this->hasMany(Department::class);
     }
 
+    /**
+     * This organization's stated module state (MOD-005; data/API 10.1A).
+     *
+     * Rows here are statements, not the whole truth: a module with no row is
+     * entitled and enabled, so what an organization actually runs is read from
+     * {@see \App\Services\Modules\ActiveModuleResolver} rather than counted
+     * here.
+     */
+    public function modules(): HasMany
+    {
+        return $this->hasMany(OrganizationModule::class);
+    }
+
     public function policyDocuments(): HasMany
     {
         return $this->hasMany(PolicyDocument::class);

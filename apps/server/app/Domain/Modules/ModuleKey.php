@@ -12,12 +12,11 @@ namespace App\Domain\Modules;
  * an organization chooses which of these it runs and cannot define, install, or
  * extend one (MOD-003).
  *
- * This enum is the catalogue and nothing else. Where module state is *stored*
- * per organization — the entitled/enabled pair of MOD-005 — is M19.11's, and
- * {@see \App\Services\Modules\ActiveModuleResolver} is the single seam that
- * will read it. Naming the eight keys here now is what lets the offline read
- * set declare which module owns each of its sections, which is the MOD-016
- * boundary the set has to hold whether or not the storage exists yet.
+ * This enum is the catalogue and nothing else. Module state is *stored* per
+ * organization on `organization_modules` — the entitled/enabled pair of
+ * MOD-005 — and {@see \App\Services\Modules\ActiveModuleResolver} is the single
+ * seam that reads it. Which of Meridian's domain namespaces each module owns is
+ * {@see DomainNamespace}.
  */
 enum ModuleKey: string
 {
