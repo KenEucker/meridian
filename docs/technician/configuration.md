@@ -66,12 +66,16 @@ Event mode is derived from the effective node role: any role other than
 `development` is treated as event/production mode, unless `MERIDIAN_EVENT_MODE`
 explicitly forces it on or off.
 
-In event mode the server enforces two checks and fails closed on either:
+In event mode the server enforces three checks and fails closed on any of them:
 
 - The configured application URL must use HTTPS.
 - The node must be able to serve the offline read set devices cache from. This
   replaced a PowerSync liveness probe: PowerSync was retired, and event mode now
   gates on the thing offline readiness actually needs.
+- No secret this node uses may be missing or still set to a sample value. This
+  one also refuses the boot itself, whatever `MERIDIAN_EVENT_MODE_REQUIRE_CONFIGURED_SECRETS`
+  says — that variable decides only whether node setup refuses an event role over
+  it. See **Secrets** in `deployment.md` for the repair.
 
 Local encryption and device signing are checked on the client, not here.
 
@@ -81,9 +85,10 @@ clients and the Electron health panel can notice drift.
 ## Where to see the effect
 
 The God Mode landing screen reports node configuration completeness, node role
-and pairing state, required secrets, secure connection policy, and offline read
-set availability. If you changed something and want to know whether it helped, that
-list is the fastest answer. It reads state and repairs nothing.
+and pairing state, required secrets, secure connection policy, offline read set
+availability, and any secret still set to a sample value. If you changed
+something and want to know whether it helped, that list is the fastest answer. It
+reads state and repairs nothing.
 
 ## The full configuration catalogue
 
@@ -170,4 +175,5 @@ after the database is reachable.
 ```bash
 php artisan meridian:config:list        # catalogue with sources; secrets masked
 php artisan meridian:config:validate    # non-zero exit on invalid overrides or missing required values
+php artisan meridian:secrets            # non-zero exit when this node would refuse to serve on its secrets
 ```

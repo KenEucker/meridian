@@ -19,6 +19,9 @@ class EventModeSetupFailClosedTest extends TestCase
             'meridian.event_mode.enabled' => null,
             'meridian.event_mode.require_https' => true,
             'meridian.event_mode.require_offline_read_set' => true,
+            // The secret safeguards have their own tests (M19.3); stated here
+            // so this class keeps asserting the two checks it is about.
+            'meridian.event_mode.require_configured_secrets' => false,
         ]);
     }
 

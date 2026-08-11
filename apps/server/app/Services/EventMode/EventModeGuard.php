@@ -6,6 +6,7 @@ use App\Models\Node;
 use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodeSetupService;
 use App\Services\Offline\OfflineReadSetProbe;
+use App\Services\Secrets\SecretSafeguard;
 
 /**
  * Evaluates and enforces event-mode fail-closed safeguards on the server
@@ -22,6 +23,11 @@ use App\Services\Offline\OfflineReadSetProbe;
  *     device caches to work without signal (ADR-0003). This replaced the
  *     PowerSync liveness probe, which failed event mode closed on a service no
  *     client ever connected to.
+ *   - Configured secrets: no secret this node uses may be missing or still set
+ *     to a sample value (technical spec 26.2). The evaluation belongs to
+ *     {@see SecretSafeguard}, which is also what refuses the boot; the guard
+ *     reports it so setting a node up into an event role is refused for the
+ *     same reason rather than succeeding into a node that cannot start.
  *
  * Local encryption and device signing are client-side checks and are evaluated
  * on the client (technical spec 8.6). Development mode never blocks.
@@ -32,6 +38,7 @@ class EventModeGuard
         private readonly OfflineReadSetProbe $offlineReadSet,
         private readonly NodeSetupService $nodes,
         private readonly NodeConfigResolver $configResolver,
+        private readonly SecretSafeguard $secrets,
     ) {}
 
     /**
@@ -69,6 +76,10 @@ class EventModeGuard
 
         if ((bool) config('meridian.event_mode.require_offline_read_set', true)) {
             $checks[] = $this->evaluateOfflineReadSet();
+        }
+
+        if ((bool) config('meridian.event_mode.require_configured_secrets', true)) {
+            $checks[] = $this->evaluateConfiguredSecrets();
         }
 
         return new EventModeReadiness(eventMode: true, checks: $checks);
@@ -115,6 +126,29 @@ class EventModeGuard
             reason: $passed
                 ? null
                 : 'The offline read set is unavailable: event mode requires this node to be able to serve the set devices cache from.',
+        );
+    }
+
+    /**
+     * The secret safeguards, reported rather than re-decided (technical spec
+     * 26.2). {@see SecretSafeguard} owns the inventory and the boot refusal; the
+     * guard asks it what it found so a node cannot be set up into an event role
+     * that its own boot would then refuse.
+     *
+     * The reason names variables and never values.
+     */
+    private function evaluateConfiguredSecrets(): EventModeCheck
+    {
+        $readiness = $this->secrets->evaluate();
+        $passed = ! $readiness->blocked();
+
+        return new EventModeCheck(
+            key: EventModeCheck::CONFIGURED_SECRETS,
+            label: 'Configured secrets',
+            passed: $passed,
+            reason: $passed
+                ? null
+                : 'Event mode refuses to run on default secrets: '.implode(' ', $readiness->reasons()),
         );
     }
 

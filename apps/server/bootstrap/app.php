@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ReportCentralReach;
 use App\Services\Node\EventAuthorityException;
+use App\Services\Secrets\DefaultSecretsException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -54,5 +55,27 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return response($exception->getMessage(), 409);
+        });
+
+        // A node refusing to boot on default secrets (technical spec 26.2). It
+        // is thrown from provider boot, before routing, so every request gets
+        // the same answer including `/up` — a node that will not serve must not
+        // report itself healthy to the container that is waiting on it.
+        //
+        // 503 rather than 500: the deployment is not broken, it is unfinished,
+        // and the same node serves normally the moment its environment carries
+        // real secrets. The message names variables and remedies and no values,
+        // which is what makes it safe to render with APP_DEBUG off — the
+        // alternative is an operator staring at a blank 500 on an event morning.
+        $exceptions->render(function (DefaultSecretsException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                    'reason_code' => 'default_secrets',
+                    'secrets' => $exception->readiness->failedNames(),
+                ], 503);
+            }
+
+            return response($exception->getMessage(), 503);
         });
     })->create();

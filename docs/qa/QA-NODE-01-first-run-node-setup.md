@@ -35,8 +35,8 @@ Verify that a fresh Meridian server can create its first node, generate node key
 - No organization or event setup is required.
 - Use a node name such as `qa.2027.onsite`.
 - Use the `development` role for local HTTP testing. Use `onsite`, `central`, or
-  `standalone` only when `APP_URL` is HTTPS and required event-mode services are
-  available.
+  `standalone` only when `APP_URL` is HTTPS, required event-mode services are
+  available, and no secret is still set to a sample value.
 - Optional central URL: `https://central.example.org`.
 - For the pairing steps: name the central install `qa.central` and the on-site
   install `qa.2027.onsite`, and use the central install's URL as the on-site
@@ -71,6 +71,22 @@ Central pairing (two installs):
     **Revoke unused tokens** and confirm.
 17. On the on-site install, attempt to pair with the token from step 16.
 
+Secret safeguards (one install, command line and browser):
+
+18. Run `php artisan meridian:secrets` and read the table.
+19. Set `DB_PASSWORD` to the sample value `meridian` and set `MERIDIAN_EVENT_MODE=true`,
+    then run `php artisan meridian:secrets` again.
+20. With that configuration still in place, request any page in a browser, and
+    request `/up`.
+21. Run `php artisan meridian:config:list` and `php artisan migrate --pretend`.
+22. Attempt first-run setup (or a role change on `/admin/node-config`) with the
+    `onsite` role while that configuration is in place.
+23. Sign in to the God Mode console and read the landing screen attention list.
+24. Restore a real `DB_PASSWORD`, unset `MERIDIAN_EVENT_MODE`, remove the node's
+    `node_private_key` and `node_public_key` config rows, and run
+    `php artisan meridian:secrets --generate`.
+25. Run `php artisan meridian:secrets --generate` a second time.
+
 ## Expected results
 
 - `/setup` shows the first-run form before setup.
@@ -103,6 +119,26 @@ Central pairing (two installs):
   refused with a single-use explanation.
 - After the central node URL is changed on the on-site install, pairing status
   reads `Pairing recheck required` until pairing is run again.
+- `php artisan meridian:secrets` lists every secret this node uses with its
+  state, names nothing for a service the node does not run, and prints no secret
+  value anywhere.
+- With a sample `DB_PASSWORD` in event mode the command names `DB_PASSWORD`,
+  states what to do, and exits non-zero. The same finding on a development node
+  is reported and the command exits zero.
+- Every browser request, including `/up`, answers `503` naming `DB_PASSWORD`.
+  The response carries the variable name and the remedy and never the value. A
+  node that refuses to serve does not report itself healthy.
+- `meridian:config:list` and `migrate --pretend` still run. A node that refuses
+  to boot stays repairable from `artisan`.
+- Setting up or saving an `onsite` role while a secret is a sample value is
+  refused with the reason, and no node is created or changed.
+- The God Mode landing screen lists **Secrets are missing or still set to sample
+  values** with a link to System Configuration, and the detail names variables
+  and no values.
+- `meridian:secrets --generate` gives the keyless node a keypair, reports it, and
+  the node's public key and `node_private_key` config row both appear.
+- The second `--generate` run reports the keypair as already present and leaves
+  the same public key in place.
 
 ## Evidence to capture
 
@@ -115,6 +151,12 @@ Central pairing (two installs):
   `Paired with central`.
 - Screenshot of `/admin/node-config` on the on-site install showing
   `Pairing recheck required` after the central node URL changes.
+- Terminal output of `php artisan meridian:secrets` in event mode with a sample
+  `DB_PASSWORD`, including the exit code.
+- Screenshot or captured body of the `503` response, and of `/up` returning the
+  same.
+- Screenshot of the God Mode landing screen showing the secrets attention item.
+- Terminal output of both `php artisan meridian:secrets --generate` runs.
 
 ## Failure notes
 
@@ -129,3 +171,10 @@ Central pairing (two installs):
   a blocking pairing issue.
 - If pairing succeeds over plain HTTP while the node is in event mode, stop
   testing and file a blocking event-mode safeguard issue.
+- If a node in event mode serves any page with a sample secret in place, stop
+  testing and file a blocking event-mode safeguard issue.
+- If any secret value appears in command output, in the `503` body, or in the
+  console attention list, stop testing and file a blocking security issue.
+- If `--generate` replaces a keypair the node already held, stop testing and
+  file a blocking node identity issue: every operation that node has signed is
+  now unverifiable.

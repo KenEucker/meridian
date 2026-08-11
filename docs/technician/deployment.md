@@ -45,21 +45,45 @@ do:
 The whole stack is one Compose install, and the node's role is configuration
 rather than a different stack.
 
-1. Copy the sample configuration and edit every value marked `CHANGE ME`. It sets
-   the node role, the hostname, the database password, and the mail credentials.
+The order below matters in two places, and both are the same reason: a step needs
+something an earlier step produces. Do them in order the first time.
+
+1. Copy the sample configuration. Every value in it is fake on purpose, and the
+   node will not start until the ones marked `CHANGE ME` are real.
 
    ```bash
    cp deploy/docker/.env.deployment.example deploy/docker/.env.deployment
    ```
 
-2. Build the images. Both are tagged with the Meridian version they were built
-   from; put that value in `MERIDIAN_IMAGE_TAG` in the file you just edited.
+2. Build the images, then put the version they were tagged with into
+   `MERIDIAN_IMAGE_TAG` in the file you just copied. Nothing else in this list
+   works until that variable is set: the Compose file requires it, by design, so a
+   node cannot run an image nobody named.
 
    ```bash
    corepack pnpm run deploy:build
+   corepack pnpm run deploy:tag     # prints the same value, if you need it again
    ```
 
-3. Decide how the node gets its certificate, because the browsers on the event
+3. Generate the application key and set `APP_KEY` to what it prints. This needs
+   the image from step 2, which is why it is not part of step 1.
+
+   ```bash
+   docker compose --env-file deploy/docker/.env.deployment \
+     -f deploy/docker/compose.deployment.yaml \
+     run --rm server php artisan key:generate --show
+   ```
+
+   Generate one **per node** and never copy it between them. It protects
+   sessions, signed URLs, encrypted values, and the configuration override store.
+
+4. Fill in the rest of the `CHANGE ME` values: the node role, `APP_URL` and
+   `MERIDIAN_SITE_ADDRESS` (the same hostname, and the one on the certificate),
+   `DB_PASSWORD`, and the mail credentials. Mail is not optional — magic-link
+   login is how people sign in, so a node that cannot send mail is a node nobody
+   can log in to.
+
+5. Decide how the node gets its certificate, because the browsers on the event
    network have to actually trust it. Event mode requires HTTPS and fails closed
    without it.
 
@@ -69,7 +93,7 @@ rather than a different stack.
      `MERIDIAN_TLS_CERTIFICATE` and `MERIDIAN_TLS_KEY` at a certificate obtained
      **before** you left for the event. A field network cannot get one.
 
-4. Start the stack. Migrations run automatically in production and event modes —
+6. Start the stack. Migrations run automatically in production and event modes —
    take a database backup before you start, not after. The server container prints
    the warning and then migrates.
 
@@ -77,9 +101,22 @@ rather than a different stack.
    corepack pnpm run deploy:up
    ```
 
-5. Open the server in a browser. A node with no identity redirects to first-run
-   setup. Follow [Node setup and pairing](node-setup-and-pairing.md).
-6. Open the God Mode console. The landing screen lists anything still
+7. Confirm it actually started. A node that still holds a sample secret stops
+   here rather than serving, and says which variable it is waiting on:
+
+   ```bash
+   corepack pnpm run deploy:ps
+   corepack pnpm run deploy:logs
+   ```
+
+   See **Secrets** below for what to do about each one.
+
+8. Open the server in a browser. A node with no identity redirects to first-run
+   setup, which is where it gets its name, its role, and its signing keypair.
+   Follow [Node setup and pairing](node-setup-and-pairing.md) — that document also
+   covers pairing an on-site node with central, which is a separate step and has
+   to be done from both sides.
+9. Open the God Mode console. The landing screen lists anything still
    outstanding.
 
 If the stack does not come up, `corepack pnpm run deploy:logs` follows every
@@ -89,8 +126,40 @@ is `GET /api/health` through the proxy.
 
 ## Secrets
 
-Production and event modes refuse to boot with default secrets, and generate
-`APP_KEY`, node keys, and service secrets when they are missing or default.
+Production and event modes refuse to boot with default secrets. A node whose
+environment still carries a sample or placeholder value answers every request
+with `503` and the names of the variables it is waiting on, the queue worker and
+the scheduler refuse to start, and the container stops at the entrypoint with the
+same list in `docker compose logs`.
+
+`artisan` keeps working. That is deliberate: a node that cannot boot cannot be
+repaired, and the repair lives there.
+
+```bash
+php artisan meridian:secrets              # what this node holds, and what it would refuse on
+php artisan meridian:secrets --generate   # generate what Meridian owns, name what it does not
+```
+
+`--generate` covers the two secrets Meridian owns: Laravel's `APP_KEY`, written
+to the node's environment file, and this node's signing keypair, stored as node
+configuration. An existing key is never replaced — replacing one orphans every
+operation this node has already signed.
+
+Everything else is named and left alone, because it is not Meridian's to mint. A
+database password belongs to the database, an SMTP password to the mail account,
+an OAuth client secret to the provider that issued it; a generated value would
+only stop the node connecting. Set those in the node's environment.
+
+A deployed container has no environment file — its values arrive as process
+environment — so `APP_KEY` is generated once, by hand, and set in the deployment
+environment:
+
+```bash
+docker compose run --rm server php artisan key:generate --show
+```
+
+Neither the command nor the refusal ever prints a secret value. They print
+variable names.
 
 Do not copy a `.env` between nodes. Two nodes sharing a signing key cannot be
 told apart by the node they sync with.

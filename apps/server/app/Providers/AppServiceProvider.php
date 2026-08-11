@@ -26,6 +26,7 @@ use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
 use App\Services\Notifications\NotificationOperationApplier;
+use App\Services\Secrets\SecretSafeguard;
 use App\Services\SystemConfig\ApplySystemConfigOverrides;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -169,6 +170,17 @@ class AppServiceProvider extends ServiceProvider
         // unreadable override table leaves the node on environment
         // configuration and surfaces through diagnostics (SYS-022).
         $this->app->make(ApplySystemConfigOverrides::class)->apply();
+
+        // Production and event modes refuse to boot with default secrets
+        // (technical spec 26.2). Last in boot, because it has to read the
+        // configuration the overrides above just applied: a secret supplied as a
+        // database override is a configured secret, and refusing a node that has
+        // one would be refusing on a value nothing else in the app reads.
+        //
+        // Only the processes that serve are refused — HTTP, the queue worker,
+        // the scheduler. `artisan` stays usable, because a node that cannot boot
+        // cannot be repaired and the repair lives there.
+        $this->app->make(SecretSafeguard::class)->enforceAtBoot();
     }
 
     /**

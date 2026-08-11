@@ -127,7 +127,11 @@ corepack pnpm run db:reset
 
 - The committed `.env.example` values are development-only. Replace every
   password for event or production deployments and never commit
-  `deploy/docker/.env`.
+  `deploy/docker/.env`. A deployment that keeps `DB_PASSWORD=meridian` does not
+  start: production and event modes refuse to boot with default secrets
+  (technical spec 26.2), and the sample password is one. Run
+  `php artisan meridian:secrets` on the node to see exactly what it is waiting
+  on.
 - The example connections use unencrypted local traffic. For any deployment
   outside a private development network, terminate TLS in front of PostgreSQL or
   enable server TLS.

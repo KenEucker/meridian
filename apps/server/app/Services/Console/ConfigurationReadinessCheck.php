@@ -17,11 +17,12 @@ use App\Services\Node\NodeSetupService;
  * Deployment and configuration readiness for the God Mode landing screen
  * (GOD-006; technical spec 22.5.2, 25.3, 26.2).
  *
- * Five signals are reported: node configuration completeness, node role and
+ * Six signals are reported: node configuration completeness, node role and
  * pairing state, presence of required secrets, secure connection policy status,
- * and offline read set availability.
+ * offline read set availability, and whether any secret this node uses is still
+ * a sample value (technical spec 26.2).
  *
- * The last two are not evaluated here. They are the event-mode fail-closed
+ * The last three are not evaluated here. They are the event-mode fail-closed
  * checks in {@see EventModeGuard}, and this reports what that guard already
  * decided rather than applying a second policy that could disagree with the one
  * that actually blocks a node from starting (technical spec 26.2).
@@ -47,6 +48,8 @@ final class ConfigurationReadinessCheck
     public const SECURE_CONNECTION = 'configuration.secure_connection';
 
     public const OFFLINE_READ_SET = 'configuration.offline_read_set';
+
+    public const DEFAULT_SECRETS = 'configuration.default_secrets';
 
     public const NOTIFICATIONS_SUPPRESSED = 'configuration.notifications_suppressed';
 
@@ -284,6 +287,17 @@ final class ConfigurationReadinessCheck
                     detail: (string) $failure->reason,
                     resolveRoute: 'platform.node.config',
                     resolveLabel: 'Node Configuration',
+                ),
+                // A secret is set in the environment rather than in node
+                // configuration, so this one resolves to System Configuration —
+                // where the catalogue names the variable and states its source
+                // — instead of to the node screen the others point at.
+                EventModeCheck::CONFIGURED_SECRETS => new AttentionItem(
+                    key: self::DEFAULT_SECRETS,
+                    label: 'Secrets are missing or still set to sample values',
+                    detail: (string) $failure->reason,
+                    resolveRoute: 'platform.system.configuration',
+                    resolveLabel: 'System Configuration',
                 ),
                 default => new AttentionItem(
                     key: 'configuration.'.$failure->key,

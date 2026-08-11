@@ -222,12 +222,21 @@ return [
     | force it on or off. The require_* flags default to on so a misconfigured
     | event node fails closed rather than silently starting insecurely.
     |
+    | `require_configured_secrets` is the reporting half of the section 26.2
+    | rule that production and event modes refuse to boot with default secrets.
+    | The refusal that stops a node lives in
+    | App\Services\Secrets\SecretSafeguard and is not switched off by this flag;
+    | this one decides whether the same finding is reported through the event
+    | mode guard, which is what makes node setup refuse an event role rather
+    | than creating a node whose own boot would then refuse.
+    |
     */
 
     'event_mode' => [
         'enabled' => env('MERIDIAN_EVENT_MODE'),
         'require_https' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_HTTPS', true), FILTER_VALIDATE_BOOL),
         'require_offline_read_set' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_OFFLINE_READ_SET', true), FILTER_VALIDATE_BOOL),
+        'require_configured_secrets' => filter_var(env('MERIDIAN_EVENT_MODE_REQUIRE_CONFIGURED_SECRETS', true), FILTER_VALIDATE_BOOL),
     ],
 
     /*

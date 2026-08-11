@@ -19,7 +19,7 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | Path | What it is |
 |---|---|
 | [`docker/Dockerfile`](docker/Dockerfile) | The `server` and `web` images. Multi-stage, built from the repository root. |
-| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, config caches. |
+| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, secret generation and refusal, config caches. |
 | [`docker/compose.deployment.yaml`](docker/compose.deployment.yaml) | The deployment stack: database, server, queue worker, scheduler, proxy. |
 | [`docker/.env.deployment.example`](docker/.env.deployment.example) | The deployment's configuration, with fake values. |
 | [`docker/compose.yaml`](docker/compose.yaml) | The development database service, on the loopback interface. |
@@ -45,30 +45,51 @@ predate the decision.
 subdomain form is M19.10. Until then this bundle serves the deployment root, and
 the root-path form of organization addressing works there.
 
-**No secret generation.** Production and event modes generate `APP_KEY`, node
-keys, and service secrets when they are missing, and refuse to boot on defaults
-(technical spec 26.2). Those are server safeguards — task M19.3 — so that they
-hold however a node is started, not only when it is started by Compose.
+**No secret generation of its own.** The safeguards technical spec 26.2 asks for
+— generate `APP_KEY` and node keys when they are missing or still a sample value,
+and refuse to boot on the rest — belong to the server (M19.3), so they hold
+however a node is started and not only when it is started by Compose. The
+entrypoint calls them (`php artisan meridian:secrets --generate`) so a
+misconfigured node stops at start with one legible line in
+`docker compose logs`, rather than coming up and answering `503` to everything.
+Nothing in this bundle decides the policy.
 
 ## Deploy a node
 
+The full walkthrough, with what each value means, is
+[Deployment](../docs/technician/deployment.md). The short form, in the order the
+steps actually depend on each other:
+
 ```bash
 cp deploy/docker/.env.deployment.example deploy/docker/.env.deployment
-```
-
-Edit every value marked `CHANGE ME`. Then build the images and start the stack:
-
-```bash
 corepack pnpm run deploy:build
 ```
+
+`deploy:build` tags both images with the root `package.json` version, which is the
+only Meridian product version (technical spec 26.3; the versioning strategy). Set
+`MERIDIAN_IMAGE_TAG` in the environment file to the value it prints before going
+further — the Compose file requires it, so nothing below runs without it.
+
+Then generate the node's own application key, which needs the image that was just
+built, and set `APP_KEY` to what it prints:
+
+```bash
+docker compose --env-file deploy/docker/.env.deployment \
+  -f deploy/docker/compose.deployment.yaml \
+  run --rm server php artisan key:generate --show
+```
+
+Edit the remaining values marked `CHANGE ME` — node role, hostname, database
+password, mail credentials, and the certificate settings for an event node — and
+start the stack:
 
 ```bash
 corepack pnpm run deploy:up
 ```
 
-`deploy:build` tags both images with the root `package.json` version, which is the
-only Meridian product version (technical spec 26.3; the versioning strategy).
-Set `MERIDIAN_IMAGE_TAG` in the environment file to the value it prints.
+A node that still holds a sample secret stops at start rather than serving, and
+names the variable it is waiting on in `deploy:logs`. That is technical spec 26.2
+working, not a broken deployment.
 
 The other scripts:
 
