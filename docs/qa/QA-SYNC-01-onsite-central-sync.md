@@ -191,11 +191,12 @@ by the feature tasks that emit those operations.
 30. Start the on-site Laravel server and shared Kiosk client.
 31. Start the Electron wrapper pointed at the on-site server.
 32. Open the health panel with `Ctrl+Shift+H` (`Cmd+Shift+H` on macOS).
-33. Confirm sync failures or severe unresolved conflicts are visible in the
-    health panel when the on-site server health endpoint exposes them. If the
-    build still shows placeholder sync fields, record that the God-mode Node
-    sync panel is the implemented sync-health evidence and file the M12.10
-    follow-up before release.
+33. Confirm the panel's "Sync status" field reports the node's sync state read
+    from the server health endpoint (M19.5), and that a sync failure or an open
+    conflict from the earlier sections renders both an attention value in that
+    field and an amber warning line above the table. The panel refreshes itself
+    every 15 seconds while open, so a conflict resolved in God Mode clears from
+    an open panel without reopening it.
 
 ## Expected results
 
@@ -224,9 +225,9 @@ by the feature tasks that emit those operations.
   frozen on every node.
 - Sync conflicts appear in the God-mode queue, show read-only local/remote
   values, require a human choice, and audit the selected resolution.
-- The Electron health panel either shows the M12.10 sync/conflict signal or the
-  reviewer records a release-blocking follow-up that the signal is still
-  placeholder-only.
+- The Electron health panel shows the node's sync status and warns on sync
+  failures and open conflicts (M19.5), and the warning clears once the failure
+  is retried away or the conflict is resolved.
 
 ## Evidence to capture
 
@@ -244,8 +245,8 @@ by the feature tasks that emit those operations.
 - Screenshot of `/admin/sync-conflicts` list and two conflict detail resolutions.
 - Audit evidence for `node_operation.rejected`, `node_sync.refused`, and
   `sync_conflict.resolved` where applicable.
-- Screenshot of the Electron health panel sync/conflict state or the recorded
-  M12.10 placeholder/follow-up note.
+- Screenshot of the Electron health panel showing the sync status field and a
+  sync/conflict warning.
 
 ## Failure notes
 
@@ -266,6 +267,5 @@ by the feature tasks that emit those operations.
 - If a sync conflict can be edited manually, auto-resolved without a reviewer,
   resolved twice, or resolved without audit evidence, file a blocking conflict
   resolver issue.
-- If Electron health hides severe sync failures or severe unresolved conflicts
-  in the target M12.10 build, file a blocking on-site health issue before
-  release.
+- If Electron health hides severe sync failures or severe unresolved conflicts,
+  file a blocking on-site health issue before release.

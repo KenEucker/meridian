@@ -46,6 +46,10 @@ import { startClientStaticServer, type ClientStaticServer } from "./staticClient
 
 const RELOAD_DELAY_MS = 2000;
 const HEALTH_TOGGLE_SHORTCUT = "CommandOrControl+Shift+H";
+// Sync failures and severe conflicts must appear in an open panel (technical
+// spec 25.3), so the panel re-reads server health while it is showing rather
+// than only when toggled.
+const HEALTH_REFRESH_INTERVAL_MS = 15_000;
 
 let mainWindow: BrowserWindow | null = null;
 let healthWindow: BrowserWindow | null = null;
@@ -171,7 +175,14 @@ function toggleHealthWindow(): void {
     },
   });
 
+  const refreshTimer = setInterval(() => {
+    if (healthWindow && !healthWindow.isDestroyed()) {
+      void refreshHealthWindow(healthWindow);
+    }
+  }, HEALTH_REFRESH_INTERVAL_MS);
+
   healthWindow.on("closed", () => {
+    clearInterval(refreshTimer);
     healthWindow = null;
   });
 
