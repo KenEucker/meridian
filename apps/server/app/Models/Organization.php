@@ -62,6 +62,7 @@ class Organization extends Model
         'handle_change_policy',
         'profile_picture_change_policy',
         'handle_self_service_change_limit',
+        'directory_enabled',
         'notifications_suppressed_at',
         'accepts_organization_applications',
         // How much audit history this organization writes, and how much it
@@ -108,6 +109,7 @@ class Organization extends Model
             'calendar_year_start_day' => 'integer',
             'hours_correction_grace_period_days' => 'integer',
             'event_horizon_lead_days' => 'integer',
+            'directory_enabled' => 'boolean',
             'notifications_suppressed_at' => 'datetime',
             'accepts_organization_applications' => 'boolean',
             'archived_at' => 'datetime',
@@ -267,6 +269,16 @@ class Organization extends Model
     public function eventHorizonLeadDays(): int
     {
         return (int) ($this->event_horizon_lead_days ?? 30);
+    }
+
+    /**
+     * Whether this organization has the Directory (DIR-004). An organization
+     * that has never touched the setting has one — enabled is the documented
+     * default, and the fallback covers a row hydrated without the column.
+     */
+    public function directoryEnabled(): bool
+    {
+        return (bool) ($this->directory_enabled ?? true);
     }
 
     /**

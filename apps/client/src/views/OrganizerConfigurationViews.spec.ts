@@ -583,6 +583,30 @@ describe("the organization configuration surface", () => {
     expect(wrapper.text()).toContain("Configuration saved.");
   });
 
+  it("carries the Directory availability switch, enabled by default (M18.72)", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    // A node that has never had the setting touched answers enabled (DIR-004).
+    const toggle = wrapper.get("#config-directory-enabled");
+    expect((toggle.element as HTMLInputElement).checked).toBe(true);
+
+    await toggle.setValue(false);
+    await wrapper
+      .get("form[aria-label='Organization operational settings']")
+      .trigger("submit");
+    await flushPromises();
+
+    const command = commandCalls(calls, "update-organization-configuration").at(0);
+
+    expect(command?.body).toMatchObject({
+      organization_id: ORGANIZATION_ID,
+      directory_enabled: false,
+    });
+  });
+
   it("carries the credit policy featureset (M18.16)", async () => {
     installSession();
     const calls = stubAdminNode();

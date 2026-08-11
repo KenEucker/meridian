@@ -275,6 +275,80 @@ class OrganizationConfigurationHttpTest extends TestCase
             ->assertJsonPath('governance.frozen_by_event.name', fn (?string $name): bool => $name !== null);
     }
 
+    public function test_the_directory_defaults_to_enabled_for_an_organization_that_never_touched_it(): void
+    {
+        // DIR-004: an organization that has never opened this surface has a
+        // Directory.
+        [$organization, $organizer] = $this->organizationWithOrganizer();
+
+        $this->assertTrue($organization->refresh()->directoryEnabled());
+
+        $this->actingAsClient($organizer)
+            ->getJson("/api/organizations/{$organization->id}/configuration")
+            ->assertOk()
+            ->assertJsonPath('configuration.directory_enabled', true);
+    }
+
+    public function test_disabling_the_directory_is_audited(): void
+    {
+        [$organization, $organizer] = $this->organizationWithOrganizer();
+
+        $this->actingAsClient($organizer)
+            ->postJson('/api/commands/update-organization-configuration', [
+                'organization_id' => $organization->id,
+                'directory_enabled' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('configuration.directory_enabled', false);
+
+        $this->assertFalse($organization->refresh()->directoryEnabled());
+
+        $audit = AuditEvent::query()
+            ->where('action', 'organization.configuration_updated')
+            ->where('entity_id', $organization->id)
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertTrue($audit->before_json['directory_enabled']);
+        $this->assertFalse($audit->after_json['directory_enabled']);
+    }
+
+    public function test_the_directory_setting_cannot_be_cleared(): void
+    {
+        [$organization, $organizer] = $this->organizationWithOrganizer();
+
+        $this->actingAsClient($organizer)
+            ->postJson('/api/commands/update-organization-configuration', [
+                'organization_id' => $organization->id,
+                'directory_enabled' => null,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', fn (string $message): bool => str_contains($message, 'enabled is the default'));
+
+        $this->assertTrue($organization->refresh()->directoryEnabled());
+    }
+
+    public function test_the_directory_setting_is_frozen_during_the_active_event_window(): void
+    {
+        // ORG-021 applies to the Directory switch the way it applies to every
+        // other value on this surface (M18.72).
+        [$organization, $organizer] = $this->organizationWithOrganizer();
+
+        Event::factory()->for($organization)->create([
+            'active_event_window_starts_at' => now()->subDay(),
+            'active_event_window_ends_at' => now()->addDay(),
+        ]);
+
+        $this->actingAsClient($organizer)
+            ->postJson('/api/commands/update-organization-configuration', [
+                'organization_id' => $organization->id,
+                'directory_enabled' => false,
+            ])
+            ->assertStatus(409);
+
+        $this->assertTrue($organization->refresh()->directoryEnabled());
+    }
+
     public function test_configuration_edits_are_refused_on_an_onsite_node(): void
     {
         // ORG-021: central is authoritative for organization configuration.

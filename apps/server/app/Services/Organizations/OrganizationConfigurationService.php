@@ -65,6 +65,7 @@ final class OrganizationConfigurationService
         'handle_change_policy',
         'profile_picture_change_policy',
         'handle_self_service_change_limit',
+        'directory_enabled',
     ];
 
     public function __construct(
@@ -181,7 +182,27 @@ final class OrganizationConfigurationService
             );
         }
 
+        if (array_key_exists('directory_enabled', $changes)) {
+            $values['directory_enabled'] = $this->directoryEnabled($changes['directory_enabled']);
+        }
+
         return $values;
+    }
+
+    /**
+     * The DIR-004 availability switch. It cannot be cleared: an organization
+     * always has an answer to whether the Directory exists, and enabled is the
+     * documented default.
+     */
+    private function directoryEnabled(mixed $value): bool
+    {
+        if ($value === null) {
+            throw OrganizationConfigurationException::invalid(
+                'The Directory setting cannot be cleared: it is enabled or disabled, and enabled is the default.',
+            );
+        }
+
+        return (bool) $value;
     }
 
     /**
@@ -434,6 +455,7 @@ final class OrganizationConfigurationService
             'handle_change_policy' => $organization->handle_change_policy,
             'profile_picture_change_policy' => $organization->profile_picture_change_policy,
             'handle_self_service_change_limit' => $organization->handle_self_service_change_limit,
+            'directory_enabled' => $organization->directoryEnabled(),
         ];
     }
 }

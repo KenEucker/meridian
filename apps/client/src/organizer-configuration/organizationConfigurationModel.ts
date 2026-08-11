@@ -60,6 +60,8 @@ export interface OrganizationConfigurationValues {
   readonly profilePictureChangePolicy: string;
   /** Handle changes applied without review while the policy allows any (VOL-028). */
   readonly handleSelfServiceChangeLimit: number;
+  /** Whether the organization has the Directory at all (DIR-004). */
+  readonly directoryEnabled: boolean;
 }
 
 /** Whether edits are possible here and now, and why not when they are not. */
@@ -94,6 +96,7 @@ export interface OrganizationConfigurationUpdate {
   readonly handle_change_policy?: string | null;
   readonly profile_picture_change_policy?: string | null;
   readonly handle_self_service_change_limit?: number | null;
+  readonly directory_enabled?: boolean;
 }
 
 interface ConfigurationPayload {
@@ -112,6 +115,7 @@ interface ConfigurationPayload {
     readonly handle_change_policy?: string;
     readonly profile_picture_change_policy?: string;
     readonly handle_self_service_change_limit?: number;
+    readonly directory_enabled?: boolean;
   };
   readonly options?: {
     readonly departments?: { id: string; name: string }[];
@@ -157,6 +161,9 @@ function toConfiguration(
         values.profile_picture_change_policy ?? "organizer_only",
       handleSelfServiceChangeLimit:
         values.handle_self_service_change_limit ?? 2,
+      // Enabled is the DIR-004 default, and what an older node that does not
+      // carry the setting behaves as.
+      directoryEnabled: values.directory_enabled ?? true,
     },
     departments: payload.options?.departments ?? [],
     creditPolicies: payload.options?.credit_policies ?? [],
