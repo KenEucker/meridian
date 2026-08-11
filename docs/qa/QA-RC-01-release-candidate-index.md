@@ -198,8 +198,12 @@ directly here; the rest of this section closes the checklist.
     deployment-root path and at its organization-slug subdomain with the same
     content and the slug segment omitted from paths, an unknown subdomain is
     not found, and the marketing surface renders only at the deployment root.
-    (Built by M19.8 through M19.10; until those land this step is blocked, and
-    it moves into their QA coverage if they add a script of their own.)
+    (Built by M19.8 through M19.10, which added feature tests and no script of
+    their own, so the human pass stays here. In development the subdomain form
+    is `http://northwood.localhost:<port>` against the seeded Northwood
+    scenario; on a deployment it needs the wildcard DNS record and
+    `Caddyfile.wildcard` proxy configuration from the deployment bundle —
+    see `deploy/dns/README.md` and `deploy/caddy/README.md`.)
 25. Modules: run `QA-MOD-01-organization-modules.md` (M19.19), which carries
     the modules half of the milestone 19 gate — an organization with
     Scheduling, Incident Management, and Documents disabled still intakes

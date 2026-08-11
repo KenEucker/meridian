@@ -1,0 +1,53 @@
+# Meridian reverse proxy — internet-reachable node serving organization
+# subdomains (technical spec 8.7).
+#
+# Organizations resolve at `<organization-slug>.<deployment-domain>` beside
+# their root path, so this configuration serves two sites from one body: the
+# deployment root, and the wildcard host `*.<deployment-domain>`. Same content
+# either way — which organization a request addresses is the server's decision,
+# made from the Host header, and an unknown subdomain is the server's 404.
+#
+# The two sites get their certificates differently, and that difference is why
+# this file exists beside `Caddyfile` rather than replacing it:
+#
+#   - The root site uses ACME over HTTP, exactly as `Caddyfile` does. Inbound
+#     port 80 and 443 must reach this host.
+#   - The wildcard site serves a pre-provisioned wildcard certificate. A CA
+#     issues a wildcard only against the DNS-01 challenge, which needs API
+#     credentials for the DNS provider — a deployment decision, not a line in
+#     a Caddyfile, and the stock Caddy image carries no DNS provider modules.
+#     Obtain `*.<deployment-domain>` with the provider's own tooling (or an
+#     ACME client with a DNS plugin), place the certificate and key in
+#     MERIDIAN_TLS_DIRECTORY, and point the two wildcard variables at them.
+#     Renew on a calendar; a wildcard certificate that lapses takes every
+#     organization subdomain down at once.
+#
+# A certificate whose SANs cover both `<deployment-domain>` and
+# `*.<deployment-domain>` may of course be pointed at by both sites; the shape
+# below simply keeps the root site working with no certificate file at all.
+#
+# Per-organization certificates (one hostname each, HTTP-01, no wildcard) are
+# the spec's stated alternative and need no pre-provisioning — but they require
+# on-demand issuance wired to an allowlist of active organization slugs, which
+# Meridian does not ship yet. Use the wildcard.
+#
+# Development needs none of this: browsers resolve `*.localhost` to loopback on
+# their own, so `http://northwood.localhost:8000` reaches a dev server directly
+# (see deploy/dns/README.md).
+{
+	# Where the certificate authority sends expiry and problem notices for the
+	# root site's ACME certificate.
+	email {$MERIDIAN_ACME_EMAIL}
+}
+
+import /etc/caddy/meridian.snippet
+
+{$MERIDIAN_SITE_ADDRESS} {
+	import meridian-app
+}
+
+*.{$MERIDIAN_SITE_ADDRESS} {
+	tls {$MERIDIAN_WILDCARD_TLS_CERTIFICATE} {$MERIDIAN_WILDCARD_TLS_KEY}
+
+	import meridian-app
+}

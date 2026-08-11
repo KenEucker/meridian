@@ -25,7 +25,8 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | [`docker/compose.yaml`](docker/compose.yaml) | The development database service, on the loopback interface. |
 | [`caddy/Caddyfile`](caddy/Caddyfile) | Proxy for an internet-reachable node; Caddy obtains the certificate over ACME. |
 | [`caddy/Caddyfile.onsite`](caddy/Caddyfile.onsite) | Proxy for an event node; serves a certificate provisioned before the event. |
-| [`caddy/meridian.snippet`](caddy/meridian.snippet) | The site body both Caddyfiles import, so the two cannot drift. |
+| [`caddy/Caddyfile.wildcard`](caddy/Caddyfile.wildcard) | Proxy for an internet-reachable node also serving organization subdomains at `*.<deployment-domain>` (technical spec 8.7). |
+| [`caddy/meridian.snippet`](caddy/meridian.snippet) | The site body every Caddyfile imports, so none can drift. |
 | [`dns/onsite-dnsmasq.conf`](dns/onsite-dnsmasq.conf) | Event network DNS for the Meridian-controlled router or AP. |
 | [`dns/onsite-hosts.example`](dns/onsite-hosts.example) | Per-machine fallback where Meridian does not control DNS. |
 
@@ -39,11 +40,15 @@ predate the decision.
 
 **No Redis or Memcached.** Sessions, cache, and queue are all database-backed.
 
-**No wildcard host handling.** Organizations are addressable at
+**No per-organization proxy or DNS records.** Organizations are addressable at
 `<organization-slug>.<deployment-domain>` as well as at their root path
-(technical spec 8.7), and the wildcard DNS and TLS configuration that serves the
-subdomain form is M19.10. Until then this bundle serves the deployment root, and
-the root-path form of organization addressing works there.
+(technical spec 8.7). Serving the subdomain form is one wildcard DNS record
+(`deploy/dns/README.md`), the `Caddyfile.wildcard` proxy configuration, and a
+pre-provisioned wildcard certificate (`deploy/caddy/README.md`) — nothing in
+the bundle names an organization, because which organization a request
+addresses is the server's decision, made from the Host header. A node running
+plain `Caddyfile` serves the deployment root only, where the root-path form
+works.
 
 **No secret generation of its own.** The safeguards technical spec 26.2 asks for
 — generate `APP_KEY` and node keys when they are missing or still a sample value,

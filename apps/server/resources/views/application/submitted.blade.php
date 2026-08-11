@@ -16,7 +16,7 @@
         @endif
 
         @if (($canWithdraw ?? false) && $application instanceof \App\Models\EventApplication)
-            <form method="post" action="{{ route('public.events.apply.withdraw', array_merge($event->applyRouteParameters(), ['application' => $application->id])) }}">
+            <form method="post" action="{{ app(\App\Services\Organizations\OrganizationHostUrls::class)->route('public.events.apply.withdraw', array_merge($event->applyRouteParameters(), ['application' => $application->id])) }}">
                 @csrf
                 <button type="submit">Withdraw application</button>
             </form>

@@ -50,9 +50,35 @@ that does breaks the mDNS the devices are doing themselves.
 ## Organization subdomains
 
 Organizations resolve at `<organization-slug>.<deployment-domain>` as well as at
-their root path (technical spec 8.7). The wildcard DNS entry that serves the
-subdomain form on a deployment, and the `*.localhost` development equivalent, are
-M19.10.
+their root path (technical spec 8.7). Serving the subdomain form takes one
+wildcard record at the deployment's DNS provider, pointing at the same address
+the root record points at:
+
+```text
+*.meridian.example.org.    A    <the deployment's address>
+```
+
+(or a `CNAME` to the root name, where the provider allows a wildcard CNAME).
+No per-organization records exist and none are ever added: which organization a
+request addresses is the server's decision, made from the Host header, and a
+subdomain that matches no active organization is the server's 404 (ORG-024).
+The certificate half of the wildcard — the part DNS-01 issuance exists for — is
+`deploy/caddy/Caddyfile.wildcard`; see the README beside it.
+
+### `*.localhost` in development
+
+Development needs no DNS at all: browsers resolve any `*.localhost` name to
+loopback on their own, so `http://northwood.localhost:8000` reaches the dev
+server directly, and the server derives the platform host from `APP_URL`
+(technical spec 8.7). Two caveats:
+
+- Tools that resolve through the OS rather than the browser (curl, some mobile
+  emulators) may not resolve `*.localhost`. Give them `--resolve`, a hosts-file
+  entry per slug you actually use — hosts files cannot express a wildcard — or
+  a local dnsmasq line: `address=/.localhost/127.0.0.1`.
+- The organization must exist and be active on the dev node: an unknown
+  subdomain is a 404 by design, so `northwood.localhost` answers only after the
+  Northwood scenario is seeded.
 
 On-site nodes are unaffected either way: an on-site node serves its one event
 hostname and does not serve the marketing surface (PUBLIC-006).

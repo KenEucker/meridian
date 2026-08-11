@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Branding\BrandingProfile;
 use App\Services\Branding\BrandingResolver;
 use App\Services\Branding\BrandingTokenResolver;
+use App\Services\Organizations\OrganizationHostContext;
 use Illuminate\Http\Response;
 
 /**
@@ -24,6 +25,22 @@ use Illuminate\Http\Response;
  */
 final class BrandingStylesheetController extends Controller
 {
+    /**
+     * The stylesheet at the host's own address (M19.9; ORG-023, BRAND-003;
+     * technical spec 8.7): on an organization subdomain it is that
+     * organization's branding — the same profile the organization-addressed
+     * route serves — with no organization segment in the path; at the
+     * deployment root it is Meridian's own identity, because the root carries
+     * no organization and the marketing surface never adopts one (BRAND-003).
+     */
+    public function showForHost(
+        OrganizationHostContext $context,
+        BrandingResolver $resolver,
+        BrandingTokenResolver $tokens,
+    ): Response {
+        return $this->show((string) ($context->organization()?->getKey() ?? ''), $resolver, $tokens);
+    }
+
     public function show(string $organization, BrandingResolver $resolver, BrandingTokenResolver $tokens): Response
     {
         $profile = $resolver->forOrganizationId($organization);

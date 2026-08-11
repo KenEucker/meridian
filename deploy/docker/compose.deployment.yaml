@@ -183,6 +183,8 @@ services:
       MERIDIAN_ACME_EMAIL: ${MERIDIAN_ACME_EMAIL:-}
       MERIDIAN_TLS_CERTIFICATE: ${MERIDIAN_TLS_CERTIFICATE:-}
       MERIDIAN_TLS_KEY: ${MERIDIAN_TLS_KEY:-}
+      MERIDIAN_WILDCARD_TLS_CERTIFICATE: ${MERIDIAN_WILDCARD_TLS_CERTIFICATE:-}
+      MERIDIAN_WILDCARD_TLS_KEY: ${MERIDIAN_WILDCARD_TLS_KEY:-}
     ports:
       # Port 80 stays published on an internet-reachable node because that is
       # where the ACME challenge and the redirect to HTTPS arrive. Nothing is

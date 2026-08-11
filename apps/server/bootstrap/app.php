@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ReportCentralReach;
+use App\Http\Middleware\ResolveOrganizationHost;
 use App\Services\EventMode\EventModeNotReadyException;
 use App\Services\Node\EventAuthorityException;
 use App\Services\Secrets\DefaultSecretsException;
@@ -32,6 +33,24 @@ return Application::configure(basePath: dirname(__DIR__))
     // moment a device should not stop being told what its node can reach.
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [ReportCentralReach::class]);
+
+        // Organization subdomain resolution (M19.8; ORG-022 through ORG-025;
+        // technical spec 8.7). Global rather than grouped because the answer is
+        // a property of the request host, not of any route: an unknown
+        // subdomain of the platform domain is not found whatever the path asks
+        // for — web, API, console, or health — and a known one binds the
+        // organization host context everything downstream reads.
+        $middleware->prepend(ResolveOrganizationHost::class);
+
+        // The host-scope check runs before binding substitution: it refuses on
+        // the raw slug, and it forgets the domain pattern's suffix parameter
+        // before the framework hands route parameters to controllers
+        // positionally and resolves scoped child bindings against the
+        // parameter that precedes them.
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\EnforceOrganizationHostScope::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

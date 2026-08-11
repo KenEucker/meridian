@@ -18,7 +18,12 @@
             </ul>
         @endif
 
-        <form method="POST" action="{{ route('public.events.apply.store', $event->applyRouteParameters()) }}">
+        {{--
+            Host-aware (M19.9): on the organization's subdomain the action is
+            the subdomain form of the same route, so submitting keeps the
+            visitor on the host they arrived at.
+        --}}
+        <form method="POST" action="{{ app(\App\Services\Organizations\OrganizationHostUrls::class)->route('public.events.apply.store', $event->applyRouteParameters()) }}">
             @csrf
 
             <label for="applicant_legal_name">Legal name</label>

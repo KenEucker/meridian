@@ -35,8 +35,9 @@
 		# Meridian is HTTPS-only in production and event modes (technical spec
 		# 8.2), so telling browsers to refuse the plain-HTTP form costs nothing
 		# that was ever meant to work. No `includeSubDomains`: organization
-		# subdomains get their own certificates and their own policy in M19.10,
-		# and a parent directive would commit them before that decision.
+		# subdomains served by Caddyfile.wildcard import this same body, so each
+		# host sends its own header, and a parent directive would additionally
+		# commit any non-Meridian name under the domain that is not served here.
 		Strict-Transport-Security "max-age=31536000"
 
 		X-Content-Type-Options "nosniff"

@@ -16,6 +16,7 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Setup\NodeSetupController;
 use App\Http\Controllers\Staffing\StaffProfileChangeRequestController;
+use App\Http\Middleware\EnforceOrganizationHostScope;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', ClientAppController::class)->name('client.app');
@@ -35,26 +36,77 @@ Route::get('branding/{organization}/manifest.json', [BrandingManifestController:
 Route::get('branding/assets/{attachment}', [BrandingAssetController::class, 'show'])
     ->name('branding.asset');
 
+// The same pair resolved by request host (M19.9; ORG-023, BRAND-003; technical
+// spec 8.7): on an organization subdomain the host answers with that
+// organization's branding profile and no organization segment in the path; at
+// the deployment root it answers with Meridian's own identity, which is what
+// BRAND-003 requires of every surface that carries no organization.
+Route::get('branding/tokens.css', [BrandingStylesheetController::class, 'showForHost'])
+    ->name('branding.host.stylesheet');
+Route::get('branding/manifest.json', [BrandingManifestController::class, 'showForHost'])
+    ->name('branding.host.manifest');
+
 Route::get('setup', [NodeSetupController::class, 'show'])->name('setup.show');
 Route::post('setup', [NodeSetupController::class, 'store'])->name('setup.store');
 
 // Public event application form (public.apply). Accessible to public or
 // authenticated applicants (UI implementation contract section 12.1). Scoped by
 // organization slug + event slug because event slugs are unique per organization.
-Route::get('{organization:slug}/{event:slug}/apply', [EventApplicationController::class, 'create'])
-    ->scopeBindings()
-    ->name('public.events.apply');
-Route::post('{organization:slug}/{event:slug}/apply', [EventApplicationController::class, 'store'])
-    ->middleware('throttle:10,1')
-    ->scopeBindings()
-    ->name('public.events.apply.store');
-Route::get('{organization:slug}/{event:slug}/apply/submitted', [EventApplicationController::class, 'submitted'])
-    ->scopeBindings()
-    ->name('public.events.apply.submitted');
-Route::post('{organization:slug}/{event:slug}/apply/{application}/withdraw', [EventApplicationController::class, 'withdraw'])
-    ->middleware('throttle:10,1')
-    ->scopeBindings()
-    ->name('public.events.apply.withdraw');
+// `EnforceOrganizationHostScope` keeps the path form off other organizations'
+// subdomains (M19.8; ORG-024): on a host that resolved an organization, a path
+// naming a different one is not found.
+Route::middleware(EnforceOrganizationHostScope::class)->group(function (): void {
+    Route::get('{organization:slug}/{event:slug}/apply', [EventApplicationController::class, 'create'])
+        ->scopeBindings()
+        ->name('public.events.apply');
+    Route::post('{organization:slug}/{event:slug}/apply', [EventApplicationController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->scopeBindings()
+        ->name('public.events.apply.store');
+    Route::get('{organization:slug}/{event:slug}/apply/submitted', [EventApplicationController::class, 'submitted'])
+        ->scopeBindings()
+        ->name('public.events.apply.submitted');
+    Route::post('{organization:slug}/{event:slug}/apply/{application}/withdraw', [EventApplicationController::class, 'withdraw'])
+        ->middleware('throttle:10,1')
+        ->scopeBindings()
+        ->name('public.events.apply.withdraw');
+});
+
+/*
+ * The same application flow at the organization's subdomain, with the slug
+ * segment omitted from the path (M19.8; ORG-022 through ORG-024; technical
+ * spec 8.7): `https://<organization-slug>.<platform-host>/<event-slug>/apply`
+ * serves what `https://<platform-host>/<organization-slug>/<event-slug>/apply`
+ * serves.
+ *
+ * The organization comes from the request host. The domain pattern binds the
+ * first label as the organization and accepts any suffix, because the platform
+ * host is configuration the router cannot read at registration time — it is
+ * derived per request from the application URL (technical spec 8.7). The
+ * `ResolveOrganizationHost` middleware has already refused unknown and
+ * archived slugs before routing, and `EnforceOrganizationHostScope` refuses
+ * these routes on any host that did not actually resolve an organization, so
+ * a host under some other domain still falls through to path resolution.
+ */
+Route::domain('{organization:slug}.{organizationHostSuffix}')
+    ->where(['organizationHostSuffix' => '.+'])
+    ->middleware(EnforceOrganizationHostScope::class)
+    ->group(function (): void {
+        Route::get('{event:slug}/apply', [EventApplicationController::class, 'create'])
+            ->scopeBindings()
+            ->name('subdomain.public.events.apply');
+        Route::post('{event:slug}/apply', [EventApplicationController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->scopeBindings()
+            ->name('subdomain.public.events.apply.store');
+        Route::get('{event:slug}/apply/submitted', [EventApplicationController::class, 'submitted'])
+            ->scopeBindings()
+            ->name('subdomain.public.events.apply.submitted');
+        Route::post('{event:slug}/apply/{application}/withdraw', [EventApplicationController::class, 'withdraw'])
+            ->middleware('throttle:10,1')
+            ->scopeBindings()
+            ->name('subdomain.public.events.apply.withdraw');
+    });
 
 /*
  * The applicant portal (M18.22; APP-004, APP-012 through APP-015; AUTH-010).

@@ -5,10 +5,11 @@ namespace App\Services\Marketing;
 use App\Models\Node;
 use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodeSetupService;
+use App\Services\Organizations\OrganizationHostContext;
 
 /**
- * Whether this node serves the public marketing surface (M18.23; PUBLIC-001,
- * PUBLIC-006).
+ * Whether this request serves the public marketing surface (M18.23; PUBLIC-001,
+ * PUBLIC-006; M19.8, ORG-024).
  *
  * Two nodes do not: an on-site node, and any node locked to an event.
  *
@@ -29,17 +30,25 @@ use App\Services\Node\NodeSetupService;
  * has not been set up at all is not on-site and is not locked, so a fresh
  * install serves the surface; that is the deployment the requirement is
  * written for.
+ *
+ * An organization subdomain does not serve it either, on any node (ORG-024):
+ * the marketing surface remains at the deployment root, and a host that
+ * resolves an organization is that organization's address, not Meridian's. The
+ * same node keeps serving the surface at its root host.
  */
 class MarketingSurface
 {
     public function __construct(
         private readonly NodeSetupService $nodes,
         private readonly NodeConfigResolver $configResolver,
+        private readonly OrganizationHostContext $hostContext,
     ) {}
 
     public function isServed(): bool
     {
-        return ! $this->isOnSiteNode() && ! $this->isLockedToEvent();
+        return ! $this->hostContext->isOrganizationHost()
+            && ! $this->isOnSiteNode()
+            && ! $this->isLockedToEvent();
     }
 
     /**

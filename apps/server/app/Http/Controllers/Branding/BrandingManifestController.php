@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attachment;
 use App\Services\Branding\BrandingProfile;
 use App\Services\Branding\BrandingResolver;
+use App\Services\Organizations\OrganizationHostContext;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -29,6 +30,17 @@ use Illuminate\Http\JsonResponse;
  */
 final class BrandingManifestController extends Controller
 {
+    /**
+     * The manifest at the host's own address (M19.9; ORG-023, BRAND-003;
+     * technical spec 8.7): the host organization's profile on its subdomain,
+     * Meridian's at the deployment root, resolved the same way the stylesheet
+     * beside it resolves.
+     */
+    public function showForHost(OrganizationHostContext $context, BrandingResolver $resolver): JsonResponse
+    {
+        return $this->show((string) ($context->organization()?->getKey() ?? ''), $resolver);
+    }
+
     public function show(string $organization, BrandingResolver $resolver): JsonResponse
     {
         $profile = $resolver->forOrganizationId($organization);

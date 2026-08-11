@@ -11,6 +11,7 @@ use App\Services\Application\DuplicateApplicationException;
 use App\Services\Application\EventApplicationService;
 use App\Services\Application\EventNotOpenForApplicationsException;
 use App\Services\Application\ApplicationWithdrawalException;
+use App\Services\Organizations\OrganizationHostUrls;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -19,10 +20,17 @@ use Illuminate\View\View;
  * Public event application form (UI implementation contract screen `public.apply`,
  * route `public.events.apply`). Renders the form and records a Submitted
  * application (requirements APP-001 through APP-004, section 3.10, section 5.2).
+ *
+ * Serves at the path form and at the organization subdomain form alike; its
+ * redirects go through {@see OrganizationHostUrls} so a visitor who arrived on
+ * an organization subdomain stays on it (M19.9; technical spec 8.7).
  */
 class EventApplicationController extends Controller
 {
-    public function __construct(private readonly EventApplicationService $applications) {}
+    public function __construct(
+        private readonly EventApplicationService $applications,
+        private readonly OrganizationHostUrls $urls,
+    ) {}
 
     public function create(Organization $organization, Event $event): View
     {
@@ -64,7 +72,7 @@ class EventApplicationController extends Controller
         }
 
         return redirect()
-            ->route('public.events.apply.submitted', $event->applyRouteParameters())
+            ->to($this->urls->route('public.events.apply.submitted', $event->applyRouteParameters()))
             ->with('application_submitted', true)
             ->with('submitted_application_id', $application->id);
     }
@@ -72,7 +80,7 @@ class EventApplicationController extends Controller
     public function submitted(Request $request, Organization $organization, Event $event): View|RedirectResponse
     {
         if (! $request->session()->get('application_submitted')) {
-            return redirect()->route('public.events.apply', $event->applyRouteParameters());
+            return redirect()->to($this->urls->route('public.events.apply', $event->applyRouteParameters()));
         }
 
         $application = null;
@@ -122,7 +130,7 @@ class EventApplicationController extends Controller
         }
 
         return redirect()
-            ->route('public.events.apply.submitted', $event->applyRouteParameters())
+            ->to($this->urls->route('public.events.apply.submitted', $event->applyRouteParameters()))
             ->with('application_submitted', true)
             ->with('submitted_application_id', $application->id)
             ->with('application_withdrawn', true);
