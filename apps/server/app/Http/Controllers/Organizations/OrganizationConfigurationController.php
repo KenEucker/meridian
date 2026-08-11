@@ -75,6 +75,9 @@ final class OrganizationConfigurationController extends Controller
             'handle_change_policy' => ['sometimes', 'nullable', 'string'],
             'profile_picture_change_policy' => ['sometimes', 'nullable', 'string'],
             'handle_self_service_change_limit' => ['sometimes', 'nullable', 'integer'],
+            // The DIR-004 Directory availability switch. Null is refused in
+            // the service, which words why the setting cannot be cleared.
+            'directory_enabled' => ['sometimes', 'nullable', 'boolean'],
         ]);
 
         $user = $request->user();
@@ -164,6 +167,12 @@ final class OrganizationConfigurationController extends Controller
                 'handle_change_policy' => $organization->handleChangePolicy()->value,
                 'profile_picture_change_policy' => $organization->profilePictureChangePolicy()->value,
                 'handle_self_service_change_limit' => $organization->handleSelfServiceChangeLimit(),
+                /*
+                 * Whether the organization has a Directory at all (DIR-004).
+                 * Resolved, so an organization that never touched the setting
+                 * reads as the enabled default it behaves as.
+                 */
+                'directory_enabled' => $organization->directoryEnabled(),
             ],
             'options' => [
                 'departments' => $departments

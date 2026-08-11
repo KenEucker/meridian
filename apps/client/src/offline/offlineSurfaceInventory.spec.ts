@@ -138,6 +138,53 @@ function storedSections(): Record<string, readonly Record<string, unknown>[]> {
       },
     ],
     shift_assignments: [],
+    /*
+     * The Directory projection (M18.77; DIR-037): rows name the context they
+     * were composed for, and the surface renders the ones matching the
+     * session's resolved event.
+     */
+    directory_departments: [
+      {
+        scope: "event",
+        organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+        organization_label: "Northwood Collective",
+        event_id: EVENT_ID,
+        event_label: "Local Field Event",
+        id: DEPARTMENT_ID,
+        name: "Rangers",
+        is_organizers: false,
+        leads: [],
+        teams: [
+          {
+            id: LOCAL_FIELD_TEAM_IDS.rangersDirt,
+            name: "Dirt",
+            leads: [],
+            members: [LOCAL_FIELD_FIXTURE.staffId],
+          },
+        ],
+        prospectives: [],
+      },
+    ],
+    directory_people: [
+      {
+        scope: "event",
+        organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+        organization_label: "Northwood Collective",
+        event_id: EVENT_ID,
+        event_label: "Local Field Event",
+        id: LOCAL_FIELD_FIXTURE.staffId,
+        handle: "local",
+        years_of_service: 1,
+        locations: [
+          {
+            department_id: DEPARTMENT_ID,
+            team_id: LOCAL_FIELD_TEAM_IDS.rangersDirt,
+            kind: "team_member",
+            status: "active",
+          },
+        ],
+      },
+    ],
     field_reports: [
       {
         id: ROUTE_PARAMS.fieldReportId,
@@ -487,6 +534,8 @@ describe("the recorded offline surface inventory", () => {
       "events.departments.teams.create",
       "staff.me",
       "staff.event-horizon",
+      // M18.77: the Directory renders from the stored authorized projection.
+      "directory",
       "staff.shifts.index",
       "signup.documents.acknowledge",
       "staff.documents.acknowledgments",

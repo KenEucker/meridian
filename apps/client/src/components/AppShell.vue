@@ -26,6 +26,7 @@ import {
   useStaffMenuLinks,
   useWorkflowMenuLinks,
 } from "@/components/workflowLinks";
+import { refreshDirectoryPresence } from "@/directory/directoryModel";
 import { refreshEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
 import { offlineBannerState } from "@/offline/offlineReadSetRefresh";
@@ -502,6 +503,27 @@ watch(
   (eventId) => {
     if (eventId !== null) {
       void refreshEventHorizonPresence(eventId);
+    }
+  },
+  { immediate: true },
+);
+
+/*
+ * The Directory's presence in navigation (M18.75; DIR-002, DIR-005; UI
+ * contract 19D.2).
+ *
+ * Whether the entry renders turns on the organization's own setting, which
+ * only the node can answer — a disabled Directory is absent from the menu and
+ * the palette, never explained. So the shell asks once whenever the session
+ * resolves a context, quietly, the same way it asks about the Event Horizon:
+ * the read is cached like every other Alpha 1 read, a failure leaves the entry
+ * as it stood, and the surface itself re-reads when opened.
+ */
+watch(
+  () => [sessionOrganizationId.value, sessionEventContext.value?.eventId ?? null],
+  ([organizationId]) => {
+    if (organizationId !== null) {
+      void refreshDirectoryPresence();
     }
   },
   { immediate: true },

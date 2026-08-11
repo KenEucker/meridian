@@ -73,6 +73,7 @@ const form = reactive({
   handleChangePolicy: "organizer_only",
   profilePictureChangePolicy: "organizer_only",
   handleChangeLimit: "2",
+  directoryEnabled: true,
 });
 
 const governance = computed(() => configuration.value?.governance ?? null);
@@ -168,6 +169,7 @@ function fillForm(current: OrganizationConfiguration): void {
   form.handleChangePolicy = values.handleChangePolicy;
   form.profilePictureChangePolicy = values.profilePictureChangePolicy;
   form.handleChangeLimit = values.handleSelfServiceChangeLimit.toString();
+  form.directoryEnabled = values.directoryEnabled;
 }
 
 /*
@@ -212,6 +214,7 @@ async function onSave(): Promise<void> {
       handle_change_policy: form.handleChangePolicy,
       profile_picture_change_policy: form.profilePictureChangePolicy,
       handle_self_service_change_limit: numberOrNull(form.handleChangeLimit),
+      directory_enabled: form.directoryEnabled,
     });
     fillForm(configuration.value);
     saved.value = true;
@@ -549,6 +552,35 @@ async function onSave(): Promise<void> {
           </p>
         </fieldset>
 
+        <!--
+          The Directory (DIR-004, DIR-005). Availability, not visibility: the
+          switch decides whether the organization has an organization chart at
+          all, and who appears within one is derived from leadership and
+          organizer standing rather than configured here.
+        -->
+        <fieldset class="org-configuration-settings__group">
+          <legend>Directory</legend>
+          <div class="org-configuration-settings__fields">
+            <label
+              class="org-configuration-settings__toggle"
+              for="config-directory-enabled"
+            >
+              <input
+                id="config-directory-enabled"
+                v-model="form.directoryEnabled"
+                type="checkbox"
+                :disabled="!editable"
+              />
+              Offer the Directory
+            </label>
+          </div>
+          <p class="org-configuration-settings__note">
+            The Directory is the read-only organization chart with handle
+            search. Enabled is the default; disabled, it is absent everywhere —
+            no page, no menu entry, and nothing synchronized to devices.
+          </p>
+        </fieldset>
+
         <div class="org-configuration-settings__actions">
           <button type="submit" :disabled="busy || !editable">
             Save configuration
@@ -605,6 +637,19 @@ async function onSave(): Promise<void> {
   display: flex;
   gap: var(--m-space-3);
   align-items: center;
+}
+
+.org-configuration-settings__toggle {
+  display: inline-flex;
+  gap: var(--m-space-2);
+  align-items: center;
+  min-height: 44px;
+  font-weight: 700;
+}
+
+.org-configuration-settings__toggle input {
+  width: 24px;
+  height: 24px;
 }
 
 .org-configuration-settings__frozen {

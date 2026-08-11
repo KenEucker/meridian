@@ -347,6 +347,13 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       offlineText: "could not be checked at all",
     },
     {
+      route: "directory",
+      outcome: "renders-offline",
+      basis:
+        "the stored Directory projection (M18.77; DIR-037): the sections the node composed from the same visibility rule the online chart read serves, so the device holds what its user could have retrieved and nothing else; the offline search index is that stored set, and profile pictures stay behind under the M8.2 replication boundary, rendering as lettermarks",
+      offlineText: "the copy this device stored",
+    },
+    {
       route: "staff.profile.edit",
       outcome: "connection-required",
       basis:

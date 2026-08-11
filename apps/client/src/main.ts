@@ -2,6 +2,7 @@ import { createApp } from "vue";
 
 import App from "@/App.vue";
 import { followSessionBranding } from "@/branding/brandingContext";
+import { resetDirectoryPresence } from "@/directory/directoryModel";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { installOfflineReadSetRefreshTriggers } from "@/offline/offlineReadSetRefresh";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
@@ -59,6 +60,13 @@ registerSessionContextReset((context) => {
    * readiness.
    */
   resetEventHorizonPresence();
+  /*
+   * The Directory's presence summary too (M18.75; DIR-005). It remembers one
+   * organization's answer to whether the Directory exists; carried across a
+   * switch it would offer another organization's page on the strength of this
+   * one's setting.
+   */
+  resetDirectoryPresence();
 });
 
 /*
