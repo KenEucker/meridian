@@ -57,6 +57,24 @@ The Capacitor configuration lives in `capacitor.config.ts`:
 | `appName` | `Meridian Field` | Installed application display name |
 | `webDir` | `../client/dist/field` | Fixed Meridian Field build output packaged into native platforms |
 
+## Version
+
+The mobile app version is the root `package.json` Meridian version, carried by
+the packaged Meridian Field artifact: `apps/client` bakes the root version into
+the bundle at build time, and `mobile:cap:copy` and `mobile:cap:sync` package
+exactly that bundle. Capacitor's configuration has no version field of its own,
+and per `docs/process/versioning-strategy.md` the wrapper must not declare one.
+
+The shared client displays it in **Settings → Versions** as "Mobile app
+version", together with the platform read from Capacitor's injected global
+(M19.1; technical spec 26.3). The row appears only when Meridian is running as
+the installed app; the same bundle opened in a phone browser reports its client
+bundle version and no mobile app version, because there is no installed app to
+report one for.
+
+When native platform projects are added, their `versionName` and equivalent
+must be stamped from the same root version rather than maintained separately.
+
 Native platform projects are not committed yet. When a later milestone needs
 installable native builds, add a platform and sync the built shared client
 assets:

@@ -39,7 +39,8 @@ These versions follow `docs/meridian-technology-baseline.md`.
 | `src/config.ts` | Pure resolution of the Kiosk client dist path, server URL, health URL, and root Meridian version. |
 | `src/health.ts` | Pure health panel model, HTML renderer, and the non-throwing health fetch helper. |
 | `src/staticClientServer.ts` | Tiny local static server for the packaged shared Vue client. |
-| `src/preload.ts` | Tells the Kiosk which trusted shared workstation this machine is, before any page script runs (M18.32). |
+| `src/desktopRuntimeConfig.ts` | Pure build of what the wrapper tells the Kiosk about itself: the trusted shared workstation (M18.32) and the wrapper's own version (M19.1). |
+| `src/preload.ts` | Hands that runtime config to the Kiosk before any page script runs. |
 | `src/main.ts` | Electron main process: dev-server or packaged client loading, kiosk window, auto-recovery, and the toggleable health panel window. |
 
 `src/config.ts` and `src/health.ts` contain all domain logic and are unit
@@ -61,6 +62,14 @@ tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
 
 The displayed client and Electron wrapper versions both come from the root
 `package.json` Meridian version.
+
+The wrapper also hands its own version to the Kiosk client through the preload,
+as `desktopAppVersion` on `window.__MERIDIAN_RUNTIME_CONFIG__`, so the Settings
+screen can show the desktop app version beside the bundle and server versions
+(M19.1; technical spec 26.3). The main process passes it to the preload as a
+renderer argument rather than an environment variable, because it is resolved
+at startup rather than known when the process was spawned. It is not a
+credential; the health panel prints the same value.
 
 ## Local development
 

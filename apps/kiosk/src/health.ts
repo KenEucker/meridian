@@ -99,7 +99,9 @@ export function buildHealthPanelModel(input: {
   const reachable = health !== null;
   const generatedAt = input.generatedAt ?? new Date().toISOString();
 
-  const serverValue = (value: string | null | undefined): { value: string; source: HealthFieldSource } => {
+  const serverValue = (
+    value: string | number | null | undefined,
+  ): { value: string; source: HealthFieldSource } => {
     if (!reachable) {
       return { value: UNAVAILABLE_VALUE, source: "server" };
     }
@@ -130,6 +132,10 @@ export function buildHealthPanelModel(input: {
           },
         ]),
     { label: "Server version", ...serverValue(health?.server_version) },
+    // Beside the server version because it is the node's other build fact
+    // (technical spec 26.3). A schema mismatch does not block startup in Alpha
+    // 1, so the panel is where a technician finds out one exists at all.
+    { label: "Config schema version", ...serverValue(health?.config_schema_version) },
     { label: "Client version", value: clientVersion, source: "app" },
     { label: "Electron wrapper version", value: appVersion, source: "app" },
   ];

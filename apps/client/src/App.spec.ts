@@ -114,8 +114,8 @@ describe("shared client shell", () => {
     await flushPromises();
 
     expect(wrapper.get("#about-heading").text()).toBe("Settings");
-    expect(wrapper.get('[aria-label="Application version"]').text()).toContain(
-      "Client version",
+    expect(wrapper.get('[aria-label="Version metadata"]').text()).toContain(
+      "Client bundle version",
     );
     expect(wrapper.get('[aria-label="Operational health"]').text()).toContain(
       "Server health",

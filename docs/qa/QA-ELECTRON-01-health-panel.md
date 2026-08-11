@@ -16,6 +16,7 @@ at this stage.
 - Technical spec: Section 25.1 Purpose
 - Technical spec: Section 25.2 Distribution
 - Technical spec: Section 25.3 Health panel
+- Technical spec: Section 26.3 Versioning
 - Kiosk and field hardware UX guide: Section 12 Hardware-Aware Interaction
 
 ## Environment
@@ -67,6 +68,10 @@ at this stage.
    wrapper itself keeps running.
 12. Restart the Laravel server and confirm the health panel returns to reachable
     server-sourced values without manually restarting the wrapper.
+13. In the wrapped Kiosk UI, open **Settings** and read the **Versions**
+    section. Confirm it names the app, the desktop app version, the client
+    bundle version, the UI mode, the deployment target, the server version, and
+    the config schema version (M19.1; technical spec 26.3).
 
 ## Expected results
 
@@ -79,11 +84,17 @@ at this stage.
 - The health panel lists all technical spec 25.3 fields in order: local node
   name, node role, event name, sync status, offline read set status, connected
   devices, local discovery status, certificate/HTTPS status, server version,
-  client version, and Electron wrapper version.
-- "Server version" shows the running server version and "Node role" shows the
-  server environment while connected; "Client version" and "Electron wrapper
-  version" both show the root `package.json` Meridian version; "Certificate /
-  HTTPS status" reflects the configured URL scheme.
+  config schema version, client version, and Electron wrapper version.
+- "Server version" shows the running server version, "Config schema version"
+  shows the node's configuration schema version (technical spec 26.3), and
+  "Node role" shows the server environment while connected; "Client version" and
+  "Electron wrapper version" both show the root `package.json` Meridian version;
+  "Certificate / HTTPS status" reflects the configured URL scheme.
+- Step 13: the Settings Versions section shows "Desktop app version" with the
+  same value the panel's "Electron wrapper version" shows, because the wrapper
+  states it to the client rather than the client assuming it; "Server version"
+  and "Config schema version" match the panel; the mobile app version row is
+  absent, since this is not the installed mobile app.
 - Fields owned by later milestones (local node name, event name, sync status,
   offline read set status, connected devices, local discovery status) show a clearly
   labeled placeholder.
@@ -97,6 +108,7 @@ at this stage.
 - A screenshot of the wrapped Meridian web UI in the fullscreen/kiosk window.
 - A screenshot of the health panel while the server is reachable.
 - A screenshot of the health panel while the server is unreachable.
+- A screenshot of the Settings Versions section inside the wrapped Kiosk UI.
 
 ## Failure notes
 

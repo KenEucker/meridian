@@ -49,6 +49,7 @@ beforeEach(() => {
 afterEach(() => {
   clearClientSession();
   resetNodeReachability();
+  delete window.__MERIDIAN_RUNTIME_CONFIG__;
   vi.unstubAllGlobals();
 });
 
@@ -112,5 +113,69 @@ describe("Device diagnostics operational health", () => {
 
     expect(health).toContain("Connected and fully capable");
     expect(health).toContain("Central or expected sync target reachable");
+  });
+});
+
+/*
+ * Version metadata on the one screen a person is told to read out (M19.1;
+ * technical spec 26.3). The composition itself is unit tested in
+ * `app/appVersions.spec.ts`; these are about the section rendering what this
+ * device and its node actually hold, in both states of the node.
+ */
+describe("Device diagnostics versions", () => {
+  function versions(wrapper: ReturnType<typeof mount>): string {
+    return wrapper.get('[aria-label="Version metadata"]').text();
+  }
+
+  it("reports the build, the wrapper, and the node's versions together", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "ok",
+              environment: "local",
+              server_version: "1.2.3",
+              config_schema_version: 4,
+              timestamp: "2026-08-03T12:00:00.000Z",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    window.__MERIDIAN_RUNTIME_CONFIG__ = { desktopAppVersion: "9.9.9" };
+
+    const wrapper = await mountDiagnostics();
+    const rendered = versions(wrapper);
+
+    expect(rendered).toContain("Desktop app version");
+    expect(rendered).toContain("9.9.9");
+    expect(rendered).toContain("Client bundle version");
+    expect(rendered).toContain("0.0.0-test");
+    expect(rendered).toContain("Server version");
+    expect(rendered).toContain("1.2.3");
+    expect(rendered).toContain("Config schema version");
+    expect(rendered).toContain("4");
+  });
+
+  it("still reports this device's own versions with the node down", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const wrapper = await mountDiagnostics();
+    const rendered = versions(wrapper);
+
+    expect(rendered).toContain("Client bundle version");
+    expect(rendered).toContain("0.0.0-test");
+    // The two server rows are the only ones that go unavailable, and they say so
+    // rather than showing a stale or invented version.
+    expect(rendered).toContain("Server version");
+    expect(rendered).toContain("Unavailable");
+    expect(rendered).not.toContain("Desktop app version");
   });
 });
