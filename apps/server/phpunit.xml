@@ -42,6 +42,14 @@
         -->
         <env name="MERIDIAN_NOTIFICATIONS_SUPPRESSED" value="false"/>
         <env name="MERIDIAN_CLIENT_USE_DEV_SERVER" value="false"/>
+        <!--
+            The secret safeguards (technical spec 26.2) evaluate the running
+            configuration, which in the suite is whatever `.env` the checkout
+            happens to carry. Off here so event-mode tests assert the checks they
+            are about; SecretSafeguardTest switches it back on for itself and
+            sets the values it is asserting against.
+        -->
+        <env name="MERIDIAN_EVENT_MODE_REQUIRE_CONFIGURED_SECRETS" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

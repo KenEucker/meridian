@@ -19,7 +19,7 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | Path | What it is |
 |---|---|
 | [`docker/Dockerfile`](docker/Dockerfile) | The `server` and `web` images. Multi-stage, built from the repository root. |
-| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, config caches. |
+| [`docker/entrypoint.sh`](docker/entrypoint.sh) | Per-boot work: storage tree, migrations with a backup warning, secret generation and refusal, config caches. |
 | [`docker/compose.deployment.yaml`](docker/compose.deployment.yaml) | The deployment stack: database, server, queue worker, scheduler, proxy. |
 | [`docker/.env.deployment.example`](docker/.env.deployment.example) | The deployment's configuration, with fake values. |
 | [`docker/compose.yaml`](docker/compose.yaml) | The development database service, on the loopback interface. |
@@ -45,10 +45,14 @@ predate the decision.
 subdomain form is M19.10. Until then this bundle serves the deployment root, and
 the root-path form of organization addressing works there.
 
-**No secret generation.** Production and event modes generate `APP_KEY`, node
-keys, and service secrets when they are missing, and refuse to boot on defaults
-(technical spec 26.2). Those are server safeguards — task M19.3 — so that they
-hold however a node is started, not only when it is started by Compose.
+**No secret generation of its own.** The safeguards technical spec 26.2 asks for
+— generate `APP_KEY` and node keys when they are missing or still a sample value,
+and refuse to boot on the rest — belong to the server (M19.3), so they hold
+however a node is started and not only when it is started by Compose. The
+entrypoint calls them (`php artisan meridian:secrets --generate`) so a
+misconfigured node stops at start with one legible line in
+`docker compose logs`, rather than coming up and answering `503` to everything.
+Nothing in this bundle decides the policy.
 
 ## Deploy a node
 

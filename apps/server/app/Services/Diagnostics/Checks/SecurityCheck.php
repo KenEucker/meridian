@@ -8,6 +8,7 @@ use App\Services\Diagnostics\DiagnosticCategory;
 use App\Services\Diagnostics\DiagnosticCheck;
 use App\Services\Diagnostics\DiagnosticResult;
 use App\Services\EventMode\EventModeGuard;
+use App\Services\Secrets\SecretSafeguard;
 
 /**
  * Sanitized security warnings (SYS-033: security category). This is a small
@@ -15,7 +16,10 @@ use App\Services\EventMode\EventModeGuard;
  */
 class SecurityCheck implements DiagnosticCheck
 {
-    public function __construct(private readonly EventModeGuard $eventMode) {}
+    public function __construct(
+        private readonly EventModeGuard $eventMode,
+        private readonly SecretSafeguard $secrets,
+    ) {}
 
     public function key(): string
     {
@@ -48,6 +52,24 @@ class SecurityCheck implements DiagnosticCheck
 
         if (blank(config('app.key'))) {
             $critical[] = 'The application key is missing.';
+        }
+
+        // Default and missing secrets (technical spec 26.2). Critical in event
+        // mode because they are what the node refuses to boot on; a warning
+        // outside it, because a development machine running the sample database
+        // password is doing exactly what the sample is for. Reasons name
+        // variables and never values, so the sanitized export stays sanitized.
+        foreach ($this->secrets->evaluate()->failures() as $failure) {
+            if ($failure->requirement->name === 'APP_KEY' && blank(config('app.key'))) {
+                // Already stated above; saying it twice reads as two faults.
+                continue;
+            }
+
+            if ($eventMode) {
+                $critical[] = (string) $failure->reason;
+            } else {
+                $warnings[] = (string) $failure->reason;
+            }
         }
 
         if ((bool) config('app.debug') && ! $local) {

@@ -10,9 +10,13 @@
 # and the warning is deliberately printed before the migration rather than after:
 # a warning that arrives with the result is a note, not a warning.
 #
-# What this does not do is generate or refuse secrets. Those safeguards belong to
-# the server itself (technical spec 26.2, task M19.3) so that they hold for every
-# way a node is started, not only for the containerized one.
+# It also runs the secret safeguards before the container serves anything
+# (technical spec 7.4, 26.2). The refusal itself belongs to the server and holds
+# for every way a node is started, not only the containerized one; running the
+# check here is what turns it into one legible line in `docker compose logs` at
+# start, instead of a 503 on every request from a container that looks like it
+# came up. Generation covers the secrets Meridian owns; the rest are named and
+# the container stops.
 
 set -eu
 
@@ -78,6 +82,14 @@ if [ "$run_shared_setup" = yes ]; then
         log "----------------------------------------------------------------"
         php artisan migrate --force --no-interaction
     fi
+
+    # Generate what Meridian owns and refuse what it does not (technical spec
+    # 7.4, 26.2). This runs after migrations because the node keypair is stored
+    # as node configuration, and before the config cache because a generated key
+    # has to be in the cache the served requests read. `set -e` stops the
+    # container when a secret it cannot generate is still a sample value, which
+    # is the point: a node that will not serve should not look started.
+    php artisan meridian:secrets --generate --no-interaction
 
     # Caching after the environment is injected rather than at build time, because
     # a cache built during `docker build` would freeze the builder's environment

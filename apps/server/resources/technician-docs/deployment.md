@@ -89,8 +89,40 @@ is `GET /api/health` through the proxy.
 
 ## Secrets
 
-Production and event modes refuse to boot with default secrets, and generate
-`APP_KEY`, node keys, and service secrets when they are missing or default.
+Production and event modes refuse to boot with default secrets. A node whose
+environment still carries a sample or placeholder value answers every request
+with `503` and the names of the variables it is waiting on, the queue worker and
+the scheduler refuse to start, and the container stops at the entrypoint with the
+same list in `docker compose logs`.
+
+`artisan` keeps working. That is deliberate: a node that cannot boot cannot be
+repaired, and the repair lives there.
+
+```bash
+php artisan meridian:secrets              # what this node holds, and what it would refuse on
+php artisan meridian:secrets --generate   # generate what Meridian owns, name what it does not
+```
+
+`--generate` covers the two secrets Meridian owns: Laravel's `APP_KEY`, written
+to the node's environment file, and this node's signing keypair, stored as node
+configuration. An existing key is never replaced — replacing one orphans every
+operation this node has already signed.
+
+Everything else is named and left alone, because it is not Meridian's to mint. A
+database password belongs to the database, an SMTP password to the mail account,
+an OAuth client secret to the provider that issued it; a generated value would
+only stop the node connecting. Set those in the node's environment.
+
+A deployed container has no environment file — its values arrive as process
+environment — so `APP_KEY` is generated once, by hand, and set in the deployment
+environment:
+
+```bash
+docker compose run --rm server php artisan key:generate --show
+```
+
+Neither the command nor the refusal ever prints a secret value. They print
+variable names.
 
 Do not copy a `.env` between nodes. Two nodes sharing a signing key cannot be
 told apart by the node they sync with.

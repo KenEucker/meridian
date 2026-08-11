@@ -15,6 +15,17 @@ asks for three things:
 Setup generates the node's signing keypair. The private key is stored as node
 configuration; the public key is what a peer verifies signatures against.
 
+Choosing anything other than `development` puts the node in event mode, and setup
+refuses the role rather than creating the node when an event-mode safeguard is
+failing — plain HTTP, an unservable offline read set, or a secret still set to a
+sample value. That refusal is the same one the node's own boot would make, so a
+setup that succeeds is a node that will start. `php artisan meridian:secrets`
+names what is outstanding, and **Secrets** in `deployment.md` covers the repair.
+
+For a node that arrived without keys — a database restored without its config
+values, an install prepared before the keys existed — `php artisan meridian:secrets
+--generate` gives it a keypair. It never replaces one that is already there.
+
 **Infrastructure → Node Configuration** in the console asks for the same three
 things and does the same work, so a node can be set up from there instead. The
 `/setup` page exists for the moment before anyone can sign in; once you are in

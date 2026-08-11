@@ -10,7 +10,19 @@ use InvalidArgumentException;
 
 class NodeSetupService
 {
-    public function __construct(private readonly NodeKeyPairGenerator $keys) {}
+    /** A keypair was generated and stored for a node that had neither half. */
+    public const KEYS_GENERATED = 'generated';
+
+    /** The node already holds both halves; nothing was touched. */
+    public const KEYS_PRESENT = 'present';
+
+    /** The node holds one half and not the other; an operator has to decide. */
+    public const KEYS_INCOMPLETE = 'incomplete';
+
+    public function __construct(
+        private readonly NodeKeyPairGenerator $keys,
+        private readonly NodeKeyProvider $keyProvider,
+    ) {}
 
     public function hasActiveNode(): bool
     {
@@ -61,6 +73,56 @@ class NodeSetupService
             }
 
             return $node->load('configValues');
+        });
+    }
+
+    /**
+     * Give an already-configured node the keypair it is missing (technical spec
+     * 7.3, 7.4, 26.2).
+     *
+     * First-run setup generates keys with the node, so this covers the node that
+     * arrived some other way: a database restored without its config values, an
+     * install whose keys were never written, a deployment prepared before the
+     * keys existed. It is what `meridian:secrets --generate` calls.
+     *
+     * An existing key is never replaced. Replacing it orphans every operation
+     * this node has signed — central verifies an on-site node's operations
+     * against the public key it registered at pairing — so a node holding
+     * either half of a keypair is left exactly as it is. Holding one half and
+     * not the other is reported as {@see self::KEYS_INCOMPLETE} rather than
+     * repaired, because the repair is replacing a key somebody else may still
+     * be verifying against, and that is an operator's decision.
+     *
+     * @return self::KEYS_* What was done.
+     */
+    public function ensureNodeKeys(Node $node, ?User $updatedBy = null): string
+    {
+        if (! $node->is_local) {
+            throw new InvalidArgumentException('Only this install\'s own node may be given keys.');
+        }
+
+        return DB::transaction(function () use ($node, $updatedBy): string {
+            $hasPrivateKey = $this->keyProvider->hasPrivateKey($node);
+            $hasPublicKey = $this->keyProvider->publicKeyFor($node) !== null;
+
+            if ($hasPrivateKey && $hasPublicKey) {
+                return self::KEYS_PRESENT;
+            }
+
+            if ($hasPrivateKey || $hasPublicKey) {
+                return self::KEYS_INCOMPLETE;
+            }
+
+            $keypair = $this->keys->generate();
+
+            $node->forceFill(['public_key' => $keypair['public_key']])->save();
+
+            $this->storeDatabaseOverride($node, 'node_public_key', $keypair['public_key'], $updatedBy);
+            $this->storeDatabaseOverride($node, 'node_private_key', $keypair['private_key'], $updatedBy);
+
+            $node->load('configValues');
+
+            return self::KEYS_GENERATED;
         });
     }
 
