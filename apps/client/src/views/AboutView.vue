@@ -16,6 +16,7 @@ import {
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
+import { useMenuCandidateLinks } from "@/components/workflowLinks";
 import { clientSessionState } from "@/session/clientSession";
 import {
   HIDEABLE_PAGES,
@@ -23,6 +24,12 @@ import {
   setPageHidden,
   type HideablePage,
 } from "@/session/hiddenPages";
+import {
+  MENU_PAGE_LIMIT,
+  menuPageKeyFor,
+  pageInMenu,
+  setPageInMenu,
+} from "@/session/menuPages";
 import {
   resolveReadinessChecklist,
   summarizeReadiness,
@@ -260,6 +267,104 @@ async function setPageShown(page: HideablePage, shown: boolean): Promise<void> {
   }
 }
 
+/*
+ * What this reader keeps in their menus (M18.69).
+ *
+ * The rows are built from the reader's own menus rather than from a fixed list,
+ * so somebody is only ever offered entries their session actually has, and each
+ * row is named with the words the menu uses for it. A catalog of labels here
+ * would be a second place for the same page to be called something, and the
+ * first thing to drift.
+ *
+ * The two menus are listed as one set. The shell already merges them under the
+ * threshold, so "which menu is this in" is a question with a moving answer, and
+ * not one worth making a reader hold while they decide what they work out of.
+ *
+ * Deduplicated by page key. The dashboards are one page under four routes, and
+ * a reader holding two of those standings should find one control rather than
+ * the same control twice.
+ */
+const menuCandidates = useMenuCandidateLinks();
+
+type MenuPageRow = {
+  readonly key: string;
+  readonly label: string;
+};
+
+const menuPageRows = computed<MenuPageRow[]>(() => {
+  const rows = new Map<string, MenuPageRow>();
+
+  for (const link of menuCandidates.value) {
+    const key = menuPageKeyFor(link.to.name);
+
+    if (key === null || rows.has(key)) {
+      continue;
+    }
+
+    rows.set(key, { key, label: link.pageLabel ?? link.label });
+  }
+
+  return [...rows.values()];
+});
+
+const menuPageLimit = MENU_PAGE_LIMIT;
+
+const menuPagesChosen = computed(
+  () => menuPageRows.value.filter((page) => pageInMenu(page.key)).length,
+);
+
+const menuPagesFull = computed(() => menuPagesChosen.value >= menuPageLimit);
+
+/**
+ * A reader who is over the ceiling rather than at it.
+ *
+ * Reachable without anybody doing anything wrong: a department lead holding
+ * every capability starts around ten, and the ceiling is eight. Worth saying
+ * differently from "full", because "8 of 8" is a reader who has finished
+ * choosing and "10 of 8" is one who has not started.
+ */
+const menuPagesOver = computed(() => menuPagesChosen.value > menuPageLimit);
+
+const menuPageBusy = ref<string | null>(null);
+const menuPageError = ref<string | null>(null);
+
+function isPageInMenu(key: string): boolean {
+  return pageInMenu(key);
+}
+
+/**
+ * A box the reader cannot tick right now, and why.
+ *
+ * Only ever the unticked ones at the ceiling: a full menu is changed by taking
+ * something out first, and disabling the ticked boxes too would leave somebody
+ * with a full menu and no way to change it at all.
+ */
+function menuPageDisabled(key: string): boolean {
+  return (
+    menuPageBusy.value !== null || (menuPagesFull.value && !pageInMenu(key))
+  );
+}
+
+async function setInMenu(key: string, inMenu: boolean): Promise<void> {
+  if (menuPageBusy.value !== null || pageInMenu(key) === inMenu) {
+    return;
+  }
+
+  menuPageBusy.value = key;
+  menuPageError.value = null;
+
+  try {
+    await setPageInMenu(key, inMenu);
+  } catch (error) {
+    menuPageError.value =
+      error instanceof Error
+        ? error.message
+        : "The node did not accept the change.";
+  } finally {
+    menuPageBusy.value = null;
+  }
+}
+
 function readPreferredTheme(): ThemeChoice {
   if (typeof window === "undefined") {
     return "dark";
@@ -445,6 +550,95 @@ watch(
       -->
       <p v-if="pageVisibilityError" class="about__pages-error" role="alert">
         {{ pageVisibilityError }}
+      </p>
+    </section>
+
+    <!--
+      What the menus carry (M18.69).
+
+      Under Pages and separate from it, because it is the milder version of the
+      same decision and the order says so: first what you keep at all, then what
+      you work out of. Taking a page out of the menus leaves it on Home, which
+      the note says outright — a reader who trims their menu down to the four
+      pages they use hourly has to know the rest are still somewhere, or the
+      control is one nobody dares to touch.
+
+      The rows are the reader's own menu entries rather than a fixed list, so
+      nobody is offered a page their session does not have.
+    -->
+    <section class="about__menus" aria-labelledby="about-menus-heading">
+      <h2 id="about-menus-heading" class="about__subheading">Menus</h2>
+      <p class="about__section-note">
+        Which of your pages appear in the menus at the top of the screen.
+        Everything here stays on Home whether or not it is in a menu, and still
+        opens from a link or from search. Saved to your account, so your menus
+        look the same on any device you sign in on.
+      </p>
+
+      <!--
+        Checkboxes rather than a pair of buttons per page, and a plain list
+        rather than a row each.
+
+        Fourteen of anything is a screen somebody scrolls, and the two-button
+        rows this replaced spent that scroll on saying "in menu / home only"
+        fourteen times over. A checkbox says the same thing in the shape a
+        reader already knows, and it is short enough that the whole menu is one
+        glance — which is the thing being decided here.
+      -->
+      <p v-if="menuPageRows.length > 0" class="about__menus-count">
+        {{ menuPagesChosen }} of {{ menuPageLimit }} in your menus
+      </p>
+
+      <ul v-if="menuPageRows.length > 0" class="about__menus-list">
+        <li v-for="page in menuPageRows" :key="page.key">
+          <label>
+            <input
+              type="checkbox"
+              :checked="isPageInMenu(page.key)"
+              :disabled="menuPageDisabled(page.key)"
+              @change="
+                setInMenu(
+                  page.key,
+                  ($event.target as HTMLInputElement).checked,
+                )
+              "
+            />
+            <span>{{ page.label }}</span>
+          </label>
+        </li>
+      </ul>
+
+      <!--
+        Said where the boxes went quiet, rather than left for the reader to work
+        out from a control that stopped responding.
+
+        Two sentences rather than one, because the two states are different
+        situations. At the ceiling somebody has finished choosing and wants to
+        swap. Over it — which is where a full department lead starts, since the
+        pages their capabilities carry outnumber the ceiling — nobody has chosen
+        anything yet, and the honest thing is to say what the menu is for rather
+        than to imply they broke a rule.
+      -->
+      <p v-if="menuPagesOver" class="about__menus-count" role="status">
+        Your menus hold more than {{ menuPageLimit }}. Untick the ones you do
+        not work out of — they stay on Home.
+      </p>
+      <p v-else-if="menuPagesFull" class="about__menus-count" role="status">
+        Your menus are full. Take one out to add another.
+      </p>
+
+      <!--
+        A reader with no session has no menu to describe, and one whose pages
+        are all hidden has emptied it on purpose. Either way the honest thing to
+        render is a sentence rather than a heading over nothing.
+      -->
+      <p v-if="menuPageRows.length === 0" class="about__section-note">
+        Your menus are empty. Pages appear here once you are signed in to an
+        event.
+      </p>
+
+      <p v-if="menuPageError" class="about__menus-error" role="alert">
+        {{ menuPageError }}
       </p>
     </section>
 
@@ -646,6 +840,7 @@ watch(
 .about__settings,
 .about__device,
 .about__pages,
+.about__menus,
 .about__permissions,
 .about__about {
   margin-top: var(--m-space-6);
@@ -657,7 +852,58 @@ watch(
   font-size: var(--m-text-sm);
 }
 
-.about__pages-error {
+.about__menus-count {
+  margin: var(--m-space-3) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+/* Two columns where there is room for them, so a full menu is one glance
+   rather than a scroll. */
+.about__menus-list {
+  display: grid;
+  gap: var(--m-space-1) var(--m-space-4);
+  margin: var(--m-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 32rem) {
+  .about__menus-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.about__menus-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--m-space-2);
+  /* A thumb-sized target on a phone, which is where this screen is read. */
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.about__menus-list input {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--m-action-primary-bg);
+}
+
+.about__menus-list input:disabled {
+  cursor: not-allowed;
+}
+
+.about__menus-list input:disabled + span {
+  color: var(--m-text-muted);
+}
+
+.about__menus-list input:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.about__pages-error,
+.about__menus-error {
   margin: var(--m-space-3) 0 0;
   color: var(--m-status-danger);
   font-size: var(--m-text-sm);

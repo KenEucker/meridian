@@ -364,15 +364,22 @@ async function restoreEventHorizon(): Promise<void> {
       </dl>
     </header>
 
+    <!--
+      The pages this person reaches from their own (M18.71).
+
+      Four, and each of them is about the person rather than about the machine
+      they happen to be holding. Device Readiness and Account and Device were
+      here and are not any more: both are properties of a device, both live in
+      Settings, and a profile page that offered them was answering a question
+      nobody asked while standing on their own record. Settings is still a click
+      away in the user menu, which is where somebody looks for it.
+
+      My Requests moved too, onto Edit Profile. A request is something you made
+      about your record, so the place to find it is the page where you change
+      that record, not a list beside Event Info.
+    -->
     <nav class="me__links" aria-label="Me links">
       <RouterLink :to="{ name: 'staff.profile.edit' }">Edit Profile</RouterLink>
-      <!--
-        Where a handle change or a submitted picture stands (M18.20D; VOL-024,
-        VOL-029). Beside Edit Profile rather than in the Staff menu: a request
-        is something you already made, so the place you go looking for it is
-        your own page, not a list of every page you can reach.
-      -->
-      <RouterLink :to="{ name: 'staff.profile.requests' }">My Requests</RouterLink>
       <RouterLink
         v-if="eventId"
         :to="{ name: 'events.info', params: { eventId } }"
@@ -383,15 +390,14 @@ async function restoreEventHorizon(): Promise<void> {
         My Field Reports
       </RouterLink>
       <!--
-        Sign in to a shared workstation (M18.61; UI contract 12.3). Here and in
-        the command palette rather than in the Staff menu: the moment somebody
-        wants it they are standing at a kiosk, and Me is their page.
+        Shared workstations (M18.61, M18.71; UI contract 12.3). The page signs
+        you in at one and lists the ones you have used, so it is named for the
+        things rather than for the one action — somebody checking whether they
+        left themselves signed in at a kiosk is not looking for "sign-in".
       -->
       <RouterLink :to="{ name: 'staff.workstation-code' }">
-        Workstation Sign-in
+        Workstations
       </RouterLink>
-      <RouterLink :to="{ name: 'readiness' }">Device Readiness</RouterLink>
-      <RouterLink :to="{ name: 'settings.about' }">Account and Device</RouterLink>
     </nav>
 
     <section class="me__section" aria-labelledby="me-assignments-heading">

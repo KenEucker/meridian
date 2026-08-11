@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
 import { MeridianApiError, meridianJson } from "@/api/meridianApi";
-import { sessionEventContext } from "@/session/sessionAccess";
+import { formatTimestamp } from "@/department-ops/labels";
+import {
+  sessionEventContext,
+  sessionEventTimeZone,
+} from "@/session/sessionAccess";
+import {
+  getMyWorkstationSessions,
+  workstationSessionOutcome,
+  type WorkstationSession,
+} from "@/session/workstationHistory";
 import {
   acceptScannedWorkstationCode,
   grantScannedWorkstationSignIn,
@@ -292,6 +301,61 @@ async function generateUntargeted(): Promise<void> {
   await generate({ event_id: event.eventId });
 }
 
+/* ------------------------------------------------------------- history */
+
+/*
+ * Where this login has already signed in (M18.71; AUTH-030; technical spec
+ * 13.3).
+ *
+ * On this page rather than on Me, because it is about the same things the rest
+ * of the page acts on. It answers two questions somebody actually has: whether
+ * they are still signed in at a machine they walked away from, and whether a
+ * session they are being asked about was theirs.
+ *
+ * Reloaded after a successful grant, so the row for the sign-in somebody just
+ * performed is there when they scroll down to look for it.
+ */
+const historySessions = ref<readonly WorkstationSession[]>([]);
+const historyLoading = ref(false);
+const historyError = ref<string | null>(null);
+const historyLoaded = ref(false);
+
+async function loadHistory(): Promise<void> {
+  historyLoading.value = true;
+  historyError.value = null;
+
+  try {
+    historySessions.value = (await getMyWorkstationSessions()).sessions;
+    historyLoaded.value = true;
+  } catch (error) {
+    historySessions.value = [];
+    historyLoaded.value = false;
+    historyError.value =
+      error instanceof MeridianApiError
+        ? error.message
+        : "This device could not reach the node to read your workstation history.";
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+void loadHistory();
+
+watch(
+  () => workstationGrantState.step,
+  (step) => {
+    if (step === "granted") {
+      void loadHistory();
+    }
+  },
+);
+
+function historyWhen(session: WorkstationSession): string {
+  return session.startedAt === null
+    ? "Unknown time"
+    : formatTimestamp(session.startedAt, sessionEventTimeZone.value);
+}
+
 onBeforeUnmount(() => {
   stopScanning();
   resetWorkstationGrantFlow();
@@ -304,7 +368,7 @@ onBeforeUnmount(() => {
       <RouterLink :to="{ name: 'staff.me' }">Back to Me</RouterLink>
     </nav>
 
-    <h1 id="workstation-code-heading">Sign in to a workstation</h1>
+    <h1 id="workstation-code-heading">Workstations</h1>
     <p class="workstation-code__lede">
       Use this device to sign yourself in to a shared workstation — a kiosk or
       a desk machine. Scan the code on its locked screen, or use one of the
@@ -474,6 +538,76 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </section>
+
+    <!-- ------------------------------------------------------- history -->
+    <!--
+      Where this login has signed in (M18.71; AUTH-030).
+
+      A live session leads and says so, because that is the row somebody came
+      here worried about: a kiosk they walked away from is a kiosk somebody else
+      is standing at. The rest is the record — enough to recognise a session as
+      yours, or to be sure one was not.
+    -->
+    <section
+      class="workstation-code__panel"
+      aria-labelledby="workstation-history-heading"
+      data-testid="workstation-history"
+    >
+      <h2 id="workstation-history-heading">Workstations you have used</h2>
+
+      <p v-if="historyLoading && !historyLoaded" role="status">
+        Reading your workstation history.
+      </p>
+
+      <!--
+        A read that failed is stated as a failed read rather than as an empty
+        history, which would tell somebody they have never signed in anywhere
+        when what happened is that nobody asked.
+      -->
+      <p
+        v-else-if="historyError !== null"
+        class="workstation-code__notice"
+        role="alert"
+        data-testid="workstation-history-error"
+      >
+        {{ historyError }}
+        <button
+          class="workstation-code__action workstation-code__action--secondary"
+          type="button"
+          @click="loadHistory()"
+        >
+          Try again
+        </button>
+      </p>
+
+      <p v-else-if="historySessions.length === 0" role="status">
+        You have not signed in at a shared workstation.
+      </p>
+
+      <ul v-else class="workstation-code__history">
+        <li
+          v-for="session in historySessions"
+          :key="session.id"
+          :data-active="session.active"
+        >
+          <div class="workstation-code__history-row">
+            <strong>{{ session.workstationName ?? "A removed workstation" }}</strong>
+            <span
+              class="workstation-code__history-outcome"
+              :data-active="session.active"
+            >
+              {{ workstationSessionOutcome(session) }}
+            </span>
+          </div>
+          <small>
+            {{ historyWhen(session) }}
+            <template v-if="session.eventName !== null">
+              — {{ session.eventName }}
+            </template>
+          </small>
+        </li>
+      </ul>
+    </section>
   </section>
 </template>
 
@@ -622,6 +756,56 @@ onBeforeUnmount(() => {
 
 .workstation-code__hint {
   margin: 0;
+  color: var(--m-text-muted);
+}
+
+.workstation-code__history {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workstation-code__history li {
+  display: grid;
+  gap: var(--m-space-1);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-md);
+  background: var(--m-surface-base, var(--m-surface-raised));
+}
+
+/* A live session is the row somebody came here about, so it carries a marker
+   rather than relying on its position in the list. */
+.workstation-code__history li[data-active="true"] {
+  border-left: 4px solid var(--m-status-success, var(--m-border-default));
+}
+
+.workstation-code__history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--m-space-2);
+}
+
+.workstation-code__history-outcome {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-pill);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.workstation-code__history-outcome[data-active="true"] {
+  border-color: var(--m-status-success, var(--m-border-default));
+  color: var(--m-text-primary);
+}
+
+.workstation-code__history small {
   color: var(--m-text-muted);
 }
 </style>

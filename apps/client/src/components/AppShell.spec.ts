@@ -548,6 +548,59 @@ describe("AppShell fixed UI mode display", () => {
   });
 
   /*
+   * Signing yourself in at a shared workstation, from the user menu (M18.71;
+   * M18.61; AUTH-026 through AUTH-028).
+   *
+   * A second door to one page rather than a second page: Me still lists it. It
+   * is here because the moment somebody wants it they are standing at a kiosk
+   * with their phone out, which is a bad moment to navigate to Me first.
+   *
+   * It needs a session, because the action is this login granting itself a seat
+   * somewhere else, and it is absent on a Kiosk, where the route does not exist
+   * at all.
+   */
+  it("offers workstation sign-in once this device holds a token, and never on a Kiosk", async () => {
+    const signedOut = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await signedOut.get(".app-shell__user-button").trigger("click");
+
+    expect(signedOut.get(".app-shell__user-menu").text()).not.toContain(
+      "Workstation sign-in",
+    );
+
+    storeApiToken({
+      token: "device-token",
+      user: { id: "user-1", name: "Local Field Author", email: "author@example.test" },
+    });
+    adoptHeldApiToken();
+
+    const signedIn = mount(AppShell, {
+      props: { config: appConfigForUiMode("admin") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await signedIn.get(".app-shell__user-button").trigger("click");
+
+    expect(signedIn.get(".app-shell__user-menu").text()).toContain(
+      "Workstation sign-in",
+    );
+
+    const kiosk = mount(AppShell, {
+      props: { config: appConfigForUiMode("kiosk") },
+      global: { stubs: routerLinkStub },
+    });
+
+    await kiosk.get(".app-shell__user-button").trigger("click");
+
+    expect(kiosk.get(".app-shell__user-menu").text()).not.toContain(
+      "Workstation sign-in",
+    );
+  });
+
+  /*
    * A Kiosk offers neither: it holds a shared-workstation session rather than a
    * token, and both entering and ending one belong to its own surfaces
    * (AUTH-030; technical spec 13.3).

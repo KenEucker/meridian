@@ -23,8 +23,8 @@ import OfflineBanner from "@/components/OfflineBanner.vue";
 import {
   useCombinedNavigation,
   useShowStaffMenu,
-  useStaffLinks,
-  useWorkflowLinks,
+  useStaffMenuLinks,
+  useWorkflowMenuLinks,
 } from "@/components/workflowLinks";
 import { refreshEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
 import { syncFieldReportOutbox } from "@/field-reports/syncFieldReportOutbox";
@@ -184,8 +184,11 @@ const workflowMenuOpen = ref(false);
 const userElement = ref<HTMLElement | null>(null);
 const workflowMenuElement = ref<HTMLElement | null>(null);
 const theme = ref<ThemeChoice>(readPreferredTheme());
-const workflowLinks = useWorkflowLinks();
-const staffLinks = useStaffLinks();
+// The menus draw from the reader's own trimming of them (M18.69). Home builds
+// from the untrimmed lists, which is the difference between a shorter menu and
+// a hidden page.
+const workflowLinks = useWorkflowMenuLinks();
+const staffLinks = useStaffMenuLinks();
 const navigation = useCombinedNavigation();
 const showStaffMenu = useShowStaffMenu();
 // A short nav reads better as one list than as two dropdowns the reader has to
@@ -280,6 +283,18 @@ const showContextSwitching = computed(
  */
 const showsPersonalSignIn = computed(
   () => appConfig.value.uiMode !== "kiosk",
+);
+
+/*
+ * The way to sign yourself in at a shared workstation (M18.71; M18.61).
+ *
+ * The same two conditions the surface itself has: the route exists in Field and
+ * Admin and not in Kiosk (`workstationCodeRouteGuard`), and there has to be a
+ * session, because the whole action is this login granting itself a seat
+ * somewhere else.
+ */
+const showsWorkstationSignIn = computed(
+  () => appConfig.value.uiMode !== "kiosk" && signedIn.value,
 );
 
 /*
@@ -835,6 +850,29 @@ onBeforeUnmount(() => {
                 @click="closeUserMenu"
               >
                 Settings
+              </RouterLink>
+              <!--
+                Signing yourself in at a shared workstation (M18.71; M18.61;
+                AUTH-026 through AUTH-028).
+
+                In the user menu because that is what it is about — this login,
+                and where it is signed in — and because the moment somebody
+                wants it they are standing at a kiosk with their phone out,
+                which is a worse moment to be navigating to Me first. Me still
+                lists it; this is a second door to one page, not a second page.
+
+                Absent on a Kiosk, where the route does not exist: a shared
+                workstation signs in by typed code at its own keyboard, and an
+                entry leading somewhere the guard sends straight back is an
+                entry that wastes a tap.
+              -->
+              <RouterLink
+                v-if="showsWorkstationSignIn"
+                role="menuitem"
+                :to="{ name: 'staff.workstation-code' }"
+                @click="closeUserMenu"
+              >
+                Workstation sign-in
               </RouterLink>
               <RouterLink
                 v-if="showsWorkstationSwitch"

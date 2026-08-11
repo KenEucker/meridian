@@ -63,8 +63,10 @@ export type MeridianCommandType =
   // The Event Horizon's own view state (M18.44; HORIZON-012; data/API 5.8A).
   | "hide-event-horizon"
   | "show-event-horizon"
-  // Hiding a page from your own navigation (M18.69).
+  // Hiding a page from your own navigation, and keeping one out of your own
+  // menus (M18.69).
   | "set-page-visibility"
+  | "set-menu-page-visibility"
   // Staff self-service on their own profile (M18.20, M18.20B, M18.20C).
   | "update-my-profile"
   | "request-handle-change"
@@ -451,6 +453,18 @@ const CATALOG: Readonly<Record<MeridianCommandType, CommandDescriptor>> =
       "/api/commands/set-page-visibility",
       "Page visibility",
       "Changing which pages appear needs a connection to the node, because the setting is stored on your account rather than on this device.",
+    ),
+    /*
+     * Keeping a page out of your own menus (M18.69). Connected-only on exactly
+     * the reasoning above, and for the same reason: the two preferences live in
+     * the same place and travel the same way, and it is where they are stored
+     * rather than how far-reaching they are that decides this.
+     */
+    "set-menu-page-visibility": connectedOnly(
+      "set-menu-page-visibility",
+      "/api/commands/set-menu-page-visibility",
+      "Menu contents",
+      "Changing which pages appear in your menus needs a connection to the node, because the setting is stored on your account rather than on this device.",
     ),
     /*
      * The staff member's own profile (M18.20; VOL-015). Connected-only for the

@@ -19,6 +19,7 @@
 **Additive Update:** Per-organization staff profile approval policy requirements (VOL-027–VOL-029) added for configuring how handle and profile picture changes are approved, making the self-service handle change allowance a configurable number defaulting to two, and showing a staff member the state and rejection reason of their most recent submission. VOL-027 changes the default behavior of VOL-017: an organization now opts into the two-change allowance by selecting the "applied without review" handle policy, and the shipped default reviews every change.
 **Additive Update:** Event Horizon requirements (HORIZON-001–HORIZON-018, sections 3.46 and 7.28) added for the event-scoped personal readiness surface that lists what a staff member still has outstanding in preparation for one event, links each item to the surface that resolves it, and can be hidden from a member's workflow menu once nothing is outstanding.
 **Additive Update:** Organization addressing requirements (ORG-022–ORG-025) added for organization subdomain resolution beside the existing root-path form, and platform landing page requirements (PUBLIC-007–PUBLIC-009) added for the feature tour with example-organization screenshots and the description of the platform offerings. Dedicated per-organization infrastructure recorded as deferred scope.
+**Additive Update:** Directory requirements (DIR-001–DIR-037, sections 3.47 and 7.29) added for the read-only organization chart and handle search surface: an organization-configurable page, enabled by default, whose population follows event participation in event context and persistent membership outside one, whose staff visibility is derived from organizer status and leadership assignments rather than from a new permission, and whose only person-identifying field is the handle.
 
 ---
 
@@ -1638,6 +1639,29 @@ The Event Horizon is distinct from:
 - Insights, which are authorized aggregate views of operations rather than one person's readiness
 - dashboards, whose widgets are entry points into work rather than an ordered list of what is outstanding
 - notifications, which tell a person when something changed rather than what remains
+
+---
+
+## 3.47 The Directory
+
+The Directory is Meridian's organization chart: the shape of the organization, drawn as a tree, with the people in it that the person reading it is allowed to see.
+
+The Directory answers:
+
+> How is this organization arranged, and who is where in it?
+
+It renders the organization as the root, the Organizers Department and every other department beneath it, the teams within each department, and the people within each team. Departments and teams are always drawn, whether or not the reader may see anybody inside them.
+
+The Directory is read-only. Nothing on it is edited, contacted, messaged, or administered, and the only person-identifying text it carries is the handle (section 3.4). It is not a contact list, a personnel file, or a way to reach somebody — Meridian is not an HR system (section 1), and a directory that exposed a phone number would be one.
+
+What a reader sees inside a department or a team is decided by what they are: ordinary staff see the leadership of the whole organization, a department lead additionally sees inside the departments they lead, a team lead additionally sees inside the teams they lead, and an organizer sees everyone. The Directory grants none of this; it reads the leadership assignments and organizer status that already exist.
+
+The Directory is distinct from:
+
+- the department roster, which is one department's operational staff list, reached from that department's surfaces and carrying operational fields the Directory does not
+- the command palette, which reaches pages rather than people
+- Name References, which are text mentions in IMS notes and Field Reports and deliberately resolve to no profile page (section 3.21A)
+- the staff profile surface, which is one person's own record and is maintained by them
 
 ---
 
@@ -5966,6 +5990,220 @@ An item kind owned by an inactive module shall be omitted entirely, and the Even
 #### HORIZON-018
 
 The Event Horizon shall send no notification of its own. The NOTIFY-001 set already notifies on the conditions it reports, and NOTIFY-001A limits one operational action to one notification.
+
+---
+
+## 7.29 Directory Requirements
+
+The Directory (section 3.47) is the read-only organization chart: the organization, its departments and teams, and the people within them that the reader is authorized to see. It creates no record, grants no authority, and exposes no personal data beyond the handle.
+
+### Surface, availability, and configuration
+
+#### DIR-001
+
+Meridian shall provide the Directory: a read-only surface presenting the organization as a chart of departments, teams, and people, together with a search over the people the viewer is authorized to see.
+
+The Directory shall create, edit, and delete nothing.
+
+#### DIR-002
+
+The Directory shall be available in Meridian Field, Meridian Kiosk, and Meridian Admin, shall be reached from the Workflows menu, and shall be available both within an event context and at the persistent organization level.
+
+#### DIR-003
+
+The Directory shall work offline and shall be designed touch-first, remaining usable by touch from small phone widths through wall-mounted displays of approximately 55 inches. It shall carry no control that requires hover.
+
+#### DIR-004
+
+Whether the Directory is available shall be organization configuration on the ORG-018 surface, under the same governance and audit rules as the rest of that surface.
+
+The Directory shall be enabled by default, and an organizer shall be able to disable it.
+
+#### DIR-005
+
+Where an organization has disabled the Directory, the Directory shall be absent: no navigation entry, no reachable route, no API response, no cached data, and nothing synchronized to a device.
+
+Its absence shall not be presented as permission denial.
+
+### Population and context
+
+#### DIR-006
+
+Where the interface is resolved to an event, Directory membership shall follow participation in that event. Persistent organization membership alone shall not place a staff member in an event Directory.
+
+#### DIR-007
+
+Where the interface is not resolved to an event, Directory membership shall follow persistent organization membership.
+
+#### DIR-008
+
+Visibility (DIR-014 through DIR-020) and status (DIR-021, DIR-022) rules shall be applied after the relevant event or organization population has been determined.
+
+### Chart structure
+
+#### DIR-009
+
+The Directory hierarchy shall be organization, then organizers and departments, then teams, then people. The organization shall be the root node.
+
+The Organizers Department shall be presented first, followed by every other department.
+
+#### DIR-010
+
+Organizers shall be presented within the Organizers Department. The Directory shall not present a second organization-level organizer list outside it.
+
+#### DIR-011
+
+Within a department, content shall be presented in this order: the department heading, the department leads, the teams, and then the department's members who are assigned to no team.
+
+#### DIR-012
+
+Within a team, content shall be presented in this order: the team heading, the team leads, and then the team members.
+
+A team lead shall not additionally be presented as an ordinary member of the team they lead.
+
+There shall be no nested teams or subteams.
+
+#### DIR-013
+
+A visible department member assigned to no team shall be presented in a department-level section labeled Prospectives.
+
+This label shall be presentation on the Directory only. It shall not change, imply, or record any membership status, role, assignment, or team data, and the Directory shall neither report nor investigate why the member holds no team.
+
+#### DIR-014
+
+A staff member shall be presented once in every chart location they hold that the viewer is authorized to see, including multiple departments, multiple teams, and a department leadership location alongside one or more team locations.
+
+The one exception is the team-lead duplication rule in DIR-012.
+
+#### DIR-015
+
+Every department and every team shall remain presented even where the viewer can see no people within it.
+
+The Directory shall not label a branch, a team, or a person as restricted, withheld, or hidden. A person the viewer may not see shall simply be absent.
+
+#### DIR-016
+
+The chart shall open collapsed to the department level, presenting the organization, the Organizers Department, and every other department. Team and people branches shall be expandable, by touch, without hover.
+
+### Staff visibility
+
+#### DIR-017
+
+Directory visibility shall be enforced before data is returned or synchronized. Hiding a staff member in the client shall not by itself satisfy any requirement in this section.
+
+#### DIR-018
+
+A staff member holding no Directory leadership shall see every organizer, every department lead, and every team lead, across every department and team, and no other staff member.
+
+#### DIR-019
+
+A department lead shall additionally see, in each department they lead: every member of that department whose status is visible under DIR-021, every member of every team within it, and every member assigned to the department directly without a team.
+
+Department-lead visibility shall reach only the departments the viewer actually leads. Leading one department shall grant no visibility of ordinary members of another.
+
+#### DIR-020
+
+A team lead shall additionally see every member, whose status is visible under DIR-021, of each team they lead.
+
+Leading a team shall not grant visibility of the surrounding department's other members.
+
+#### DIR-021
+
+An organizer shall see every Directory-eligible staff member in the applicable event or organization population.
+
+#### DIR-022
+
+Where a viewer holds several of these positions, their visibility shall be the union of what each grants, each within its own scope. A team lead position in one department shall not widen a department lead position held in another.
+
+#### DIR-023
+
+No role shall receive expanded Directory visibility because it carries elevated privilege elsewhere in Meridian. This includes Staff Coordinators, Incident Command roles, department Operators, organization owners, God Mode, and any other administrative position, unless the holder independently occupies one of the positions in DIR-018 through DIR-021.
+
+#### DIR-024
+
+Directory visibility shall be derived from organizer status and leadership assignments. Meridian shall not add a named permission for it, and it shall not be separately grantable.
+
+The DIR-004 organization setting governs whether the Directory exists for an organization and is separate from which people a viewer may see within it.
+
+### Status
+
+#### DIR-025
+
+The Directory shall exclude a staff member whose applicable membership status is Inactive, Department Inactive, Do Not Staff, or Department Ineligible.
+
+The Directory shall include a staff member whose applicable membership status is Active, Prospective, Emeritus, or Retired, and their department equivalents.
+
+The status applied shall be the one appropriate to the context and the membership being presented.
+
+#### DIR-026
+
+An excluded staff member shall not be presented because they hold a position that would otherwise be visible.
+
+### Privacy
+
+#### DIR-027
+
+The Directory shall not expose legal names, preferred names, email addresses, phone numbers, emergency contacts, addresses, dates of birth, or any other personally identifying field.
+
+The only person-identifying text the Directory shall carry is the handle (VOL-009).
+
+#### DIR-028
+
+DIR-027 shall hold in API responses, client state, offline storage, DOM attributes, accessibility labels, search indexes, debugging payloads, and serialized page data alike.
+
+The Directory shall read a purpose-built projection of the fields it presents rather than reading staff records and omitting fields at render.
+
+#### DIR-029
+
+A Directory person entry shall present only the profile picture, the handle, the departments and teams the viewer is authorized to associate with that person, and years of service.
+
+It shall present no contact control, no messaging control, no administrative action, and no profile editing.
+
+#### DIR-030
+
+Being authorized to see a staff member in one chart location shall not authorize the viewer to see every location that staff member holds. A person entry shall list only the locations the viewer is independently authorized to see.
+
+### Search
+
+#### DIR-031
+
+Search shall remain available while the viewer browses the chart. It shall not be a separate page, and it shall not require switching between a search view and a chart view.
+
+#### DIR-032
+
+Search shall match on the handle only. It shall not match legal names, preferred names, email addresses, phone numbers, department names, team names, or role names.
+
+#### DIR-033
+
+Search shall reach only staff members the viewer is authorized to see. An unauthorized staff member shall not appear in results, contribute to a result count, be discoverable through a partial match or a timing difference, enter a client-side search index, or be synchronized for offline search.
+
+#### DIR-034
+
+A search result shall present the matching handle and the person's chart location as a breadcrumb, such as `Rangers → Training → Team Lead`. A person holding several visible locations may produce several results. A location the viewer is not authorized to associate with that person shall not appear.
+
+#### DIR-035
+
+Selecting a search result shall expand the chart branches needed to reveal the person, scroll to the closest applicable chart node, highlight every occurrence of that person the viewer is authorized to see, and leave the search interface in place.
+
+Selecting a result shall not open a staff profile page, an administrative record, or a contact action.
+
+### Browsing and filtering
+
+#### DIR-036
+
+The Directory shall let a viewer narrow what is presented by department, team, role, and status, through immediately visible touch-first controls rather than through a dropdown as the primary filtering interaction.
+
+Filtering shall never reveal or imply the existence of a staff member the viewer is not authorized to see, and any count presented shall count only people visible to that viewer.
+
+### Offline, audit, and notifications
+
+#### DIR-037
+
+Offline Directory data shall obey the same visibility, status, and privacy rules as data served online, and a device shall hold only the Directory-safe records its user is authorized to see.
+
+When the user changes, signs out, switches organization or event, or loses a position that granted visibility, Directory data the user may no longer see shall be purged or invalidated under Meridian's existing offline data lifecycle (CLIENT-021, CLIENT-022).
+
+Reading or searching the Directory shall not be audited, and the Directory shall send no notification of its own.
 
 ---
 

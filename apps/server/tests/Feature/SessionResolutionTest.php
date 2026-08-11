@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Navigation\HideablePageCatalog;
+use App\Domain\Navigation\MenuPageCatalog;
 use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -134,14 +136,47 @@ class SessionResolutionTest extends TestCase
              * enforced on arrival (CLIENT-006). The assertions below are what
              * keep the two apart — the payload holds keys the *user* named and
              * still no route, screen, or surface the *node* named.
+             *
+             * Two lists, because there are two questions a reader can answer
+             * about a page: whether they have put it away at all, and whether
+             * they work out of it. Neither is a decision this node makes.
              */
             'preferences',
             'refreshed_at',
         ], array_keys((array) $response->json()));
 
-        $this->assertSame(['hidden_pages'], array_keys((array) $response->json('preferences')));
+        $preferences = (array) $response->json('preferences');
 
-        foreach ($this->keysOf((array) $response->json()) as $key) {
+        $this->assertSame(
+            ['hidden_pages', 'menu_hidden_pages'],
+            array_keys($preferences),
+        );
+
+        /*
+         * The preference block is held to a different check from the rest of
+         * the payload, and it has to be.
+         *
+         * It speaks the reader's vocabulary: `menu_hidden_pages` says "menu"
+         * because a menu is the thing the *reader* asked about, and the sweep
+         * below — which is looking for the node publishing one — would read the
+         * word as exactly the failure it exists to catch. What has to hold here
+         * is narrower and worth stating outright: every entry is a page key one
+         * of the two catalogs knows, so there is no room in this block for a
+         * route, a screen, or an ordered list of surfaces. Two lists of keys the
+         * user themselves named is the whole of it.
+         */
+        foreach ((array) $preferences['hidden_pages'] as $pageKey) {
+            $this->assertContains($pageKey, HideablePageCatalog::keys());
+        }
+
+        foreach ((array) $preferences['menu_hidden_pages'] as $pageKey) {
+            $this->assertContains($pageKey, MenuPageCatalog::keys());
+        }
+
+        $published = (array) $response->json();
+        unset($published['preferences']);
+
+        foreach ($this->keysOf($published) as $key) {
             $this->assertDoesNotMatchRegularExpression(
                 '/nav|menu|screen|route|surface|sidebar|tab|link/i',
                 $key,

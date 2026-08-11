@@ -79,6 +79,7 @@ import {
   sessionSwitchingAvailable,
 } from "@/session/sessionContext";
 import { visibleLinks } from "@/session/hiddenPages";
+import { menuLinks } from "@/session/menuPages";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -500,18 +501,102 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
   });
 }
 
+/*
+ * The two menus as the shell actually draws them (M18.69).
+ *
+ * Everything above answers "what may this person reach and what have they kept"
+ * — one list, and the one Home renders from. These two answer the narrower
+ * question the menus ask: of those pages, which does this reader work out of.
+ *
+ * The filter belongs here rather than inside the builders because it is the
+ * only place it is true. A page taken out of a menu is still on Home, still in
+ * the command palette, and still reachable; folding it into `useStaffLinks` or
+ * `useWorkflowLinks` would take it off the map as well, which is the other
+ * preference and not this one.
+ */
+
+/**
+ * Every page this reader could put in a menu, whether or not it is in one.
+ *
+ * The menu entries their session builds, plus the four Home-only pages that may
+ * be promoted into one. This is what Settings renders a row from, so the two
+ * halves have to arrive together: a reader deciding what their menu holds is
+ * choosing among all of it at once, and a control that offered only what is
+ * already there could never add anything.
+ *
+ * Filtered by the hidden-pages preference, because the builders below already
+ * are. A page somebody has put away has no menu question left to answer.
+ */
+export function useMenuCandidateLinks(): ComputedRef<WorkflowLink[]> {
+  const staff = useStaffLinks();
+  const workflows = useWorkflowLinks();
+
+  return computed(() => {
+    if (!sessionEstablished.value) {
+      return [];
+    }
+
+    return [
+      ...staff.value,
+      ...visibleLinks(staffDirectoryLinks()),
+      ...workflows.value,
+      ...visibleLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
+    ];
+  });
+}
+
+/**
+ * The Workflows menu: the workflow hubs this reader kept in it, plus any
+ * Incident Command page they asked for.
+ *
+ * The promoted pages are appended rather than woven in. They are additions to a
+ * menu whose order says something — the department's home first, then the
+ * workflows inside it — and a reader who adds a page is adding it to the end of
+ * the list they already read.
+ */
+export function useWorkflowMenuLinks(): ComputedRef<WorkflowLink[]> {
+  const links = useWorkflowLinks();
+
+  return computed(() =>
+    menuLinks([
+      ...links.value,
+      ...visibleLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
+    ]),
+  );
+}
+
+/**
+ * The Staff menu: the personal pages this reader kept in it, plus
+ * Acknowledgments or the document library if they asked for either.
+ */
+export function useStaffMenuLinks(): ComputedRef<WorkflowLink[]> {
+  const links = useStaffLinks();
+
+  return computed(() => {
+    if (links.value.length === 0) {
+      return [];
+    }
+
+    return menuLinks([...links.value, ...visibleLinks(staffDirectoryLinks())]);
+  });
+}
+
 /**
  * Whether the app shell renders Staff and Workflows as one menu or two.
  *
  * Under the threshold the shell shows a single list, because splitting a short
  * list across two dropdowns makes the reader guess which one holds the page.
+ *
+ * Counted after the reader's own trimming, which is the count that matters:
+ * the threshold is about how long a list somebody has to read, and a reader who
+ * has taken five entries out of their menus is reading the shorter one.
  */
 export function useCombinedNavigation(): ComputedRef<{
   readonly combined: boolean;
   readonly links: readonly WorkflowLink[];
 }> {
-  const workflowLinks = useWorkflowLinks();
-  const staffLinks = useStaffLinks();
+  const workflowLinks = useWorkflowMenuLinks();
+  const staffLinks = useStaffMenuLinks();
 
   return computed(() => {
     const links = [...staffLinks.value, ...workflowLinks.value];
@@ -529,7 +614,7 @@ export function useCombinedNavigation(): ComputedRef<{
  */
 export function useShowStaffMenu(): ComputedRef<boolean> {
   const navigation = useCombinedNavigation();
-  const staffLinks = useStaffLinks();
+  const staffLinks = useStaffMenuLinks();
 
   return computed(() => !navigation.value.combined && staffLinks.value.length > 0);
 }

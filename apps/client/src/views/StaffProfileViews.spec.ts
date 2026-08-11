@@ -517,6 +517,32 @@ describe("staff me profile rows", () => {
     expect(editLink?.attributes("href")).toBe("/staff/me/edit");
   });
 
+  /*
+   * What Me links to, and what it deliberately no longer does (M18.71).
+   *
+   * Device Readiness and Account and Device are properties of a device rather
+   * than of a person, and both live in Settings, which the user menu reaches
+   * from every screen. My Requests moved onto Edit Profile, where the change it
+   * tracks was made. What is left is four links that are all about the person
+   * whose page this is.
+   */
+  it("links to the person's own pages and not to the device's", async () => {
+    stubNode(() => ({ body: { profiles: [profilePayload()] } }));
+
+    const wrapper = await mountView(MeView, "staff.me");
+    const links = wrapper.get("nav[aria-label='Me links']");
+    const labels = links.findAll("a").map((anchor) => anchor.text());
+
+    expect(labels).toContain("Edit Profile");
+    expect(labels).toContain("Workstations");
+    expect(labels).not.toContain("Device Readiness");
+    expect(labels).not.toContain("Account and Device");
+    expect(labels).not.toContain("My Requests");
+    // Renamed rather than removed: the page signs you in at a workstation and
+    // lists the ones you have used, so it is named for the things.
+    expect(labels).not.toContain("Workstation Sign-in");
+  });
+
   it("leaves the profile rows absent when the read fails, rather than printing Not set", async () => {
     vi.stubGlobal(
       "fetch",

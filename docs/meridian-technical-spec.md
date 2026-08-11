@@ -3160,6 +3160,119 @@ The Event Horizon sends no notification of its own. NOTIFY-001 already sends on 
 
 ---
 
+# 21E. The Directory
+
+## 21E.1 Purpose and boundary
+
+The Directory is the organization drawn as a tree: organization, departments, teams, people, with a search over the people in it (DIR-001).
+
+It reads. It writes nothing, owns no table of its own beyond the organization setting in 21E.9, and adds no source of truth: departments, teams, memberships, leadership, and status all belong to the domains that already hold them.
+
+It grants nothing. Every person it shows is shown because of a leadership assignment or an organizer position that already exists, and the Directory reads those rather than adding a position of its own (DIR-024). A named `directory.view_all` permission would become a second answer to who may see whom, grantable to somebody who leads nothing, and the first time it disagreed with the leadership records it would be the disagreement nobody could see.
+
+It carries one person-identifying field, the handle. Meridian is not an HR system (requirements section 1), and this is the surface where that is easiest to forget: a chart of people is exactly the shape somebody would hang a phone number on.
+
+## 21E.2 Context and population
+
+The population comes from the interface's resolved context, which is the resolution already described in 11A.3.
+
+Resolved to an event, the population is participation in that event. Resolved to the organization, it is persistent organization membership (DIR-006, DIR-007). These are different questions with different answers, and the second is not a superset presented differently: somebody who has been an organization member for six years and is not working this event does not appear in this event's chart.
+
+Visibility and status filtering run after the population is chosen, never before it (DIR-008). Filtering first and then scoping would let a person be excluded for the wrong reason and would make the two contexts share a cache they must not share.
+
+## 21E.3 Chart composition
+
+The tree is organization at the root, the Organizers Department first among its children, then every other department, then teams, then people (DIR-009). Organizers are people inside the Organizers Department and are not additionally listed at the organization root (DIR-010) — an organizer holds their standing through membership in that department (requirements 4.2), and a second list would present the same authority as if it came from somewhere else.
+
+Within a department: heading, department leads, teams, then members holding no team, in that order (DIR-011). Within a team: heading, team leads, then members, with a lead never repeated as an ordinary member of their own team (DIR-012). There are no subteams; team-lead visibility therefore needs no recursive traversal.
+
+Departments and teams are drawn whether or not the viewer can see anybody in them (DIR-015). This is deliberate and is the opposite of the usual instinct to hide empty containers: the shape of the organization is not the confidential part, and an empty team tells a reader that the team exists, which is true and is what a chart is for. Nothing is labeled restricted, because "3 members hidden" is a disclosure with a number in it.
+
+A member of a department who holds no team appears under a department-level heading, Prospectives (DIR-013). The label is presentation and touches no record. It is also a word Meridian already uses as a status name (requirements 3.5), and the two are not the same thing — an Active member with no team assignment appears here — which is why DIR-013 fixes it as a Directory label rather than a status read.
+
+## 21E.4 Visibility resolution
+
+Visibility is one domain rule, resolved server-side, consumed by every path that returns Directory data: the online chart read, the search, the offline read set, and any server-rendered response (DIR-017).
+
+It is not reimplemented per controller, per component, or per sync definition. The rule is the same in each place and the cost of a second copy is that one of them is wrong for a while without anybody noticing.
+
+The rule is additive over positions the viewer holds, each within its own scope:
+
+| Viewer holds | Sees |
+|---|---|
+| nothing | every organizer, department lead, and team lead (DIR-018) |
+| department lead of D | additionally, every visible-status member of D, of every team in D, and of D directly with no team (DIR-019) |
+| team lead of T | additionally, every visible-status member of T (DIR-020) |
+| organizer | every Directory-eligible member of the population (DIR-021) |
+
+Leading a team inside another department widens nothing but that team (DIR-022). No other role widens anything at all (DIR-023): Staff Coordinator reviews applications, an IC role reads incidents, an Operator takes Field Reports on behalf of others, and none of those is a reason to hand somebody the department's membership list.
+
+God Mode is not an exception, and does not need to be. The Directory is a client product surface; Orchid remains the repair path and reads the underlying records directly, as it does everywhere else, which is a different surface with its own audited access rather than a bypass through this one.
+
+The rule constrains two things, not one: which people may be returned, and which of each person's locations may be returned (DIR-030). A viewer who may see somebody as a team lead of one team is not thereby told which other departments that person belongs to, and the person's department and team lists are filtered to authorized locations rather than returned whole. This is the leak the shape of the data invites — the person is authorized, so the record comes back, and the record knows more than the viewer does.
+
+## 21E.5 Status filter
+
+Excluded: Inactive, Department Inactive, Do Not Staff, Department Ineligible. Included: Active, Prospective, Emeritus, Retired, and their department equivalents (DIR-025).
+
+The status read is the one belonging to the membership being drawn: an organization-context entry reads organization status, a department entry reads that department's status, on the rule in requirements 2.7 that organization status supersedes department status.
+
+Exclusion wins over position (DIR-026). A department lead who has gone Inactive is not drawn because they are a lead, which is the case where the two rules meet and the ordering has to be stated.
+
+## 21E.6 The Directory projection
+
+The client receives a Directory representation built for this surface, not a staff or membership model with fields omitted at render (DIR-028).
+
+The distinction is the whole privacy control. A read that loads staff records and hides fields in a component has already put legal names and email addresses into the API response, the client store, the offline database, and whatever a developer console or a serialized page state shows; the rendering step is the last place that decision can be made and the only one where forgetting it is invisible in review.
+
+The projection carries, per person: the profile picture reference, the handle, the authorized locations, and years of service (DIR-029). Profile pictures resolve through the existing staff profile picture path in 18A, under the visibility that section already defines. No contact field, and no administrative action, exists in the shape to be accidentally populated.
+
+Years of service is listed by requirements 2.8 as staff history Meridian preserves and is not defined anywhere as a calculation. It is open question 37 and must be settled before the card renders it.
+
+## 21E.7 Search
+
+Search runs beside the chart, over the same authorized set, and returns handles with a breadcrumb of the authorized location (DIR-031, DIR-032, DIR-034).
+
+Matching is on the handle alone. Meridian models one handle and deliberately does not separately model playa name, callsign, Ranger name, or radio name (requirements 3.4), so there is one field here rather than two to reconcile.
+
+An unauthorized person is absent from the index rather than filtered out of results (DIR-033). Filtering at the end is what produces the discoverability failures the requirement lists: a count that includes them, a partial match that confirms a handle exists, a response that is measurably slower when there was something to remove. The index is built from the authorized set, online and offline alike, so there is nothing to leak through.
+
+Selecting a result expands the branches, scrolls to the closest applicable node, and highlights every authorized occurrence, leaving search in place (DIR-035). Which occurrence is closest, where several are equally applicable, is open question 38.
+
+## 21E.8 Offline behavior
+
+The Directory renders from the offline read set under the permission scoping in 11A.7, on the same footing as every other offline-capable surface, and takes an entry in the surface inventory M18.53 established.
+
+Only the authorized projection is synchronized (DIR-037). The device holds what its user could have retrieved from the API and nothing else — the property M18.47 asserts for every other scope, applied here to a surface whose whole content is people.
+
+Visibility loss is handled by the existing lifecycle rather than a new one: the store is context-scoped and is dropped on sign-out, on context switch, and on shared-workstation session end (technical spec 9.3, M18.48), and a role change takes effect at the next read-set refresh (M18.49). A demoted department lead's stored member list is gone on that refresh, which is the same guarantee the roster scopes already carry.
+
+Nothing on the Directory writes, so it needs no place in the command outbox.
+
+## 21E.9 Organization configuration
+
+Availability is one organization setting on the ORG-018 surface, enabled by default, under that surface's governance edit rules and audit (DIR-004).
+
+Disabled, the Directory is absent rather than refused (DIR-005): no navigation entry, no route, no API response, no synchronized record. A disabled Directory that answered 403 would confirm the feature exists and is switched off, and would leave a device holding data for a surface the organization has withdrawn.
+
+This is availability, not visibility. It decides whether the organization has a Directory at all; who appears within one is 21E.4 and nothing else.
+
+## 21E.10 Performance
+
+The chart is composed from a bounded number of queries over departments, teams, memberships, and leadership — not one query per department, team, lead, or person.
+
+Repeated placements are ordinary here rather than exceptional: one person legitimately appears in several departments and teams, so the composition works from a person set resolved once and placed many times rather than from a traversal that re-reads a person at every node.
+
+Caching is permitted only where a cache key cannot outlive the authorization that produced it. A Directory response is specific to one viewer, one organization, and one event or organization context; a cache keyed on less than that is a cross-viewer leak, and this surface is the one where such a leak is a list of people somebody was not allowed to know about.
+
+## 21E.11 Audit and notifications
+
+Reading and searching the Directory are not audited (DIR-037). It composes reads under authority the viewer already holds, and an audit entry per chart expansion would bury the audit trail without recording a decision anybody made.
+
+The Directory sends no notification.
+
+---
+
 # 22. Admin, Orchid, and God Mode
 
 ## 22.1 Orchid purpose
@@ -3977,6 +4090,8 @@ The following areas may need later detail:
 34. Whether the equipment domain needs states the equipment-not-returned metric implies but does not model — overdue, lost, and unknown status are named as presentation distinctions but only `available`, `checked_out`, `returned`, `missing`, and `damaged` exist.
 35. Whether event-assigned equipment needs an explicit assignment scope. The equipment-not-returned metric distinguishes shift-assigned from event-assigned equipment, and the current model does not record which a checkout is.
 36. Whether any Insight Metric proves expensive enough to justify a compiled-result cache, and if so its invalidation rules.
+37. Exact years-of-service calculation. Requirements 2.8 lists it among the staff history Meridian preserves and no document defines how it is derived — from first organization status, from first event worked, from first shift with recorded hours, counted in whole years or elapsed years, and what a gap in participation does to it. The Directory person entry (DIR-029) is the first surface that renders it.
+38. Exact tie-break for the closest applicable occurrence when a Directory search result matches a person who holds several equally applicable chart locations (DIR-035). Every authorized occurrence is highlighted regardless; this decides only which one the surface scrolls to.
 
 ---
 

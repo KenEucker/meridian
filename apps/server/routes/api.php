@@ -44,8 +44,10 @@ use App\Http\Controllers\Incidents\IncidentPdfController;
 use App\Http\Controllers\Incidents\IncidentReadController;
 use App\Http\Controllers\Incidents\IncidentTypeAdminController;
 use App\Http\Controllers\Kiosk\KioskWorkstationContextController;
+use App\Http\Controllers\Kiosk\MyWorkstationSessionController;
 use App\Http\Controllers\Kiosk\WorkstationSignInRequestController;
 use App\Http\Controllers\Marketing\OrganizationInterestController;
+use App\Http\Controllers\Navigation\MenuVisibilityController;
 use App\Http\Controllers\Navigation\PageVisibilityController;
 use App\Http\Controllers\Node\NodeHealthReportController;
 use App\Http\Controllers\Node\NodePairingController;
@@ -536,6 +538,15 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.set-page-visibility');
 
     /*
+     * Taking a page out of your own menus (M18.69). The same shape as the
+     * command above and self-scoped for the same reason, but a milder change:
+     * this one shortens a menu and leaves the page on the home directory, where
+     * the reader still reaches it.
+     */
+    Route::post('/commands/set-menu-page-visibility', [MenuVisibilityController::class, 'update'])
+        ->name('api.commands.set-menu-page-visibility');
+
+    /*
      * Staff self-service on their own profile (M18.20; VOL-015, VOL-016,
      * VOL-026). Self-scoped like the two shift commands above: the record
      * written is one the caller's login speaks for, and no role is checked
@@ -1007,6 +1018,15 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      */
     Route::get('/me/profile', [MyProfileController::class, 'show'])
         ->name('api.me.profile');
+
+    /*
+     * Where this login has signed in at a shared workstation (M18.71;
+     * AUTH-030). A fact about the caller like the profile read above, and
+     * self-scoped the same way: the request names no subject, so there is
+     * nothing here to point at anybody else's history.
+     */
+    Route::get('/me/workstation-sessions', [MyWorkstationSessionController::class, 'index'])
+        ->name('api.me.workstation-sessions');
 
     /*
      * The reviewer's queue (M18.20D; VOL-019, VOL-020; UI contract 12.6). The

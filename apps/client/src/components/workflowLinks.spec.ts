@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  useCombinedNavigation,
   useNavigationSections,
   useStaffLinks,
+  useStaffMenuLinks,
   useWorkflowLinks,
+  useWorkflowMenuLinks,
 } from "@/components/workflowLinks";
+import { resetMenuPageAnswers } from "@/session/menuPages";
 import {
   clearClientSession,
   installClientSession,
@@ -137,6 +141,7 @@ function sectionLabels(title: string): string[] {
 afterEach(() => {
   clearClientSession();
   resetSelectedSessionDepartment();
+  resetMenuPageAnswers();
 });
 
 describe("navigation without a permitting capability", () => {
@@ -674,5 +679,154 @@ describe("navigation the reader has hidden", () => {
     for (const section of useNavigationSections().value) {
       expect(section.links.length).toBeGreaterThan(0);
     }
+  });
+});
+
+/*
+ * Pages the reader has kept out of their menus (M18.69).
+ *
+ * The milder of the two preferences, and the whole of what separates it from
+ * the one above is where it stops. These cases are about that boundary: the
+ * menus get shorter, Home does not, and nothing about authority moves.
+ */
+describe("the pages a reader keeps in their menus", () => {
+  const DEPARTMENT = "66666666-6666-4666-8666-666666666666";
+
+  function installTrimmed(pages: readonly string[]): void {
+    installClientSession(
+      localFieldSessionDocument({
+        preferences: { hidden_pages: [], menu_hidden_pages: pages },
+      }),
+      "network",
+    );
+    selectSessionDepartment(DEPARTMENT);
+  }
+
+  it("takes a workflow out of the menu and leaves it on Home", () => {
+    installTrimmed(["logistics"]);
+
+    expect(useWorkflowMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Logistics",
+    );
+    // Still on the map. This is the assertion the second preference exists for:
+    // a reader who trims a menu has said they do not work out of that page, not
+    // that they are done with it.
+    expect(sectionLabels("Workflows")).toContain("Logistics");
+  });
+
+  it("takes a personal page out of the menu and leaves it on Home", () => {
+    installTrimmed(["shift-board"]);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Shifts",
+    );
+    expect(sectionLabels("You")).toContain("Shifts");
+  });
+
+  /*
+   * The two preferences answer two questions about one page, and answering one
+   * does not answer the other. Somebody who wants a dashboard but does not want
+   * it in the menu they read twenty times a day is making an ordinary request.
+   */
+  it("keeps a page the reader restored out of the menu when they asked for that", () => {
+    installClientSession(
+      localFieldSessionDocument({
+        preferences: { hidden_pages: [], menu_hidden_pages: ["dashboard"] },
+      }),
+      "network",
+    );
+    selectSessionDepartment(DEPARTMENT);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Dashboard",
+    );
+    expect(useWorkflowMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Dashboard",
+    );
+    expect(sectionLabels("You")).toContain("Dashboard");
+    expect(sectionLabels("Workflows")).toContain("Dashboard");
+  });
+
+  /*
+   * The threshold is about how long a list somebody has to read, so it counts
+   * the list they actually read. A reader who has trimmed their menus is
+   * reading the shorter one.
+   */
+  it("counts the trimmed menus when deciding whether to combine them", () => {
+    installTrimmed([]);
+
+    const full = useCombinedNavigation().value.links.length;
+
+    clearClientSession();
+    installTrimmed(["logistics", "planning"]);
+
+    const trimmed = useCombinedNavigation().value;
+
+    expect(trimmed.links.length).toBe(full - 2);
+    expect(trimmed.links.map((link) => link.label)).not.toContain("Logistics");
+  });
+
+  /*
+   * The four Home-only pages a reader may promote (M18.69).
+   *
+   * The preference runs both ways for these: they are on Home and out of the
+   * menus until somebody asks, and asking puts them in. Everything else in this
+   * describe block is about subtraction, and this is the one case that adds.
+   */
+  it("puts a Home-only page in the menu when the reader asks for it", () => {
+    installTrimmed([]);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).toContain(
+      "Documents",
+    );
+    expect(useStaffMenuLinks().value.map((link) => link.label)).toContain(
+      "Acknowledgments",
+    );
+    expect(useWorkflowMenuLinks().value.map((link) => link.label)).toContain(
+      "Field Reports",
+    );
+  });
+
+  it("leaves them on Home and out of the menus by default", () => {
+    installClientSession(localFieldSessionDocument(), "network");
+    selectSessionDepartment(DEPARTMENT);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Documents",
+    );
+    // Still where they have always been, which is the point: promoting one is
+    // an addition to a menu rather than a move off Home.
+    expect(sectionLabels("You")).toContain("Documents");
+  });
+
+  /* Promoted once, not once per list it appears in. */
+  it("does not list a promoted page twice", () => {
+    installTrimmed([]);
+
+    const labels = useStaffMenuLinks().value.map((link) => link.label);
+
+    expect(labels.filter((label) => label === "Documents")).toHaveLength(1);
+    expect(sectionLabels("You").filter((label) => label === "Documents")).toHaveLength(
+      1,
+    );
+  });
+
+  /*
+   * Nothing about authority moves. The lists the capability checks build are
+   * untouched — the filter runs on the way to a menu and nowhere else — so a
+   * reader tidying their menu is not quietly narrowing what they can do.
+   */
+  it("takes nothing away from what the session permits", () => {
+    installTrimmed([]);
+
+    const permitted = everyNavigationLabel();
+
+    clearClientSession();
+    installTrimmed(["logistics", "planning", "shift-board"]);
+
+    expect(everyNavigationLabel()).toEqual(permitted);
+    expect(useWorkflowLinks().value.map((link) => link.label)).toContain(
+      "Logistics",
+    );
   });
 });

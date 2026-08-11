@@ -486,6 +486,12 @@ async function onWithdrawHandle(): Promise<void> {
         The tracking surface (M18.20D; UI contract 12.3 `staff.profile-requests`).
         This page is where a change is made; that one is where a change already
         made is followed.
+
+        The only way in, as of M18.71. Me carried a second link to it, which put
+        a page about changes to your record one step from a page about your
+        event — and left somebody who had just submitted a handle change looking
+        for it in the wrong place. Following a request starts where the request
+        was made.
       -->
       <RouterLink :to="{ name: 'staff.profile.requests' }">My Requests</RouterLink>
     </p>

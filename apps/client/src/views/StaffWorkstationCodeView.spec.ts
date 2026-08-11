@@ -35,6 +35,10 @@ const OWN_NODE = { id: "node-1", name: "onsite-command-1" };
 const node = {
   granted: [] as unknown[],
   generated: 0,
+  /** What `GET /api/me/workstation-sessions` answers with (M18.71). */
+  history: [] as unknown[],
+  historyStatus: 200,
+  historyReads: 0,
 };
 
 function json(body: unknown, status = 200): Response {
@@ -57,6 +61,14 @@ function stubNode(): void {
           node_id: OWN_NODE.id,
           node_name: OWN_NODE.name,
         });
+      }
+
+      if (path === "/api/me/workstation-sessions") {
+        node.historyReads += 1;
+
+        return node.historyStatus === 200
+          ? json({ sessions: node.history })
+          : json({ message: "The node refused." }, node.historyStatus);
       }
 
       if (path === `/api/kiosk/workstations/${WORKSTATION_ID}`) {
@@ -137,6 +149,9 @@ async function mountView(router: Router): Promise<VueWrapper> {
 beforeEach(() => {
   node.granted = [];
   node.generated = 0;
+  node.history = [];
+  node.historyStatus = 200;
+  node.historyReads = 0;
 
   window.localStorage.clear();
   resetWorkstationGrantFlow();
@@ -266,5 +281,124 @@ describe("mode placement", () => {
     expect(workstationCodeRouteGuard("kiosk")).toEqual({ name: "kiosk.home" });
     expect(workstationCodeRouteGuard("field")).toBe(true);
     expect(workstationCodeRouteGuard("admin")).toBe(true);
+  });
+});
+
+/*
+ * The history of workstations this login has used (M18.71; AUTH-030;
+ * technical spec 13.3).
+ *
+ * On this page because it is about the same machines the rest of it acts on.
+ * What has to be readable: whether a session is still live, how a finished one
+ * ended, and — the one that costs somebody real trust when it is wrong — a read
+ * that failed said as a failed read rather than as an empty history.
+ */
+describe("workstation history", () => {
+  function session(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: "session-1",
+      workstation_name: "Gate A Workstation",
+      event_name: "Emberfall 2027",
+      started_at: "2027-07-15T10:00:00+00:00",
+      last_activity_at: "2027-07-15T10:04:00+00:00",
+      ended_at: null,
+      ended_reason: null,
+      active: false,
+      ...overrides,
+    };
+  }
+
+  it("lists the workstations this login has signed in at", async () => {
+    node.history = [session()];
+
+    const wrapper = await mountView(buildRouter());
+    const history = wrapper.get('[data-testid="workstation-history"]');
+
+    expect(history.text()).toContain("Gate A Workstation");
+    expect(history.text()).toContain("Emberfall 2027");
+
+    wrapper.unmount();
+  });
+
+  /* The row somebody came here worried about: a kiosk they walked away from. */
+  it("says which session is still signed in", async () => {
+    node.history = [
+      session({ id: "live", active: true }),
+      session({ id: "done", ended_reason: "signed_out", ended_at: "2027-07-15T10:30:00+00:00" }),
+    ];
+
+    const wrapper = await mountView(buildRouter());
+    const rows = wrapper.get('[data-testid="workstation-history"]').findAll("li");
+
+    expect(rows[0].text()).toContain("Signed in now");
+    expect(rows[0].attributes("data-active")).toBe("true");
+    expect(rows[1].text()).toContain("Signed out");
+    expect(rows[1].attributes("data-active")).toBe("false");
+
+    wrapper.unmount();
+  });
+
+  /*
+   * A session that timed out unobserved carries no end and is not live. Naming
+   * it "ended" would claim a moment nobody recorded, so it is distinguished
+   * from a sign-out — which is exactly the difference somebody auditing their
+   * own history is looking for.
+   */
+  it("tells a timeout apart from a sign-out", async () => {
+    node.history = [session({ ended_reason: "timed_out", active: false })];
+
+    const wrapper = await mountView(buildRouter());
+
+    expect(wrapper.get('[data-testid="workstation-history"]').text()).toContain(
+      "Timed out",
+    );
+
+    wrapper.unmount();
+  });
+
+  it("says nothing has happened when nothing has", async () => {
+    node.history = [];
+
+    const wrapper = await mountView(buildRouter());
+
+    expect(wrapper.get('[data-testid="workstation-history"]').text()).toContain(
+      "You have not signed in at a shared workstation",
+    );
+
+    wrapper.unmount();
+  });
+
+  it("reports a failed read as a failed read rather than as an empty history", async () => {
+    node.historyStatus = 500;
+
+    const wrapper = await mountView(buildRouter());
+
+    // `get` is the assertion that the panel is there — it throws otherwise.
+    // The node's own words are passed through rather than replaced with a
+    // generic line, and the way back is offered beside them; the fallback text
+    // is for a request that never reached anybody to refuse it.
+    const failure = wrapper.get('[data-testid="workstation-history-error"]');
+
+    expect(failure.text()).toContain("The node refused.");
+    expect(failure.find("button").exists()).toBe(true);
+    // And the empty state did not take its place, which is the failure that
+    // would quietly tell somebody they have never signed in anywhere.
+    expect(wrapper.text()).not.toContain("You have not signed in at a shared workstation");
+
+    wrapper.unmount();
+  });
+
+  /* The sign-in somebody just performed is in the list when they look for it. */
+  it("re-reads the history after a grant", async () => {
+    const wrapper = await mountView(buildRouter());
+    const before = node.historyReads;
+
+    await acceptScannedWorkstationCode(scannedQr());
+    await grantScannedWorkstationSignIn();
+    await flushPromises();
+
+    expect(node.historyReads).toBeGreaterThan(before);
+
+    wrapper.unmount();
   });
 });

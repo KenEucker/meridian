@@ -10,6 +10,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
+import { MENU_PAGE_LIMIT } from "@/session/menuPages";
 import { routes } from "@/router";
 import {
   clearClientSession,
@@ -17,6 +18,8 @@ import {
 } from "@/session/clientSession";
 import { installLocalFieldSession } from "@/session/localFieldSessionFixture";
 import { resetHiddenPageAnswers } from "@/session/hiddenPages";
+import { resetMenuPageAnswers } from "@/session/menuPages";
+import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
 import {
   recordNodeUnreachable,
   resetNodeReachability,
@@ -58,7 +61,9 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   clearClientSession();
+  resetSelectedSessionDepartment();
   resetHiddenPageAnswers();
+  resetMenuPageAnswers();
   resetNodeReachability();
   configureMeridianApi(null);
   vi.unstubAllGlobals();
@@ -238,6 +243,180 @@ describe("page visibility on Settings", () => {
         .findAll(".about__theme-toggle button")[1]
         .attributes("aria-pressed"),
     ).toBe("true");
+  });
+});
+
+/*
+ * What the menus carry, from Settings (M18.69).
+ *
+ * The rows are the reader's own menu entries, so what has to be readable here
+ * is that they are built from the session rather than from a fixed list, that
+ * the control says which side it is on, and that a refusal is said out loud —
+ * the same three things the Pages section owes, for a preference stored the
+ * same way.
+ */
+describe("menu contents on Settings", () => {
+  function sessionWithMenu(menuHidden: readonly string[]) {
+    return fixtureSessionDocument({
+      preferences: { hidden_pages: [], menu_hidden_pages: menuHidden },
+    });
+  }
+
+  function boxes(wrapper: VueWrapper) {
+    return wrapper.get(".about__menus").findAll("input[type=checkbox]");
+  }
+
+  function labels(wrapper: VueWrapper): string[] {
+    return wrapper
+      .get(".about__menus")
+      .findAll(".about__menus-list li")
+      .map((row) => row.text());
+  }
+
+  it("lists the reader's own menu entries and ticks the ones in it", async () => {
+    installClientSession(
+      sessionWithMenu(["shift-board"]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const rowLabels = labels(wrapper);
+
+    expect(rowLabels).toContain("Me");
+    expect(rowLabels).toContain("Shift Board");
+    // One row per page rather than one per route: the dashboards are one page
+    // seen from several standings.
+    expect(new Set(rowLabels).size).toBe(rowLabels.length);
+
+    const shiftBoard = boxes(wrapper)[rowLabels.indexOf("Shift Board")];
+
+    expect((shiftBoard.element as HTMLInputElement).checked).toBe(false);
+    expect((boxes(wrapper)[rowLabels.indexOf("Me")].element as HTMLInputElement).checked).toBe(
+      true,
+    );
+  });
+
+  /* The count is the thing being decided, so it is said rather than left to be
+     counted off the boxes. */
+  it("says how much of the menu is spent", async () => {
+    installClientSession(
+      sessionWithMenu(["shift-board"]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const chosen = boxes(wrapper).filter(
+      (box) => (box.element as HTMLInputElement).checked,
+    ).length;
+
+    expect(wrapper.get(".about__menus-count").text()).toBe(
+      `${chosen} of ${MENU_PAGE_LIMIT} in your menus`,
+    );
+  });
+
+  /*
+   * The ceiling, which a reader meets rather than reads about. Stated as the
+   * invariant rather than against a fixed count, because how many pages a
+   * session carries is a property of the fixture and the rule is not: at or
+   * over the limit, the boxes that would add a page go quiet and the ones that
+   * would free a slot stay live.
+   */
+  it("stops the reader adding a ninth page and leaves the ticked ones live", async () => {
+    installClientSession(
+      // Every promotable page in, which puts this reader at the ceiling.
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const all = boxes(wrapper).map((box) => box.element as HTMLInputElement);
+    const chosen = all.filter((box) => box.checked).length;
+
+    expect(chosen).toBeGreaterThanOrEqual(MENU_PAGE_LIMIT);
+
+    for (const box of all) {
+      expect(box.disabled).toBe(!box.checked);
+    }
+
+    // This reader is past the ceiling rather than at it, which is the ordinary
+    // case for anybody holding a few capabilities, so the line asks them to
+    // trim rather than telling them they are full.
+    expect(wrapper.get(".about__menus [role=status]").text()).toContain(
+      `Your menus hold more than ${MENU_PAGE_LIMIT}`,
+    );
+  });
+
+  it("writes the change to the node and follows its answer", async () => {
+    installClientSession(
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ menu_hidden_pages: ["me"] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+
+    const me = boxes(wrapper)[labels(wrapper).indexOf("Me")];
+
+    (me.element as HTMLInputElement).checked = false;
+    await me.trigger("change");
+    await flushPromises();
+
+    expect(
+      (boxes(wrapper)[labels(wrapper).indexOf("Me")].element as HTMLInputElement)
+        .checked,
+    ).toBe(false);
+    expect(wrapper.find(".about__menus-error").exists()).toBe(false);
+  });
+
+  it("says so when the change cannot be made", async () => {
+    installClientSession(
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+
+    recordNodeUnreachable();
+
+    const me = boxes(wrapper)[labels(wrapper).indexOf("Me")];
+
+    (me.element as HTMLInputElement).checked = false;
+    await me.trigger("change");
+    await flushPromises();
+
+    expect(wrapper.get(".about__menus-error").text()).toContain(
+      "needs a connection to the node",
+    );
+    // And the box still says what the account holds, rather than the state the
+    // click asked for and did not get.
+    expect(
+      (boxes(wrapper)[labels(wrapper).indexOf("Me")].element as HTMLInputElement)
+        .checked,
+    ).toBe(true);
+  });
+
+  it("says the menus are empty when the device holds no session", async () => {
+    const wrapper = await mountSettings();
+
+    expect(boxes(wrapper)).toEqual([]);
+    expect(wrapper.get(".about__menus").text()).toContain(
+      "Your menus are empty",
+    );
   });
 });
 
