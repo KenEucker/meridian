@@ -24,6 +24,10 @@ import {
   refreshDirectoryPresence,
   resetDirectoryPresence,
 } from "@/directory/directoryModel";
+import {
+  installOfflineReadSet,
+  offlineReadSetPayload,
+} from "@/offline/offlineReadSetFixture";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { routes } from "@/router";
 import { clearClientSession } from "@/session/clientSession";
@@ -523,6 +527,122 @@ describe("search beside the chart and filtering (M18.76)", () => {
     await statusChip!.trigger("click");
 
     expect(wrapper.text()).toContain("1 person shown.");
+  });
+});
+
+describe("the Directory offline (M18.77; DIR-037)", () => {
+  function storedDirectorySections() {
+    const context = {
+      scope: "event",
+      organization_id: LOCAL_FIELD_ORGANIZATION_ID,
+      organization_label: "Northwood Collective",
+      event_id: EVENT_ID,
+      event_label: "Local Field Event",
+    };
+
+    return {
+      directory_departments: [
+        {
+          ...context,
+          id: "dept-rangers",
+          name: "Rangers",
+          is_organizers: false,
+          leads: [],
+          teams: [
+            {
+              id: "team-dirt",
+              name: "Dirt",
+              leads: ["staff-tess"],
+              members: [],
+            },
+          ],
+          prospectives: [],
+        },
+      ],
+      directory_people: [
+        {
+          ...context,
+          id: "staff-tess",
+          handle: "Tess",
+          years_of_service: 1,
+          locations: [
+            {
+              department_id: "dept-rangers",
+              team_id: "team-dirt",
+              kind: "team_lead",
+              status: "active",
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function stubUnreachableNode(): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+  }
+
+  async function withStoredSet(): Promise<void> {
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        sections: storedDirectorySections(),
+        readiness: {
+          context_event_id: EVENT_ID,
+          usable_until: "2099-01-01T00:00:00+00:00",
+        },
+      }),
+      { organizationId: LOCAL_FIELD_ORGANIZATION_ID, eventId: EVENT_ID },
+    );
+  }
+
+  it("renders the chart from the stored set and discloses the copy", async () => {
+    await withStoredSet();
+    stubUnreachableNode();
+
+    const wrapper = await mountView();
+
+    // The chart the node composed for this viewer, disclosed as a stored copy
+    // rather than presented as current (19D.8).
+    expect(wrapper.text()).toContain("the copy this device stored");
+    expect(wrapper.get('[data-testid="directory-chart"]').text()).toContain("Rangers");
+
+    await wrapper.get('[data-department-id="dept-rangers"]').trigger("click");
+    await wrapper.get('[data-team-id="team-dirt"]').trigger("click");
+
+    // The stored projection carries no picture reference (M8.2), so the entry
+    // renders its handle-derived lettermark.
+    const entry = wrapper.get('[data-staff-id="staff-tess"]');
+    expect(entry.text()).toContain("Tess");
+    expect(entry.find(".directory-person__lettermark").text()).toBe("TE");
+    expect(entry.find("img").exists()).toBe(false);
+  });
+
+  it("searches the stored index, which holds only the authorized set", async () => {
+    await withStoredSet();
+    stubUnreachableNode();
+
+    const wrapper = await mountView();
+
+    await wrapper.get("#directory-search").setValue("Te");
+    await flushPromises();
+
+    const row = wrapper.get(".directory__result");
+    expect(row.text()).toContain("Tess");
+    expect(row.text()).toContain("Rangers → Dirt → Team Lead");
+
+    // An unauthorized handle was never synchronized, so the offline index has
+    // no entry to match — not results, not counts, not partial matches
+    // (DIR-033, DIR-037).
+    await wrapper.get("#directory-search").setValue("Greta");
+    await flushPromises();
+
+    expect(wrapper.find(".directory__result").exists()).toBe(false);
+    expect(wrapper.text()).toContain("No handles match.");
   });
 });
 

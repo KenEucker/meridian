@@ -51,6 +51,7 @@ class OfflineReadSetComposer
         DepartmentPlanningSections $planning,
         ShiftLeadSections $shiftLead,
         DepartmentLeadSections $departmentLead,
+        DirectorySections $directory,
     ) {
         /*
          * The lists of technical spec 9.3: the regular-staff one every staff
@@ -78,6 +79,13 @@ class OfflineReadSetComposer
             $planning,
             $shiftLead,
             $departmentLead,
+            /*
+             * The Directory projection for the caller's authorized scope
+             * (M18.77; DIR-037), composed by the same service the online chart
+             * read serves so the device holds exactly what its user could have
+             * retrieved from the API.
+             */
+            $directory,
         ];
     }
 
