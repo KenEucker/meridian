@@ -397,8 +397,8 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       route: "staff.workstation-code",
       outcome: "renders-offline",
       basis:
-        "the scan control and the two code forms (M18.61); the node is asked only when a grant or a code is requested, and a request that cannot reach it says so in the panel it was made from",
-      offlineText: "Sign in to a workstation",
+        "the scan control and the two code forms (M18.61); the node is asked only when a grant or a code is requested, and a request that cannot reach it says so in the panel it was made from. The history added in M18.71 is a read and does need the node, so offline it reports a failed read in its own panel rather than an empty history — one panel unable to answer, on a surface whose other three still work",
+      offlineText: "Workstations",
     },
     {
       route: "staff.field-reports.index",
