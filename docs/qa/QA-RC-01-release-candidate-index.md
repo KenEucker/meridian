@@ -15,16 +15,18 @@ steps executed directly in this script are the ones no other script carries —
 assembling the run, checking the completed checklist, and the two milestone 19
 gate checks that have no consolidated script of their own yet.
 
-Two lines of the section 20 checklist are owned by work that lands after this
+One line of the section 20 checklist is owned by work that lands after this
 index:
 
 - `QA-MOD-01-organization-modules.md` is written by M19.19 and enters section
   A's run table when it lands. Until then the modules line of the milestone 19
   QA gate cannot be answered and no release candidate can be declared.
-- The second-person install/deployment evidence requirement is documented by
-  M19.7. The checklist line ("Install/deployment docs tested by a second
-  person") already exists and is carried in section F; M19.7 defines what
-  evidence the second person captures.
+
+The second-person install/deployment evidence requirement is
+[`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md) (M19.7): the checklist
+line ("Install/deployment docs tested by a second person") is carried in
+section F, and that script defines the dry run and the evidence form the
+second person captures.
 
 ## Requirements covered
 
@@ -67,7 +69,8 @@ not restated here.
 - The release decider — the person answering the checklist, typically the
   product owner.
 - The second person — someone other than the author of the install and
-  deployment documentation, for the M19.7 dry run.
+  deployment documentation, for the
+  [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md) dry run.
 - Every persona a linked script names is that script's own; this index adds
   none.
 
@@ -116,7 +119,7 @@ not restated here.
 | 20 | Event Horizon | [`QA-HORIZON-01`](QA-HORIZON-01-event-horizon.md) | Landed |
 | 21 | Organization modules | `QA-MOD-01-organization-modules.md` | Written by M19.19; not yet landed |
 | 22 | Platform landing page | `QA-PUBLIC-01` | Written by M20.6; not yet landed |
-| 23 | Release candidate | This script's sections B through F | This script |
+| 23 | Release candidate | [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md), then this script's sections B through F | Landed; this script |
 
 Every script in the table is critical: the development process phase 5 line
 "all critical QA scripts pass" means this table, whole. A script that fails
@@ -208,11 +211,11 @@ directly here; the rest of this section closes the checklist.
     it.
 27. Confirm known critical issues are triaged: each has an owner and a
     decision — fix before release, or accept with reasons recorded.
-28. Install/deployment dry run: a second person — someone other than the
-    author of the docs — follows the install and deployment documentation from
-    a clean machine and captures the evidence M19.7 requires. Until M19.7
-    lands, capture at minimum who ran it, from what starting state, and where
-    they got stuck.
+28. Install/deployment dry run: run
+    [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md). A second person —
+    someone other than the author of the docs — follows the install and
+    deployment documentation from a clean machine, and the evidence record
+    that script defines is attached here whole.
 29. Complete a fresh copy of the development process section 20 Release
     Candidate Checklist, checking each box only from the evidence gathered
     above, and attach it to the release candidate record.
@@ -233,8 +236,9 @@ directly here; the rest of this section closes the checklist.
 - The completed section 20 checklist copy, dated and attributed.
 - The section A run table with per-script outcomes and links to each script's
   own captured evidence.
-- The second person's install/deployment evidence (M19.7 defines its required
-  form).
+- The second person's install/deployment evidence record, in the form
+  [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md)'s Evidence to capture
+  section defines.
 - Version screenshots: the client Settings Versions section and the Electron
   health panel showing the candidate versions.
 - The triage list of known issues with owners and decisions.
