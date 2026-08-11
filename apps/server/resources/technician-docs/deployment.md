@@ -102,14 +102,16 @@ something an earlier step produces. Do them in order the first time.
    ```
 
 7. Confirm it actually started. A node that still holds a sample secret stops
-   here rather than serving, and says which variable it is waiting on:
+   here rather than serving, and says which variable it is waiting on — as does
+   a node in an event or production role whose application URL is not HTTPS:
 
    ```bash
    corepack pnpm run deploy:ps
    corepack pnpm run deploy:logs
    ```
 
-   See **Secrets** below for what to do about each one.
+   See **Secrets** and **Event-mode fail-closed checks** below for what to do
+   about each finding.
 
 8. Open the server in a browser. A node with no identity redirects to first-run
    setup, which is where it gets its name, its role, and its signing keypair.
@@ -166,6 +168,34 @@ told apart by the node they sync with.
 
 Sample configuration files under `deploy/` carry fake values on purpose. Replace
 every one of them.
+
+## Event-mode fail-closed checks
+
+A node in an event or production role — any role other than `development` —
+fails closed rather than starting insecurely. Two checks are the server's to
+make, and it makes them at every boot, not only when the role is first
+configured:
+
+- **HTTPS validation.** The configured application URL (`APP_URL`) must use
+  HTTPS. Production and event modes never use plain HTTP.
+- **Offline read set.** The node must be able to serve the set devices cache to
+  keep working without signal. A node that cannot hand a device anything is not
+  ready to run an event.
+
+A node that fails one answers every request with `503` and the failed check —
+`/up` included, so the container never reports healthy — the queue worker and
+the scheduler refuse to start, and the deployed container stops at the
+entrypoint with the reason in `docker compose logs`.
+
+```bash
+php artisan meridian:event-mode           # each check, its state, and what failed
+php artisan meridian:event-mode --json    # the same evaluation for tooling
+```
+
+As with the secrets, `artisan` keeps working so the node can be repaired. Fix
+the finding the message names — usually `APP_URL` still reading `http://` —
+and start the stack again. Local encryption and device signing are the
+client-side halves of the same rule and are enforced by the apps themselves.
 
 ## Before an event
 

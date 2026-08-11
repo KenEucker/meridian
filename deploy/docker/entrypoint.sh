@@ -98,6 +98,14 @@ if [ "$run_shared_setup" = yes ]; then
     php artisan route:cache
     php artisan view:cache
     php artisan event:cache
+
+    # The event-mode fail-closed checks (technical spec 8.2, 8.6, 26.2): HTTPS
+    # validation and the offline read set. After the caches, so what is
+    # validated is the cached configuration and route set the served requests
+    # will read. `set -e` stops the container on a failing check, which is the
+    # fail-closed working: a node that refuses event mode stops at start with
+    # one legible line instead of coming up and answering 503 to everything.
+    php artisan meridian:event-mode --no-interaction
 fi
 
 exec "$@"

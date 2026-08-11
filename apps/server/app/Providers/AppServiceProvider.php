@@ -22,6 +22,7 @@ use App\Services\Auth\SharedWorkstationSessionKey;
 use App\Services\Auth\SharedWorkstationSessionService;
 use App\Services\Diagnostics\Checks;
 use App\Services\Diagnostics\DiagnosticRunner;
+use App\Services\EventMode\EventModeGuard;
 use App\Services\Node\EventScopedWriteGuard;
 use App\Services\Node\GovernanceWriteGuard;
 use App\Services\Node\NodeOperationApplierRegistry;
@@ -181,6 +182,16 @@ class AppServiceProvider extends ServiceProvider
         // the scheduler. `artisan` stays usable, because a node that cannot boot
         // cannot be repaired and the repair lives there.
         $this->app->make(SecretSafeguard::class)->enforceAtBoot();
+
+        // Event mode fails closed when HTTPS validation fails or the offline
+        // read set cannot be served (technical spec 8.2, 8.6, 26.2). Deferred
+        // to `booted` rather than run here because the read-set probe asks the
+        // router whether the route is registered, and routes are loaded by a
+        // `booted` callback the framework queued before this provider booted.
+        // Same refusal shape as the secrets: serving processes only.
+        $this->app->booted(function (): void {
+            $this->app->make(EventModeGuard::class)->enforceAtBoot();
+        });
     }
 
     /**

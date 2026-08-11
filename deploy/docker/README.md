@@ -132,6 +132,10 @@ corepack pnpm run db:reset
   (technical spec 26.2), and the sample password is one. Run
   `php artisan meridian:secrets` on the node to see exactly what it is waiting
   on.
+- A node in an event or production role also refuses to start while `APP_URL`
+  is plain HTTP or the offline read set cannot be served (technical spec 8.2,
+  8.6, 26.2). Run `php artisan meridian:event-mode` on the node to see each
+  check and what failed.
 - The example connections use unencrypted local traffic. For any deployment
   outside a private development network, terminate TLS in front of PostgreSQL or
   enable server TLS.

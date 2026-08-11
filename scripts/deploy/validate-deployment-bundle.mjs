@@ -20,9 +20,13 @@
  *   - the deployment database publishes no host port;
  *   - the committed sample environment carries fake values and no secrets
  *     (technical spec 26.2), and is complete enough to render the stack;
- *   - no proxy configuration serves plain HTTP (technical spec 8.2), and the
- *     event-node configuration does not depend on a certificate authority it
- *     cannot reach (technical spec 8.3, 8.6);
+ *   - no proxy configuration serves plain HTTP, and the shared site body tells
+ *     browsers to refuse the plain-HTTP form (technical spec 8.2);
+ *   - the event-node configuration does not depend on a certificate authority
+ *     it cannot reach (technical spec 8.3, 8.6);
+ *   - the entrypoint runs the server's event-mode fail-closed checks — HTTPS
+ *     validation and the offline read set — after the caches it builds, so a
+ *     node that fails them stops at start (technical spec 8.6, 26.2);
  *   - the DNS templates carry documentation names and private addresses only.
  *
  * With --with-docker it additionally asks Docker itself: `docker build --check`
@@ -432,6 +436,16 @@ function checkCaddyConfiguration() {
     }
   }
 
+  // The policy is HTTPS-only, not HTTPS-mostly: the shared site body has to
+  // tell browsers to refuse the plain-HTTP form of the site as well as never
+  // serving it (technical spec 8.2). In the snippet rather than per-file, so
+  // neither Caddyfile can lose it alone.
+  if (!snippet.includes('Strict-Transport-Security')) {
+    fail(
+      `${CADDY_SNIPPET} does not send Strict-Transport-Security. Meridian is HTTPS-only in production and event modes (technical spec 8.2).`,
+    );
+  }
+
   const onsite = read(CADDYFILE_ONSITE);
 
   if (!/auto_https\s+disable_certs/.test(onsite)) {
@@ -516,6 +530,24 @@ function checkEntrypoint() {
     fail(`${ENTRYPOINT} runs migrations without a backup warning (technical spec 26.2).`);
   } else if (warningIndex > migrateIndex) {
     fail(`${ENTRYPOINT} prints its backup warning after running migrations, which is too late to act on.`);
+  }
+
+  // The event-mode fail-closed checks: HTTPS validation and the offline read
+  // set (technical spec 8.2, 8.6, 26.2). The refusal itself belongs to the
+  // server and holds however a node is started; running the command here is
+  // what stops a failing container at start with one legible line. It has to
+  // run after `config:cache`, or it validates a configuration the served
+  // requests will not read.
+  const eventModeIndex = source.indexOf('meridian:event-mode');
+
+  if (eventModeIndex === -1) {
+    fail(
+      `${ENTRYPOINT} does not run the event-mode fail-closed checks. A node that fails HTTPS validation or cannot serve the offline read set must fail closed at start in event mode (technical spec 8.6, 26.2).`,
+    );
+  } else if (eventModeIndex < source.indexOf('config:cache')) {
+    fail(
+      `${ENTRYPOINT} runs the event-mode checks before the config cache is built, so it validates a configuration the served requests will not read.`,
+    );
   }
 }
 
