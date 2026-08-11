@@ -1267,6 +1267,7 @@ Organization and event selection are connected-only. A client resolves its conte
 | `staff.document-detail` | `staff.documents.show` | Rendered policy/procedure document | Authenticated staff with document visibility |
 | `staff.document-acknowledgments` | `staff.documents.acknowledgments` | My required document acknowledgments | Authenticated staff |
 | `staff.workstation-code` | `staff.workstation-code` | Generate a shared-workstation login code for yourself, for use on a kiosk with no internet | Authenticated staff on a device holding a valid session |
+| `directory` | `directory` | The Directory: the organization chart of departments, teams, and the people in them the viewer may see, with handle search (DIR-001) | Authenticated staff, where the organization has the Directory enabled |
 | `briefing.hub` | `events.briefing` | The Briefing hub (Command-added Notes + shells) | Approved event staff |
 
 ### 12.4 Department Screens
@@ -2274,6 +2275,80 @@ Where a kind could not be evaluated locally, the surface says which kind and why
 ### 19C.10 Responsive Behavior
 
 The Event Horizon uses the existing list and card conventions on narrow and touch viewports. It introduces no new layout primitives, no new state vocabulary, and no new colors.
+
+---
+
+## 19D. Directory Contract
+
+### 19D.1 What This Surface Is
+
+The Directory is the organization drawn as a tree, with handle search over the people in it the viewer may see (DIR-001). It is a read-only reference surface: it renders, it expands, it searches, and it does nothing else.
+
+It is not the department roster. The roster is one department's operational staff list, reached from that department's surfaces, carrying operational fields and belonging to the person running that department. The Directory spans the whole organization, carries a handle and nothing else about a person, and belongs to anybody. Surfaces must not present one as the other, and roster components must not be reused here.
+
+No control on the Directory writes, contacts, messages, edits, or administers (DIR-001, DIR-029). A "message" or "call" affordance on a person entry is out of contract regardless of whether the underlying field exists.
+
+### 19D.2 Presence and Navigation
+
+The Directory appears in the Workflows menu, in Field, Kiosk, and Admin, in event context and in organization context alike (DIR-002).
+
+Where the organization has disabled it (DIR-004), it is absent: no menu entry, no palette entry, no route, and no empty state explaining that it would have been here. Its absence is never presented as permission denial and section 19's denial copy does not apply to it (DIR-005).
+
+### 19D.3 Chart Rendering
+
+The chart renders organization, then the Organizers Department, then every other department, then teams, then people (DIR-009, DIR-010).
+
+Order within a department is heading, leads, teams, unassigned members. Order within a team is heading, team leads, members (DIR-011, DIR-012). A team lead appears once in their own team, above the members, and not again below them.
+
+Members of a department holding no team render under a section headed **Prospectives** (DIR-013). The heading is a label on this surface only; it is not the Prospective status from section 9 and must not be styled with the status vocabulary, because a reader who has learned that vocabulary elsewhere will otherwise read it as one.
+
+Departments and teams render whether or not the viewer can see anyone inside them (DIR-015). An empty branch renders as itself, with no count, no "hidden" marker, no lock icon, and no explanatory copy — the branch existing is the whole message, and any adornment on it is a disclosure that there was something to adorn.
+
+### 19D.4 Initial State and Expansion
+
+The chart opens collapsed to departments: organization, Organizers Department, and every other department (DIR-016).
+
+Expansion is by touch. Expand and collapse controls meet the touch target sizing in section 20, are reachable by keyboard, and carry no hover requirement anywhere in the interaction (DIR-003). A chart that only opens on hover is unusable on every touch target Meridian ships to.
+
+### 19D.5 Person Entries
+
+A person entry presents the profile picture, the handle, the departments and teams the viewer may associate with them, and years of service (DIR-029). That is the complete list.
+
+It presents no legal name, preferred name, pronouns, email, phone, location, contact control, messaging control, administrative action, or profile edit. Where a person has no picture, the existing generated-lettermark convention applies, derived from the handle rather than from a name.
+
+Locations listed on an entry are the authorized ones only (DIR-030). An entry rendered for a team lead does not list the other departments that person belongs to merely because the record reached the client.
+
+### 19D.6 Search
+
+Search is present and usable while the chart is being browsed (DIR-031). It is not a separate route, not a tab beside a chart tab, and not a mode the reader switches into and out of.
+
+It matches handles (DIR-032). Results are text rows: the matching handle and the chart location as a breadcrumb, `Rangers → Training → Team Lead` (DIR-034). One person may produce several rows where they hold several visible locations.
+
+Selecting a row expands the branches needed to reveal the person, scrolls to the closest applicable node, highlights every authorized occurrence, and leaves the search interface in place so the reader can search again without reopening anything (DIR-035). It does not navigate away, does not open a profile, and does not open an administrative record.
+
+Highlighting is a state marker plus accessible text, not color alone — section 20's non-color-only rule applies directly, and a highlight that survives the next search must be cleared when it does.
+
+### 19D.7 Filtering
+
+Filtering narrows by department, team, role, and status (DIR-036).
+
+The primary filtering interaction is immediately visible and touch-first: chips, segmented controls, expandable facets, or direct interaction with chart headings. A desktop-style select or dropdown holding every filter behind one small control is out of contract. Filters use the existing component vocabulary in section 11 rather than a set introduced for this page.
+
+Counts, where a filter shows one, count only what this viewer can see (DIR-036). No filter, and no count, may reveal or imply that there was something else to count.
+
+### 19D.8 Offline and Freshness
+
+The Directory renders from stored data with no node reachable, using the connectivity and freshness conventions in section 16 (DIR-037), and takes an entry in the offline surface inventory.
+
+Stale data discloses its staleness the way every other offline-capable surface does. It never presents a branch as empty when what is true is that the branch was not synchronized.
+
+### 19D.9 Responsive Behavior
+
+The Directory is designed at the narrowest supported width first and widens from there (DIR-003). It uses the existing list, card, and disclosure conventions and introduces no new layout primitives, no new state vocabulary, and no new colors.
+
+A wide viewport is not assumed to have a mouse. Kiosk and wall-mounted displays up to roughly 55 inches are touch surfaces at reading distance: additional width is spent on legibility and on showing more of the tree, not on hover affordances or denser controls.
+
+The chart must not become a wide box-and-line diagram that has to be panned horizontally to read. Depth is expressed with indentation and disclosure, which stay readable at phone width and remain honest at television width.
 
 ---
 
