@@ -268,6 +268,50 @@ const anyFilterActive = computed(
 );
 
 /**
+ * The filters narrow the results the same way they narrow the chart
+ * (DIR-036): a result row is a presented placement, and a chip that hid it
+ * from the tree hides it here too. The row's own location carries the status
+ * it was admitted under, so no second read is asked.
+ */
+const filteredSearchRows = computed<readonly DirectorySearchRow[]>(() =>
+  searchRows.value.filter((row) => {
+    const { departmentId, teamId, kind, status } = row.location;
+
+    if (
+      departmentFilter.value.size > 0 &&
+      !departmentFilter.value.has(departmentId)
+    ) {
+      return false;
+    }
+
+    if (
+      teamFilter.value.size > 0 &&
+      (teamId === null || !teamFilter.value.has(teamId))
+    ) {
+      return false;
+    }
+
+    if (roleFilter.value.size > 0 && !roleFilter.value.has(kind)) {
+      return false;
+    }
+
+    if (statusFilter.value.size > 0 && !statusFilter.value.has(status)) {
+      return false;
+    }
+
+    return true;
+  }),
+);
+
+/** Matches exist but the active chips hide them — a different sentence from "no matches". */
+const matchesHiddenByFilters = computed(
+  () =>
+    searchRows.value.length > 0 &&
+    filteredSearchRows.value.length === 0 &&
+    anyFilterActive.value,
+);
+
+/**
  * How many people the filters leave visible (DIR-036): unique people, and
  * only people this viewer can see — there is nothing else in the projection
  * to count.
@@ -489,11 +533,14 @@ void load();
             </p>
 
             <ul
-              v-if="searchRows.length > 0"
+              v-if="filteredSearchRows.length > 0"
               class="directory__results"
               aria-label="Search results"
             >
-              <li v-for="row in searchRows" :key="`${row.staffId}-${row.breadcrumb}`">
+              <li
+                v-for="row in filteredSearchRows"
+                :key="`${row.staffId}-${row.breadcrumb}`"
+              >
                 <button
                   type="button"
                   class="directory__result"
@@ -504,6 +551,15 @@ void load();
                 </button>
               </li>
             </ul>
+
+            <p
+              v-else-if="matchesHiddenByFilters"
+              class="directory__no-results"
+              role="status"
+            >
+              Matches exist outside the current filters. Clear a filter to see
+              them.
+            </p>
 
             <p
               v-else-if="searchQuery.trim() !== '' && !searchError"

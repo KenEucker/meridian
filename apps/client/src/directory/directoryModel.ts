@@ -140,6 +140,7 @@ interface DirectorySearchPayload {
       readonly department_id?: string;
       readonly team_id?: string | null;
       readonly kind?: string;
+      readonly status?: string;
     };
   }[];
 }
@@ -497,7 +498,7 @@ export async function searchDirectory(
         departmentId: row.location?.department_id ?? "",
         teamId: row.location?.team_id ?? null,
         kind: kindOf(row.location?.kind),
-        status: "",
+        status: row.location?.status ?? "",
       },
     }));
   } catch (error) {

@@ -105,6 +105,12 @@ class DirectorySearchService
                         'department_id' => $placement->departmentId,
                         'team_id' => $placement->teamId,
                         'kind' => $placement->kind,
+                        /*
+                         * The membership status the placement was admitted
+                         * under (DIR-025), so the DIR-036 filters narrow
+                         * search results the same way they narrow the chart.
+                         */
+                        'status' => $placement->status,
                     ],
                     'breadcrumb' => implode(' → ', $parts),
                 ];

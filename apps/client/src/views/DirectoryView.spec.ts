@@ -377,6 +377,7 @@ describe("search beside the chart and filtering (M18.76)", () => {
       department_id: "dept-rangers",
       team_id: "team-dirt",
       kind: "team_lead",
+      status: "active",
     },
   };
 
@@ -498,6 +499,37 @@ describe("search beside the chart and filtering (M18.76)", () => {
       expect(chip.element.tagName).toBe("BUTTON");
       expect(chip.attributes("aria-pressed")).toBeDefined();
     }
+  });
+
+  it("narrows search results with the same chips that narrow the chart", async () => {
+    stubNodeWithSearch([TESS_ROW]);
+
+    const wrapper = await mountView();
+
+    await wrapper.get("#directory-search").setValue("Tess");
+    await flushPromises();
+    expect(wrapper.find(".directory__result").exists()).toBe(true);
+
+    // A chip that would hide Tess's placement from the tree hides her result
+    // row too (DIR-036): a result is a presented placement.
+    const memberChip = wrapper
+      .findAll(".directory__chip")
+      .find((chip) => chip.text() === "Member");
+    await memberChip!.trigger("click");
+
+    expect(wrapper.find(".directory__result").exists()).toBe(false);
+    // And the copy says the matches are filtered, not that they do not exist —
+    // these are people the viewer may see.
+    expect(wrapper.text()).toContain("Matches exist outside the current filters.");
+
+    // A chip her placement matches brings the row back.
+    await memberChip!.trigger("click");
+    const teamLeadChip = wrapper
+      .findAll(".directory__chip")
+      .find((chip) => chip.text() === "Team Lead");
+    await teamLeadChip!.trigger("click");
+
+    expect(wrapper.find(".directory__result").exists()).toBe(true);
   });
 
   it("counts only visible people when a filter narrows the chart", async () => {

@@ -189,37 +189,42 @@ All from the seeded development scenario:
 24. Apply a role chip and a status chip and confirm the count counts only
     people visible to this viewer, with no wording implying there was
     something else to count.
+25. With a search result on screen, apply a chip that hides that result's
+    placement and confirm the row disappears with wording that the matches
+    sit outside the current filters — not "no matches" — and returns when
+    the chip is cleared. The filters narrow the chart and the results as one
+    presentation.
 
 ### F. Offline (DIR-037)
 
-25. As Dana, with the node reachable, open the Directory so the read set
+26. As Dana, with the node reachable, open the Directory so the read set
     synchronizes. Take the device offline and reload: confirm the chart
     renders from the stored copy, disclosed as one with the moment it was
     taken, and that entries render lettermarks — profile pictures do not
     travel to devices.
-26. Offline, search for a Rangers member and confirm a result; search for a
+27. Offline, search for a Rangers member and confirm a result; search for a
     handle outside Dana's scope and confirm the offline index has no entry
     for it — the stored set is the authorized set (DIR-033, DIR-037).
-27. Inspect the stored set (`/api/offline-read-set` as Dana, or the
+28. Inspect the stored set (`/api/offline-read-set` as Dana, or the
     device's store) and confirm no PII field appears in the
     `directory_people` rows.
-28. Back online, revoke Dana's department lead standing (remove her from
+29. Back online, revoke Dana's department lead standing (remove her from
     the Ranger Leads team or revoke the grant), refresh, and confirm the
     stored member list is gone on the next composition — then restore her.
-29. Disable the Directory as Olive and confirm the read set carries no
+30. Disable the Directory as Olive and confirm the read set carries no
     `directory_departments` or `directory_people` section at all: a
     disabled Directory synchronizes nothing.
 
 ### G. Kiosk and widths (DIR-002, DIR-003; 19D.9)
 
-30. On a Kiosk workstation with a live session, open the command palette and
+31. On a Kiosk workstation with a live session, open the command palette and
     confirm **Directory** is offered and opens the chart; end the session
     and confirm the entry is gone with it.
-31. At phone width, confirm the chart is usable by touch alone: disclosure
+32. At phone width, confirm the chart is usable by touch alone: disclosure
     targets comfortably tappable, no hover-only affordance, and no
     horizontal panning anywhere — depth is indentation, and the page
     scrolls vertically only.
-32. On the largest display available, confirm added width is spent on
+33. On the largest display available, confirm added width is spent on
     legibility and more of the tree — not on a box-and-line diagram — and
     that the chart remains operable by touch at arm's length.
 
@@ -254,8 +259,8 @@ All from the seeded development scenario:
 - The chart response body from step 14, with the search for PII field names
   coming back empty
 - A screenshot of Milo's three highlighted occurrences after step 21
-- The stored `directory_people` rows from step 27, before and after the
-  demotion in step 28
+- The stored `directory_people` rows from step 28, before and after the
+  demotion in step 29
 
 ## Failure notes
 

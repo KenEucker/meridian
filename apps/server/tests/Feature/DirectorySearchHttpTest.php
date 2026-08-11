@@ -105,6 +105,9 @@ class DirectorySearchHttpTest extends TestCase
         $this->assertSame('Tess', $results[0]['handle']);
         $this->assertSame('Rangers → Dirt → Team Lead', $results[0]['breadcrumb']);
         $this->assertSame((string) $this->dirt->getKey(), $results[0]['location']['team_id']);
+        // The placement's own status rides along so the DIR-036 filters can
+        // narrow results the way they narrow the chart.
+        $this->assertSame('active', $results[0]['location']['status']);
     }
 
     public function test_a_legal_name_and_a_preferred_name_match_nothing(): void
