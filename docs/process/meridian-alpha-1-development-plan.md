@@ -1086,7 +1086,7 @@ Sequencing: M18.70 first, as change control requires. M18.71 and M18.72 are inde
 | Task | PR-sized outcome | Source references | Test/QA expectation |
 |---|---|---|---|
 | M19.1 Version metadata | Add server, mobile, Electron, and config schema version display. | Technical spec 26.3 | Unit/UI tests |
-| M19.2 Deployment config bundle | Package Docker/Caddy/PowerSync/DNS deployment config bundle. | Technical spec 4, 8, 26 | Build smoke test |
+| M19.2 Deployment config bundle | Package the Docker/Caddy/DNS deployment config bundle. No PowerSync service: M18.51 removed `deploy/powersync` under ADR-0003, so the stack runs the database, the server, a queue worker, a scheduler, and the reverse proxy. | Technical spec 4, 8, 26 | Build smoke test |
 | M19.3 Event-mode secret safeguards | Refuse/default-generate secrets as specified. | Technical spec 7.4, 26.2 | Feature/config tests |
 | M19.4 HTTPS and PowerSync fail-closed | Validate production/event secure connection policy. | Technical spec 8.2, 8.6, 26.2 | Config tests |
 | M19.5 Electron health finalization | Show node name, role, event, sync, PowerSync, discovery, HTTPS, connected devices, and versions. | Technical spec 25.3 | Desktop QA |

@@ -23,7 +23,9 @@
         "Bring up a node",
         "Secrets",
         "Before an event",
-        "Moving or rebuilding a node"
+        "Backups",
+        "Moving or rebuilding a node",
+        "Upgrading a node"
       ]
     },
     {

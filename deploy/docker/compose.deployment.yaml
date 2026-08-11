@@ -1,0 +1,210 @@
+name: meridian
+
+# Meridian deployment stack.
+#
+# The one Compose install that supports every Alpha 1 node role — central,
+# on-site, and standalone (technical spec 8.1, 26.1). The role is configuration,
+# not a different stack: `MERIDIAN_NODE_ROLE` in the env file decides what the node
+# is allowed to do, and an on-site node additionally swaps the proxy's Caddyfile
+# for the one that serves a pre-provisioned certificate.
+#
+# Development is the exception and does not use this file. A developer runs the
+# server with `php artisan serve` and the client with Vite against the database
+# service in `compose.yaml` beside this file, which is why that file still exists
+# and exposes a port on the loopback interface.
+#
+# Start it:
+#   cp deploy/docker/.env.deployment.example deploy/docker/.env.deployment
+#   # edit every value marked CHANGE ME, then:
+#   corepack pnpm run deploy:up
+#
+# There is no PowerSync service. ADR-0003 retired it — devices fetch the offline
+# read set from the Laravel server and queue writes back through the same node —
+# so a deployment has one application to run and no sync engine beside it.
+
+services:
+  # -------------------------------------------------------------------------
+  # PostgreSQL
+  # -------------------------------------------------------------------------
+  # Deliberately not the same service definition as the development database in
+  # compose.yaml. This one publishes no host port, so the database is reachable
+  # only from the stack's own network, and it has no default password to fall back
+  # to. A deployment that uses a managed PostgreSQL instead removes this service
+  # and points DB_HOST at the managed one.
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    # wal_level=logical keeps logical replication available for node-to-node sync
+    # (technical spec section 10).
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?Set DB_DATABASE in the deployment env file}
+      POSTGRES_USER: ${DB_USERNAME:?Set DB_USERNAME in the deployment env file}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the deployment env file}
+    volumes:
+      - meridian-deployment-postgres:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "${DB_USERNAME}" -d "${DB_DATABASE}"
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  # -------------------------------------------------------------------------
+  # The Laravel server
+  # -------------------------------------------------------------------------
+  server: &server
+    image: ${MERIDIAN_IMAGE:-meridian/server}:${MERIDIAN_IMAGE_TAG:?Set MERIDIAN_IMAGE_TAG to the Meridian version being deployed}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: server
+    restart: unless-stopped
+    env_file:
+      # One file configures the node. It is also the file Compose interpolates
+      # this stack's own `${...}` values from, which is why the pnpm scripts pass
+      # it to `--env-file` as well. `MERIDIAN_ENV_FILE` exists so the bundle check
+      # can render the stack against the committed example without a deployment
+      # having to keep its real secrets under a second name.
+      - path: ${MERIDIAN_ENV_FILE:-./.env.deployment}
+        required: true
+    environment:
+      # The container's own identity in the stack, read by the entrypoint: only
+      # the web container runs migrations and warms caches, so a worker and a
+      # scheduler starting at the same moment do not race it.
+      MERIDIAN_CONTAINER_ROLE: web
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+    volumes:
+      # Uploaded Field Report photos, staff profile pictures, and logs. Losing
+      # this volume loses the attachments; it belongs in the backup beside the
+      # database, not instead of it.
+      - meridian-deployment-storage:/var/www/meridian/apps/server/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Proves the two things that make this container useful: the PHP runtime
+      # boots the application, and the database answers it. It does not prove
+      # php-fpm is accepting FastCGI connections — the end-to-end answer is
+      # `GET /api/health` through the proxy, which is what a monitor should watch.
+      test:
+        - CMD-SHELL
+        - php artisan db:show --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # -------------------------------------------------------------------------
+  # Queue worker
+  # -------------------------------------------------------------------------
+  # Transactional notifications are queued (NOTIFY-001, config meridian.
+  # notifications.queue), so a deployment without a worker is one where the
+  # operational mail Meridian promises to send is written and never delivered.
+  worker:
+    <<: *server
+    command:
+      - php
+      - artisan
+      - queue:work
+      - --queue=notifications,default
+      - --tries=3
+      - --max-time=3600
+    environment:
+      MERIDIAN_CONTAINER_ROLE: worker
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # Scheduler
+  # -------------------------------------------------------------------------
+  # Node-to-node sync runs every minute, the diagnostics heartbeat that proves the
+  # scheduler is firing runs every minute, health reports run every ten, and the
+  # organization lifecycle thresholds run daily (apps/server/routes/console.php).
+  # None of them are triggered by a person, so a deployment without this container
+  # is one where on-site never pushes back to central.
+  scheduler:
+    <<: *server
+    command:
+      - php
+      - artisan
+      - schedule:work
+    environment:
+      MERIDIAN_CONTAINER_ROLE: scheduler
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # Caddy
+  # -------------------------------------------------------------------------
+  web:
+    image: ${MERIDIAN_IMAGE:-meridian/server}-web:${MERIDIAN_IMAGE_TAG:?Set MERIDIAN_IMAGE_TAG to the Meridian version being deployed}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: web
+    restart: unless-stopped
+    # The caddy image's entrypoint is `caddy` itself, so the command starts at the
+    # subcommand. This overrides the image's default only to choose which
+    # Caddyfile runs: /etc/caddy/Caddyfile.onsite for an event node.
+    command:
+      - run
+      - --config
+      - ${MERIDIAN_CADDYFILE:-/etc/caddy/Caddyfile}
+      - --adapter
+      - caddyfile
+    environment:
+      MERIDIAN_SITE_ADDRESS: ${MERIDIAN_SITE_ADDRESS:?Set MERIDIAN_SITE_ADDRESS to the hostname on the certificate}
+      MERIDIAN_SERVER_UPSTREAM: server:9000
+      MERIDIAN_ACME_EMAIL: ${MERIDIAN_ACME_EMAIL:-}
+      MERIDIAN_TLS_CERTIFICATE: ${MERIDIAN_TLS_CERTIFICATE:-}
+      MERIDIAN_TLS_KEY: ${MERIDIAN_TLS_KEY:-}
+    ports:
+      # Port 80 stays published on an internet-reachable node because that is
+      # where the ACME challenge and the redirect to HTTPS arrive. Nothing is
+      # served over it (technical spec 8.2).
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      # Issued certificates and ACME account keys. Without this volume a restart
+      # asks the certificate authority for a new certificate and will eventually
+      # be rate-limited.
+      - meridian-deployment-caddy-data:/data
+      - meridian-deployment-caddy-config:/config
+      # An on-site node's pre-provisioned certificate. The directory is created by
+      # the operator and stays empty on a node that uses automatic HTTPS.
+      - ${MERIDIAN_TLS_DIRECTORY:-./tls}:/etc/caddy/tls:ro
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  meridian-deployment-postgres:
+  meridian-deployment-storage:
+  meridian-deployment-caddy-data:
+  meridian-deployment-caddy-config:

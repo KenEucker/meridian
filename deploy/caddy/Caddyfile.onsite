@@ -1,0 +1,30 @@
+# Meridian reverse proxy — event node on a field network.
+#
+# The on-site node serves its one event hostname (technical spec 8.3) using a
+# public-domain certificate obtained before the event, while the node still had
+# internet. During the event, the event network's DNS resolves that public
+# hostname to the node's LAN address (see deploy/dns), so devices reach a name
+# their browsers already trust without the node ever talking to a CA.
+#
+# Automatic issuance is switched off rather than left to fail: an event node has
+# no inbound route from the internet, so every ACME attempt is a retry loop
+# against a challenge that cannot be answered, and a node that fails HTTPS
+# validation in event mode fails closed (technical spec 8.6, 26.2).
+#
+# Mount the certificate and key read-only into the proxy container and point the
+# two variables at them. Renew before each event, not during one: a certificate
+# that expires mid-event cannot be replaced from the field.
+{
+	# No ACME issuance and no OCSP fetching. Both need the internet the event
+	# network does not have.
+	auto_https disable_certs
+	ocsp_stapling off
+}
+
+import /etc/caddy/meridian.snippet
+
+{$MERIDIAN_SITE_ADDRESS} {
+	tls {$MERIDIAN_TLS_CERTIFICATE} {$MERIDIAN_TLS_KEY}
+
+	import meridian-app
+}

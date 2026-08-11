@@ -53,6 +53,13 @@ jobs:
         with:
           node-version: "24"
 
+      # The Docker half of the deployment bundle's build smoke test. Its hermetic
+      # half runs inside `pnpm test` below; see pr-process-checks.yml for why the
+      # two are separate steps.
+      - name: Validate the deployment bundle against Docker
+        if: hashFiles('deploy/docker/compose.deployment.yaml') != ''
+        run: node scripts/deploy/validate-deployment-bundle.mjs --require-docker
+
       - name: Run detected Node checks
         if: hashFiles('package.json') != ''
         shell: bash

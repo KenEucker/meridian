@@ -18,6 +18,14 @@ public_html/hot
 storage/*.key
 .env
 .env.*.local
+# A deployment's own configuration, copied from
+# deploy/docker/.env.deployment.example. It holds the node's APP_KEY, database
+# password, and mail credentials, and must never be committed or copied between
+# nodes (technical spec 26.2).
+deploy/docker/.env.deployment
+# An on-site node's pre-provisioned TLS certificate and key, mounted read-only
+# into the proxy container.
+deploy/docker/tls/
 # Written by `pnpm run kiosk:workstation` and holding the workstation this
 # machine was provisioned as. Not a credential (AUTH-030), but it is one
 # developer's local machine identity and belongs to nobody else's checkout.
