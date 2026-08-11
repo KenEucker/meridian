@@ -40,10 +40,17 @@ final readonly class DirectoryPlacement
      */
     public const KIND_PROSPECTIVE = 'prospective';
 
+    /**
+     * `$status` is the membership status belonging to this placement — the
+     * department membership's own status, already filtered to the visible set
+     * (DIR-025). It rides along so the filtering surface can narrow by status
+     * (DIR-036) without a second read asking a wider question.
+     */
     public function __construct(
         public string $staffId,
         public string $departmentId,
         public ?string $teamId,
         public string $kind,
+        public string $status = '',
     ) {}
 }

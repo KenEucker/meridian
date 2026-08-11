@@ -41,6 +41,11 @@ export interface DirectoryLocation {
     | "team_lead"
     | "team_member"
     | "prospective";
+  /**
+   * The membership status belonging to this placement (DIR-025) — always one
+   * of the visible statuses, carried for the DIR-036 status filter.
+   */
+  readonly status: string;
 }
 
 /** A person entry: the complete list of what it may carry (DIR-029). */
@@ -117,6 +122,7 @@ interface DirectoryPayload {
       readonly department_id: string;
       readonly team_id?: string | null;
       readonly kind?: string;
+      readonly status?: string;
     }[];
   }[];
 }
@@ -245,6 +251,7 @@ function toChart(payload: DirectoryPayload, freshness: ReadFreshness): Directory
         departmentId: location.department_id,
         teamId: location.team_id ?? null,
         kind: kindOf(location.kind),
+        status: location.status ?? "",
       })),
     })),
     freshness,
@@ -326,6 +333,7 @@ export async function searchDirectory(
         departmentId: row.location?.department_id ?? "",
         teamId: row.location?.team_id ?? null,
         kind: kindOf(row.location?.kind),
+        status: "",
       },
     }));
   } catch (error) {

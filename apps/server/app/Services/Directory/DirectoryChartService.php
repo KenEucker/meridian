@@ -242,6 +242,13 @@ class DirectoryChartService
                             'department_id' => $placement->departmentId,
                             'team_id' => $placement->teamId,
                             'kind' => $placement->kind,
+                            /*
+                             * The membership status belonging to the placement
+                             * (DIR-025), for the DIR-036 status filter. Always
+                             * one of the visible statuses — the rule excluded
+                             * the rest before anything reached this shape.
+                             */
+                            'status' => $placement->status,
                         ],
                         $visibility->placementsFor($staffId),
                     ),

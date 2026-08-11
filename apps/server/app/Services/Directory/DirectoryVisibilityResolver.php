@@ -316,6 +316,7 @@ class DirectoryVisibilityResolver
                     departmentId: $departmentId,
                     teamId: null,
                     kind: DirectoryPlacement::KIND_PROSPECTIVE,
+                    status: (string) $membership->status,
                 );
 
                 continue;
@@ -341,6 +342,7 @@ class DirectoryVisibilityResolver
                     kind: $teamMembership->membership_role === 'lead'
                         ? DirectoryPlacement::KIND_TEAM_LEAD
                         : DirectoryPlacement::KIND_TEAM_MEMBER,
+                    status: (string) $membership->status,
                 );
             }
 
@@ -350,6 +352,7 @@ class DirectoryVisibilityResolver
                     departmentId: $departmentId,
                     teamId: null,
                     kind: DirectoryPlacement::KIND_DEPARTMENT_LEAD,
+                    status: (string) $membership->status,
                 );
             }
         }

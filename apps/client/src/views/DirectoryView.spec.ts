@@ -58,7 +58,12 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         is_organizers: true,
         leads: [],
         teams: [
-          { id: "team-core", name: "Core", leads: [], members: ["staff-olive"] },
+          {
+            id: "team-core",
+            name: "Core",
+            leads: [],
+            members: ["staff-olive", "staff-tess"],
+          },
         ],
         prospectives: [],
       },
@@ -94,7 +99,12 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         profile_picture_url: null,
         years_of_service: 6,
         locations: [
-          { department_id: "dept-organizers", team_id: "team-core", kind: "team_member" },
+          {
+            department_id: "dept-organizers",
+            team_id: "team-core",
+            kind: "team_member",
+            status: "active",
+          },
         ],
       },
       {
@@ -103,7 +113,12 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         profile_picture_url: null,
         years_of_service: 4,
         locations: [
-          { department_id: "dept-rangers", team_id: null, kind: "department_lead" },
+          {
+            department_id: "dept-rangers",
+            team_id: null,
+            kind: "department_lead",
+            status: "active",
+          },
         ],
       },
       {
@@ -112,7 +127,18 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         profile_picture_url: null,
         years_of_service: 1,
         locations: [
-          { department_id: "dept-rangers", team_id: "team-dirt", kind: "team_lead" },
+          {
+            department_id: "dept-rangers",
+            team_id: "team-dirt",
+            kind: "team_lead",
+            status: "active",
+          },
+          {
+            department_id: "dept-organizers",
+            team_id: "team-core",
+            kind: "team_member",
+            status: "active",
+          },
         ],
       },
       {
@@ -121,7 +147,12 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         profile_picture_url: null,
         years_of_service: 0,
         locations: [
-          { department_id: "dept-rangers", team_id: "team-dirt", kind: "team_member" },
+          {
+            department_id: "dept-rangers",
+            team_id: "team-dirt",
+            kind: "team_member",
+            status: "active",
+          },
         ],
       },
       {
@@ -130,7 +161,12 @@ function chartPayload(overrides: Record<string, unknown> = {}) {
         profile_picture_url: null,
         years_of_service: 2,
         locations: [
-          { department_id: "dept-rangers", team_id: null, kind: "prospective" },
+          {
+            department_id: "dept-rangers",
+            team_id: null,
+            kind: "prospective",
+            status: "prospective",
+          },
         ],
       },
     ],
@@ -209,7 +245,7 @@ describe("the Directory chart", () => {
     stubNode(() => ({ body: chartPayload() }));
 
     const wrapper = await mountView();
-    const text = wrapper.text();
+    const text = wrapper.get('[data-testid="directory-chart"]').text();
 
     // Every department heading is on screen (DIR-016)...
     expect(text).toContain("Organizers");
@@ -325,6 +361,168 @@ describe("the Directory chart", () => {
     expect(wrapper.find("svg").exists()).toBe(false);
     expect(wrapper.find("canvas").exists()).toBe(false);
     expect(wrapper.html()).not.toContain("overflow-x");
+  });
+});
+
+describe("search beside the chart and filtering (M18.76)", () => {
+  const TESS_ROW = {
+    staff_id: "staff-tess",
+    handle: "Tess",
+    breadcrumb: "Rangers → Dirt → Team Lead",
+    location: {
+      department_id: "dept-rangers",
+      team_id: "team-dirt",
+      kind: "team_lead",
+    },
+  };
+
+  function stubNodeWithSearch(rows: readonly Record<string, unknown>[]): void {
+    stubNode((call) =>
+      call.url.includes("/directory/search")
+        ? { body: { results: rows } }
+        : { body: chartPayload() },
+    );
+  }
+
+  it("stays usable while the chart is browsed", async () => {
+    stubNodeWithSearch([TESS_ROW]);
+
+    const wrapper = await mountView();
+
+    await wrapper.get("#directory-search").setValue("Te");
+    await flushPromises();
+
+    // A result row, carrying the handle and the breadcrumb (DIR-034).
+    expect(wrapper.get(".directory__result").text()).toContain("Tess");
+    expect(wrapper.get(".directory__result").text()).toContain(
+      "Rangers → Dirt → Team Lead",
+    );
+
+    // Browsing the chart does not dismiss, replace, or narrow the search
+    // interface (DIR-031): no separate page, no tab, no mode.
+    await wrapper.get('[data-department-id="dept-rangers"]').trigger("click");
+
+    expect(
+      (wrapper.get("#directory-search").element as HTMLInputElement).value,
+    ).toBe("Te");
+    expect(wrapper.find(".directory__result").exists()).toBe(true);
+    expect(wrapper.find('[data-testid="directory-chart"]').exists()).toBe(true);
+  });
+
+  it("selecting a result expands the branches, scrolls to the row's own node, and highlights every occurrence", async () => {
+    stubNodeWithSearch([TESS_ROW]);
+
+    const scrolledTo: Element[] = [];
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value(this: Element) {
+        scrolledTo.push(this);
+      },
+    });
+
+    const wrapper = await mountView();
+
+    await wrapper.get("#directory-search").setValue("Tess");
+    await flushPromises();
+    await wrapper.get(".directory__result").trigger("click");
+    await flushPromises();
+
+    // Every branch holding an authorized occurrence is open: her Rangers team
+    // lead placement and her Organizers membership alike (DIR-035).
+    expect(
+      wrapper.get('[data-department-id="dept-rangers"]').attributes("aria-expanded"),
+    ).toBe("true");
+    expect(
+      wrapper.get('[data-department-id="dept-organizers"]').attributes("aria-expanded"),
+    ).toBe("true");
+
+    // Both occurrences are highlighted, with a marker and accessible text
+    // rather than color alone (section 20).
+    const highlighted = wrapper.findAll('[data-highlighted="true"]');
+    expect(highlighted).toHaveLength(2);
+    expect(highlighted[0].text()).toContain("Search match");
+
+    // The scroll goes to the selected row's own node — open question 38, as
+    // settled: the row names one location, and that is where the chart goes.
+    expect(
+      scrolledTo.some(
+        (element) => element.getAttribute("data-team-id") === "team-dirt",
+      ),
+    ).toBe(true);
+
+    // And search is left in place (DIR-035): same query, same results.
+    expect(
+      (wrapper.get("#directory-search").element as HTMLInputElement).value,
+    ).toBe("Tess");
+    expect(wrapper.find(".directory__result").exists()).toBe(true);
+  });
+
+  it("clears the previous highlight on the next search", async () => {
+    stubNodeWithSearch([TESS_ROW]);
+
+    const wrapper = await mountView();
+
+    await wrapper.get("#directory-search").setValue("Tess");
+    await flushPromises();
+    await wrapper.get(".directory__result").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-highlighted="true"]').length).toBeGreaterThan(0);
+
+    await wrapper.get("#directory-search").setValue("Vera");
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-highlighted="true"]')).toHaveLength(0);
+  });
+
+  it("offers no dropdown as a filter's primary interaction", async () => {
+    stubNodeWithSearch([]);
+
+    const wrapper = await mountView();
+    const tools = wrapper.get(".directory__tools");
+
+    // Chips — immediately visible, touch-first buttons carrying their own
+    // pressed state (19D.7) — and not one select element anywhere in the
+    // filtering interface.
+    expect(tools.findAll("select")).toHaveLength(0);
+
+    const chips = tools.findAll(".directory__chip");
+    expect(chips.length).toBeGreaterThan(0);
+
+    for (const chip of chips) {
+      expect(chip.element.tagName).toBe("BUTTON");
+      expect(chip.attributes("aria-pressed")).toBeDefined();
+    }
+  });
+
+  it("counts only visible people when a filter narrows the chart", async () => {
+    stubNodeWithSearch([]);
+
+    const wrapper = await mountView();
+
+    // No filter, no count: a number with nothing narrowed would just be the
+    // population size.
+    expect(wrapper.text()).not.toContain("shown.");
+
+    const roleChip = wrapper
+      .findAll(".directory__chip")
+      .find((chip) => chip.text() === "Team Lead");
+    await roleChip!.trigger("click");
+
+    // One team lead is visible to this viewer, and the count counts exactly
+    // the people the filtered chart presents (DIR-036).
+    expect(wrapper.text()).toContain("1 person shown.");
+
+    // The status facet narrows the same way, from the placement's own status.
+    await roleChip!.trigger("click");
+
+    const statusChip = wrapper
+      .findAll(".directory__chip")
+      .find((chip) => chip.text() === "Prospective");
+    await statusChip!.trigger("click");
+
+    expect(wrapper.text()).toContain("1 person shown.");
   });
 });
 
