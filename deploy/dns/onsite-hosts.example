@@ -1,0 +1,23 @@
+# Meridian event network — hosts-file fallback.
+#
+# When Meridian does not control the network's DNS, browser and PWA access is not
+# guaranteed and the installed Capacitor app is the reliable client (technical
+# spec 8.2 rule 4, 8.4). This file is the narrow middle case: a small number of
+# machines that must reach the node in a browser, on a network whose DNS you
+# cannot change.
+#
+# It is a per-machine edit, so it does not scale to a staff roster and is not the
+# on-site plan. Use deploy/dns/onsite-dnsmasq.conf on a Meridian-controlled router
+# for that.
+#
+# Append to:
+#   Linux, macOS   /etc/hosts
+#   Windows        C:\Windows\System32\drivers\etc\hosts
+#
+# The name must be the one on the node's certificate. Pointing a different name at
+# the node produces a certificate warning, and clicking through it is God-mode and
+# emergency access only, never normal staff workflow (technical spec 8.2 rule 6).
+#
+# Replace the address and hostname; both are fake.
+
+10.10.0.2	juplaya-2027-onsite.example.org

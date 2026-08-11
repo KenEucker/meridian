@@ -88,6 +88,16 @@ jobs:
         with:
           node-version: "24"
 
+      # The deployment bundle's build smoke test, Docker half. Its hermetic half
+      # runs inside `pnpm test` below; this step renders both Compose files against
+      # the committed sample environment and validates the Dockerfile with
+      # `docker build --check`. It is a separate step because it reaches a registry
+      # for base image metadata, and a rate-limited registry should be legible as
+      # itself rather than as a failure of the repository's other checks.
+      - name: Validate the deployment bundle against Docker
+        if: hashFiles('deploy/docker/compose.deployment.yaml') != ''
+        run: node scripts/deploy/validate-deployment-bundle.mjs --require-docker
+
       - name: Run detected Node checks
         if: hashFiles('package.json') != ''
         shell: bash

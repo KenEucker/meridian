@@ -1,0 +1,26 @@
+# Meridian reverse proxy — internet-reachable node.
+#
+# For a central or standalone node with a public hostname that resolves from the
+# internet. Caddy obtains and renews the certificate itself over ACME, which needs
+# inbound port 80 and 443 to reach this host.
+#
+# An event node on a field network cannot complete an ACME challenge, because the
+# network it is on has no route from the internet. Use `Caddyfile.onsite` there:
+# it serves a certificate provisioned before the event (technical spec 8.3).
+#
+# Organization subdomains resolve at `<organization-slug>.<deployment-domain>`
+# (technical spec 8.7). This file serves the deployment root only. The wildcard
+# host and its certificate handling arrive with M19.10, and adding `*.example.org`
+# here before then would ask Caddy for a certificate the DNS provider is not yet
+# configured to prove.
+{
+	# Where the certificate authority sends expiry and problem notices. ACME
+	# issuance works without it; finding out about a renewal failure does not.
+	email {$MERIDIAN_ACME_EMAIL}
+}
+
+import /etc/caddy/meridian.snippet
+
+{$MERIDIAN_SITE_ADDRESS} {
+	import meridian-app
+}

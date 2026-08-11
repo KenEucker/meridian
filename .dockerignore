@@ -1,0 +1,47 @@
+# Build context exclusions for the deployment bundle images
+# (deploy/docker/Dockerfile, built from the repository root).
+#
+# The server image installs its own dependencies and builds its own client
+# artifact, so a developer's installed trees are never the right ones to copy in:
+# node_modules holds a platform's native builds, vendor holds a dev-mode autoload
+# map, and dist holds whatever was last built by hand. Excluding them also keeps
+# the context small enough to send quickly.
+
+.git
+.github
+node_modules
+**/node_modules
+**/vendor
+**/dist
+.pnpm-store
+
+# A checkout's own environment files. The image is configured at run time from
+# the deployment's env file, never from whatever the builder had lying around,
+# and copying one in would bake a developer's secrets into a shipped layer.
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local state that must not enter a shipped image.
+**/storage/logs/*
+**/storage/framework/cache/data/*
+**/storage/framework/sessions/*
+**/storage/framework/views/*
+**/storage/app/private/*
+**/storage/app/public/*
+**/.phpunit.result.cache
+**/*.tsbuildinfo
+**/.phpunit.cache
+
+# Documentation, planning, and QA trees. The technician documentation the God
+# Mode console serves is the packaged copy under
+# apps/server/resources/technician-docs, which is committed; docs/ itself is not
+# read at run time.
+docs
+scripts/process
+
+# Editor and OS noise.
+.DS_Store
+.claude
+.idea
+.vscode

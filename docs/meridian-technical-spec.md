@@ -4061,7 +4061,7 @@ The following areas may need later detail:
 4. Exact crypto implementation for Capacitor secure storage.
 5. Exact browser/PWA limitations for secure key storage.
 6. Exact local discovery implementation.
-7. Exact Caddy/DNS configuration for on-site router/AP deployments.
+7. Exact Caddy/DNS configuration for on-site router/AP deployments. Settled in M19.2: `deploy/caddy/Caddyfile.onsite` serves a certificate provisioned before the event with automatic issuance and OCSP stapling switched off, because a field network cannot answer an ACME challenge; `deploy/caddy/meridian.snippet` holds the site body both proxy configurations import so the on-site and internet-reachable forms cannot drift; and `deploy/dns/onsite-dnsmasq.conf` answers the event hostname with the node's LAN address on the Meridian-controlled router, declining to answer for `.local` so the mDNS the devices perform themselves keeps working. The wildcard host form for organization subdomains is M19.10.
 8. Exact spreadsheet import formats.
 9. Exact audit log table schema.
 10. Exact node operation payload JSON strategy.
@@ -4071,7 +4071,7 @@ The following areas may need later detail:
 14. Exact IC incident dashboard UI.
 15. Exact attendance reconciliation rules.
 16. Exact photo conversion pipeline.
-17. Exact deployment bundle format.
+17. Exact deployment bundle format. Settled in M19.2: the bundle is the committed `deploy/` tree, not a generated archive — a multi-stage `Dockerfile` producing a `server` and a `web` image, one `compose.deployment.yaml` stack carrying the database, server, queue worker, scheduler, and proxy, a sample environment file with fake values, the two proxy configurations, and the on-site DNS templates. The images are tagged with the root `package.json` version, which is the only Meridian product version (26.3). It carries no PowerSync service: ADR-0003 retired it, so a deployment runs one application and no sync engine beside it. `scripts/deploy/validate-deployment-bundle.mjs` is the bundle's build smoke test.
 18. Exact Markdown sanitizer/renderer libraries for Laravel and the shared Vue client.
 19. Exact custom fragment token grammar and editor UI.
 20. Exact snapshot strategy for acknowledged policy/procedure versions.

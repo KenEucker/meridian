@@ -1,0 +1,57 @@
+# The Meridian site body, shared by every Caddyfile in this directory.
+#
+# Kept in one place because the difference between a central node and an event
+# node is how the certificate is obtained (technical spec 8.3), not what the site
+# serves. A header or a limit that drifted between the two would be a difference
+# nobody chose.
+
+(meridian-app) {
+	# The same path the server image holds its public root at. `php_fastcgi`
+	# builds SCRIPT_FILENAME from this root and sends it to php-fpm, so the path
+	# has to resolve in both containers. The image mirrors the monorepo layout,
+	# which is why the path reads like a checkout.
+	root * /var/www/meridian/apps/server/public
+
+	encode zstd gzip
+
+	php_fastcgi {$MERIDIAN_SERVER_UPSTREAM:server:9000} {
+		# Field Report photo uploads and spreadsheet imports are slower than a
+		# page render, and the default read timeout ends them mid-upload.
+		read_timeout 120s
+	}
+
+	# Laravel serves the built client artifact and its assets through PHP
+	# (ClientAppController), so the proxy's own file serving covers only the
+	# server's public files: favicon.ico, robots.txt, console CSS, and images.
+	file_server
+
+	# Matches post_max_size in the server image. A body refused here never
+	# reaches PHP, which is the cheaper place to refuse it.
+	request_body {
+		max_size 40MB
+	}
+
+	header {
+		# Meridian is HTTPS-only in production and event modes (technical spec
+		# 8.2), so telling browsers to refuse the plain-HTTP form costs nothing
+		# that was ever meant to work. No `includeSubDomains`: organization
+		# subdomains get their own certificates and their own policy in M19.10,
+		# and a parent directive would commit them before that decision.
+		Strict-Transport-Security "max-age=31536000"
+
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Meridian is never framed. Clickjacking a check-in or an incident
+		# action is worth ruling out, and no Meridian surface embeds another.
+		Content-Security-Policy "frame-ancestors 'none'"
+
+		# The version of the proxy is not a fact a client needs.
+		-Server
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

@@ -1,7 +1,27 @@
 # Docker Deployment
 
-This directory contains the managed Meridian **database service**: a Dockerized
-PostgreSQL 18 instance that runs the canonical Meridian database.
+This directory holds two Compose files, for two different jobs:
+
+| File | Job |
+|---|---|
+| `compose.yaml` | The **development database service** documented below: PostgreSQL on the loopback interface, with committed defaults, for a developer running the server with `php artisan serve`. |
+| `compose.deployment.yaml` | The **deployment stack**: database, server, queue worker, scheduler, and Caddy. See [`deploy/README.md`](../README.md). |
+
+They are deliberately separate rather than one file with a profile, because the
+database service they need is not the same one. Development publishes a host port
+and ships a known password so a fresh checkout runs without edits; a deployment
+publishes no port and has no password to fall back to.
+
+`Dockerfile` builds the deployment's `server` and `web` images and is used by
+`compose.deployment.yaml` only. `entrypoint.sh` is the server container's per-boot
+work: the storage tree, migrations with a backup warning first (technical spec
+26.2), and the configuration caches.
+
+The rest of this document covers the development database service.
+
+## The development database service
+
+A Dockerized PostgreSQL 18 instance that runs the canonical Meridian database.
 
 PostgreSQL is the canonical Meridian server database (data/API specification
 section 3.1). This service exists so the database can be brought up, configured,
@@ -9,9 +29,9 @@ and managed consistently instead of relying on an ad-hoc `docker run`. It is the
 recommended way to run PostgreSQL for local development, and it is the base the
 Laravel server (`apps/server`) connects to.
 
-The broader multi-service deployment bundle (server container, Caddy, DNS, and a
-single top-level Compose file) is separate and still tracked as later
-deployment work. This directory owns the database service only.
+The multi-service deployment stack that adds the server container, Caddy, and the
+DNS templates is `compose.deployment.yaml` beside it, documented in
+[`deploy/README.md`](../README.md). `compose.yaml` stays development-only.
 
 ## What it provisions
 
@@ -37,6 +57,10 @@ through the same authorization the rest of the API answers from.
 - `compose.yaml` runs the `postgres:18` database service with logical
   replication enabled.
 - `.env.example` documents the required configuration and development defaults.
+
+The deployment stack's own files — `compose.deployment.yaml`,
+`.env.deployment.example`, `Dockerfile`, and `entrypoint.sh` — are documented in
+[`deploy/README.md`](../README.md).
 
 ## Prerequisites
 
