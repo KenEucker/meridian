@@ -98,6 +98,17 @@ QA-AUTH-01 exercises workstation login codes only through the God Mode
 console; this script is the path a person walks with the phone in their
 pocket, built by M18.58 through M18.62.
 
+## Alpha 1 Directory script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-DIR-01-directory-and-organization-chart.md`](QA-DIR-01-directory-and-organization-chart.md) | The Part H gate: the visibility matrix walked by hand with the seeded personas — ordinary staff reaching the organization's leadership and no ordinary members, a department lead reaching their own departments whole and not another's, a team lead their own teams and not the surrounding department, the three-department persona appearing once per authorized placement, an organizer the whole population, and an IC role widening nothing — with exclusion winning over position and a person entry carrying the picture, handle, authorized locations, and years of service and not one field more; the organization availability switch whose off position is a 404 indistinguishable between a permitted and an unpermitted viewer, with no menu entry, no palette entry, and nothing synchronized; handle search beside the chart over the authorized index, where a legal name, a department name, and an unauthorized handle's partial prefix all match nothing, and selecting a row expands, scrolls to the row's own node, and highlights every authorized occurrence; chip filtering whose counts count only visible people; the offline copy holding the authorized projection with no PII and no profile pictures, gone for a demoted lead on the next refresh; and the chart itself — Organizers Department first, empty branches drawn without counts or markers, touch-only disclosure with no horizontal panning from phone width to a wall display | M18.78 |
+
+The Directory is the second surface whose entire content is people, and the
+matrix section of this script is the part that gates: a person reached who
+should not have been is a security finding against DIR-017 through DIR-026,
+wherever the rendering looked right.
+
 ## Alpha 1 Command palette script
 
 | ID | Coverage | Owning task |
