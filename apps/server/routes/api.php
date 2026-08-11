@@ -21,6 +21,7 @@ use App\Http\Controllers\Departments\DepartmentRosterReadController;
 use App\Http\Controllers\Departments\DepartmentSelfAdminCommandController;
 use App\Http\Controllers\Deployments\DeploymentAdminController;
 use App\Http\Controllers\Deployments\DeploymentCommandController;
+use App\Http\Controllers\Directory\DirectoryReadController;
 use App\Http\Controllers\Documents\DocumentAcknowledgmentController;
 use App\Http\Controllers\Documents\DocumentCommandController;
 use App\Http\Controllers\Documents\DocumentExportController;
@@ -986,6 +987,20 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/configuration', [OrganizationConfigurationController::class, 'show'])
         ->name('api.organizations.configuration.show');
+
+    /*
+     * The Directory chart (M18.73; DIR-001 through DIR-015; technical spec
+     * 21E). One chart over two populations: the organization Directory reads
+     * persistent membership, the event Directory reads participation in that
+     * event (DIR-006, DIR-007). Where the organization has the Directory
+     * disabled both answer 404 before any authorization question is asked,
+     * because a disabled Directory is absent rather than refused (DIR-005).
+     */
+    Route::get('/organizations/{organization}/directory', [DirectoryReadController::class, 'organization'])
+        ->name('api.organizations.directory');
+
+    Route::get('/events/{event}/directory', [DirectoryReadController::class, 'event'])
+        ->name('api.events.directory');
 
     Route::get('/organizations/{organization}/credit-policies', [CreditPolicyAdminController::class, 'index'])
         ->name('api.organizations.credit-policies.index');
