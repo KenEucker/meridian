@@ -5,10 +5,12 @@
 Verify that the Meridian Electron on-site wrapper (M2.3/M2.6) opens the shared
 Meridian Kiosk UI in a fullscreen/kiosk window, uses the Vite dev server for
 unpackaged development, and auto-recovers if the wrapped UI is not yet
-available. Verify that the health panel (M2.4) displays the technical spec 25.3
-fields with node/server version placeholders read from the server health
-endpoint. No authentication, real sync state, or product workflows are expected
-at this stage.
+available. Verify that the finalized health panel (M19.5) displays every
+technical spec 25.3 field with real values read from the server health
+endpoint — node name and role, event name, sync status, offline read set
+status, connected devices, local discovery, certificate/HTTPS status, and
+versions — and warns on sync failures, open sync conflicts, an unservable
+offline read set in event mode, and a server/app version mismatch.
 
 ## Requirements covered
 
@@ -87,17 +89,27 @@ at this stage.
   config schema version, client version, and Electron wrapper version.
 - "Server version" shows the running server version, "Config schema version"
   shows the node's configuration schema version (technical spec 26.3), and
-  "Node role" shows the server environment while connected; "Client version" and
-  "Electron wrapper version" both show the root `package.json` Meridian version;
-  "Certificate / HTTPS status" reflects the configured URL scheme.
+  "Node role" shows the configured node's role while connected; "Client version"
+  and "Electron wrapper version" both show the root `package.json` Meridian
+  version; "Certificate / HTTPS status" reflects the configured URL scheme.
 - Step 13: the Settings Versions section shows "Desktop app version" with the
   same value the panel's "Electron wrapper version" shows, because the wrapper
   states it to the client rather than the client assuming it; "Server version"
   and "Config schema version" match the panel; the mobile app version row is
   absent, since this is not the installed mobile app.
-- Fields owned by later milestones (local node name, event name, sync status,
-  offline read set status, connected devices, local discovery status) show a clearly
-  labeled placeholder.
+- With a configured node: "Local node name" shows the technician-given node
+  name, "Event name" shows the locked event's name (or "No event locked to this
+  node"), "Sync status" summarizes the node sync state, "Offline read set
+  status" says whether the node can serve the device cache set, "Connected
+  devices" counts devices seen in the last 15 minutes, and "Local discovery
+  status" describes the resolved node URL (mDNS `.local` name, direct IP, DNS
+  name, or local machine). On an install with no configured node, the identity
+  fields state "No node configured" rather than a placeholder.
+- When node sync has failures or open conflicts, when an event-mode node cannot
+  serve the offline read set, or when the server version differs from the
+  wrapper's expected app version, an amber warning list renders above the field
+  table; the panel refreshes every 15 seconds while open, so the warnings track
+  the server without reopening the panel.
 - When the server is stopped, server-sourced fields show "Unavailable" and the
   wrapped UI does not block; when the server returns, the wrapped UI reloads
   automatically.

@@ -38,6 +38,10 @@ class HealthEndpointTest extends TestCase
             'node_role',
             'organization_id',
             'event_id',
+            'event_name',
+            'sync',
+            'offline_read_set',
+            'connected_devices',
         ]);
     }
 
@@ -54,6 +58,11 @@ class HealthEndpointTest extends TestCase
         $response->assertJsonPath('node_role', null);
         $response->assertJsonPath('organization_id', null);
         $response->assertJsonPath('event_id', null);
+        // The M19.5 panel facts degrade the same way: the probe answers with
+        // nulls rather than failing when their tables cannot be read.
+        $response->assertJsonPath('event_name', null);
+        $response->assertJsonPath('sync', null);
+        $response->assertJsonPath('connected_devices', null);
     }
 
     public function test_health_endpoint_is_reachable_without_authentication(): void
