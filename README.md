@@ -81,10 +81,11 @@ and run its test suite, the `apps/client` shared Vue client builds and runs its
 smoke tests, `apps/mobile` validates the Capacitor packaging configuration,
 and the `apps/kiosk` Electron wrapper shell builds and runs its unit tests.
 A managed PostgreSQL database service ([deploy/docker](deploy/docker/README.md)),
-PostgreSQL development configuration, and seed data are present; the complete
-multi-service deployment bundle (server
-container, reverse proxy, DNS, and a single top-level Compose file) and
-remaining product services arrive in later Alpha 1 tasks.
+PostgreSQL development configuration, and seed data are present, and the
+deployment bundle that stands up a real node — server image, reverse proxy, queue
+worker, scheduler, and DNS templates — is in [deploy/](deploy/README.md). See
+[Deploying a Node](#deploying-a-node) below; the rest of this section is the
+developer path and does not stand up a deployment.
 
 Normal product UI is built in the shared Vue client. Orchid is reserved for God
 Mode / repair tooling, configuration override, and dangerous administration.
@@ -169,6 +170,78 @@ corepack pnpm run commit:check -- --message "docs(process): update README"
 ```
 
 The validators use the Python standard library. Composer and product-service checks are designed to become active as later Alpha 1 tasks add those project files and bootable services.
+
+## Deploying a Node
+
+The section above is the developer path: `php artisan serve`, Vite, and a local
+database. It does not stand up a central, on-site, or standalone node, and those
+need a different set of steps.
+
+One Compose install serves every deployment role. The role is configuration —
+`MERIDIAN_NODE_ROLE` — rather than a different stack, so the path below is the
+same for all three.
+
+### Prerequisites
+
+- Docker with Docker Compose, on the machine that will be the node.
+- A hostname the node's devices can resolve, and a certificate for it. An event
+  node's certificate must be obtained **before** the event: a field network has
+  no route to a certificate authority.
+- Node.js and pnpm, for the `deploy:*` scripts that wrap Compose.
+
+### First run, in order
+
+```bash
+cp deploy/docker/.env.deployment.example deploy/docker/.env.deployment
+corepack pnpm run deploy:build
+```
+
+1. **Set `MERIDIAN_IMAGE_TAG`** in `deploy/docker/.env.deployment` to the version
+   `deploy:build` printed. The Compose file requires it, so nothing else runs
+   until it is set.
+2. **Generate this node's `APP_KEY`** and set it. It needs the image built above,
+   which is why it cannot be done while first editing the file:
+
+   ```bash
+   docker compose --env-file deploy/docker/.env.deployment \
+     -f deploy/docker/compose.deployment.yaml \
+     run --rm server php artisan key:generate --show
+   ```
+
+   Generate one per node. Never copy a key, or a whole environment file, between
+   nodes.
+3. **Fill in the remaining `CHANGE ME` values**: node role, `APP_URL` and
+   `MERIDIAN_SITE_ADDRESS`, `DB_PASSWORD`, mail credentials, and — for an event
+   node — `MERIDIAN_CADDYFILE`, `MERIDIAN_TLS_CERTIFICATE`, and
+   `MERIDIAN_TLS_KEY`.
+4. **Start the stack.** Migrations run automatically; back the database up first
+   on an existing node.
+
+   ```bash
+   corepack pnpm run deploy:up
+   corepack pnpm run deploy:ps
+   ```
+
+   A node still holding a sample secret stops here instead of serving and names
+   the variable in `corepack pnpm run deploy:logs`. That is the production
+   safeguard working. `php artisan meridian:secrets` on the node lists everything
+   outstanding, and never prints a value.
+5. **Open the node in a browser.** With no identity it redirects to first-run
+   setup, where it gets its name, its role, and its signing keypair.
+6. **Pair an on-site node with central.** A separate step, done from both sides:
+   central issues a one-time token, the on-site node redeems it.
+7. **Open the God Mode console.** The landing screen lists anything still
+   outstanding for this deployment.
+
+### Where the detail lives
+
+| Document | What it covers |
+|---|---|
+| [deploy/README.md](deploy/README.md) | The bundle itself: what each file is, the `deploy:*` scripts, event-node specifics, backups. |
+| [Deployment](docs/technician/deployment.md) | The operational walkthrough, with what every value means, the secret safeguards, and a pre-event checklist. |
+| [Node setup and pairing](docs/technician/node-setup-and-pairing.md) | First-run setup and central pairing, from both sides. |
+| [Configuration](docs/technician/configuration.md) | Config sources and precedence, event mode, and the override catalogue. |
+| [deploy/dns/README.md](deploy/dns/README.md) | Name resolution on an event network. |
 
 ## License
 

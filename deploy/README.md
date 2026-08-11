@@ -56,23 +56,40 @@ Nothing in this bundle decides the policy.
 
 ## Deploy a node
 
+The full walkthrough, with what each value means, is
+[Deployment](../docs/technician/deployment.md). The short form, in the order the
+steps actually depend on each other:
+
 ```bash
 cp deploy/docker/.env.deployment.example deploy/docker/.env.deployment
-```
-
-Edit every value marked `CHANGE ME`. Then build the images and start the stack:
-
-```bash
 corepack pnpm run deploy:build
 ```
+
+`deploy:build` tags both images with the root `package.json` version, which is the
+only Meridian product version (technical spec 26.3; the versioning strategy). Set
+`MERIDIAN_IMAGE_TAG` in the environment file to the value it prints before going
+further — the Compose file requires it, so nothing below runs without it.
+
+Then generate the node's own application key, which needs the image that was just
+built, and set `APP_KEY` to what it prints:
+
+```bash
+docker compose --env-file deploy/docker/.env.deployment \
+  -f deploy/docker/compose.deployment.yaml \
+  run --rm server php artisan key:generate --show
+```
+
+Edit the remaining values marked `CHANGE ME` — node role, hostname, database
+password, mail credentials, and the certificate settings for an event node — and
+start the stack:
 
 ```bash
 corepack pnpm run deploy:up
 ```
 
-`deploy:build` tags both images with the root `package.json` version, which is the
-only Meridian product version (technical spec 26.3; the versioning strategy).
-Set `MERIDIAN_IMAGE_TAG` in the environment file to the value it prints.
+A node that still holds a sample secret stops at start rather than serving, and
+names the variable it is waiting on in `deploy:logs`. That is technical spec 26.2
+working, not a broken deployment.
 
 The other scripts:
 
