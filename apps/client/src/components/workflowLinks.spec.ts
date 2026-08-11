@@ -767,6 +767,51 @@ describe("the pages a reader keeps in their menus", () => {
   });
 
   /*
+   * The four Home-only pages a reader may promote (M18.69).
+   *
+   * The preference runs both ways for these: they are on Home and out of the
+   * menus until somebody asks, and asking puts them in. Everything else in this
+   * describe block is about subtraction, and this is the one case that adds.
+   */
+  it("puts a Home-only page in the menu when the reader asks for it", () => {
+    installTrimmed([]);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).toContain(
+      "Documents",
+    );
+    expect(useStaffMenuLinks().value.map((link) => link.label)).toContain(
+      "Acknowledgments",
+    );
+    expect(useWorkflowMenuLinks().value.map((link) => link.label)).toContain(
+      "Field Reports",
+    );
+  });
+
+  it("leaves them on Home and out of the menus by default", () => {
+    installClientSession(localFieldSessionDocument(), "network");
+    selectSessionDepartment(DEPARTMENT);
+
+    expect(useStaffMenuLinks().value.map((link) => link.label)).not.toContain(
+      "Documents",
+    );
+    // Still where they have always been, which is the point: promoting one is
+    // an addition to a menu rather than a move off Home.
+    expect(sectionLabels("You")).toContain("Documents");
+  });
+
+  /* Promoted once, not once per list it appears in. */
+  it("does not list a promoted page twice", () => {
+    installTrimmed([]);
+
+    const labels = useStaffMenuLinks().value.map((link) => link.label);
+
+    expect(labels.filter((label) => label === "Documents")).toHaveLength(1);
+    expect(sectionLabels("You").filter((label) => label === "Documents")).toHaveLength(
+      1,
+    );
+  });
+
+  /*
    * Nothing about authority moves. The lists the capability checks build are
    * untouched — the filter runs on the way to a menu and nowhere else — so a
    * reader tidying their menu is not quietly narrowing what they can do.

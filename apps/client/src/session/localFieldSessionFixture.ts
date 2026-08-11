@@ -345,11 +345,21 @@ export function localFieldSessionDocument(
       node_locked_event_id: LOCAL_FIELD_FIXTURE.eventId,
       switching_available: false,
     },
-    // A reader who has hidden nothing and trimmed nothing (M18.69), stated for
-    // the same reason the other session fixture states it: these specs are
-    // about what capability codes permit, and a preference is a question a spec
-    // asking it should set.
-    preferences: { hidden_pages: [], menu_hidden_pages: [] },
+    // A reader who has hidden nothing and decided nothing about their menus
+    // (M18.69), stated for the same reason the other session fixture states it:
+    // these specs are about what capability codes permit, and a preference is a
+    // question a spec asking it should set. The list is the four pages that
+    // enter a menu only when somebody asks — empty would mean this reader asked
+    // for all four.
+    preferences: {
+      hidden_pages: [],
+      menu_hidden_pages: [
+        "acknowledgments",
+        "documents",
+        "ic-dashboard",
+        "ims-field-reports",
+      ],
+    },
     refreshed_at: new Date(0).toISOString(),
     ...overrides,
   };

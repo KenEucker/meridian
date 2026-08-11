@@ -16,11 +16,7 @@ import {
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
-import {
-  COMBINED_NAVIGATION_MAX_ITEMS,
-  useStaffLinks,
-  useWorkflowLinks,
-} from "@/components/workflowLinks";
+import { useMenuCandidateLinks } from "@/components/workflowLinks";
 import { clientSessionState } from "@/session/clientSession";
 import {
   HIDEABLE_PAGES,
@@ -29,6 +25,7 @@ import {
   type HideablePage,
 } from "@/session/hiddenPages";
 import {
+  MENU_PAGE_LIMIT,
   menuPageKeyFor,
   pageInMenu,
   setPageInMenu,
@@ -287,8 +284,7 @@ async function setPageShown(page: HideablePage, shown: boolean): Promise<void> {
  * a reader holding two of those standings should find one control rather than
  * the same control twice.
  */
-const staffMenuPages = useStaffLinks();
-const workflowMenuPages = useWorkflowLinks();
+const menuCandidates = useMenuCandidateLinks();
 
 type MenuPageRow = {
   readonly key: string;
@@ -298,7 +294,7 @@ type MenuPageRow = {
 const menuPageRows = computed<MenuPageRow[]>(() => {
   const rows = new Map<string, MenuPageRow>();
 
-  for (const link of [...staffMenuPages.value, ...workflowMenuPages.value]) {
+  for (const link of menuCandidates.value) {
     const key = menuPageKeyFor(link.to.name);
 
     if (key === null || rows.has(key)) {
@@ -311,22 +307,23 @@ const menuPageRows = computed<MenuPageRow[]>(() => {
   return [...rows.values()];
 });
 
-/**
- * How many of these a menu will carry.
- *
- * The same number the shell splits its menus at, and it is the right ceiling
- * for the same reason it is the right split: it was calibrated one item above
- * the fullest standing a session carries, so a reader who has never touched
- * this screen is never over it. Somebody who gains a page past the ceiling is
- * asked which one to give up rather than handed a menu that quietly scrolls.
- */
-const menuPageLimit = COMBINED_NAVIGATION_MAX_ITEMS;
+const menuPageLimit = MENU_PAGE_LIMIT;
 
 const menuPagesChosen = computed(
   () => menuPageRows.value.filter((page) => pageInMenu(page.key)).length,
 );
 
 const menuPagesFull = computed(() => menuPagesChosen.value >= menuPageLimit);
+
+/**
+ * A reader who is over the ceiling rather than at it.
+ *
+ * Reachable without anybody doing anything wrong: a department lead holding
+ * every capability starts around ten, and the ceiling is eight. Worth saying
+ * differently from "full", because "8 of 8" is a reader who has finished
+ * choosing and "10 of 8" is one who has not started.
+ */
+const menuPagesOver = computed(() => menuPagesChosen.value > menuPageLimit);
 
 const menuPageBusy = ref<string | null>(null);
 const menuPageError = ref<string | null>(null);
@@ -614,8 +611,19 @@ watch(
       <!--
         Said where the boxes went quiet, rather than left for the reader to work
         out from a control that stopped responding.
+
+        Two sentences rather than one, because the two states are different
+        situations. At the ceiling somebody has finished choosing and wants to
+        swap. Over it — which is where a full department lead starts, since the
+        pages their capabilities carry outnumber the ceiling — nobody has chosen
+        anything yet, and the honest thing is to say what the menu is for rather
+        than to imply they broke a rule.
       -->
-      <p v-if="menuPagesFull" class="about__menus-count" role="status">
+      <p v-if="menuPagesOver" class="about__menus-count" role="status">
+        Your menus hold more than {{ menuPageLimit }}. Untick the ones you do
+        not work out of — they stay on Home.
+      </p>
+      <p v-else-if="menuPagesFull" class="about__menus-count" role="status">
         Your menus are full. Take one out to add another.
       </p>
 

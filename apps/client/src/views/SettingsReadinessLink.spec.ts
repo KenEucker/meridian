@@ -10,7 +10,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createWebHistory } from "vue-router";
 
 import { configureMeridianApi } from "@/api/meridianApi";
-import { COMBINED_NAVIGATION_MAX_ITEMS } from "@/components/workflowLinks";
+import { MENU_PAGE_LIMIT } from "@/session/menuPages";
 import { routes } from "@/router";
 import {
   clearClientSession,
@@ -312,7 +312,40 @@ describe("menu contents on Settings", () => {
     ).length;
 
     expect(wrapper.get(".about__menus-count").text()).toBe(
-      `${chosen} of ${COMBINED_NAVIGATION_MAX_ITEMS} in your menus`,
+      `${chosen} of ${MENU_PAGE_LIMIT} in your menus`,
+    );
+  });
+
+  /*
+   * The ceiling, which a reader meets rather than reads about. Stated as the
+   * invariant rather than against a fixed count, because how many pages a
+   * session carries is a property of the fixture and the rule is not: at or
+   * over the limit, the boxes that would add a page go quiet and the ones that
+   * would free a slot stay live.
+   */
+  it("stops the reader adding a ninth page and leaves the ticked ones live", async () => {
+    installClientSession(
+      // Every promotable page in, which puts this reader at the ceiling.
+      sessionWithMenu([]),
+      "network",
+      new Date("2026-09-11T18:35:00+00:00"),
+    );
+
+    const wrapper = await mountSettings();
+    const all = boxes(wrapper).map((box) => box.element as HTMLInputElement);
+    const chosen = all.filter((box) => box.checked).length;
+
+    expect(chosen).toBeGreaterThanOrEqual(MENU_PAGE_LIMIT);
+
+    for (const box of all) {
+      expect(box.disabled).toBe(!box.checked);
+    }
+
+    // This reader is past the ceiling rather than at it, which is the ordinary
+    // case for anybody holding a few capabilities, so the line asks them to
+    // trim rather than telling them they are full.
+    expect(wrapper.get(".about__menus [role=status]").text()).toContain(
+      `Your menus hold more than ${MENU_PAGE_LIMIT}`,
     );
   });
 

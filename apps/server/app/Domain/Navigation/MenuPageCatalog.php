@@ -19,16 +19,15 @@ namespace App\Domain\Navigation;
  *    product — the reader who trims Logistics out of a menu they never open it
  *    from still reaches it from Home, from a link, and from the address bar.
  *
- * `dashboard` appears in both catalogs and means the same page in each, which
- * is the point of a shared vocabulary: one page, two questions somebody may
- * answer about it. Nothing here reads the other catalog's answer — a page put
- * away entirely is already gone from the menus, so the two never disagree about
- * anything a reader can see.
- *
- * Every key ships shown, and the defaults machinery is here anyway for the same
- * reason it is next door: a page can be given a menu-absent default later
- * without a data migration, and a stored decision keeps a reader's answer
- * stable when a default moves underneath them.
+ * `dashboard` appears in both catalogs, and the difference between what it
+ * means in each is worth stating. Next door it is the dashboard as an idea, all
+ * four surfaces of it, because somebody who does not want a dashboard does not
+ * want whichever one their role opens. Here it is the two that a menu can
+ * carry — the personal one and the department's — and Incident Command's is its
+ * own key below, because a reader can put that one in a menu and it is a
+ * destination they choose rather than the one their role hands them. Nothing
+ * here reads the other catalog's answer: a page put away entirely is already
+ * gone from the menus, so the two never disagree about anything a reader sees.
  */
 final class MenuPageCatalog
 {
@@ -66,13 +65,40 @@ final class MenuPageCatalog
 
     public const PAGE_ADMIN = 'admin';
 
+    /*
+     * Pages that are on Home and not in a menu, which a reader may put in one.
+     *
+     * The four below are the only Home-only pages offered, and what they have
+     * in common is that they sit beside a menu entry already: two are personal
+     * pages listed next to Me, and two are Incident Command pages reached from
+     * inside the Incidents workspace. Somebody who reads policies daily, or who
+     * lives on the IC dashboard for a weekend, is asking for one of these to be
+     * a hub — which is the same request the entries above answer.
+     *
+     * Department and organization administration is deliberately not here. A
+     * menu names places somebody works out of for a stretch of the event, and
+     * an organizer holding thirty administration pages needs a directory rather
+     * than a longer menu.
+     */
+    public const PAGE_ACKNOWLEDGMENTS = 'acknowledgments';
+
+    public const PAGE_DOCUMENTS = 'documents';
+
+    public const PAGE_IC_DASHBOARD = 'ic-dashboard';
+
+    public const PAGE_IMS_FIELD_REPORTS = 'ims-field-reports';
+
     /**
      * Every menu page key, mapped to whether it is out of the menus for a user
      * who has expressed no preference.
      *
-     * All of them start in. A reader arriving at their first event should be
+     * The hub pages start in. A reader arriving at their first event should be
      * shown the whole of what they may work out of; a menu somebody has to
      * assemble before it is useful is a menu that was empty when it mattered.
+     *
+     * The four Home-only pages start out, which is where they are today. Adding
+     * one is a reader saying they work out of it, and defaulting them in would
+     * lengthen every menu in the product to answer a request nobody made.
      *
      * @return array<string, bool>
      */
@@ -93,6 +119,10 @@ final class MenuPageCatalog
             self::PAGE_OPERATIONS => false,
             self::PAGE_INCIDENTS => false,
             self::PAGE_ADMIN => false,
+            self::PAGE_ACKNOWLEDGMENTS => true,
+            self::PAGE_DOCUMENTS => true,
+            self::PAGE_IC_DASHBOARD => true,
+            self::PAGE_IMS_FIELD_REPORTS => true,
         ];
     }
 

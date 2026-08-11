@@ -31,7 +31,29 @@ export type MenuPage = {
   readonly key: string;
   /** Every route this key takes out of the menus. */
   readonly routeNames: readonly string[];
+  /**
+   * Whether this page is out of the menus for a reader who has decided
+   * nothing. True for the pages that live on Home today and become menu
+   * entries only because somebody asked.
+   */
+  readonly hiddenByDefault?: boolean;
 };
+
+/**
+ * The most pages a menu carries.
+ *
+ * A ceiling rather than the shell's split threshold, which is a different
+ * number answering a different question: that one asks when two dropdowns
+ * organize better than one, and this one asks how long a list somebody can find
+ * an entry in while an event is running. Eight is short enough to read without
+ * scanning.
+ *
+ * A reader who has never opened Settings can be over it — a department lead
+ * holding every capability starts around ten — and that is the intended
+ * pressure rather than an oversight. Nothing is taken away from them; the count
+ * says where they stand and the unticked boxes wait until they trim.
+ */
+export const MENU_PAGE_LIMIT = 8;
 
 /**
  * Every menu entry a reader may put away, in the order the menus build them:
@@ -51,19 +73,13 @@ export const MENU_PAGES: readonly MenuPage[] = [
   { key: "event-horizon", routeNames: ["staff.event-horizon"] },
   { key: "event-info", routeNames: ["events.info"] },
   /*
-   * The dashboards, as one key — the same four surfaces `HIDEABLE_PAGES`
-   * covers. Two of them are never in a menu, and they are listed anyway so the
-   * key means one page rather than "the menu half of a page".
+   * The dashboard a reader's role opens for them: the personal one and the
+   * department's, which are the two a menu carries. Incident Command's is a key
+   * of its own below — it is a destination somebody chooses rather than the one
+   * their standing hands them — and the organizer's is an Organization page,
+   * which no menu offers.
    */
-  {
-    key: "dashboard",
-    routeNames: [
-      "staff.dashboard",
-      "events.departments.show",
-      "organizer.dashboard",
-      "ims.dashboard",
-    ],
-  },
+  { key: "dashboard", routeNames: ["staff.dashboard", "events.departments.show"] },
   { key: "shift-board", routeNames: ["staff.shifts.index"] },
   { key: "field-reports", routeNames: ["staff.field-reports.index"] },
   { key: "trainings", routeNames: ["events.departments.trainings.index"] },
@@ -74,18 +90,50 @@ export const MENU_PAGES: readonly MenuPage[] = [
   { key: "operations", routeNames: ["events.departments.operations"] },
   { key: "incidents", routeNames: ["ims.incidents.index"] },
   { key: "admin", routeNames: ["events.departments.teams.index"] },
+  /*
+   * On Home today, and in a menu only because somebody asked (M18.69).
+   *
+   * These four are the whole of what a reader may promote, and what they have
+   * in common is that each already sits beside a menu entry: two personal pages
+   * listed next to Me, and two Incident Command pages reached from inside the
+   * Incidents workspace. Reading policies daily, or living on the IC dashboard
+   * for a weekend, is the request they answer.
+   *
+   * Department and organization administration is deliberately absent. A menu
+   * names places somebody works out of, and an organizer holding thirty
+   * administration pages needs the directory rather than a longer menu.
+   */
+  {
+    key: "acknowledgments",
+    routeNames: ["staff.documents.acknowledgments"],
+    hiddenByDefault: true,
+  },
+  {
+    key: "documents",
+    routeNames: ["staff.documents.index"],
+    hiddenByDefault: true,
+  },
+  { key: "ic-dashboard", routeNames: ["ims.dashboard"], hiddenByDefault: true },
+  {
+    key: "ims-field-reports",
+    routeNames: ["ims.field-reports.index"],
+    hiddenByDefault: true,
+  },
 ];
 
 /**
- * Nothing starts out of the menus.
+ * The hub pages start in the menus; the four Home-only ones start out.
  *
  * The node says the same, and this copy is what Settings renders from before a
  * session has resolved. A reader at their first event is shown the whole of
  * what they may work out of — a menu somebody has to assemble before it is
- * useful is a menu that was empty when it mattered.
+ * useful is a menu that was empty when it mattered — and is shown none of what
+ * they have not asked for.
  */
 function defaultMenuHiddenPageKeys(): Set<string> {
-  return new Set();
+  return new Set(
+    MENU_PAGES.filter((page) => page.hiddenByDefault).map((page) => page.key),
+  );
 }
 
 const preference = createPagePreference({

@@ -29,16 +29,53 @@ class MenuPageVisibilityPreferenceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_a_user_who_has_decided_nothing_has_a_full_menu(): void
+    public function test_a_user_who_has_decided_nothing_gets_the_catalog_defaults(): void
     {
         $user = User::factory()->create();
 
         $response = $this->me($user);
 
         $response->assertOk();
-        // Nothing starts out of the menus. A reader arriving at their first
-        // event is shown the whole of what they may work out of.
-        $response->assertJsonPath('preferences.menu_hidden_pages', []);
+        /*
+         * The hub pages start in the menus and the four Home-only ones start
+         * out, so a reader arriving at their first event is shown the whole of
+         * what they may work out of and none of what they have not asked for.
+         */
+        $response->assertJsonPath('preferences.menu_hidden_pages', [
+            MenuPageCatalog::PAGE_ACKNOWLEDGMENTS,
+            MenuPageCatalog::PAGE_DOCUMENTS,
+            MenuPageCatalog::PAGE_IC_DASHBOARD,
+            MenuPageCatalog::PAGE_IMS_FIELD_REPORTS,
+        ]);
+    }
+
+    /**
+     * The preference runs both ways, which is what the four promotable keys
+     * need it to do.
+     *
+     * Every other page is in the menus until somebody takes it out. These are
+     * out until somebody puts them in, and the row that records it is the same
+     * row — which is the reason the column stores the decision rather than the
+     * table recording it by a row's presence.
+     */
+    public function test_a_home_only_page_can_be_put_into_the_menus(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->command($user, MenuPageCatalog::PAGE_DOCUMENTS, false);
+
+        $response->assertOk();
+        $response->assertJsonPath('menu_hidden_pages', [
+            MenuPageCatalog::PAGE_ACKNOWLEDGMENTS,
+            MenuPageCatalog::PAGE_IC_DASHBOARD,
+            MenuPageCatalog::PAGE_IMS_FIELD_REPORTS,
+        ]);
+
+        $this->assertDatabaseHas('menu_page_preferences', [
+            'user_id' => $user->getKey(),
+            'page_key' => MenuPageCatalog::PAGE_DOCUMENTS,
+            'hidden' => false,
+        ]);
     }
 
     public function test_taking_a_page_out_of_the_menus_is_stored_and_reported(): void
@@ -48,9 +85,10 @@ class MenuPageVisibilityPreferenceTest extends TestCase
         $response = $this->command($user, MenuPageCatalog::PAGE_LOGISTICS, true);
 
         $response->assertOk();
-        $response->assertJsonPath('menu_hidden_pages', [
-            MenuPageCatalog::PAGE_LOGISTICS,
-        ]);
+        $response->assertJsonPath(
+            'menu_hidden_pages',
+            $this->defaultsPlus(MenuPageCatalog::PAGE_LOGISTICS),
+        );
 
         $this->assertDatabaseHas('menu_page_preferences', [
             'user_id' => $user->getKey(),
@@ -58,9 +96,10 @@ class MenuPageVisibilityPreferenceTest extends TestCase
             'hidden' => true,
         ]);
 
-        $this->me($user)->assertJsonPath('preferences.menu_hidden_pages', [
-            MenuPageCatalog::PAGE_LOGISTICS,
-        ]);
+        $this->me($user)->assertJsonPath(
+            'preferences.menu_hidden_pages',
+            $this->defaultsPlus(MenuPageCatalog::PAGE_LOGISTICS),
+        );
     }
 
     public function test_a_decision_can_be_reversed_without_stacking_rows(): void
@@ -77,7 +116,10 @@ class MenuPageVisibilityPreferenceTest extends TestCase
             MenuPagePreference::query()->where('user_id', $user->getKey())->count(),
         );
 
-        $this->me($user)->assertJsonPath('preferences.menu_hidden_pages', []);
+        $this->me($user)->assertJsonPath(
+            'preferences.menu_hidden_pages',
+            $this->defaultsPlus(),
+        );
     }
 
     /**
@@ -101,9 +143,10 @@ class MenuPageVisibilityPreferenceTest extends TestCase
         $response->assertJsonPath('preferences.hidden_pages', [
             HideablePageCatalog::PAGE_DASHBOARD,
         ]);
-        $response->assertJsonPath('preferences.menu_hidden_pages', [
-            MenuPageCatalog::PAGE_LOGISTICS,
-        ]);
+        $response->assertJsonPath(
+            'preferences.menu_hidden_pages',
+            $this->defaultsPlus(MenuPageCatalog::PAGE_LOGISTICS),
+        );
     }
 
     /**
@@ -124,9 +167,10 @@ class MenuPageVisibilityPreferenceTest extends TestCase
         $response = $this->me($user);
 
         $response->assertJsonPath('preferences.hidden_pages', []);
-        $response->assertJsonPath('preferences.menu_hidden_pages', [
-            MenuPageCatalog::PAGE_DASHBOARD,
-        ]);
+        $response->assertJsonPath(
+            'preferences.menu_hidden_pages',
+            $this->defaultsPlus(MenuPageCatalog::PAGE_DASHBOARD),
+        );
     }
 
     public function test_a_page_the_menu_catalog_does_not_know_is_refused(): void
@@ -161,7 +205,31 @@ class MenuPageVisibilityPreferenceTest extends TestCase
 
         $this->command($user, MenuPageCatalog::PAGE_LOGISTICS, true)->assertOk();
 
-        $this->me($other)->assertJsonPath('preferences.menu_hidden_pages', []);
+        $this->me($other)->assertJsonPath(
+            'preferences.menu_hidden_pages',
+            $this->defaultsPlus(),
+        );
+    }
+
+    /**
+     * The keys out of the menus by default, plus whatever this case took out.
+     *
+     * In catalog order, which is the order `resolve()` answers in. Written as a
+     * helper because every case here would otherwise restate the four
+     * promotable defaults, and a fifth one added later would edit every
+     * assertion in the file rather than this method.
+     *
+     * @return list<string>
+     */
+    private function defaultsPlus(string ...$pageKeys): array
+    {
+        $taken = array_flip($pageKeys);
+
+        return array_values(array_filter(
+            MenuPageCatalog::keys(),
+            fn (string $key): bool => isset($taken[$key])
+                || MenuPageCatalog::defaults()[$key],
+        ));
     }
 
     private function command(User $user, string $pageKey, bool $hidden): TestResponse

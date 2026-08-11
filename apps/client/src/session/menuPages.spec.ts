@@ -96,18 +96,23 @@ describe("what the session says is out of the menus", () => {
 
   /*
    * A document from a node that predates the field, or a cached one written by
-   * an older build. Nothing starts out of the menus, so the reader gets the
-   * whole of what they may work out of rather than a menu whose shape depends
-   * on which build last wrote the cache.
+   * an older build. The reader gets the catalog's defaults — every hub page in,
+   * every promotable one out — rather than a menu whose shape depends on which
+   * build last wrote the cache.
    */
-  it("takes a menu with no answer as a full one", () => {
+  it("falls back to the catalog defaults when the document carries none", () => {
     installClientSession(
       fixtureSessionDocument({ preferences: { hidden_pages: [] } }),
       "network",
     );
 
-    expect(menuHiddenPageKeys.value.size).toBe(0);
+    expect([...menuHiddenPageKeys.value].sort()).toEqual(
+      MENU_PAGES.filter((page) => page.hiddenByDefault)
+        .map((page) => page.key)
+        .sort(),
+    );
     expect(pageInMenu("logistics")).toBe(true);
+    expect(pageInMenu("acknowledgments")).toBe(false);
   });
 
   it("drops the links it names and keeps every other one", () => {
@@ -137,9 +142,17 @@ describe("what the session says is out of the menus", () => {
    * rather than inventing a key nothing would store.
    */
   it("has no key for a page the menus do not carry", () => {
-    expect(menuPageKeyFor("staff.documents.acknowledgments")).toBeNull();
+    // Department and organization administration is not promotable, so these
+    // are Home pages with no menu question to answer.
     expect(menuPageKeyFor("events.departments.roster")).toBeNull();
+    expect(menuPageKeyFor("organizer.audit.index")).toBeNull();
     expect(menuPageKeyFor("events.departments.logistics")).toBe("logistics");
+    // The four that are promotable do have one, whether or not they are in a
+    // menu right now.
+    expect(menuPageKeyFor("staff.documents.acknowledgments")).toBe(
+      "acknowledgments",
+    );
+    expect(menuPageKeyFor("ims.dashboard")).toBe("ic-dashboard");
   });
 
   /*
