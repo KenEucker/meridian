@@ -372,9 +372,17 @@ describe("workstation history", () => {
     node.historyStatus = 500;
 
     const wrapper = await mountView(buildRouter());
+
+    // `get` is the assertion that the panel is there — it throws otherwise.
+    // The node's own words are passed through rather than replaced with a
+    // generic line, and the way back is offered beside them; the fallback text
+    // is for a request that never reached anybody to refuse it.
     const failure = wrapper.get('[data-testid="workstation-history-error"]');
 
-    expect(failure.exists()).toBe(true);
+    expect(failure.text()).toContain("The node refused.");
+    expect(failure.find("button").exists()).toBe(true);
+    // And the empty state did not take its place, which is the failure that
+    // would quietly tell somebody they have never signed in anywhere.
     expect(wrapper.text()).not.toContain("You have not signed in at a shared workstation");
 
     wrapper.unmount();
