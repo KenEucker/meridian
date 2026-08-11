@@ -1002,6 +1002,19 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
     Route::get('/events/{event}/directory', [DirectoryReadController::class, 'event'])
         ->name('api.events.directory');
 
+    /*
+     * Handle search over the Directory's authorized set (M18.74; DIR-031
+     * through DIR-034). The index is built from what the M18.71 rule
+     * authorized rather than filtered down from everybody, so an unauthorized
+     * handle has no entry to leak through a count, a partial match, or a
+     * timing difference (DIR-033).
+     */
+    Route::get('/organizations/{organization}/directory/search', [DirectoryReadController::class, 'organizationSearch'])
+        ->name('api.organizations.directory.search');
+
+    Route::get('/events/{event}/directory/search', [DirectoryReadController::class, 'eventSearch'])
+        ->name('api.events.directory.search');
+
     Route::get('/organizations/{organization}/credit-policies', [CreditPolicyAdminController::class, 'index'])
         ->name('api.organizations.credit-policies.index');
 

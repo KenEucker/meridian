@@ -12,6 +12,7 @@ use App\Models\StaffOrganizationStatus;
 use App\Models\User;
 use App\Services\Directory\DirectoryChartService;
 use App\Services\Directory\DirectoryContext;
+use App\Services\Directory\DirectorySearchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,7 +38,10 @@ use Illuminate\Http\Request;
  */
 final class DirectoryReadController extends Controller
 {
-    public function __construct(private readonly DirectoryChartService $chart) {}
+    public function __construct(
+        private readonly DirectoryChartService $chart,
+        private readonly DirectorySearchService $search,
+    ) {}
 
     public function organization(Request $request, Organization $organization): JsonResponse
     {
@@ -52,7 +56,69 @@ final class DirectoryReadController extends Controller
         return $this->respond($request, new DirectoryContext($organization, $event));
     }
 
+    /**
+     * Handle search over the authorized set (M18.74; DIR-031 through
+     * DIR-034). The same gates as the chart, because search reaches exactly
+     * what the chart reaches and nothing else.
+     */
+    public function organizationSearch(Request $request, Organization $organization): JsonResponse
+    {
+        return $this->respondToSearch($request, new DirectoryContext($organization));
+    }
+
+    public function eventSearch(Request $request, Event $event): JsonResponse
+    {
+        $organization = $event->organization;
+        abort_if($organization === null, 404);
+
+        return $this->respondToSearch($request, new DirectoryContext($organization, $event));
+    }
+
     private function respond(Request $request, DirectoryContext $context): JsonResponse
+    {
+        $user = $this->gate($request, $context);
+
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $chart = $this->chart->chart($user, $context);
+
+        return response()->json([
+            'context' => $this->contextPayload($context),
+            'departments' => $chart['departments'],
+            'people' => $chart['people'],
+        ]);
+    }
+
+    private function respondToSearch(Request $request, DirectoryContext $context): JsonResponse
+    {
+        $user = $this->gate($request, $context);
+
+        if ($user instanceof JsonResponse) {
+            return $user;
+        }
+
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $query = (string) ($validated['q'] ?? '');
+
+        return response()->json([
+            'context' => $this->contextPayload($context),
+            'query' => $query,
+            'results' => $this->search->search($user, $context, $query),
+        ]);
+    }
+
+    /**
+     * The shared gate, in its one deliberate order: availability first
+     * (DIR-005), then authentication, then standing. A disabled Directory is
+     * 404 to everyone before any authorization question is asked, so the
+     * answer cannot disclose that the feature exists.
+     */
+    private function gate(Request $request, DirectoryContext $context): User|JsonResponse
     {
         abort_unless($context->organization->directoryEnabled(), 404);
 
@@ -65,19 +131,21 @@ final class DirectoryReadController extends Controller
             ], 403);
         }
 
-        $chart = $this->chart->chart($user, $context);
+        return $user;
+    }
 
-        return response()->json([
-            'context' => [
-                'scope' => $context->isEventContext() ? 'event' : 'organization',
-                'organization_id' => (string) $context->organization->getKey(),
-                'organization_label' => $context->organization->name,
-                'event_id' => $context->event !== null ? (string) $context->event->getKey() : null,
-                'event_label' => $context->event?->name,
-            ],
-            'departments' => $chart['departments'],
-            'people' => $chart['people'],
-        ]);
+    /**
+     * @return array<string, mixed>
+     */
+    private function contextPayload(DirectoryContext $context): array
+    {
+        return [
+            'scope' => $context->isEventContext() ? 'event' : 'organization',
+            'organization_id' => (string) $context->organization->getKey(),
+            'organization_label' => $context->organization->name,
+            'event_id' => $context->event !== null ? (string) $context->event->getKey() : null,
+            'event_label' => $context->event?->name,
+        ];
     }
 
     /**
