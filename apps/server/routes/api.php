@@ -75,6 +75,7 @@ use App\Http\Controllers\Teams\TeamStaffCommandController;
 use App\Http\Controllers\Trainings\TrainingCommandController;
 use App\Http\Controllers\Trainings\TrainingReadController;
 use App\Http\Controllers\Waivers\WaiverAdminController;
+use App\Http\Middleware\EnforceOrganizationHostScope;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', [HealthController::class, 'show'])->name('api.health');
@@ -354,15 +355,22 @@ Route::get('/organizations/{organization}/branding', [BrandingReadController::cl
  * handled by the responses being identical whatever Meridian already knows
  * about the address (STAT-006).
  */
+// `EnforceOrganizationHostScope` (M19.8; ORG-024): these reads name an
+// organization by slug, so on an organization subdomain a different
+// organization's slug is not found — a subdomain never serves another
+// organization's content. The same routes answer unchanged at the deployment
+// root and for the host organization's own slug.
 Route::get('/public/organizations/{organization:slug}', [PublicParticipationController::class, 'organization'])
+    ->middleware(EnforceOrganizationHostScope::class)
     ->name('api.public.organizations.show');
 
 Route::get('/public/organizations/{organization:slug}/events/{event:slug}', [PublicParticipationController::class, 'event'])
+    ->middleware(EnforceOrganizationHostScope::class)
     ->scopeBindings()
     ->name('api.public.organizations.events.show');
 
 Route::post('/public/organizations/{organization:slug}/applications', [PublicParticipationController::class, 'submit'])
-    ->middleware('throttle:10,1')
+    ->middleware([EnforceOrganizationHostScope::class, 'throttle:10,1'])
     ->name('api.public.organizations.applications.store');
 
 /*
