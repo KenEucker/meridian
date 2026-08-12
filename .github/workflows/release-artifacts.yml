@@ -1,0 +1,295 @@
+name: release-artifacts
+
+# The tagged release workflow (M19.23, technical spec 26.7): a version tag
+# builds, from that one commit, the server image and deployment bundle, the
+# Windows, macOS, and Linux desktop installers, and the signed Android app
+# bundle and APK, derives every artifact version from the root package.json,
+# verifies each artifact carries it, and attaches the artifacts to the GitHub
+# release. Release artifacts are attached to the release, never committed.
+#
+# Every job checks out the same commit — the one the tag names — with no ref
+# override anywhere, which is what "from one build of the tagged commit" means
+# in workflow terms.
+#
+# The iOS application archive is deliberately not built here: it requires a
+# macOS signing environment holding the Apple distribution certificate and
+# provisioning profile, which this automation does not have. It is produced
+# from the same tagged commit through the docs/process/release-packaging.md
+# runbook (M19.24), and the release notes composed below say so rather than
+# silently omitting it.
+#
+# workflow_dispatch is the dry run: every artifact is built and verified
+# exactly as a tag build would, and nothing is attached anywhere.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The version every artifact must carry, resolved once from the root
+  # package.json (docs/process/versioning-strategy.md). A tag that names any
+  # other version is refused before anything is built: a release whose tag and
+  # contents disagree is worse than no release.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the root version and hold the tag to it
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The root package.json version '$VERSION' is not numeric major.minor.patch." >&2
+            exit 1
+          fi
+          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref_name }}" != "v$VERSION" ]]; then
+            echo "Tag '${{ github.ref_name }}' does not name the root package.json version (expected 'v$VERSION')." >&2
+            echo "Every artifact version derives from the root package.json; a tag naming another version cannot release this commit." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # The server image, the web (proxy) image, and the deployment configuration
+  # bundle (technical spec 26.4's server-side distributable).
+  server-image:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The packaged changelog is generated from first-parent history
+          # (GOD-021), so the image build needs the whole timeline, not a
+          # shallow tip.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # Both scripts are dependency-free, so no install step is needed. The
+      # changelog lands in apps/server/resources/changelog before the image
+      # build copies apps/server in, which is how a released image renders the
+      # God Mode Changelog page without network access.
+      - name: Generate the packaged changelog
+        run: node scripts/release/generate-changelog.mjs
+
+      - name: Build the deployment images
+        run: node scripts/deploy/build-images.mjs
+
+      - name: Stage the images and the deployment bundle
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p release-artifacts
+          docker save "meridian/server:$VERSION" | gzip > "release-artifacts/meridian-server-$VERSION.tar.gz"
+          docker save "meridian/server-web:$VERSION" | gzip > "release-artifacts/meridian-server-web-$VERSION.tar.gz"
+          node scripts/release/package-deployment-bundle.mjs --out release-artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-image-and-bundle
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  # The three desktop installers, one per host platform, all from the one
+  # packaging configuration (technical spec 26.6). electron-builder packages
+  # for the platform it runs on, which is why this is a matrix rather than one
+  # runner: a cross-built macOS DMG is not a thing it can produce.
+  desktop-installers:
+    needs: version
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # `corepack enable` puts `pnpm` itself on the PATH: electron-builder's
+      # node-module collector invokes it directly rather than through
+      # `corepack pnpm`, and the shim resolves the version this repository
+      # pins (see scripts/release/package-desktop.mjs).
+      - name: Build and package the desktop installer
+        shell: bash
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm run kiosk:build
+          node scripts/release/package-desktop.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installer-${{ matrix.os }}
+          # Only the installers travel; blockmaps and updater metadata do not,
+          # because packaged desktop applications do not self-update in
+          # Alpha 1 (technical spec 26.6).
+          path: |
+            apps/kiosk/release/meridian-kiosk-*.exe
+            apps/kiosk/release/meridian-kiosk-*.dmg
+            apps/kiosk/release/meridian-kiosk-*.AppImage
+          if-no-files-found: error
+
+  # The Android app bundle for the Play internal testing track and the
+  # direct-install APK (technical spec 26.5), signed from the upload keystore
+  # per M19.22: every credential arrives through the environment from a
+  # repository secret, and the Gradle task-graph guard fails the build rather
+  # than emitting an unsigned artifact that looks distributable.
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The keystore itself is held outside the repository (technical spec
+      # 26.5) and carried as a base64 repository secret. Failing here, before
+      # any build work, keeps a missing secret legible as itself.
+      - name: Materialize the upload keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MERIDIAN_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "The MERIDIAN_ANDROID_UPLOAD_KEYSTORE_BASE64 secret is not set." >&2
+            echo "Technical spec 26.5 supplies signing credentials through the environment; refusing to build an Android release without the upload keystore." >&2
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+
+      - name: Build the Field client and sync the native project
+        shell: bash
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm run mobile:cap:sync
+
+      - name: Build the signed app bundle and APK
+        working-directory: apps/mobile/android
+        shell: bash
+        env:
+          MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE: ${{ runner.temp }}/upload.keystore
+          MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS }}
+          MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease assembleRelease
+
+      # Gradle names its outputs app-release.*; the attached artifacts carry
+      # the product and the root version instead. The version inside the
+      # artifacts is already stamped from the root package.json by the M19.21
+      # Gradle configuration.
+      - name: Stage the Android artifacts under their release names
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p release-artifacts
+          cp apps/mobile/android/app/build/outputs/bundle/release/app-release.aab "release-artifacts/meridian-field-$VERSION.aab"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "release-artifacts/meridian-field-$VERSION.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-packages
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  # Verification, then attachment. The verify script holds the downloaded set
+  # against the root package.json version — every artifact present, every
+  # artifact carrying that version, nothing unexpected — so the release either
+  # carries the complete set or does not exist.
+  release:
+    needs: [version, server-image, desktop-installers, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Verify every artifact carries the root version
+        run: node scripts/release/verify-release-artifact-versions.mjs release-artifacts
+
+      - name: Compose the release notes
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          cat > release-notes.md <<NOTES
+          Meridian $VERSION, built from one build of this tagged commit. Every
+          artifact carries the root \`package.json\` version (technical spec 26.7).
+
+          | Artifact | File |
+          |---|---|
+          | Server image (\`docker load\`) | \`meridian-server-$VERSION.tar.gz\` |
+          | Web proxy image (\`docker load\`) | \`meridian-server-web-$VERSION.tar.gz\` |
+          | Deployment configuration bundle | \`meridian-deployment-bundle-$VERSION.tar.gz\` |
+          | Meridian Kiosk, Windows installer | \`meridian-kiosk-$VERSION-win-<arch>.exe\` |
+          | Meridian Kiosk, macOS installer | \`meridian-kiosk-$VERSION-mac-<arch>.dmg\` |
+          | Meridian Kiosk, Linux installer | \`meridian-kiosk-$VERSION-linux-<arch>.AppImage\` |
+          | Meridian Field, Android app bundle | \`meridian-field-$VERSION.aab\` |
+          | Meridian Field, direct-install APK | \`meridian-field-$VERSION.apk\` |
+
+          **iOS:** the Meridian Field iOS application archive is not attached
+          here. Building it requires a macOS signing environment holding the
+          Apple distribution certificate and provisioning profile, which this
+          automation does not have; it is produced from this same tagged commit
+          by following the runbook in \`docs/process/release-packaging.md\`
+          (M19.24) and uploaded to App Store Connect from there.
+
+          **Desktop installers are unsigned** in Alpha 1 (technical spec 26.6):
+          Windows and macOS show a first-run trust warning, described in the
+          install documentation.
+          NOTES
+
+      - name: Create the release and attach the artifacts
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Meridian $VERSION" \
+            --notes-file release-notes.md \
+            release-artifacts/*
+
+      - name: Report the dry run
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          {
+            echo "## Release dry run"
+            echo
+            echo "Every artifact was built from this commit and verified against the root version; nothing was attached anywhere."
+            echo
+            echo '```'
+            ls -l release-artifacts
+            echo '```'
+            echo
+            cat release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"

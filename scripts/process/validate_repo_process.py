@@ -25,6 +25,7 @@ REQUIRED_FILES = [
     ".github/workflows/pr-process-checks.yml",
     ".github/workflows/main-process-checks.yml",
     ".github/workflows/production-version-bump.yml",
+    ".github/workflows/release-artifacts.yml",
     "scripts/process/validate_pr_body.py",
     "scripts/process/test_validate_pr_body.py",
     "scripts/process/validate_traceability_matrix.py",
