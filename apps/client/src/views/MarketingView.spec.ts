@@ -216,8 +216,18 @@ describe("the public marketing surface", () => {
     const wrapper = await mountSurface();
 
     expect(wrapper.findAll("form")).toHaveLength(1);
-    expect(wrapper.findAll("button")).toHaveLength(1);
-    expect(wrapper.find("button").attributes("type")).toBe("submit");
+
+    // Every button on the page is either the interest form's submit or a
+    // screenshot viewer control. Nothing buys, subscribes, or signs up.
+    for (const button of wrapper.findAll("button")) {
+      const isSubmit = button.attributes("type") === "submit";
+      const isViewer = button.classes("marketing__shot");
+
+      expect(isSubmit || isViewer).toBe(true);
+    }
+    expect(
+      wrapper.findAll('button[type="submit"]'),
+    ).toHaveLength(1);
 
     const offerings = wrapper.find('[aria-labelledby="marketing-offerings"]');
     expect(offerings.findAll("form")).toHaveLength(0);
@@ -236,6 +246,36 @@ describe("the public marketing surface", () => {
     expect(wrapper.text()).not.toMatch(
       /sign up|billing|subscribe|per month|credit card|\$|€|£/i,
     );
+  });
+
+  /**
+   * A screenshot small enough for a column is too small to read an interface
+   * in, so every one opens larger in an in-page viewer: same committed asset,
+   * a dialog role, the alt text carried along, and Escape or the close button
+   * to come back.
+   */
+  it("opens a screenshot larger, and closes the viewer again", async () => {
+    const wrapper = await mountSurface();
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    await wrapper.find("button.marketing__shot").trigger("click");
+
+    const viewer = wrapper.find('[role="dialog"]');
+    expect(viewer.exists()).toBe(true);
+    expect(viewer.attributes("aria-modal")).toBe("true");
+
+    const first = MARKETING_FEATURE_TOUR[0];
+    expect(viewer.find("img").attributes("src")).toBe(first.screenshot);
+    expect(viewer.find("img").attributes("alt")).toBe(first.screenshotAlt);
+    expect(viewer.text()).toContain(first.title);
+
+    await viewer.trigger("keydown.esc");
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+
+    await wrapper.find("button.marketing__shot").trigger("click");
+    await wrapper.find(".marketing__viewer-close").trigger("click");
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
   });
 
   /**
