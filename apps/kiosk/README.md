@@ -169,8 +169,10 @@ corepack pnpm run kiosk:package:check
 The configuration lives in `src/packagingConfig.ts` (unit tested in
 `src/packagingConfig.spec.ts`); `electron-builder.config.cjs` only loads its
 compiled form. Alpha 1 artifacts are unsigned on purpose — Windows and macOS
-show a first-run trust warning, which the M19.24 install documentation states
-rather than hides; code signing and macOS notarization are beta scope. Packaged
+show a first-run trust warning, which the install documentation
+([`docs/process/release-packaging.md`](../../docs/process/release-packaging.md),
+M19.24) states rather than hides; code signing and macOS notarization are beta
+scope. Packaged
 applications do not self-update; a new version is installed the way the first
 one was (technical spec 26.6).
 
