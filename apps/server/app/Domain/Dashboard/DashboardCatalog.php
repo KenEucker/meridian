@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Dashboard;
 
+use App\Domain\Modules\ModuleKey;
+
 /**
  * The Alpha 1 dashboard widget inventory (UI contract 13.1 through 13.6;
  * dashboard widget spec 6; M18.28).
@@ -108,6 +110,14 @@ final class DashboardCatalog
                 'permission' => $definition->permission,
                 'evaluation' => $definition->evaluation->value,
                 'deferred_to' => $definition->deferredTo,
+                /*
+                 * The module whose records the widget reads, or null where they
+                 * are core (MOD-019). The inventory is what a surface reads to
+                 * know what it is not being sent, and "this Meridian defers it"
+                 * and "your organization does not run it" are different answers
+                 * to that question.
+                 */
+                'module' => $definition->module?->value,
             ],
             self::definitions(),
         );
@@ -128,6 +138,7 @@ final class DashboardCatalog
         return [
             new DashboardWidgetDefinition(
                 id: 'staff.current_shift',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Staff,
                 title: 'Current Shift',
                 scope: 'user/event',
@@ -138,6 +149,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'staff.upcoming_shifts',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Staff,
                 title: 'Upcoming Shifts',
                 scope: 'user/event',
@@ -158,6 +170,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'staff.shift_alerts',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Staff,
                 title: 'Shift Alerts',
                 scope: 'user/event',
@@ -168,6 +181,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'staff.document_acknowledgments',
+                module: ModuleKey::Documents,
                 group: DashboardWidgetGroup::Staff,
                 title: 'Documents to Acknowledge',
                 scope: 'user/org/department',
@@ -178,6 +192,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'staff.briefing',
+                module: ModuleKey::Briefing,
                 group: DashboardWidgetGroup::Staff,
                 title: 'The Briefing',
                 scope: 'user/event',
@@ -213,6 +228,7 @@ final class DashboardCatalog
         return [
             new DashboardWidgetDefinition(
                 id: 'dept.coverage_issues',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Coverage Issues',
                 scope: 'department/event',
@@ -223,6 +239,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.shift_readiness',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Shift Readiness',
                 scope: 'department/event',
@@ -233,6 +250,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.checkin_status',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Check-in Status',
                 scope: 'department/event',
@@ -243,6 +261,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.training_readiness',
+                module: ModuleKey::Qualifications,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Training Readiness',
                 scope: 'department/event',
@@ -253,6 +272,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.policy_readiness',
+                module: ModuleKey::Documents,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Policy Readiness',
                 scope: 'department',
@@ -263,6 +283,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.equipment_returns',
+                module: ModuleKey::Equipment,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Equipment Returns',
                 scope: 'department/event',
@@ -273,6 +294,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'dept.event_map',
+                module: ModuleKey::EventGeography,
                 group: DashboardWidgetGroup::DepartmentLead,
                 title: 'Event Map',
                 scope: 'department/event',
@@ -299,6 +321,7 @@ final class DashboardCatalog
         return [
             new DashboardWidgetDefinition(
                 id: 'shift.current_assignments',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::DepartmentOperations,
                 title: 'Current Assignments',
                 scope: 'shift/department/event',
@@ -309,6 +332,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'shift.late_missing',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::DepartmentOperations,
                 title: 'Late or Missing Staff',
                 scope: 'shift/department/event',
@@ -319,6 +343,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'shift.deployment_needs',
+                module: ModuleKey::EventGeography,
                 group: DashboardWidgetGroup::DepartmentOperations,
                 title: 'Deployment Needs',
                 scope: 'shift/department/event',
@@ -329,6 +354,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'shift.equipment_status',
+                module: ModuleKey::Equipment,
                 group: DashboardWidgetGroup::DepartmentOperations,
                 title: 'Equipment Status',
                 scope: 'shift/department/event',
@@ -354,6 +380,7 @@ final class DashboardCatalog
         return [
             new DashboardWidgetDefinition(
                 id: 'org.event_readiness',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Organizer,
                 title: 'Event Readiness',
                 scope: 'org/event',
@@ -364,6 +391,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'org.cross_dept_coverage',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Organizer,
                 title: 'Cross-Department Coverage',
                 scope: 'org/event',
@@ -384,6 +412,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'org.policy_readiness',
+                module: ModuleKey::Documents,
                 group: DashboardWidgetGroup::Organizer,
                 title: 'Policy Readiness',
                 scope: 'org/event',
@@ -430,6 +459,7 @@ final class DashboardCatalog
         return [
             new DashboardWidgetDefinition(
                 id: 'ic.active_incidents',
+                module: ModuleKey::IncidentManagement,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'Active Incidents',
                 scope: 'event/IC department',
@@ -440,6 +470,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'ic.serious_incidents',
+                module: ModuleKey::IncidentManagement,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'Serious Incidents',
                 scope: 'event/IC department',
@@ -450,6 +481,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'ic.on_scene',
+                module: ModuleKey::IncidentManagement,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'On Scene',
                 scope: 'event/IC department',
@@ -460,6 +492,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'ic.monitoring',
+                module: ModuleKey::IncidentManagement,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'Monitoring',
                 scope: 'event/IC department',
@@ -470,6 +503,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'ic.unresolved_field_reports',
+                module: ModuleKey::IncidentManagement,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'Field Reports to Review',
                 scope: 'event/IC department',
@@ -480,6 +514,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'ic.briefing',
+                module: ModuleKey::Briefing,
                 group: DashboardWidgetGroup::IncidentCommand,
                 title: 'The Briefing',
                 scope: 'event/IC department',
@@ -516,6 +551,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'kiosk.staff_checkin',
+                module: ModuleKey::Scheduling,
                 group: DashboardWidgetGroup::Kiosk,
                 title: 'Staff-Mediated Check-in',
                 scope: 'event/department',
@@ -526,6 +562,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'kiosk.equipment_returns',
+                module: ModuleKey::Equipment,
                 group: DashboardWidgetGroup::Kiosk,
                 title: 'Equipment Returns',
                 scope: 'event/department',
@@ -558,6 +595,7 @@ final class DashboardCatalog
             ),
             new DashboardWidgetDefinition(
                 id: 'kiosk.event_map',
+                module: ModuleKey::EventGeography,
                 group: DashboardWidgetGroup::Kiosk,
                 title: 'Event Map',
                 scope: 'event/kiosk',

@@ -6,6 +6,9 @@ namespace App\Services\Modules;
 
 use App\Domain\Modules\ModuleKey;
 use App\Models\OrganizationModule;
+use Illuminate\Container\Container;
+use Illuminate\Http\Request;
+use WeakReference;
 
 /**
  * The modules an organization is currently running (MOD-005, MOD-016).
@@ -34,17 +37,29 @@ use App\Models\OrganizationModule;
 class ActiveModuleResolver
 {
     /**
-     * Answers already given, for the life of this instance.
+     * Answers already given, for the request they were given in.
      *
      * The read set asks about several organizations in one pass and the route
-     * gate (M19.12) asks about one organization repeatedly within a request.
-     * Memoizing per instance keeps both to one query each without holding an
-     * answer across requests, which is what would let a module toggle go
-     * unnoticed until a worker restarted.
+     * gate (M19.12) asks about one organization repeatedly within a request, so
+     * memoizing keeps both to one query each.
+     *
+     * The memo is scoped to a request rather than to this object, because the
+     * two are not the same lifetime and assuming they were is how a module
+     * toggle goes unnoticed. A resolver injected into a service that is itself
+     * held by something long-lived — Laravel caches a controller instance on the
+     * `Route` that dispatched to it, and a queued worker keeps a container alive
+     * across jobs — would otherwise answer a later request from an earlier one's
+     * reading, and an organization that switched a module off would keep getting
+     * it until the process restarted. {@see self::currentScope()}.
      *
      * @var array<string, list<ModuleKey>>
      */
     private array $resolved = [];
+
+    /**
+     * Which request the memo above belongs to, or null outside one.
+     */
+    private ?WeakReference $memoScope = null;
 
     /**
      * The modules active for this organization.
@@ -53,6 +68,8 @@ class ActiveModuleResolver
      */
     public function activeFor(string $organizationId): array
     {
+        $this->discardAnswersFromAnotherRequest();
+
         return $this->resolved[$organizationId] ??= $this->read($organizationId);
     }
 
@@ -104,12 +121,54 @@ class ActiveModuleResolver
     public function forget(?string $organizationId = null): void
     {
         if ($organizationId === null) {
+            $current = $this->currentScope();
+
             $this->resolved = [];
+            $this->memoScope = $current === null ? null : WeakReference::create($current);
 
             return;
         }
 
         unset($this->resolved[$organizationId]);
+    }
+
+    /**
+     * Drop the memo when it was filled during a different request.
+     *
+     * Cheap — one identity comparison per lookup — and it makes the memo mean
+     * "for this request" wherever the resolver happens to be held. Outside a
+     * request there is no scope to change, so a console command or a test
+     * driving the resolver directly keeps the plain per-instance behaviour and
+     * can still {@see self::forget()} after writing module state.
+     */
+    private function discardAnswersFromAnotherRequest(): void
+    {
+        $current = $this->currentScope();
+
+        if ($current !== null && $this->memoScope?->get() === $current) {
+            return;
+        }
+
+        $this->resolved = [];
+        $this->memoScope = $current === null ? null : WeakReference::create($current);
+    }
+
+    /**
+     * The request this lookup is happening inside, or null outside one.
+     *
+     * Held weakly and compared by identity rather than by an object id, because
+     * an id is reused once its object is collected — the request the memo was
+     * filled for is exactly the object that gets freed between requests, and a
+     * reused id would silently keep a stale answer. A weak reference to a
+     * collected request reads null and differs from everything, which fails in
+     * the direction of one extra query.
+     */
+    private function currentScope(): ?Request
+    {
+        $container = Container::getInstance();
+        $request = $container->bound('request') ? $container->make('request') : null;
+
+        return $request instanceof Request ? $request : null;
     }
 
     /**

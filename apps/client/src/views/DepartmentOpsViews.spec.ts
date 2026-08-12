@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   installLocalFieldSession,
   LOCAL_FIELD_DEPARTMENT_IDS,
+  localFieldOrganizationsWithout,
+  localFieldSessionDocument,
 } from "@/session/localFieldSessionFixture";
+import {
+  MODULE_EQUIPMENT,
+  MODULE_EVENT_GEOGRAPHY,
+  MODULE_SCHEDULING,
+  type ModuleKey,
+} from "@/session/sessionModules";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
@@ -12,7 +20,10 @@ import { configureMeridianApi } from "@/api/meridianApi";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
-import { clearClientSession } from "@/session/clientSession";
+import {
+  clearClientSession,
+  installClientSession,
+} from "@/session/clientSession";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
@@ -1715,5 +1726,90 @@ describe("department operations surfaces", () => {
       "You may no longer work this department.",
     );
     expect(wrapper.find(".logistics__cache").exists()).toBe(false);
+  });
+});
+
+/*
+ * The four surfaces compose modules an organization may not run, and none of
+ * them may fail, blank, or error because one is off (M19.18; MOD-019; data/API
+ * 5.9). The node omits the sections it does not run; these cases cover the
+ * client half, which is that the region goes rather than going quiet.
+ *
+ * The distinction is the whole point. An absent `searchable_equipment` and a
+ * department that happens to hold no equipment arrive here as the same empty
+ * array, and "No open equipment for this staff member" is a true sentence about
+ * the first and a misleading one about the second — it describes a desk that
+ * could have equipment out, when the organization has no equipment desk at all
+ * (CLIENT-005).
+ */
+describe("department operations surfaces without every module", () => {
+  function establish(...inactive: readonly ModuleKey[]): void {
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldOrganizationsWithout(...inactive),
+      }),
+      "network",
+    );
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.rangers);
+  }
+
+  it("withholds the Logistics Desk's shift and equipment regions and keeps the desk", async () => {
+    establish(MODULE_SCHEDULING, MODULE_EQUIPMENT);
+
+    const { wrapper } = await mountAt(logisticsPath());
+    const text = wrapper.text();
+
+    expect(text).not.toContain("Current shifts");
+    expect(text).not.toContain("On shift now");
+    expect(text).not.toContain("Equipment checked out");
+    expect(text).not.toContain("Future shift signups");
+    // What the desk is for without either of them: somebody is standing here,
+    // find them and mark them on or off site (requirements 5.8).
+    expect(wrapper.find(".logistics__cache").exists()).toBe(true);
+    expect(text).toContain("Department staff, read");
+    expect(wrapper.find(".logistics__error").exists()).toBe(false);
+  });
+
+  it("withholds the Overview's shift sections and keeps its core content", async () => {
+    establish(MODULE_SCHEDULING);
+
+    const { wrapper } = await mountAt(overviewPath());
+    const text = wrapper.text();
+
+    expect(text).not.toContain("Exceptions needing attention");
+    expect(text).not.toContain("Shift assignments");
+    // Nor the empty state that would report a gap in a schedule that is not
+    // part of this organization.
+    expect(text).not.toContain("No shifts are scheduled for this department");
+    expect(text).toContain("On-site");
+    expect(wrapper.find(".overview__error").exists()).toBe(false);
+  });
+
+  it("says why the Planning Table is empty rather than rendering an empty table", async () => {
+    establish(MODULE_SCHEDULING);
+
+    const { wrapper } = await mountAt(planningPath());
+    const text = wrapper.text();
+
+    expect(text).not.toContain("Plan versus actual");
+    expect(text).not.toContain("Scheduled shifts");
+    expect(text).toContain("This organization does not use Scheduling");
+    expect(wrapper.find(".planning__error").exists()).toBe(false);
+  });
+
+  it("drops an Operations Center module rather than describing authority nobody holds", async () => {
+    establish(MODULE_EVENT_GEOGRAPHY);
+
+    const { wrapper } = await mountAt(operationsPath());
+    const text = wrapper.text();
+
+    // The entry is gone, not listed with the sentence naming the capability
+    // that would open it: with Event Geography off there is no such capability
+    // for anybody in the organization (MOD-013).
+    expect(text).not.toContain(
+      "Deployments require Department Operations capability.",
+    );
+    expect(text).toContain("Capability modules");
+    expect(wrapper.find(".ops__error").exists()).toBe(false);
   });
 });

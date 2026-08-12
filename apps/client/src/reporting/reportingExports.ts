@@ -57,6 +57,12 @@ import {
   sessionEventContext,
 } from "@/session/sessionAccess";
 import type { SessionRole } from "@/session/sessionDocument";
+import {
+  MODULE_QUALIFICATIONS,
+  MODULE_SCHEDULING,
+  moduleActiveIn,
+  type ModuleKey,
+} from "@/session/sessionModules";
 
 /**
  * One export, described well enough that somebody can decide whether to run it
@@ -70,6 +76,19 @@ export interface ReportingExportDescriptor {
   readonly format: string;
   /** The capability code that permits running it. */
   readonly capability: string;
+  /**
+   * The MOD-002 module whose records this export reads, or null where they are
+   * core (M19.18; MOD-019; data/API 5.9: "exports owned by a module are
+   * unavailable when it is inactive; the short-lived download URL is not
+   * issued").
+   *
+   * Held on the descriptor rather than checked at the surface for the reason
+   * the endpoint is: the entry that was rendered is the entry that declares
+   * what it needs, so an export cannot be offered on one page and withheld on
+   * another. The node gates the two endpoints behind each of these (M19.12);
+   * this is what keeps a reader from pressing a button that answers `404`.
+   */
+  readonly module: ModuleKey | null;
   /**
    * The endpoint that issues this export's short-lived URL, for the event.
    *
@@ -115,6 +134,7 @@ export interface ReportingExportDescriptor {
  */
 export const CREDENTIAL_ELIGIBILITY_EXPORT: ReportingExportDescriptor = {
   id: "credential-eligibility",
+  module: MODULE_QUALIFICATIONS,
   label: "Credential eligibility",
   format: "CSV",
   capability: CAPABILITY_REPORTS_CREDENTIAL_ELIGIBILITY_EXPORT,
@@ -149,6 +169,7 @@ export const CREDENTIAL_ELIGIBILITY_EXPORT: ReportingExportDescriptor = {
  */
 export const SHIFT_ROSTER_EXPORT: ReportingExportDescriptor = {
   id: "shift-roster",
+  module: MODULE_SCHEDULING,
   label: "Shift roster",
   format: "CSV",
   capability: CAPABILITY_REPORTS_SHIFT_ROSTER_EXPORT,
@@ -185,6 +206,7 @@ export const SHIFT_ROSTER_EXPORT: ReportingExportDescriptor = {
  */
 export const STAFF_CONTACT_EXPORT: ReportingExportDescriptor = {
   id: "staff-contact",
+  module: null,
   label: "Staff contact list",
   format: "CSV",
   capability: CAPABILITY_REPORTS_STAFF_CONTACT_EXPORT,
@@ -222,6 +244,7 @@ export const STAFF_CONTACT_EXPORT: ReportingExportDescriptor = {
  */
 export const HOURS_WORKED_EXPORT: ReportingExportDescriptor = {
   id: "hours-worked",
+  module: null,
   label: "Hours worked",
   format: "CSV",
   capability: CAPABILITY_REPORTS_HOURS_WORKED_EXPORT,
@@ -263,6 +286,7 @@ export const HOURS_WORKED_EXPORT: ReportingExportDescriptor = {
  */
 export const CREDITS_EARNED_EXPORT: ReportingExportDescriptor = {
   id: "credits-earned",
+  module: null,
   label: "Credits earned",
   format: "CSV",
   capability: CAPABILITY_REPORTS_CREDITS_EARNED_EXPORT,
@@ -416,7 +440,22 @@ export function reportingExportAuthorityFor(
       roleReaches(role, reach),
     );
 
-    const permitted = offered.filter((descriptor) =>
+    /*
+     * The module boundary is asked before the capability one, because they are
+     * different questions and only one of them is about the reader. An export
+     * owned by a module the organization does not run is not offered to
+     * anybody, permitted or not (MOD-019), and the node refuses both of its
+     * endpoints regardless (MOD-012). The organization asked about is the one
+     * the department belongs to — an organizer working across two organizations
+     * exports from the one they are standing in.
+     */
+    const runnable = offered.filter(
+      (descriptor) =>
+        descriptor.module === null ||
+        moduleActiveIn(department.organizationId, descriptor.module),
+    );
+
+    const permitted = runnable.filter((descriptor) =>
       atReach.some((role) => role.capabilities.includes(descriptor.capability)),
     );
 

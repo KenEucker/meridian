@@ -10,6 +10,7 @@ use App\Domain\EventHorizon\EventHorizonItemState;
 use App\Models\Event;
 use App\Models\EventHorizonDismissal;
 use App\Models\User;
+use App\Services\Modules\ActiveModuleResolver;
 use Illuminate\Support\Carbon;
 
 /**
@@ -24,9 +25,10 @@ use Illuminate\Support\Carbon;
  *
  * Each registered kind is evaluated under the viewer's existing authorization
  * for the domain it reads. A kind the viewer cannot read is omitted entirely
- * rather than reported as unknown (21D.5), and a kind is registered here in
- * code and nowhere else — there is no configuration path that could add,
- * remove, or reorder one (HORIZON-003).
+ * rather than reported as unknown (21D.5), a kind owned by a module the
+ * organization does not run is omitted for everybody (HORIZON-017), and a kind
+ * is registered here in code and nowhere else — there is no configuration path
+ * that could add, remove, or reorder one (HORIZON-003).
  *
  * The service enforces nothing (HORIZON-008). Every condition it reports is
  * enforced, or deliberately not enforced, by the rule that already governs it;
@@ -37,6 +39,7 @@ final class EventHorizonService
 {
     public function __construct(
         private readonly EventHorizonViewerResolver $viewers,
+        private readonly ActiveModuleResolver $modules,
     ) {}
 
     public function viewerFor(User $user, Event $event): EventHorizonViewer
@@ -47,14 +50,40 @@ final class EventHorizonService
     /**
      * The registered kinds this viewer can read, in catalogue order.
      *
+     * Two filters, in this order and for different reasons. A kind owned by a
+     * module the organization does not run is omitted for everybody in it
+     * (HORIZON-017, MOD-019): there are no waivers, trainings, or shifts to be
+     * ready with, so evaluating the kind would report on records that are not
+     * part of this Meridian. A kind whose records *this viewer* cannot read is
+     * omitted for them alone (HORIZON-002, 21D.5). Both produce absence rather
+     * than an empty section, and the surface follows: where nothing remains the
+     * read reports itself unpresentable rather than answering with an empty list
+     * that reads as "you are ready".
+     *
      * @return list<EventHorizonItemKind>
      */
     public function availableKinds(EventHorizonViewer $viewer, Event $event): array
     {
         return array_values(array_filter(
             $this->kinds(),
-            fn (EventHorizonItemKind $kind): bool => $kind->availableTo($viewer, $event),
+            fn (EventHorizonItemKind $kind): bool => $this->moduleRuns($kind, $event)
+                && $kind->availableTo($viewer, $event),
         ));
+    }
+
+    /**
+     * Whether the event's organization runs the module owning this kind.
+     *
+     * A kind naming a module this build's catalogue does not list is treated as
+     * core and stays available, the same safe direction an undeclared domain
+     * namespace takes (technical spec 15A.2).
+     */
+    private function moduleRuns(EventHorizonItemKind $kind, Event $event): bool
+    {
+        $module = $kind->definition()->moduleKey();
+
+        return $module === null
+            || $this->modules->isActive((string) $event->organization_id, $module);
     }
 
     /**
