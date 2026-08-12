@@ -146,6 +146,13 @@ return [
         'private_key' => env('MERIDIAN_NODE_PRIVATE_KEY'),
         'central_node_url' => env('MERIDIAN_CENTRAL_NODE_URL'),
 
+        // The organization this node is bound to, when it serves exactly one
+        // (technical spec 7.3, 15A.6). Unset on a central node, which serves
+        // many. A bound node's console hides that organization's inactive
+        // modules from operational navigation (MOD-021); nothing about
+        // enforcement changes, which stays by organization.
+        'organization_id' => env('MERIDIAN_NODE_ORGANIZATION_ID'),
+
         // Pairing state (technical spec 7.3). These are normally written by
         // pairing as database overrides; the file values exist so a prepared
         // deployment can ship a known central identity.

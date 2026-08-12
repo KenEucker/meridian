@@ -71,6 +71,76 @@ class NodeConfigSourceTest extends TestCase
         $this->assertSame('Configured (hidden)', $values->get('node_private_key')['display_value']);
     }
 
+    /**
+     * Technical spec 7.3 lists the organization and event bindings among node
+     * config and requires God Mode to report where every config value came
+     * from. Both are read by product code — the organization narrows console
+     * navigation (M19.14, MOD-021) and a node naming an event does not serve
+     * the marketing surface (PUBLIC-006) — so a node bound by its own record
+     * has to say so rather than reporting "Not set".
+     */
+    public function test_resolver_reports_the_node_records_own_bindings(): void
+    {
+        config(['meridian.node.organization_id' => null]);
+
+        $node = Node::factory()->create([
+            'organization_id' => '0195b0f1-1111-7000-8000-000000000000',
+            'event_id' => '0195b0f1-2222-7000-8000-000000000000',
+        ]);
+
+        $values = collect(app(NodeConfigResolver::class)->valuesFor($node))->keyBy('key');
+
+        $this->assertSame(NodeConfigValue::SOURCE_RUNTIME, $values->get('organization_id')['source']);
+        $this->assertSame('0195b0f1-1111-7000-8000-000000000000', $values->get('organization_id')['display_value']);
+
+        $this->assertSame(NodeConfigValue::SOURCE_RUNTIME, $values->get('event_id')['source']);
+        $this->assertSame('0195b0f1-2222-7000-8000-000000000000', $values->get('event_id')['display_value']);
+    }
+
+    /**
+     * An unbound node reports the bindings as unset rather than omitting them,
+     * so "this node serves every organization" is a stated answer on the screen
+     * rather than a row an operator has to notice is missing.
+     */
+    public function test_resolver_reports_unset_bindings_on_an_unbound_node(): void
+    {
+        config(['meridian.node.organization_id' => null]);
+
+        $values = collect(app(NodeConfigResolver::class)->valuesFor(Node::factory()->create()))->keyBy('key');
+
+        $this->assertSame('Not set', $values->get('organization_id')['display_value']);
+        $this->assertSame('Not set', $values->get('event_id')['display_value']);
+    }
+
+    /**
+     * The precedence the binding itself is read through: a database override,
+     * then file config, then the node record. `value()` is the single reader,
+     * so what the product acts on is what this screen reports a source for.
+     */
+    public function test_resolver_reads_one_value_through_the_displayed_precedence(): void
+    {
+        $node = Node::factory()->create(['organization_id' => 'record-organization']);
+
+        $resolver = app(NodeConfigResolver::class);
+
+        config(['meridian.node.organization_id' => null]);
+        $this->assertSame('record-organization', $resolver->value('organization_id', $node));
+
+        config(['meridian.node.organization_id' => 'file-organization']);
+        $this->assertSame('file-organization', $resolver->value('organization_id', $node));
+
+        NodeConfigValue::factory()->for($node)->create([
+            'key' => 'organization_id',
+            'value_json' => 'override-organization',
+            'source' => NodeConfigValue::SOURCE_DATABASE,
+        ]);
+
+        $this->assertSame('override-organization', $resolver->value('organization_id', $node));
+
+        // A key the table has never heard of decides nothing.
+        $this->assertNull($resolver->value('not_a_config_value', $node));
+    }
+
     public function test_orchid_node_config_screen_displays_sources_without_private_key_material(): void
     {
         $node = Node::factory()->create([

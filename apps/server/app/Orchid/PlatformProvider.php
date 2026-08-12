@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Orchid;
 
 use App\Models\User;
+use App\Services\Console\ConsoleModuleVisibility;
 use Orchid\Platform\Dashboard;
 use Orchid\Platform\ItemPermission;
 use Orchid\Platform\Models\User as OrchidUser;
@@ -34,11 +35,19 @@ class PlatformProvider extends OrchidServiceProvider
     /**
      * Register the application menu.
      *
+     * Entries owned by a module the bound organization does not run are hidden
+     * before the sidebar is built (M19.14; MOD-021; technical spec 15A.6).
+     * {@see ConsoleModuleVisibility} decides that centrally from one ownership
+     * table rather than each item below carrying a visibility call, so a new
+     * module-owned screen is hidden by declaring what it administers and cannot
+     * be missed by forgetting to wire it. On central — a node bound to no
+     * single organization — nothing is hidden at all.
+     *
      * @return Menu[]
      */
     public function menu(): array
     {
-        return [
+        return $this->app->make(ConsoleModuleVisibility::class)->narrow([
             // The console entry point carries no group heading: it is the first
             // thing in the sidebar, so a heading above it would name a section
             // of one and say nothing the item does not already say.
@@ -123,6 +132,12 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.credit-policies')
                 ->permission('platform.credit-policies'),
 
+            // Every item under this heading belongs to Documents, so a bound
+            // organization that does not run Documents loses the whole section
+            // and its heading together. A group heading in this framework lives
+            // on the first item of its group, which is a problem where a hidden
+            // item strands the ones below it; here the group and the module are
+            // the same set, so it is the correct outcome rather than a hazard.
             Menu::make(__('Policy Documents'))
                 ->icon('bs.file-earmark-text')
                 ->route('platform.policy-documents')
@@ -338,7 +353,7 @@ class PlatformProvider extends OrchidServiceProvider
                 ->route('platform.changelog')
                 ->permission('platform.changelog')
                 ->badge(fn (): string => (string) config('meridian.version'), Color::DARK),
-        ];
+        ]);
     }
 
     /**
