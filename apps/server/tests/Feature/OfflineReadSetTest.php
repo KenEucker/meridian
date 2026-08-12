@@ -15,6 +15,7 @@ use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
 use App\Models\FieldReport;
 use App\Models\Organization;
+use App\Models\OrganizationModule;
 use App\Models\PermissionRole;
 use App\Models\PolicyDocument;
 use App\Models\Shift;
@@ -25,7 +26,6 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
-use App\Services\Modules\ActiveModuleResolver;
 use Database\Seeders\AttendanceScenarioSeeder;
 use Database\Seeders\DevelopmentScenarioSeeder;
 use Database\Seeders\DocumentScenarioSeeder;
@@ -664,50 +664,35 @@ class OfflineReadSetTest extends TestCase
     }
 
     /**
-     * Switch modules off for every organization, or for one named organization.
+     * Switch modules off for this test's organization, or for one named
+     * organization.
      *
-     * `organization_modules` does not exist until M19.11, so the state is
-     * supplied through the resolver that will read it. The boundary under test
-     * is the composer's, and it is the same boundary whichever side of that
-     * table the state comes from.
+     * Written to `organization_modules` (M19.11) the way the organizer surface
+     * writes it — entitled, and not enabled (MOD-008) — rather than through a
+     * resolver bound for the test, which is what this had to do while the table
+     * did not exist. `ModuleScopedReplicationTest` is where the boundary is
+     * proven on real state end to end; these two exercise it on the
+     * regular-staff sections.
      */
     private function withoutModules(ModuleKey ...$inactive): void
     {
-        $this->bindModules($inactive, null);
+        $this->withoutModulesIn((string) $this->organization->id, ...$inactive);
     }
 
     private function withoutModulesIn(string $organizationId, ModuleKey ...$inactive): void
     {
-        $this->bindModules($inactive, $organizationId);
-    }
-
-    /**
-     * @param  list<ModuleKey>  $inactive
-     */
-    private function bindModules(array $inactive, ?string $only): void
-    {
-        $this->app->instance(ActiveModuleResolver::class, new class($inactive, $only) extends ActiveModuleResolver
-        {
-            /**
-             * @param  list<ModuleKey>  $inactive
-             */
-            public function __construct(
-                private readonly array $inactive,
-                private readonly ?string $only,
-            ) {}
-
-            public function activeFor(string $organizationId): array
-            {
-                if ($this->only !== null && $this->only !== $organizationId) {
-                    return ModuleKey::cases();
-                }
-
-                return array_values(array_filter(
-                    ModuleKey::cases(),
-                    fn (ModuleKey $module): bool => ! in_array($module, $this->inactive, true),
-                ));
-            }
-        });
+        foreach ($inactive as $module) {
+            OrganizationModule::query()->updateOrCreate(
+                [
+                    'organization_id' => $organizationId,
+                    'module_key' => $module->value,
+                ],
+                [
+                    'entitled' => true,
+                    'enabled' => false,
+                ],
+            );
+        }
     }
 
     private function grant(string $roleCode, Team $team, ?Event $event = null): TeamGrant

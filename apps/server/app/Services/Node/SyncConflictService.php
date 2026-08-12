@@ -4,6 +4,7 @@ namespace App\Services\Node;
 
 use App\Models\NodeOperation;
 use App\Models\SyncConflict;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -20,6 +21,12 @@ use RuntimeException;
  *
  * Unresolved conflicts must not block unrelated sync (technical spec 10.3):
  * callers enqueue a conflict and continue applying other operations.
+ *
+ * {@see self::recordDeviceWrite()} is the second shape, added by MOD-017: a
+ * write queued on a device and refused when it landed. It has no node operation
+ * and never will, so the two entry points are separate rather than one with a
+ * nullable argument — everything that makes the first safe is about the
+ * operation it marks.
  */
 class SyncConflictService
 {
@@ -79,6 +86,64 @@ class SyncConflictService
 
             return $conflict;
         });
+    }
+
+    /**
+     * Record a write that was composed on a device, queued, and refused when it
+     * reached this node (MOD-017; technical spec 15A.8; data/API 7.5).
+     *
+     * No operation is marked, because there is none: the write never became a
+     * node-to-node operation and must not be made into one. What identifies it
+     * instead is `origin_operation_uuid`, the key the device queued it under
+     * (technical spec 11A.5), which is why a repeated delivery of the same
+     * queued write finds the conflict it already has rather than filing a second
+     * one. That check and the unique index behind it are two halves of the same
+     * guarantee: the read answers the ordinary case, and the index answers two
+     * deliveries racing.
+     *
+     * @param  array<string, mixed>|null  $localValue  what the device sent
+     * @param  array<string, mixed>|null  $remoteValue  what this node holds
+     */
+    public function recordDeviceWrite(
+        string $originOperationUuid,
+        string $entityType,
+        string $entityId,
+        string $reason,
+        string $conflictType,
+        ?array $localValue = null,
+        ?array $remoteValue = null,
+    ): SyncConflict {
+        $held = SyncConflict::query()
+            ->where('origin_operation_uuid', $originOperationUuid)
+            ->first();
+
+        if ($held instanceof SyncConflict) {
+            return $held;
+        }
+
+        try {
+            return SyncConflict::query()->create([
+                'operation_id' => null,
+                'origin_operation_uuid' => $originOperationUuid,
+                'conflict_type' => $conflictType,
+                'entity_type' => $entityType,
+                'entity_id' => $entityId,
+                'local_value_json' => $localValue,
+                'remote_value_json' => $remoteValue,
+                'reason' => $reason,
+                'status' => SyncConflict::STATUS_OPEN,
+                'reviewed_by_user_id' => null,
+                'reviewed_at' => null,
+                'resolution' => null,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Two deliveries of one queued write arrived together. The index
+            // decided which of them filed the row; both callers are answered
+            // with it, because they are the same refusal.
+            return SyncConflict::query()
+                ->where('origin_operation_uuid', $originOperationUuid)
+                ->firstOrFail();
+        }
     }
 
     /**

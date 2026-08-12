@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\NodeOperation;
 use App\Models\SyncConflict;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -23,6 +24,7 @@ class SyncConflictSchemaTest extends TestCase
         $expected = [
             'id',
             'operation_id',
+            'origin_operation_uuid',
             'conflict_type',
             'entity_type',
             'entity_id',
@@ -82,6 +84,36 @@ class SyncConflictSchemaTest extends TestCase
         $this->assertSame($operation->entity_type, $conflict->entity_type);
         $this->assertSame($operation->entity_id, $conflict->entity_id);
         $this->assertTrue($operation->syncConflicts->contains($conflict));
+    }
+
+    /**
+     * A refused device write has no node operation and is identified by the key
+     * the device queued it under instead (MOD-017; M19.17). The uniqueness of
+     * that key is what makes a repeated delivery the same conflict rather than a
+     * new one.
+     */
+    public function test_a_device_write_conflict_holds_no_operation_and_names_the_device_key(): void
+    {
+        $key = (string) Str::uuid();
+
+        $conflict = SyncConflict::factory()->moduleInactive($key)->create();
+
+        $this->assertNull($conflict->operation_id);
+        $this->assertNull($conflict->operation);
+        $this->assertSame($key, $conflict->origin_operation_uuid);
+        $this->assertTrue($conflict->isDeviceWrite());
+
+        $this->expectException(UniqueConstraintViolationException::class);
+        SyncConflict::factory()->moduleInactive($key)->create();
+    }
+
+    /**
+     * A node-to-node conflict is not a device write and must not start resolving
+     * like one, whatever its operation column happens to hold.
+     */
+    public function test_a_node_operation_conflict_is_not_a_device_write(): void
+    {
+        $this->assertFalse(SyncConflict::factory()->create()->isDeviceWrite());
     }
 
     public function test_open_scope_excludes_resolved_conflicts(): void

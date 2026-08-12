@@ -43,6 +43,14 @@ use Illuminate\Support\Facades\DB;
  * Resolution is audited (technical spec 10.3; data/API 7.5, 8), and the audit
  * event is written in the same transaction as the resolution so a resolved
  * conflict cannot exist without the record of who resolved it.
+ *
+ * M19.17 added a second shape of conflict with no second set of rules. A write
+ * queued on a device and refused because its module went inactive (MOD-017) is
+ * still two versions and still resolved by keeping one of them — but one of the
+ * two is an organization's configuration rather than another node's copy of a
+ * record, so only accepting central can be carried out.
+ * {@see self::resolveDeviceWrite()} is that path, and it refuses the other
+ * choice rather than pretending to take it.
  */
 class SyncConflictResolver
 {
@@ -94,6 +102,10 @@ class SyncConflictResolver
 
         if (! $conflict->isOpen()) {
             throw SyncConflictResolutionException::alreadyResolved($conflict);
+        }
+
+        if ($conflict->isDeviceWrite()) {
+            return $this->resolveDeviceWrite($conflict, $resolution, $reviewer);
         }
 
         $operation = $conflict->operation()->first();
@@ -175,6 +187,82 @@ class SyncConflictResolver
     }
 
     /**
+     * Resolve a refused device write (MOD-017; technical spec 15A.8).
+     *
+     * The two choices are the same two, and only one of them is available.
+     * Accepting central keeps what this node holds, which for this kind of
+     * conflict is the organization's own module configuration: the write is not
+     * applied and the row is closed with a named reviewer against it. Accepting
+     * on-site would mean applying the write, and the module that owns it is not
+     * active — there is no operation to apply and applying one would write a
+     * record for capability the organization has switched off.
+     *
+     * Nothing is deleted either way (MOD-022). The refusal stays on the queue as
+     * history, and the work itself is still on the device, which is what makes
+     * "activate the module and send again" a real answer rather than a
+     * consolation.
+     *
+     * @throws SyncConflictResolutionException
+     */
+    private function resolveDeviceWrite(
+        SyncConflict $conflict,
+        string $resolution,
+        User $reviewer,
+    ): SyncConflict {
+        if ($resolution !== SyncConflict::RESOLUTION_ACCEPT_CENTRAL) {
+            throw SyncConflictResolutionException::deviceWriteNotApplicable($conflict);
+        }
+
+        return DB::transaction(function () use ($conflict, $resolution, $reviewer): SyncConflict {
+            $before = [
+                'status' => $conflict->status,
+                'resolution' => $conflict->resolution,
+            ];
+
+            $conflict->forceFill([
+                'status' => SyncConflict::STATUS_RESOLVED,
+                'resolution' => $resolution,
+                'reviewed_by_user_id' => $reviewer->getKey(),
+                'reviewed_at' => now(),
+            ])->save();
+
+            $this->audit->recordForEntity(
+                entity: $conflict,
+                action: self::AUDIT_RESOLVED,
+                actorUser: $reviewer,
+                /*
+                 * The organization whose module configuration was kept, so the
+                 * decision lands in that organization's own trail rather than
+                 * only in the platform-wide one. It is read from the row the
+                 * refusal wrote rather than re-derived, because the record the
+                 * write was about was never created.
+                 */
+                organizationId: is_string($conflict->remote_value_json['organization_id'] ?? null)
+                    ? $conflict->remote_value_json['organization_id']
+                    : null,
+                before: $before,
+                after: [
+                    'status' => SyncConflict::STATUS_RESOLVED,
+                    'resolution' => $resolution,
+                    'accepted_side' => self::SIDE_LOCAL,
+                    'origin_operation_uuid' => $conflict->origin_operation_uuid,
+                    'entity_type' => $conflict->entity_type,
+                    'entity_id' => $conflict->entity_id,
+                    'accepted_value' => $conflict->remote_value_json,
+                ],
+                reason: sprintf(
+                    'Queued %s write refused for an inactive module was closed; the organization\'s module '
+                    .'configuration was kept and the write was not applied.',
+                    (string) $conflict->entity_type,
+                ),
+                sourceContext: AuditEvent::SOURCE_ORCHID,
+            );
+
+            return $conflict->refresh();
+        });
+    }
+
+    /**
      * The resolution technical spec 10.3 defaults to for this conflict.
      *
      * "Active event window + event-scoped records: accept on-site. Central/global
@@ -186,6 +274,12 @@ class SyncConflictResolver
      */
     public function defaultResolutionFor(SyncConflict $conflict): string
     {
+        if ($conflict->isDeviceWrite()) {
+            // The only resolution a refused device write has (MOD-017), so the
+            // recommendation and the available choice are the same one.
+            return SyncConflict::RESOLUTION_ACCEPT_CENTRAL;
+        }
+
         $eventId = $conflict->operation()->first()?->event_id;
 
         if ($eventId === null) {

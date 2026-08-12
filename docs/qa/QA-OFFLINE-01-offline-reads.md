@@ -31,6 +31,13 @@ now has a third answer besides "try again" and "dismiss", where the reader holds
 the authority and the node's refusal reason is one the specification lists as
 overridable.
 
+Section H walks the one M19.17 added, which is not the reader's at all: a write
+queued against a module that was switched off while the device was away is
+refused on arrival and lands in the God Mode conflict queue (MOD-017). It is here
+rather than in a script of its own because it is the offline queue's behaviour
+under a condition the queue cannot see; `QA-MOD-01` covers the module system as a
+whole.
+
 This script does not cover offline *writes* in general — QA-FR-01 covers the
 Field Report queue and QA-SLB-01 covers attendance and the M18.54 Logistics
 addition. What is covered here is reading with no node, and the one refusal
@@ -47,12 +54,12 @@ outcome that M18.54's addition made reachable.
 - `TEAM-009`
 - `UI-020`
 - Requirements section 2.4 (attribution)
-- Technical spec sections 8.6, 9.1 through 9.5, 10, 11A.4, 11A.5, 11A.7, 22A.8,
-  26.2
-- Data/API spec sections 5.3, 5.6, 5.10, 7.1, 7.2, 7.3
+- Technical spec sections 8.6, 9.1 through 9.5, 10, 11A.4, 11A.5, 11A.7, 15A.8,
+  22A.8, 26.2
+- Data/API spec sections 5.3, 5.6, 5.10, 7.1, 7.2, 7.3, 7.5, 7.6
 - UI Implementation Contract sections 11.13, 16, 16.1, 16.1A, 16.2, 16.3
 - ADR-0003 (PowerSync retirement)
-- Meridian Alpha 1 tasks M18.46 through M18.53 and M18.55
+- Meridian Alpha 1 tasks M18.46 through M18.53, M18.55, and M19.17
 
 ## Environment
 
@@ -129,6 +136,8 @@ outcome that M18.54's addition made reachable.
    php artisan test \
      tests/Feature/OfflineReadSetTest.php \
      tests/Feature/OfflineReadSetRoleScopesTest.php \
+     tests/Feature/ModuleScopedReplicationTest.php \
+     tests/Feature/ModuleInactiveOfflineWriteTest.php \
      tests/Feature/PowerSyncRetirementTest.php \
      tests/Feature/ShiftAdditionOverrideTest.php \
      tests/Feature/DepartmentOperationsCommandHttpTest.php
@@ -152,7 +161,13 @@ outcome that M18.54's addition made reachable.
    - the read set is composed through the caller's effective roles, and a login
      with no staff profile receives nothing;
    - an unpublished document reaches nobody and an inactive module's records are
-     absent;
+     absent from a device whose user is permitted to read them, and reactivating
+     the module replicates them back unchanged;
+   - every section that replicates declares the synced table it projects, and no
+     section is owned more widely than that table;
+   - a write queued offline against a module that went inactive becomes an open
+     sync conflict rather than being applied or dropped, one conflict per queued
+     write however many times it is delivered;
    - an unchanged set returns `304` rather than a payload;
    - a role-additive section is absent for a caller without the role rather than
      present and empty;
@@ -303,7 +318,54 @@ error.
     override as Dana; confirm it is held on the device, and that it sends and is
     decided when the network returns.
 
-### H. PowerSync is gone
+### H. A queued write that lands on a switched-off module (MOD-017)
+
+The one case where a queued write is refused for a reason nobody at the desk
+could have known about: an organizer narrowed the product while the device was
+out of coverage. The requirement forbids two outcomes — the write must not be
+silently applied, and it must not be silently dropped — so this section checks
+both, from the device that queued it and from the console that has to answer for
+it.
+
+Sign in as **Sam Shiftlead** on the Logistics Desk.
+
+1. With the node reachable, note a shift in the desk's window and a department
+   staff member marked on-site.
+2. Stop the Laravel server. Confirm the connectivity indicator reports no node
+   reachable.
+3. Add the on-site staff member to the shift. Confirm the outbox holds it as
+   queued rather than refusing it — the Logistics addition is an offline write
+   (data/API 7.2).
+4. With the queue still holding it, start Laravel again and switch Scheduling off
+   for Northwood Collective from the God Mode Organization Modules screen, or
+   with:
+   ```bash
+   php apps/server/artisan tinker --execute="App\Models\OrganizationModule::query()->updateOrCreate(['organization_id' => App\Models\Organization::query()->where('slug','northwood-collective')->value('id'), 'module_key' => 'scheduling'], ['entitled' => true, 'enabled' => false]);"
+   ```
+5. Let the outbox drain, or press retry. Confirm the queued addition settles as
+   **rejected** with the node's own sentence naming Scheduling — not as accepted,
+   and not silently removed from the queue.
+6. Confirm no assignment was created:
+   ```bash
+   php apps/server/artisan tinker --execute="echo App\Models\ShiftAssignment::query()->count();"
+   ```
+7. Sign in to the God Mode console as an operator holding
+   `platform.sync-conflicts` and open **Sync Conflicts**. Confirm one open
+   conflict of type `module_inactive` naming the shift, and open it.
+8. On the review screen, confirm: the operation UUID is the key the device queued
+   the command under; the operation type reads as a queued device write with no
+   origin node; the local value shows the command and the fields the device sent;
+   the remote value shows the module with `entitled` and `enabled` separately and
+   `active` false; and **Accept on-site is not offered** — there is nothing to
+   accept from the device while the module is off.
+9. Choose **Accept central**. Confirm the conflict closes as resolved with the
+   reviewer named, no assignment is created, and an audit entry records the
+   decision.
+10. Drain the outbox once more with the same command still in it, or repeat step
+    5. Confirm no second conflict row appears: the device's key makes a repeated
+    delivery the same refusal.
+
+### I. PowerSync is gone
 
 1. Confirm no PowerSync service, role, bucket-storage database, or publication
    provisioning remains:
@@ -342,6 +404,12 @@ error.
   reason, and is recorded on the assignment and in the audit trail with the
   acting user and the overridden reason code.
 - `do_not_staff` offers no override control at any authority.
+- A write queued against a module that went inactive settles as rejected with the
+  node's sentence naming the module, writes no record, and appears once in the
+  God Mode conflict queue as `module_inactive` however many times it is
+  delivered.
+- That conflict offers Accept central and not Accept on-site, closes with the
+  reviewer named, and creates no record when it closes.
 - No PowerSync configuration or application code remains, and event mode gates on
   the read set check.
 
@@ -360,6 +428,10 @@ error.
 - The `shift_assignments` row and the audit entry for the override.
 - The refusal with no override control for `do_not_staff`.
 - The waiver refusal that survived the on-site override.
+- The outbox entry rejected for an inactive module, beside the God Mode
+  `module_inactive` conflict it filed, showing the same operation UUID.
+- The conflict review screen before resolution, showing no Accept on-site
+  control, and the audit entry after.
 - Output of the PowerSync reference grep and the `docker compose config` check.
 
 ## Failure notes

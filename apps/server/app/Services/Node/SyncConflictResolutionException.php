@@ -42,6 +42,12 @@ class SyncConflictResolutionException extends RuntimeException
     /** Accepting the remote version ran the applier and it did not apply. */
     public const REASON_NOT_APPLIED = 'resolution_not_applied';
 
+    /**
+     * A refused device write cannot be accepted while its module is inactive
+     * (MOD-017).
+     */
+    public const REASON_MODULE_INACTIVE = 'module_inactive';
+
     public function __construct(
         public readonly string $reason,
         string $message,
@@ -105,6 +111,29 @@ class SyncConflictResolutionException extends RuntimeException
                 .'this conflict is between a "%s" node and a "%s" node.',
                 $localRole,
                 $remoteRole,
+            ),
+        );
+    }
+
+    /**
+     * A device write refused for an inactive module has one outcome available
+     * here and it is not this one (MOD-017; technical spec 15A.8).
+     *
+     * There is no stored operation to apply and there could not be: applying it
+     * would write a record belonging to a module the organization has said it
+     * does not run, which is the thing MOD-012 refuses everywhere else in the
+     * product. The refusal names what an operator can do instead, because the
+     * work is not lost — the device is still holding it.
+     */
+    public static function deviceWriteNotApplicable(SyncConflict $conflict): self
+    {
+        return new self(
+            self::REASON_MODULE_INACTIVE,
+            sprintf(
+                'This %s write was refused because the module that owns it is not active, so there is nothing '
+                .'to accept from the device. Keep the central version to close it, or activate the module and '
+                .'have the device send its queued work again.',
+                (string) $conflict->entity_type,
             ),
         );
     }

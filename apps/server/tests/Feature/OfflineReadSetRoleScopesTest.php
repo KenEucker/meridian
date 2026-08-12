@@ -17,6 +17,7 @@ use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
 use App\Models\EventDepartmentPresence;
 use App\Models\Organization;
+use App\Models\OrganizationModule;
 use App\Models\PermissionRole;
 use App\Models\PolicyDocument;
 use App\Models\Shift;
@@ -27,7 +28,6 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
-use App\Services\Modules\ActiveModuleResolver;
 use Database\Seeders\AttendanceScenarioSeeder;
 use Database\Seeders\DevelopmentScenarioSeeder;
 use Database\Seeders\DocumentScenarioSeeder;
@@ -947,23 +947,27 @@ class OfflineReadSetRoleScopesTest extends TestCase
         return array_column($sections[$section] ?? [], 'id');
     }
 
+    /**
+     * Switch modules off the way the organizer surface does — entitled, and not
+     * enabled (MOD-008) — on `organization_modules` (M19.11). This used to bind
+     * a resolver for the test because the table did not exist;
+     * `ModuleScopedReplicationTest` now proves the whole boundary on real state,
+     * and this exercises it on the role-additive sections.
+     */
     private function withoutModules(ModuleKey ...$inactive): void
     {
-        $this->app->instance(ActiveModuleResolver::class, new class($inactive) extends ActiveModuleResolver
-        {
-            /**
-             * @param  list<ModuleKey>  $inactive
-             */
-            public function __construct(private readonly array $inactive) {}
-
-            public function activeFor(string $organizationId): array
-            {
-                return array_values(array_filter(
-                    ModuleKey::cases(),
-                    fn (ModuleKey $module): bool => ! in_array($module, $this->inactive, true),
-                ));
-            }
-        });
+        foreach ($inactive as $module) {
+            OrganizationModule::query()->updateOrCreate(
+                [
+                    'organization_id' => $this->organization->id,
+                    'module_key' => $module->value,
+                ],
+                [
+                    'entitled' => true,
+                    'enabled' => false,
+                ],
+            );
+        }
     }
 
     private function grant(string $roleCode, Team $team, ?Event $event = null): TeamGrant
