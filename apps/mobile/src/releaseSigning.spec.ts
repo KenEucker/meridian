@@ -131,13 +131,16 @@ describe("no key material is committed", () => {
   });
 
   it("finds no embedded private key block in the mobile wrapper", () => {
+    // The marker is assembled at runtime so this spec's own source never
+    // contains the contiguous string it hunts for.
+    const privateKeyBlockMarker = ["PRIVATE", "KEY-----"].join(" ");
     const textFiles = trackedPaths("apps/mobile").filter(
       (path) => !/\.(png|webp|ico|jar)$/i.test(path),
     );
     expect(textFiles.length).toBeGreaterThan(0);
     for (const path of textFiles) {
       const content = readFileSync(resolve(repoRoot, path), "utf8");
-      expect(content, path).not.toContain("PRIVATE KEY-----");
+      expect(content, path).not.toContain(privateKeyBlockMarker);
     }
   });
 
