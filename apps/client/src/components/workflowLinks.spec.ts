@@ -13,7 +13,21 @@ import {
   clearClientSession,
   installClientSession,
 } from "@/session/clientSession";
-import { localFieldSessionDocument } from "@/session/localFieldSessionFixture";
+import {
+  LOCAL_FIELD_DEPARTMENT_IDS,
+  localFieldOrganizationsWithout,
+  localFieldSessionDocument,
+} from "@/session/localFieldSessionFixture";
+import {
+  MODULE_DOCUMENTS,
+  MODULE_EQUIPMENT,
+  MODULE_EVENT_GEOGRAPHY,
+  MODULE_INCIDENT_MANAGEMENT,
+  MODULE_KEYS,
+  MODULE_QUALIFICATIONS,
+  MODULE_SCHEDULING,
+  type ModuleKey,
+} from "@/session/sessionModules";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
@@ -679,6 +693,259 @@ describe("navigation the reader has hidden", () => {
     for (const section of useNavigationSections().value) {
       expect(section.links.length).toBeGreaterThan(0);
     }
+  });
+});
+
+/*
+ * Modules the organization does not run (M19.16; MOD-015; technical spec
+ * 15A.5, 15A.8).
+ *
+ * A third filter over the same lists, and the one that is not about the reader.
+ * The cases above vary a capability and a preference for one person; these vary
+ * nothing about the person at all — the session carries every capability the
+ * fixture grants, and the entries go anyway, because the organization does not
+ * run the product they belong to.
+ *
+ * Each case names the entries that must go and then checks that the core ones
+ * beside them stayed. That second half is the requirement doing the work: the
+ * QA gate for this milestone is an organization with three modules off that
+ * still intakes staff, runs status, checks people in and out, and records hours,
+ * so a filter that took a neighbour with it would be the failure.
+ */
+describe("navigation for modules the organization does not run", () => {
+  const DEPARTMENT = "66666666-6666-4666-8666-666666666666";
+
+  function installWithout(...inactive: readonly ModuleKey[]): void {
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldOrganizationsWithout(...inactive),
+      }),
+      "network",
+    );
+    selectSessionDepartment(DEPARTMENT);
+  }
+
+  /**
+   * The same, read from the Organizer department.
+   *
+   * The organizer capabilities in this fixture are granted there, so the
+   * Organization pages section is empty from Rangers — a "not offered"
+   * assertion made from the wrong department would pass without gating
+   * anything.
+   */
+  function installOrganizerWithout(...inactive: readonly ModuleKey[]): void {
+    installWithout(...inactive);
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+  }
+
+  /*
+   * The control every case below is read against. Without it a filter that
+   * removed an entry for some unrelated reason — a capability the fixture
+   * stopped granting, a label somebody renamed — would read as a passing module
+   * test, and the whole file would go green while gating nothing.
+   */
+  it("offers all of it to a reader whose organization runs everything", () => {
+    installWithout();
+
+    const labels = everyNavigationLabel();
+
+    for (const offered of [
+      "Shift Board",
+      "My Field Reports",
+      "Field Reports",
+      "Incident Command dashboard",
+      "Policies & Procedures",
+      "Acknowledgments",
+      "Waivers",
+      "Trainings",
+      "Credentials",
+      "Equipment",
+      "Deployments",
+    ]) {
+      expect(labels).toContain(offered);
+    }
+
+    expect(useWorkflowLinks().value.map((link) => link.label)).toContain(
+      "Incidents",
+    );
+    expect(sectionLabels("Department pages")).toContain("Shifts");
+    expect(sectionLabels("Department pages")).toContain("Documents");
+
+    installOrganizerWithout();
+
+    for (const offered of ["Documents", "Acknowledgments", "Waivers", "Credentials"]) {
+      expect(sectionLabels("Organization pages")).toContain(offered);
+    }
+  });
+
+  it("takes the shift board and shift administration away with Scheduling", () => {
+    installWithout(MODULE_SCHEDULING);
+
+    const labels = everyNavigationLabel();
+
+    expect(labels).not.toContain("Shift Board");
+    expect(sectionLabels("Department pages")).not.toContain("Shifts");
+
+    /*
+     * Planning stays. The Planning Table composes several modules' records and
+     * MOD-019 keeps it rendering with any of them off — omitting the shift
+     * sections is M19.18's work on the surface itself, not a reason to remove
+     * the door.
+     */
+    expect(useWorkflowLinks().value.map((link) => link.label)).toContain(
+      "Planning",
+    );
+    expect(labels).toContain("Logistics");
+  });
+
+  it("takes the Incidents workspace and every Field Report page away with Incident Management", () => {
+    installWithout(MODULE_INCIDENT_MANAGEMENT);
+
+    const labels = everyNavigationLabel();
+
+    expect(useWorkflowLinks().value.map((link) => link.label)).not.toContain(
+      "Incidents",
+    );
+    expect(labels).not.toContain("My Field Reports");
+    expect(labels).not.toContain("Field Reports");
+    expect(labels).not.toContain("Incident Command dashboard");
+  });
+
+  it("takes documents, acknowledgments, and waivers away with Documents", () => {
+    installWithout(MODULE_DOCUMENTS);
+
+    const labels = everyNavigationLabel();
+
+    expect(labels).not.toContain("Policies & Procedures");
+    expect(labels).not.toContain("Acknowledgments");
+    expect(labels).not.toContain("Waivers");
+    expect(sectionLabels("Department pages")).not.toContain("Documents");
+
+    installOrganizerWithout(MODULE_DOCUMENTS);
+
+    for (const gone of ["Documents", "Acknowledgments", "Waivers"]) {
+      expect(sectionLabels("Organization pages")).not.toContain(gone);
+    }
+
+    // The organizer's own surfaces that read no document stand.
+    expect(sectionLabels("Organization pages")).toContain("Staff");
+    expect(sectionLabels("Organization pages")).toContain("Configuration");
+  });
+
+  it("takes trainings and credentials away with Qualifications", () => {
+    installWithout(MODULE_QUALIFICATIONS);
+    expect(everyNavigationLabel()).not.toContain("Trainings");
+
+    installOrganizerWithout(MODULE_QUALIFICATIONS);
+    expect(sectionLabels("Organization pages")).not.toContain("Credentials");
+  });
+
+  it("takes inventory away with Equipment and deployment options away with Event Geography", () => {
+    installWithout(MODULE_EQUIPMENT);
+    expect(sectionLabels("Department pages")).not.toContain("Equipment");
+    // The Logistics desk is where equipment is handed over, and it reads three
+    // capabilities of which equipment is one. It stays (MOD-019).
+    expect(useWorkflowLinks().value.map((link) => link.label)).toContain(
+      "Logistics",
+    );
+
+    installWithout(MODULE_EVENT_GEOGRAPHY);
+    expect(sectionLabels("Department pages")).not.toContain("Deployments");
+  });
+
+  it("leaves the core product standing with three modules off at once", () => {
+    // The milestone QA gate, as navigation: Scheduling, Incident Management,
+    // and Documents all inactive, and the organization still runs.
+    installWithout(MODULE_SCHEDULING, MODULE_INCIDENT_MANAGEMENT, MODULE_DOCUMENTS);
+
+    const labels = everyNavigationLabel();
+
+    for (const kept of [
+      "Me",
+      "Event Info",
+      "Logistics",
+      "Operations",
+      "Roster",
+      "Credits",
+      "Exports",
+      "Admin",
+      "Readiness",
+    ]) {
+      expect(labels).toContain(kept);
+    }
+  });
+
+  it("says nothing about a module when the node did not state the set", () => {
+    /*
+     * A document written by a build from before MOD-015, or one whose
+     * organization this client was never told about. Not knowing is not the
+     * same as running nothing: the entry stands, the address stands, and the
+     * node refuses the read if it should. Hiding on an unstated set would make
+     * an older cached document look like an organization that runs no product
+     * at all.
+     */
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldSessionDocument().organizations.map(
+          ({ modules: _modules, ...organization }) => organization,
+        ),
+      }),
+      "network",
+    );
+    selectSessionDepartment(DEPARTMENT);
+
+    expect(everyNavigationLabel()).toContain("Shift Board");
+    expect(useWorkflowLinks().value.map((link) => link.label)).toContain(
+      "Incidents",
+    );
+  });
+
+  it("answers for the organization the selected department belongs to", () => {
+    /*
+     * Module state is per organization (MOD-005), and somebody working across
+     * two of them is owed each one's answer where it applies. One shared set
+     * would let an organization that turned Scheduling off take the shift board
+     * away from the other's departments.
+     */
+    const document = localFieldSessionDocument();
+    const other = "org-cascadia-collective";
+
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: [
+          ...localFieldOrganizationsWithout(MODULE_EQUIPMENT),
+          {
+            id: other,
+            name: "Cascadia Collective",
+            slug: "cascadia-collective",
+            status: "approved",
+            archived_at: null,
+            modules: [...MODULE_KEYS],
+          },
+        ],
+        departments: [
+          ...document.departments,
+          {
+            id: "dept-cascadia",
+            organization_id: other,
+            name: "Cascadia Rangers",
+            code: "CASC",
+            membership_status: "active",
+            archived_at: null,
+          },
+        ],
+        roles: document.roles.map((role) => ({
+          ...role,
+          department_id: "dept-cascadia",
+          organization_id: other,
+        })),
+      }),
+      "network",
+    );
+
+    selectSessionDepartment("dept-cascadia");
+
+    expect(sectionLabels("Department pages")).toContain("Equipment");
   });
 });
 

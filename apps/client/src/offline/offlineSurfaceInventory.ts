@@ -674,6 +674,13 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
       offlineText: "Session timed out",
     },
     {
+      route: "module.unavailable",
+      outcome: "renders-offline",
+      basis:
+        "the module is in the address and the sentence is built from it, so a reader who reloads this page in a field is told the same thing the node told them (M19.16; MOD-013)",
+      offlineText: "not part of this organization",
+    },
+    {
       route: "not-found",
       outcome: "renders-offline",
       basis: "an address that matched nothing needs no node to say so",

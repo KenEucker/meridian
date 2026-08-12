@@ -1069,7 +1069,7 @@ Returns, for the calling user:
 - `user`: identity fields, plus `staff_ids` — the staff records the login speaks for, which a client needs to recognize its own user in a roster it has been handed
 - `roles`: effective role codes resolved from active team memberships and active team grants, each with the scope it was resolved at and the reason it was granted
 - `capabilities`: permission capability codes carried by those roles, as published by the permission catalog
-- `organizations`: organizations the user holds an association with
+- `organizations`: organizations the user holds an association with, each carrying `modules` — the module keys that organization is currently running (MOD-015)
 - `events`: events the user holds an association with, and which one the node is locked to when it is locked
 - `departments` and `teams`: the user's associations within the resolved context
 - `context`: the resolved organization, event, and department, and whether context switching is available
@@ -1081,6 +1081,8 @@ The response returns codes, not navigation. It carries no screen list, menu stru
 Each entry in `roles` also carries the capability codes that role alone brings, because authority is scoped — a person may run logistics for one department and be ordinary staff in another — and the client holds no copy of the role-to-capability mapping to narrow the flat list for itself. Both lists are read from the same catalog the server enforces from.
 
 Each entry in `events` carries the event's own window and its active event window, which is what bounds the staleness of a cached session in 11A.4.
+
+`modules` rides on each organization rather than on `context`, because module state is a fact about an organization the way its name and slug are, and because the caller's departments can span more than one: a client gating a department's navigation asks the organization that department belongs to, which is only answerable if every listed organization carries its own set. The resolved context organization is always one of them, which is the "resolved organization's active module set" of technical spec 11A.3. It is the *active* set — `entitled && enabled` — because what a member may reach does not depend on which of the two decisions removed it, and it is always present, because "runs nothing" and "this build did not say" are different facts and a client that cannot tell them apart would have to choose between hiding a product it should show and showing one the organization turned off. It is not a navigation decision: it names modules, not screens, and which surfaces a module covers stays the client's own business. Clients cache it with the rest of the document, which is what makes an offline client gate on the set the server enforces (11A.4, 15A.8).
 
 `device` reports trust, not identity the client supplied. The device is taken from the caller's own token binding (12.5) rather than from anything in the request, so there is no parameter for whose device to report, for the same reason there is none for whose session. It answers the "device trusted" item of the readiness checklist (technical spec 14), which had no signal for a personal device before this: trust lives in `device_trusts` (12.2) and nothing published it. `trusted` is `DeviceTrust::isActive()` — the same predicate the Field Report services refuse an untrusted origin device with — so a client and the writes it will attempt cannot disagree about what trust means. The four `trust_state` values are distinguished because they mean different things to the person reading them: `expired` is renewed by signing in again and `revoked` is not.
 
@@ -1276,7 +1278,7 @@ Gate behavior:
 - An inactive module answers `404` with `{"error": {"code": "module_inactive", "module": "<key>"}}`.
 - Command endpoints are gated by the module that owns the command, using the same rule. A gated command never reaches its handler and never writes an audit event for an attempted domain change.
 - A command replayed from the outbox against an inactive module is refused the same way, and the refusal is recorded as a sync conflict (MOD-017) rather than returned as a plain client error, because the submitting device may be long gone.
-- Session resolution (5.5) returns the organization's active module set. It is core and is never gated.
+- Session resolution (5.5) returns the active module set of every organization it lists. It is core and is never gated.
 - Exports owned by a module are unavailable when it is inactive; the short-lived download URL (5.7) is not issued.
 
 Departments operations read models (Overview, Logistics, Operations, Planning) are core endpoints that compose module-owned data. They omit the sections whose modules are inactive and return the rest (MOD-019). They never refuse on module state.

@@ -77,6 +77,9 @@ const ROUTE_PARAMS: Readonly<Record<string, string>> = {
   applicationId: "99999999-9999-4999-8999-999999999997",
   organizationSlug: "northwood-collective",
   eventSlug: "local-field-event",
+  // The module an address was refused for (M19.16). A key rather than a name:
+  // the surface turns it into Meridian's own term for the reader (MOD-022).
+  moduleKey: "scheduling",
 };
 
 /**
@@ -556,6 +559,9 @@ describe("the recorded offline surface inventory", () => {
       "kiosk.switch-user",
       "kiosk.reauth",
       "kiosk.safe-timeout",
+      // M19.16: the module is in the address, so the absence explains itself
+      // with no node to ask.
+      "module.unavailable",
       "not-found",
     ]);
   });

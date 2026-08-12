@@ -60,6 +60,7 @@ import type {
   SessionDocument,
   SessionRole,
 } from "@/session/sessionDocument";
+import { MODULE_KEYS, type ModuleKey } from "@/session/sessionModules";
 
 /** Identities shared with the server's `meridian:seed-local-field-fixture`. */
 export const LOCAL_FIELD_FIXTURE = {
@@ -281,6 +282,14 @@ export function localFieldSessionDocument(
         slug: "northwood-collective",
         status: "approved",
         archived_at: null,
+        /*
+         * Running everything (M19.16; MOD-009). Stated rather than left off for
+         * the same reason `preferences` is stated: an absent set means "this
+         * node did not say", which these specs would then be silently
+         * exercising instead of the module rules they are about. A spec that
+         * turns a module off narrows this list for itself.
+         */
+        modules: [...MODULE_KEYS],
       },
     ],
     events: [
@@ -365,6 +374,22 @@ export function localFieldSessionDocument(
   };
 }
 
+/**
+ * The same organization, running everything except the modules named (M19.16).
+ *
+ * The shape a module spec overrides `organizations` with, so a case reads
+ * "Northwood does not run Scheduling" rather than restating a whole
+ * organization entry to change one array.
+ */
+export function localFieldOrganizationsWithout(
+  ...inactive: readonly ModuleKey[]
+): SessionDocument["organizations"] {
+  return localFieldSessionDocument().organizations.map((organization) => ({
+    ...organization,
+    modules: MODULE_KEYS.filter((module) => !inactive.includes(module)),
+  }));
+}
+
 /** A second association, so a context switcher has somewhere to go (M16.7). */
 export const LOCAL_FIELD_OTHER_ORGANIZATION_ID = "org-cascadia-collective";
 export const LOCAL_FIELD_OTHER_EVENT_ID = "event-cascadia-thaw-2027";
@@ -396,6 +421,7 @@ export function switchableLocalFieldContext(): Pick<
         slug: "cascadia-collective",
         status: "approved",
         archived_at: null,
+        modules: [...MODULE_KEYS],
       },
     ],
     events: [

@@ -27,6 +27,14 @@
 // additionally by how wide the role carrying them reaches, so they read the same
 // authority their surfaces render from rather than restating the rule here. See
 // `reporting/reportingExports`.
+//
+// Over all three sits a question that is not about the reader at all: whether
+// the organization runs the module the page belongs to (M19.16; MOD-015). A
+// capability check asks what this person may do, and gets its answer wrong only
+// by hiding something they could have reached. This asks what the organization
+// has, and an entry that survives it leads to a route the guard bounces and an
+// endpoint the node answers `404` to. It is applied in `presentLinks` from the
+// same table the router guard reads, so the two cannot disagree.
 
 import { computed, type ComputedRef } from "vue";
 
@@ -81,6 +89,7 @@ import {
 } from "@/session/sessionContext";
 import { visibleLinks } from "@/session/hiddenPages";
 import { menuLinks } from "@/session/menuPages";
+import { routeModuleActive } from "@/router/routeModules";
 
 export type WorkflowLink = {
   /** Short label for the workflow tab bar, where horizontal space is tight. */
@@ -117,6 +126,27 @@ export type NavigationSection = {
 export const COMBINED_NAVIGATION_MAX_ITEMS = 15;
 
 /**
+ * The entries this reader is actually offered: what their organization runs,
+ * then what they have chosen to keep (M19.16; MOD-015).
+ *
+ * Two filters in a fixed order, and the order says what each one is. The module
+ * filter answers whether the page is part of this organization's product at
+ * all — a question about the organization, decided from the same table the
+ * router guard reads, so an entry can never outlive the route behind it
+ * (technical spec 15A.5). The preference filter answers what this reader wants
+ * to look at among the pages that exist. Running it first would let a display
+ * preference stand in front of a product decision, and would leave the reader
+ * able to "restore" a page that is not there.
+ *
+ * Neither is a permission check. Whether a capability permits the entry is
+ * decided by each builder below, before either of these, and the node refuses
+ * the request regardless of what was rendered (CLIENT-006).
+ */
+function presentLinks(links: readonly WorkflowLink[]): WorkflowLink[] {
+  return visibleLinks(links.filter((link) => routeModuleActive(link.to.name)));
+}
+
+/**
  * The event the interface is currently working in, or null when the session
  * resolved no single event.
  *
@@ -149,7 +179,7 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
       // one workflow that survives having no department route to build — and
       // the Directory survives with it, because it is organization-scoped and
       // belongs to anybody (DIR-002).
-      return visibleLinks([...incidentLinks(department), ...directoryLinks()]);
+      return presentLinks([...incidentLinks(department), ...directoryLinks()]);
     }
 
     const isDepartmentLead = departmentHasRole(department, ROLE_DEPARTMENT_LEAD);
@@ -256,15 +286,16 @@ export function useWorkflowLinks(): ComputedRef<WorkflowLink[]> {
     links.push(...directoryLinks());
 
     /*
-     * The reader's own preference, applied last (M18.69).
+     * What the organization runs, then the reader's own preference, both
+     * applied last (M18.69, M19.16).
      *
      * Last on purpose: everything above decides what this person is permitted
-     * to reach, and this decides what they want to look at. Filtering earlier
-     * would tangle the two and make a display preference read like an
-     * authority decision — and it is the capability checks, not this, that
-     * CLIENT-005 is about.
+     * to reach, and neither of these is about permission. Filtering earlier
+     * would tangle the three and make a module decision or a display preference
+     * read like an authority decision — and it is the capability checks, not
+     * these, that CLIENT-005 is about. {@see presentLinks}.
      */
-    return visibleLinks(links);
+    return presentLinks(links);
   });
 }
 
@@ -515,7 +546,7 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       department.teams.length === 0 ||
       departmentHasCapability(department, CAPABILITY_DEPARTMENT_ADMINISTER)
     ) {
-      return visibleLinks(links);
+      return presentLinks(links);
     }
 
     links.push({
@@ -524,9 +555,10 @@ export function useStaffLinks(): ComputedRef<WorkflowLink[]> {
       to: { name: "events.departments.trainings.index", params },
     });
 
-    // The reader's own preference, applied after the checks that built the
-    // list. See the note at the end of `useWorkflowLinks`.
-    return visibleLinks(links);
+    // The organization's modules and the reader's own preference, applied
+    // after the checks that built the list. See the note at the end of
+    // `useWorkflowLinks`.
+    return presentLinks(links);
   });
 }
 
@@ -567,9 +599,9 @@ export function useMenuCandidateLinks(): ComputedRef<WorkflowLink[]> {
 
     return [
       ...staff.value,
-      ...visibleLinks(staffDirectoryLinks()),
+      ...presentLinks(staffDirectoryLinks()),
       ...workflows.value,
-      ...visibleLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
+      ...presentLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
     ];
   });
 }
@@ -589,7 +621,7 @@ export function useWorkflowMenuLinks(): ComputedRef<WorkflowLink[]> {
   return computed(() =>
     menuLinks([
       ...links.value,
-      ...visibleLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
+      ...presentLinks(imsDirectoryLinks(selectedSessionDepartment.value)),
     ]),
   );
 }
@@ -606,7 +638,7 @@ export function useStaffMenuLinks(): ComputedRef<WorkflowLink[]> {
       return [];
     }
 
-    return menuLinks([...links.value, ...visibleLinks(staffDirectoryLinks())]);
+    return menuLinks([...links.value, ...presentLinks(staffDirectoryLinks())]);
   });
 }
 
@@ -1215,20 +1247,22 @@ export function useNavigationSections(): ComputedRef<NavigationSection[]> {
     });
 
     /*
-     * The reader's own preference, applied to the whole directory at once
-     * (M18.69).
+     * The organization's modules and the reader's own preference, applied to
+     * the whole directory at once (M18.69, M19.16).
      *
      * Home is the full map of what somebody can reach, so hiding a page has to
      * take it off the map as well as out of the menus — a preference that only
      * cleaned up the tab bar would leave the tile it was meant to remove sitting
-     * on the first screen the reader sees.
+     * on the first screen the reader sees. A module the organization does not
+     * run is off the map for the stronger reason: those pages are not part of
+     * its product at all (MOD-015).
      *
      * A section left with nothing in it goes too. A heading over an empty grid
      * describes a group the reader has emptied on purpose, and the honest
      * rendering of that is nothing at all.
      */
     return sections
-      .map((section) => ({ ...section, links: visibleLinks(section.links) }))
+      .map((section) => ({ ...section, links: presentLinks(section.links) }))
       .filter((section) => section.links.length > 0);
   });
 }

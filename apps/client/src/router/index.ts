@@ -37,6 +37,11 @@ import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import MarketingView from "@/views/MarketingView.vue";
+import ModuleUnavailableView from "@/views/ModuleUnavailableView.vue";
+import {
+  moduleGateRedirect,
+  MODULE_UNAVAILABLE_ROUTE,
+} from "@/router/routeModules";
 import { workstationSessionState } from "@/session/workstationSession";
 import IncidentEditView from "@/views/IncidentEditView.vue";
 import IncidentListView from "@/views/IncidentListView.vue";
@@ -955,6 +960,22 @@ export const routes: RouteRecordRaw[] = [
     name: "kiosk.safe-timeout",
     component: KioskSafeTimeoutView,
   },
+  /*
+   * Where an address owned by an inactive module lands (M19.16; MOD-013,
+   * MOD-015).
+   *
+   * An address of its own rather than a state of the not-found page, because
+   * the two say different things and only one of them is true: the surface
+   * exists in Meridian and this organization does not run it. The module is in
+   * the path so the sentence survives a reload on a device with no signal, and
+   * so a reader who was sent a link can be told which capability their
+   * organization is missing rather than that somebody sent them a broken URL.
+   */
+  {
+    path: "/module-unavailable/:moduleKey",
+    name: MODULE_UNAVAILABLE_ROUTE,
+    component: ModuleUnavailableView,
+  },
   {
     path: "/:pathMatch(.*)*",
     name: "not-found",
@@ -1090,7 +1111,21 @@ export function registerNavigationGuards(
       return kioskLanding;
     }
 
-    return requiresSignIn(to.name) ? { name: "login" } : true;
+    if (requiresSignIn(to.name)) {
+      return { name: "login" };
+    }
+
+    /*
+     * The module gate, last of the three and after sign-in on purpose
+     * (M19.16; technical spec 15A.5).
+     *
+     * A client holding no session knows no module state, so asking it first
+     * would answer "not gated" for every address and then send the reader to
+     * sign in anyway. Once a session is established the answer is real, and it
+     * comes before the surface renders — which is what keeps a disabled
+     * module's route unreachable rather than merely empty.
+     */
+    return moduleGateRedirect(to) ?? true;
   });
 }
 
