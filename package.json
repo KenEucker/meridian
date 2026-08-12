@@ -73,6 +73,7 @@
     "mobile:cap:copy": "corepack pnpm --filter @meridian/mobile run cap:copy",
     "mobile:cap:sync": "corepack pnpm --filter @meridian/mobile run cap:sync",
     "mobile:assets:generate": "corepack pnpm --filter @meridian/mobile run assets:generate",
+    "mobile:ios:archive": "corepack pnpm --filter @meridian/mobile run ios:archive",
     "kiosk:start": "corepack pnpm --filter @meridian/kiosk run start",
     "kiosk:build": "corepack pnpm --filter @meridian/kiosk run build",
     "kiosk:package": "corepack pnpm --filter @meridian/kiosk run package",
