@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Meridian Field</string>
+    <string name="title_activity_main">Meridian Field</string>
+    <string name="package_name">org.meridian.field</string>
+    <string name="custom_url_scheme">org.meridian.field</string>
+</resources>
