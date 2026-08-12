@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Domain\Modules\ModuleKey;
 use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Modules\ModuleInactiveException;
+use App\Services\Modules\ModuleInactiveWriteRecorder;
 use App\Services\Modules\RequestOrganizationScope;
 use Closure;
 use Illuminate\Http\Request;
@@ -46,12 +47,19 @@ use Symfony\Component\HttpFoundation\Response;
  * endpoints that compose module-owned data, and data/API 5.9 is explicit that
  * they omit an inactive module's contribution rather than refusing (MOD-019).
  * They carry no gate here, and M19.18 is where their omission is built.
+ *
+ * M19.17 gave the refusal a second effect and no second answer. Where the
+ * refused request is a write queued on a device (data/API 7.2), it is recorded
+ * as a sync conflict on the way out (MOD-017), so a module switched off while
+ * somebody was out of coverage does not swallow their work silently. The
+ * response is identical either way; see {@see self::refuse()}.
  */
 class EnforceActiveModule
 {
     public function __construct(
         private readonly ActiveModuleResolver $modules,
         private readonly RequestOrganizationScope $scope,
+        private readonly ModuleInactiveWriteRecorder $writes,
     ) {}
 
     /**
@@ -81,7 +89,7 @@ class EnforceActiveModule
             // not answer.
             foreach ($named as $organizationId) {
                 if (! $this->modules->isActive($organizationId, $key)) {
-                    throw new ModuleInactiveException($key, $organizationId);
+                    $this->refuse($request, new ModuleInactiveException($key, $organizationId));
                 }
             }
 
@@ -105,6 +113,27 @@ class EnforceActiveModule
             }
         }
 
-        throw new ModuleInactiveException($key);
+        $this->refuse($request, new ModuleInactiveException($key));
+    }
+
+    /**
+     * Refuse, recording the refusal first where the request is a queued offline
+     * write (MOD-017; technical spec 15A.8).
+     *
+     * The recording runs here rather than in the exception renderer because this
+     * is the one place that has both the request and the decision, and because a
+     * renderer that wrote to the database would do so for every path this
+     * exception can ever take. What the caller receives is unchanged either way:
+     * the same `404` naming the same module, whether or not a queue row was
+     * filed, because MOD-012's refusal must not vary by who is asking or by how
+     * the request arrived.
+     *
+     * @throws ModuleInactiveException always
+     */
+    private function refuse(Request $request, ModuleInactiveException $refusal): never
+    {
+        $this->writes->record($request, $refusal);
+
+        throw $refusal;
     }
 }

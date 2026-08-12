@@ -12,6 +12,7 @@ use App\Services\Node\NodeOperationApplierRegistry;
 use App\Services\Node\SignedNodeOperation;
 use App\Services\Node\SyncConflictResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Orchid\Support\Testing\ScreenTesting;
 use Tests\TestCase;
 
@@ -84,6 +85,46 @@ class SyncConflictOrchidTest extends TestCase
         $response->assertSee('Accept on-site');
         $response->assertSee('Accept central');
         $response->assertSee('Recommended default');
+    }
+
+    /**
+     * A refused device write (MOD-017) reaches the same queue and reads as
+     * itself: the device's key stands in for an operation UUID that does not
+     * exist, and the operation rows say what happened rather than "Unknown"
+     * three times over.
+     */
+    public function test_a_refused_device_write_reads_as_a_queued_write_rather_than_an_operation(): void
+    {
+        $key = (string) Str::uuid();
+        $conflict = SyncConflict::factory()->moduleInactive($key)->create();
+
+        $response = $this->actingAs($this->godModeUser())
+            ->get(route('platform.sync-conflicts.show', $conflict));
+
+        $response->assertOk();
+        $response->assertSee('module_inactive');
+        $response->assertSee($key);
+        $response->assertSee('Queued device write');
+        $response->assertSee('None; submitted by a device');
+        $response->assertDontSee('Unknown');
+    }
+
+    /**
+     * There is nothing to accept from the device: the module that owns the write
+     * is not active, so applying it would write a record for capability the
+     * organization has switched off. The control is withheld; the refusal itself
+     * lives in the resolver, which `ModuleInactiveOfflineWriteTest` drives.
+     */
+    public function test_a_refused_device_write_offers_only_the_resolution_that_can_be_carried_out(): void
+    {
+        $conflict = SyncConflict::factory()->moduleInactive()->create();
+
+        $response = $this->actingAs($this->godModeUser())
+            ->get(route('platform.sync-conflicts.show', $conflict));
+
+        $response->assertOk();
+        $response->assertSee('Accept central');
+        $response->assertDontSee('Accept on-site');
     }
 
     /**

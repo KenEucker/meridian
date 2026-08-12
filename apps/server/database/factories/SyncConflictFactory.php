@@ -87,6 +87,33 @@ class SyncConflictFactory extends Factory
     }
 
     /**
+     * A write queued on a device and refused because its module went inactive
+     * (MOD-017; M19.17).
+     *
+     * No operation, because there is none and there must not be one: the write
+     * never became a node-to-node operation. What identifies it is the key the
+     * device queued it under.
+     */
+    public function moduleInactive(?string $originOperationUuid = null): static
+    {
+        return $this->state(fn (): array => [
+            'operation_id' => null,
+            'origin_operation_uuid' => $originOperationUuid ?? (string) Str::uuid(),
+            'conflict_type' => SyncConflict::TYPE_MODULE_INACTIVE,
+            'entity_type' => 'shift_assignment',
+            'local_value_json' => ['command' => 'add-staff-to-shift'],
+            'remote_value_json' => [
+                'module' => 'scheduling',
+                'entitled' => true,
+                'enabled' => false,
+                'active' => false,
+            ],
+            'reason' => 'add-staff-to-shift was queued on a device and reached this node after '
+                .'Scheduling was switched off, so it was refused rather than applied.',
+        ]);
+    }
+
+    /**
      * Seed a conflict for a specific entity type with a matching operation.
      */
     public function forEntity(string $entityType, ?string $entityId = null): static

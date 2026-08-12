@@ -47,10 +47,21 @@ class SyncConflictDetailScreen extends Screen
             'status_label' => $conflict->statusLabel(),
             'resolution_label' => $conflict->resolutionLabel(),
             'default_resolution_label' => $this->defaultResolutionLabel($conflict),
-            'operation_uuid' => $conflict->operation?->uuid ?? __('Unknown'),
-            'operation_type' => $conflict->operation?->operation_type ?? __('Unknown'),
-            'operation_status' => $conflict->operation?->status ?? __('Unknown'),
-            'origin_node' => $conflict->operation?->originNode?->node_name ?? __('Unknown'),
+            /*
+             * A refused device write has no node operation and never will
+             * (MOD-017). What identifies it is the key the device queued it
+             * under, so that is what the operation fields report rather than
+             * three rows of "Unknown".
+             */
+            'operation_uuid' => $conflict->operation?->uuid
+                ?? $conflict->origin_operation_uuid
+                ?? __('Unknown'),
+            'operation_type' => $conflict->operation?->operation_type
+                ?? ($conflict->isDeviceWrite() ? __('Queued device write') : __('Unknown')),
+            'operation_status' => $conflict->operation?->status
+                ?? ($conflict->isDeviceWrite() ? __('Refused on arrival') : __('Unknown')),
+            'origin_node' => $conflict->operation?->originNode?->node_name
+                ?? ($conflict->isDeviceWrite() ? __('None; submitted by a device') : __('Unknown')),
             'reviewed_by_display' => $conflict->reviewedBy?->name ?? __('Not reviewed'),
             'reviewed_at_display' => $conflict->reviewed_at?->toDayDateTimeString() ?? __('Not reviewed'),
             'created_at_display' => $conflict->created_at?->toDayDateTimeString() ?? __('Unknown'),
@@ -87,6 +98,16 @@ class SyncConflictDetailScreen extends Screen
     {
         $canResolve = $this->conflict?->isOpen() === true;
 
+        /*
+         * A refused device write has nothing to accept from the device: the
+         * module that owns it is not active, and applying it would write a
+         * record for capability the organization has switched off (MOD-017).
+         * The control is withheld rather than offered and refused, and the
+         * refusal still lives in the resolver — this is a courtesy, not the
+         * enforcement, the same split the module screens take.
+         */
+        $canAcceptOnsite = $canResolve && $this->conflict?->isDeviceWrite() !== true;
+
         return [
             Link::make(__('Back to queue'))
                 ->icon('bs.arrow-left-circle')
@@ -96,7 +117,7 @@ class SyncConflictDetailScreen extends Screen
                 ->icon('bs.hdd-network')
                 ->method('acceptOnsite')
                 ->confirm(__('Keep the on-site node version of this record and discard the other version? This is audited and cannot be undone here.'))
-                ->canSee($canResolve),
+                ->canSee($canAcceptOnsite),
 
             Button::make(__('Accept central'))
                 ->icon('bs.cloud')

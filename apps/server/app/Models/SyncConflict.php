@@ -85,10 +85,23 @@ class SyncConflict extends Model
     public const TYPE_STATE_MISMATCH = 'state_mismatch';
 
     /**
+     * A write queued on a device reached a module the organization no longer
+     * runs (MOD-017; technical spec 15A.8).
+     *
+     * The one conflict type with no node operation behind it. There are not two
+     * versions of a record to choose between here: there is a write, and an
+     * organization that has said it does not run the capability the write
+     * belongs to. {@see \App\Services\Node\SyncConflictResolver} is where that
+     * narrows the reviewer's two choices to one.
+     */
+    public const TYPE_MODULE_INACTIVE = 'module_inactive';
+
+    /**
      * @var list<string>
      */
     protected $fillable = [
         'operation_id',
+        'origin_operation_uuid',
         'conflict_type',
         'entity_type',
         'entity_id',
@@ -182,6 +195,20 @@ class SyncConflict extends Model
     public function isResolved(): bool
     {
         return $this->status === self::STATUS_RESOLVED;
+    }
+
+    /**
+     * Whether this conflict is a refused device write rather than a node-to-node
+     * disagreement (MOD-017).
+     *
+     * Asked of the type rather than of `operation_id` being null, because the
+     * type is what the row *means* and the missing operation is a consequence of
+     * it. A row that lost its operation some other way is a defect, not a device
+     * write, and must not start resolving like one.
+     */
+    public function isDeviceWrite(): bool
+    {
+        return $this->conflict_type === self::TYPE_MODULE_INACTIVE;
     }
 
     /**
