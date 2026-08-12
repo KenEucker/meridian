@@ -5,6 +5,7 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "assets:generate": "node scripts/generate-native-assets.mjs",
     "build": "corepack pnpm --filter @meridian/client run build:field",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -12,11 +13,14 @@
     "cap:sync": "corepack pnpm --filter @meridian/client run build:field && cap sync"
   },
   "dependencies": {
-    "@capacitor/core": "^8.0.0"
+    "@capacitor/core": "^8.5.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.0.0",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@types/node": "^24.0.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.7.0",
     "vitest": "^4.1.0"
   }

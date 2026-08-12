@@ -1,0 +1,102 @@
+apply plugin: 'com.android.application'
+
+/*
+ * The Meridian version this native project stamps into every build (M19.21).
+ *
+ * The root package.json is the only Meridian version source of truth
+ * (docs/process/versioning-strategy.md), and this wrapper must not declare a
+ * version of its own. The version is read at build time rather than committed
+ * here, so the production version-bump workflow never has to regenerate this
+ * file. A root manifest this block cannot read, or a version that is not
+ * numeric major.minor.patch, fails the build: an installable stamped with a
+ * wrong or default version looks distributable and must never be emitted.
+ *
+ * versionCode packs major.minor.patch as major*1_000_000 + minor*1_000 + patch,
+ * which increases monotonically as long as minor and patch stay below 1000 —
+ * enforced below, because Google Play rejects a versionCode that ever goes
+ * backwards.
+ */
+def meridianRootManifest = rootProject.file('../../../package.json')
+def meridianVersionName = { ->
+    def parsed
+    try {
+        parsed = new groovy.json.JsonSlurper().parse(meridianRootManifest)
+    } catch (Exception e) {
+        throw new GradleException(
+            "Cannot read the Meridian root package.json at ${meridianRootManifest}; " +
+            "the mobile package version comes from it and nowhere else: ${e.message}")
+    }
+    if (parsed.name != 'meridian') {
+        throw new GradleException(
+            "${meridianRootManifest} is not the Meridian root package; " +
+            'refusing to stamp the mobile application version from it.')
+    }
+    def version = parsed.version
+    if (!(version instanceof String) || !(version ==~ /\d+\.\d+\.\d+/)) {
+        throw new GradleException(
+            "The root package.json version must be numeric major.minor.patch, received: ${version}")
+    }
+    return version
+}()
+def meridianVersionCode = { version ->
+    def (major, minor, patch) = version.tokenize('.').collect { it as int }
+    if (minor > 999 || patch > 999) {
+        throw new GradleException(
+            "versionCode packs major.minor.patch as major*1_000_000 + minor*1_000 + patch; " +
+            "minor and patch must stay below 1000, received: ${version}")
+    }
+    return major * 1_000_000 + minor * 1_000 + patch
+}(meridianVersionName)
+
+android {
+    namespace = "org.meridian.field"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "org.meridian.field"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode meridianVersionCode
+        versionName meridianVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
