@@ -110,3 +110,20 @@ jobs:
               echo "No pnpm script '$script' found; skipping."
             fi
           done
+
+      # The desktop installer's build smoke test (M19.20). The packaging
+      # configuration's hermetic tests run inside `pnpm test` above; this step
+      # runs electron-builder against the artifacts `pnpm build` just produced
+      # and asserts the host platform's installer exists, carries the root
+      # version, and packages the Kiosk client build and no other UI mode's.
+      # It is a separate step because electron-builder downloads the Electron
+      # distribution, and a mirror outage should be legible as itself rather
+      # than as a failure of the repository's other checks.
+      - name: Package the desktop installer
+        if: hashFiles('apps/kiosk/electron-builder.config.cjs') != ''
+        # `corepack enable` puts `pnpm` itself on the PATH: electron-builder's
+        # node-module collector invokes it directly rather than through
+        # `corepack pnpm`, and the shim resolves the version this repository pins.
+        run: |
+          corepack enable
+          node scripts/release/validate-desktop-packaging.mjs

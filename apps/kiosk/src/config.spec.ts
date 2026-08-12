@@ -10,10 +10,10 @@ import {
   resolveAppIconPath,
   resolveClientDevAppUrl,
   resolveClientDevServerUrl,
-  resolveClientDistPath,
   resolveClientPort,
   resolveClientVersion,
   resolveHealthUrl,
+  resolvePackagedClientDistPath,
   resolveServerUrl,
   resolveSharedWorkstationId,
   resolveWindowedMode,
@@ -41,19 +41,19 @@ describe("resolveServerUrl", () => {
   });
 });
 
-describe("resolveClientDistPath", () => {
-  it("defaults to the fixed Meridian Kiosk dist directory beside the desktop app", () => {
+describe("resolvePackagedClientDistPath", () => {
+  it("defaults to the kiosk client build inside the installed resources directory", () => {
     // Compared through `resolve` rather than against a literal, because these
     // helpers return native paths and the separator differs by platform.
-    expect(resolveClientDistPath({}, "/repo/apps/kiosk")).toBe(
-      resolve("/repo/apps/client/dist/kiosk"),
+    expect(resolvePackagedClientDistPath({}, "/install/resources")).toBe(
+      resolve("/install/resources/client/kiosk"),
     );
   });
 
   it("uses MERIDIAN_CLIENT_DIST_DIR when provided", () => {
-    expect(resolveClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "../custom-dist" }, "/repo/apps/kiosk")).toBe(
-      resolve("/repo/apps/custom-dist"),
-    );
+    expect(
+      resolvePackagedClientDistPath({ MERIDIAN_CLIENT_DIST_DIR: "/known-good/kiosk" }, "/install/resources"),
+    ).toBe(resolve("/known-good/kiosk"));
   });
 });
 

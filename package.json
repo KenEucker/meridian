@@ -74,6 +74,8 @@
     "mobile:cap:sync": "corepack pnpm --filter @meridian/mobile run cap:sync",
     "kiosk:start": "corepack pnpm --filter @meridian/kiosk run start",
     "kiosk:build": "corepack pnpm --filter @meridian/kiosk run build",
+    "kiosk:package": "corepack pnpm --filter @meridian/kiosk run package",
+    "kiosk:package:check": "node scripts/release/validate-desktop-packaging.mjs",
     "kiosk:typecheck": "corepack pnpm --filter @meridian/kiosk run typecheck",
     "kiosk:test": "corepack pnpm --filter @meridian/kiosk run test",
     "kiosk:workstation": "node scripts/dev/start-shared-workstation.mjs",

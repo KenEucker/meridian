@@ -44,6 +44,15 @@ def main():
         if "version" in package_json:
             errors.append(f"{path} must omit version; root package.json is the product version source.")
 
+        # A workspace manifest may repeat the root packageManager pin (the
+        # Electron packaging tooling resolves the package manager from the
+        # nearest manifest, M19.20), but it must not drift from the root.
+        if isinstance(root_package, dict) and "packageManager" in package_json:
+            if package_json["packageManager"] != root_package.get("packageManager"):
+                errors.append(
+                    f"{path} packageManager must match the root package.json packageManager."
+                )
+
     if errors:
         print("Version strategy validation failed:")
         for error in errors:
