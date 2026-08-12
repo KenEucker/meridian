@@ -13,6 +13,9 @@ maintained in `apps/client`. Native app versions must be derived from the root
 - [ADR 0001: Shared Vue Client Across Web, Desktop, and Mobile](../../docs/adr/0001-shared-vue-client.md)
 - Technical spec section 3.3 Mobile packaging wrapper.
 - UI Implementation Contract section 3 Alpha 1 Technical Contract.
+- [Release packaging runbook](../../docs/process/release-packaging.md) (M19.24):
+  release builds for both platforms, signing credentials, TestFlight and Play
+  internal testing track uploads, and the direct APK install.
 
 ## Stack
 
