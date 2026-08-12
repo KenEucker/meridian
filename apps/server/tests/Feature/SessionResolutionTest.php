@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Services\Auth\ApiTokenIssuer;
 use App\Services\Session\SessionResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -43,6 +44,16 @@ use Tests\TestCase;
 class SessionResolutionTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        // The suite shares one process and nothing in the framework restores a
+        // frozen clock, so a test that freezes one hands it to whatever runs
+        // next.
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
 
     public function test_the_session_endpoint_returns_identity_roles_capabilities_and_associations(): void
     {
@@ -221,6 +232,18 @@ class SessionResolutionTest extends TestCase
      */
     public function test_the_session_reports_trust_for_the_device_its_token_is_bound_to(): void
     {
+        /*
+         * Frozen because signing in renews trust (AUTH-024; technical spec
+         * 12.2): `meFrom` issues a token, issuance calls `DeviceTrustService`,
+         * and the row this reads back is rewritten six weeks from *that*
+         * instant rather than from the factory's. The two instants are
+         * milliseconds apart and agree to the second nearly always — which is
+         * what made this intermittent rather than simply wrong. Stopping the
+         * clock makes the renewal land on the value the factory wrote, so the
+         * assertion compares expiries instead of racing a second boundary.
+         */
+        $this->freezeTime();
+
         $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
         $device = Device::factory()->create(['device_label' => "Dana's phone"]);
         $trust = DeviceTrust::factory()->create([
@@ -293,6 +316,38 @@ class SessionResolutionTest extends TestCase
 
         $this->assertFalse($document['device']['trusted']);
         $this->assertSame('expired', $document['device']['trust_state']);
+    }
+
+    /**
+     * `trusted_until` is the expiry on record, not six weeks from the read
+     * (AUTH-024; technical spec 12.2).
+     *
+     * Resolved directly for the same reason the lapsed case above is: issuing a
+     * token renews trust to exactly six weeks out, so no request can hand the
+     * resolver an expiry that a recomputed `now()->addWeeks(6)` would fail to
+     * match by coincidence. That coincidence is worth denying a test, because a
+     * resolver that recomputed would report a full six weeks remaining on every
+     * device whatever `device_trusts` said, and the person watching their window
+     * close would never see it move.
+     */
+    public function test_trusted_until_reports_the_stored_expiry_rather_than_a_fresh_window(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $device = Device::factory()->create();
+
+        $trust = DeviceTrust::factory()->create([
+            'user_id' => $scenario['user']->getKey(),
+            'device_id' => $device->getKey(),
+            'expires_at' => now()->addDays(3),
+            'revoked_at' => null,
+        ]);
+
+        $document = app(SessionResolver::class)->resolve($scenario['user'], null, $device);
+
+        $this->assertSame(
+            $trust->expires_at?->toIso8601String(),
+            $document['device']['trusted_until'],
+        );
     }
 
     /**

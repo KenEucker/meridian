@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MeridianApiError, configureMeridianApi } from "@/api/meridianApi";
 import {
   installLocalFieldSession,
+  localFieldOrganizationsWithout,
   localFieldSessionDocument,
   LOCAL_FIELD_DEPARTMENT_IDS,
 } from "@/session/localFieldSessionFixture";
@@ -26,7 +27,11 @@ import {
   REPORTING_EXPORTS,
   STAFF_CONTACT_EXPORT,
 } from "@/reporting/reportingExports";
-import { clearClientSession } from "@/session/clientSession";
+import { clearClientSession, installClientSession } from "@/session/clientSession";
+import {
+  MODULE_QUALIFICATIONS,
+  MODULE_SCHEDULING,
+} from "@/session/sessionModules";
 import {
   resetSelectedSessionDepartment,
   selectSessionDepartment,
@@ -268,5 +273,79 @@ describe("the five Alpha 1 exports", () => {
       REPORTING_EXPORTS.find((descriptor) => descriptor.id === "shift-roster")
         ?.excludes,
     ).toContain("Phone numbers");
+  });
+});
+
+/*
+ * An export owned by an inactive module is not offered (M19.18; MOD-019;
+ * data/API 5.9). The page stands and the entry goes: both surfaces offer five
+ * files across core and module-owned records, and refusing the whole surface
+ * because one of them is unavailable would take four working exports away with
+ * it.
+ *
+ * Presentation only. The node gates the issuing endpoint and the signed
+ * download behind it (M19.12), so a client that offered the entry anyway would
+ * get `404` with `module_inactive` rather than a file.
+ */
+describe("exports owned by a module the organization does not run", () => {
+  it("names the owning module of each export, and null for the core ones", () => {
+    const byId = new Map(
+      REPORTING_EXPORTS.map((descriptor) => [descriptor.id, descriptor.module]),
+    );
+
+    expect(byId.get("credential-eligibility")).toBe(MODULE_QUALIFICATIONS);
+    expect(byId.get("shift-roster")).toBe(MODULE_SCHEDULING);
+    // Contacts, hours, and credits are core: an organization running none of
+    // the optional modules still records who worked and what they earned.
+    expect(byId.get("staff-contact")).toBeNull();
+    expect(byId.get("hours-worked")).toBeNull();
+    expect(byId.get("credits-earned")).toBeNull();
+  });
+
+  it("drops the entry and keeps the rest of the surface", () => {
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldOrganizationsWithout(MODULE_SCHEDULING),
+      }),
+      "network",
+    );
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+
+    const offered = organizerReportingExportAuthority.value?.exports ?? [];
+    const ids = offered.map((descriptor) => descriptor.id);
+
+    expect(ids).not.toContain("shift-roster");
+    expect(ids).toContain("credential-eligibility");
+    expect(ids).toContain("hours-worked");
+  });
+
+  it("does not offer an export the reader is permitted to run", () => {
+    /*
+     * The distinction MOD-013 draws. Permission is not what is missing here —
+     * this caller holds the capability and the export is still absent, because
+     * there is no shift roster in an organization that does not run Scheduling
+     * and no role anybody could be granted to produce one.
+     */
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldOrganizationsWithout(
+          MODULE_SCHEDULING,
+          MODULE_QUALIFICATIONS,
+        ),
+      }),
+      "network",
+    );
+    selectSessionDepartment(LOCAL_FIELD_DEPARTMENT_IDS.organizer);
+
+    const permitted =
+      organizerReportingExportAuthority.value?.exports.map(
+        (descriptor) => descriptor.id,
+      ) ?? [];
+
+    expect(permitted).not.toContain("shift-roster");
+    expect(permitted).not.toContain("credential-eligibility");
+    // Three core exports remain, so the surface is a shorter list rather than
+    // an absent one.
+    expect(permitted.length).toBeGreaterThan(0);
   });
 });

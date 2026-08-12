@@ -7,6 +7,7 @@ namespace App\Services\Dashboard;
 use App\Domain\Dashboard\DashboardCatalog;
 use App\Domain\Dashboard\DashboardWidget;
 use App\Domain\Dashboard\DashboardWidgetDefinition;
+use App\Domain\Modules\ModuleKey;
 use App\Models\Event;
 use Illuminate\Support\Carbon;
 
@@ -31,12 +32,48 @@ abstract class DashboardWidgetCompiler
     protected const MAX_ITEMS = 5;
 
     /**
+     * The modules the organization runs, for the one widget that composes
+     * others (M19.18).
+     *
+     * Everything the compiler returns is filtered against this by
+     * {@see DashboardService}, so a compiler does not have to remember to check.
+     * It is readable here for the case that filter cannot cover: a core widget
+     * whose content is a sum over module-owned ones has to leave the missing
+     * terms out of the sum rather than out of the response.
+     *
+     * Everything active until told otherwise, so a compiler constructed in a
+     * test without a module set behaves as an organization running everything —
+     * which is MOD-009's default and the safe direction.
+     *
+     * @var list<ModuleKey>
+     */
+    private array $activeModules = [];
+
+    private bool $modulesKnown = false;
+
+    /**
      * Every widget this compiler is responsible for, whether or not it has
      * something to report.
      *
      * @return list<DashboardWidget>
      */
     abstract public function compile(Event $event, DashboardAudience $audience, Carbon $now): array;
+
+    /**
+     * @param  list<ModuleKey>  $modules
+     */
+    public function composingModules(array $modules): static
+    {
+        $this->activeModules = $modules;
+        $this->modulesKnown = true;
+
+        return $this;
+    }
+
+    protected function runs(ModuleKey $module): bool
+    {
+        return ! $this->modulesKnown || in_array($module, $this->activeModules, true);
+    }
 
     protected function definition(string $id): DashboardWidgetDefinition
     {

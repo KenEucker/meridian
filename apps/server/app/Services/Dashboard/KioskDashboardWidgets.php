@@ -6,6 +6,7 @@ namespace App\Services\Dashboard;
 
 use App\Domain\Dashboard\DashboardAttention;
 use App\Domain\Dashboard\DashboardWidget;
+use App\Domain\Modules\ModuleKey;
 use App\Models\AttendanceRecord;
 use App\Models\Department;
 use App\Models\EquipmentCheckout;
@@ -57,11 +58,23 @@ final class KioskDashboardWidgets extends DashboardWidgetCompiler
          * a return answers to `department.equipment.manage`. A widget nobody
          * could act on is absent rather than refused on tap (CLIENT-005).
          */
-        $checkIns = $department !== null && $authority?->canManageAttendance === true
+        /*
+         * The module check sits beside the capability check rather than after
+         * it, because `kiosk.current_tasks` is compiled from these two answers
+         * and is itself core (MOD-019, M19.18). Its own widget is dropped later
+         * for a module the organization does not run; the sum below would still
+         * have counted it, and a Kiosk reading "3 tasks" over a list of one is
+         * worse than either of the honest answers.
+         */
+        $checkIns = $department !== null
+            && $authority?->canManageAttendance === true
+            && $this->runs(ModuleKey::Scheduling)
             ? $this->awaitingCheckIn($event, $department, $now)
             : null;
 
-        $returns = $department !== null && $authority?->canManageEquipment === true
+        $returns = $department !== null
+            && $authority?->canManageEquipment === true
+            && $this->runs(ModuleKey::Equipment)
             ? $this->outstandingReturns($event, $department, $now)
             : null;
 

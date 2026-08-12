@@ -19,6 +19,7 @@ import {
   overviewSummary,
   type DepartmentOverviewRead,
 } from "@/department-ops/departmentOpsReadModel";
+import { useDepartmentOpsModules } from "@/department-ops/departmentOpsModules";
 
 /**
  * Department Overview (SLB-001, SLB-002; bound to the node in M16.21).
@@ -27,10 +28,18 @@ import {
  * filter over what is already here: the exceptions, the checked-in list, and the
  * counts are all answers about the selected shift, so they come from the node
  * together and cannot disagree with each other.
+ *
+ * The page is core and composes three modules (M19.18; MOD-019). Everything
+ * organized around the selected shift belongs to Scheduling, the equipment
+ * section to Equipment, and the deployment column to Event Geography. What the
+ * organization does not run is absent here as it is absent from the payload —
+ * an overview of a department with no schedule is still the department's
+ * on-site count and its equipment, and it renders rather than refusing.
  */
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId ?? ""));
 const departmentId = computed(() => String(route.params.departmentId ?? ""));
+const modules = useDepartmentOpsModules(departmentId);
 
 const overview = ref<DepartmentOverviewRead | null>(null);
 const loadError = ref<string | null>(null);
@@ -132,10 +141,12 @@ void loadOverview();
     <template #heading-cards>
       <WorkflowHeadingCardGrid>
         <WorkflowHeadingCard
+          v-if="modules.scheduling.value"
           label="Shift assignments"
           :value="String(summary.assignmentCount)"
         />
         <WorkflowHeadingCard
+          v-if="modules.scheduling.value"
           label="Checked in"
           :value="String(summary.checkedInCount)"
         />
@@ -144,6 +155,7 @@ void loadOverview();
           :value="String(summary.onSiteCount)"
         />
         <WorkflowHeadingCard
+          v-if="modules.equipment.value"
           label="Equipment out"
           :value="String(summary.equipmentOutCount)"
         />
@@ -161,14 +173,24 @@ void loadOverview();
     </p>
 
     <template v-else-if="overview">
+      <!--
+        The shift the whole page is about, absent where the organization does
+        not run Scheduling: there is no shift to select, and "no shifts are
+        scheduled in the current window" would report a gap in a schedule that
+        does not exist here (MOD-019).
+      -->
       <ShiftSelector
-        v-if="overview.selectedShiftId"
+        v-if="modules.scheduling.value && overview.selectedShiftId"
         :shifts="overview.shifts"
         :model-value="overview.selectedShiftId"
         :time-zone="timeZone"
         @update:model-value="(shiftId: string) => loadOverview(shiftId)"
       />
-      <p v-else class="overview__window" role="status">
+      <p
+        v-else-if="modules.scheduling.value"
+        class="overview__window"
+        role="status"
+      >
         No shifts are scheduled for this department in the current window.
       </p>
 
@@ -184,7 +206,11 @@ void loadOverview();
         should not have to scroll past it to see who is on shift.
       -->
       <ContentGrid min="region" :stretch="false">
-      <section aria-labelledby="exceptions-heading" class="overview__section">
+      <section
+        v-if="modules.scheduling.value"
+        aria-labelledby="exceptions-heading"
+        class="overview__section"
+      >
         <h2 id="exceptions-heading">Exceptions needing attention</h2>
         <p v-if="overview.exceptions.length === 0" role="status">
           No exceptions for this shift.
@@ -201,7 +227,11 @@ void loadOverview();
         </ul>
       </section>
 
-      <section aria-labelledby="checked-in-heading" class="overview__section">
+      <section
+        v-if="modules.scheduling.value"
+        aria-labelledby="checked-in-heading"
+        class="overview__section"
+      >
         <h2 id="checked-in-heading">Checked-in staff currently working</h2>
         <p v-if="checkedIn.length === 0" role="status">
           No staff are checked in for this shift.
@@ -210,14 +240,20 @@ void loadOverview();
           <li v-for="member in checkedIn" :key="member.assignmentId">
             <span>{{ member.displayName }}</span>
             <span>
-              {{ attendanceStateLabel(member.attendanceState) }} /
-              {{ deploymentLabel(overview.deployments, member.currentDeploymentId) }}
+              {{ attendanceStateLabel(member.attendanceState) }}
+              <template v-if="modules.geography.value">
+                / {{ deploymentLabel(overview.deployments, member.currentDeploymentId) }}
+              </template>
             </span>
           </li>
         </ul>
       </section>
 
-      <section aria-labelledby="assignments-heading" class="overview__section">
+      <section
+        v-if="modules.scheduling.value"
+        aria-labelledby="assignments-heading"
+        class="overview__section"
+      >
         <h2 id="assignments-heading">Shift assignments</h2>
         <div class="overview__table-frame">
           <table>
@@ -226,7 +262,13 @@ void loadOverview();
                 <th scope="col">Staff</th>
                 <th scope="col">Team</th>
                 <th scope="col">Attendance</th>
-                <th scope="col">Deployment</th>
+                <!--
+                  The one column on this table that is not Scheduling's. A
+                  department without Event Geography has nowhere to be deployed
+                  to, and an empty column headed Deployment reads as nobody
+                  having been assigned one.
+                -->
+                <th v-if="modules.geography.value" scope="col">Deployment</th>
               </tr>
             </thead>
             <tbody>
@@ -237,7 +279,7 @@ void loadOverview();
                 <th scope="row">{{ member.displayName }}</th>
                 <td>{{ member.teamLabel }}</td>
                 <td>{{ attendanceStateLabel(member.attendanceState) }}</td>
-                <td>
+                <td v-if="modules.geography.value">
                   {{ deploymentLabel(overview.deployments, member.currentDeploymentId) }}
                 </td>
               </tr>
@@ -246,7 +288,11 @@ void loadOverview();
         </div>
       </section>
 
-      <section aria-labelledby="equipment-heading" class="overview__section">
+      <section
+        v-if="modules.equipment.value"
+        aria-labelledby="equipment-heading"
+        class="overview__section"
+      >
         <h2 id="equipment-heading">Equipment out</h2>
         <p v-if="overview.equipmentOut.length === 0" role="status">
           No equipment is checked out.

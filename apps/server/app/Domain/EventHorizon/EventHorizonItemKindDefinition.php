@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\EventHorizon;
 
+use App\Domain\Modules\ModuleKey;
+
 /**
  * The registration of one item kind (HORIZON-003; technical spec 21D.2).
  *
@@ -26,6 +28,19 @@ final class EventHorizonItemKindDefinition
         /** The requirement rows this kind's evaluation restates (HORIZON-003). */
         public readonly string $governedBy,
     ) {}
+
+    /**
+     * The owning module as the catalogue enum, or null where this build's
+     * catalogue does not list the key.
+     *
+     * Null reads as core, which is the same direction {@see \App\Domain\Modules\DomainNamespace}
+     * takes for an undeclared namespace: a kind whose module cannot be resolved
+     * stays available rather than disappearing from every organization.
+     */
+    public function moduleKey(): ?ModuleKey
+    {
+        return ModuleKey::tryFrom($this->module);
+    }
 
     /**
      * @return array<string, string>

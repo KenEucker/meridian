@@ -16,6 +16,13 @@ import {
   incidentAccess,
   incidentSessionContext,
 } from "@/ims/incidentReadModel";
+import {
+  MODULE_EQUIPMENT,
+  MODULE_EVENT_GEOGRAPHY,
+  MODULE_INCIDENT_MANAGEMENT,
+  moduleActiveForDepartment,
+  type ModuleKey,
+} from "@/session/sessionModules";
 
 /**
  * The Operations Center (SLB-009, SLB-010, SLB-013, SLB-014, SLB-022; bound to
@@ -30,6 +37,17 @@ import {
  * The IMS and Field Report counts were bound in M16.20 and are unchanged: one
  * narrow read per number, each the node's total for the filter its card links
  * to.
+ *
+ * M19.18 adds the second reason a module of this screen can be absent, and it
+ * is not the same reason as the first. `available` answers whether *this actor*
+ * holds the capability, and an unavailable module prints a sentence about the
+ * authority they would need. A module the *organization* does not run is
+ * dropped from the list entirely (MOD-019): there is no authority to describe,
+ * because there is nobody in the organization who could hold it, and printing
+ * "Deployments require Department Operations capability" would send somebody to
+ * ask for a grant nobody can issue (MOD-013). The screen itself never refuses on
+ * module state — an Operations Center with only its core content is still the
+ * page a department opens.
  */
 
 const route = useRoute();
@@ -56,12 +74,23 @@ const deployments = computed(() => center.value?.deployments ?? []);
  * department-scoped (SLB-014); equipment follows the department's equipment
  * grant. Maintenance stays an extension point until that domain is specified.
  */
-const modules = computed(() => {
-  const access = center.value?.access;
+/** One entry on the Capability modules list, and the product module it needs. */
+interface OperationsCenterModule {
+  readonly id: string;
+  /** The MOD-002 module that owns it, or null where the entry is core. */
+  readonly module: ModuleKey | null;
+  readonly title: string;
+  readonly available: boolean;
+  readonly unavailableReason: string;
+  readonly summary: string;
+}
 
-  return [
+const modules = computed<readonly OperationsCenterModule[]>(() => {
+  const access = center.value?.access;
+  const entries: readonly OperationsCenterModule[] = [
     {
       id: "deployments",
+      module: MODULE_EVENT_GEOGRAPHY,
       title: "Deployments",
       available: access?.canAssignDeployments ?? false,
       unavailableReason: "Deployments require Department Operations capability.",
@@ -69,6 +98,7 @@ const modules = computed(() => {
     },
     {
       id: "field_reports",
+      module: MODULE_INCIDENT_MANAGEMENT,
       title: "Field Reports",
       available: incidentAccess.value.canViewFieldReports,
       unavailableReason:
@@ -78,6 +108,7 @@ const modules = computed(() => {
     },
     {
       id: "incidents",
+      module: MODULE_INCIDENT_MANAGEMENT,
       title: "Incidents",
       available: incidentAccess.value.canView,
       unavailableReason:
@@ -86,6 +117,7 @@ const modules = computed(() => {
     },
     {
       id: "equipment",
+      module: MODULE_EQUIPMENT,
       title: "Equipment",
       available: access?.canManageEquipment ?? false,
       unavailableReason:
@@ -96,6 +128,8 @@ const modules = computed(() => {
     },
     {
       id: "maintenance",
+      // Core: no product module owns it, because no domain does yet.
+      module: null,
       title: "Maintenance",
       available: false,
       unavailableReason:
@@ -103,6 +137,12 @@ const modules = computed(() => {
       summary: "No maintenance module yet.",
     },
   ];
+
+  return entries.filter(
+    (entry) =>
+      entry.module === null ||
+      moduleActiveForDepartment(departmentId.value || null, entry.module),
+  );
 });
 
 const availableModules = computed(() =>

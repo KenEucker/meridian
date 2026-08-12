@@ -23,12 +23,18 @@ import {
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { resetCommandOutbox } from "@/outbox/commandOutboxRuntime";
 import { routes } from "@/router";
-import { clearClientSession } from "@/session/clientSession";
+import {
+  clearClientSession,
+  installClientSession,
+} from "@/session/clientSession";
 import {
   installLocalFieldSession,
   LOCAL_FIELD_FIXTURE,
+  localFieldOrganizationsWithout,
+  localFieldSessionDocument,
 } from "@/session/localFieldSessionFixture";
 import { resetSelectedSessionDepartment } from "@/session/sessionAccess";
+import { MODULE_SCHEDULING } from "@/session/sessionModules";
 import EventHorizonView from "@/views/EventHorizonView.vue";
 
 const EVENT_ID = LOCAL_FIELD_FIXTURE.eventId;
@@ -433,6 +439,32 @@ describe("the Event Horizon surface", () => {
 
     expect(text).toContain("Waivers, Trainings, Shift signup and Team coverage");
     expect(text).toContain("could not be checked at all");
+  });
+
+  /*
+   * HORIZON-017 applied to the disclosure itself (M19.18; MOD-019). A member of
+   * an organization that does not run Scheduling has no shift signups and no
+   * coverage gaps to be unsure about, so naming them as unevaluated would
+   * describe readiness items that do not exist here as ones this copy merely
+   * missed. The module set rides in the session document, so a device with no
+   * node in reach can still answer this.
+   */
+  it("does not name kinds the organization does not run among the unevaluated", async () => {
+    installClientSession(
+      localFieldSessionDocument({
+        organizations: localFieldOrganizationsWithout(MODULE_SCHEDULING),
+      }),
+      "network",
+    );
+    await installAcknowledgmentSet(false);
+    stubUnreachableNode();
+
+    const { wrapper } = await mountView();
+    const text = wrapper.text();
+
+    expect(text).toContain("Waivers and Trainings");
+    expect(text).not.toContain("Shift signup");
+    expect(text).not.toContain("Team coverage");
   });
 
   /*

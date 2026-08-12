@@ -7,8 +7,10 @@ namespace App\Services\Dashboard;
 use App\Domain\Dashboard\DashboardCatalog;
 use App\Domain\Dashboard\DashboardWidget;
 use App\Domain\Dashboard\DashboardWidgetGroup;
+use App\Domain\Modules\ModuleKey;
 use App\Models\Event;
 use App\Models\User;
+use App\Services\Modules\ActiveModuleResolver;
 use Illuminate\Support\Carbon;
 
 /**
@@ -26,9 +28,20 @@ use Illuminate\Support\Carbon;
  * absent rather than empty. CLIENT-005 is the reason: an unavailable thing is
  * absent, not disabled, and an empty department group would tell somebody with
  * no standing in that department how many shifts it has trouble with.
+ *
+ * The dashboard is the widest aggregator in the product — one surface reading
+ * every domain — so MOD-019 lands here squarely (M19.18). A widget whose module
+ * the organization does not run is dropped from the compiled list, for the same
+ * reason a group the reader does not hold is: a quiet "No upcoming shifts" card
+ * is a statement about a schedule, and an organization without Scheduling has
+ * none to be quiet about. The endpoint itself is core and never refuses on
+ * module state (data/API 5.9) — a dashboard with fewer cards on it is still a
+ * dashboard.
  */
 final class DashboardService
 {
+    public function __construct(private readonly ActiveModuleResolver $modules) {}
+
     /**
      * Every widget this reader may see, in contract order.
      *
@@ -37,10 +50,17 @@ final class DashboardService
     public function compile(User $user, Event $event, DashboardAudience $audience, ?Carbon $now = null): array
     {
         $now ??= Carbon::now();
+        $active = $this->modules->activeFor((string) $event->organization_id);
         $widgets = [];
 
         foreach ($audience->groups() as $group) {
-            foreach ($this->compilerFor($group, $user)->compile($event, $audience, $now) as $widget) {
+            foreach ($this->compilerFor($group, $user, $active)->compile($event, $audience, $now) as $widget) {
+                $module = $widget->definition->module;
+
+                if ($module !== null && ! in_array($module, $active, true)) {
+                    continue;
+                }
+
                 $widgets[] = $widget;
             }
         }
@@ -70,10 +90,20 @@ final class DashboardService
      * takes a dependency at all — the staff group reads the caller's own
      * acknowledgments, which are recorded against the user rather than against a
      * staff profile.
+     *
+     * The active module set is handed to each of them because dropping a
+     * compiled widget is not always enough: `kiosk.current_tasks` is a core
+     * widget whose whole content is the sum of two module-owned ones, so it has
+     * to know not to count what it will not be sent (MOD-019).
+     *
+     * @param  list<ModuleKey>  $active
      */
-    private function compilerFor(DashboardWidgetGroup $group, User $user): DashboardWidgetCompiler
-    {
-        return match ($group) {
+    private function compilerFor(
+        DashboardWidgetGroup $group,
+        User $user,
+        array $active,
+    ): DashboardWidgetCompiler {
+        $compiler = match ($group) {
             DashboardWidgetGroup::Staff => new StaffDashboardWidgets($user),
             DashboardWidgetGroup::DepartmentLead => new DepartmentLeadDashboardWidgets,
             DashboardWidgetGroup::DepartmentOperations => new DepartmentOperationsDashboardWidgets,
@@ -81,5 +111,7 @@ final class DashboardService
             DashboardWidgetGroup::IncidentCommand => new IncidentCommandDashboardWidgets,
             DashboardWidgetGroup::Kiosk => new KioskDashboardWidgets,
         };
+
+        return $compiler->composingModules($active);
     }
 }
