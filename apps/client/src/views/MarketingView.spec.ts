@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MeridianApiError } from "@/api/meridianApi";
 import { INTEREST_TRAP_FIELD } from "@/marketing/marketingModel";
+import { MARKETING_FEATURE_TOUR } from "@/marketing/marketingTour";
 import MarketingView from "@/views/MarketingView.vue";
 
 vi.mock("vue-router", () => ({
@@ -150,6 +151,111 @@ describe("the public marketing surface", () => {
 
   it("names the trap field the same thing the node reads", async () => {
     expect(INTEREST_TRAP_FIELD).toBe("organization_reference_code");
+  });
+
+  /**
+   * PUBLIC-007: the landing page introduces each major feature area, one
+   * section per catalogue entry, in the catalogue's order.
+   */
+  it("renders one feature tour section per catalogue entry", async () => {
+    const wrapper = await mountSurface();
+
+    const sections = wrapper.findAll(".marketing__feature");
+    expect(sections).toHaveLength(MARKETING_FEATURE_TOUR.length);
+
+    MARKETING_FEATURE_TOUR.forEach((feature, index) => {
+      expect(sections[index].find("h3").text()).toBe(feature.title);
+      expect(sections[index].text()).toContain(feature.description);
+    });
+  });
+
+  /**
+   * PUBLIC-008 and the accessibility checklist: every screenshot is the
+   * committed Northwood asset, and every one of them carries alt text that
+   * says what it shows. The page also states outright that the organization
+   * pictured is fictional.
+   */
+  it("illustrates every feature with its Northwood screenshot and alt text", async () => {
+    const wrapper = await mountSurface();
+
+    const screenshots = wrapper.findAll("img.marketing__screenshot");
+    expect(screenshots).toHaveLength(MARKETING_FEATURE_TOUR.length);
+
+    MARKETING_FEATURE_TOUR.forEach((feature, index) => {
+      expect(screenshots[index].attributes("src")).toBe(feature.screenshot);
+      expect(screenshots[index].attributes("alt")).toBe(feature.screenshotAlt);
+      expect(feature.screenshotAlt.trim().length).toBeGreaterThan(0);
+    });
+
+    expect(wrapper.text()).toContain("Northwood Collective");
+    expect(wrapper.text()).toContain(
+      "No real organization's data appears on this page.",
+    );
+  });
+
+  /** PUBLIC-009: the three offerings, described. */
+  it("describes the three platform offerings", async () => {
+    const wrapper = await mountSurface();
+    const offerings = wrapper.findAll(".marketing__offering");
+
+    expect(offerings).toHaveLength(3);
+    expect(offerings[0].text()).toContain("free and open source");
+    expect(offerings[1].text()).toContain("without support");
+    expect(offerings[1].text()).toContain("lower fee");
+    expect(offerings[2].text()).toContain("full support");
+    expect(offerings[2].text()).toContain("on-site technician");
+  });
+
+  /**
+   * PUBLIC-009, PUBLIC-004: the offerings are descriptive only. No payment,
+   * billing, or self-service signup path exists anywhere on the page — the
+   * only form is the interest form, the only button submits it, and the only
+   * links the tour and offerings carry point at that form.
+   */
+  it("offers no payment or self-service signup path", async () => {
+    const wrapper = await mountSurface();
+
+    expect(wrapper.findAll("form")).toHaveLength(1);
+    expect(wrapper.findAll("button")).toHaveLength(1);
+    expect(wrapper.find("button").attributes("type")).toBe("submit");
+
+    const offerings = wrapper.find('[aria-labelledby="marketing-offerings"]');
+    expect(offerings.findAll("form")).toHaveLength(0);
+    expect(offerings.findAll("button")).toHaveLength(0);
+    expect(offerings.findAll("input")).toHaveLength(0);
+
+    for (const link of wrapper
+      .find('[aria-labelledby="marketing-tour"]')
+      .findAll("a")
+      .concat(offerings.findAll("a"))) {
+      expect(link.attributes("href")).toBe("#marketing-interest");
+    }
+
+    // No price, no billing language. "Checkout" is deliberately not in this
+    // list — equipment checkout is a feature the tour describes.
+    expect(wrapper.text()).not.toMatch(
+      /sign up|billing|subscribe|per month|credit card|\$|€|£/i,
+    );
+  });
+
+  /**
+   * M20.5: a reader who has just finished the tour or the offerings can act
+   * on what they read — both sections end at the interest form, and the
+   * anchor they use exists.
+   */
+  it("routes the tour and the offerings to the interest form", async () => {
+    const wrapper = await mountSurface();
+
+    const tourLink = wrapper
+      .find('[aria-labelledby="marketing-tour"]')
+      .find('a[href="#marketing-interest"]');
+    const offeringsLink = wrapper
+      .find('[aria-labelledby="marketing-offerings"]')
+      .find('a[href="#marketing-interest"]');
+
+    expect(tourLink.exists()).toBe(true);
+    expect(offeringsLink.exists()).toBe(true);
+    expect(wrapper.find("#marketing-interest").exists()).toBe(true);
   });
 
   /**

@@ -122,7 +122,7 @@ not restated here.
 | 19 | Gap closure and offline reads | [`QA-GAP-01`](QA-GAP-01-milestone-18-gap-closure.md), [`QA-GOD-03`](QA-GOD-03-orchid-repair-visibility.md), [`QA-ORG-04`](QA-ORG-04-context-and-organizer-surfaces.md), [`QA-DIR-01`](QA-DIR-01-directory-and-organization-chart.md), [`QA-OFFLINE-01`](QA-OFFLINE-01-offline-reads.md), [`QA-PUBLIC-02`](QA-PUBLIC-02-marketing-surface-and-organization-interest.md) | Landed |
 | 20 | Event Horizon | [`QA-HORIZON-01`](QA-HORIZON-01-event-horizon.md) | Landed |
 | 21 | Organization modules | `QA-MOD-01-organization-modules.md` | Written by M19.19; not yet landed |
-| 22 | Platform landing page | `QA-PUBLIC-01` | Written by M20.6; not yet landed |
+| 22 | Platform landing page | [`QA-PUBLIC-01`](QA-PUBLIC-01-platform-landing-page.md) | Landed |
 | 23 | Release candidate | [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md), [`QA-PKG-01`](QA-PKG-01-packaged-application-install.md), then this script's sections B through F | Landed; this script |
 
 Every script in the table is critical: the development process phase 5 line

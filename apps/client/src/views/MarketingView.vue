@@ -12,6 +12,7 @@ import {
   submitOrganizationInterest,
   type MarketingSurfaceAvailability,
 } from "@/marketing/marketingModel";
+import { MARKETING_FEATURE_TOUR } from "@/marketing/marketingTour";
 
 /**
  * `public.marketing` — Meridian describing itself (M18.23; PUBLIC-001 through
@@ -37,9 +38,13 @@ import {
  *     to sign in when the answer is no, rather than advertising a platform on a
  *     laptop that is running somebody's event.
  *
- * The feature tour, its screenshots of the seeded example organization, and the
- * descriptions of the three platform offerings (PUBLIC-007 through PUBLIC-009)
- * are Milestone 20's, and are deliberately absent rather than stubbed.
+ * Milestone 20 made this the platform landing page (PUBLIC-007 through
+ * PUBLIC-009): the feature tour walks each major feature area with a committed
+ * screenshot of the seeded Northwood scenario, the offerings section describes
+ * the three ways an organization can run Meridian, and both end at the same
+ * place — the interest form that was already here. The offerings are
+ * descriptive on purpose: there is no price, no checkout, and no signup path,
+ * because organization creation stays a deliberate God Mode act (PUBLIC-004).
  */
 const emit = defineEmits<{ (event: "unavailable"): void }>();
 
@@ -206,6 +211,90 @@ onMounted(() => {
           can take to the site, keeps working while it is offline, and syncs
           back when it is not. It is free and open source, and you can host it
           yourself.
+        </p>
+      </section>
+
+      <section class="marketing__section" aria-labelledby="marketing-tour">
+        <h2 id="marketing-tour">What Meridian does</h2>
+        <p class="marketing__quiet">
+          Every screenshot below shows Northwood Collective, the fictional
+          example organization Meridian's own development runs against. No real
+          organization's data appears on this page.
+        </p>
+
+        <section
+          v-for="feature in MARKETING_FEATURE_TOUR"
+          :key="feature.id"
+          class="marketing__feature"
+          :aria-labelledby="`marketing-feature-${feature.id}`"
+        >
+          <h3 :id="`marketing-feature-${feature.id}`">{{ feature.title }}</h3>
+          <img
+            class="marketing__screenshot"
+            :src="feature.screenshot"
+            :alt="feature.screenshotAlt"
+            loading="lazy"
+            width="1280"
+            height="800"
+          />
+          <p>{{ feature.description }}</p>
+        </section>
+
+        <p v-if="!submitted">
+          <a href="#marketing-interest"
+            >Sound like your events? Tell us about your organization below.</a
+          >
+        </p>
+      </section>
+
+      <section class="marketing__section" aria-labelledby="marketing-offerings">
+        <h2 id="marketing-offerings">Three ways to run it</h2>
+
+        <div class="marketing__offerings">
+          <section
+            class="marketing__offering"
+            aria-labelledby="marketing-offering-self-hosted"
+          >
+            <h3 id="marketing-offering-self-hosted">Self-hosted</h3>
+            <p>
+              Meridian is free and open source. Run it on your own hardware, on
+              your own terms, with every feature and no fee — the source is
+              yours to read and the deployment is yours to keep.
+            </p>
+          </section>
+
+          <section
+            class="marketing__offering"
+            aria-labelledby="marketing-offering-self-starter"
+          >
+            <h3 id="marketing-offering-self-starter">Hosted self-starter</h3>
+            <p>
+              We host Meridian for your organization and you run it
+              yourselves, without support, at a lower fee than the managed
+              offering. The platform stays up; the operating stays yours.
+            </p>
+          </section>
+
+          <section
+            class="marketing__offering"
+            aria-labelledby="marketing-offering-managed"
+          >
+            <h3 id="marketing-offering-managed">Hosted and managed</h3>
+            <p>
+              Fully hosted with full support — setup, operations, and an
+              on-site technician at your event, so the system is somebody
+              else's job while the event is yours.
+            </p>
+          </section>
+        </div>
+
+        <p class="marketing__quiet">
+          There is nothing to buy on this page, and no signup to click through.
+          Every offering starts the same way:
+          <a v-if="!submitted" href="#marketing-interest"
+            >tell us about your organization</a
+          ><span v-else>tell us about your organization</span>
+          and somebody will get back to you.
         </p>
       </section>
 
@@ -383,6 +472,40 @@ onMounted(() => {
 .marketing__section h2 {
   margin: 0;
   font-size: 1.15rem;
+}
+
+.marketing__feature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+  margin-top: var(--m-space-3, 0.75rem);
+}
+
+.marketing__feature h3,
+.marketing__offering h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.marketing__screenshot {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--m-color-border, #d5ddda);
+  border-radius: var(--m-radius-2, 0.375rem);
+}
+
+.marketing__offerings {
+  display: grid;
+  gap: var(--m-space-3, 0.75rem);
+}
+
+.marketing__offering {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-1, 0.25rem);
+  padding: var(--m-space-3, 0.75rem);
+  border: 1px solid var(--m-color-border, #d5ddda);
+  border-radius: var(--m-radius-2, 0.375rem);
 }
 
 .marketing__notice,
