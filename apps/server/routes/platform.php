@@ -42,6 +42,8 @@ use App\Orchid\Screens\Organization\OrganizationEditScreen;
 use App\Orchid\Screens\Organization\OrganizationInquiryDetailScreen;
 use App\Orchid\Screens\Organization\OrganizationInquiryListScreen;
 use App\Orchid\Screens\Organization\OrganizationListScreen;
+use App\Orchid\Screens\Organization\OrganizationModuleEditScreen;
+use App\Orchid\Screens\Organization\OrganizationModuleListScreen;
 use App\Orchid\Screens\Permission\PermissionCatalogScreen;
 use App\Orchid\Screens\PlatformScreen;
 use App\Orchid\Screens\Role\RoleEditScreen;
@@ -183,6 +185,28 @@ Route::screen('organizations', OrganizationListScreen::class)
     ->breadcrumbs(fn (Trail $trail) => $trail
         ->parent('platform.index')
         ->push(__('Organizations'), route('platform.organizations')));
+
+/*
+ * Platform > God Mode > Organization Modules (M19.13; MOD-006, MOD-021;
+ * technical spec 15A.6, 22.2).
+ *
+ * `organization-modules` rather than nested under `organizations/{id}`, and for
+ * the same reason `audit-settings` is not nested under it: the list is a
+ * cross-organization screen in its own right, and nesting would make the
+ * per-organization screen's breadcrumb parent the organization record rather
+ * than the list an operator arrived from.
+ */
+Route::screen('organization-modules/{organization}', OrganizationModuleEditScreen::class)
+    ->name('platform.organization-modules.edit')
+    ->breadcrumbs(fn (Trail $trail, $organization) => $trail
+        ->parent('platform.organization-modules')
+        ->push($organization->name, route('platform.organization-modules.edit', $organization)));
+
+Route::screen('organization-modules', OrganizationModuleListScreen::class)
+    ->name('platform.organization-modules')
+    ->breadcrumbs(fn (Trail $trail) => $trail
+        ->parent('platform.index')
+        ->push(__('Organization Modules'), route('platform.organization-modules')));
 
 /*
  * Platform > Operations > Organization Inquiries (M18.23; PUBLIC-004).

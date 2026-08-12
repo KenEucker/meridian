@@ -104,6 +104,12 @@ final class AuditActionCatalog
         // Organization governance: the values every other rule is measured
         // from (ORG-020 requires configuration changes to be audited).
         'organization.configuration_updated',
+        // Which modules an organization is entitled to run. MOD-011 audits
+        // every transition without qualification, and the transition decides
+        // whether a whole capability exists for everyone in the organization —
+        // so it sits at the floor rather than at a level an organization could
+        // configure its way below.
+        'organization_module.entitlement_changed',
         // The archival that enforces a retention limit. Recorded at the floor
         // for the obvious reason: an act that removes audit history is the last
         // one that should be omissible from it.
