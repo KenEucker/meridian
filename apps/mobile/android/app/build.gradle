@@ -48,6 +48,32 @@ def meridianVersionCode = { version ->
     return major * 1_000_000 + minor * 1_000 + patch
 }(meridianVersionName)
 
+/*
+ * Release signing from the upload keystore (M19.22).
+ *
+ * Technical spec 26.5 holds every signing credential outside the repository
+ * and supplies it through the environment; none of these four variables has
+ * an in-repo default, and the keystore itself is never committed. The
+ * inventory below is mirrored by apps/mobile/src/releaseSigning.ts, which is
+ * what the config tests hold this file against.
+ *
+ * A release build that cannot resolve all four credentials fails in the
+ * task-graph guard below rather than falling back to debug signing or
+ * emitting an unsigned artifact that looks distributable. Debug builds are
+ * untouched: the credentials are only demanded when a release task is
+ * actually scheduled.
+ */
+def meridianReleaseSigningEnv = [
+    'MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE',
+    'MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD',
+    'MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS',
+    'MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD',
+]
+def meridianMissingReleaseCredentials = meridianReleaseSigningEnv.findAll { name ->
+    def value = System.getenv(name)
+    value == null || value.isEmpty()
+}
+
 android {
     namespace = "org.meridian.field"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -64,11 +90,54 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (meridianMissingReleaseCredentials.isEmpty()) {
+            release {
+                storeFile file(System.getenv('MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE'))
+                storePassword System.getenv('MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS')
+                keyPassword System.getenv('MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (meridianMissingReleaseCredentials.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+/*
+ * The fail-closed half of the M19.22 signing contract: if any task of a
+ * release variant is scheduled while a credential is missing, the build stops
+ * before compiling anything. Without this guard the Android Gradle plugin
+ * would happily emit app-release-unsigned.apk, which is exactly the artifact
+ * technical spec 26.5 forbids.
+ */
+gradle.taskGraph.whenReady { graph ->
+    def releaseTaskScheduled = graph.allTasks.any { task ->
+        task.project == project && task.name ==~ /(?i).*release.*/
+    }
+    if (!releaseTaskScheduled) {
+        return
+    }
+    if (!meridianMissingReleaseCredentials.isEmpty()) {
+        throw new GradleException(
+            "Missing Android release signing credentials: " +
+            "${meridianMissingReleaseCredentials.join(', ')}. Technical spec 26.5 holds " +
+            'the upload keystore and its passwords outside the repository and supplies ' +
+            'them through the environment; refusing to build a release that would not ' +
+            'be signed from the upload keystore.')
+    }
+    def uploadKeystore = file(System.getenv('MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE'))
+    if (!uploadKeystore.isFile()) {
+        throw new GradleException(
+            "MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE points at ${uploadKeystore}, which does " +
+            'not exist; refusing to build a release without the upload keystore.')
     }
 }
 

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cap:copy": "corepack pnpm --filter @meridian/client run build:field && cap copy",
-    "cap:sync": "corepack pnpm --filter @meridian/client run build:field && cap sync"
+    "cap:sync": "corepack pnpm --filter @meridian/client run build:field && cap sync",
+    "ios:archive": "sh scripts/build-ios-release.sh"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.0"
