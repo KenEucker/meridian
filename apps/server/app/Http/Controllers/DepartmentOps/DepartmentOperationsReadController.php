@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\DepartmentOps;
 
+use App\Domain\Modules\ModuleKey;
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\CurrentDeploymentAssignment;
@@ -27,6 +28,7 @@ use App\Services\DepartmentOps\PlanVersusActual;
 use App\Services\DepartmentOps\ShiftLifecycle;
 use App\Services\Equipment\EquipmentCheckoutPresentation;
 use App\Services\Equipment\EquipmentLookupService;
+use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Presence\DepartmentPresenceException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -58,9 +60,35 @@ use Illuminate\Support\Carbon;
  *  3. **Scope.** The Logistics Window indexes the department's staff, equipment,
  *     and shifts for the operational horizon around now; the Planning Table
  *     answers with aggregates and no identities at all (SLB-019).
+ *
+ * All four are **core endpoints that compose module-owned data** (data/API 5.9;
+ * MOD-019; M19.18). Shifts, signups, and every attendance card built on them
+ * belong to Scheduling; the checkout desk and its inventory belong to Equipment;
+ * deployments belong to Event Geography. What the organization does not run is
+ * omitted from the payload and the rest is returned — the section key is absent
+ * rather than present and empty, on the same reasoning the offline read set
+ * applies (5.10), because an empty `searchable_equipment` is a claim that the
+ * department has no equipment and absence is a statement about the product.
+ *
+ * None of the four ever refuses on module state. An organization running staff,
+ * presence, attendance, and hours and nothing else still opens all four
+ * surfaces: check-in does not require a shift (requirements 5.8), and the desk
+ * is where somebody stands whether or not a schedule exists.
+ *
+ * The `access` block is deliberately *not* narrowed by module. It answers what
+ * this caller may do, and a role granting equipment authority still grants it —
+ * the equipment is simply not part of what the organization runs. Reporting
+ * `can_manage_equipment: false` would tell a client the reader lacks authority
+ * when the truth is that the capability is absent for everyone in the
+ * organization, which is exactly the confusion MOD-013 separates. The client
+ * withholds a module's controls from its own copy of the active module set
+ * (technical spec 15A.8), and the commands behind them are refused by the route
+ * gate regardless (MOD-012).
  */
 final class DepartmentOperationsReadController extends Controller
 {
+    public function __construct(private readonly ActiveModuleResolver $modules) {}
+
     /**
      * Department Overview for a selected shift (SLB-001, SLB-002).
      *
@@ -89,20 +117,24 @@ final class DepartmentOperationsReadController extends Controller
         if ($selected === null) {
             return response()->json([
                 ...$this->envelope($event, $department, $authority, $now),
-                'shifts' => [],
-                'selected_shift_id' => null,
-                'exceptions' => [],
-                'assignments' => [],
-                'equipment_out' => [],
-                'deployments' => $this->deploymentOptions($event, $department),
+                ...$this->scheduling($event, [
+                    'shifts' => [],
+                    'selected_shift_id' => null,
+                    'exceptions' => [],
+                    'assignments' => [],
+                ]),
+                ...$this->equipment($event, ['equipment_out' => []]),
+                ...$this->geography($event, [
+                    'deployments' => $this->deploymentOptions($event, $department),
+                ]),
                 'on_site_count' => $this->onSiteCount($event, $department),
             ]);
         }
 
         $assignments = $this->assignmentsForShift($selected);
         $attendance = $this->attendanceForShift($selected);
-        $deployments = $this->currentDeploymentsForShift($selected);
-        $equipmentOut = $this->openCheckoutsForShift($selected);
+        $deployments = $this->currentDeploymentsForShift($event, $selected);
+        $equipmentOut = $this->openCheckoutsForShift($event, $selected);
 
         $rows = $assignments->map(function (ShiftAssignment $assignment) use ($selected, $attendance, $deployments): array {
             $record = $attendance[(string) $assignment->staff_id] ?? null;
@@ -127,31 +159,37 @@ final class DepartmentOperationsReadController extends Controller
 
         return response()->json([
             ...$this->envelope($event, $department, $authority, $now),
-            'shifts' => $shifts->map(fn (Shift $shift): array => $this->shiftOption($shift, $now))->values()->all(),
-            'selected_shift_id' => (string) $selected->id,
-            'exceptions' => $this->exceptionsFor($selected, $rows->all(), $equipmentOut, $now),
-            'assignments' => $rows->values()->all(),
-            'equipment_out' => $equipmentOut
-                ->map(function (EquipmentCheckout $checkout) use ($event, $now): array {
-                    $derived = EquipmentCheckoutPresentation::describe(
-                        $checkout,
-                        $checkout->shift,
-                        $event,
-                        $now,
-                    );
+            ...$this->scheduling($event, [
+                'shifts' => $shifts->map(fn (Shift $shift): array => $this->shiftOption($shift, $now))->values()->all(),
+                'selected_shift_id' => (string) $selected->id,
+                'exceptions' => $this->exceptionsFor($selected, $rows->all(), $equipmentOut, $now),
+                'assignments' => $rows->values()->all(),
+            ]),
+            ...$this->equipment($event, [
+                'equipment_out' => $equipmentOut
+                    ->map(function (EquipmentCheckout $checkout) use ($event, $now): array {
+                        $derived = EquipmentCheckoutPresentation::describe(
+                            $checkout,
+                            $checkout->shift,
+                            $event,
+                            $now,
+                        );
 
-                    return [
-                        'checkout_id' => (string) $checkout->id,
-                        'item_name' => $checkout->equipmentItem?->name ?? 'Equipment',
-                        'asset_tag' => $checkout->equipmentItem?->asset_tag,
-                        'staff_name' => $this->staffName($checkout->staff),
-                        'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
-                        ...$derived,
-                    ];
-                })
-                ->values()
-                ->all(),
-            'deployments' => $this->deploymentOptions($event, $department),
+                        return [
+                            'checkout_id' => (string) $checkout->id,
+                            'item_name' => $checkout->equipmentItem?->name ?? 'Equipment',
+                            'asset_tag' => $checkout->equipmentItem?->asset_tag,
+                            'staff_name' => $this->staffName($checkout->staff),
+                            'checked_out_at' => $checkout->checked_out_at?->toIso8601String(),
+                            ...$derived,
+                        ];
+                    })
+                    ->values()
+                    ->all(),
+            ]),
+            ...$this->geography($event, [
+                'deployments' => $this->deploymentOptions($event, $department),
+            ]),
             'on_site_count' => $this->onSiteCount($event, $department),
         ]);
     }
@@ -194,6 +232,8 @@ final class DepartmentOperationsReadController extends Controller
         $attendance = $this->attendanceForShifts($event, $department, $shifts->modelKeys(), $staffIds);
         $openEquipment = $this->openCheckoutsForStaff($event, $department, $staffIds);
         $checkoutInventory = $this->checkoutInventory($event, $department, $lookup);
+        $runsScheduling = $this->runs($event, ModuleKey::Scheduling);
+        $runsEquipment = $this->runs($event, ModuleKey::Equipment);
         $signups = $this->futureSignups($event, $department, $staffIds, $now);
         $hours = $this->hoursForShifts($event, $department, $shifts->modelKeys(), $staffIds);
         $eligibleTeamMembers = $this->eligibleTeamMembers(
@@ -239,33 +279,45 @@ final class DepartmentOperationsReadController extends Controller
                     $holdingBlocksOffSite => DepartmentPresenceException::openEquipmentCheckout()->getMessage(),
                     default => null,
                 },
-                'shift_cards' => $this->shiftCards(
-                    $shifts,
-                    $staffId,
-                    $assignments,
-                    $attendance,
-                    $presence[$staffId] ?? EventDepartmentPresence::STATE_OFF_SITE,
-                    $eligibleTeamMembers,
-                    $hours,
-                    (string) ($event->timezone ?: config('app.timezone')),
-                    $now,
-                    $correctionClosesAt,
-                ),
-                'open_equipment' => $held
-                    ->map(fn (EquipmentCheckout $checkout): array => $this->openEquipmentPayload($checkout, $event, $now))
-                    ->values()
-                    ->all(),
-                'future_signups' => $signups->get($staffId, new Collection)
-                    ->map(fn (ShiftAssignment $assignment): array => [
-                        'signup_id' => (string) $assignment->id,
-                        'shift_id' => (string) $assignment->shift_id,
-                        'shift_title' => $assignment->shift?->title ?? 'Shift',
-                        'starts_at' => $assignment->shift?->starts_at?->toIso8601String(),
-                        'ends_at' => $assignment->shift?->ends_at?->toIso8601String(),
-                        'state' => $assignment->assignment_status,
-                    ])
-                    ->values()
-                    ->all(),
+                /*
+                 * A workspace omits the same sections the desk does. Every
+                 * shift card is a Scheduling record and every held item an
+                 * Equipment one, so a workspace on a desk without them is the
+                 * person, their presence, and the off-site decision — which is
+                 * the whole of what an organization running neither has to do
+                 * about somebody standing at the counter.
+                 */
+                ...($runsScheduling ? [
+                    'shift_cards' => $this->shiftCards(
+                        $shifts,
+                        $staffId,
+                        $assignments,
+                        $attendance,
+                        $presence[$staffId] ?? EventDepartmentPresence::STATE_OFF_SITE,
+                        $eligibleTeamMembers,
+                        $hours,
+                        (string) ($event->timezone ?: config('app.timezone')),
+                        $now,
+                        $correctionClosesAt,
+                    ),
+                    'future_signups' => $signups->get($staffId, new Collection)
+                        ->map(fn (ShiftAssignment $assignment): array => [
+                            'signup_id' => (string) $assignment->id,
+                            'shift_id' => (string) $assignment->shift_id,
+                            'shift_title' => $assignment->shift?->title ?? 'Shift',
+                            'starts_at' => $assignment->shift?->starts_at?->toIso8601String(),
+                            'ends_at' => $assignment->shift?->ends_at?->toIso8601String(),
+                            'state' => $assignment->assignment_status,
+                        ])
+                        ->values()
+                        ->all(),
+                ] : []),
+                ...($runsEquipment ? [
+                    'open_equipment' => $held
+                        ->map(fn (EquipmentCheckout $checkout): array => $this->openEquipmentPayload($checkout, $event, $now))
+                        ->values()
+                        ->all(),
+                ] : []),
             ];
         }
 
@@ -285,55 +337,59 @@ final class DepartmentOperationsReadController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'searchable_equipment' => $this->departmentEquipment($department)
-                ->map(function (EquipmentItem $item) use ($holders, $event, $now): array {
-                    $checkout = $holders->get((string) $item->id);
-                    /*
-                     * A pool is never labelled Checked out (UI contract 9.6):
-                     * it is not held by anybody, so it reads Available with the
-                     * quantity that is left. A tracked unit reads the derived
-                     * standing of its open checkout, which is where Overdue and
-                     * Unknown come from (EQUIP-005).
-                     */
-                    $derived = $checkout === null
-                        ? null
-                        : EquipmentCheckoutPresentation::describe(
-                            $checkout,
-                            $checkout->shift,
-                            $event,
-                            $now,
-                        );
+            ...$this->equipment($event, [
+                'searchable_equipment' => $this->departmentEquipment($event, $department)
+                    ->map(function (EquipmentItem $item) use ($holders, $event, $now): array {
+                        $checkout = $holders->get((string) $item->id);
+                        /*
+                         * A pool is never labelled Checked out (UI contract 9.6):
+                         * it is not held by anybody, so it reads Available with the
+                         * quantity that is left. A tracked unit reads the derived
+                         * standing of its open checkout, which is where Overdue and
+                         * Unknown come from (EQUIP-005).
+                         */
+                        $derived = $checkout === null
+                            ? null
+                            : EquipmentCheckoutPresentation::describe(
+                                $checkout,
+                                $checkout->shift,
+                                $event,
+                                $now,
+                            );
 
-                    return [
-                        'equipment_item_id' => (string) $item->id,
-                        'name' => $item->name,
-                        'tracking' => $item->tracking,
-                        'tracking_label' => EquipmentItem::trackingLabel($item->tracking),
-                        'asset_tag' => $item->asset_tag,
-                        'serial_number' => $item->serial_number,
-                        'status' => $item->status,
-                        'status_label' => EquipmentItem::statusLabel($item->status),
-                        'quantity_total' => (int) $item->quantity_total,
-                        'quantity_available' => $item->availableQuantity(),
-                        'presentation_state' => $derived['state'] ?? $item->status,
-                        'presentation_state_label' => $derived['state_label']
-                            ?? EquipmentItem::statusLabel($item->status),
-                        'holder_staff_id' => $checkout === null ? null : (string) $checkout->staff_id,
-                        'holder_name' => $checkout === null ? null : $this->staffName($checkout->staff),
-                    ];
-                })
-                ->values()
-                ->all(),
-            'searchable_shifts' => $shifts->map(fn (Shift $shift): array => $this->shiftOption($shift, $now))->values()->all(),
-            /*
-             * Once for the desk, not once per workspace. An available item is
-             * available to whoever is standing at the desk, so the list does
-             * not vary by staff member — and a department with four hundred
-             * tracked units and a hundred staff would otherwise send forty
-             * thousand rows to render one dialog, which is the same problem
-             * EQUIP-012 is about at a different layer.
-             */
-            'checkout_inventory' => $checkoutInventory,
+                        return [
+                            'equipment_item_id' => (string) $item->id,
+                            'name' => $item->name,
+                            'tracking' => $item->tracking,
+                            'tracking_label' => EquipmentItem::trackingLabel($item->tracking),
+                            'asset_tag' => $item->asset_tag,
+                            'serial_number' => $item->serial_number,
+                            'status' => $item->status,
+                            'status_label' => EquipmentItem::statusLabel($item->status),
+                            'quantity_total' => (int) $item->quantity_total,
+                            'quantity_available' => $item->availableQuantity(),
+                            'presentation_state' => $derived['state'] ?? $item->status,
+                            'presentation_state_label' => $derived['state_label']
+                                ?? EquipmentItem::statusLabel($item->status),
+                            'holder_staff_id' => $checkout === null ? null : (string) $checkout->staff_id,
+                            'holder_name' => $checkout === null ? null : $this->staffName($checkout->staff),
+                        ];
+                    })
+                    ->values()
+                    ->all(),
+                /*
+                 * Once for the desk, not once per workspace. An available item is
+                 * available to whoever is standing at the desk, so the list does
+                 * not vary by staff member — and a department with four hundred
+                 * tracked units and a hundred staff would otherwise send forty
+                 * thousand rows to render one dialog, which is the same problem
+                 * EQUIP-012 is about at a different layer.
+                 */
+                'checkout_inventory' => $checkoutInventory,
+            ]),
+            ...$this->scheduling($event, [
+                'searchable_shifts' => $shifts->map(fn (Shift $shift): array => $this->shiftOption($shift, $now))->values()->all(),
+            ]),
             'staff_workspaces' => (object) $workspaces,
         ]);
     }
@@ -363,7 +419,7 @@ final class DepartmentOperationsReadController extends Controller
         $now = Carbon::now();
         $shifts = $this->deskShifts($event, $department, $now)
             ->filter(fn (Shift $shift): bool => $this->lifecycle($shift, $now) === 'active');
-        $deployments = $this->currentDeploymentsForShifts($shifts->modelKeys());
+        $deployments = $this->currentDeploymentsForShifts($event, $shifts->modelKeys());
         $options = $this->deploymentOptions($event, $department);
         $names = collect($options)->pluck('name', 'id');
 
@@ -391,13 +447,22 @@ final class DepartmentOperationsReadController extends Controller
 
         return response()->json([
             ...$this->envelope($event, $department, $authority, $now),
-            'deployments' => $options,
-            'rows' => $rows,
-            'equipment_out_count' => $this->openCheckoutsForStaff(
-                $event,
-                $department,
-                $this->departmentStaff($department)->modelKeys(),
-            )->flatten()->count(),
+            ...$this->geography($event, ['deployments' => $options]),
+            /*
+             * The rows are shift assignments, so they belong to Scheduling even
+             * though what the screen does with them is deployment work. An
+             * organization running Event Geography without Scheduling has
+             * deployments and nobody on a shift to move between them, and the
+             * screen renders the options with no rows rather than failing.
+             */
+            ...$this->scheduling($event, ['rows' => $rows]),
+            ...$this->equipment($event, [
+                'equipment_out_count' => $this->openCheckoutsForStaff(
+                    $event,
+                    $department,
+                    $this->departmentStaff($department)->modelKeys(),
+                )->flatten()->count(),
+            ]),
         ]);
     }
 
@@ -437,7 +502,10 @@ final class DepartmentOperationsReadController extends Controller
             $query->where('eligible_team_id', $teamId);
         }
 
-        $shifts = $query->get();
+        // The table's own read of shifts, gated at the source for the reason
+        // `deskShifts` is: the aggregates are counts over these rows, and a
+        // count is a contribution too.
+        $shifts = $this->runs($event, ModuleKey::Scheduling) ? $query->get() : new Collection;
 
         if ($date !== null) {
             $shifts = $shifts->filter(
@@ -463,7 +531,12 @@ final class DepartmentOperationsReadController extends Controller
                 'team_id' => $teamId,
                 'date' => $date,
             ],
-            'rows' => $aggregates->rows($shifts, $now),
+            /*
+             * Every plan-versus-actual row is a shift. The teams and the filters
+             * above are core and stay, so the table renders its own frame with
+             * nothing scheduled in it rather than refusing (MOD-019).
+             */
+            ...$this->scheduling($event, ['rows' => $aggregates->rows($shifts, $now)]),
         ]);
     }
 
@@ -501,6 +574,60 @@ final class DepartmentOperationsReadController extends Controller
     }
 
     /**
+     * Whether this event's organization runs a module (MOD-019, data/API 5.9).
+     */
+    private function runs(Event $event, ModuleKey $module): bool
+    {
+        return $this->modules->isActive((string) $event->organization_id, $module);
+    }
+
+    /**
+     * The given section keys, or none of them where the organization does not
+     * run the module that owns them.
+     *
+     * Spread into a payload rather than assigned, so an omitted section leaves
+     * no key behind. Absent and empty are different answers — an empty
+     * `searchable_equipment` says this department holds no equipment, and the
+     * key's absence says this Meridian has none (data/API 5.9, 5.10) — and
+     * spelling that difference three times as an `if` around a block would be
+     * three chances to spell it differently.
+     *
+     * @param  array<string, mixed>  $sections
+     * @return array<string, mixed>
+     */
+    private function ownedBy(Event $event, ModuleKey $module, array $sections): array
+    {
+        return $this->runs($event, $module) ? $sections : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $sections
+     * @return array<string, mixed>
+     */
+    private function scheduling(Event $event, array $sections): array
+    {
+        return $this->ownedBy($event, ModuleKey::Scheduling, $sections);
+    }
+
+    /**
+     * @param  array<string, mixed>  $sections
+     * @return array<string, mixed>
+     */
+    private function equipment(Event $event, array $sections): array
+    {
+        return $this->ownedBy($event, ModuleKey::Equipment, $sections);
+    }
+
+    /**
+     * @param  array<string, mixed>  $sections
+     * @return array<string, mixed>
+     */
+    private function geography(Event $event, array $sections): array
+    {
+        return $this->ownedBy($event, ModuleKey::EventGeography, $sections);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function envelope(
@@ -529,10 +656,20 @@ final class DepartmentOperationsReadController extends Controller
      * may be recorded against one (`UnscheduledShiftAdditionException`,
      * SLB-027), and a desk offering it could only mislead.
      *
+     * Empty where the organization does not run Scheduling, which is what makes
+     * the omission complete rather than cosmetic: the shifts are still on the
+     * node (MOD-020 deletes nothing), and gating the source is what keeps them
+     * out of the assignment, attendance, hours, and eligibility reads composed
+     * from these ids as well as out of the section that lists them.
+     *
      * @return Collection<int, Shift>
      */
     private function deskShifts(Event $event, Department $department, Carbon $now): Collection
     {
+        if (! $this->runs($event, ModuleKey::Scheduling)) {
+            return new Collection;
+        }
+
         return Shift::query()
             ->with('eligibleTeam')
             ->where('event_id', $event->id)
@@ -1122,7 +1259,7 @@ final class DepartmentOperationsReadController extends Controller
      */
     private function openCheckoutsForStaff(Event $event, Department $department, array $staffIds): Collection
     {
-        if ($staffIds === []) {
+        if ($staffIds === [] || ! $this->runs($event, ModuleKey::Equipment)) {
             return new Collection;
         }
 
@@ -1137,8 +1274,12 @@ final class DepartmentOperationsReadController extends Controller
     /**
      * @return Collection<int, EquipmentCheckout>
      */
-    private function openCheckoutsForShift(Shift $shift): Collection
+    private function openCheckoutsForShift(Event $event, Shift $shift): Collection
     {
+        if (! $this->runs($event, ModuleKey::Equipment)) {
+            return new Collection;
+        }
+
         return EquipmentCheckout::query()
             ->with(['equipmentItem', 'staff', 'shift'])
             ->where('shift_id', $shift->id)
@@ -1149,8 +1290,12 @@ final class DepartmentOperationsReadController extends Controller
     /**
      * @return Collection<int, EquipmentItem>
      */
-    private function departmentEquipment(Department $department): Collection
+    private function departmentEquipment(Event $event, Department $department): Collection
     {
+        if (! $this->runs($event, ModuleKey::Equipment)) {
+            return new Collection;
+        }
+
         return EquipmentItem::query()
             ->where('department_id', $department->id)
             ->active()
@@ -1179,6 +1324,10 @@ final class DepartmentOperationsReadController extends Controller
         Department $department,
         EquipmentLookupService $lookup,
     ): array {
+        if (! $this->runs($event, ModuleKey::Equipment)) {
+            return [];
+        }
+
         return $lookup->candidates($event, $department)
             ->map(fn (EquipmentItem $item): array => $lookup->payload($item))
             ->values()
@@ -1227,7 +1376,7 @@ final class DepartmentOperationsReadController extends Controller
      */
     private function futureSignups(Event $event, Department $department, array $staffIds, Carbon $now): Collection
     {
-        if ($staffIds === []) {
+        if ($staffIds === [] || ! $this->runs($event, ModuleKey::Scheduling)) {
             return new Collection;
         }
 
@@ -1250,6 +1399,10 @@ final class DepartmentOperationsReadController extends Controller
      */
     private function deploymentOptions(Event $event, Department $department): array
     {
+        if (! $this->runs($event, ModuleKey::EventGeography)) {
+            return [];
+        }
+
         return Deployment::query()
             ->where('event_id', $event->id)
             ->where('department_id', $department->id)
@@ -1269,9 +1422,9 @@ final class DepartmentOperationsReadController extends Controller
     /**
      * @return array<string, string>
      */
-    private function currentDeploymentsForShift(Shift $shift): array
+    private function currentDeploymentsForShift(Event $event, Shift $shift): array
     {
-        $assignments = $this->currentDeploymentsForShifts([$shift->id]);
+        $assignments = $this->currentDeploymentsForShifts($event, [$shift->id]);
         $deployments = [];
 
         foreach ($assignments as $key => $deploymentId) {
@@ -1291,9 +1444,9 @@ final class DepartmentOperationsReadController extends Controller
      * @param  list<mixed>  $shiftIds
      * @return array<string, string>
      */
-    private function currentDeploymentsForShifts(array $shiftIds): array
+    private function currentDeploymentsForShifts(Event $event, array $shiftIds): array
     {
-        if ($shiftIds === []) {
+        if ($shiftIds === [] || ! $this->runs($event, ModuleKey::EventGeography)) {
             return [];
         }
 

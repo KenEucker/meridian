@@ -45,6 +45,7 @@ import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
 import type { ReadFreshness } from "@/offline/readFreshness";
 import { queueCommand } from "@/outbox/submitCommand";
 import { syncCommandOutbox } from "@/outbox/syncCommandOutbox";
+import { moduleActive, type ModuleKey } from "@/session/sessionModules";
 
 export type EventHorizonItemState = "outstanding" | "complete";
 
@@ -176,7 +177,9 @@ interface EventHorizonPayload {
  * device silently fails to name, which is why the ids are spelled out rather
  * than derived.
  */
-const EVENT_HORIZON_KINDS: readonly EventHorizonKind[] = Object.freeze([
+const EVENT_HORIZON_KINDS: readonly (EventHorizonKind & {
+  readonly module: ModuleKey;
+})[] = Object.freeze([
   {
     id: "document_acknowledgment",
     label: "Document acknowledgments",
@@ -475,8 +478,20 @@ function storedEventHorizon(
           },
         ],
         items,
+        /*
+         * The kinds this device could not check, minus the ones the
+         * organization does not run (HORIZON-017, MOD-019). A member of an
+         * organization without Scheduling has no shift signups or coverage gaps
+         * to be unsure about, and naming them as unevaluated would describe a
+         * readiness item that does not exist here as one this copy is merely
+         * missing. The module set rides in the session document, so it is
+         * readable with no node (technical spec 15A.8) — and where it cannot be
+         * read at all, `moduleActive` presumes yes and every kind is named, the
+         * same direction the router guard takes.
+         */
         unevaluated_kinds: EVENT_HORIZON_KINDS.filter(
-          (kind) => kind.id !== OFFLINE_EVALUABLE_KIND,
+          (kind) =>
+            kind.id !== OFFLINE_EVALUABLE_KIND && moduleActive(kind.module),
         ).map((kind) => ({
           id: kind.id,
           label: kind.label,

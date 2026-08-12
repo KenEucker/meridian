@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Dashboard;
 
+use App\Domain\Modules\ModuleKey;
+
 /**
  * One row of the UI contract 13 widget inventory (M18.28).
  *
@@ -27,6 +29,14 @@ namespace App\Domain\Dashboard;
  *    explicit that a widget which cannot answer its required anatomy should not
  *    ship, so those are carried here as inventory and never compiled. Naming the
  *    task is the difference between a gap and an omission.
+ *  - `module` names the MOD-002 module whose records the widget reads, or null
+ *    where it reads core records (M19.18). The dashboard is one surface
+ *    composing every domain in the product, so it is the aggregator MOD-019 is
+ *    most about: a widget owned by a module the organization does not run is
+ *    omitted from the compiled dashboard rather than reported as quiet, because
+ *    "No upcoming shifts" is a statement about a schedule and an organization
+ *    without Scheduling does not have one. Undeclared is core, the same safe
+ *    direction {@see \App\Domain\Modules\DomainNamespace} takes.
  */
 final class DashboardWidgetDefinition
 {
@@ -38,6 +48,7 @@ final class DashboardWidgetDefinition
      * @param  string|null  $actionLabel  The contract's primary action, or null where it has none.
      * @param  string|null  $actionSurface  The UI contract section 12 screen id the action opens.
      * @param  string|null  $deferredTo  The task that will make this widget answerable, when one is outstanding.
+     * @param  ModuleKey|null  $module  The module whose records this widget reads, or null where they are core.
      */
     public function __construct(
         public readonly string $id,
@@ -50,6 +61,7 @@ final class DashboardWidgetDefinition
         public readonly ?string $actionSurface = null,
         public readonly DashboardWidgetEvaluation $evaluation = DashboardWidgetEvaluation::Node,
         public readonly ?string $deferredTo = null,
+        public readonly ?ModuleKey $module = null,
     ) {}
 
     /** Whether this widget has a domain behind it yet. */

@@ -51,6 +51,7 @@ import {
   type LogisticsSearchHit,
   type LogisticsShiftCard,
 } from "@/department-ops/departmentOpsReadModel";
+import { useDepartmentOpsModules } from "@/department-ops/departmentOpsModules";
 import type {
   EquipmentCheckoutCandidate,
   EquipmentCheckoutLine,
@@ -114,6 +115,29 @@ function toDateTimeLocalFrom(timestamp: string | null): string {
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId ?? ""));
 const departmentId = computed(() => String(route.params.departmentId ?? ""));
+const modules = useDepartmentOpsModules(departmentId);
+
+/**
+ * What the search index actually covers, named rather than recited (MOD-019).
+ *
+ * The line used to promise "staff, equipment, and shifts" unconditionally. On a
+ * desk whose organization runs neither Equipment nor Scheduling that is a
+ * promise the index cannot keep, and somebody typing an asset tag into it would
+ * conclude the tag is wrong rather than that there is no equipment here.
+ */
+const searchScopeSummary = computed(() => {
+  const covered = [
+    "Department staff",
+    ...(modules.equipment.value ? ["equipment"] : []),
+    ...(modules.scheduling.value ? ["shifts"] : []),
+  ];
+
+  if (covered.length === 1) {
+    return covered[0];
+  }
+
+  return `${covered.slice(0, -1).join(", ")} and ${covered[covered.length - 1]}`;
+});
 
 const desk = ref<LogisticsDeskRead | null>(null);
 /** Null while the desk is live; the storage timestamp while it is the stored index. */
@@ -870,7 +894,19 @@ void loadDesk();
       <button type="button" @click="loadDesk">Try again</button>
     </p>
 
+    <!--
+      Everything on this desk that is organized around a shift belongs to
+      Scheduling, and everything about what somebody is holding belongs to
+      Equipment (M19.18; MOD-019; data/API 5.9). The node omits both from the
+      payload where the organization does not run them; the regions go with
+      them, because "no shifts are currently going" is a true sentence about a
+      quiet afternoon and a misleading one about an organization with no
+      schedule. What is left is the desk's core: who is here, who is on site,
+      and who may go off site — which is a working Logistics Desk, since
+      check-in does not require a shift (requirements 5.8).
+    -->
     <section
+      v-if="modules.scheduling.value"
       class="logistics__current-shifts"
       aria-labelledby="current-shifts-heading"
     >
@@ -906,7 +942,7 @@ void loadDesk();
     </section>
 
     <section class="logistics__watch-grid" aria-label="Attendance watch">
-      <div>
+      <div v-if="modules.scheduling.value">
         <h2>Current</h2>
         <p>
           {{
@@ -916,7 +952,7 @@ void loadDesk();
           }}
         </p>
       </div>
-      <div>
+      <div v-if="modules.equipment.value">
         <h2>Oustanding</h2>
         <p>
           {{
@@ -946,17 +982,21 @@ void loadDesk();
         <dt>Off site</dt>
         <dd>{{ logisticsSummary.offSite }}</dd>
       </div>
-      <div>
+      <div v-if="modules.equipment.value">
         <dt>Equipment out</dt>
         <dd>{{ logisticsSummary.equipmentOut }}</dd>
       </div>
-      <div>
+      <div v-if="modules.scheduling.value">
         <dt>Current shifts</dt>
         <dd>{{ logisticsSummary.currentShifts }}</dd>
       </div>
     </dl>
 
-    <section class="logistics__on-shift" aria-labelledby="on-shift-heading">
+    <section
+      v-if="modules.scheduling.value"
+      class="logistics__on-shift"
+      aria-labelledby="on-shift-heading"
+    >
       <h2 id="on-shift-heading">On shift now</h2>
       <p class="logistics__on-shift-lede">
         Staff checked in and not yet checked out. Act on them here without
@@ -1027,7 +1067,7 @@ void loadDesk();
         <h2 id="search-scope-heading">Search scope</h2>
         <p>{{ desk.context.eventLabel }} / {{ desk.context.departmentLabel }}</p>
         <p>
-          Department staff, equipment, and shifts, read
+          {{ searchScopeSummary }}, read
           {{ formatTimestamp(desk.context.asOf, timeZone) }}.
         </p>
         <!--
@@ -1046,7 +1086,7 @@ void loadDesk();
     </div>
 
     <section
-      v-if="selectedShift"
+      v-if="modules.scheduling.value && selectedShift"
       class="logistics__search-context"
       aria-labelledby="search-context-heading"
     >
@@ -1219,7 +1259,7 @@ void loadDesk();
         {{ workspace.offSiteBlockedReason }}
       </p>
 
-      <section aria-labelledby="shift-cards-heading">
+      <section v-if="modules.scheduling.value" aria-labelledby="shift-cards-heading">
         <h3 id="shift-cards-heading">Shift context</h3>
         <section
           v-for="section in shiftSectionGroups"
@@ -1355,7 +1395,7 @@ void loadDesk();
         </section>
       </section>
 
-      <section aria-labelledby="open-equipment-heading">
+      <section v-if="modules.equipment.value" aria-labelledby="open-equipment-heading">
         <h3 id="open-equipment-heading">Equipment checked out</h3>
         <div v-if="checkoutInventory.length > 0" class="logistics__actions">
           <button
@@ -1443,7 +1483,7 @@ void loadDesk();
         </p>
       </section>
 
-      <section aria-labelledby="future-signups-heading">
+      <section v-if="modules.scheduling.value" aria-labelledby="future-signups-heading">
         <h3 id="future-signups-heading">Future shift signups</h3>
         <p v-if="workspace.futureSignups.length === 0" role="status">
           No future signups for this staff member.

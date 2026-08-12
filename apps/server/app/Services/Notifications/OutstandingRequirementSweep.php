@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Notifications;
 
+use App\Domain\Modules\ModuleKey;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
 use App\Models\DocumentAcknowledgment;
@@ -14,6 +15,7 @@ use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\Waiver;
 use App\Models\WaiverCompletion;
+use App\Services\Modules\ActiveModuleResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -35,12 +37,21 @@ use Illuminate\Support\Collection;
  * this person already been told?" exactly. A suppressed or unaddressable
  * delivery counts as told for this purpose, which is deliberate: switching
  * suppression off should not release a fortnight of daily reminders.
+ *
+ * Both requirements belong to Documents — acknowledgments and waivers are its
+ * namespaces — so an organization that does not run it is skipped entirely
+ * (MOD-018: a requirement an inactive module owns is not presented, and a
+ * message is a presentation). The rows are read past and nothing is deleted, so
+ * turning Documents back on resumes the sweep against the same requirements; and
+ * because the skip writes no delivery record, a person who was never told is
+ * still owed the message rather than counted as told.
  */
 class OutstandingRequirementSweep
 {
     public function __construct(
         private readonly NotificationDispatcher $notifications,
         private readonly NotificationRecipientResolver $recipients,
+        private readonly ActiveModuleResolver $modules,
     ) {}
 
     /**
@@ -74,6 +85,10 @@ class OutstandingRequirementSweep
             ->get();
 
         foreach ($requirements as $requirement) {
+            if (! $this->runsDocuments((string) $requirement->organization_id)) {
+                continue;
+            }
+
             $document = $requirement->document;
 
             // A requirement pointing at an unpublished document is a fault
@@ -149,6 +164,10 @@ class OutstandingRequirementSweep
                     continue;
                 }
 
+                if (! $this->runsDocuments((string) $waiver->organization_id)) {
+                    continue;
+                }
+
                 // One pair per waiver and staff member, however many shifts
                 // required it. NOTIFY-001A's rule is about one action, but the
                 // reason behind it applies here too: three shifts requiring the
@@ -185,6 +204,11 @@ class OutstandingRequirementSweep
         }
 
         return $sent;
+    }
+
+    private function runsDocuments(string $organizationId): bool
+    {
+        return $this->modules->isActive($organizationId, ModuleKey::Documents);
     }
 
     /**

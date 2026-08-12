@@ -2,6 +2,7 @@
 
 namespace App\Services\Credential;
 
+use App\Domain\Modules\ModuleKey;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
 use App\Models\EventCredential;
@@ -10,6 +11,7 @@ use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
 use App\Models\User;
 use App\Models\Waiver;
+use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Notifications\NotificationDispatcher;
 use App\Services\Notifications\NotificationRecipientResolver;
 use App\Services\Notifications\NotificationType;
@@ -21,6 +23,27 @@ use Illuminate\Support\Collection;
  * Event credential eligibility calculation (CRED-001 through CRED-010, CRED-014; WAIVER-006).
  *
  * Manual revocation is delivered by {@see CredentialRevocationService}.
+ *
+ * Two of requirements 5.6's five conditions are owned by modules the
+ * organization may not run, and where the owning module is inactive the
+ * condition evaluates as satisfied rather than as blocking (MOD-018, technical
+ * spec 15A.7).
+ *
+ * - **The signed-up-shift condition belongs to Scheduling.** An organization
+ *   running Qualifications without Scheduling has no shifts for anybody to sign
+ *   up for, so blocking every credential on "no signed-up shifts" would make
+ *   credential eligibility unreachable rather than unrequired. With Scheduling
+ *   inactive the condition is not asked, and the remaining four — organization
+ *   status, department status, waivers, and age — decide the credential on their
+ *   own.
+ * - **A shift's required waivers belong to Documents.** The same rule the shift
+ *   signup gate applies (`ShiftEligibilityService`), applied to the second place
+ *   requirements 5.6 reads those requirements from.
+ *
+ * Nothing is deleted in either case. The assignments and the waiver requirements
+ * are read past, so activating the module restores the condition exactly as it
+ * stood — which is what makes a recalculation after activation the same
+ * calculation it would have been all along.
  */
 class CredentialEligibilityService
 {
@@ -40,6 +63,7 @@ class CredentialEligibilityService
         private readonly StaffStatusService $staffStatus,
         private readonly NotificationDispatcher $notifications,
         private readonly NotificationRecipientResolver $notificationRecipients,
+        private readonly ActiveModuleResolver $modules,
     ) {}
 
     /**
@@ -52,7 +76,7 @@ class CredentialEligibilityService
 
         $credentialAssignments = $this->credentialEligibleAssignmentsForEvent($event, $staff);
 
-        if ($credentialAssignments->isEmpty()) {
+        if ($credentialAssignments->isEmpty() && $this->requiresSignedUpShift($event)) {
             return CredentialEvaluation::blocked(self::REASON_NO_SIGNED_UP_SHIFTS);
         }
 
@@ -86,11 +110,13 @@ class CredentialEligibilityService
             }
         }
 
-        $requiredWaivers = $this->requiredWaiversForAssignments($credentialAssignments);
+        if ($this->modules->isActive((string) $event->organization_id, ModuleKey::Documents)) {
+            $requiredWaivers = $this->requiredWaiversForAssignments($credentialAssignments);
 
-        foreach ($requiredWaivers as $waiver) {
-            if (! $waiver->isCompleteFor($staff, $asOf)) {
-                return CredentialEvaluation::blocked(self::REASON_MISSING_REQUIRED_WAIVER);
+            foreach ($requiredWaivers as $waiver) {
+                if (! $waiver->isCompleteFor($staff, $asOf)) {
+                    return CredentialEvaluation::blocked(self::REASON_MISSING_REQUIRED_WAIVER);
+                }
             }
         }
 
@@ -127,7 +153,14 @@ class CredentialEligibilityService
 
         $credentialAssignments = $this->credentialEligibleAssignmentsForEvent($event, $staff);
 
-        if ($credentialAssignments->isEmpty()) {
+        /*
+         * With Scheduling inactive there are no assignments to be empty of, and
+         * an empty list is no longer the answer "this person has signed up for
+         * nothing" (MOD-018). Recalculation falls through to the full evaluation
+         * so the other four conditions decide, rather than short-circuiting into
+         * a block or into no credential at all.
+         */
+        if ($credentialAssignments->isEmpty() && $this->requiresSignedUpShift($event)) {
             if ($credential === null) {
                 return null;
             }
@@ -178,6 +211,18 @@ class CredentialEligibilityService
         return $assignment->created_at !== null
             && $shift->starts_at !== null
             && $assignment->created_at->lt($shift->starts_at);
+    }
+
+    /**
+     * Whether requirements 5.6's "at least one signed-up shift" condition is
+     * asked of this event's organization at all (MOD-018).
+     *
+     * It is a Scheduling condition — a signup is a `shift_signups_and_requirements`
+     * record — so an organization that does not run Scheduling is not held to it.
+     */
+    private function requiresSignedUpShift(Event $event): bool
+    {
+        return $this->modules->isActive((string) $event->organization_id, ModuleKey::Scheduling);
     }
 
     /**

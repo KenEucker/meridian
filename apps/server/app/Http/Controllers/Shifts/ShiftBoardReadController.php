@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Shifts;
 
+use App\Domain\Modules\ModuleKey;
 use App\Http\Controllers\Controller;
 use App\Models\DepartmentMembership;
 use App\Models\Event;
@@ -11,6 +12,7 @@ use App\Models\Staff;
 use App\Models\Training;
 use App\Models\User;
 use App\Models\Waiver;
+use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Shift\ShiftOverlapService;
 use App\Services\Shift\ShiftOverlapWarning;
 use App\Services\Shift\ShiftSignupService;
@@ -50,12 +52,16 @@ final class ShiftBoardReadController extends Controller
         Event $event,
         ShiftSignupService $signups,
         ShiftOverlapService $overlaps,
+        ActiveModuleResolver $modules,
     ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
 
         $moment = Carbon::now();
         $staffByDepartment = $this->staffByDepartment($user);
+        $organizationId = (string) $event->organization_id;
+        $presentsTrainings = $modules->isActive($organizationId, ModuleKey::Qualifications);
+        $presentsWaivers = $modules->isActive($organizationId, ModuleKey::Documents);
 
         $shifts = $staffByDepartment->isEmpty()
             ? new Collection
@@ -110,6 +116,8 @@ final class ShiftBoardReadController extends Controller
                     $signups,
                     $overlaps,
                     $moment,
+                    $presentsTrainings,
+                    $presentsWaivers,
                 ): array {
                     $staff = $staffProfiles->get(
                         (string) $staffByDepartment->get((string) $shift->department_id),
@@ -123,6 +131,8 @@ final class ShiftBoardReadController extends Controller
                         $signups,
                         $overlaps,
                         $moment,
+                        $presentsTrainings,
+                        $presentsWaivers,
                     );
                 })
                 ->values()
@@ -169,6 +179,8 @@ final class ShiftBoardReadController extends Controller
         ShiftSignupService $signups,
         ShiftOverlapService $overlaps,
         Carbon $moment,
+        bool $presentsTrainings,
+        bool $presentsWaivers,
     ): array {
         $verdict = $staff === null
             ? null
@@ -191,14 +203,25 @@ final class ShiftBoardReadController extends Controller
             'signup_closes_at' => $shift->signup_closes_at?->toIso8601String(),
             'schedule_lock_at' => $shift->schedule_lock_at?->toIso8601String(),
             'cancelled_at' => $shift->cancelled_at?->toIso8601String(),
-            'required_training_names' => $shift->requiredTrainings
-                ->map(fn (Training $training): string => $training->name)
-                ->values()
-                ->all(),
-            'required_waiver_names' => $shift->requiredWaivers
-                ->map(fn (Waiver $waiver): string => $waiver->name)
-                ->values()
-                ->all(),
+            /*
+             * A requirement owned by a module the organization does not run is
+             * not presented (MOD-018): the gate behind it evaluates as satisfied
+             * in `ShiftEligibilityService`, and naming a training on the board
+             * that nothing asks for and nobody can complete would describe a
+             * condition that is not there. The rows are read past, not deleted.
+             */
+            'required_training_names' => $presentsTrainings
+                ? $shift->requiredTrainings
+                    ->map(fn (Training $training): string => $training->name)
+                    ->values()
+                    ->all()
+                : [],
+            'required_waiver_names' => $presentsWaivers
+                ? $shift->requiredWaivers
+                    ->map(fn (Waiver $waiver): string => $waiver->name)
+                    ->values()
+                    ->all()
+                : [],
             'signed_up' => $isSignedUp,
             'assignment_status' => $assignment?->assignment_status,
             'can_sign_up' => $verdict?->eligible ?? false,

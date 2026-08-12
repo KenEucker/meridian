@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Documents;
 
+use App\Domain\Modules\ModuleKey;
 use App\Http\Controllers\Controller;
 use App\Models\AuditEvent;
 use App\Models\Department;
@@ -18,6 +19,7 @@ use App\Services\Documents\DocumentAcknowledgmentAccess;
 use App\Services\Documents\DocumentAcknowledgmentRequirementService;
 use App\Services\Documents\DocumentAcknowledgmentService;
 use App\Services\Documents\DocumentRenderer;
+use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Node\NodeSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -79,8 +81,11 @@ final class DocumentAcknowledgmentController extends Controller
      * acknowledged" — and listing an item nobody can act on is listing a fault
      * as a task.
      */
-    public function mine(Request $request, DocumentRenderer $renderer): JsonResponse
-    {
+    public function mine(
+        Request $request,
+        DocumentRenderer $renderer,
+        ActiveModuleResolver $modules,
+    ): JsonResponse {
         $user = $request->user();
         abort_unless($user !== null, 401);
 
@@ -107,7 +112,20 @@ final class DocumentAcknowledgmentController extends Controller
                         ->where('scope_type', DocumentAcknowledgmentRequirement::SCOPE_DEPARTMENT)
                         ->whereIn('scope_id', $departmentIds->all()));
             })
-            ->get();
+            ->get()
+            /*
+             * One person's list can span organizations, and this read is core
+             * for exactly that reason: the route gate refuses it only when *no*
+             * organization the caller belongs to runs Documents (data/API 5.9).
+             * Narrowing the rows is this half of the rule — an organization with
+             * Documents inactive contributes nothing to the list rather than
+             * taking the list away from the one that does run it (MOD-019).
+             */
+            ->filter(fn (DocumentAcknowledgmentRequirement $requirement): bool => $modules->isActive(
+                (string) $requirement->organization_id,
+                ModuleKey::Documents,
+            ))
+            ->values();
 
         $acknowledgments = DocumentAcknowledgment::query()
             ->where('user_id', $user->getKey())

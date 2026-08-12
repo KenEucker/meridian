@@ -21,6 +21,7 @@ import {
   signedVarianceLabel,
   type PlanningTableRead,
 } from "@/department-ops/departmentOpsReadModel";
+import { useDepartmentOpsModules } from "@/department-ops/departmentOpsModules";
 
 /**
  * The Planning Table (SLB-019, SLB-020; bound to the node in M16.21).
@@ -42,6 +43,7 @@ import {
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId ?? ""));
 const departmentId = computed(() => String(route.params.departmentId ?? ""));
+const modules = useDepartmentOpsModules(departmentId);
 
 const table = ref<PlanningTableRead | null>(null);
 const loadError = ref<string | null>(null);
@@ -276,7 +278,7 @@ function formatTimelineMarker(timestamp: number): string {
       </div>
     </template>
 
-    <template #heading-cards>
+    <template v-if="modules.scheduling.value" #heading-cards>
       <WorkflowHeadingCardGrid>
         <WorkflowHeadingCard
           label="Shift windows"
@@ -310,7 +312,28 @@ function formatTimelineMarker(timestamp: number): string {
       <button type="button" @click="loadPlanning">Try again</button>
     </p>
 
-    <div class="planning__boardbar" aria-label="Board controls">
+    <!--
+      Every row on this surface is a shift, so an organization that does not run
+      Scheduling has nothing to plan against. The page opens and says so rather
+      than rendering a chart, a filter bar, and a table with nothing in any of
+      them, which would read as a department that has scheduled no work
+      (MOD-019, CLIENT-005). This is a statement about the organization, not a
+      refusal: the address resolves and no read is denied.
+    -->
+    <p
+      v-if="!modules.scheduling.value"
+      class="planning__empty"
+      role="status"
+    >
+      This organization does not use Scheduling, so there are no shift windows
+      to plan against. Attendance, hours, and credits are recorded without them.
+    </p>
+
+    <div
+      v-if="modules.scheduling.value"
+      class="planning__boardbar"
+      aria-label="Board controls"
+    >
       <span>{{ summary.shiftCount }} shift windows</span>
       <span v-if="table">
         Read {{ formatTimestamp(table.context.asOf, timeZone) }}
@@ -320,7 +343,7 @@ function formatTimelineMarker(timestamp: number): string {
       </div>
     </div>
 
-    <ControlBar label="Planning filters">
+    <ControlBar v-if="modules.scheduling.value" label="Planning filters">
       <form data-control-group aria-label="Planning filters">
         <label>
           <span>Team filter</span>
@@ -354,7 +377,7 @@ function formatTimelineMarker(timestamp: number): string {
       pairing is the point: choosing a bar to read its staffing should not push
       the answer below the fold. They sit side by side once each has room.
     -->
-    <ContentGrid min="region" :stretch="false">
+    <ContentGrid v-if="modules.scheduling.value" min="region" :stretch="false">
       <section class="planning__gantt" aria-labelledby="planning-gantt-heading">
         <header class="planning__section-header">
           <div>
@@ -448,6 +471,7 @@ function formatTimelineMarker(timestamp: number): string {
     </ContentGrid>
 
     <section
+      v-if="modules.scheduling.value"
       class="planning__table-section"
       aria-labelledby="planning-table-heading"
     >
