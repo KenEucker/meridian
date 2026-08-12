@@ -72,4 +72,30 @@ class EventAuthorityException extends RuntimeException
             (string) $event->getKey(),
         );
     }
+
+    /**
+     * No node is named here either, and for the same reason: module state is
+     * frozen during the active event window (MOD-010, technical spec 15A.3), so
+     * there is no other node the same change could be made on.
+     *
+     * A separate factory from the governance-content one because the sentence
+     * has to say what was refused and why it matters here. Bumping a document
+     * version mid-event invalidates acknowledgments; turning a module off
+     * mid-event takes records off devices that are holding them, and the two
+     * are not the same warning.
+     */
+    public static function moduleStateFrozenDuringActiveEvent(Event $event, string $organizationName): self
+    {
+        return new self(
+            self::REASON_GOVERNANCE_FROZEN_DURING_ACTIVE_EVENT,
+            sprintf(
+                'Module state is blocked while %s is in its active event window, so what %s runs '
+                .'cannot be changed on any node until the window ends. Deactivating a module mid-event '
+                .'would take its records off devices that are already holding them.',
+                $event->name === null || $event->name === '' ? 'this event' : sprintf('"%s"', $event->name),
+                $organizationName === '' ? 'this organization' : sprintf('"%s"', $organizationName),
+            ),
+            (string) $event->getKey(),
+        );
+    }
 }

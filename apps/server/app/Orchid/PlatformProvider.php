@@ -155,6 +155,28 @@ class PlatformProvider extends OrchidServiceProvider
                 ->title(__('God Mode')),
 
             /*
+             * Which of the eight modules each organization is entitled to
+             * (M19.13; MOD-006, MOD-021; technical spec 15A.6, 22.2).
+             *
+             * Beside the Permission Catalog because the two answer adjacent
+             * questions about what is reachable — the catalog answers "may this
+             * person do it", and this answers "does this organization run it at
+             * all" — and under God Mode because entitlement is the platform's
+             * decision, not an organizer's. Whether an entitled module is
+             * actually turned on is the organization's own, and lives on its
+             * configuration surface (MOD-008).
+             *
+             * This item is never hidden by module state. MOD-021 makes that a
+             * rule rather than an oversight: it is the surface an operator uses
+             * to turn a module back on, so hiding it when a module is off would
+             * remove the only way out.
+             */
+            Menu::make(__('Organization Modules'))
+                ->icon('bs.grid-3x3-gap')
+                ->route('platform.organization-modules')
+                ->permission('platform.organization-modules'),
+
+            /*
              * The audit trail (M18.34; requirements 2.4; UI contract 12.9).
              *
              * Beside the Permission Catalog rather than in Infrastructure,
@@ -360,6 +382,12 @@ class PlatformProvider extends OrchidServiceProvider
             // access finds a capability under the heading they saw it under.
             ItemPermission::group(__('God Mode'))
                 ->addPermission('platform.permissions', __('Permission catalog'))
+                // Deciding which of the eight modules an organization is
+                // entitled to (MOD-006). God Mode by definition: it is the
+                // platform's decision about an organization, and data/API 6.8
+                // separates it from the organizer's enablement decision, which
+                // rides `organization.configuration.manage` instead.
+                ->addPermission('platform.organization-modules', __('Organization modules'))
                 // Reading the audit trail across every organization on this
                 // node (M18.34; requirements 2.4). Separate from the product
                 // capability `organization.audit.review`, which is one
