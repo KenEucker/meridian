@@ -86,11 +86,17 @@ separate change teaches it to honor that classification.
 
 At `1.0.0` and higher, Meridian follows semantic versioning strictly.
 
-## Future Release Packaging
+## Release Packaging
 
-A later release workflow will package Electron builds and mobile builds for
-their target environments. That workflow must derive all app package versions
-from the root `package.json`.
+The release workflow packages Electron builds and mobile builds for their target
+environments. It must derive all app package versions from the root
+`package.json`; no wrapper declares a version of its own.
+
+This is owned work, not a deferral. The desktop packaging configuration is
+M19.20, the committed Capacitor native projects are M19.21, mobile release
+signing is M19.22, and the tagged release workflow that produces and attaches
+every artifact is M19.23, with the runbook in M19.24 and installed-application
+QA in M19.25. Technical spec 26.4 through 26.7 govern them.
 
 Packaged apps may only work with Meridian APIs that share the same major
 version. For example, an app built as `1.4.2` can work only with `1.x.y` APIs.
