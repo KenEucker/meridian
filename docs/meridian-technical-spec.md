@@ -120,6 +120,9 @@ guaranteed.
 The Capacitor wrapper must not expose a UI mode override. It always packages
 Meridian Field.
 
+How the packaged app reaches a device — native project layout, signing, and the
+distribution channel — is sections 26.4 and 26.5.
+
 ## 3.4 Desktop on-site wrapper
 
 The on-site laptop uses an Electron desktop wrapper that packages Meridian
@@ -3797,6 +3800,9 @@ environment-specific connectivity, but it must not expose a generic
 `APP_URL`-style override that swaps Meridian Kiosk for an externally served
 client.
 
+How the installable app is produced — the packaging configuration, the platform
+targets, the signing policy, and the update path — is section 26.6.
+
 ## 25.3 Health panel
 
 Electron should show:
@@ -3871,6 +3877,89 @@ Node pairing rejects incompatible major versions.
 Client apps warn when server version is incompatible.
 
 Electron warns if local server version does not match the expected app version.
+
+## 26.4 Application packaging
+
+Section 3.2 names three fixed client artifacts. Each one becomes a distributable
+through a packaging step that is part of the build, not part of the runtime:
+
+| Product | Client artifact | Wrapper | Distributable |
+|---|---|---|---|
+| Meridian Admin | `apps/client/dist/admin` | none | Server image and deployment bundle |
+| Meridian Field | `apps/client/dist/field` | `apps/mobile` (Capacitor) | Android app bundle and APK; iOS application archive |
+| Meridian Kiosk | `apps/client/dist/kiosk` | `apps/kiosk` (Electron) | Windows, macOS, and Linux desktop installers |
+
+A wrapper packages an already built client artifact. It does not build a
+different UI mode, and it does not fetch the client from a network location at
+package time. This is the packaging-time half of the section 3.2 rule that UI
+mode is compile-time configuration.
+
+Capacitor's native platform projects are committed to the repository rather than
+generated on each machine. They carry the application identifier, permission
+declarations, icons, and build settings, and those must be reviewable in a diff
+and identical on every machine that builds a release.
+
+Every package version derives from the root `package.json` version, per
+`docs/process/versioning-strategy.md`. No wrapper declares a version of its own.
+
+## 26.5 Mobile application distribution
+
+Alpha 1 distributes Meridian Field through internal testing tracks rather than
+public store listings:
+
+- Android: a signed app bundle uploaded to the Google Play Console internal
+  testing track, and a signed APK for direct installation.
+- iOS: a signed application archive uploaded to App Store Connect and
+  distributed to devices through TestFlight.
+
+The direct-install APK is not a convenience. Section 4 allows an on-site network
+with no usable internet route, and the installed app is exactly the client that
+case depends on; a distribution path that requires the device to reach a store
+at install time fails in the conditions the app exists for.
+
+Signing credentials — the Android upload keystore, the Apple distribution
+certificate, and provisioning profiles — are held outside the repository and
+supplied to the build through the environment. A build that cannot find its
+credentials fails rather than emitting an unsigned artifact that looks
+distributable.
+
+Public App Store and Google Play listings, store metadata and screenshots,
+privacy and data-safety declarations, age ratings, and review submission are
+beta scope. What Alpha 1 requires is that the developer accounts, the signing
+identities, and the upload path exist and have been exercised, so that beta is a
+submission rather than a first attempt at building a signed app.
+
+## 26.6 Desktop application distribution
+
+Alpha 1 builds Meridian Kiosk installers for Windows, macOS, and Linux from one
+packaging configuration, so that the three cannot drift into three different
+applications. The on-site laptop is the target the product is designed for; the
+other two exist because the people who set the on-site laptop up do not all run
+Windows.
+
+Alpha 1 desktop artifacts are unsigned. An unsigned installer raises a first-run
+trust warning on Windows and macOS, and the install instructions must say so and
+say what the user should expect to see — an install document that omits the
+warning teaches the operator to distrust the document. Code signing and macOS
+notarization are beta scope.
+
+Packaged desktop applications do not self-update in Alpha 1. A new version is
+installed the way the first one was, and section 26.3's version mismatch
+warnings are what tell the operator that it is time.
+
+## 26.7 Release artifacts
+
+A versioned release produces its artifacts from one build of the tagged commit,
+and each artifact carries the root version that tag names.
+
+The release produces the server image and deployment bundle, the three desktop
+installers, and the Android app bundle and APK. The iOS archive requires Apple
+tooling on macOS; where the release automation has no macOS runner it is
+produced through the documented runbook instead, and the runbook is the thing
+that must exist, not the assumption that someone knows the steps.
+
+Release artifacts are attached to the release. They are not committed to the
+repository.
 
 ---
 
@@ -3956,9 +4045,16 @@ Alpha 1 should prove:
 29. An authorized lead or IC user can create an immutable Note; the author and Command can read it; other event staff cannot until Command adds it to The Briefing; edit/append is rejected.
 30. Command can add a Note to The Briefing by reference or link with event-staff or department-leads-only audience; permitted viewers then see it in the hub; hub shells remain for AAR, Directions, Action Plan, and Notices.
 
-Alpha 1 does not need to prove app-store distribution.
+Alpha 1 does not need to prove public app-store listing or review submission. It
+does need to prove the internal distribution path in 26.5: a signed build
+uploaded to TestFlight and to the Play internal testing track, and a
+direct-install APK.
 
-Alpha 1 does not need to work on an actual phone to be considered initially complete, though mobile validation remains important.
+Alpha 1 does not need to work on every phone to be considered initially
+complete, but the packaged Field app must have been installed on at least one
+real device from that path. Section 4 makes the installed app the reliable
+client where DNS or browser-trusted HTTPS cannot be guaranteed, and a client
+nobody has ever installed is an untested claim rather than a fallback.
 
 ---
 
@@ -3969,7 +4065,7 @@ Alpha 1 excludes:
 ```text
 SMS
 push notifications
-native app-store distribution
+public app-store listings and review submission (26.5 distributes Meridian Field through internal testing tracks)
 staff self check-in/out
 GPS collection
 configurable form structure
@@ -3998,7 +4094,7 @@ multiple Placement departments per event
 full multi-on-site-node implementation
 USB/server snapshot restore workflows
 automatic backups to USB/second disk
-app-store distribution
+code signing and notarization of desktop installers, and self-update for any packaged app (26.6)
 biometric/PIN local unlock
 password login
 full Submission/Final AAR workflows
@@ -4043,7 +4139,7 @@ Recommended order:
 24. HTTPS/cert/discovery validation
 25. Audit log hardening
 26. CSV/spreadsheet import/export
-27. Build/distribution packages
+27. Build/distribution packages (26.4 through 26.7)
 28. The Briefing hub, immutable Notes, and Command add-to-Briefing (Alpha slice)
 ```
 
