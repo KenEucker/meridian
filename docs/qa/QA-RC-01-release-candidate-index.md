@@ -44,7 +44,11 @@ second person captures.
   organization subdomain, with the marketing surface only at the deployment
   root — and an organization with Scheduling, Incident Management, and
   Documents disabled still runs its operational core with no trace of a
-  disabled module anywhere in the product.
+  disabled module anywhere in the product. That same second human installs
+  Meridian Kiosk from a desktop installer and Meridian Field from its
+  internal testing track onto a real device, with every app reporting the
+  same root version — the packaged-install half, carried by
+  [`QA-PKG-01`](QA-PKG-01-packaged-application-install.md) (M19.25).
 
 The requirement IDs behind each area are covered by the linked scripts and are
 not restated here.
@@ -119,7 +123,7 @@ not restated here.
 | 20 | Event Horizon | [`QA-HORIZON-01`](QA-HORIZON-01-event-horizon.md) | Landed |
 | 21 | Organization modules | `QA-MOD-01-organization-modules.md` | Written by M19.19; not yet landed |
 | 22 | Platform landing page | `QA-PUBLIC-01` | Written by M20.6; not yet landed |
-| 23 | Release candidate | [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md), then this script's sections B through F | Landed; this script |
+| 23 | Release candidate | [`QA-RC-02`](QA-RC-02-install-deployment-dry-run.md), [`QA-PKG-01`](QA-PKG-01-packaged-application-install.md), then this script's sections B through F | Landed; this script |
 
 Every script in the table is critical: the development process phase 5 line
 "all critical QA scripts pass" means this table, whole. A script that fails
@@ -220,7 +224,16 @@ directly here; the rest of this section closes the checklist.
     someone other than the author of the docs — follows the install and
     deployment documentation from a clean machine, and the evidence record
     that script defines is attached here whole.
-29. Complete a fresh copy of the development process section 20 Release
+29. Packaged application install: run
+    [`QA-PKG-01`](QA-PKG-01-packaged-application-install.md) (M19.25). The
+    same second person installs each desktop installer on its own OS and
+    Meridian Field from its internal tracks and the direct APK, verifies the
+    Settings Versions metadata, the Kiosk fullscreen launch and health panel,
+    and Field operating against an on-site node, and records the first-run
+    trust warnings against the install document. Where the critical scripts
+    above can be exercised from an installed application rather than a
+    development client, the milestone 19 gate expects them run that way.
+30. Complete a fresh copy of the development process section 20 Release
     Candidate Checklist, checking each box only from the evidence gathered
     above, and attach it to the release candidate record.
 
@@ -230,9 +243,12 @@ directly here; the rest of this section closes the checklist.
   failure is documented with evidence and a recorded judgement.
 - Every line of the section 20 checklist is checked from evidence, not from
   memory; no line is checked while its owning script is unlanded or unrun.
-- Both milestone 19 gate checks (addressing and modules) pass.
+- All three milestone 19 gate checks (addressing, modules, and the packaged
+  application install) pass.
 - The second person completed the install/deployment dry run without the
-  author's help, and their evidence is attached.
+  author's help, and their evidence is attached, along with the
+  [`QA-PKG-01`](QA-PKG-01-packaged-application-install.md) packaged-install
+  evidence from the same person.
 - No open critical bug is untriaged.
 
 ## Evidence to capture
