@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Node;
 
-use App\Models\Node;
 use App\Models\Organization;
 use App\Services\Modules\ActiveModuleResolver;
 
@@ -25,13 +24,15 @@ use App\Services\Modules\ActiveModuleResolver;
  * the route gate asks {@see ActiveModuleResolver} about the organization a
  * request names, on a bound node exactly as on central.
  *
- * **Where the binding comes from.** The local node record's `organization_id`
- * is the node's own copy, which is what a setup or pairing flow writes.
- * `meridian.node.organization_id` is the file-config boot default a prepared
- * deployment ships, and the system configuration override path can change it on
- * the fly, which is technical spec 7.3's file-first, database-second order.
- * The record wins where both are set, because it is the node saying what it is
- * rather than the image it was built from.
+ * **Where the binding comes from.** {@see NodeConfigResolver} answers, so the
+ * binding the product acts on and the source God Mode displays for it are the
+ * same read and cannot drift apart (technical spec 7.3). That is a database
+ * override first, then `meridian.node.organization_id` — the file default a
+ * prepared deployment ships, which the system configuration surface can also
+ * override at boot — and the node record's own `organization_id` last, as what
+ * this node is running with absent anything more explicit. First-run setup
+ * writes a record and a database override together, so a binding set that way
+ * arrives in the top tier rather than the bottom one.
  *
  * **An id naming no organization is not a binding.** A deployment carrying a
  * stale id — an organization deleted, a config copied between installs — is
@@ -50,7 +51,10 @@ class NodeOrganizationBinding
 
     private ?string $organizationId = null;
 
-    public function __construct(private readonly NodeSetupService $nodes) {}
+    public function __construct(
+        private readonly NodeSetupService $nodes,
+        private readonly NodeConfigResolver $config,
+    ) {}
 
     public function isBound(): bool
     {
@@ -84,11 +88,7 @@ class NodeOrganizationBinding
 
     private function read(): ?string
     {
-        $node = $this->nodes->activeNode();
-
-        $declared = $node instanceof Node && $node->organization_id !== null
-            ? (string) $node->organization_id
-            : trim((string) config('meridian.node.organization_id'));
+        $declared = trim((string) $this->config->value('organization_id', $this->nodes->activeNode()));
 
         if ($declared === '') {
             return null;

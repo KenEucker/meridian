@@ -345,6 +345,22 @@ List all source requirement IDs and technical sections.
 
 Do not rely on memory. Read the source documents and quote or paraphrase the relevant behavior into the issue.
 
+A cited section is a checklist, not background reading. One section can impose
+several obligations in different sentences, and satisfying the one the slice is
+named for does not satisfy the reference. Technical spec 7.3 is the worked
+example: it lists what node config may include *and* requires God Mode to show
+whether each value came from file config, a database override, or the runtime
+default. A slice that reads a new node config value and shows no source has met
+half of one citation. Enumerate what each cited section obliges, and account for
+every obligation before the slice is considered scoped.
+
+For any obligation the slice will not deliver, find the task that owns it —
+search the development plan for the cited section. An unshipped task that covers
+it is the answer, and its id goes in the issue. If the owning task has already
+shipped, or there is none, the obligation belongs to this slice: deliver it, or
+record it under Step 7. Work deferred to "a later task" that nobody can name is
+work that has been dropped.
+
 ### Step 3: Define acceptance criteria
 
 Write acceptance criteria before implementation.
@@ -436,7 +452,24 @@ Before opening the PR, the implementer must mark each acceptance criterion as:
 - changed;
 - intentionally deferred.
 
-Any deferred item must reference a follow-up issue.
+The same marking applies to every obligation the slice's cited sources impose
+(Step 2), whether or not it was written up as an acceptance criterion. Most
+dropped work is not a criterion somebody declined — it is a sentence in a cited
+section that nobody turned into one.
+
+Any deferred item must name an owner that outlives this PR:
+
+- an unshipped development plan task that covers it, cited by id; or
+- a `docs/issues/NNN-*.md` entry, together with a traceability matrix row or
+  note recording the gap and what closes it.
+
+A PR body is not a record. "Deliberately out of scope" written only in PR prose
+names no owner and stops being searchable the moment the PR merges, so it is a
+silent drop rather than a deferral. The Follow-up issues section of the PR must
+not read "None" when something was deferred.
+
+Prefer closing a small gap to tracking it. A gap worth a paragraph of
+justification is usually smaller than the paragraph.
 
 ### Step 8: Open the PR
 
@@ -1095,6 +1128,8 @@ Before requesting review, the implementer should complete this checklist.
 
 ```md
 - [ ] I linked the PR to source requirements or technical spec sections.
+- [ ] I accounted for every obligation those sections impose, not only the one the slice is named for.
+- [ ] I named an owning task or filed an issue for anything a cited section obliges and this PR does not deliver.
 - [ ] I copied the acceptance criteria into the PR.
 - [ ] I checked each acceptance criterion manually or with tests.
 - [ ] I added tests for success paths.
@@ -1121,6 +1156,7 @@ Reviewers should read in this order:
 Reviewer questions:
 
 - Does this satisfy the requirement, or only part of it?
+- Does anything the cited sections oblige go undelivered and unowned? Deferred work should name an unshipped task or a filed issue, not describe itself in the PR body.
 - Are denied users tested?
 - Are historical/audit expectations met?
 - Is offline/sync behavior defined where needed?

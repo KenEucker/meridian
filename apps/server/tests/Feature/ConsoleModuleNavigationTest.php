@@ -6,11 +6,13 @@ namespace Tests\Feature;
 
 use App\Domain\Modules\ModuleKey;
 use App\Models\Node;
+use App\Models\NodeConfigValue;
 use App\Models\Organization;
 use App\Models\OrganizationModule;
 use App\Models\User;
 use App\Orchid\PlatformProvider;
 use App\Services\Console\ConsoleModuleVisibility;
+use App\Services\Node\NodeConfigResolver;
 use App\Services\Node\NodeOrganizationBinding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -237,15 +239,30 @@ class ConsoleModuleNavigationTest extends TestCase
     }
 
     /**
-     * The binding is node configuration (technical spec 7.3): the node record
-     * is the node's own copy, and file config is the boot default a prepared
-     * deployment ships.
+     * The binding is node configuration and follows node configuration's own
+     * precedence (technical spec 7.3): database override, then file config,
+     * then what the node record itself carries. It is read through
+     * {@see NodeConfigResolver}, so the binding the console
+     * acts on is the one God Mode reports a source for.
      */
-    public function test_the_node_record_binding_wins_over_the_file_default(): void
+    public function test_the_binding_follows_node_configuration_precedence(): void
     {
+        $carried = Organization::factory()->create();
         $shipped = Organization::factory()->create();
-        $actual = Organization::factory()->create();
+        $overridden = Organization::factory()->create();
 
+        // The node record alone: what this node is running with.
+        $node = Node::factory()->create([
+            'is_local' => true,
+            'organization_id' => $carried->getKey(),
+        ]);
+
+        $this->assertSame(
+            (string) $carried->getKey(),
+            app(NodeOrganizationBinding::class)->organizationId(),
+        );
+
+        // File config is more explicit than the record.
         config()->set('meridian.node.organization_id', (string) $shipped->getKey());
 
         $this->assertSame(
@@ -253,13 +270,15 @@ class ConsoleModuleNavigationTest extends TestCase
             app(NodeOrganizationBinding::class)->organizationId(),
         );
 
-        Node::factory()->create([
-            'is_local' => true,
-            'organization_id' => $actual->getKey(),
+        // A database override is what an operator set on this node, and wins.
+        NodeConfigValue::factory()->for($node)->create([
+            'key' => 'organization_id',
+            'value_json' => (string) $overridden->getKey(),
+            'source' => NodeConfigValue::SOURCE_DATABASE,
         ]);
 
         $this->assertSame(
-            (string) $actual->getKey(),
+            (string) $overridden->getKey(),
             app(NodeOrganizationBinding::class)->organizationId(),
         );
     }
