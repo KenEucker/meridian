@@ -115,7 +115,7 @@ export function buildDesktopPackagingConfig(
   extraResources: { from: string; to: string }[];
   win: { target: string[]; icon: string };
   mac: { target: string[]; icon: string; category: string; identity: null };
-  linux: { target: string[]; icon: string; category: string };
+  linux: { target: string[]; icon: string; category: string; executableName: string };
   artifactName: string;
   npmRebuild: boolean;
   forceCodeSigning: boolean;
@@ -151,7 +151,9 @@ export function buildDesktopPackagingConfig(
       category: "public.app-category.utilities",
       identity: null,
     },
-    linux: { target: ["AppImage"], icon: KIOSK_ICON, category: "Utility" },
+    // Linux derives the executable name from the package name by default, and
+    // the scoped `@meridian/kiosk` cannot be used in file paths.
+    linux: { target: ["AppImage"], icon: KIOSK_ICON, category: "Utility", executableName: "meridian-kiosk" },
     artifactName: "meridian-kiosk-${version}-${os}-${arch}.${ext}",
     // The wrapper has no native production dependencies to rebuild.
     npmRebuild: false,

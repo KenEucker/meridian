@@ -116,6 +116,11 @@ describe("buildDesktopPackagingConfig", () => {
     expect(flattened.match(/dist\/kiosk/g)).toHaveLength(1);
   });
 
+  it("names a path-safe Linux executable instead of the scoped package name", () => {
+    expect(config.linux.executableName).toBe("meridian-kiosk");
+    expect(config.linux.executableName).toMatch(/^[A-Za-z0-9._ -]+$/);
+  });
+
   it("states the Alpha 1 unsigned policy explicitly", () => {
     expect(config.mac.identity).toBeNull();
     expect(config.forceCodeSigning).toBe(false);
