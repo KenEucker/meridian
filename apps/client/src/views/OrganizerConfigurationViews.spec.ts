@@ -185,6 +185,52 @@ function creditPoliciesPayload(
   };
 }
 
+/**
+ * The modules the platform entitles this organization to, as the node answers
+ * them (M19.15; MOD-008). Entitlement never appears here: an unentitled module
+ * is absent from the read rather than present and refused, so the way to write
+ * a narrower organization in a test is to leave the module out.
+ */
+function modulesPayload(
+  modules: Record<string, unknown>[] = defaultModules(),
+  governance: Record<string, unknown> = {
+    editable: true,
+    holds_authority: true,
+    frozen_by_event: null,
+  },
+): Record<string, unknown> {
+  return { organization_id: ORGANIZATION_ID, modules, governance };
+}
+
+function defaultModules(): Record<string, unknown>[] {
+  return [
+    {
+      key: "scheduling",
+      name: "Scheduling",
+      summary: "Shifts, shift signups, the shift board.",
+      enabled: true,
+      changed_at: null,
+      changed_by: null,
+    },
+    {
+      key: "documents",
+      name: "Documents",
+      summary: "Policy documents, procedure documents, and waivers.",
+      enabled: true,
+      changed_at: "2026-07-04T12:00:00+00:00",
+      changed_by: "Olive Organizer",
+    },
+    {
+      key: "insights",
+      name: "Insights",
+      summary: "Insight metrics and Insight Sheets.",
+      enabled: false,
+      changed_at: null,
+      changed_by: null,
+    },
+  ];
+}
+
 function designationsPayload(
   staffCoordinator: { team_id: string; team_name: string } | null = null,
 ): Record<string, unknown> {
@@ -211,6 +257,7 @@ function stubAdminNode(
   types?: Record<string, unknown>[],
   staffCoordinator: { team_id: string; team_name: string } | null = null,
   configurationGovernance?: Record<string, unknown>,
+  modules?: Record<string, unknown>[],
 ): NodeCall[] {
   return stubNode((call) => {
     if (
@@ -218,6 +265,15 @@ function stubAdminNode(
       call.url.includes("update-organization-configuration")
     ) {
       return { body: configurationPayload(configurationGovernance) };
+    }
+
+    if (
+      call.url.endsWith("/modules") ||
+      call.url.includes("update-organization-modules")
+    ) {
+      return {
+        body: modulesPayload(modules, configurationGovernance),
+      };
     }
 
     if (call.url.includes("calculate-event-credits")) {
@@ -530,6 +586,10 @@ describe("the organization configuration surface", () => {
     expect(calls.some((call) => call.url.includes("/designations"))).toBe(false);
     expect(calls.some((call) => call.url.includes("/configuration"))).toBe(false);
     expect(calls.some((call) => call.url.includes("/credit-policies"))).toBe(false);
+    // Modules ride `organization.configuration.manage` (data/API 6.8), so
+    // somebody without it does not read them either.
+    expect(calls.some((call) => call.url.endsWith("/modules"))).toBe(false);
+    expect(wrapper.find("#module-scheduling").exists()).toBe(false);
   });
 
   it("carries the operational settings featureset (M18.14)", async () => {
@@ -605,6 +665,176 @@ describe("the organization configuration surface", () => {
       organization_id: ORGANIZATION_ID,
       directory_enabled: false,
     });
+  });
+
+  it("carries the modules featureset (M19.15)", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(
+      calls.some((call) =>
+        call.url.endsWith(`/api/organizations/${ORGANIZATION_ID}/modules`),
+      ),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Modules");
+
+    // MOD-022: Meridian's own names, never the keys.
+    expect(wrapper.text()).toContain("Scheduling");
+    expect(wrapper.text()).toContain("Insights");
+    expect(wrapper.text()).toContain("Shifts, shift signups, the shift board.");
+
+    // The node's state is on the controls, both ways round.
+    expect(
+      (wrapper.get("#module-scheduling").element as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (wrapper.get("#module-insights").element as HTMLInputElement).checked,
+    ).toBe(false);
+
+    // The last transition, beside the control that makes the next one.
+    expect(wrapper.text()).toContain("Olive Organizer");
+  });
+
+  it("offers only the modules the organization is entitled to (MOD-008)", async () => {
+    // Entitlement is a platform decision, so a module Meridian does not offer
+    // this organization is absent rather than present and disabled — and the
+    // surface says what the list is a list of, so a short one does not read as
+    // modules gone missing.
+    installSession();
+    stubAdminNode(undefined, null, undefined, [
+      {
+        key: "scheduling",
+        name: "Scheduling",
+        summary: "Shifts, shift signups, the shift board.",
+        enabled: true,
+        changed_at: null,
+        changed_by: null,
+      },
+    ]);
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.find("#module-scheduling").exists()).toBe(true);
+    expect(wrapper.find("#module-insights").exists()).toBe(false);
+    expect(wrapper.text()).toContain(
+      "Meridian offers this organization the modules listed here.",
+    );
+  });
+
+  it("says so when the platform offers no optional modules", async () => {
+    // MOD-004: an organization with nothing optional is still a working
+    // organization, and the empty state says that rather than reading as a
+    // fault.
+    installSession();
+    stubAdminNode(undefined, null, undefined, []);
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.text()).toContain(
+      "Meridian makes no optional modules available to this organization.",
+    );
+    expect(wrapper.find("form[aria-label='Organization modules']").exists()).toBe(
+      false,
+    );
+  });
+
+  it("turns a module off through its command and carries an optional reason", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#module-documents").setValue(false);
+    await wrapper.get("#module-change-reason").setValue("We keep waivers on paper.");
+    await wrapper.get("form[aria-label='Organization modules']").trigger("submit");
+    await flushPromises();
+
+    const command = commandCalls(calls, "update-organization-modules").at(0);
+
+    // Every offered module rides the save, so the node compares against what
+    // it holds and writes only what moved.
+    expect(command?.body).toEqual({
+      organization_id: ORGANIZATION_ID,
+      modules: { scheduling: true, documents: false, insights: false },
+      reason: "We keep waivers on paper.",
+    });
+    expect(wrapper.text()).toContain("Modules saved.");
+  });
+
+  it("omits the reason entirely when none is given", async () => {
+    installSession();
+    const calls = stubAdminNode();
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#module-insights").setValue(true);
+    await wrapper.get("form[aria-label='Organization modules']").trigger("submit");
+    await flushPromises();
+
+    const command = commandCalls(calls, "update-organization-modules").at(0);
+
+    expect(command?.body).not.toHaveProperty("reason");
+  });
+
+  it("reads modules only, with the node's reason, while an event freezes them", async () => {
+    // MOD-010: module state is governance data on the ORG-021 rule, and the
+    // surface explains the freeze rather than letting a save discover it.
+    installSession();
+    const calls = stubAdminNode(undefined, null, {
+      editable: false,
+      holds_authority: true,
+      frozen_by_event: { id: LOCAL_FIELD_FIXTURE.eventId, name: "Emberfall 2026" },
+    });
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    expect(wrapper.text()).toContain(
+      "Modules are frozen while Emberfall 2026 is inside its active event window",
+    );
+    expect(wrapper.get("#module-scheduling").attributes("disabled")).toBeDefined();
+
+    await wrapper.get("form[aria-label='Organization modules']").trigger("submit");
+    await flushPromises();
+
+    // A disabled form submits nothing: the refusal is explained, not tripped.
+    expect(commandCalls(calls, "update-organization-modules")).toHaveLength(0);
+  });
+
+  it("shows the node's refusal when a module save is rejected", async () => {
+    installSession();
+    stubNode((call) => {
+      if (call.url.includes("update-organization-modules")) {
+        return {
+          status: 422,
+          body: {
+            message:
+              "Meridian does not make Insights available to this organization, so it cannot be turned on or off here.",
+          },
+        };
+      }
+
+      if (call.url.endsWith("/modules")) {
+        return { body: modulesPayload() };
+      }
+
+      if (call.url.includes("/configuration")) {
+        return { body: configurationPayload() };
+      }
+
+      return call.method === "POST" ? { body: {} } : { body: listPayload() };
+    });
+
+    const { wrapper } = await mountAt("/organizer/configuration");
+
+    await wrapper.get("#module-insights").setValue(true);
+    await wrapper.get("form[aria-label='Organization modules']").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.get(".org-modules__error").text()).toContain(
+      "does not make Insights available to this organization",
+    );
   });
 
   it("carries the credit policy featureset (M18.16)", async () => {

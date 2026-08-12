@@ -33,13 +33,14 @@ use Illuminate\Support\Carbon;
  * M19.19 writes the full set at organization creation, which is where a
  * complete set of rows properly comes from.
  *
- * **Enablement is not written here.** MOD-008 gives that decision to the
- * organization, from the ORG-018 configuration surface (M19.15). Revoking
- * entitlement therefore leaves `enabled` exactly as the organization left it,
- * which is MOD-007's requirement and falls out of never touching the column
- * rather than being separately arranged. A row created by a revoke starts from
- * the un-stated default of enabled, so restoring entitlement restores the
- * organization to running the module — which is the state it was in.
+ * **The two halves are written separately.** MOD-008 gives enablement to the
+ * organization, from the ORG-018 configuration surface, and
+ * {@see self::setEnablement()} is that writer (M19.15). Neither entry point
+ * touches the other's column, so revoking entitlement leaves `enabled` exactly
+ * as the organization left it — MOD-007's requirement, falling out of never
+ * touching the column rather than being separately arranged. A row created by a
+ * revoke starts from the un-stated default of enabled, so restoring entitlement
+ * restores the organization to running the module, which is the state it was in.
  */
 class ModuleStateService
 {
@@ -49,6 +50,14 @@ class ModuleStateService
      * and a verbosity setting must not be able to switch that off.
      */
     public const AUDIT_ENTITLEMENT_CHANGED = 'organization_module.entitlement_changed';
+
+    /**
+     * MOD-011's other half. In the required floor for the same reason: the
+     * requirement audits entitlement *and* enablement transitions without
+     * qualification, and the organization's own switch is the one that most
+     * often explains why a capability stopped being there.
+     */
+    public const AUDIT_ENABLEMENT_CHANGED = 'organization_module.enablement_changed';
 
     public function __construct(
         private readonly ModuleGovernance $governance,
@@ -203,14 +212,134 @@ class ModuleStateService
     }
 
     /**
+     * The catalogue modules this organization may be offered as a choice
+     * (MOD-008).
+     *
+     * Entitlement is the platform's decision and is not the organizer's to see
+     * around: a module Meridian does not offer this organization is absent from
+     * the surface rather than present and refused.
+     *
+     * @return list<ModuleState>
+     */
+    public function entitledStateFor(Organization $organization): array
+    {
+        return array_values(array_filter(
+            $this->stateFor($organization),
+            static fn (ModuleState $state): bool => $state->entitled,
+        ));
+    }
+
+    /**
+     * Apply a desired enablement state for one organization (MOD-008).
+     *
+     * The organizer's half of module state, from the ORG-018 configuration
+     * surface. Keyed the way {@see self::setEntitlement()} is keyed: a catalogue
+     * module the array does not name is left alone, and a key the catalogue does
+     * not know decides nothing.
+     *
+     * Validation runs over the whole submission before anything is written, so a
+     * request naming one module it may not change does not half-apply the
+     * others. Entitlement is never touched here, which is the other direction of
+     * MOD-007.
+     *
+     * @param  array<string, bool>  $enablement
+     * @return array{enabled: list<ModuleKey>, disabled: list<ModuleKey>}
+     *
+     * @throws ModuleAuthorityException when this node does not own module state
+     * @throws EventAuthorityException when the organization is inside its active event window
+     * @throws ModuleEnablementException when the organization is not entitled to a module it moved
+     */
+    public function setEnablement(
+        Organization $organization,
+        array $enablement,
+        ?User $actor = null,
+        ?string $reason = null,
+    ): array {
+        $this->governance->assertEditable((string) $organization->getKey(), (string) $organization->name);
+
+        /** @var list<array{state: ModuleState, enabled: bool}> $transitions */
+        $transitions = [];
+
+        foreach ($this->stateFor($organization) as $state) {
+            if (! array_key_exists($state->key(), $enablement)) {
+                continue;
+            }
+
+            $desired = (bool) $enablement[$state->key()];
+
+            // A restated value is not a change, and a submission that changes
+            // nothing is not a submission worth refusing — including for a
+            // module whose entitlement was revoked while the page was open.
+            if ($desired === $state->enabled) {
+                continue;
+            }
+
+            if (! $state->entitled) {
+                throw ModuleEnablementException::notEntitled($state->module);
+            }
+
+            $transitions[] = ['state' => $state, 'enabled' => $desired];
+        }
+
+        $enabled = [];
+        $disabled = [];
+
+        foreach ($transitions as $transition) {
+            $this->writeEnablement($organization, $transition['state'], $transition['enabled'], $actor, $reason);
+
+            if ($transition['enabled']) {
+                $enabled[] = $transition['state']->module;
+            } else {
+                $disabled[] = $transition['state']->module;
+            }
+        }
+
+        return ['enabled' => $enabled, 'disabled' => $disabled];
+    }
+
+    private function writeEnablement(
+        Organization $organization,
+        ModuleState $state,
+        bool $enabled,
+        ?User $actor,
+        ?string $reason,
+    ): void {
+        $row = OrganizationModule::query()->firstOrNew([
+            'organization_id' => $organization->getKey(),
+            'module_key' => $state->key(),
+        ]);
+
+        $row->fill([
+            // The platform's decision, carried forward untouched — and for a
+            // module nobody has written a row for, the un-stated default the
+            // organization is currently entitled under.
+            'entitled' => $state->entitled,
+            'enabled' => $enabled,
+            'enablement_changed_at' => Carbon::now(),
+            'enablement_changed_by_user_id' => $actor?->getKey(),
+        ])->save();
+
+        $this->audit->record(
+            action: self::AUDIT_ENABLEMENT_CHANGED,
+            entityType: $row->getMorphClass(),
+            entityId: (string) $row->getKey(),
+            actorUser: $actor,
+            organizationId: (string) $organization->getKey(),
+            before: $this->snapshot($state->module, $state->entitled, $state->enabled),
+            after: $this->snapshot($state->module, $state->entitled, $enabled),
+            reason: $reason,
+            sourceContext: AuditEvent::SOURCE_API,
+        );
+    }
+
+    /**
      * MOD-011's "previous and new state": both halves and the module, in both
      * snapshots.
      *
-     * `enabled` is unchanged by an entitlement transition and is recorded
-     * anyway, because active is the pair and a reader of the trail asking
-     * whether this change turned the module off needs the other half to answer
-     * it. `active` is derived here rather than left to be re-derived by
-     * whoever reads the row later.
+     * The half a transition did not move is recorded anyway, because active is
+     * the pair and a reader of the trail asking whether this change turned the
+     * module off needs both halves to answer it. `active` is derived here
+     * rather than left to be re-derived by whoever reads the row later.
      *
      * @return array<string, mixed>
      */

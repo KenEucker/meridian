@@ -110,6 +110,11 @@ final class AuditActionCatalog
         // so it sits at the floor rather than at a level an organization could
         // configure its way below.
         'organization_module.entitlement_changed',
+        // And which of those the organization has chosen to run (MOD-008). The
+        // same reasoning: it is the transition that most often explains why a
+        // capability an organization had yesterday is absent today, and MOD-011
+        // audits it without qualification.
+        'organization_module.enablement_changed',
         // The archival that enforces a retention limit. Recorded at the floor
         // for the obvious reason: an act that removes audit history is the last
         // one that should be omissible from it.

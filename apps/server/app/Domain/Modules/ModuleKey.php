@@ -55,6 +55,37 @@ enum ModuleKey: string
     }
 
     /**
+     * What MOD-002 says this module covers, for the organizer deciding whether
+     * to run it (MOD-008).
+     *
+     * The node sends these to the configuration surface rather than the client
+     * carrying its own copy, on the same reasoning the ORG-018 surface already
+     * applies to the VOL-027 policy descriptions: what a person reads before
+     * making a choice and what the product does with the choice must not be able
+     * to drift apart. The Briefing's entry omits MOD-002's list of surfaces
+     * Alpha 1 defers, because naming screens that do not exist yet would tell an
+     * organizer less rather than more.
+     */
+    public function summary(): string
+    {
+        return match ($this) {
+            self::Scheduling => 'Shifts, shift signups, the shift board, shift training and waiver requirements, '
+                .'the Schedule Desk, and the Planning Table.',
+            self::IncidentManagement => 'Incidents, incident types, IMS numbers, incident timeline and links, '
+                .'incident print, and Field Reports.',
+            self::Documents => 'Policy documents, procedure documents, fragments, acknowledgments and '
+                .'acknowledgment requirements, document exports, and waivers.',
+            self::Qualifications => 'Trainings, training prerequisites, training signups and completions, and '
+                .'event credential eligibility.',
+            self::Equipment => 'Equipment items and equipment checkout and check-in.',
+            self::EventGeography => 'Event maps, camps, map locations and features, the Placement department '
+                .'designation, and deployment and location assignment.',
+            self::Briefing => 'Notes, the Briefing hub, and Briefing note inclusions.',
+            self::Insights => 'Insight metrics and Insight Sheets.',
+        };
+    }
+
+    /**
      * @return list<string>
      */
     public static function keys(): array
