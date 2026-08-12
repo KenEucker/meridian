@@ -327,7 +327,8 @@ Either:
   warnings, this is the expected face of an internally distributed build, and
   the person installing should be told to expect it.
 
-Verify the install the way M19.25's packaged-application QA does: launch
+Verify the install the way M19.25's packaged-application QA
+([`QA-PKG-01`](../qa/QA-PKG-01-packaged-application-install.md)) does: launch
 Meridian Field, open Settings → Versions, and confirm the mobile app version
 reported is `<version>`.
 
@@ -365,4 +366,6 @@ The exercise record captures:
 7. **Filed issues** for every stuck point and divergence.
 
 Installed-application behavior — that what was installed actually runs against
-a node and reports its versions — is `QA-PKG-01` (M19.25), not this record.
+a node and reports its versions — is
+[`QA-PKG-01`](../qa/QA-PKG-01-packaged-application-install.md) (M19.25), not
+this record.
