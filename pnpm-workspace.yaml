@@ -2,7 +2,14 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Build-script adjudication. esbuild's install script places its platform
+# binary and is allowed. electron-winstaller arrives with electron-builder
+# (M19.20) but its build script only serves the Squirrel.Windows installer
+# target, which Meridian does not use — the Windows installer is NSIS — so its
+# build script is refused and the install stays hermetic.
+allowBuilds:
+  esbuild: true
+  electron-winstaller: false
+
 onlyBuiltDependencies:
   - esbuild
-allowBuilds:
-  esbuild: set this to true or false

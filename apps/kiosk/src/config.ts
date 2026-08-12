@@ -137,14 +137,22 @@ export function resolveServerUrlSetting(
   return { url: DEFAULT_SERVER_URL, source: "default", settingsPath };
 }
 
-/** Resolve the packaged Meridian Kiosk client build directory. */
-export function resolveClientDistPath(env: EnvLike = {}, cwd = process.cwd()): string {
+/**
+ * Resolve the Meridian Kiosk client build inside an installed application.
+ *
+ * The packaging configuration (`packagingConfig.ts`, M19.20) places the built
+ * `apps/client/dist/kiosk` artifact under `client/kiosk` in Electron's
+ * resources directory, because an installed wrapper has no repository beside
+ * it to resolve `../client/dist/kiosk` from. `MERIDIAN_CLIENT_DIST_DIR` still
+ * wins so a technician can point a broken install at a known-good build.
+ */
+export function resolvePackagedClientDistPath(env: EnvLike = {}, resourcesPath: string): string {
   const raw = env.MERIDIAN_CLIENT_DIST_DIR?.trim();
   if (raw) {
-    return resolve(cwd, raw);
+    return resolve(resourcesPath, raw);
   }
 
-  return resolve(cwd, "../client/dist/kiosk");
+  return resolve(resourcesPath, "client/kiosk");
 }
 
 /** Resolve the Meridian desktop window/app icon asset. */

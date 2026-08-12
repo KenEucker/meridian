@@ -22,13 +22,13 @@ import { join } from "node:path";
 import { app, BrowserWindow, globalShortcut, nativeImage } from "electron";
 
 import {
-  resolveClientDistPath,
   resolveClientDevAppUrl,
   resolveClientPort,
   resolveClientVersion,
   resolveHealthUrl,
   resolveAppIconPath,
   resolveAppUrlOverride,
+  resolvePackagedClientDistPath,
   resolveServerUrlSetting,
   resolveWindowedMode,
   NODE_SETTINGS_FILE,
@@ -74,6 +74,15 @@ function nodeSetting(): ResolvedServerUrl {
   return resolveServerUrlSetting(process.env, settingsPath);
 }
 
+/**
+ * The Meridian window icon, from the app package rather than the process
+ * working directory: an installed application is launched from wherever the OS
+ * pleases, and its `assets/icon.png` travels inside the app package (M19.20).
+ */
+function appIconPath(): string {
+  return resolveAppIconPath(process.env, app.isPackaged ? app.getAppPath() : process.cwd());
+}
+
 function createMainWindow(appUrl: string): BrowserWindow {
   // Fullscreen and locked down is what an on-site workstation is, and stays the
   // default. `MERIDIAN_DESKTOP_WINDOWED` is for exercising a Kiosk workflow on a
@@ -89,7 +98,7 @@ function createMainWindow(appUrl: string): BrowserWindow {
     height: windowed ? 900 : undefined,
     autoHideMenuBar: true,
     backgroundColor: "#11151c",
-    icon: resolveAppIconPath(process.env),
+    icon: appIconPath(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -167,7 +176,7 @@ function toggleHealthWindow(): void {
     title: "Meridian On-site Health",
     autoHideMenuBar: true,
     backgroundColor: "#11151c",
-    icon: resolveAppIconPath(process.env),
+    icon: appIconPath(),
     parent: mainWindow ?? undefined,
     webPreferences: {
       contextIsolation: true,
@@ -199,8 +208,10 @@ async function resolveMainAppUrl(): Promise<string> {
     return resolveClientDevAppUrl(process.env, "kiosk");
   }
 
+  // An installed application serves the Kiosk client build the packaging step
+  // placed in its resources directory (technical spec 25.2, 26.4; M19.20).
   clientServer = await startClientStaticServer({
-    distDir: resolveClientDistPath(process.env),
+    distDir: resolvePackagedClientDistPath(process.env, process.resourcesPath),
     port: resolveClientPort(process.env),
   });
 
@@ -258,7 +269,11 @@ async function applyOrganizationWindowIcon(window: BrowserWindow): Promise<void>
 }
 
 app.whenReady().then(async () => {
-  currentMeridianVersion = resolveClientVersion(process.env);
+  // A development checkout resolves the root Meridian version from the
+  // repository tree; an installed application has no tree, and reports the
+  // version the packaging step stamped into its metadata from the same root
+  // `package.json` (versioning strategy; M19.20).
+  currentMeridianVersion = app.isPackaged ? app.getVersion() : resolveClientVersion(process.env);
   currentAppUrl = await resolveMainAppUrl();
   mainWindow = createMainWindow(currentAppUrl);
 

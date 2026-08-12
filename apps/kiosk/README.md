@@ -4,9 +4,10 @@ The Meridian Electron on-site workstation wrapper for Meridian Kiosk.
 
 The desktop wrapper opens the Kiosk artifact in a fullscreen/kiosk window and
 auto-recovers if the wrapped UI crashes. In unpackaged development it loads the
-shared Vue Vite dev server so UI changes hot-update immediately; packaged builds
-serve `apps/client/dist/kiosk` through a tiny local static server. The toggleable
-health panel displays server/node placeholders and the root Meridian version.
+shared Vue Vite dev server so UI changes hot-update immediately; installed
+builds serve the packaged Kiosk client build through a tiny local static
+server. The toggleable health panel displays server/node placeholders and the
+root Meridian version.
 
 The wrapper intentionally does **not** manage Docker Compose, block accidental
 close, or include emergency export in Alpha 1 (technical spec 3.3, 25.1).
@@ -37,6 +38,8 @@ These versions follow `docs/meridian-technology-baseline.md`.
 | File | Purpose |
 |---|---|
 | `src/config.ts` | Pure resolution of the Kiosk client dist path, server URL, health URL, and root Meridian version. |
+| `src/packagingConfig.ts` | Pure electron-builder configuration for the desktop installers (M19.20): identity, targets, root-version stamping, and the packaged Kiosk client resources. |
+| `electron-builder.config.cjs` | electron-builder entry point; loads the compiled `dist/packagingConfig.js`. |
 | `src/health.ts` | Pure health panel model, HTML renderer, and the non-throwing health fetch helper. |
 | `src/staticClientServer.ts` | Tiny local static server for the packaged shared Vue client. |
 | `src/desktopRuntimeConfig.ts` | Pure build of what the wrapper tells the Kiosk about itself: the trusted shared workstation (M18.32) and the wrapper's own version (M19.1). |
@@ -51,7 +54,7 @@ tested. `src/main.ts` is the thin Electron glue, verified by manual desktop QA
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| `MERIDIAN_CLIENT_DIST_DIR` | `../client/dist/kiosk` from `apps/kiosk` | Meridian Kiosk build directory to serve locally. |
+| `MERIDIAN_CLIENT_DIST_DIR` | `client/kiosk` inside the installed resources directory | Meridian Kiosk build directory an installed wrapper serves locally. An absolute path points a broken install at a known-good build. |
 | `MERIDIAN_CLIENT_PORT` | `0` | Local static-server port. `0` lets the OS choose. |
 | `MERIDIAN_CLIENT_DEV_SERVER_URL` | `http://localhost:5173/` | Shared Vue Vite dev server opened by unpackaged Electron. |
 | `MERIDIAN_APP_URL` | unset | Optional override that skips both the development URL default and packaged static server. |
@@ -137,11 +140,39 @@ corepack pnpm --filter @meridian/kiosk run start
 When launched from the workspace with `electron .`, the unpackaged wrapper
 opens `MERIDIAN_CLIENT_DEV_SERVER_URL` with the Kiosk runtime mode requested, so
 Vue changes hot-update in the desktop shell without inheriting the Field mode
-from the shared Vite process. Packaged builds still serve `apps/client/dist`
-through the local static server.
+from the shared Vite process. Installed builds serve the Kiosk client build
+from their own resources directory through the local static server.
 
 Press `Ctrl+Shift+H` (`Cmd+Shift+H` on macOS) to toggle the health panel.
 
-Installable packaging (electron-builder), version-mismatch warnings, and the
-full live health fields are deferred to later Alpha 1 packaging and sync
-milestones.
+## Desktop installers
+
+One electron-builder configuration builds the Windows (NSIS), macOS (DMG), and
+Linux (AppImage) installers, so the three cannot drift into three different
+applications (technical spec 26.6). It carries the `org.meridian.kiosk`
+application id, the Meridian Kiosk product name, and `assets/icon.png`, and it
+packages the already built `apps/client/dist/kiosk` artifact — never another
+UI mode's build (technical spec 26.4). The package version is read from the
+root `package.json` at packaging time; this manifest declares none of its own
+(`docs/process/versioning-strategy.md`).
+
+```bash
+# Build the client artifact and the wrapper, then package the host
+# platform's installer into apps/kiosk/release/ (gitignored)
+corepack pnpm run kiosk:package
+
+# The build smoke test CI runs: packages the host installer and asserts the
+# version stamp and the kiosk-only packaged resources
+corepack pnpm run kiosk:package:check
+```
+
+The configuration lives in `src/packagingConfig.ts` (unit tested in
+`src/packagingConfig.spec.ts`); `electron-builder.config.cjs` only loads its
+compiled form. Alpha 1 artifacts are unsigned on purpose — Windows and macOS
+show a first-run trust warning, which the M19.24 install documentation states
+rather than hides; code signing and macOS notarization are beta scope. Packaged
+applications do not self-update; a new version is installed the way the first
+one was (technical spec 26.6).
+
+Version-mismatch warnings and the full live health fields are deferred to
+later Alpha 1 sync milestones.

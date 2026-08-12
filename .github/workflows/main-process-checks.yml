@@ -73,6 +73,15 @@ jobs:
             fi
           done
 
+      # The desktop installer's build smoke test (M19.20); see
+      # pr-process-checks.yml for why it is its own step and why corepack is
+      # enabled first.
+      - name: Package the desktop installer
+        if: hashFiles('apps/kiosk/electron-builder.config.cjs') != ''
+        run: |
+          corepack enable
+          node scripts/release/validate-desktop-packaging.mjs
+
       - name: Upload process artifacts
         uses: actions/upload-artifact@v4
         with:

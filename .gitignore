@@ -46,6 +46,9 @@ auth.json
 
 # Frontend app build output
 apps/*/dist/
+# Desktop installer output from electron-builder (M19.20). Release artifacts
+# are attached to releases, never committed (technical spec 26.7).
+apps/kiosk/release/
 # Changelog data file, generated from repository history by the release build
 # step (GOD-021). The packaged technician documentation beside it is committed
 # because it mirrors authored content in docs/technician/; this one is derived
