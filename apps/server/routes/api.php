@@ -56,6 +56,7 @@ use App\Http\Controllers\Node\NodePairingController;
 use App\Http\Controllers\Node\NodeSyncController;
 use App\Http\Controllers\Offline\OfflineReadSetController;
 use App\Http\Controllers\Organizations\OrganizationConfigurationController;
+use App\Http\Controllers\Organizations\OrganizationModuleController;
 use App\Http\Controllers\Presence\DepartmentPresenceCommandController;
 use App\Http\Controllers\Reporting\ReportingExportController;
 use App\Http\Controllers\Session\SessionController;
@@ -827,6 +828,14 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.update-organization-configuration');
 
     /*
+     * The module half of the same surface (M19.15; MOD-008, MOD-010, MOD-011).
+     * Ungated for the reason its read is: this is the command a module is turned
+     * back on with.
+     */
+    Route::post('/commands/update-organization-modules', [OrganizationModuleController::class, 'update'])
+        ->name('api.commands.update-organization-modules');
+
+    /*
      * Event administration as a product surface (M18.29, M18.31; UI contract
      * 12.6 `organizer.events`; ORG-006; PLACE-003). One read carries the
      * organization's events with the departments participating in each one, the
@@ -1064,6 +1073,19 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
 
     Route::get('/organizations/{organization}/configuration', [OrganizationConfigurationController::class, 'show'])
         ->name('api.organizations.configuration.show');
+
+    /*
+     * Which modules the organization runs (M19.15; ORG-018, MOD-008). Part of
+     * the ORG-018 configuration surface and under its capability, but its own
+     * read and its own command: enablement lives on `organization_modules`
+     * rather than on the organization row, and its transitions are audited one
+     * module at a time (MOD-011).
+     *
+     * Deliberately ungated. A surface that disappeared with the module it
+     * administers would leave nobody able to turn one back on (data/API 5.9).
+     */
+    Route::get('/organizations/{organization}/modules', [OrganizationModuleController::class, 'show'])
+        ->name('api.organizations.modules.index');
 
     /*
      * The Directory chart (M18.73; DIR-001 through DIR-015; technical spec

@@ -1981,6 +1981,8 @@ Relationships:
 
 Records one organization's state for one module in the fixed catalogue (MOD-002). One row per organization per module.
 
+`entitled` is set from the God Mode Organization Modules screens (technical spec 22.2). `enabled` is set from the organizer surface: `GET /api/organizations/{organization}/modules` is the administration read behind `organizer.configuration`, and `update-organization-modules` is its command. Both require `organization.configuration.manage` (organizers and Lead Organizers, ORG-020), both answer to the ORG-021 configuration governance — central-owned, frozen during the active event window — and the read returns only the modules the organization is entitled to, because a module the platform does not offer it is not an organizer choice (MOD-008). Neither endpoint is gated on a module: the surface a module is turned back on from cannot be one that disappears with it.
+
 Key fields:
 
 - `id`
