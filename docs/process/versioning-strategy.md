@@ -92,11 +92,40 @@ The release workflow packages Electron builds and mobile builds for their target
 environments. It must derive all app package versions from the root
 `package.json`; no wrapper declares a version of its own.
 
-This is owned work, not a deferral. The desktop packaging configuration is
-M19.20, the committed Capacitor native projects are M19.21, mobile release
-signing is M19.22, and the tagged release workflow that produces and attaches
-every artifact is M19.23, with the runbook in M19.24 and installed-application
-QA in M19.25. Technical spec 26.4 through 26.7 govern them.
+The desktop packaging configuration is M19.20, the committed Capacitor native
+projects are M19.21, mobile release signing is M19.22, the tagged release
+workflow that produces and attaches every artifact is M19.23, the runbook is
+M19.24, and installed-application QA is M19.25. Technical spec 26.4 through
+26.7 govern them.
+
+### Cutting a release
+
+A release is cut by pushing the tag `v<version>`, where `<version>` is the root
+`package.json` version at the tagged commit — `v0.0.152` releases `0.0.152`.
+`.github/workflows/release-artifacts.yml` refuses a tag that names any other
+version, because the tag is a claim about the artifacts and every artifact
+version derives from the root manifest, not from the tag.
+
+From that one commit the workflow builds the server and web images and the
+deployment configuration bundle, the Windows, macOS, and Linux desktop
+installers, and the signed Android app bundle and APK; verifies that every
+produced artifact carries the root version
+(`scripts/release/verify-release-artifact-versions.mjs`); and attaches the
+artifacts to the GitHub release. Artifacts are attached to the release, never
+committed to the repository (technical spec 26.7).
+
+The iOS application archive is not produced by the workflow: it requires a
+macOS signing environment holding the Apple distribution certificate and
+provisioning profile, which the automation does not have. It is produced from
+the same tagged commit through the `docs/process/release-packaging.md` runbook
+(M19.24), and the workflow's release notes state that rather than silently
+omitting it.
+
+Running the workflow manually (`workflow_dispatch`) is a dry run: every
+artifact is built and verified exactly as a tag build would, and nothing is
+attached anywhere. `scripts/release/validate-release-workflow.mjs` holds the
+workflow's shape and the verifier's behavior on every pull request, since the
+workflow itself only runs on a tag.
 
 Packaged apps may only work with Meridian APIs that share the same major
 version. For example, an app built as `1.4.2` can work only with `1.x.y` APIs.

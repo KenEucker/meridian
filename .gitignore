@@ -49,6 +49,10 @@ apps/*/dist/
 # Desktop installer output from electron-builder (M19.20). Release artifacts
 # are attached to releases, never committed (technical spec 26.7).
 apps/kiosk/release/
+# The release workflow's artifact staging directory (M19.23): saved images,
+# the deployment bundle, and staged mobile packages land here before they are
+# attached to the release. Same rule: attached, never committed.
+release-artifacts/
 # Changelog data file, generated from repository history by the release build
 # step (GOD-021). The packaged technician documentation beside it is committed
 # because it mirrors authored content in docs/technician/; this one is derived

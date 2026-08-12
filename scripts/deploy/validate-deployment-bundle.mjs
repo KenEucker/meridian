@@ -52,6 +52,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { IMAGE_TARGETS, meridianImageTag } from './build-images.mjs';
+import { DEPLOYMENT_BUNDLE_FILES } from './deployment-bundle-manifest.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -66,26 +67,12 @@ const CADDYFILE_ONSITE = 'deploy/caddy/Caddyfile.onsite';
 const CADDYFILE_WILDCARD = 'deploy/caddy/Caddyfile.wildcard';
 const ENTRYPOINT = 'deploy/docker/entrypoint.sh';
 
-/** Every file the bundle ships. A missing one is a bundle that cannot be used. */
-const REQUIRED_FILES = [
-  'deploy/README.md',
-  DOCKERFILE,
-  ENTRYPOINT,
-  DEPLOYMENT_COMPOSE,
-  DEPLOYMENT_ENV_EXAMPLE,
-  DATABASE_COMPOSE,
-  DATABASE_ENV_EXAMPLE,
-  'deploy/docker/README.md',
-  CADDYFILE,
-  CADDYFILE_ONSITE,
-  CADDYFILE_WILDCARD,
-  CADDY_SNIPPET,
-  'deploy/caddy/README.md',
-  'deploy/dns/onsite-dnsmasq.conf',
-  'deploy/dns/onsite-hosts.example',
-  'deploy/dns/README.md',
-  '.dockerignore',
-];
+/**
+ * Every file the bundle ships, from the shared manifest the release packaging
+ * step also tars (`scripts/deploy/deployment-bundle-manifest.mjs`). A missing
+ * one is a bundle that cannot be used.
+ */
+const REQUIRED_FILES = DEPLOYMENT_BUNDLE_FILES;
 
 /** Services the deployment stack cannot be complete without. */
 const REQUIRED_SERVICES = ['postgres', 'server', 'worker', 'scheduler', 'web'];
