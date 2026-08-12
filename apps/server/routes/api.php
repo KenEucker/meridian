@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Modules\ModuleKey;
 use App\Http\Controllers\Application\ApplicationReviewController;
 use App\Http\Controllers\Application\PublicParticipationController;
 use App\Http\Controllers\Attendance\AttendanceCommandController;
@@ -75,6 +76,7 @@ use App\Http\Controllers\Teams\TeamStaffCommandController;
 use App\Http\Controllers\Trainings\TrainingCommandController;
 use App\Http\Controllers\Trainings\TrainingReadController;
 use App\Http\Controllers\Waivers\WaiverAdminController;
+use App\Http\Middleware\EnforceActiveModule;
 use App\Http\Middleware\EnforceOrganizationHostScope;
 use Illuminate\Support\Facades\Route;
 
@@ -457,9 +459,11 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * working from.
      */
     Route::post('/commands/revoke-credential', [EventCredentialAdminController::class, 'revoke'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.revoke-credential');
 
     Route::post('/commands/set-current-deployment', [DeploymentCommandController::class, 'setCurrent'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.commands.set-current-deployment');
 
     /*
@@ -474,15 +478,19 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * still where somebody was standing.
      */
     Route::post('/commands/create-deployment', [DeploymentAdminController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.commands.create-deployment');
 
     Route::post('/commands/update-deployment', [DeploymentAdminController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.commands.update-deployment');
 
     Route::post('/commands/archive-deployment', [DeploymentAdminController::class, 'archive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.commands.archive-deployment');
 
     Route::post('/commands/restore-deployment', [DeploymentAdminController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.commands.restore-deployment');
 
     Route::post('/commands/mark-staff-on-site', [DepartmentPresenceCommandController::class, 'markOnSite'])
@@ -492,6 +500,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.mark-staff-off-site');
 
     Route::post('/commands/add-staff-to-shift', [ShiftAssignmentCommandController::class, 'addUnscheduledStaff'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.add-staff-to-shift');
 
     /*
@@ -507,6 +516,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * device that is still standing at the desk.
      */
     Route::post('/commands/override-shift-addition', [ShiftAssignmentCommandController::class, 'overrideUnscheduledStaff'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.override-shift-addition');
 
     /*
@@ -516,9 +526,11 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * what the services check rather than a role.
      */
     Route::post('/commands/sign-up-for-shift', [ShiftSignupCommandController::class, 'signUp'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.sign-up-for-shift');
 
     Route::post('/commands/withdraw-from-shift', [ShiftSignupCommandController::class, 'withdraw'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.withdraw-from-shift');
 
     /*
@@ -606,75 +618,99 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.reject-profile-change-request');
 
     Route::post('/commands/checkout-equipment', [EquipmentCommandController::class, 'checkout'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.checkout-equipment');
 
     Route::post('/commands/return-equipment', [EquipmentCommandController::class, 'returnEquipment'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.return-equipment');
 
     Route::post('/commands/create-equipment-item', [EquipmentInventoryCommandController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.create-equipment-item');
 
     Route::post('/commands/update-equipment-item', [EquipmentInventoryCommandController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.update-equipment-item');
 
     Route::post('/commands/archive-equipment-item', [EquipmentInventoryCommandController::class, 'archive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.archive-equipment-item');
 
     Route::post('/commands/restore-equipment-item', [EquipmentInventoryCommandController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.restore-equipment-item');
 
     Route::post('/commands/import-equipment-inventory', [EquipmentInventoryCommandController::class, 'import'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.commands.import-equipment-inventory');
 
     Route::post('/commands/submit-field-report', [FieldReportCommandController::class, 'submit'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.submit-field-report');
 
     Route::post('/commands/upload-field-report-photo', [FieldReportPhotoController::class, 'upload'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.upload-field-report-photo');
 
     Route::post('/commands/create-incident', [IncidentCommandController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.create-incident');
 
     Route::post('/commands/update-incident', [IncidentCommandController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.update-incident');
 
     Route::post('/commands/link-incident', [IncidentCommandController::class, 'linkIncident'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.link-incident');
 
     Route::post('/commands/unlink-incident', [IncidentCommandController::class, 'unlinkIncident'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.unlink-incident');
 
     Route::post('/commands/link-field-report', [IncidentCommandController::class, 'linkFieldReport'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.link-field-report');
 
     Route::post('/commands/unlink-field-report', [IncidentCommandController::class, 'unlinkFieldReport'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.unlink-field-report');
 
     Route::post('/commands/strike-incident-attachment', [IncidentCommandController::class, 'strikeAttachment'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.strike-incident-attachment');
 
     Route::post('/commands/append-incident-note', [IncidentCommandController::class, 'appendNote'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.append-incident-note');
 
     Route::post('/commands/strike-incident-note', [IncidentCommandController::class, 'strikeNote'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.strike-incident-note');
 
     Route::post('/commands/create-incident-type', [IncidentTypeAdminController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.create-incident-type');
 
     Route::post('/commands/rename-incident-type', [IncidentTypeAdminController::class, 'rename'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.rename-incident-type');
 
     Route::post('/commands/archive-incident-type', [IncidentTypeAdminController::class, 'archive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.archive-incident-type');
 
     Route::post('/commands/restore-incident-type', [IncidentTypeAdminController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.restore-incident-type');
 
     Route::post('/commands/save-incident-list-preset', [IncidentListPresetController::class, 'save'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.save-incident-list-preset');
 
     Route::post('/commands/delete-incident-list-preset', [IncidentListPresetController::class, 'delete'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.delete-incident-list-preset');
 
     Route::post('/commands/update-organization-branding', [BrandingCommandController::class, 'updateOrganization'])
@@ -855,27 +891,35 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.calculate-event-credits');
 
     Route::post('/commands/create-shift', [ShiftAdminCommandController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.create-shift');
 
     Route::post('/commands/update-shift', [ShiftAdminCommandController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.update-shift');
 
     Route::post('/commands/cancel-shift', [ShiftAdminCommandController::class, 'cancel'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.cancel-shift');
 
     Route::post('/commands/restore-shift', [ShiftAdminCommandController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.commands.restore-shift');
 
     Route::post('/commands/create-policy-document', [DocumentCommandController::class, 'createPolicy'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.create-policy-document');
 
     Route::post('/commands/update-policy-document', [DocumentCommandController::class, 'updatePolicy'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.update-policy-document');
 
     Route::post('/commands/publish-policy-document', [DocumentCommandController::class, 'publishPolicy'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.publish-policy-document');
 
     Route::post('/commands/archive-policy-document', [DocumentCommandController::class, 'archivePolicy'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.archive-policy-document');
 
     /*
@@ -890,30 +934,39 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * it last cached rather than the one standing when it arrives.
      */
     Route::post('/commands/acknowledge-document', [DocumentAcknowledgmentController::class, 'acknowledge'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.acknowledge-document');
 
     Route::post('/commands/create-document-acknowledgment-requirement', [DocumentAcknowledgmentController::class, 'createRequirement'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.create-document-acknowledgment-requirement');
 
     Route::post('/commands/set-document-acknowledgment-requirement-active', [DocumentAcknowledgmentController::class, 'setRequirementActive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.set-document-acknowledgment-requirement-active');
 
     Route::post('/commands/create-procedure-document', [DocumentCommandController::class, 'createProcedure'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.create-procedure-document');
 
     Route::post('/commands/update-procedure-document', [DocumentCommandController::class, 'updateProcedure'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.update-procedure-document');
 
     Route::post('/commands/publish-procedure-document', [DocumentCommandController::class, 'publishProcedure'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.publish-procedure-document');
 
     Route::post('/commands/archive-procedure-document', [DocumentCommandController::class, 'archiveProcedure'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.archive-procedure-document');
 
     Route::post('/commands/create-document-fragment', [DocumentCommandController::class, 'createFragment'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.create-document-fragment');
 
     Route::post('/commands/update-document-fragment', [DocumentCommandController::class, 'updateFragment'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.update-document-fragment');
 
     /*
@@ -925,48 +978,63 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * every endpoint resolves the caller's maintainable scopes instead.
      */
     Route::post('/commands/create-waiver', [WaiverAdminController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.create-waiver');
 
     Route::post('/commands/update-waiver', [WaiverAdminController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.update-waiver');
 
     Route::post('/commands/archive-waiver', [WaiverAdminController::class, 'archive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.archive-waiver');
 
     Route::post('/commands/restore-waiver', [WaiverAdminController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.restore-waiver');
 
     Route::post('/commands/record-waiver-completion', [WaiverAdminController::class, 'recordCompletion'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.commands.record-waiver-completion');
 
     Route::post('/commands/create-training', [TrainingCommandController::class, 'create'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.create-training');
 
     Route::post('/commands/update-training', [TrainingCommandController::class, 'update'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.update-training');
 
     Route::post('/commands/archive-training', [TrainingCommandController::class, 'archive'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.archive-training');
 
     Route::post('/commands/restore-training', [TrainingCommandController::class, 'restore'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.restore-training');
 
     Route::post('/commands/add-training-prerequisite', [TrainingCommandController::class, 'addPrerequisite'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.add-training-prerequisite');
 
     Route::post('/commands/remove-training-prerequisite', [TrainingCommandController::class, 'removePrerequisite'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.remove-training-prerequisite');
 
     Route::post('/commands/sign-up-for-training', [TrainingCommandController::class, 'signUp'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.sign-up-for-training');
 
     Route::post('/commands/cancel-training-signup', [TrainingCommandController::class, 'cancelSignup'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.cancel-training-signup');
 
     Route::post('/commands/record-training-completion', [TrainingCommandController::class, 'recordCompletion'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.record-training-completion');
 
     Route::post('/commands/import-training-completions', [TrainingCommandController::class, 'importCompletions'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.commands.import-training-completions');
 
     Route::post('/commands/add-organization-staff', [OrganizerStaffCommandController::class, 'addStaff'])
@@ -988,6 +1056,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.organizations.staff.index');
 
     Route::get('/organizations/{organization}/incident-types', [IncidentTypeAdminController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.organizations.incident-types.index');
 
     Route::get('/organizations/{organization}/designations', [OrganizationDesignationController::class, 'index'])
@@ -1027,12 +1096,15 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.organizations.credit-policies.index');
 
     Route::get('/organizations/{organization}/documents', [DocumentReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.organizations.documents.index');
 
     Route::get('/organizations/{organization}/waivers', [WaiverAdminController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.organizations.waivers.index');
 
     Route::get('/organizations/{organization}/waivers/{waiver}', [WaiverAdminController::class, 'show'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.organizations.waivers.show');
 
     /*
@@ -1044,6 +1116,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * `documents.acknowledgments.review`.
      */
     Route::get('/document-acknowledgments/me', [DocumentAcknowledgmentController::class, 'mine'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.document-acknowledgments.me');
 
     /*
@@ -1075,32 +1148,41 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.staff-profile-change-requests.index');
 
     Route::get('/organizations/{organization}/document-acknowledgments', [DocumentAcknowledgmentController::class, 'review'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.organizations.document-acknowledgments.index');
 
     Route::get('/policy-documents/{policyDocument}', [DocumentReadController::class, 'policy'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.policy-documents.show');
 
     Route::get('/policy-documents/{policyDocument}/export/{format}', [DocumentExportController::class, 'apiPolicy'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.policy-documents.export');
 
     Route::get('/procedure-documents/{procedureDocument}', [DocumentReadController::class, 'procedure'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.procedure-documents.show');
 
     Route::get('/procedure-documents/{procedureDocument}/export/{format}', [DocumentExportController::class, 'apiProcedure'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.procedure-documents.export');
 
     Route::get('/document-fragments/{fragment}', [DocumentReadController::class, 'fragment'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.document-fragments.show');
 
     Route::get('/departments/{department}/trainings', [TrainingReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.departments.trainings.index');
 
     Route::get('/departments/{department}/trainings/{training}', [TrainingReadController::class, 'show'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.departments.trainings.show');
 
     Route::get('/departments/{department}/equipment', [EquipmentInventoryReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.departments.equipment.index');
 
     Route::get('/departments/{department}/teams', [TeamReadController::class, 'index'])
@@ -1110,9 +1192,11 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.departments.teams.show');
 
     Route::get('/departments/{department}/shifts', [ShiftAdminReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.departments.shifts.index');
 
     Route::get('/departments/{department}/shifts/{shift}', [ShiftAdminReadController::class, 'show'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.departments.shifts.show');
 
     Route::get('/events/{event}/info', [EventInfoReadController::class, 'show'])
@@ -1124,6 +1208,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * own staff profiles rather than anything the request may name.
      */
     Route::get('/events/{event}/shift-board', [ShiftBoardReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.events.shift-board');
 
     /*
@@ -1169,6 +1254,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.events.departments.roster');
 
     Route::get('/events/{event}/departments/{department}/deployments', [DeploymentAdminController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::EventGeography))
         ->name('api.events.departments.deployments.index');
 
     Route::get('/events/{event}/departments/{department}/credits', DepartmentCreditReviewController::class)
@@ -1208,6 +1294,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * node is reachable; this is the node's answer when one is.
      */
     Route::get('/events/{event}/departments/{department}/equipment-lookup', EquipmentLookupController::class)
+        ->middleware(EnforceActiveModule::for(ModuleKey::Equipment))
         ->name('api.events.departments.equipment-lookup');
 
     /*
@@ -1222,14 +1309,17 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * list a revocation is aimed from.
      */
     Route::get('/events/{event}/credentials', [EventCredentialAdminController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.events.credentials.index');
 
     // Reporting exports (REPORT-001 through REPORT-005). Scope comes from the
     // caller's own authority; `department_id` may only narrow it.
     Route::get('/events/{event}/exports/credential-eligibility', [ReportingExportController::class, 'credentialEligibility'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.events.exports.credential-eligibility');
 
     Route::get('/events/{event}/exports/shift-roster', [ReportingExportController::class, 'shiftRoster'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.events.exports.shift-roster');
 
     Route::get('/events/{event}/exports/staff-contact', [ReportingExportController::class, 'staffContact'])
@@ -1242,6 +1332,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.events.exports.credits-earned');
 
     Route::get('/events/{event}/field-reports', [FieldReportReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.field-reports.index');
 
     /*
@@ -1249,15 +1340,19 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * else (M18.24A; FR-015, FR-017).
      */
     Route::get('/events/{event}/field-report-dictation', FieldReportDictationReadController::class)
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.field-report-dictation');
 
     Route::get('/events/{event}/incidents', [IncidentReadController::class, 'index'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.incidents.index');
 
     Route::get('/events/{event}/incidents/{incident}', [IncidentReadController::class, 'show'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.incidents.show');
 
     Route::get('/events/{event}/incidents/{incident}/pdf', [IncidentPdfController::class, 'download'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.incidents.pdf');
 
     /*
@@ -1273,6 +1368,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * The Field Report photo pair established this shape and keeps its paths.
      */
     Route::post('/events/{event}/exports/credential-eligibility/download-url', [ReportingExportController::class, 'issueCredentialEligibilityDownloadUrl'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Qualifications))
         ->name('api.events.exports.credential-eligibility.download-url');
 
     /*
@@ -1285,6 +1381,7 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
      * than one export that downloads differently from its four siblings.
      */
     Route::post('/events/{event}/exports/shift-roster/download-url', [ReportingExportController::class, 'issueShiftRosterDownloadUrl'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Scheduling))
         ->name('api.events.exports.shift-roster.download-url');
 
     Route::post('/events/{event}/exports/staff-contact/download-url', [ReportingExportController::class, 'issueStaffContactDownloadUrl'])
@@ -1297,19 +1394,24 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.events.exports.credits-earned.download-url');
 
     Route::post('/events/{event}/incidents/{incident}/pdf/download-url', [IncidentPdfController::class, 'issueDownloadUrl'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.events.incidents.pdf.download-url');
 
     Route::post('/policy-documents/{policyDocument}/export/{format}/download-url', [DocumentExportController::class, 'issuePolicyDownloadUrl'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.policy-documents.export.download-url');
 
     Route::post('/procedure-documents/{procedureDocument}/export/{format}/download-url', [DocumentExportController::class, 'issueProcedureDownloadUrl'])
         ->whereIn('format', ['markdown', 'pdf'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::Documents))
         ->name('api.procedure-documents.export.download-url');
 
     Route::post('/field-report-photos/{attachment}/preview-url', [FieldReportPhotoController::class, 'issuePreviewUrl'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.field-report-photos.preview-url');
 
     Route::post('/field-report-photos/{attachment}/download-url', [FieldReportPhotoController::class, 'issueDownloadUrl'])
+        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.field-report-photos.download-url');
 });
