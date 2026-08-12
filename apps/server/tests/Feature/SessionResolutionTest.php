@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Modules\ModuleKey;
 use App\Domain\Navigation\HideablePageCatalog;
 use App\Domain\Navigation\MenuPageCatalog;
 use App\Domain\Permissions\PermissionCatalog;
@@ -14,6 +15,7 @@ use App\Models\EventCredential;
 use App\Models\EventDepartmentAssignment;
 use App\Models\Node;
 use App\Models\Organization;
+use App\Models\OrganizationModule;
 use App\Models\PermissionRole;
 use App\Models\Staff;
 use App\Models\StaffOrganizationStatus;
@@ -546,6 +548,95 @@ class SessionResolutionTest extends TestCase
         // With no status row the association is still reported, without a status.
         $response->assertJsonPath('organizations.0.id', (string) $scenario['organization']->getKey());
         $response->assertJsonPath('organizations.0.status', null);
+    }
+
+    public function test_each_organization_carries_the_modules_it_runs(): void
+    {
+        // MOD-015: the active module set rides session resolution, so a client
+        // builds navigation from capability the organization runs rather than
+        // filtering it afterwards (technical spec 11A.3, 15A.8).
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LEAD);
+
+        $response = $this->me($scenario['user']);
+
+        // No rows written: MOD-009's default is entitled and enabled, so a
+        // freshly created organization runs the whole catalogue.
+        $response->assertJsonPath('organizations.0.modules', ModuleKey::keys());
+    }
+
+    public function test_a_disabled_module_is_absent_from_the_organizations_module_set(): void
+    {
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LEAD);
+
+        OrganizationModule::factory()->create([
+            'organization_id' => $scenario['organization']->getKey(),
+            'module_key' => ModuleKey::Scheduling->value,
+            'entitled' => true,
+            'enabled' => false,
+        ]);
+
+        $modules = (array) $this->me($scenario['user'])->json('organizations.0.modules');
+
+        $this->assertNotContains(ModuleKey::Scheduling->value, $modules);
+        $this->assertContains(ModuleKey::Documents->value, $modules);
+    }
+
+    public function test_an_unentitled_module_is_absent_even_where_the_organization_enabled_it(): void
+    {
+        // Active is `entitled && enabled` (MOD-005), and the client is told the
+        // active set rather than either half: what a member may reach does not
+        // depend on which of the two decisions removed it.
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LEAD);
+
+        OrganizationModule::factory()->create([
+            'organization_id' => $scenario['organization']->getKey(),
+            'module_key' => ModuleKey::Insights->value,
+            'entitled' => false,
+            'enabled' => true,
+        ]);
+
+        $this->assertNotContains(
+            ModuleKey::Insights->value,
+            (array) $this->me($scenario['user'])->json('organizations.0.modules'),
+        );
+    }
+
+    public function test_each_organization_is_answered_for_on_its_own_state(): void
+    {
+        /*
+         * A caller reaching two organizations gets two answers, because a
+         * department's navigation is gated on the organization that department
+         * belongs to. One shared set would let a module one organization turned
+         * off take the surface away in the other.
+         */
+        $scenario = $this->scenario(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
+        $other = Organization::factory()->create();
+
+        StaffOrganizationStatus::factory()->active()->create([
+            'organization_id' => $other->getKey(),
+            'staff_id' => $scenario['staff']->getKey(),
+        ]);
+
+        OrganizationModule::factory()->create([
+            'organization_id' => $other->getKey(),
+            'module_key' => ModuleKey::Equipment->value,
+            'entitled' => true,
+            'enabled' => false,
+        ]);
+
+        $modules = collect($this->me($scenario['user'])->json('organizations'))
+            ->mapWithKeys(fn (array $organization): array => [
+                $organization['id'] => $organization['modules'],
+            ]);
+
+        $this->assertContains(
+            ModuleKey::Equipment->value,
+            $modules[(string) $scenario['organization']->getKey()],
+        );
+        $this->assertNotContains(
+            ModuleKey::Equipment->value,
+            $modules[(string) $other->getKey()],
+        );
     }
 
     /**

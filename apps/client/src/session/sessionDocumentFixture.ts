@@ -14,6 +14,7 @@ import type {
   SessionDocument,
   SessionEvent,
 } from "@/session/sessionDocument";
+import { MODULE_KEYS } from "@/session/sessionModules";
 
 export const FIXTURE_EVENT_ID = "event-decompression-2026";
 export const FIXTURE_ORGANIZATION = "org-northwood-collective";
@@ -73,6 +74,10 @@ export function fixtureSessionDocument(
         slug: "northwood-collective",
         status: "approved",
         archived_at: null,
+        // Running everything (MOD-009), stated for the reason `preferences` is:
+        // an absent set means "the node did not say", which is a case a spec
+        // about it should choose rather than inherit.
+        modules: [...MODULE_KEYS],
       },
     ],
     events: [event],

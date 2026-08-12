@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Session;
 
+use App\Domain\Modules\ModuleKey;
 use App\Domain\Permissions\PermissionCatalog;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -20,6 +21,7 @@ use App\Models\Team;
 use App\Models\TeamGrant;
 use App\Models\TeamMembership;
 use App\Models\User;
+use App\Services\Modules\ActiveModuleResolver;
 use App\Services\Navigation\PageVisibilityService;
 use App\Services\Node\NodeSetupService;
 use App\Services\Permissions\EffectiveRole;
@@ -52,6 +54,12 @@ use Illuminate\Support\Collection;
  * or the single event its user is associated with. Roles are then resolved at
  * that event, so event-scoped grants — Incident Command in particular — appear
  * only where they apply.
+ *
+ * Each organization carries the modules it runs (MOD-015; technical spec 11A.3,
+ * 15A.8), so a client builds navigation out of capability the organization
+ * actually runs rather than filtering it after the fact — and so an offline
+ * client, which holds this document and nothing fresher, gates on the same set
+ * the server enforces.
  */
 class SessionResolver
 {
@@ -59,6 +67,7 @@ class SessionResolver
         private readonly EffectiveRoleResolver $roles,
         private readonly NodeSetupService $nodes,
         private readonly PageVisibilityService $pages,
+        private readonly ActiveModuleResolver $modules,
     ) {}
 
     /**
@@ -401,6 +410,15 @@ class SessionResolver
      * here, and a client is never left displaying an organization it was not
      * told about.
      *
+     * `modules` is the organization's active set (MOD-015). It rides here
+     * rather than on `context` because module state is a fact about an
+     * organization, in the same way its name and slug are, and because the
+     * caller's departments can span more than one of them: a client gating a
+     * department's navigation asks the organization that department belongs to,
+     * which is only answerable if every listed organization carries its own
+     * answer. The resolved context organization is one of these, so technical
+     * spec 11A.3's "the resolved organization's active module set" is here too.
+     *
      * @param  list<string>  $staffIds
      * @param  Collection<string, array<string, mixed>>  $departments
      * @param  Collection<int, Event>  $events
@@ -439,8 +457,32 @@ class SessionResolver
                     'slug' => $organization->slug,
                     'status' => $statuses->get($id)?->status,
                     'archived_at' => $organization->archived_at?->toIso8601String(),
+                    'modules' => $this->activeModules($id),
                 ]];
             });
+    }
+
+    /**
+     * The module keys this organization is currently running (MOD-015).
+     *
+     * Keys rather than labels, and the same keys the route gate refuses on, so
+     * a client's answer about a surface and the node's answer about the request
+     * behind it cannot disagree. What each key is called to a reader is
+     * MOD-022's question and belongs to the surface printing the sentence.
+     *
+     * Always a list, never absent and never null. "This organization runs
+     * nothing" and "this build did not say" are different facts, and a client
+     * that cannot tell them apart would have to choose between hiding a product
+     * it should show and showing one the organization turned off.
+     *
+     * @return list<string>
+     */
+    private function activeModules(string $organizationId): array
+    {
+        return array_map(
+            static fn (ModuleKey $module): string => $module->value,
+            $this->modules->activeFor($organizationId),
+        );
     }
 
     /**

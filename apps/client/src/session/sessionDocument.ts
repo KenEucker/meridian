@@ -19,6 +19,10 @@
 // menu structure, or precomputed surface availability in it, and nothing here
 // adds one; a client answers "may I render this" from the capabilities it holds
 // (technical spec 11A.2, UI implementation contract 19A.1).
+//
+// Each organization's active module set (MOD-015) is codes on those terms too.
+// It names modules, not screens: which surfaces a module covers stays this
+// client's business, the same way which surfaces a capability covers does.
 
 export interface SessionUser {
   readonly id: string;
@@ -58,6 +62,16 @@ export interface SessionOrganization {
   readonly slug: string | null;
   readonly status: string | null;
   readonly archived_at: string | null;
+  /**
+   * The module keys this organization runs (MOD-015; technical spec 11A.3,
+   * 15A.8).
+   *
+   * Optional in the type and absent from a document written by a build from
+   * before this field existed, which `sessionModules` reads as "this node did
+   * not say" rather than as "this organization runs nothing" — the two are
+   * different facts and only one of them means hiding a product.
+   */
+  readonly modules?: readonly string[] | null;
 }
 
 export interface SessionEvent {

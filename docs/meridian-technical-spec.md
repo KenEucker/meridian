@@ -978,7 +978,7 @@ Where the node has no lock and the user is associated with exactly one event, th
 
 A client without connectivity is locked to the context the node provides and does not offer switching.
 
-The session response also carries the resolved organization's active module set (MOD-015), so navigation is built from capability the organization runs rather than filtered after the fact.
+The session response also carries the resolved organization's active module set (MOD-015), so navigation is built from capability the organization runs rather than filtered after the fact. It rides on each organization the response lists rather than on the resolved context alone, because a caller's departments can span more than one and each answers for itself: a client gating a department's navigation asks the organization that department belongs to, and a single session-wide set would let one organization's decision take a surface away in another's.
 
 Switching re-resolves permissions, navigation, branding, modules, and cached context. Data from the previous context is not left visible.
 
@@ -1622,7 +1622,13 @@ The rule to implement against: a module's absence is never an error condition in
 
 ## 15A.8 Client delivery and offline behavior
 
-Session/context resolution returns the organization's active module set alongside effective permissions, and the client caches it with the offline permission cache (section 11A.4). An offline client therefore gates navigation on the same set the server enforces.
+Session/context resolution returns the organization's active module set alongside effective permissions, and the client caches it with the offline permission cache (section 11A.4). An offline client therefore gates navigation on the same set the server enforces. It rides inside the session document rather than beside it, so there is no second cache to keep in step and no state in which a device holds one and not the other.
+
+Two client rules follow, and both are consequences of the gate being on the node rather than here.
+
+**Not knowing is not the same as running nothing.** A document from a build older than this field, an organization the document does not list, or a context that has not resolved yields no answer, and no answer leaves the surface offered. The failure mode is then a page that is reachable and refused, rather than a product that silently disappears — the same direction section 15A.2 takes for an undeclared namespace.
+
+**Absence is not denial.** A permission-denied surface names the role that would open it, because one exists and somebody holds it. Where the module is inactive there is no such role for anyone in the organization, so the client says what the organization runs and names the module (MOD-013, MOD-022) rather than describing the reader's authority. The two must not be interchangeable: a member sent to the wrong one goes looking for a grant that cannot be issued.
 
 A write queued offline against a module that is inactive by the time it reaches the server is refused and recorded as a sync conflict (MOD-017). It is not silently dropped, because the person who wrote it deserves to know, and not silently applied, because the organization has said it does not run that capability.
 
