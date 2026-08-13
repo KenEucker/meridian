@@ -262,13 +262,21 @@ if (withDns) {
      * it per query.
      */
     [
+      /*
+       * No `fallthrough`: this server is authoritative for home.arpa (RFC
+       * 8375 — the name is answered locally or not at all), so a query it
+       * cannot answer from the hosts list is NODATA, not somebody else's
+       * problem. Falling through with nothing behind it returned SERVFAIL
+       * for the HTTPS record type Chrome asks for before every navigation,
+       * and a hard failure there pushes the browser toward an HTTPS upgrade
+       * against a node that serves plain HTTP.
+       */
       "home.arpa {",
       "    log",
       "    hosts {",
       `        ${lanAddress} meridian.home.arpa`,
       `        ${lanAddress} meridian2.home.arpa`,
       `        ${lanAddress} meridian3.home.arpa`,
-      "        fallthrough",
       "    }",
       "}",
       ". {",
