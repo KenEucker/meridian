@@ -187,3 +187,26 @@ device. Plain HTTP on these names is the stated trade (technical spec 8.5): the
 packaged apps carry a cleartext allowance scoped to `home.arpa` and nothing
 else, and browser staff workflow stays on the certificate-bearing event
 hostname model above.
+
+### The installed app signs in here; a browser does not
+
+Reaching `http://meridian.home.arpa` in a browser serves pages, and signing in
+there fails with a message about secure key storage being unavailable. That is
+the policy working, not a fault to chase: sign-in generates a device signing
+key through WebCrypto, browsers expose it only in a secure context, and a plain
+HTTP origin is not one. A device that cannot keep a key does not sign in
+(technical spec 8.6, and `deviceIdentity.ts` alongside it) — the alternative is
+registering key material nothing can verify.
+
+The installed app is unaffected because it serves its own bundled client from
+`https://localhost`, which is a secure context, while still calling a
+plain-HTTP node — secure-context rules follow the page's origin, not what it
+fetches. This is exactly the split technical spec 8.2 rule 4 and 8.4 describe:
+without control of DNS and certificates, the installed app is the reliable
+client and browser access is not guaranteed.
+
+So the convention names serve the app, admin, and debug access. Browser staff
+workflow needs a name a public authority will certify, which `home.arpa` never
+is — use the event hostname model at the top of this file: a real hostname
+whose certificate was obtained before the event, answered on the event network
+by local DNS pointing at the node's LAN address.
