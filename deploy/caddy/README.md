@@ -168,6 +168,19 @@ finds on its own:
    A hosts file on the phone is not an option, which is why the DNS half
    exists at all.
 
+4. **On Windows, open the firewall** — inbound LAN traffic to a published
+   container port is dropped unless a rule allows it, and dropped rather than
+   refused, so the phone shows a connection that times out while this machine
+   logs nothing at all. Local requests and Docker's own bridge bypass the
+   filter, which means every test run on the laptop passes while every phone
+   hangs. `node:local` prints the rules; they are, once, from an
+   administrator terminal:
+
+   ```powershell
+   netsh advfirewall firewall add rule name="Meridian local node" dir=in action=allow protocol=TCP localport=80
+   netsh advfirewall firewall add rule name="Meridian local DNS" dir=in action=allow protocol=UDP localport=53
+   ```
+
 A Field app on that network then discovers the node at boot with no manual
 settings — the zero-configuration path QA-PKG-01 exercises against a real
 device. Plain HTTP on these names is the stated trade (technical spec 8.5): the

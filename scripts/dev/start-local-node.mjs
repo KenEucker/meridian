@@ -306,9 +306,30 @@ if (withDns) {
   ]);
 
   console.log("");
-  console.log(`  DNS is up: point the phone's Wi-Fi DNS at ${lanAddress} and it will`);
-  console.log("  resolve meridian.home.arpa here. Allow inbound UDP 53 once, from an");
-  console.log("  administrator terminal:");
-  console.log('      netsh advfirewall firewall add rule name="Meridian local DNS" dir=in action=allow protocol=UDP localport=53');
+  console.log(`  DNS is up: point the phone's Wi-Fi DNS at ${lanAddress} — or the`);
+  console.log("  router's, where it can be set — and it resolves the node here.");
+  console.log("");
+}
+
+/*
+ * The Windows firewall drops inbound LAN traffic to a published container
+ * port unless a rule allows it, and it drops rather than refuses — so the
+ * symptom on the phone is a connection that times out with nothing in any
+ * log on this machine. Worth stating up front rather than leaving somebody
+ * to discover it: local traffic and Docker's own bridge both bypass the
+ * filter, so every test run *on* this machine passes while every phone on
+ * the network hangs.
+ */
+if (process.platform === "win32") {
+  console.log("  Windows firewall: phones need these inbound rules. Run once, in an");
+  console.log("  administrator terminal (harmless to re-run):");
+  console.log(
+    '      netsh advfirewall firewall add rule name="Meridian local node" dir=in action=allow protocol=TCP localport=80',
+  );
+  if (withDns) {
+    console.log(
+      '      netsh advfirewall firewall add rule name="Meridian local DNS" dir=in action=allow protocol=UDP localport=53',
+    );
+  }
   console.log("");
 }
