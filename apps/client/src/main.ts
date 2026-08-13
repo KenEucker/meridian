@@ -1,6 +1,7 @@
 import { createApp } from "vue";
 
 import App from "@/App.vue";
+import { discoverNodeUrl } from "@/app/nodeConnection";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { resetDirectoryPresence } from "@/directory/directoryModel";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
@@ -32,6 +33,18 @@ import "@/assets/base.css";
  * replacing it, and a context switch (CLIENT-014).
  */
 followSessionBranding();
+
+/*
+ * Find this device's node before anybody types anything (technical spec 8.4).
+ *
+ * A packaged app that has never been configured walks the on-site convention —
+ * meridian.home.arpa, then its numbered siblings, then the central deployment —
+ * and works against the first node that answers. Deliberately not awaited, for
+ * the same reason branding is not: the app must come up on a phone standing on
+ * no network at all, and every request made before this resolves already goes
+ * to the convention's main name, which is where the answer usually is.
+ */
+void discoverNodeUrl();
 
 /*
  * What a context switch drops (M16.7, CLIENT-014).
