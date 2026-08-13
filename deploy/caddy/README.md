@@ -141,10 +141,13 @@ finds on its own:
    `corepack pnpm run setup:local`, per the repository README.
 2. **Run the node** — `corepack pnpm run node:local`. This starts the Laravel
    dev server listening on the LAN and Caddy on port 80 serving the three
-   convention names in front of it. (Or run
-   `caddy run --config deploy/caddy/Caddyfile.home-arpa` beside a server you
-   already have running; set `MERIDIAN_LOCAL_UPSTREAM` if it is not at
-   `127.0.0.1:8000`.)
+   convention names in front of it. Caddy runs in Docker by default
+   (`caddy:2-alpine`, the image the deployment stack already uses, with the
+   upstream rewritten to `host.docker.internal` because loopback inside a
+   container is the container); with Docker down it falls back to a `caddy`
+   binary on the PATH. Running Caddy by hand beside a server you already have
+   works too: `caddy run --config deploy/caddy/Caddyfile.home-arpa`, with
+   `MERIDIAN_LOCAL_UPSTREAM` set if the server is not at `127.0.0.1:8000`.
 3. **Answer the name** — something on the network must resolve
    `meridian.home.arpa` to this machine. On the laptop itself, one hosts-file
    line covers browser testing: `127.0.0.1 meridian.home.arpa`. For phones, the

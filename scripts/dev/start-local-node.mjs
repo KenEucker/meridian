@@ -10,6 +10,13 @@
  * An installed Meridian Field app on the same network then finds this machine
  * at boot with nothing typed on the phone.
  *
+ * Caddy runs in Docker by default — `caddy:2-alpine`, the image the deployment
+ * stack already uses — so a fresh clone needs no Caddy install. A machine
+ * without Docker falls back to a `caddy` binary on the PATH. Inside the
+ * container, loopback is the container, which is why the upstream becomes
+ * `host.docker.internal` there; the `host-gateway` mapping makes that name
+ * work on Linux engines too, where Docker does not define it by itself.
+ *
  * What this script cannot do is answer DNS: something on the network has to
  * resolve `meridian.home.arpa` to this machine. The router's local-DNS entry
  * or the dnsmasq fragment in `deploy/dns` covers phones; a hosts-file line
@@ -20,7 +27,7 @@
  *   corepack pnpm run node:local
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -81,12 +88,22 @@ function run(label, command, args) {
 }
 
 let stopping = false;
+let dockerProxyStarted = false;
 
 function stop(code) {
   if (stopping) {
     return;
   }
   stopping = true;
+
+  /*
+   * Killing the docker CLI does not reliably kill the container it attached,
+   * so the container is removed by name — which also clears the way for the
+   * next run.
+   */
+  if (dockerProxyStarted) {
+    spawnSync("docker", ["rm", "-f", DOCKER_PROXY_NAME], { stdio: "ignore" });
+  }
 
   for (const child of children) {
     child.kill();
@@ -123,8 +140,47 @@ run("The Meridian server", "php", [
   "8000",
 ]);
 
-run("Caddy", "caddy", [
-  "run",
-  "--config",
-  join("deploy", "caddy", "Caddyfile.home-arpa"),
-]);
+const DOCKER_PROXY_NAME = "meridian-local-node-proxy";
+
+/** Whether the Docker daemon is up, not merely whether a CLI is installed. */
+function dockerAvailable() {
+  return spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;
+}
+
+if (dockerAvailable()) {
+  // A previous run that died without cleanup would otherwise block the name.
+  spawnSync("docker", ["rm", "-f", DOCKER_PROXY_NAME], { stdio: "ignore" });
+
+  dockerProxyStarted = true;
+  run("Caddy (Docker)", "docker", [
+    "run",
+    "--rm",
+    "--name",
+    DOCKER_PROXY_NAME,
+    "-p",
+    "80:80",
+    // Loopback inside the container is the container; this name is the host.
+    // Docker Desktop defines it on its own, Linux engines need the mapping.
+    "--add-host",
+    "host.docker.internal:host-gateway",
+    "-e",
+    "MERIDIAN_LOCAL_UPSTREAM=host.docker.internal:8000",
+    "-v",
+    `${join(repoRoot, "deploy", "caddy", "Caddyfile.home-arpa").replaceAll("\\", "/")}:/etc/caddy/Caddyfile:ro`,
+    "caddy:2-alpine",
+  ]);
+} else {
+  console.log(
+    "Docker is not running, so Caddy runs from the PATH instead. Start Docker",
+  );
+  console.log(
+    "Desktop (or install caddy: https://caddyserver.com/docs/install) to change that.",
+  );
+  console.log("");
+
+  run("Caddy", "caddy", [
+    "run",
+    "--config",
+    join("deploy", "caddy", "Caddyfile.home-arpa"),
+  ]);
+}
