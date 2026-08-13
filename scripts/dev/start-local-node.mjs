@@ -255,8 +255,15 @@ if (withDns) {
   const corefile = join(mkdtempSync(join(tmpdir(), "meridian-dns-")), "Corefile");
   writeFileSync(
     corefile,
+    /*
+     * `log` on both blocks on purpose: this configuration exists to be
+     * diagnosed. "Did the phone's query ever arrive" is the whole question
+     * when a device cannot resolve the node, and the container's log answers
+     * it per query.
+     */
     [
       "home.arpa {",
+      "    log",
       "    hosts {",
       `        ${lanAddress} meridian.home.arpa`,
       `        ${lanAddress} meridian2.home.arpa`,
@@ -265,6 +272,7 @@ if (withDns) {
       "    }",
       "}",
       ". {",
+      "    log",
       "    forward . 1.1.1.1 8.8.8.8",
       "    cache 30",
       "}",
