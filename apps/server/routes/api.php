@@ -119,7 +119,7 @@ Route::post('/node-health-report', [NodeHealthReportController::class, 'store'])
  * tighter of the two.
  */
 Route::post('/auth/magic-link', [ApiAuthController::class, 'requestMagicLink'])
-    ->middleware('throttle:5,1')
+    ->middleware('throttle:api-login-code-request')
     ->name('api.auth.magic-link.store');
 
 Route::post('/auth/magic-link/verify', [ApiAuthController::class, 'verifyMagicLink'])

@@ -36,7 +36,7 @@ import KioskSwitchUserView from "@/views/KioskSwitchUserView.vue";
 import KioskWorkstationLoginView from "@/views/KioskWorkstationLoginView.vue";
 import LoginCodeView from "@/views/LoginCodeView.vue";
 import LoginView from "@/views/LoginView.vue";
-import MarketingView from "@/views/MarketingView.vue";
+import PlatformView from "@/views/PlatformView.vue";
 import ModuleUnavailableView from "@/views/ModuleUnavailableView.vue";
 import {
   moduleGateRedirect,
@@ -228,7 +228,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/platform",
     name: "public.marketing",
-    component: MarketingView,
+    component: PlatformView,
   },
   /*
    * The two context-switching surfaces (UI contract 12.2; M16.7). Both are

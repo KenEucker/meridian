@@ -18,8 +18,13 @@ The platform landing page introduces each major feature area with a screenshot
 (PUBLIC-007), and every screenshot is captured from the seeded Northwood
 development scenario — a fictional organization, fictional people, fictional
 events (PUBLIC-008). The images are **committed static assets** in
-`apps/client/public/assets/marketing/northwood/`, one per feature tour entry,
-named `<tour id>.webp`. Nothing on the marketing surface reads live data.
+`apps/client/public/assets/marketing/northwood/`, one per feature tour
+*perspective* — a feature's lead/organizer side and, where a real second
+surface exists, its staff or applicant side. The capture script's `CAPTURES`
+ids are the asset basenames, and the tour catalogue in `marketingTour.ts`
+names each perspective's asset. A capture with no persona photographs a
+public surface (the application form) the way a visitor meets it: holding
+nothing. Nothing on the marketing surface reads live data.
 
 They therefore go stale on purpose: a UI change does not change them until
 somebody recaptures. That is the trade PUBLIC-008 makes — a page that can

@@ -83,6 +83,27 @@ class OrganizationInterestTest extends TestCase
         $this->getJson('/api/public/marketing-surface')->assertOk();
     }
 
+    /**
+     * The development node serves the surface even while its record names an
+     * event (M20, product owner direction). The seeded scenario always names
+     * one so field surfaces resolve, and refusing here made the deployment
+     * root's normal flow — the landing page — unreachable in every seeded
+     * development environment. The exemption is exactly the development role:
+     * the standalone case above pins that a deployable node's lock still
+     * refuses.
+     */
+    public function test_a_development_node_locked_to_an_event_still_serves_the_surface(): void
+    {
+        $organization = Organization::factory()->create();
+        $event = Event::factory()->for($organization)->create();
+        $this->localNode(Node::ROLE_DEVELOPMENT, $event);
+
+        $this->getJson('/api/public/marketing-surface')->assertOk();
+        $this->submitInterest()->assertStatus(201);
+
+        $this->assertSame(1, OrganizationInquiry::query()->count());
+    }
+
     /** PUBLIC-002, PUBLIC-003: the submission becomes an inquiry and nothing else. */
     public function test_a_submission_is_stored_as_an_inquiry(): void
     {

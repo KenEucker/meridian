@@ -14,6 +14,7 @@ import {
 } from "@/marketing/marketingModel";
 import {
   MARKETING_FEATURE_TOUR,
+  type MarketingTourPerspective,
   type MarketingTourSection,
 } from "@/marketing/marketingTour";
 
@@ -78,8 +79,40 @@ const submitting = ref(false);
 const submitted = ref(false);
 const submitError = ref<string | null>(null);
 
-/** The tour entry open in the screenshot viewer, and who opened it. */
-const enlarged = ref<MarketingTourSection | null>(null);
+/**
+ * Which side of each two-sided feature is showing, by feature id. A feature
+ * with no entry shows its first perspective — the lead/organizer side, by the
+ * catalogue's ordering convention.
+ */
+const perspectiveChoice = ref<Record<string, string>>({});
+
+function activePerspective(
+  feature: MarketingTourSection,
+): MarketingTourPerspective {
+  const chosen = perspectiveChoice.value[feature.id];
+
+  return (
+    feature.perspectives.find((perspective) => perspective.id === chosen) ??
+    feature.perspectives[0]
+  );
+}
+
+function choosePerspective(featureId: string, perspectiveId: string): void {
+  perspectiveChoice.value = {
+    ...perspectiveChoice.value,
+    [featureId]: perspectiveId,
+  };
+}
+
+/** What the screenshot viewer is showing, and who opened it. */
+interface EnlargedShot {
+  readonly title: string;
+  readonly label: string;
+  readonly screenshot: string;
+  readonly screenshotAlt: string;
+}
+
+const enlarged = ref<EnlargedShot | null>(null);
 let enlargedOpener: HTMLElement | null = null;
 
 const viewerClose = ref<HTMLButtonElement | null>(null);
@@ -175,9 +208,16 @@ async function openShot(
   feature: MarketingTourSection,
   event: Event,
 ): Promise<void> {
+  const perspective = activePerspective(feature);
+
   enlargedOpener =
     event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-  enlarged.value = feature;
+  enlarged.value = {
+    title: feature.title,
+    label: perspective.label,
+    screenshot: perspective.screenshot,
+    screenshotAlt: perspective.screenshotAlt,
+  };
 
   // The page behind the dialog holds still while the dialog is up.
   document.documentElement.style.overflow = "hidden";
@@ -304,18 +344,53 @@ onMounted(() => {
             </p>
             <h3 :id="`marketing-feature-${feature.id}`">{{ feature.title }}</h3>
             <p>{{ feature.description }}</p>
+
+            <div
+              v-if="feature.perspectives.length > 1"
+              class="marketing__perspectives"
+              role="group"
+              :aria-label="`${feature.title}: choose a side`"
+            >
+              <button
+                v-for="perspective in feature.perspectives"
+                :key="perspective.id"
+                type="button"
+                class="marketing__perspective"
+                :class="{
+                  'marketing__perspective--active':
+                    activePerspective(feature).id === perspective.id,
+                }"
+                :aria-pressed="activePerspective(feature).id === perspective.id"
+                @click="choosePerspective(feature.id, perspective.id)"
+              >
+                {{ perspective.label }}
+              </button>
+            </div>
+            <p v-else class="marketing__perspective-label">
+              {{ feature.perspectives[0].label }}
+            </p>
+
+            <ul class="marketing__micro">
+              <li
+                v-for="micro in activePerspective(feature).microFeatures"
+                :key="micro"
+              >
+                {{ micro }}
+              </li>
+            </ul>
           </div>
 
           <button
+            :key="activePerspective(feature).id"
             type="button"
             class="marketing__shot"
-            :aria-label="`View larger — ${feature.title}`"
+            :aria-label="`View larger — ${feature.title} (${activePerspective(feature).label})`"
             @click="openShot(feature, $event)"
           >
             <img
               class="marketing__screenshot"
-              :src="feature.screenshot"
-              :alt="feature.screenshotAlt"
+              :src="activePerspective(feature).screenshot"
+              :alt="activePerspective(feature).screenshotAlt"
               loading="lazy"
               width="1280"
               height="800"
@@ -542,7 +617,7 @@ onMounted(() => {
           </button>
           <img :src="enlarged.screenshot" :alt="enlarged.screenshotAlt" />
           <figcaption>
-            <strong>{{ enlarged.title }}.</strong>
+            <strong>{{ enlarged.title }} — {{ enlarged.label }}.</strong>
             {{ enlarged.screenshotAlt }}
           </figcaption>
         </figure>
@@ -773,6 +848,75 @@ onMounted(() => {
 .marketing__feature-copy p:not(.marketing__eyebrow) {
   margin: 0;
   line-height: 1.6;
+}
+
+.marketing__perspectives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-1, 0.25rem);
+  padding: var(--m-space-1, 0.25rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  border-radius: var(--m-radius-pill, 999px);
+  align-self: flex-start;
+  background: var(--m-surface-base, #fffcf6);
+}
+
+.marketing__perspective {
+  border: none;
+  background: none;
+  padding: var(--m-space-1, 0.25rem) var(--m-space-3, 0.75rem);
+  border-radius: var(--m-radius-pill, 999px);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--m-text-secondary, #475157);
+  cursor: pointer;
+}
+
+.marketing__perspective--active {
+  background: var(--m-action-primary-bg, #475157);
+  color: var(--m-action-primary-text, #fffcf6);
+}
+
+.marketing__perspective:focus-visible {
+  outline: 2px solid var(--m-focus-ring, #b35f14);
+  outline-offset: 2px;
+}
+
+.marketing__perspective-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m-platform-secondary, #6b7562);
+}
+
+.marketing__micro {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+}
+
+.marketing__micro li {
+  position: relative;
+  padding-left: var(--m-space-5, 1.25rem);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.marketing__micro li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  background: var(--m-platform-tertiary, #a58667);
 }
 
 .marketing__shot {

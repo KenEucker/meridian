@@ -40,10 +40,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const SERVER_URL = process.env.MERIDIAN_SERVER_URL ?? "http://127.0.0.1:8000";
 const CLIENT_URL = process.env.MERIDIAN_CLIENT_URL ?? "http://localhost:5173";
 const LARAVEL_LOG = join(repoRoot, "apps/server/storage/logs/laravel.log");
-const OUTPUT_DIR = join(
-  repoRoot,
-  "apps/client/public/assets/marketing/northwood",
-);
+const OUTPUT_DIR =
+  process.env.MERIDIAN_CAPTURE_OUT ??
+  join(repoRoot, "apps/client/public/assets/marketing/northwood");
 
 const VIEWPORT = { width: 1280, height: 800, deviceScaleFactor: 2 };
 
@@ -111,6 +110,46 @@ const CAPTURES = [
     persona: "felix.fieldhand@northwood-collective.test",
     route: "/staff/event-horizon",
     expect: /readiness|outstanding|horizon/i,
+  },
+
+  // The other side of each feature, where a real second surface exists: the
+  // person the lead's surface is *about*. No persona means no session — the
+  // public apply page is photographed the way a visitor meets it.
+  {
+    id: "applications-apply",
+    // The event application form itself — the thing an applicant actually
+    // fills in — rather than the event chooser in front of it.
+    persona: null,
+    route: "/apply/northwood-collective/emberfall-decompression-2026",
+    expect: /apply|application/i,
+  },
+  {
+    id: "scheduling-planning",
+    persona: "sam.shiftlead@northwood-collective.test",
+    route: "/events/{eventId}/departments/{departmentId}/planning",
+    expect: /planning|capacity/i,
+  },
+  {
+    id: "incidents-field-report",
+    // The form needs a field session — the node must be locked to its event,
+    // the state the seed ships in. `avoid` catches the refusal the surface
+    // renders when it is not, whose text also contains "Field Report".
+    persona: "vera.staff@northwood-collective.test",
+    route: "/staff/field-reports/create",
+    expect: /field report/i,
+    avoid: /session is unavailable/i,
+  },
+  {
+    id: "documents-authoring",
+    persona: "olive.organizer@northwood-collective.test",
+    route: "/organizer/documents",
+    expect: /polic|document/i,
+  },
+  {
+    id: "qualifications-staff",
+    persona: "felix.fieldhand@northwood-collective.test",
+    route: "/events/{eventId}/departments/{departmentId}/trainings",
+    expect: /training/i,
   },
 ];
 
@@ -518,14 +557,17 @@ async function main() {
     await navigate(cdp, sessionId, `${CLIENT_URL}/login`);
 
     for (const capture of captures) {
-      log(`capturing ${capture.id} (${capture.persona})`);
+      log(`capturing ${capture.id} (${capture.persona ?? "no session"})`);
 
-      const signedIn = await signIn(capture.persona);
+      // A capture with no persona is a public surface — the apply page, say —
+      // photographed the way a visitor meets it: holding nothing.
+      const signedIn =
+        capture.persona === null ? null : await signIn(capture.persona);
       const route = capture.route
-        .replace("{eventId}", String(signedIn.eventId))
-        .replace("{departmentId}", String(signedIn.departmentId));
+        .replace("{eventId}", String(signedIn?.eventId))
+        .replace("{departmentId}", String(signedIn?.departmentId));
 
-      if (route.includes("null")) {
+      if (route.includes("null") || route.includes("undefined")) {
         throw new Error(
           `${capture.id}: ${capture.persona}'s session resolved no event or department for ${capture.route}`,
         );
@@ -536,13 +578,38 @@ async function main() {
       await evaluate(
         cdp,
         sessionId,
-        `localStorage.clear(); localStorage.setItem(${JSON.stringify(
-          "meridian.api-token.v1",
-        )}, ${JSON.stringify(JSON.stringify(signedIn.stored))});`,
+        `localStorage.clear(); ${
+          signedIn === null
+            ? ""
+            : `localStorage.setItem(${JSON.stringify(
+                "meridian.api-token.v1",
+              )}, ${JSON.stringify(JSON.stringify(signedIn.stored))});`
+        }`,
       );
       await navigate(cdp, sessionId, `${CLIENT_URL}${route}`);
 
+      // Screenshots are captured on the dark scheme unless an entry says
+      // otherwise; the OS preference of whoever runs this must not decide.
+      await cdp.send(
+        "Emulation.setEmulatedMedia",
+        {
+          features: [
+            {
+              name: "prefers-color-scheme",
+              value: capture.colorScheme ?? "dark",
+            },
+          ],
+        },
+        sessionId,
+      );
+
       const text = await settle(cdp, sessionId);
+
+      if (capture.avoid !== undefined && capture.avoid.test(text)) {
+        throw new Error(
+          `${capture.id}: ${route} rendered the ${capture.avoid} state this capture must not photograph — got:\n${text.slice(0, 400)}`,
+        );
+      }
 
       if (capture.scrollY !== undefined) {
         // Twice, with a beat between: a late render can put the page back at

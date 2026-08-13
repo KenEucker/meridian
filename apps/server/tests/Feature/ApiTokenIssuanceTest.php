@@ -340,18 +340,49 @@ class ApiTokenIssuanceTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
-    public function test_requesting_login_codes_is_rate_limited(): void
+    /**
+     * Neither login route can carry a session, so the rate limit is what
+     * stands between the endpoints and mail flooding or code guessing. The
+     * budget is per client-and-address pair with a per-client ceiling above
+     * it — a plain per-client limit refused one person's first request
+     * because of somebody else's retries from the same machine.
+     */
+    public function test_requesting_login_codes_is_rate_limited_per_address(): void
     {
         Mail::fake();
 
-        for ($request = 0; $request < 5; $request++) {
+        for ($request = 0; $request < 3; $request++) {
             $this->postJson(route('api.auth.magic-link.store'), ['email' => 'flood@example.com'])
                 ->assertStatus(202);
         }
 
-        // Neither login route can carry a session, so the rate limit is what
-        // stands between the endpoints and mail flooding or code guessing.
         $this->postJson(route('api.auth.magic-link.store'), ['email' => 'flood@example.com'])
+            ->assertStatus(429);
+
+        // A different address from the same client has a budget of its own:
+        // one inbox's retries do not refuse another person's first request.
+        $this->postJson(route('api.auth.magic-link.store'), ['email' => 'fresh@example.com'])
+            ->assertStatus(202);
+    }
+
+    public function test_requesting_login_codes_is_capped_per_client_across_addresses(): void
+    {
+        Mail::fake();
+
+        // Five addresses at their full three-request budgets is the documented
+        // fifteen-per-minute client ceiling.
+        for ($address = 0; $address < 5; $address++) {
+            for ($request = 0; $request < 3; $request++) {
+                $this->postJson(route('api.auth.magic-link.store'), [
+                    'email' => "walk{$address}@example.com",
+                ])->assertStatus(202);
+            }
+        }
+
+        // The sixth address is within its own budget, and is refused by the
+        // client ceiling — the bound on what one machine can make the mailer
+        // do, however many addresses it walks.
+        $this->postJson(route('api.auth.magic-link.store'), ['email' => 'walk5@example.com'])
             ->assertStatus(429);
     }
 

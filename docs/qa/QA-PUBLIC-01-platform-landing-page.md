@@ -40,18 +40,10 @@ order the pages' concerns were built, not the order they are read.
 - Laravel app migrated and development scenario seeded
   (`php artisan migrate:fresh --seed`).
 - Server and client dev servers both running.
-- The seeded development node is locked to an event, and PUBLIC-006 correctly
-  hides the whole surface while it is. Clear the lock first and restore it
-  when done:
-
-```bash
-php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)->update(["event_id" => null]);'
-```
-
-```bash
-php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)->update(["event_id" => App\Models\Event::query()->value("id")]);'
-```
-
+- No lock-clearing is needed: the development node serves the marketing
+  surface even while the seed names an event on it. That exemption is exactly
+  the development role — the deployable roles keep PUBLIC-006's refusal, which
+  `QA-PUBLIC-02` section F verifies.
 - A browser window holding no Meridian session.
 - A screen reader, or the browser's accessibility tree inspector, for the alt
   text checks.
@@ -85,52 +77,61 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
 ### B. The feature tour
 
 4. Scroll through "What Meridian does". Confirm there is one titled section
-   per major feature area, each with a screenshot and a short description of
-   what the feature does for an organization.
+   per major feature area, each with a short description of what the feature
+   does for an organization, a labelled list of micro-features, and a
+   screenshot.
 5. Confirm the tour states, before the first screenshot, that the organization
    pictured — Northwood Collective — is fictional and that no real
    organization's data appears.
-6. Look at every screenshot and confirm each shows the surface its section
-   describes, populated with Northwood scenario content, with no spinner,
-   error, or empty state in frame.
-7. Select a screenshot. Confirm it opens larger in an in-page viewer with its
-   title and description, that Escape and the close control both close it,
-   and that focus returns to the screenshot that was opened. Confirm the
-   viewer is reachable and operable by keyboard alone.
-8. **The PUBLIC-008 review.** Confirm nothing in any screenshot is a real
-   organization's data: every person, department, event, document, incident,
-   and equipment item visible is from the fictional seeded scenario. Anything
-   recognizable as real fails the script.
-9. With the screen reader or accessibility inspector, confirm every screenshot
-   has alt text, and that the alt text describes what the image shows rather
-   than repeating the section title.
-10. Confirm each tour section's heading structure is real headings (the
+6. On a feature with two sides (Intake and applications is one), use the
+   perspective switch. Confirm the micro-features and the screenshot change
+   together, that the switch reports its pressed state to assistive
+   technology, and that both sides show a real surface — the organizer's
+   review queue on one, the applicant's own form on the other. Confirm a
+   one-sided feature offers no switch.
+7. Work through every perspective of every feature and confirm each
+   screenshot shows the surface its side describes, populated with Northwood
+   scenario content, with no spinner, error, or empty state in frame.
+8. Select a screenshot. Confirm it opens larger in an in-page viewer with its
+   title, its perspective label, and its description; that Escape and the
+   close control both close it; and that focus returns to the screenshot that
+   was opened. Confirm the viewer is reachable and operable by keyboard
+   alone.
+9. **The PUBLIC-008 review.** Confirm nothing in any screenshot — every
+   perspective of every feature — is a real organization's data: every
+   person, department, event, document, incident, and equipment item visible
+   is from the fictional seeded scenario. Anything recognizable as real fails
+   the script.
+10. With the screen reader or accessibility inspector, confirm every
+    screenshot has alt text, and that the alt text describes what the image
+    shows rather than repeating the section title.
+11. Confirm each tour section's heading structure is real headings (the
     sections are navigable by heading level), not styled paragraphs.
 
 ### C. The offerings
 
-11. Read "Three ways to run it". Confirm three offerings are described:
+12. Read "Three ways to run it". Confirm three offerings are described:
     self-hosting, free and open source; a hosted self-starter without support
     at a lower fee; and a fully hosted and managed offering with full support,
     including an on-site technician.
-12. Answer aloud, from the page alone: which offering would an organization
+13. Answer aloud, from the page alone: which offering would an organization
     with its own ops team and hardware pick, and which would one with neither
     pick? If the descriptions have not made the difference plain, record it.
-13. Confirm the offerings are described and nothing more: no prices, no
+14. Confirm the offerings are described and nothing more: no prices, no
     payment method, no checkout, no plan-selection control, and no signup
     path. The only actionable thing near them is the link to the interest
     form.
-14. Search the whole page for a route into self-service organization
+15. Search the whole page for a route into self-service organization
     creation. There must be none — creating an organization stays a God Mode
     action (PUBLIC-004).
 
 ### D. Acting on it
 
-15. From the end of the feature tour, follow the "tell us about your
+16. From the end of the feature tour, follow the "tell us about your
     organization" link. Confirm it lands on the interest form on the same
     page.
-16. Do the same from the offerings section.
-17. Fill the form in and submit it as `QA-PUBLIC-02` section B describes.
+17. Do the same from the offerings section.
+18. Fill the form in and submit it as `QA-PUBLIC-02` section B describes.
     Confirm the thank-you replaces the form. The form's own behavior — what
     the submission creates, the traps, the limits — is covered there and is
     not re-verified here; what this script confirms is that a reader who just
@@ -138,7 +139,7 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
 
 ### E. The gate, in one sitting
 
-18. Hand the page to somebody who has not seen Meridian before, with no
+19. Hand the page to somebody who has not seen Meridian before, with no
     explanation. Confirm they can say what the platform does, name a feature
     that matters to them from the tour, say how the three offerings differ,
     and find where to express interest — without leaving the page or asking
@@ -147,8 +148,10 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
 ## Expected results
 
 - The landing page at the deployment root explains the platform and
-  introduces each major feature area with a Northwood screenshot and a
-  description (PUBLIC-007, PUBLIC-008).
+  introduces each major feature area with a description, labelled
+  micro-features, and a Northwood screenshot (PUBLIC-007, PUBLIC-008) — from
+  both sides, with a working perspective switch, wherever the product has a
+  real second surface.
 - The fictional-organization statement is on the page ahead of the
   screenshots, and no real organization's data appears in any of them.
 - Every screenshot carries descriptive alt text.
@@ -167,7 +170,7 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
   screenshots.
 - A note recording the PUBLIC-008 review: who looked at the eight committed
   screenshots, when, and that nothing from a real organization appears.
-- The step 18 reader's answers, roughly transcribed.
+- The step 19 reader's answers, roughly transcribed.
 
 ## Failure notes
 
@@ -181,6 +184,6 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
   tour catalogue disagree; the client test suite's asset presence check
   should have caught it, so a broken image here means the build under test
   and the tested tree differ.
-- If the step 18 reader cannot answer one of the four questions, the copy has
+- If the step 19 reader cannot answer one of the four questions, the copy has
   failed PUBLIC-007 or PUBLIC-009 even though every element is present;
   record what they could not answer.
