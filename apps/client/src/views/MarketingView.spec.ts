@@ -96,6 +96,20 @@ describe("the public marketing surface", () => {
     expect(wrapper.text()).not.toContain("Tell us about your organization");
   });
 
+  /*
+   * The unreachable notice is the first thing a fresh packaged install shows —
+   * its default node is a localhost no phone answers — and "Try again" against
+   * a node that was never set is a loop. The way out is the node connection
+   * panel in Settings (QA-PKG-01 step 13).
+   */
+  it("offers the node setup door when nothing answered", async () => {
+    getMarketingSurface.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const wrapper = await mountSurface();
+
+    expect(wrapper.text()).toContain("Connect this device to a node");
+  });
+
   /** PUBLIC-002, PUBLIC-003. */
   it("sends the four fields and the node's form token", async () => {
     const wrapper = await mountSurface();

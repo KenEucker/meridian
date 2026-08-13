@@ -53,6 +53,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/*
+ * The node connection panel in Settings (QA-PKG-01 step 13). On a packaged app
+ * this is the door into the product — a device that has not been pointed at a
+ * node cannot sign in — so Settings carries the panel behind an "Advanced"
+ * disclosure rather than leaving it only on the readiness screen.
+ */
+describe("Settings node connection", () => {
+  it("holds the node connection panel behind the Advanced disclosure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+
+    const wrapper = await mountDiagnostics();
+    const disclosure = wrapper.get("#node-connection");
+
+    expect(disclosure.text()).toContain("Advanced: node connection");
+    expect(disclosure.text()).toContain("Use this node");
+  });
+});
+
 describe("Device diagnostics operational health", () => {
   it("does not claim the sync target is reachable while the node is not answering", async () => {
     // The device has a network throughout. That is the case: wifi is fine and

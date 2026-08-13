@@ -94,6 +94,18 @@ describe("requiring sign-in", () => {
     expect(requiresSignIn("not-found")).toBe(false);
   });
 
+  /*
+   * The packaged Field and desktop apps must be pointed at a node before they
+   * can sign in at all (QA-PKG-01 step 13; technical spec 26.5's direct-install
+   * path). Gating the surfaces that hold the node connection panel behind
+   * sign-in left a fresh install with no door in: Settings bounced to a login
+   * that had no node to ask.
+   */
+  it("leaves the device setup surfaces reachable", () => {
+    expect(requiresSignIn("settings.about")).toBe(false);
+    expect(requiresSignIn("readiness")).toBe(false);
+  });
+
   it("lets a client holding a token through", () => {
     configureMeridianApi({
       baseUrl: "http://node.test",

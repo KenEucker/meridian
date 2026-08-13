@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { meridianAppConfig } from "@/app/appConfig";
+import { nodeConnection } from "@/app/nodeConnection";
 import {
   apiLoginState,
   requestLoginCode,
@@ -33,6 +34,14 @@ const productName = meridianAppConfig.productName;
 const canSubmit = computed(
   () => email.value.trim() !== "" && !apiLoginState.requesting,
 );
+/*
+ * Whether to offer the node setup door (QA-PKG-01 step 13). `servedUrl` is
+ * null exactly on the packaged clients, where this screen can be reached
+ * before the device has been pointed at any node — and a login code request
+ * sent to no node is a screen that can only fail. A browser client was served
+ * by its node and needs no door.
+ */
+const offerNodeSetup = computed(() => nodeConnection.value.servedUrl === null);
 
 async function submit(): Promise<void> {
   if (!canSubmit.value) {
@@ -93,6 +102,15 @@ async function submit(): Promise<void> {
       <p class="login__alternate">
         Already have a code?
         <RouterLink :to="{ name: 'auth.code.entry' }">Enter it here</RouterLink>.
+      </p>
+
+      <p v-if="offerNodeSetup" class="login__alternate">
+        Sign-in asks your Meridian node for the code. If this device has not
+        been connected to one yet,
+        <RouterLink :to="{ name: 'settings.about', hash: '#node-connection' }"
+          >connect it to a node</RouterLink
+        >
+        first.
       </p>
     </template>
   </section>

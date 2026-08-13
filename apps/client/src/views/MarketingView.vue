@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
+import { nodeConnection } from "@/app/nodeConnection";
 import {
   connectionRequiredMessage,
   nodeDidNotAnswer,
@@ -61,6 +62,12 @@ const surface = ref<MarketingSurfaceAvailability | null>(null);
 const loading = ref(true);
 /** Whether nothing answered, as opposed to a node saying it does not serve this. */
 const unreachable = ref(false);
+/*
+ * Whether the unreachable notice offers the node setup door. `servedUrl` is
+ * null exactly on the packaged clients — a browser client was served by its
+ * node, and its remedy is the node coming back, not a different node.
+ */
+const offerNodeSetup = computed(() => nodeConnection.value.servedUrl === null);
 
 const organizationName = ref("");
 const contactName = ref("");
@@ -257,6 +264,20 @@ onMounted(() => {
         )
       }}
       <button type="button" @click="load">Try again</button>
+      <!--
+        The way out for a packaged app holding no node yet: this notice is the
+        first thing a fresh install shows, and retrying against a node that was
+        never set is a loop. Offered only when no node served this client — a
+        browser whose serving node stopped answering cannot be helped by
+        pointing elsewhere (QA-PKG-01 step 13).
+      -->
+      <RouterLink
+        v-if="offerNodeSetup"
+        class="marketing__notice-connect"
+        :to="{ name: 'settings.about', hash: '#node-connection' }"
+      >
+        Connect this device to a node
+      </RouterLink>
     </p>
 
     <template v-else-if="surface !== null">
@@ -1054,6 +1075,18 @@ onMounted(() => {
 
 .marketing__error {
   border-color: var(--m-status-danger, #cc792f);
+}
+
+.marketing__notice-connect {
+  display: inline-block;
+  margin-inline-start: var(--m-space-2, 0.5rem);
+  color: inherit;
+  font-weight: 700;
+}
+
+.marketing__notice-connect:focus-visible {
+  outline: 2px solid var(--m-focus-ring, #8d8371);
+  outline-offset: 2px;
 }
 
 .marketing__form {
