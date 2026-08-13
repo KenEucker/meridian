@@ -28,8 +28,9 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { networkInterfaces } from "node:os";
+import { createSocket } from "node:dgram";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -88,7 +89,7 @@ function run(label, command, args) {
 }
 
 let stopping = false;
-let dockerProxyStarted = false;
+const dockerContainersStarted = [];
 
 function stop(code) {
   if (stopping) {
@@ -98,11 +99,11 @@ function stop(code) {
 
   /*
    * Killing the docker CLI does not reliably kill the container it attached,
-   * so the container is removed by name — which also clears the way for the
+   * so containers are removed by name — which also clears the way for the
    * next run.
    */
-  if (dockerProxyStarted) {
-    spawnSync("docker", ["rm", "-f", DOCKER_PROXY_NAME], { stdio: "ignore" });
+  for (const name of dockerContainersStarted) {
+    spawnSync("docker", ["rm", "-f", name], { stdio: "ignore" });
   }
 
   for (const child of children) {
@@ -115,16 +116,57 @@ function stop(code) {
 process.on("SIGINT", () => stop(0));
 process.on("SIGTERM", () => stop(0));
 
-const lanAddresses = Object.values(networkInterfaces())
-  .flat()
-  .filter((entry) => entry && entry.family === "IPv4" && !entry.internal)
-  .map((entry) => entry.address);
+/*
+ * The address the network should answer `meridian.home.arpa` with — detected
+ * at start, every start, because it is a fact about the network this machine
+ * is standing on right now. A connected UDP socket reports which local
+ * address routes toward the internet, which is the interface phones share;
+ * reading the interface list instead would offer the WSL and Hyper-V adapters
+ * as equals, and a DNS record pointing at one of those answers nobody.
+ */
+function detectLanAddress() {
+  return new Promise((resolveAddress) => {
+    const probe = createSocket("udp4");
+
+    probe.once("error", () => {
+      probe.close();
+      resolveAddress(null);
+    });
+
+    probe.connect(53, "8.8.8.8", () => {
+      const { address } = probe.address();
+      probe.close();
+      resolveAddress(address);
+    });
+  });
+}
+
+const lanAddress =
+  (await detectLanAddress()) ??
+  (Object.values(networkInterfaces())
+    .flat()
+    .find((entry) => entry && entry.family === "IPv4" && !entry.internal)
+    ?.address ??
+    null);
+
+if (lanAddress === null) {
+  console.error(
+    "No usable network address found; a phone cannot reach this machine. " +
+      "Connect to the network the devices are on and rerun.",
+  );
+  process.exit(1);
+}
+
+const withDns = process.argv.includes("--with-dns");
 
 console.log("Starting a local Meridian node on the on-site convention names.");
 console.log("");
-console.log("  This machine's LAN addresses: " + (lanAddresses.join(", ") || "(none found)"));
-console.log("  Point the network's DNS record for meridian.home.arpa at one of them");
-console.log("  (router local-DNS entry, or deploy/dns/onsite-dnsmasq.conf).");
+console.log(`  This machine's address on the current network: ${lanAddress}`);
+if (!withDns) {
+  console.log("  Point the network's DNS record for meridian.home.arpa at it");
+  console.log("  (router local-DNS entry, or deploy/dns/onsite-dnsmasq.conf) —");
+  console.log("  or rerun with --with-dns and this machine answers the name itself.");
+}
 console.log("  For this machine's own browser, a hosts-file line does it:");
 console.log("      127.0.0.1 meridian.home.arpa");
 console.log("");
@@ -141,17 +183,20 @@ run("The Meridian server", "php", [
 ]);
 
 const DOCKER_PROXY_NAME = "meridian-local-node-proxy";
+const DOCKER_DNS_NAME = "meridian-local-node-dns";
 
 /** Whether the Docker daemon is up, not merely whether a CLI is installed. */
 function dockerAvailable() {
   return spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;
 }
 
-if (dockerAvailable()) {
+const dockerIsUp = dockerAvailable();
+
+if (dockerIsUp) {
   // A previous run that died without cleanup would otherwise block the name.
   spawnSync("docker", ["rm", "-f", DOCKER_PROXY_NAME], { stdio: "ignore" });
 
-  dockerProxyStarted = true;
+  dockerContainersStarted.push(DOCKER_PROXY_NAME);
   run("Caddy (Docker)", "docker", [
     "run",
     "--rm",
@@ -183,4 +228,71 @@ if (dockerAvailable()) {
     "--config",
     join("deploy", "caddy", "Caddyfile.home-arpa"),
   ]);
+}
+
+/*
+ * `--with-dns`: this machine answers `meridian.home.arpa` itself, for
+ * networks whose router cannot serve local DNS records (Starlink's and
+ * Google's can't). CoreDNS in Docker answers the convention names with this
+ * machine's address and forwards everything else, so a phone pointed at this
+ * machine for DNS loses nothing.
+ *
+ * Bound to the detected LAN address, not the wildcard: Windows Internet
+ * Connection Sharing — which WSL2 and therefore Docker Desktop depend on —
+ * holds 0.0.0.0:53/udp, and a wildcard listener beside it receives nothing.
+ * UDP only, because Docker's port proxy refuses the TCP half on some
+ * machines and phones resolve over UDP.
+ *
+ * Opt-in rather than default: taking over a network's name resolution is a
+ * decision, not a side effect.
+ */
+if (withDns) {
+  if (!dockerIsUp) {
+    console.error("--with-dns needs Docker running; start Docker Desktop and rerun.");
+    stop(1);
+  }
+
+  const corefile = join(mkdtempSync(join(tmpdir(), "meridian-dns-")), "Corefile");
+  writeFileSync(
+    corefile,
+    [
+      "home.arpa {",
+      "    hosts {",
+      `        ${lanAddress} meridian.home.arpa`,
+      `        ${lanAddress} meridian2.home.arpa`,
+      `        ${lanAddress} meridian3.home.arpa`,
+      "        fallthrough",
+      "    }",
+      "}",
+      ". {",
+      "    forward . 1.1.1.1 8.8.8.8",
+      "    cache 30",
+      "}",
+      "",
+    ].join("\n"),
+  );
+
+  spawnSync("docker", ["rm", "-f", DOCKER_DNS_NAME], { stdio: "ignore" });
+
+  dockerContainersStarted.push(DOCKER_DNS_NAME);
+  run("CoreDNS (Docker)", "docker", [
+    "run",
+    "--rm",
+    "--name",
+    DOCKER_DNS_NAME,
+    "-p",
+    `${lanAddress}:53:53/udp`,
+    "-v",
+    `${corefile.replaceAll("\\", "/")}:/Corefile:ro`,
+    "coredns/coredns:latest",
+    "-conf",
+    "/Corefile",
+  ]);
+
+  console.log("");
+  console.log(`  DNS is up: point the phone's Wi-Fi DNS at ${lanAddress} and it will`);
+  console.log("  resolve meridian.home.arpa here. Allow inbound UDP 53 once, from an");
+  console.log("  administrator terminal:");
+  console.log('      netsh advfirewall firewall add rule name="Meridian local DNS" dir=in action=allow protocol=UDP localport=53');
+  console.log("");
 }

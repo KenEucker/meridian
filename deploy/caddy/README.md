@@ -150,10 +150,23 @@ finds on its own:
    `MERIDIAN_LOCAL_UPSTREAM` set if the server is not at `127.0.0.1:8000`.
 3. **Answer the name** — something on the network must resolve
    `meridian.home.arpa` to this machine. On the laptop itself, one hosts-file
-   line covers browser testing: `127.0.0.1 meridian.home.arpa`. For phones, the
-   network's DNS answers: the dnsmasq fragment in `deploy/dns` carries the
-   records, or add the same A record in the router's local-DNS settings. A
-   hosts file on the phone is not an option, which is why the DNS half exists.
+   line covers browser testing: `127.0.0.1 meridian.home.arpa`. For phones,
+   pick whichever of these the network allows:
+   - **The router answers** — add the A record in the router's local-DNS
+     settings, or drop the dnsmasq fragment from `deploy/dns` onto a router
+     that runs dnsmasq. Best where possible: every device benefits with no
+     per-device setup.
+   - **This machine answers** — `corepack pnpm run node:local:dns` also runs
+     CoreDNS in Docker (official image, UDP 53 on the LAN address only),
+     answering the convention names with this machine's address and
+     forwarding everything else. For routers that cannot serve local records
+     at all — Starlink and Google Wifi among them. Point the phone's Wi-Fi
+     DNS (or the router's DHCP DNS, where settable) at this machine, and
+     allow inbound UDP 53 through the Windows firewall once; the script
+     prints the exact rule.
+
+   A hosts file on the phone is not an option, which is why the DNS half
+   exists at all.
 
 A Field app on that network then discovers the node at boot with no manual
 settings — the zero-configuration path QA-PKG-01 exercises against a real

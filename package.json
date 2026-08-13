@@ -87,6 +87,7 @@
     "kiosk:test": "corepack pnpm --filter @meridian/kiosk run test",
     "kiosk:workstation": "node scripts/dev/start-shared-workstation.mjs",
     "node:local": "node scripts/dev/start-local-node.mjs",
+    "node:local:dns": "node scripts/dev/start-local-node.mjs --with-dns",
     "kiosk:workstation:codes": "php apps/server/artisan meridian:shared-workstation",
     "release:check": "node scripts/release/validate-release-workflow.mjs",
     "release:bundle": "node scripts/release/package-deployment-bundle.mjs",
