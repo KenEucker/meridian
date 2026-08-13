@@ -30,9 +30,10 @@ On Windows, open Git Bash in the repository and run this command there so the sa
 | [`QA-RC-02-install-deployment-dry-run.md`](QA-RC-02-install-deployment-dry-run.md) | The second-person install/deployment dry run: a person who is not an author of the install/deployment documentation stands up a `standalone` node from a clean machine using only what the documents say, with the author allowed to watch and not to help; and the M19.7 evidence form the section 20 "tested by a second person" line is checked from — who and when, starting state, documents and versions followed, the per-step log with stuck points and how each was resolved, a secrets-free command transcript, arrival proof over HTTPS, verdict, and filed documentation issues | M19.7 |
 | [`QA-PKG-01-packaged-application-install.md`](QA-PKG-01-packaged-application-install.md) | The packaged-install half of the milestone 19 QA gate: each desktop installer installed on its own OS and Meridian Field installed from TestFlight, the Play internal testing track, and the direct APK on a device with no route to the Play Store; every install launched and its Settings Versions section held to the M19.1 metadata (app version, UI mode, deployment target) at the one root version; the installed Kiosk opening fullscreen with the health panel reachable and filled from a configured node; the installed Field app signing in and operating against an on-site node; and the unsigned first-run trust warning each desktop OS actually shows recorded against `docs/process/release-packaging.md`, so the install document and reality agree | M19.25 |
 
-`QA-MOD-01-organization-modules.md` (M19.19) and `QA-PUBLIC-01` (M20.6) enter
-the index's run table when they land; until then the index records them as
-blocking a release candidate rather than omitting them.
+`QA-MOD-01-organization-modules.md` (M19.19) enters the index's run table when
+it lands; until then the index records it as blocking a release candidate
+rather than omitting it. `QA-PUBLIC-01` (M20.6) landed and is in the run
+table.
 
 ## Alpha 1 Branding script
 
@@ -222,13 +223,14 @@ Meridian account at all.
 
 | ID | Coverage | Owning task |
 |---|---|---|
+| [`QA-PUBLIC-01-platform-landing-page.md`](QA-PUBLIC-01-platform-landing-page.md) | The platform landing page at the deployment root: what Meridian is and who it serves, legible to a visitor who has never heard of it; the feature tour introducing each major feature area with a committed screenshot of the fictional Northwood scenario and alt text on every one; the on-page statement that no real organization's data appears, and the human review holding the assets to it; the three offerings described with no payment, billing, or signup path and no route into organization creation; and the interest form reachable from the tour and the offerings | M20.6 |
 | [`QA-PUBLIC-02-marketing-surface-and-organization-interest.md`](QA-PUBLIC-02-marketing-surface-and-organization-interest.md) | The public marketing surface at the client root: Meridian identity with no organization branding profile resolved, the home directory still rendered there for a client holding a session, the organization interest form and the inquiry it creates, no organization/user/staff record created by it, God Mode review with no create-organization path, the per-address and per-client submission limits, the hidden-field and form-token traps with no challenge presented, the submission/discard/review audit trail, and the on-site and event-locked nodes that serve none of it | M18.23 |
 
-The landing page itself — the feature tour, the Northwood screenshots, and the
-three platform offerings (PUBLIC-007 through PUBLIC-009) — is Milestone 20's,
-and its coverage arrives with it as `QA-PUBLIC-01`. That ID is left free here
-because M20.6 names the file it belongs to; this script is numbered second
-because the surface it covers was built first.
+`QA-PUBLIC-01` covers what Milestone 20 put on the page; `QA-PUBLIC-02` covers
+the surface and the form underneath it, and is numbered second because the
+surface it covers was built first. The screenshot recapture process the first
+script reviews the output of is
+`docs/process/marketing-screenshot-recapture.md`.
 
 ## Alpha 1 Department self-administration script
 

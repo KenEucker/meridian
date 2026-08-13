@@ -163,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->make(GovernanceWriteGuard::class)->register();
 
         $this->registerKioskRateLimiters();
+        $this->registerLoginCodeRateLimiter();
 
         // Valid node-local database overrides are applied over the (possibly
         // cached) file configuration, so application code keeps reading
@@ -218,6 +219,32 @@ class AppServiceProvider extends ServiceProvider
      * ones AUTH-037 names; these bound how hard one machine may ask before any
      * state is read.
      */
+    /**
+     * Requesting an API login code (AUTH-018; technical spec 11.4).
+     *
+     * Two limits, because the plain per-IP `throttle:5,1` this replaces bounded
+     * the wrong thing: every client behind one address shared one bucket, so a
+     * second person — or a script signing seeded personas in — on the same
+     * machine could refuse a first request that had asked for nothing yet. Now
+     * the address being signed in to has a budget of its own, and the per-client
+     * ceiling above it bounds what one machine can make the mailer do no matter
+     * how many addresses it walks. Requesting a code sends mail, which is why
+     * the per-address budget is the tighter of the two.
+     */
+    private function registerLoginCodeRateLimiter(): void
+    {
+        RateLimiter::for('api-login-code-request', static function (Request $request): array {
+            $email = strtolower(trim((string) $request->input('email')));
+
+            return [
+                Limit::perMinute((int) config('meridian.api_tokens.login_code.requests_per_minute_per_address', 3))
+                    ->by('login-code:address:'.hash('sha256', $request->ip().'|'.$email)),
+                Limit::perMinute((int) config('meridian.api_tokens.login_code.requests_per_minute_per_client', 15))
+                    ->by('login-code:client:'.hash('sha256', (string) $request->ip())),
+            ];
+        });
+    }
+
     private function registerKioskRateLimiters(): void
     {
         $perWorkstation = static function (Request $request, int $perMinute): Limit {

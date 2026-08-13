@@ -603,6 +603,15 @@ watch(
   gap: var(--m-space-2, 0.5rem);
 }
 
+/*
+ * These two set both halves of their colors from the real token pair rather
+ * than inheriting either. The card used to hard-code a white background
+ * through a token name that does not exist (`--m-color-surface`) while
+ * inheriting its text color from the branded page around it — which in the
+ * dark scheme put the organization's light text on a card that stayed white,
+ * and the event names all but disappeared. A surface and its text travel
+ * together or not at all.
+ */
 .participate__event,
 .participate__organization-apply {
   width: 100%;
@@ -610,8 +619,8 @@ watch(
   padding: var(--m-space-3, 0.75rem);
   border-radius: var(--m-radius-2, 0.375rem);
   border: 1px solid var(--m-color-border, #d5ddda);
-  background: var(--m-color-surface, #ffffff);
-  color: inherit;
+  background: var(--m-surface-raised, #ffffff);
+  color: var(--m-text-primary, #151a1f);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -627,7 +636,7 @@ watch(
 }
 
 .participate__event-dates {
-  color: var(--m-color-muted-foreground, #5b6b66);
+  color: var(--m-text-muted, #5f665f);
   font-size: 0.9rem;
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import { meridianErrorMessage } from "@/api/meridianApi";
@@ -12,6 +12,11 @@ import {
   submitOrganizationInterest,
   type MarketingSurfaceAvailability,
 } from "@/marketing/marketingModel";
+import {
+  MARKETING_FEATURE_TOUR,
+  type MarketingTourPerspective,
+  type MarketingTourSection,
+} from "@/marketing/marketingTour";
 
 /**
  * `public.marketing` — Meridian describing itself (M18.23; PUBLIC-001 through
@@ -37,9 +42,18 @@ import {
  *     to sign in when the answer is no, rather than advertising a platform on a
  *     laptop that is running somebody's event.
  *
- * The feature tour, its screenshots of the seeded example organization, and the
- * descriptions of the three platform offerings (PUBLIC-007 through PUBLIC-009)
- * are Milestone 20's, and are deliberately absent rather than stubbed.
+ * Milestone 20 made this the platform landing page (PUBLIC-007 through
+ * PUBLIC-009): the feature tour walks each major feature area with a committed
+ * screenshot of the seeded Northwood scenario, the offerings section describes
+ * the three ways an organization can run Meridian, and both end at the same
+ * place — the interest form that was already here. The offerings are
+ * descriptive on purpose: there is no price, no checkout, and no signup path,
+ * because organization creation stays a deliberate God Mode act (PUBLIC-004).
+ *
+ * Every screenshot opens larger in an in-page viewer, because a screenshot
+ * small enough to sit in a column is too small to actually read an interface
+ * in. The viewer is this page's own dialog rather than a new tab: the visitor
+ * stays where they were, and Escape or a click puts them back.
  */
 const emit = defineEmits<{ (event: "unavailable"): void }>();
 
@@ -64,6 +78,44 @@ const trapValue = ref("");
 const submitting = ref(false);
 const submitted = ref(false);
 const submitError = ref<string | null>(null);
+
+/**
+ * Which side of each two-sided feature is showing, by feature id. A feature
+ * with no entry shows its first perspective — the lead/organizer side, by the
+ * catalogue's ordering convention.
+ */
+const perspectiveChoice = ref<Record<string, string>>({});
+
+function activePerspective(
+  feature: MarketingTourSection,
+): MarketingTourPerspective {
+  const chosen = perspectiveChoice.value[feature.id];
+
+  return (
+    feature.perspectives.find((perspective) => perspective.id === chosen) ??
+    feature.perspectives[0]
+  );
+}
+
+function choosePerspective(featureId: string, perspectiveId: string): void {
+  perspectiveChoice.value = {
+    ...perspectiveChoice.value,
+    [featureId]: perspectiveId,
+  };
+}
+
+/** What the screenshot viewer is showing, and who opened it. */
+interface EnlargedShot {
+  readonly title: string;
+  readonly label: string;
+  readonly screenshot: string;
+  readonly screenshotAlt: string;
+}
+
+const enlarged = ref<EnlargedShot | null>(null);
+let enlargedOpener: HTMLElement | null = null;
+
+const viewerClose = ref<HTMLButtonElement | null>(null);
 
 const canSubmit = computed(
   () =>
@@ -152,6 +204,42 @@ async function submit(): Promise<void> {
   }
 }
 
+async function openShot(
+  feature: MarketingTourSection,
+  event: Event,
+): Promise<void> {
+  const perspective = activePerspective(feature);
+
+  enlargedOpener =
+    event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  enlarged.value = {
+    title: feature.title,
+    label: perspective.label,
+    screenshot: perspective.screenshot,
+    screenshotAlt: perspective.screenshotAlt,
+  };
+
+  // The page behind the dialog holds still while the dialog is up.
+  document.documentElement.style.overflow = "hidden";
+
+  await nextTick();
+  viewerClose.value?.focus();
+}
+
+function closeShot(): void {
+  enlarged.value = null;
+  document.documentElement.style.overflow = "";
+
+  // Focus goes back to the screenshot that was opened, so a keyboard reader
+  // resumes the tour where they left it rather than at the top of the page.
+  enlargedOpener?.focus();
+  enlargedOpener = null;
+}
+
+onBeforeUnmount(() => {
+  document.documentElement.style.overflow = "";
+});
+
 onMounted(() => {
   void load();
 });
@@ -177,41 +265,220 @@ onMounted(() => {
         <span class="marketing__product">Meridian</span>
       </header>
 
-      <h1 id="marketing-heading" class="marketing__heading">
-        Run your event's volunteer operations in one place
-      </h1>
-      <p class="marketing__lede">
-        Meridian is the operations system for organizations that staff events
-        with volunteers. Intake and applications, departments and teams, shifts
-        and signup, check-in and hours, equipment, policies, and incident
-        command all live in one place, so the people running an event are
-        working from the same record rather than from four spreadsheets and a
-        group chat.
-      </p>
+      <section class="marketing__hero" aria-labelledby="marketing-heading">
+        <p class="marketing__eyebrow">The volunteer operations platform</p>
+        <h1 id="marketing-heading" class="marketing__heading">
+          Run your event's volunteer operations in one place
+        </h1>
+        <p class="marketing__lede">
+          Meridian is the operations system for organizations that staff events
+          with volunteers. Intake and applications, departments and teams,
+          shifts and signup, check-in and hours, equipment, policies, and
+          incident command all live in one place, so the people running an
+          event are working from the same record rather than from four
+          spreadsheets and a group chat.
+        </p>
 
-      <section class="marketing__section" aria-labelledby="marketing-who">
-        <h2 id="marketing-who">Who it is for</h2>
-        <p>
-          Organizations that put on events staffed by volunteers: festivals and
-          gatherings, community organizations, mutual aid and safety crews, and
-          the departments inside them — rangers, gate, logistics, medical,
-          dispatch, and whoever else your event calls them.
+        <p class="marketing__hero-actions">
+          <a
+            v-if="!submitted"
+            class="marketing__cta marketing__cta--primary"
+            href="#marketing-interest"
+            >Tell us about your organization</a
+          >
+          <a class="marketing__cta marketing__cta--quiet" href="#marketing-tour"
+            >See what it does</a
+          >
+        </p>
+
+        <ul class="marketing__badges" aria-label="What sets Meridian apart">
+          <li>Keeps working offline</li>
+          <li>Free and open source</li>
+          <li>Runs where your event is</li>
+        </ul>
+      </section>
+
+      <div class="marketing__pair">
+        <section class="marketing__card" aria-labelledby="marketing-who">
+          <h2 id="marketing-who">Who it is for</h2>
+          <p>
+            Organizations that put on events staffed by volunteers: festivals
+            and gatherings, community organizations, mutual aid and safety
+            crews, and the departments inside them — rangers, gate, logistics,
+            medical, dispatch, and whoever else your event calls them.
+          </p>
+        </section>
+
+        <section class="marketing__card" aria-labelledby="marketing-field">
+          <h2 id="marketing-field">Built for the field, not just the office</h2>
+          <p>
+            Events happen where connectivity is worst. Meridian runs on a node
+            you can take to the site, keeps working while it is offline, and
+            syncs back when it is not. It is free and open source, and you can
+            host it yourself.
+          </p>
+        </section>
+      </div>
+
+      <section class="marketing__tour" aria-labelledby="marketing-tour">
+        <header class="marketing__section-head">
+          <p class="marketing__eyebrow">Feature tour</p>
+          <h2 id="marketing-tour">What Meridian does</h2>
+          <p class="marketing__quiet">
+            Every screenshot below shows Northwood Collective, the fictional
+            example organization Meridian's own development runs against. No
+            real organization's data appears on this page. Select any
+            screenshot to see more of the interface.
+          </p>
+        </header>
+
+        <section
+          v-for="(feature, index) in MARKETING_FEATURE_TOUR"
+          :key="feature.id"
+          class="marketing__feature"
+          :aria-labelledby="`marketing-feature-${feature.id}`"
+        >
+          <div class="marketing__feature-copy">
+            <p class="marketing__eyebrow" aria-hidden="true">
+              {{ String(index + 1).padStart(2, "0") }}
+            </p>
+            <h3 :id="`marketing-feature-${feature.id}`">{{ feature.title }}</h3>
+            <p>{{ feature.description }}</p>
+
+            <div
+              v-if="feature.perspectives.length > 1"
+              class="marketing__perspectives"
+              role="group"
+              :aria-label="`${feature.title}: choose a side`"
+            >
+              <button
+                v-for="perspective in feature.perspectives"
+                :key="perspective.id"
+                type="button"
+                class="marketing__perspective"
+                :class="{
+                  'marketing__perspective--active':
+                    activePerspective(feature).id === perspective.id,
+                }"
+                :aria-pressed="activePerspective(feature).id === perspective.id"
+                @click="choosePerspective(feature.id, perspective.id)"
+              >
+                {{ perspective.label }}
+              </button>
+            </div>
+            <p v-else class="marketing__perspective-label">
+              {{ feature.perspectives[0].label }}
+            </p>
+
+            <ul class="marketing__micro">
+              <li
+                v-for="micro in activePerspective(feature).microFeatures"
+                :key="micro"
+              >
+                {{ micro }}
+              </li>
+            </ul>
+          </div>
+
+          <button
+            :key="activePerspective(feature).id"
+            type="button"
+            class="marketing__shot"
+            :aria-label="`View larger — ${feature.title} (${activePerspective(feature).label})`"
+            @click="openShot(feature, $event)"
+          >
+            <img
+              class="marketing__screenshot"
+              :src="activePerspective(feature).screenshot"
+              :alt="activePerspective(feature).screenshotAlt"
+              loading="lazy"
+              width="1280"
+              height="800"
+            />
+            <span class="marketing__shot-hint" aria-hidden="true">
+              Click to enlarge
+            </span>
+          </button>
+        </section>
+
+        <p v-if="!submitted" class="marketing__tour-close">
+          <a class="marketing__cta marketing__cta--primary" href="#marketing-interest"
+            >Sound like your events? Tell us about your organization.</a
+          >
         </p>
       </section>
 
-      <section class="marketing__section" aria-labelledby="marketing-field">
-        <h2 id="marketing-field">Built for the field, not just the office</h2>
-        <p>
-          Events happen where connectivity is worst. Meridian runs on a node you
-          can take to the site, keeps working while it is offline, and syncs
-          back when it is not. It is free and open source, and you can host it
-          yourself.
+      <section
+        class="marketing__offerings-section"
+        aria-labelledby="marketing-offerings"
+      >
+        <header class="marketing__section-head">
+          <p class="marketing__eyebrow">Offerings</p>
+          <h2 id="marketing-offerings">Three ways to run it</h2>
+        </header>
+
+        <div class="marketing__offerings">
+          <section
+            class="marketing__offering"
+            aria-labelledby="marketing-offering-self-hosted"
+          >
+            <h3 id="marketing-offering-self-hosted">Self-hosted</h3>
+            <p class="marketing__offering-for">
+              For organizations with their own hardware and their own ops
+              people.
+            </p>
+            <p>
+              Meridian is free and open source. Run it on your own hardware, on
+              your own terms, with every feature and no fee — the source is
+              yours to read and the deployment is yours to keep.
+            </p>
+          </section>
+
+          <section
+            class="marketing__offering"
+            aria-labelledby="marketing-offering-self-starter"
+          >
+            <h3 id="marketing-offering-self-starter">Hosted self-starter</h3>
+            <p class="marketing__offering-for">
+              For organizations that want the hosting handled and the running
+              kept in-house.
+            </p>
+            <p>
+              We host Meridian for your organization and you run it yourselves,
+              without support, at a lower fee than the managed offering. The
+              platform stays up; the operating stays yours.
+            </p>
+          </section>
+
+          <section
+            class="marketing__offering marketing__offering--managed"
+            aria-labelledby="marketing-offering-managed"
+          >
+            <h3 id="marketing-offering-managed">Hosted and managed</h3>
+            <p class="marketing__offering-for">
+              For organizations that want the system to be somebody else's job.
+            </p>
+            <p>
+              Fully hosted with full support — setup, operations, and an
+              on-site technician at your event, so the system is somebody
+              else's job while the event is yours.
+            </p>
+          </section>
+        </div>
+
+        <p class="marketing__quiet">
+          There is nothing to buy on this page, and no signup to click through.
+          Every offering starts the same way:
+          <a v-if="!submitted" href="#marketing-interest"
+            >tell us about your organization</a
+          ><span v-else>tell us about your organization</span>
+          and somebody will get back to you.
         </p>
       </section>
 
       <section
         v-if="submitted"
-        class="marketing__section"
+        class="marketing__card marketing__interest"
         aria-labelledby="marketing-thanks"
       >
         <h2 id="marketing-thanks">Thank you</h2>
@@ -229,9 +496,10 @@ onMounted(() => {
 
       <section
         v-else
-        class="marketing__section"
+        class="marketing__card marketing__interest"
         aria-labelledby="marketing-interest"
       >
+        <p class="marketing__eyebrow">Get in touch</p>
         <h2 id="marketing-interest">Tell us about your organization</h2>
         <p class="marketing__quiet">
           Writing in creates nothing and signs you up for nothing. It reaches
@@ -315,25 +583,59 @@ onMounted(() => {
         </form>
       </section>
 
-      <section class="marketing__section" aria-labelledby="marketing-already">
+      <section class="marketing__signin" aria-labelledby="marketing-already">
         <h2 id="marketing-already">Already working an event?</h2>
         <p>
           <RouterLink :to="{ name: 'login' }">Sign in</RouterLink> if your
           organization already uses this deployment.
         </p>
       </section>
+
+      <!--
+        The screenshot viewer. Same committed asset, shown at the size it was
+        captured at, so "see more of the interface" costs one click and zero
+        extra requests to anything.
+      -->
+      <div
+        v-if="enlarged !== null"
+        class="marketing__viewer"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="`${enlarged.title} — screenshot`"
+        @click.self="closeShot"
+        @keydown.esc="closeShot"
+      >
+        <figure class="marketing__viewer-body">
+          <button
+            ref="viewerClose"
+            type="button"
+            class="marketing__viewer-close"
+            aria-label="Close screenshot viewer"
+            @click="closeShot"
+          >
+            ×
+          </button>
+          <img :src="enlarged.screenshot" :alt="enlarged.screenshotAlt" />
+          <figcaption>
+            <strong>{{ enlarged.title }} — {{ enlarged.label }}.</strong>
+            {{ enlarged.screenshotAlt }}
+          </figcaption>
+        </figure>
+      </div>
     </template>
   </main>
 </template>
 
 <style scoped>
 .marketing {
-  max-width: 42rem;
+  max-width: 64rem;
   margin: 0 auto;
   padding: var(--m-space-6, 1.5rem);
   display: flex;
   flex-direction: column;
-  gap: var(--m-space-4, 1rem);
+  gap: var(--m-space-8, 2rem);
+  font-family: var(--m-font-body, system-ui, sans-serif);
+  color: var(--m-text-primary, #151a1f);
 }
 
 .marketing__masthead {
@@ -345,9 +647,9 @@ onMounted(() => {
 .marketing__mark {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: var(--m-radius-2, 0.375rem);
-  background: var(--m-color-primary, #2f5d50);
-  color: var(--m-color-surface, #ffffff);
+  border-radius: var(--m-radius-sm, 0.375rem);
+  background: var(--m-platform-primary, #475157);
+  color: var(--m-text-inverse, #fffcf6);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -358,49 +660,423 @@ onMounted(() => {
   font-size: 1.15rem;
 }
 
+/* ---- Hero ------------------------------------------------------------- */
+
+.marketing__hero {
+  padding: var(--m-space-8, 2rem) var(--m-space-6, 1.5rem);
+  border-radius: var(--m-radius-lg, 0.875rem);
+  background:
+    radial-gradient(
+      110% 160% at 85% -20%,
+      color-mix(in srgb, var(--m-platform-tertiary, #a58667) 18%, transparent),
+      transparent 60%
+    ),
+    color-mix(
+      in srgb,
+      var(--m-platform-secondary, #6b7562) 10%,
+      var(--m-surface-base, #fffcf6)
+    );
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-4, 1rem);
+}
+
+.marketing__eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--m-platform-secondary, #6b7562);
+}
+
 .marketing__heading {
   margin: 0;
-  font-size: 1.6rem;
-  line-height: 1.25;
+  font-family: var(--m-font-heading, inherit);
+  font-size: clamp(1.9rem, 4.5vw, 2.9rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
 }
 
-.marketing__lede,
-.marketing__section p {
+.marketing__lede {
   margin: 0;
+  max-width: 60ch;
+  font-size: 1.08rem;
+  line-height: 1.6;
 }
 
-.marketing__quiet {
-  color: var(--m-color-muted-foreground, #5b6b66);
-  font-size: 0.925rem;
+.marketing__hero-actions {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-3, 0.75rem);
 }
 
-.marketing__section {
+.marketing__cta {
+  display: inline-block;
+  padding: var(--m-space-3, 0.75rem) var(--m-space-5, 1.25rem);
+  border-radius: var(--m-radius-pill, 999px);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.marketing__cta--primary {
+  background: var(--m-action-primary-bg, #475157);
+  color: var(--m-action-primary-text, #fffcf6);
+  box-shadow: var(--m-shadow-sm, 0 1px 2px rgba(21, 26, 31, 0.08));
+}
+
+.marketing__cta--primary:hover {
+  box-shadow: var(--m-shadow-md, 0 4px 12px rgba(21, 26, 31, 0.12));
+}
+
+.marketing__cta--quiet {
+  color: var(--m-text-secondary, #475157);
+  border: 1px solid var(--m-border-default, #8d8371);
+}
+
+.marketing__badges {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-2, 0.5rem);
+}
+
+.marketing__badges li {
+  padding: var(--m-space-1, 0.25rem) var(--m-space-3, 0.75rem);
+  border-radius: var(--m-radius-pill, 999px);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  background: var(--m-surface-base, #fffcf6);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--m-text-secondary, #475157);
+}
+
+/* ---- Prose cards ------------------------------------------------------ */
+
+.marketing__pair {
+  display: grid;
+  gap: var(--m-space-4, 1rem);
+}
+
+@media (min-width: 720px) {
+  .marketing__pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.marketing__card {
+  padding: var(--m-space-6, 1.5rem);
+  border-radius: var(--m-radius-md, 0.625rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  background: var(--m-surface-raised, #fffdf9);
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-3, 0.75rem);
+}
+
+.marketing__card h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.marketing__card p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ---- Feature tour ------------------------------------------------------ */
+
+.marketing__tour,
+.marketing__offerings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-6, 1.5rem);
+}
+
+.marketing__section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+  max-width: 60ch;
+}
+
+.marketing__section-head h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.01em;
+}
+
+.marketing__feature {
+  display: grid;
+  gap: var(--m-space-4, 1rem);
+  align-items: center;
+  padding: var(--m-space-5, 1.25rem);
+  border-radius: var(--m-radius-md, 0.625rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  background: var(--m-surface-raised, #fffdf9);
+}
+
+@media (min-width: 860px) {
+  .marketing__feature {
+    grid-template-columns: minmax(18rem, 2fr) 3fr;
+    gap: var(--m-space-6, 1.5rem);
+  }
+
+  /* Alternate sides so a long scroll reads as a tour, not a table. */
+  .marketing__feature:nth-of-type(even) .marketing__feature-copy {
+    order: 2;
+  }
+}
+
+.marketing__feature-copy {
   display: flex;
   flex-direction: column;
   gap: var(--m-space-2, 0.5rem);
 }
 
-.marketing__section h2 {
+.marketing__feature-copy h3 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+}
+
+.marketing__feature-copy p:not(.marketing__eyebrow) {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.marketing__perspectives {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--m-space-1, 0.25rem);
+  padding: var(--m-space-1, 0.25rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  border-radius: var(--m-radius-pill, 999px);
+  align-self: flex-start;
+  background: var(--m-surface-base, #fffcf6);
+}
+
+.marketing__perspective {
+  border: none;
+  background: none;
+  padding: var(--m-space-1, 0.25rem) var(--m-space-3, 0.75rem);
+  border-radius: var(--m-radius-pill, 999px);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--m-text-secondary, #475157);
+  cursor: pointer;
+}
+
+.marketing__perspective--active {
+  background: var(--m-action-primary-bg, #475157);
+  color: var(--m-action-primary-text, #fffcf6);
+}
+
+.marketing__perspective:focus-visible {
+  outline: 2px solid var(--m-focus-ring, #b35f14);
+  outline-offset: 2px;
+}
+
+.marketing__perspective-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m-platform-secondary, #6b7562);
+}
+
+.marketing__micro {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+}
+
+.marketing__micro li {
+  position: relative;
+  padding-left: var(--m-space-5, 1.25rem);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.marketing__micro li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  background: var(--m-platform-tertiary, #a58667);
+}
+
+.marketing__shot {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  border-radius: var(--m-radius-md, 0.625rem);
+  background: none;
+  cursor: zoom-in;
+  overflow: hidden;
+  box-shadow: var(--m-shadow-sm, 0 1px 2px rgba(21, 26, 31, 0.08));
+  transition: box-shadow 120ms ease;
+}
+
+.marketing__shot:hover,
+.marketing__shot:focus-visible {
+  box-shadow: var(--m-shadow-md, 0 4px 12px rgba(21, 26, 31, 0.12));
+}
+
+.marketing__shot:focus-visible {
+  outline: 2px solid var(--m-focus-ring, #b35f14);
+  outline-offset: 2px;
+}
+
+.marketing__screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.marketing__shot-hint {
+  position: absolute;
+  right: var(--m-space-2, 0.5rem);
+  bottom: var(--m-space-2, 0.5rem);
+  padding: var(--m-space-1, 0.25rem) var(--m-space-2, 0.5rem);
+  border-radius: var(--m-radius-pill, 999px);
+  background: color-mix(in srgb, var(--m-text-primary, #151a1f) 78%, transparent);
+  color: var(--m-text-inverse, #fffcf6);
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.marketing__shot:hover .marketing__shot-hint,
+.marketing__shot:focus-visible .marketing__shot-hint {
+  opacity: 1;
+}
+
+.marketing__tour-close {
+  margin: 0;
+}
+
+/* ---- Offerings --------------------------------------------------------- */
+
+.marketing__offerings {
+  display: grid;
+  gap: var(--m-space-4, 1rem);
+}
+
+@media (min-width: 860px) {
+  .marketing__offerings {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.marketing__offering {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+  padding: var(--m-space-5, 1.25rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+  border-top: 3px solid var(--m-platform-secondary, #6b7562);
+  border-radius: var(--m-radius-md, 0.625rem);
+  background: var(--m-surface-raised, #fffdf9);
+}
+
+.marketing__offering--managed {
+  border-top-color: var(--m-platform-accent, #cc792f);
+}
+
+.marketing__offering h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.marketing__offering p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.marketing__offering-for {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--m-text-muted, #5f665f);
+}
+
+/* ---- Interest form and footer ------------------------------------------ */
+
+.marketing__interest {
+  scroll-margin-top: var(--m-space-6, 1.5rem);
+}
+
+.marketing__signin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+}
+
+.marketing__signin h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.marketing__signin p {
+  margin: 0;
+}
+
+.marketing__quiet {
+  margin: 0;
+  color: var(--m-text-muted, #5f665f);
+  font-size: 0.925rem;
+  line-height: 1.55;
 }
 
 .marketing__notice,
 .marketing__error {
   margin: 0;
   padding: var(--m-space-3, 0.75rem);
-  border-radius: var(--m-radius-2, 0.375rem);
-  border: 1px solid var(--m-color-border, #d5ddda);
+  border-radius: var(--m-radius-sm, 0.375rem);
+  border: 1px solid var(--m-border-default, #8d8371);
 }
 
 .marketing__error {
-  border-color: var(--m-color-danger, #a3352b);
+  border-color: var(--m-status-danger, #cc792f);
 }
 
 .marketing__form {
   display: flex;
   flex-direction: column;
   gap: var(--m-space-3, 0.75rem);
+}
+
+.marketing__form button[type="submit"] {
+  align-self: flex-start;
+  padding: var(--m-space-3, 0.75rem) var(--m-space-6, 1.5rem);
+  border: none;
+  border-radius: var(--m-radius-pill, 999px);
+  background: var(--m-action-primary-bg, #475157);
+  color: var(--m-action-primary-text, #fffcf6);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.marketing__form button[type="submit"]:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .marketing__field {
@@ -416,8 +1092,10 @@ onMounted(() => {
   font: inherit;
   font-weight: 400;
   padding: var(--m-space-2, 0.5rem);
-  border-radius: var(--m-radius-2, 0.375rem);
-  border: 1px solid var(--m-color-border, #d5ddda);
+  border-radius: var(--m-radius-sm, 0.375rem);
+  border: 1px solid var(--m-border-default, #8d8371);
+  background: var(--m-surface-base, #fffcf6);
+  color: inherit;
 }
 
 .marketing__field textarea {
@@ -434,5 +1112,68 @@ onMounted(() => {
   width: 0;
   height: 0;
   overflow: hidden;
+}
+
+/* ---- Screenshot viewer -------------------------------------------------- */
+
+.marketing__viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: var(--m-space-5, 1.25rem);
+  background: color-mix(in srgb, var(--m-text-primary, #151a1f) 72%, transparent);
+}
+
+.marketing__viewer-body {
+  position: relative;
+  margin: 0;
+  max-width: min(90rem, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-2, 0.5rem);
+  padding: var(--m-space-3, 0.75rem);
+  border-radius: var(--m-radius-lg, 0.875rem);
+  background: var(--m-surface-base, #fffcf6);
+  box-shadow: var(--m-shadow-overlay, 0 12px 32px rgba(21, 26, 31, 0.2));
+}
+
+.marketing__viewer-body img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 9rem);
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  border-radius: var(--m-radius-sm, 0.375rem);
+  border: 1px solid var(--m-border-subtle, #d8d2c4);
+}
+
+.marketing__viewer-body figcaption {
+  font-size: 0.9rem;
+  color: var(--m-text-muted, #5f665f);
+  line-height: 1.5;
+}
+
+.marketing__viewer-close {
+  position: absolute;
+  top: var(--m-space-2, 0.5rem);
+  right: var(--m-space-2, 0.5rem);
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--m-border-default, #8d8371);
+  border-radius: var(--m-radius-pill, 999px);
+  background: var(--m-surface-base, #fffcf6);
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.marketing__viewer-close:focus-visible {
+  outline: 2px solid var(--m-focus-ring, #b35f14);
+  outline-offset: 2px;
 }
 </style>

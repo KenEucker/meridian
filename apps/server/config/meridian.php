@@ -386,6 +386,12 @@ return [
         'login_code' => [
             'expires_minutes' => (int) env('MERIDIAN_API_LOGIN_CODE_EXPIRES_MINUTES', 15),
             'attempt_limit' => (int) env('MERIDIAN_API_LOGIN_CODE_ATTEMPT_LIMIT', 5),
+            // Request-rate limits, per minute. The address budget is per
+            // client-and-address pair — one machine asking about one inbox —
+            // and the client budget is the mail-volume ceiling one machine
+            // gets across every address it asks about.
+            'requests_per_minute_per_address' => (int) env('MERIDIAN_API_LOGIN_CODE_REQUESTS_PER_ADDRESS', 3),
+            'requests_per_minute_per_client' => (int) env('MERIDIAN_API_LOGIN_CODE_REQUESTS_PER_CLIENT', 15),
         ],
 
         'provider_handoff' => [

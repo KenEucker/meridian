@@ -28,12 +28,11 @@ The landing page's feature tour, its Northwood screenshots, and its descriptions
 - Fresh checkout or task branch with server dependencies installed.
 - Laravel app migrated and development scenario seeded (`php artisan migrate:fresh --seed`).
 - Server and client dev servers both running.
-- **Important:** the seeded development node is locked to an event, and PUBLIC-006 means the marketing surface is correctly absent while it is. Clear the lock before section A and restore it in section F:
-
-```bash
-php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)->update(["event_id" => null]);'
-```
-
+- The seeded development node names an event, and serves the marketing surface
+  anyway: the development role is exempt from the PUBLIC-006 event-lock
+  refusal (M20), because its event context is scenario scaffolding rather
+  than a deployment. No lock-clearing is needed before section A. Section F
+  drives the refusals on the roles that keep them.
 - A browser window with no Meridian session, and a second one signed in — a private window is the easy way to hold both.
 
 ## Personas
@@ -99,16 +98,20 @@ curl -s -X POST http://127.0.0.1:8000/api/public/organization-inquiries -H 'Cont
 
 ### F. Nodes that do not serve it
 
-24. Lock the node to an event again, restoring the seeded state:
+24. Give the local node a deployable role while it is still locked to the
+    seeded event — the combination PUBLIC-006 refuses:
 
 ```bash
-php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)->update(["event_id" => App\Models\Event::query()->value("id")]);'
+php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)->update(["node_role" => "standalone"]);'
 ```
 
 25. In the signed-out browser, open `/`. Confirm you are sent to the login screen rather than shown the marketing surface.
 26. Confirm `GET /api/public/marketing-surface` answers 404 — the surface is not there, not withheld.
 27. Set the node role to on-site instead (`MERIDIAN_NODE_ROLE=onsite`, or the node role in the console), clear the event lock, and restart the server. Confirm the same two results.
-28. Return the node to its seeded state when you are done.
+28. Return the node to its seeded state (`node_role` back to `development`)
+    when you are done, and confirm the surface is back at `/` — the
+    development node serves it even while locked, which is what keeps this
+    page reachable in every seeded development environment.
 
 ## Expected results
 
@@ -120,7 +123,7 @@ php artisan tinker --execute='App\Models\Node::query()->where("is_local", true)-
 - A submission with no form token, and one that arrives too fast, are both refused with a message and lose nothing the visitor typed. A submission that fills the hidden field gets the ordinary thank-you and creates nothing.
 - No challenge is ever presented.
 - Submission, discard, and review are all audited.
-- An on-site node and an event-locked node send a signed-out visitor to sign in and answer 404 on both public endpoints.
+- An on-site node and an event-locked deployable node send a signed-out visitor to sign in and answer 404 on both public endpoints; the development node serves the surface even while its record names the seeded event.
 
 ## Evidence to capture
 
