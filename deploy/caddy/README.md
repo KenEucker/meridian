@@ -10,10 +10,14 @@ network directly.
 |---|---|
 | `Caddyfile` | An internet-reachable node — central or standalone. Caddy obtains and renews the certificate itself over ACME. |
 | `Caddyfile.onsite` | An event node on a field network. Serves a certificate provisioned before the event, with automatic issuance switched off. |
-| `meridian.snippet` | The site body both import: root, PHP upstream, compression, body limit, security headers, logging. |
+| `Caddyfile.home-arpa` | A local node on a LAN — a developer's laptop, or a machine answering the on-site convention names. Plain HTTP, deliberately outside the deployment image. |
+| `meridian.snippet` | The site body the deployment files import: root, PHP upstream, compression, body limit, security headers, logging. |
 
-Both Caddyfiles are copied into the `web` image at `/etc/caddy/`.
+The deployment Caddyfiles are copied into the `web` image at `/etc/caddy/`.
 `MERIDIAN_CADDYFILE` in the deployment environment file decides which one runs.
+`Caddyfile.home-arpa` is not among them: it serves plain HTTP, which the
+deployment validator forbids the image's configurations exactly because
+production and event nodes are HTTPS-only (technical spec 8.2).
 
 The shared snippet exists because the difference between the two deployments is
 how the certificate is obtained, not what the site serves. A header or a limit
@@ -122,3 +126,35 @@ reaches the dev server directly (see `deploy/dns/README.md`).
 trusts the certificate, so they serve the installed app and admin or debug access
 rather than staff workflow (technical spec 8.5). Nothing in this directory serves
 them; the event hostname above is what browsers use.
+
+## The on-site convention names: a local node from a fresh clone
+
+The installed Meridian Field app, when nobody has configured anything, assumes
+the on-site convention: `meridian.home.arpa` is the main local node, additional
+nodes take `meridian2.home.arpa` and `meridian3.home.arpa` in order, and the
+central deployment is the fallback when none of them answer (technical spec
+8.4; RFC 8375). `Caddyfile.home-arpa` is the serving half of that convention,
+and running it in front of a dev server makes a laptop a local node a phone
+finds on its own:
+
+1. **Install and set up the server** — `corepack pnpm install`, then
+   `corepack pnpm run setup:local`, per the repository README.
+2. **Run the node** — `corepack pnpm run node:local`. This starts the Laravel
+   dev server listening on the LAN and Caddy on port 80 serving the three
+   convention names in front of it. (Or run
+   `caddy run --config deploy/caddy/Caddyfile.home-arpa` beside a server you
+   already have running; set `MERIDIAN_LOCAL_UPSTREAM` if it is not at
+   `127.0.0.1:8000`.)
+3. **Answer the name** — something on the network must resolve
+   `meridian.home.arpa` to this machine. On the laptop itself, one hosts-file
+   line covers browser testing: `127.0.0.1 meridian.home.arpa`. For phones, the
+   network's DNS answers: the dnsmasq fragment in `deploy/dns` carries the
+   records, or add the same A record in the router's local-DNS settings. A
+   hosts file on the phone is not an option, which is why the DNS half exists.
+
+A Field app on that network then discovers the node at boot with no manual
+settings — the zero-configuration path QA-PKG-01 exercises against a real
+device. Plain HTTP on these names is the stated trade (technical spec 8.5): the
+packaged apps carry a cleartext allowance scoped to `home.arpa` and nothing
+else, and browser staff workflow stays on the certificate-bearing event
+hostname model above.

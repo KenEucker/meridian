@@ -39,6 +39,30 @@ Direct IP access with a self-signed certificate is God-mode and emergency access
 only, never normal staff workflow (technical spec 8.2 rule 6). Do not plan an event
 around clicking through a certificate warning.
 
+## The on-site convention names: `meridian.home.arpa`
+
+`home.arpa` is the special-use domain a local network answers for itself (RFC
+8375) — it never resolves from the internet, which makes it the right home for
+names that only mean something on this network. Meridian's convention on top of
+it: `meridian.home.arpa` is the main local node, and additional nodes take
+`meridian2.home.arpa`, `meridian3.home.arpa` in order. The installed Field app
+assumes exactly this on a device nobody has configured — it works against
+`meridian.home.arpa` from first boot, probes the numbered siblings when the
+main name does not answer, and falls back to the central deployment last
+(technical spec 8.4) — so a network that answers these names gives every fresh
+install its node with no settings typed on any phone.
+
+`onsite-dnsmasq.conf` carries the records. The serving half is
+`deploy/caddy/Caddyfile.home-arpa`, and the walkthrough for running a local
+node from a fresh clone is in the README beside it.
+
+Numbering today is an operator act: the main node's record points at the main
+node, and a second machine gets the `meridian2` record when somebody adds it.
+Nodes actively discovering that `meridian.home.arpa` is taken and registering
+the next free name themselves needs the node to manage the network's DNS
+records, which no shipped component does yet — a follow-up with its own spec
+section when multi-node kits become real.
+
 ## `.local` names
 
 On-site nodes support `.local` mDNS names, and those names are not sufficient for

@@ -1,0 +1,39 @@
+# Meridian local node — the on-site convention names, for development and LAN
+# use.
+#
+# Serves the home.arpa convention names over plain HTTP in front of a locally
+# running Meridian server, so an installed Meridian Field app on the same
+# network finds this machine with no settings: the app assumes
+# meridian.home.arpa when nothing has been configured, and probes the numbered
+# siblings and then central when the main name does not answer (technical spec
+# 8.4; RFC 8375).
+#
+# Plain HTTP is the stated trade rather than an oversight. home.arpa never
+# appears in public DNS, so no public authority will certify it, and the
+# packaged apps carry a scoped cleartext allowance for exactly these names
+# (technical spec 8.5). This file is deliberately not part of the deployment
+# image: production and event nodes are HTTPS-only (technical spec 8.2), and
+# the bundle validator holds their Caddyfiles to it.
+#
+# All three names are served here because which machine a name reaches is the
+# network's DNS decision, not this file's: the same file runs unchanged on the
+# machine the network calls meridian2.
+#
+# From the repository root, with the dev server already running:
+#
+#   caddy run --config deploy/caddy/Caddyfile.home-arpa
+#
+# or `corepack pnpm run node:local`, which starts the server too. Name
+# resolution is the other half; see deploy/dns/README.md.
+{
+	auto_https off
+}
+
+http://meridian.home.arpa, http://meridian2.home.arpa, http://meridian3.home.arpa {
+	reverse_proxy {$MERIDIAN_LOCAL_UPSTREAM:127.0.0.1:8000}
+
+	log {
+		output stderr
+		format console
+	}
+}
