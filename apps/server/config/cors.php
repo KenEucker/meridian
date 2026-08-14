@@ -13,7 +13,16 @@ return [
             // 5173 is the shared client's dev server. 5175 is the shared-workstation
             // Kiosk `pnpm run kiosk:workstation` starts (M18.32), which runs on a
             // port of its own so it can sit beside a client already on 5173.
-            'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5175,http://localhost:5175',
+            //
+            // The last two are the packaged mobile apps (technical spec 3.3,
+            // 26.5). A Capacitor app serves its bundled client from a fixed
+            // local origin — `https://localhost` on Android, `capacitor://localhost`
+            // on iOS — and every call it makes to a node is therefore
+            // cross-origin, exactly as the dev server's is. Without them an
+            // installed app reaches its node and is refused by the browser
+            // rather than by the node, which reads on the device as a node
+            // that is simply unreachable.
+            'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5175,http://localhost:5175,https://localhost,capacitor://localhost',
         )),
     ))),
 

@@ -11,10 +11,12 @@ import {
 
 // Which node this device works against (technical spec 7.1, 8.1).
 //
-// This belongs on device readiness rather than in a settings menu because it
-// is a setup step, not a preference: an on-site device that has not been
-// pointed at its node cannot sync, and the readiness checklist is where
-// somebody preparing a device is already looking.
+// Two surfaces host this panel. Device readiness keeps it for the technician
+// preparing a device, where the checklist is already the frame. Settings holds
+// it behind an "Advanced" disclosure for the person who installed the app and
+// has nothing yet: on a packaged app, pointing the device at a node comes
+// before sign-in can work at all, which is why both hosts are reachable signed
+// out (QA-PKG-01 step 13).
 //
 // The desktop wrapper and the mobile app are the clients that need it. A
 // browser client is served by a node and already knows which one, so the
@@ -36,6 +38,9 @@ const sourceDescription: Record<NodeUrlSource, string> = {
   configured: "Set on this device.",
   served: "The node that served this app.",
   build: "Built into this app.",
+  discovered: "Found on this network.",
+  convention:
+    "The standard on-site node name. Nothing has been set on this device.",
   default: "Local development default. No node has been set.",
 };
 

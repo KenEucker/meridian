@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import {
   holdsMeridianCredential,
@@ -15,7 +15,9 @@ import {
 } from "@/field-reports/fieldReportRuntime";
 import { resolveFieldSession } from "@/field-reports/fieldSession";
 import { listPendingFieldReportPhotoRecords } from "@/field-reports/pendingFieldReportPhotos";
+import NodeConnectionPanel from "@/components/NodeConnectionPanel.vue";
 import SessionPermissionsNotice from "@/session/SessionPermissionsNotice.vue";
+import { nodeConnection as configuredNode } from "@/app/nodeConnection";
 import { useMenuCandidateLinks } from "@/components/workflowLinks";
 import { clientSessionState } from "@/session/clientSession";
 import {
@@ -61,8 +63,17 @@ type ThemeChoice = "light" | "dark";
 
 const themeStorageKey = "meridian.ui.theme";
 
+const route = useRoute();
 const nodeConnection = useNodeConnectionStatus();
 const theme = ref<ThemeChoice>(readPreferredTheme());
+/*
+ * The node panel's disclosure, so arriving by its anchor opens it. The surfaces
+ * a disconnected device lands on — sign-in, the unreachable-node notice — link
+ * here with `#node-connection`, and somebody following that link came to do
+ * exactly one thing. Opening the disclosure for them is the difference between
+ * a guided step and a scavenger hunt.
+ */
+const nodeConnectionDetails = ref<HTMLDetailsElement | null>(null);
 const serverHealthState = ref<ServerHealthState>("checking");
 const serverHealth = ref<ServerHealth | null>(null);
 const serverHealthError = ref<string | null>(null);
@@ -457,8 +468,23 @@ async function refreshDiagnostics(): Promise<void> {
   }
 }
 
+function openNodePanelFromHash(): void {
+  if (route.hash === "#node-connection" && nodeConnectionDetails.value !== null) {
+    nodeConnectionDetails.value.open = true;
+    nodeConnectionDetails.value.scrollIntoView?.();
+  }
+}
+
+/*
+ * Watched as well as run at mount: the links land here from other routes, where
+ * mounting is enough, but Settings linking to its own anchor is a hash-only
+ * navigation and no remount happens.
+ */
+watch(() => route.hash, openNodePanelFromHash);
+
 onMounted(() => {
   void refreshDiagnostics();
+  openNodePanelFromHash();
 });
 
 watch(
@@ -683,6 +709,31 @@ watch(
           {{ readiness.ready }}/{{ readiness.total }} ready
         </span>
       </RouterLink>
+
+      <!--
+        The node this device talks to (technical spec 7.1, 8.1; QA-PKG-01 step
+        13). On a packaged app this is the door into the whole product — a
+        device that has not been pointed at a node cannot sign in — so it lives
+        here, reachable signed out, rather than only on the readiness screen.
+        Behind a disclosure because it is an install-time decision, not a daily
+        one: the summary answers "which node" at a glance, and the panel opens
+        for the one visit where that answer has to change.
+      -->
+      <details
+        id="node-connection"
+        ref="nodeConnectionDetails"
+        class="about__node"
+      >
+        <summary class="about__node-summary">
+          <span class="about__node-summary-body">
+            <strong>Advanced: node connection</strong>
+            <span>{{ configuredNode.url }}</span>
+          </span>
+        </summary>
+        <div class="about__node-panel">
+          <NodeConnectionPanel />
+        </div>
+      </details>
     </section>
 
     <!--
@@ -992,6 +1043,49 @@ watch(
   font-size: var(--m-text-sm);
   font-weight: 800;
   white-space: nowrap;
+}
+
+.about__node {
+  margin-top: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+.about__node-summary {
+  padding: var(--m-space-3);
+  cursor: pointer;
+}
+
+.about__node-summary:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.about__node-summary-body {
+  display: inline-grid;
+  gap: var(--m-space-1);
+  vertical-align: top;
+  min-width: 0;
+}
+
+.about__node-summary-body span {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* The panel keeps its card styling on the readiness screen; here it is already
+   inside a card, and a border within a border reads as clutter. */
+.about__node-panel {
+  padding: 0 var(--m-space-3) var(--m-space-3);
+}
+
+.about__node-panel :deep(.node-connection) {
+  margin: 0;
+  padding: var(--m-space-2) 0 0;
+  border: 0;
+  background: transparent;
 }
 
 .about__readiness-count[data-complete="true"] {

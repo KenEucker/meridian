@@ -10,10 +10,14 @@ network directly.
 |---|---|
 | `Caddyfile` | An internet-reachable node — central or standalone. Caddy obtains and renews the certificate itself over ACME. |
 | `Caddyfile.onsite` | An event node on a field network. Serves a certificate provisioned before the event, with automatic issuance switched off. |
-| `meridian.snippet` | The site body both import: root, PHP upstream, compression, body limit, security headers, logging. |
+| `Caddyfile.home-arpa` | A local node on a LAN — a developer's laptop, or a machine answering the on-site convention names. Plain HTTP, deliberately outside the deployment image. |
+| `meridian.snippet` | The site body the deployment files import: root, PHP upstream, compression, body limit, security headers, logging. |
 
-Both Caddyfiles are copied into the `web` image at `/etc/caddy/`.
+The deployment Caddyfiles are copied into the `web` image at `/etc/caddy/`.
 `MERIDIAN_CADDYFILE` in the deployment environment file decides which one runs.
+`Caddyfile.home-arpa` is not among them: it serves plain HTTP, which the
+deployment validator forbids the image's configurations exactly because
+production and event nodes are HTTPS-only (technical spec 8.2).
 
 The shared snippet exists because the difference between the two deployments is
 how the certificate is obtained, not what the site serves. A header or a limit
@@ -122,3 +126,87 @@ reaches the dev server directly (see `deploy/dns/README.md`).
 trusts the certificate, so they serve the installed app and admin or debug access
 rather than staff workflow (technical spec 8.5). Nothing in this directory serves
 them; the event hostname above is what browsers use.
+
+## The on-site convention names: a local node from a fresh clone
+
+The installed Meridian Field app, when nobody has configured anything, assumes
+the on-site convention: `meridian.home.arpa` is the main local node, additional
+nodes take `meridian2.home.arpa` and `meridian3.home.arpa` in order, and the
+central deployment is the fallback when none of them answer (technical spec
+8.4; RFC 8375). `Caddyfile.home-arpa` is the serving half of that convention,
+and running it in front of a dev server makes a laptop a local node a phone
+finds on its own:
+
+1. **Install and set up the server** — `corepack pnpm install`, then
+   `corepack pnpm run setup:local`, per the repository README.
+2. **Run the node** — `corepack pnpm run node:local`. This starts the Laravel
+   dev server listening on the LAN and Caddy on port 80 serving the three
+   convention names in front of it. Caddy runs in Docker by default
+   (`caddy:2-alpine`, the image the deployment stack already uses, with the
+   upstream rewritten to `host.docker.internal` because loopback inside a
+   container is the container); with Docker down it falls back to a `caddy`
+   binary on the PATH. Running Caddy by hand beside a server you already have
+   works too: `caddy run --config deploy/caddy/Caddyfile.home-arpa`, with
+   `MERIDIAN_LOCAL_UPSTREAM` set if the server is not at `127.0.0.1:8000`.
+3. **Answer the name** — something on the network must resolve
+   `meridian.home.arpa` to this machine. On the laptop itself, one hosts-file
+   line covers browser testing: `127.0.0.1 meridian.home.arpa`. For phones,
+   pick whichever of these the network allows:
+   - **The router answers** — add the A record in the router's local-DNS
+     settings, or drop the dnsmasq fragment from `deploy/dns` onto a router
+     that runs dnsmasq. Best where possible: every device benefits with no
+     per-device setup.
+   - **This machine answers** — `corepack pnpm run node:local:dns` also runs
+     CoreDNS in Docker (official image, UDP 53 on the LAN address only),
+     answering the convention names with this machine's address and
+     forwarding everything else. For routers that cannot serve local records
+     at all — Starlink and Google Wifi among them. Point the phone's Wi-Fi
+     DNS (or the router's DHCP DNS, where settable) at this machine, and
+     allow inbound UDP 53 through the Windows firewall once; the script
+     prints the exact rule.
+
+   A hosts file on the phone is not an option, which is why the DNS half
+   exists at all.
+
+4. **On Windows, open the firewall** — inbound LAN traffic to a published
+   container port is dropped unless a rule allows it, and dropped rather than
+   refused, so the phone shows a connection that times out while this machine
+   logs nothing at all. Local requests and Docker's own bridge bypass the
+   filter, which means every test run on the laptop passes while every phone
+   hangs. `node:local` prints the rules; they are, once, from an
+   administrator terminal:
+
+   ```powershell
+   netsh advfirewall firewall add rule name="Meridian local node" dir=in action=allow protocol=TCP localport=80
+   netsh advfirewall firewall add rule name="Meridian local DNS" dir=in action=allow protocol=UDP localport=53
+   ```
+
+A Field app on that network then discovers the node at boot with no manual
+settings — the zero-configuration path QA-PKG-01 exercises against a real
+device. Plain HTTP on these names is the stated trade (technical spec 8.5): the
+packaged apps carry a cleartext allowance scoped to `home.arpa` and nothing
+else, and browser staff workflow stays on the certificate-bearing event
+hostname model above.
+
+### The installed app signs in here; a browser does not
+
+Reaching `http://meridian.home.arpa` in a browser serves pages, and signing in
+there fails with a message about secure key storage being unavailable. That is
+the policy working, not a fault to chase: sign-in generates a device signing
+key through WebCrypto, browsers expose it only in a secure context, and a plain
+HTTP origin is not one. A device that cannot keep a key does not sign in
+(technical spec 8.6, and `deviceIdentity.ts` alongside it) — the alternative is
+registering key material nothing can verify.
+
+The installed app is unaffected because it serves its own bundled client from
+`https://localhost`, which is a secure context, while still calling a
+plain-HTTP node — secure-context rules follow the page's origin, not what it
+fetches. This is exactly the split technical spec 8.2 rule 4 and 8.4 describe:
+without control of DNS and certificates, the installed app is the reliable
+client and browser access is not guaranteed.
+
+So the convention names serve the app, admin, and debug access. Browser staff
+workflow needs a name a public authority will certify, which `home.arpa` never
+is — use the event hostname model at the top of this file: a real hostname
+whose certificate was obtained before the event, answered on the event network
+by local DNS pointing at the node's LAN address.

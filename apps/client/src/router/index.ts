@@ -1014,6 +1014,19 @@ const PUBLIC_ROUTE_NAMES: readonly string[] = [
    */
   "public.marketing",
   "home",
+  /*
+   * The device setup surfaces (M19.25; QA-PKG-01 step 13; technical spec 26.5's
+   * direct-install path). The packaged Field and desktop apps ship the client
+   * inside the app bundle, and pointing such a device at its node happens
+   * *before* it can sign in — sign-in is a request to the node it has not been
+   * given yet. Gated behind sign-in, a fresh install circled: Settings bounced
+   * to a login it could not complete, and the node connection panel that would
+   * have fixed it sat behind the bounce. Neither surface holds anything a
+   * signed-out reader may not see: both already render their session-scoped
+   * sections as plainly absent.
+   */
+  "settings.about",
+  "readiness",
   "not-found",
 ];
 

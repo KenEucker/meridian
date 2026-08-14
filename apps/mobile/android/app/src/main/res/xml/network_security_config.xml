@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext policy (technical spec 8.5; RFC 8375).
+
+  Everything stays HTTPS except the on-site convention names under home.arpa,
+  where cleartext is a stated trade rather than an oversight: home.arpa never
+  appears in public DNS, so no public authority will certify it, and an
+  installed app is the client that reaches an on-site node by that name. The
+  base config restates the platform default so the exception is read against
+  the rule it makes.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">home.arpa</domain>
+    </domain-config>
+</network-security-config>

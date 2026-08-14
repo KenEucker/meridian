@@ -1,12 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { appConfigForDeploymentTarget } from "@/app/appConfig";
 import {
   clearNodeUrl,
+  DEFAULT_CENTRAL_NODE_URL,
   DEFAULT_NODE_URL,
+  discoverNodeUrl,
   nodeConnection,
   normalizeNodeUrl,
   NodeUrlError,
+  ON_SITE_NODE_URLS,
   refreshNodeConnection,
+  resetNodeDiscovery,
   resolveNodeUrl,
   setNodeUrl,
 } from "@/app/nodeConnection";
@@ -23,6 +28,7 @@ function servedBy(apiBaseUrl: string): void {
 beforeEach(() => {
   window.localStorage.clear();
   clearNodeUrl();
+  resetNodeDiscovery();
   delete window.__MERIDIAN_RUNTIME_CONFIG__;
   refreshNodeConnection();
 });
@@ -30,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   window.localStorage.clear();
   clearNodeUrl();
+  resetNodeDiscovery();
   delete window.__MERIDIAN_RUNTIME_CONFIG__;
   refreshNodeConnection();
 });
@@ -118,6 +125,92 @@ describe("nodeConnection", () => {
     servedBy("not-a-url");
 
     expect(nodeConnection.value.source).toBe("default");
+  });
+});
+
+/*
+ * The zero-settings path (technical spec 8.4): a packaged app that knows
+ * nothing assumes the on-site convention, and a boot-time probe promotes the
+ * first node that actually answers — the numbered on-site names in order,
+ * then the central deployment.
+ */
+describe("the on-site convention and discovery", () => {
+  const mobile = appConfigForDeploymentTarget("mobile");
+
+  it("assumes the main on-site name on a packaged app that knows nothing", () => {
+    window.__MERIDIAN_RUNTIME_CONFIG__ = { deploymentTarget: "mobile" };
+    refreshNodeConnection();
+
+    expect(nodeConnection.value).toMatchObject({
+      url: "http://meridian.home.arpa",
+      source: "convention",
+    });
+  });
+
+  it("keeps the development default in a browser client", () => {
+    expect(nodeConnection.value.source).toBe("default");
+  });
+
+  it("promotes the first on-site name that answers", async () => {
+    const probe = vi.fn(async (url: string) => url === ON_SITE_NODE_URLS[1]);
+
+    const found = await discoverNodeUrl({ probe, config: mobile });
+
+    expect(found).toBe("http://meridian2.home.arpa");
+    expect(nodeConnection.value).toMatchObject({
+      url: "http://meridian2.home.arpa",
+      source: "discovered",
+    });
+  });
+
+  it("falls back to the central deployment when no on-site node answers", async () => {
+    const probe = vi.fn(async (url: string) => url === DEFAULT_CENTRAL_NODE_URL);
+
+    const found = await discoverNodeUrl({ probe, config: mobile });
+
+    expect(found).toBe(DEFAULT_CENTRAL_NODE_URL);
+    expect(probe).toHaveBeenCalledTimes(ON_SITE_NODE_URLS.length + 1);
+  });
+
+  it("leaves the convention standing when nothing answers anywhere", async () => {
+    window.__MERIDIAN_RUNTIME_CONFIG__ = { deploymentTarget: "mobile" };
+    refreshNodeConnection();
+
+    const found = await discoverNodeUrl({
+      probe: async () => false,
+      config: mobile,
+    });
+
+    expect(found).toBeNull();
+    expect(nodeConnection.value.source).toBe("convention");
+  });
+
+  it("never second-guesses a node somebody set on purpose", async () => {
+    setNodeUrl("https://onsite.example.org");
+    const probe = vi.fn(async () => true);
+
+    expect(await discoverNodeUrl({ probe, config: mobile })).toBeNull();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("does not probe from a browser client, which its node already serves", async () => {
+    const probe = vi.fn(async () => true);
+
+    const found = await discoverNodeUrl({
+      probe,
+      config: appConfigForDeploymentTarget("server"),
+    });
+
+    expect(found).toBeNull();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("is outranked by a node configured after discovery", async () => {
+    await discoverNodeUrl({ probe: async () => true, config: mobile });
+
+    setNodeUrl("https://onsite.example.org");
+
+    expect(nodeConnection.value.source).toBe("configured");
   });
 });
 

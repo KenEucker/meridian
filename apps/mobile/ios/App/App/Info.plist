@@ -25,6 +25,27 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<!--
+	  Cleartext policy (technical spec 8.5; RFC 8375). Everything stays HTTPS
+	  except the on-site convention names under home.arpa, where cleartext is a
+	  stated trade rather than an oversight: home.arpa never appears in public
+	  DNS, so no public authority will certify it, and the installed app is the
+	  client that reaches an on-site node by that name. Mirrors the Android
+	  network security config exactly.
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>home.arpa</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<!--
 	  Native permissions (M19.21): only what a shipped surface asks for, and
 	  each one names that surface. The declared set must match the code-defined
 	  inventory in ../../src/nativePermissions.ts exactly; the config tests fail

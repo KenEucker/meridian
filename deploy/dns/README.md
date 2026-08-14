@@ -39,6 +39,44 @@ Direct IP access with a self-signed certificate is God-mode and emergency access
 only, never normal staff workflow (technical spec 8.2 rule 6). Do not plan an event
 around clicking through a certificate warning.
 
+## The on-site convention names: `meridian.home.arpa`
+
+`home.arpa` is the special-use domain a local network answers for itself (RFC
+8375) — it never resolves from the internet, which makes it the right home for
+names that only mean something on this network. Meridian's convention on top of
+it: `meridian.home.arpa` is the main local node, and additional nodes take
+`meridian2.home.arpa`, `meridian3.home.arpa` in order. The installed Field app
+assumes exactly this on a device nobody has configured — it works against
+`meridian.home.arpa` from first boot, probes the numbered siblings when the
+main name does not answer, and falls back to the central deployment last
+(technical spec 8.4) — so a network that answers these names gives every fresh
+install its node with no settings typed on any phone.
+
+`onsite-dnsmasq.conf` carries the records. The serving half is
+`deploy/caddy/Caddyfile.home-arpa`, and the walkthrough for running a local
+node from a fresh clone is in the README beside it.
+
+### Numbering, and who decides it
+
+Where this file is the network's DNS, numbering is an operator act: the main
+node's record points at the main node, and a second machine gets the
+`meridian2` record when somebody adds it. That is the preferred arrangement —
+one authority, every device served, nothing to negotiate.
+
+Where the network cannot serve records and a node answers for itself
+(`node:local:dns`), the node claims its own name instead. On start it asks each
+convention name in order and takes the first that answers nothing, or that
+already answers as itself; a name another node answers is never displaced, and
+a node that finds every name taken refuses to start rather than claim one.
+Two nodes on a single name is a phone that resolves to one of them and signs in
+against the other, which is why claiming is a decision rather than a default.
+
+A node serving DNS answers for the name it claimed and for the peers it found,
+at the addresses they answered from, so each node's view of the convention
+agrees with what is actually running. The rule and its reasoning are technical
+spec 8.5; the decision itself is `scripts/dev/onsite-node-names.mjs`, tested
+beside it.
+
 ## `.local` names
 
 On-site nodes support `.local` mDNS names, and those names are not sufficient for
