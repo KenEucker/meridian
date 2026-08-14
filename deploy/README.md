@@ -29,6 +29,7 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | [`caddy/meridian.snippet`](caddy/meridian.snippet) | The site body every Caddyfile imports, so none can drift. |
 | [`dns/onsite-dnsmasq.conf`](dns/onsite-dnsmasq.conf) | Event network DNS for the Meridian-controlled router or AP. |
 | [`dns/onsite-hosts.example`](dns/onsite-hosts.example) | Per-machine fallback where Meridian does not control DNS. |
+| [`native/`](native/README.md) | The same stack as host services, for a node whose host cannot run containers. |
 
 ## What is not in it
 
@@ -110,6 +111,23 @@ A node with no identity redirects to first-run setup on first open. Follow
 [Node setup and pairing](../docs/technician/node-setup-and-pairing.md), and
 [Deployment](../docs/technician/deployment.md) for the operational walkthrough.
 
+## A node that cannot run containers
+
+Compose is the supported default and is what a release is built and tested as.
+Where the host cannot run it — a mini PC without the kernel support, a machine
+under a policy that forbids the daemon — [`native/`](native/README.md) installs
+the same five services with systemd, php-fpm, and the host's own PostgreSQL and
+Caddy.
+
+It is the same deployment rather than a second one: it serves the Caddyfiles in
+[`caddy/`](caddy/README.md) rather than a copy of them, takes the same
+environment keys, and runs the entrypoint's boot sequence in the entrypoint's
+order. `deploy:check` reads the two against each other and fails on drift, so
+neither path can quietly lose a step the other has.
+
+What it cannot inherit is the image build, so its release script runs Composer,
+the client build, and the docs and changelog packaging on the node itself.
+
 ## An event node
 
 Two things change for a node that will run an event on a field network:
@@ -153,6 +171,12 @@ plain HTTP and the shared site body tells browsers to refuse the plain-HTTP form
 the entrypoint runs the server's event-mode fail-closed checks after the caches
 it builds, and the DNS templates carry documentation names and private addresses
 only.
+
+It reads the containerless path in [`native/`](native/README.md) against the
+Compose stack it mirrors as part of the same run: the same boot sequence in the
+same order, the same PHP and PostgreSQL versions, the same request limits and
+database settings, the same queues worked, no proxy configuration of its own,
+and a sample environment carrying no secrets.
 
 The Docker half is opt-in, and runs as its own CI step:
 

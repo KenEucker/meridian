@@ -27,7 +27,11 @@
  *   - the entrypoint runs the server's event-mode fail-closed checks — HTTPS
  *     validation and the offline read set — after the caches it builds, so a
  *     node that fails them stops at start (technical spec 8.6, 26.2);
- *   - the DNS templates carry documentation names and private addresses only.
+ *   - the DNS templates carry documentation names and private addresses only;
+ *   - the containerless installation path in deploy/native/ still says what the
+ *     Compose stack says: the same boot sequence in the same order, the same
+ *     runtime versions, request limits, database settings and queues, no proxy
+ *     configuration of its own, and a sample environment carrying no secrets.
  *
  * With --with-docker it additionally asks Docker itself: `docker build --check`
  * resolves and validates the Dockerfile without executing a build step, and
@@ -47,7 +51,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,6 +70,16 @@ const CADDYFILE = 'deploy/caddy/Caddyfile';
 const CADDYFILE_ONSITE = 'deploy/caddy/Caddyfile.onsite';
 const CADDYFILE_WILDCARD = 'deploy/caddy/Caddyfile.wildcard';
 const ENTRYPOINT = 'deploy/docker/entrypoint.sh';
+const NATIVE_DIRECTORY = 'deploy/native';
+const NATIVE_INSTALL = 'deploy/native/install-host.sh';
+const NATIVE_RELEASE = 'deploy/native/deploy-release.sh';
+const NATIVE_SERVER_ENV_EXAMPLE = 'deploy/native/.env.server.example';
+const NATIVE_PROXY_ENV_EXAMPLE = 'deploy/native/.env.proxy.example';
+const NATIVE_CADDY_DROP_IN = 'deploy/native/systemd/caddy-meridian.conf';
+const NATIVE_WORKER_UNIT = 'deploy/native/systemd/meridian-worker.service';
+const NATIVE_SCHEDULER_UNIT = 'deploy/native/systemd/meridian-scheduler.service';
+const NATIVE_RUNTIME_INI = 'deploy/native/php/meridian-runtime.ini';
+const NATIVE_POSTGRES_CONF = 'deploy/native/postgres/meridian.conf';
 
 /**
  * Every file the bundle ships, from the shared manifest the release packaging
@@ -578,39 +592,388 @@ function checkDnsTemplates() {
   }
 }
 
-function checkEntrypoint() {
-  const source = read(ENTRYPOINT);
+/**
+ * The once-per-boot sequence a node runs before it serves traffic, wherever it
+ * is written down.
+ *
+ * Two files implement it: the container entrypoint, and the native release
+ * script for a host that cannot run containers. The order is the substance
+ * rather than the wording — a warning that arrives with the result is a note,
+ * secrets generated after the config cache are secrets the served requests
+ * never see, and event-mode checks run before that cache validate a
+ * configuration nothing will read. Asserted for both, so the second path cannot
+ * quietly lose a step the first one has.
+ */
+function checkBootSequence(file) {
+  // Comments stripped first, because both files document the order in prose
+  // above the code that implements it, and a command named in a comment would
+  // otherwise be read as the step running there.
+  const source = read(file)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
 
   if (!source.includes('migrate --force')) {
     fail(
-      `${ENTRYPOINT} does not run migrations. Production and event modes run them automatically (technical spec 26.2).`,
+      `${file} does not run migrations. Production and event modes run them automatically (technical spec 26.2).`,
     );
+
+    return;
   }
 
   const warningIndex = source.indexOf('Take a database backup');
   const migrateIndex = source.indexOf('migrate --force');
 
   if (warningIndex === -1) {
-    fail(`${ENTRYPOINT} runs migrations without a backup warning (technical spec 26.2).`);
+    fail(`${file} runs migrations without a backup warning (technical spec 26.2).`);
   } else if (warningIndex > migrateIndex) {
-    fail(`${ENTRYPOINT} prints its backup warning after running migrations, which is too late to act on.`);
+    fail(`${file} prints its backup warning after running migrations, which is too late to act on.`);
+  }
+
+  // Generation covers the secrets Meridian owns and the rest are named and the
+  // boot stops (technical spec 7.4, 26.2). After the migration because the node
+  // keypair is stored as node configuration, and before the config cache
+  // because a generated key has to be in the cache served requests read.
+  const secretsIndex = source.indexOf('meridian:secrets');
+
+  if (secretsIndex === -1) {
+    fail(
+      `${file} does not run the secret safeguards. A node still holding a sample secret must stop at start rather than serving (technical spec 7.4, 26.2).`,
+    );
+  } else if (secretsIndex < migrateIndex) {
+    fail(
+      `${file} runs the secret safeguards before migrations, but the node keypair they generate is stored as node configuration and needs its table.`,
+    );
+  }
+
+  const configCacheIndex = source.indexOf('config:cache');
+
+  if (configCacheIndex === -1) {
+    fail(`${file} never builds the configuration cache the served requests read.`);
+
+    return;
+  }
+
+  if (secretsIndex > configCacheIndex) {
+    fail(
+      `${file} runs the secret safeguards after the config cache is built, so a generated key is not in the cache the served requests read.`,
+    );
   }
 
   // The event-mode fail-closed checks: HTTPS validation and the offline read
   // set (technical spec 8.2, 8.6, 26.2). The refusal itself belongs to the
   // server and holds however a node is started; running the command here is
-  // what stops a failing container at start with one legible line. It has to
-  // run after `config:cache`, or it validates a configuration the served
-  // requests will not read.
+  // what stops a failing node at start with one legible line. It has to run
+  // after `config:cache`, or it validates a configuration the served requests
+  // will not read.
   const eventModeIndex = source.indexOf('meridian:event-mode');
 
   if (eventModeIndex === -1) {
     fail(
-      `${ENTRYPOINT} does not run the event-mode fail-closed checks. A node that fails HTTPS validation or cannot serve the offline read set must fail closed at start in event mode (technical spec 8.6, 26.2).`,
+      `${file} does not run the event-mode fail-closed checks. A node that fails HTTPS validation or cannot serve the offline read set must fail closed at start in event mode (technical spec 8.6, 26.2).`,
     );
-  } else if (eventModeIndex < source.indexOf('config:cache')) {
+  } else if (eventModeIndex < configCacheIndex) {
     fail(
-      `${ENTRYPOINT} runs the event-mode checks before the config cache is built, so it validates a configuration the served requests will not read.`,
+      `${file} runs the event-mode checks before the config cache is built, so it validates a configuration the served requests will not read.`,
+    );
+  }
+}
+
+/**
+ * The containerless installation path (`deploy/native/`), read against the
+ * Compose stack it mirrors.
+ *
+ * A second way to install the same node is a second thing to forget when the
+ * first one changes, and the failure mode is quiet: a native node running a
+ * PHP the server's platform requirement excludes, or a PostgreSQL without
+ * logical replication, looks installed until node sync or an upload does not
+ * work. So nothing here asks whether the scripts are good — only whether they
+ * still say what the Compose stack says. What they cannot be asked without a
+ * Debian host and systemd is whether they run, which is what the first
+ * `install-host.sh` on a node is for.
+ */
+function checkNativeBundle() {
+  const dockerfile = read(DOCKERFILE);
+  const compose = read(DEPLOYMENT_COMPOSE);
+  const services = serviceBlocks(compose);
+  const install = read(NATIVE_INSTALL);
+  const release = read(NATIVE_RELEASE);
+
+  // The boot sequence, held to the same order as the entrypoint's.
+  checkBootSequence(NATIVE_RELEASE);
+
+  // ---- Runtime versions ---------------------------------------------------
+  // apps/server/composer.json pins `php: >=8.5 <8.6`, so a native install that
+  // provisions a different minor installs a server Composer will refuse.
+  const imagePhp = (dockerfile.match(/^FROM\s+php:(\d+\.\d+)-/im) ?? [])[1];
+
+  for (const file of [NATIVE_INSTALL, NATIVE_RELEASE]) {
+    const nativePhp = (read(file).match(/PHP_VERSION:-(\d+\.\d+)\}/) ?? [])[1];
+
+    if (!nativePhp) {
+      fail(`${file} does not declare a default PHP_VERSION.`);
+    } else if (nativePhp !== imagePhp) {
+      fail(
+        `${file} provisions PHP ${nativePhp} while ${DOCKERFILE} builds on PHP ${imagePhp}. Both must satisfy the platform requirement in apps/server/composer.json.`,
+      );
+    }
+  }
+
+  const imagePostgres = (services.get('postgres')?.match(/image:\s*postgres:(\d+)/) ?? [])[1];
+  const nativePostgres = (install.match(/PG_VERSION:-(\d+)\}/) ?? [])[1];
+
+  if (!nativePostgres) {
+    fail(`${NATIVE_INSTALL} does not declare a default PG_VERSION.`);
+  } else if (nativePostgres !== imagePostgres) {
+    fail(
+      `${NATIVE_INSTALL} provisions PostgreSQL ${nativePostgres} while ${DEPLOYMENT_COMPOSE} runs postgres:${imagePostgres}. A deployment tested against one major and run against another is a migration surprise nobody chose.`,
+    );
+  }
+
+  // ---- The services the containers were ----------------------------------
+  // A worker or scheduler that drifted from its container is a node where
+  // queued notifications are never delivered, or where on-site never pushes
+  // back to central, with nothing visibly broken.
+  const units = [
+    { unit: NATIVE_WORKER_UNIT, service: 'worker', command: 'queue:work' },
+    { unit: NATIVE_SCHEDULER_UNIT, service: 'scheduler', command: 'schedule:work' },
+  ];
+
+  for (const { unit, service, command } of units) {
+    const source = read(unit);
+    const block = services.get(service) ?? '';
+
+    if (!source.includes(`artisan ${command}`)) {
+      fail(`${unit} does not run \`artisan ${command}\`, which is what the '${service}' service runs.`);
+    }
+
+    if (!/^ExecStart=/m.test(source)) {
+      fail(`${unit} declares no ExecStart.`);
+    }
+
+    if (!/^Restart=always/m.test(source)) {
+      fail(
+        `${unit} does not restart automatically. The '${service}' service runs with \`restart: unless-stopped\`, and the worker additionally exits by design on --max-time.`,
+      );
+    }
+
+    const composeQueues = (block.match(/--queue=(\S+)/) ?? [])[1];
+    const unitQueues = (source.match(/--queue=(\S+)/) ?? [])[1];
+
+    if (composeQueues !== unitQueues) {
+      fail(
+        `${unit} works the queues '${unitQueues ?? 'none'}' while ${DEPLOYMENT_COMPOSE} works '${composeQueues ?? 'none'}'. A queue named in one and not the other is a queue nothing drains.`,
+      );
+    }
+  }
+
+  // ---- PHP request limits -------------------------------------------------
+  // Uploaded Field Report photos and spreadsheet imports arrive through PHP, so
+  // a native pool with the stock 2M post_max_size refuses uploads the same node
+  // accepts under Compose.
+  for (const setting of ['memory_limit', 'upload_max_filesize', 'post_max_size']) {
+    const imageValue = (dockerfile.match(new RegExp(`${setting}=([^']+)'`)) ?? [])[1];
+    const nativeValue = (read(NATIVE_RUNTIME_INI).match(new RegExp(`^${setting}=(.+)$`, 'm')) ?? [])[1];
+
+    if (imageValue !== nativeValue) {
+      fail(
+        `${NATIVE_RUNTIME_INI} sets ${setting}=${nativeValue ?? 'nothing'} while ${DOCKERFILE} sets ${imageValue ?? 'nothing'}.`,
+      );
+    }
+  }
+
+  // ---- PostgreSQL settings ------------------------------------------------
+  // Logical replication is what node-to-node sync needs (technical spec section
+  // 10), and a server started without it cannot be given one later without a
+  // restart nobody planned for.
+  const postgresConf = read(NATIVE_POSTGRES_CONF);
+
+  for (const [, setting, value] of (services.get('postgres') ?? '').matchAll(
+    /^\s+-\s+"([a-z_]+)=(\S+)"\s*$/gm,
+  )) {
+    const configured = (postgresConf.match(new RegExp(`^${setting}\\s*=\\s*(\\S+)`, 'm')) ?? [])[1];
+
+    if (configured !== value) {
+      fail(
+        `${NATIVE_POSTGRES_CONF} sets ${setting} to '${configured ?? 'nothing'}' while ${DEPLOYMENT_COMPOSE} starts the database with '${value}'.`,
+      );
+    }
+  }
+
+  // The deployment database publishes no host port, so the native equivalent
+  // must not leave the loopback interface either.
+  if (!/^listen_addresses\s*=\s*'localhost'/m.test(postgresConf)) {
+    fail(
+      `${NATIVE_POSTGRES_CONF} does not bind the database to localhost. ${DEPLOYMENT_COMPOSE} publishes no host port for it, and an event network is no place to start.`,
+    );
+  }
+
+  // ---- One proxy configuration, not two -----------------------------------
+  // The shared snippet exists so a header or a limit cannot drift between the
+  // Caddyfiles; a copy of them under deploy/native would reintroduce exactly
+  // that, one directory further away.
+  for (const entry of readdirSync(join(repositoryRoot, NATIVE_DIRECTORY), { recursive: true })) {
+    const name = String(entry).split(/[\\/]/).pop();
+
+    if (/^Caddyfile/i.test(name) || name === 'meridian.snippet') {
+      fail(
+        `${NATIVE_DIRECTORY} ships its own ${name}. The native install must serve deploy/caddy/, or the two installation paths grow separate proxy configurations.`,
+      );
+    }
+  }
+
+  if (!install.includes('deploy/caddy/Caddyfile')) {
+    fail(`${NATIVE_INSTALL} does not install the bundle's own Caddyfiles from deploy/caddy/.`);
+  }
+
+  if (!read(NATIVE_CADDY_DROP_IN).includes('${MERIDIAN_CADDYFILE}')) {
+    fail(
+      `${NATIVE_CADDY_DROP_IN} does not select the configuration with MERIDIAN_CADDYFILE, so an event node cannot run Caddyfile.onsite.`,
+    );
+  }
+
+  // The public root the proxy serves is written into the shared snippet, so the
+  // native install has to put the checkout exactly there.
+  const snippetRoot = (read(CADDY_SNIPPET).match(/^\s*root\s+\*\s+(\S+)\/apps\/server\/public\s*$/m) ?? [])[1];
+  const installRoot = (install.match(/MERIDIAN_ROOT:-(\S+?)\}/) ?? [])[1];
+
+  if (snippetRoot !== installRoot) {
+    fail(
+      `${NATIVE_INSTALL} installs Meridian at '${installRoot ?? 'nothing'}' while ${CADDY_SNIPPET} roots the site at '${snippetRoot ?? 'nothing'}/apps/server/public'. The server also resolves the root package.json and the client artifact relative to that path.`,
+    );
+  }
+
+  // ---- Everything the release script has to build -------------------------
+  // The image build did these; on a host, nothing else will. A missing one is a
+  // node that serves a stale client, or a God Mode page rendering nothing.
+  const built = [
+    ['composer install', 'the server dependencies'],
+    ['build:admin', 'the Meridian Admin client artifact'],
+    ['docs:package', 'the packaged technician documentation (GOD-012)'],
+    ['changelog:generate', 'the packaged changelog (GOD-021)'],
+  ];
+
+  for (const [needle, what] of built) {
+    if (!release.includes(needle)) {
+      fail(
+        `${NATIVE_RELEASE} does not build ${what}. The image build produced it, so on a host nothing else does.`,
+      );
+    }
+  }
+
+  checkNativeEnvExamples();
+}
+
+/**
+ * The native sample configuration, held to the same rules as the Compose one
+ * (technical spec 26.2: sample configs carry fake values only), plus the two
+ * questions only this path raises — whether the proxy's own environment file
+ * documents every variable the Caddyfiles substitute, and whether the values
+ * that were container-network names have been translated.
+ */
+function checkNativeEnvExamples() {
+  const server = parseEnvFile(read(NATIVE_SERVER_ENV_EXAMPLE));
+  const proxy = parseEnvFile(read(NATIVE_PROXY_ENV_EXAMPLE));
+
+  for (const key of MUST_BE_EMPTY) {
+    if (!server.has(key)) {
+      fail(`${NATIVE_SERVER_ENV_EXAMPLE} does not document ${key}.`);
+      continue;
+    }
+
+    if (server.get(key) !== '') {
+      fail(
+        `${NATIVE_SERVER_ENV_EXAMPLE} ships a value for ${key}. Secrets in a sample configuration must be empty (technical spec 26.2).`,
+      );
+    }
+  }
+
+  const appUrl = server.get('APP_URL') ?? '';
+
+  if (!appUrl.startsWith('https://')) {
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE} sets APP_URL to '${appUrl}'. Production and event modes never use plain HTTP (technical spec 8.2).`,
+    );
+  }
+
+  for (const [file, value] of [
+    [NATIVE_SERVER_ENV_EXAMPLE, appUrl],
+    [NATIVE_PROXY_ENV_EXAMPLE, proxy.get('MERIDIAN_SITE_ADDRESS') ?? ''],
+  ]) {
+    if (!/\.example\.(org|com|net)(\/|$)/.test(value)) {
+      fail(`${file} names '${value}', which is not a documentation domain.`);
+    }
+  }
+
+  if (server.get('APP_ENV') === 'local') {
+    fail(`${NATIVE_SERVER_ENV_EXAMPLE} sets APP_ENV=local, which disables the event-mode safeguards.`);
+  }
+
+  if (server.get('APP_DEBUG') !== 'false') {
+    fail(`${NATIVE_SERVER_ENV_EXAMPLE} must set APP_DEBUG=false.`);
+  }
+
+  if (server.get('MERIDIAN_NODE_ROLE') === 'development') {
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE} sets MERIDIAN_NODE_ROLE=development, which is not a deployment role (technical spec 26.1).`,
+    );
+  }
+
+  if (server.get('SESSION_DOMAIN') !== '') {
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE} sets SESSION_DOMAIN. A host-only cookie is what keeps organization subdomains isolated from one another (technical spec 8.7).`,
+    );
+  }
+
+  // The image set this as a build-time ENV, so a deployed server always served
+  // the built artifact. Nothing sets it on a host, and the default follows
+  // APP_ENV — which is right today and is one edit away from not being.
+  if (server.get('MERIDIAN_CLIENT_USE_DEV_SERVER') !== 'false') {
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE} does not set MERIDIAN_CLIENT_USE_DEV_SERVER=false. The server image sets it as an ENV; on a host this file is the only thing that can.`,
+    );
+  }
+
+  // `postgres` was the Compose service name and resolves to nothing on a host.
+  if (server.get('DB_HOST') === 'postgres') {
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE} sets DB_HOST=postgres, which is the Compose service name and resolves to nothing on a host.`,
+    );
+  }
+
+  // Every variable the proxy configuration substitutes has to be documented in
+  // the file the proxy service actually reads, or the operator is left to find
+  // the names inside a Caddyfile.
+  const proxySources = [CADDY_SNIPPET, CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD, NATIVE_CADDY_DROP_IN];
+  const substituted = new Set();
+
+  for (const file of proxySources) {
+    for (const [, key] of read(file).matchAll(/\{\$([A-Z0-9_]+)(?::[^}]*)?\}/g)) {
+      substituted.add(key);
+    }
+  }
+
+  for (const key of [...substituted].sort()) {
+    if (!proxy.has(key)) {
+      fail(`${NATIVE_PROXY_ENV_EXAMPLE} does not document ${key}, which the proxy configuration substitutes.`);
+    }
+  }
+
+  if (proxy.get('MERIDIAN_CADDYFILE') !== '/etc/caddy/Caddyfile') {
+    fail(
+      `${NATIVE_PROXY_ENV_EXAMPLE} does not default MERIDIAN_CADDYFILE to /etc/caddy/Caddyfile, which is the configuration an internet-reachable node runs.`,
+    );
+  }
+
+  // The socket the proxy dials is named after the PHP version the pool runs, so
+  // bumping one and not the other produces a proxy dialing a socket nothing
+  // listens on.
+  const upstream = proxy.get('MERIDIAN_SERVER_UPSTREAM') ?? '';
+  const installPhp = (read(NATIVE_INSTALL).match(/PHP_VERSION:-(\d+\.\d+)\}/) ?? [])[1];
+
+  if (installPhp && !upstream.includes(`php${installPhp}-`)) {
+    fail(
+      `${NATIVE_PROXY_ENV_EXAMPLE} points MERIDIAN_SERVER_UPSTREAM at '${upstream}', which does not name PHP ${installPhp} — the version ${NATIVE_INSTALL} provisions the pool with.`,
     );
   }
 }
@@ -719,7 +1082,8 @@ function main() {
   checkCaddyConfiguration();
   checkSubdomainDocumentation();
   checkDnsTemplates();
-  checkEntrypoint();
+  checkBootSequence(ENTRYPOINT);
+  checkNativeBundle();
 
   const requireDocker = args.includes('--require-docker');
 
