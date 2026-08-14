@@ -139,6 +139,46 @@ the seeded fixture user (`local-field@meridian.test`) and reads the login
 code out of the mail log with `corepack pnpm run server:logs -- --filter "login
 code"`.
 
+### Seeing Meridian Field on a Phone
+
+Build the committed Capacitor project and run it on a simulator or emulator. On
+a Mac with Xcode:
+
+```bash
+corepack pnpm run mobile:ios:simulator
+```
+
+On any platform with the Android SDK installed:
+
+```bash
+corepack pnpm run mobile:android:emulator
+```
+
+Each syncs the Field client into its native project, builds, installs, and
+launches. iOS reuses an already booted simulator or starts the newest iPhone
+one; Android reuses a running emulator or boots the first virtual device, and
+never installs to a plugged-in phone unless `--device <serial>` names it. Pass
+`-- --device "iPhone SE (3rd generation)"` or `-- --avd Pixel_7_API_34` to pick
+one, and run either script directly with `--list` to see what the machine has.
+Neither needs `ANDROID_HOME` or `adb` on the PATH; the SDK is looked for where
+the installer puts it.
+
+Neither needs a paid developer account or any release credential: a simulator
+build is signed ad hoc by the toolchain, and the Android debug variant is signed
+with the local debug keystore. Neither is distributable — the release paths are
+`mobile:ios:release` and `mobile:android:release`, documented in
+`docs/process/release-packaging.md`.
+
+The app starts with no node configured, assuming the on-site convention name
+`meridian.home.arpa`. Point it at a local one through the menu's "Connect this
+device to a node": an iOS simulator shares this Mac's network, so
+`http://localhost:8000` works, while an Android emulator reaches the host at
+`http://10.0.2.2:8000`.
+
+A packaged build takes its `VITE_*` configuration only from variables exported
+when the build ran, never from the `.env.*.local` files `env:local` writes for
+the dev server — see `apps/client/env/build/README.md` for why.
+
 ### Quick Local Check
 
 Run the process checks before opening a pull request:

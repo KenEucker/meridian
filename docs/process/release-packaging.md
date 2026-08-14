@@ -55,6 +55,16 @@ key material is ever committed, and the environment variable inventory below is
 code (`apps/mobile/src/releaseSigning.ts`) that the build configurations are
 tested against.
 
+On the release maintainer's machine the environment is populated from `.env` at
+the repository root, which is gitignored: copy `.env.example`, fill in the
+values, and both `mobile:android:release` and `mobile:ios:release` read them
+from there (`scripts/release/release-env.mjs`). A variable already exported in
+the shell wins over its `.env` line, so a CI-style invocation behaves the same
+with the file present, and `.env` never becomes a source of defaults — a
+credential absent from both is still absent, and the build still refuses.
+`.env.example` carries names and shapes only; putting a real value in it would
+commit the credential.
+
 | Credential | Supplied as | Held where |
 |---|---|---|
 | Android upload keystore (file) | `MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE` (path); in CI, the `MERIDIAN_ANDROID_UPLOAD_KEYSTORE_BASE64` repository secret | The release maintainer's secure credential store; a base64 copy in the GitHub repository secrets. Not recoverable if lost — Play accepts an upload-key reset only through a support request. |
@@ -188,18 +198,24 @@ warning teaches the operator to distrust the document.
 `ANDROID_HOME` set or `apps/mobile/android/local.properties` pointing at the
 SDK). Gradle itself arrives through the committed wrapper.
 
-Supply the four signing credentials through the environment — the Gradle
+Supply the four signing credentials in `.env` (see Credentials) — the Gradle
 task-graph guard fails a release build that is missing any of them, before it
 can emit `app-release-unsigned.apk`:
 
-```bash
-export MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE=/path/to/meridian-upload.keystore
-export MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD=...
-export MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS=meridian-upload
-export MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD=...
+```
+MERIDIAN_ANDROID_UPLOAD_KEYSTORE_FILE=/path/to/meridian-upload.keystore
+MERIDIAN_ANDROID_UPLOAD_KEYSTORE_PASSWORD=...
+MERIDIAN_ANDROID_UPLOAD_KEY_ALIAS=meridian-upload
+MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD=...
 ```
 
 Build the Field client into the native project, then the signed artifacts:
+
+```bash
+corepack pnpm run mobile:android:release
+```
+
+Or, with the credentials exported in the shell, drive Gradle directly:
 
 ```bash
 corepack pnpm run mobile:cap:sync
@@ -225,20 +241,37 @@ workflow uses: `meridian-field-<version>.aab` and
 the login Keychain, and the provisioning profile installed (see One-time
 provisioning). This is the artifact only this runbook produces.
 
-Supply the three signing credentials through the environment — the script
+Supply the three signing credentials in `.env` (see Credentials) — the run
 refuses before invoking Xcode if any is missing:
 
-```bash
-export MERIDIAN_IOS_TEAM_ID=...
-export MERIDIAN_IOS_DISTRIBUTION_CERTIFICATE="Apple Distribution: ..."
-export MERIDIAN_IOS_PROVISIONING_PROFILE="..."
 ```
+MERIDIAN_IOS_TEAM_ID=...
+MERIDIAN_IOS_DISTRIBUTION_CERTIFICATE=Apple Distribution: ...
+MERIDIAN_IOS_PROVISIONING_PROFILE=...
+```
+
+`MERIDIAN_IOS_DISTRIBUTION_CERTIFICATE` is the signing identity's common name
+as the login Keychain spells it — `security find-identity -v -p codesigning`
+lists the ones this Mac can sign with. `MERIDIAN_IOS_PROVISIONING_PROFILE` is
+the profile's *name*, which is not the bundle identifier and not the
+`.mobileprovision` filename; `.env.example` carries the command that prints the
+names of the profiles installed on the machine.
 
 Build the Field client into the native project, then archive and export:
 
 ```bash
-corepack pnpm run mobile:cap:sync
-corepack pnpm run mobile:ios:archive
+corepack pnpm run mobile:ios:release
+```
+
+That is the iOS counterpart of `mobile:android:release`: it runs
+`mobile:cap:sync` and then `scripts/release/build-ios-release.mjs`, which
+resolves the credentials and invokes the archive script. `mobile:ios:archive`
+remains as an alias for it. To archive an already synced bundle without
+rebuilding the client, run the archive script directly with the credentials
+exported:
+
+```bash
+corepack pnpm --filter @meridian/mobile run ios:archive
 ```
 
 The script (`apps/mobile/scripts/build-ios-release.sh`) archives with manual

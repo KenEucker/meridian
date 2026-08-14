@@ -4,10 +4,8 @@
  *
  * CI's android job supplies the MERIDIAN_ANDROID_UPLOAD_* credentials from
  * repository secrets; a local release reads them from `.env` at the repository
- * root, which is gitignored, so the release maintainer keeps them out of both
- * the commit history and the shell profile. Values already exported in the
- * environment win over `.env` lines, so a CI-style invocation still behaves
- * the same with the file present.
+ * root through `release-env.mjs`, the same loader the iOS release wrapper
+ * uses, so both platforms resolve credentials by one rule.
  *
  * The keystore path accepts `~/` and Git Bash `/c/...` spellings in addition
  * to native Windows paths, because the maintainer's interactive shell is
@@ -19,10 +17,12 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { loadReleaseEnv, missingCredentials } from './release-env.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const androidDir = join(repositoryRoot, 'apps', 'mobile', 'android');
@@ -35,42 +35,9 @@ const REQUIRED_CREDENTIALS = [
   'MERIDIAN_ANDROID_UPLOAD_KEY_PASSWORD',
 ];
 
-function parseEnvFile(text) {
-  const values = {};
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line === '' || line.startsWith('#')) {
-      continue;
-    }
-    const assignment = line.startsWith('export ') ? line.slice('export '.length).trim() : line;
-    const separator = assignment.indexOf('=');
-    if (separator < 1) {
-      continue;
-    }
-    const key = assignment.slice(0, separator).trim();
-    let value = assignment.slice(separator + 1).trim();
-    const quoted =
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"));
-    if (quoted && value.length >= 2) {
-      value = value.slice(1, -1);
-    }
-    values[key] = value;
-  }
-  return values;
-}
+const env = loadReleaseEnv(envFilePath);
 
-const env = { ...process.env };
-if (existsSync(envFilePath)) {
-  const fileValues = parseEnvFile(readFileSync(envFilePath, 'utf8'));
-  for (const [key, value] of Object.entries(fileValues)) {
-    if (env[key] === undefined || env[key] === '') {
-      env[key] = value;
-    }
-  }
-}
-
-const missing = REQUIRED_CREDENTIALS.filter((name) => !env[name]);
+const missing = missingCredentials(env, REQUIRED_CREDENTIALS);
 if (missing.length > 0) {
   console.error(
     `Missing Android release signing credentials: ${missing.join(', ')}.\n` +
