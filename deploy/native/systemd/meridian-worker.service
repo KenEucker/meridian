@@ -1,0 +1,32 @@
+[Unit]
+# The `worker` service from compose.deployment.yaml. Transactional
+# notifications are queued (NOTIFY-001), so a node without this is one where the
+# operational mail Meridian promises to send is written and never delivered.
+Description=Meridian queue worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+PartOf=meridian.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=@MERIDIAN_ROOT@/apps/server
+Environment=MERIDIAN_CONTAINER_ROLE=worker
+ExecStart=/usr/bin/php@PHP_VERSION@ artisan queue:work --queue=notifications,default --tries=3 --max-time=3600
+# --max-time makes the worker exit hourly to shed leaked memory; Restart=always
+# is what brings it straight back, the same job `restart: unless-stopped` did.
+Restart=always
+RestartSec=2
+# php artisan queue:restart signals a graceful stop; give it room to finish the
+# job in hand before systemd escalates.
+TimeoutStopSec=60
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
