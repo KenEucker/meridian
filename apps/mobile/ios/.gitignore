@@ -12,6 +12,12 @@ capacitor-cordova-ios-plugins
 App/App/capacitor.config.json
 App/App/config.xml
 
+# Written by any Xcode or xcodebuild build of the project. It pins nothing
+# `CapApp-SPM/Package.swift` has not already pinned exactly, and that file is
+# regenerated from the installed @capacitor/* version on every `cap sync`, so
+# committing the resolution would only add a file that goes stale on its own.
+App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
 # Signing key material is held outside the repository and supplied through
 # the environment (technical spec 26.5, M19.22).
 *.p12
