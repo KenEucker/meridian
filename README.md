@@ -139,6 +139,29 @@ the seeded fixture user (`local-field@meridian.test`) and reads the login
 code out of the mail log with `corepack pnpm run server:logs -- --filter "login
 code"`.
 
+### Seeing Meridian Field on a Phone
+
+On a Mac with Xcode, build the committed Capacitor project and run it on an iOS
+simulator:
+
+```bash
+corepack pnpm run mobile:ios:simulator
+```
+
+This syncs the Field client into the native project, builds, installs, and
+launches, reusing an already booted simulator or starting the newest iPhone one.
+`-- --device "iPhone SE (3rd generation)"` picks a specific device, and `node
+scripts/dev/run-ios-simulator.mjs --list` names the ones this Mac has.
+
+A simulator build is signed ad hoc by the toolchain, so this needs no Apple
+Developer Program membership and none of the signing credentials in
+`docs/process/release-packaging.md`. It is also not distributable and will not
+install on a physical device — the release path is `mobile:ios:release`.
+
+The app starts with no node configured. Point it at one through the menu's
+"Connect this device to a node"; the simulator shares this Mac's network, so a
+`corepack pnpm run server:dev` node at `http://localhost:8000` is reachable.
+
 ### Quick Local Check
 
 Run the process checks before opening a pull request:

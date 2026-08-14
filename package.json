@@ -79,6 +79,7 @@
     "mobile:cap:copy": "corepack pnpm --filter @meridian/mobile run cap:copy",
     "mobile:cap:sync": "corepack pnpm --filter @meridian/mobile run cap:sync",
     "mobile:assets:generate": "corepack pnpm --filter @meridian/mobile run assets:generate",
+    "mobile:ios:simulator": "corepack pnpm run mobile:cap:sync && node scripts/dev/run-ios-simulator.mjs",
     "mobile:ios:release": "corepack pnpm run mobile:cap:sync && node scripts/release/build-ios-release.mjs",
     "mobile:ios:archive": "corepack pnpm run mobile:ios:release",
     "mobile:android:release": "corepack pnpm run mobile:cap:sync && node scripts/release/build-android-release.mjs",
