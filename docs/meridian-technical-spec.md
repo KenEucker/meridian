@@ -515,6 +515,26 @@ Local nodes should be discoverable.
 
 On-site nodes should support `.local` mDNS names, but `.local` names are not sufficient for browser-trusted HTTPS unless the client trusts the certificate. Therefore `.local` discovery is primarily useful for the installed app and admin/debug flows.
 
+### The on-site node name convention
+
+On-site nodes answer to an agreed name so that a device that has been told nothing can still find one. The convention:
+
+```text
+meridian.home.arpa     the main on-site node
+meridian2.home.arpa    the second node on the same network
+meridian3.home.arpa    the third, and so on in order
+```
+
+`home.arpa` is the special-use domain reserved for exactly this (RFC 8375): it is answered by the local network and is never resolvable from the internet. That property is the point — the name means the node standing on this network, and it cannot be made to mean anything else — and it is also the limitation, because no public certificate authority will certify a name it cannot verify. Nodes therefore serve these names over plain HTTP, and a client's allowance for cleartext is scoped to `home.arpa` and nothing else.
+
+This does not soften 8.2. Browser staff workflow stays on the event hostname of 8.3, which carries a certificate obtained before the event; the convention names serve the installed app, admin, and debug access, exactly as `.local` names do above. A browser reaching a convention name will serve pages and refuse sign-in, because device signing keys require a secure context and 8.6 fails closed without one.
+
+**What a client does.** A client with no node configured, and none injected or built in, works against `meridian.home.arpa`. At startup it probes the convention names in order and then the central deployment, and adopts the first that answers. An explicitly configured node always outranks discovery: a device somebody pointed at a node stays pointed there. Discovery is per startup and is not persisted, because which network a device is standing on is a fact about now.
+
+**What a node does.** A node joining a network claims a convention name rather than being assigned one by hand. It probes the names in order and takes the first that either answers nothing or already answers as itself; a name another node answers is never displaced. Where the node also serves DNS for the network, it answers for the name it claimed and for the peers it found at the addresses they answered from, so that every node's view of the convention agrees with what is actually running.
+
+A network whose own DNS can serve the records should carry them there instead, which is the 8.3 model and covers every device at once. Self-assignment is what makes the convention work where that is unavailable.
+
 ## 8.6 HTTPS validation
 
 Setup must fail closed if HTTPS validation fails in event mode.
