@@ -34,6 +34,12 @@ import { networkInterfaces, tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  claimOnSiteNodeName,
+  ON_SITE_NODE_HOSTNAMES,
+  onSiteDnsRecords,
+} from "./onsite-node-names.mjs";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 /*
@@ -159,8 +165,87 @@ if (lanAddress === null) {
 
 const withDns = process.argv.includes("--with-dns");
 
+/*
+ * Which convention name this node answers to (technical spec 8.5).
+ *
+ * Asked of the network rather than assumed: the first name that answers
+ * nothing, or that already answers as this machine, is this node's. A name
+ * another node holds is left alone — two nodes answering to one name resolves
+ * for a phone and then authenticates against whichever the network routed it
+ * to.
+ *
+ * Before anything starts listening, so this node's own not-yet-running proxy
+ * cannot be mistaken for a peer.
+ */
+async function probeConventionName(hostname) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const response = await fetch(`http://${hostname}/api/health`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return { answered: false, address: null };
+    }
+
+    /*
+     * Which machine answered. The node reports no address of its own, so this
+     * is the address the name resolved to — which is the question being
+     * asked: is the thing at this name me, or somebody else?
+     */
+    return { answered: true, address: await resolvedAddress(hostname) };
+  } catch {
+    return { answered: false, address: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolvedAddress(hostname) {
+  try {
+    const { lookup } = await import("node:dns/promises");
+    const { address } = await lookup(hostname, { family: 4 });
+
+    return address;
+  } catch {
+    return null;
+  }
+}
+
+const claim = await claimOnSiteNodeName({
+  ownAddress: lanAddress,
+  probe: probeConventionName,
+});
+
 console.log("Starting a local Meridian node on the on-site convention names.");
 console.log("");
+
+if (claim.hostname === null) {
+  console.error(
+    `  Every convention name is answered by another node (${ON_SITE_NODE_HOSTNAMES.join(", ")}).`,
+  );
+  console.error(
+    "  Refusing to claim one: two nodes on a name is a phone that resolves to",
+  );
+  console.error(
+    "  one of them and signs in against the other. Stop a node, or extend the",
+  );
+  console.error("  convention in scripts/dev/onsite-node-names.mjs.");
+  process.exit(1);
+}
+
+console.log(
+  `  This node is ${claim.hostname}` +
+    (claim.reclaimed ? " (reclaimed — it already answered here)" : "") +
+    (claim.index > 0 ? ` — ${claim.index} node(s) already on this network` : ""),
+);
+for (const peer of claim.peers) {
+  console.log(`    peer: ${peer.hostname} at ${peer.address ?? "unknown address"}`);
+}
 console.log(`  This machine's address on the current network: ${lanAddress}`);
 if (!withDns) {
   console.log("  Point the network's DNS record for meridian.home.arpa at it");
@@ -270,13 +355,19 @@ if (withDns) {
        * for the HTTPS record type Chrome asks for before every navigation,
        * and a hard failure there pushes the browser toward an HTTPS upgrade
        * against a node that serves plain HTTP.
+       *
+       * The records are this node's own name and the peers it found, at the
+       * addresses they answered from, so every node's DNS agrees with what
+       * is actually running rather than with a list somebody wrote down.
        */
       "home.arpa {",
       "    log",
       "    hosts {",
-      `        ${lanAddress} meridian.home.arpa`,
-      `        ${lanAddress} meridian2.home.arpa`,
-      `        ${lanAddress} meridian3.home.arpa`,
+      ...onSiteDnsRecords({
+        hostname: claim.hostname,
+        ownAddress: lanAddress,
+        peers: claim.peers,
+      }).map((record) => `        ${record.address} ${record.hostname}`),
       "    }",
       "}",
       ". {",

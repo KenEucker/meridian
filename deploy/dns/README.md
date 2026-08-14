@@ -56,12 +56,26 @@ install its node with no settings typed on any phone.
 `deploy/caddy/Caddyfile.home-arpa`, and the walkthrough for running a local
 node from a fresh clone is in the README beside it.
 
-Numbering today is an operator act: the main node's record points at the main
-node, and a second machine gets the `meridian2` record when somebody adds it.
-Nodes actively discovering that `meridian.home.arpa` is taken and registering
-the next free name themselves needs the node to manage the network's DNS
-records, which no shipped component does yet — a follow-up with its own spec
-section when multi-node kits become real.
+### Numbering, and who decides it
+
+Where this file is the network's DNS, numbering is an operator act: the main
+node's record points at the main node, and a second machine gets the
+`meridian2` record when somebody adds it. That is the preferred arrangement —
+one authority, every device served, nothing to negotiate.
+
+Where the network cannot serve records and a node answers for itself
+(`node:local:dns`), the node claims its own name instead. On start it asks each
+convention name in order and takes the first that answers nothing, or that
+already answers as itself; a name another node answers is never displaced, and
+a node that finds every name taken refuses to start rather than claim one.
+Two nodes on a single name is a phone that resolves to one of them and signs in
+against the other, which is why claiming is a decision rather than a default.
+
+A node serving DNS answers for the name it claimed and for the peers it found,
+at the addresses they answered from, so each node's view of the convention
+agrees with what is actually running. The rule and its reasoning are technical
+spec 8.5; the decision itself is `scripts/dev/onsite-node-names.mjs`, tested
+beside it.
 
 ## `.local` names
 
