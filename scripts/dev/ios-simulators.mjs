@@ -150,20 +150,3 @@ export function chooseSimulator(simulators, request = {}) {
       "simulator in Xcode under Settings → Components, or name a device with --device.",
   };
 }
-
-/**
- * The application identifier to install and launch, read from the committed
- * Capacitor configuration.
- *
- * `capacitor.config.ts` is the identity source of truth the native projects
- * are generated and tested against (`apps/mobile/src/nativeProjects.ts`), so
- * the identifier is read from it rather than repeated here, where it could
- * disagree with what a build actually produced.
- *
- * @param {string} text Contents of `apps/mobile/capacitor.config.ts`.
- * @returns {string | null}
- */
-export function appIdFromCapacitorConfig(text) {
-  const match = /\bappId:\s*["']([^"']+)["']/.exec(text);
-  return match ? match[1] : null;
-}

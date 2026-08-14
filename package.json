@@ -82,6 +82,7 @@
     "mobile:ios:simulator": "corepack pnpm run mobile:cap:sync && node scripts/dev/run-ios-simulator.mjs",
     "mobile:ios:release": "corepack pnpm run mobile:cap:sync && node scripts/release/build-ios-release.mjs",
     "mobile:ios:archive": "corepack pnpm run mobile:ios:release",
+    "mobile:android:emulator": "corepack pnpm run mobile:cap:sync && node scripts/dev/run-android-emulator.mjs",
     "mobile:android:release": "corepack pnpm run mobile:cap:sync && node scripts/release/build-android-release.mjs",
     "kiosk:start": "corepack pnpm --filter @meridian/kiosk run start",
     "kiosk:build": "corepack pnpm --filter @meridian/kiosk run build",

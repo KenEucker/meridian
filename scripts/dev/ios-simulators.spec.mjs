@@ -9,12 +9,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  appIdFromCapacitorConfig,
-  availableSimulators,
-  chooseSimulator,
-  describeSimulator,
-} from "./ios-simulators.mjs";
+import { appIdFromCapacitorConfig } from "./capacitor-app.mjs";
+import { availableSimulators, chooseSimulator, describeSimulator } from "./ios-simulators.mjs";
 
 function simctlList(runtimes) {
   return { devices: runtimes };

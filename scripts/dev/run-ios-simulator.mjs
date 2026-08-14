@@ -34,12 +34,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  appIdFromCapacitorConfig,
-  availableSimulators,
-  chooseSimulator,
-  describeSimulator,
-} from "./ios-simulators.mjs";
+import { appIdFromCapacitorConfig } from "./capacitor-app.mjs";
+import { availableSimulators, chooseSimulator, describeSimulator } from "./ios-simulators.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const mobileDir = join(repositoryRoot, "apps", "mobile");

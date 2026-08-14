@@ -141,26 +141,43 @@ code"`.
 
 ### Seeing Meridian Field on a Phone
 
-On a Mac with Xcode, build the committed Capacitor project and run it on an iOS
-simulator:
+Build the committed Capacitor project and run it on a simulator or emulator. On
+a Mac with Xcode:
 
 ```bash
 corepack pnpm run mobile:ios:simulator
 ```
 
-This syncs the Field client into the native project, builds, installs, and
-launches, reusing an already booted simulator or starting the newest iPhone one.
-`-- --device "iPhone SE (3rd generation)"` picks a specific device, and `node
-scripts/dev/run-ios-simulator.mjs --list` names the ones this Mac has.
+On any platform with the Android SDK installed:
 
-A simulator build is signed ad hoc by the toolchain, so this needs no Apple
-Developer Program membership and none of the signing credentials in
-`docs/process/release-packaging.md`. It is also not distributable and will not
-install on a physical device — the release path is `mobile:ios:release`.
+```bash
+corepack pnpm run mobile:android:emulator
+```
 
-The app starts with no node configured. Point it at one through the menu's
-"Connect this device to a node"; the simulator shares this Mac's network, so a
-`corepack pnpm run server:dev` node at `http://localhost:8000` is reachable.
+Each syncs the Field client into its native project, builds, installs, and
+launches. iOS reuses an already booted simulator or starts the newest iPhone
+one; Android reuses a running emulator or boots the first virtual device, and
+never installs to a plugged-in phone unless `--device <serial>` names it. Pass
+`-- --device "iPhone SE (3rd generation)"` or `-- --avd Pixel_7_API_34` to pick
+one, and run either script directly with `--list` to see what the machine has.
+Neither needs `ANDROID_HOME` or `adb` on the PATH; the SDK is looked for where
+the installer puts it.
+
+Neither needs a paid developer account or any release credential: a simulator
+build is signed ad hoc by the toolchain, and the Android debug variant is signed
+with the local debug keystore. Neither is distributable — the release paths are
+`mobile:ios:release` and `mobile:android:release`, documented in
+`docs/process/release-packaging.md`.
+
+The app starts with no node configured, assuming the on-site convention name
+`meridian.home.arpa`. Point it at a local one through the menu's "Connect this
+device to a node": an iOS simulator shares this Mac's network, so
+`http://localhost:8000` works, while an Android emulator reaches the host at
+`http://10.0.2.2:8000`.
+
+A packaged build takes its `VITE_*` configuration only from variables exported
+when the build ran, never from the `.env.*.local` files `env:local` writes for
+the dev server — see `apps/client/env/build/README.md` for why.
 
 ### Quick Local Check
 
