@@ -50,6 +50,13 @@ sudo chmod 0640 /var/www/meridian/apps/server/.env
 sudo -u www-data editor /var/www/meridian/apps/server/.env
 
 # 3. The node's own application key. Paste the output into APP_KEY.
+#    `artisan` needs the server's dependencies, and the host provisioning does
+#    not install them — the release build does, and that is step 5. So install
+#    them once here; step 5 re-runs the same install against the same lockfile
+#    and finishes in seconds.
+sudo -u www-data composer install --working-dir=/var/www/meridian/apps/server \
+    --no-dev --prefer-dist --no-progress --no-interaction \
+    --optimize-autoloader --classmap-authoritative
 cd /var/www/meridian/apps/server && sudo -u www-data php8.5 artisan key:generate --show
 
 # 4. Proxy configuration: MERIDIAN_SITE_ADDRESS, and the TLS choice below.
