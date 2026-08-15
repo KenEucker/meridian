@@ -976,6 +976,34 @@ function checkNativeEnvExamples() {
       `${NATIVE_PROXY_ENV_EXAMPLE} points MERIDIAN_SERVER_UPSTREAM at '${upstream}', which does not name PHP ${installPhp} — the version ${NATIVE_INSTALL} provisions the pool with.`,
     );
   }
+
+  // README step 2 copies this file to become the server's own `.env`, so
+  // phpdotenv parses it — and phpdotenv refuses an unquoted value containing
+  // whitespace outright. The failure is not a bad value but an unparseable
+  // file, which takes down every `artisan` invocation on the node, including
+  // the `composer install` that runs `package:discover`. The Compose sibling
+  // carries the same values but is read by Compose's `env_file:` parser, which
+  // accepts them, so this is the only file where the rule bites — which is
+  // exactly why it reached a node.
+  for (const [index, line] of read(NATIVE_SERVER_ENV_EXAMPLE).split(/\r?\n/).entries()) {
+    const assignment = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+
+    if (!assignment) {
+      continue;
+    }
+
+    const [, name, rawValue] = assignment;
+    // A trailing comment is phpdotenv's, not part of the value.
+    const value = rawValue.replace(/\s+#.*$/, '').trim();
+
+    if (/^(".*"|'.*')$/s.test(value) || !/\s/.test(value)) {
+      continue;
+    }
+
+    fail(
+      `${NATIVE_SERVER_ENV_EXAMPLE}:${index + 1} leaves ${name} unquoted with whitespace in its value. phpdotenv cannot parse the file this becomes, so every artisan command on the node fails.`,
+    );
+  }
 }
 
 function dockerAvailable() {
