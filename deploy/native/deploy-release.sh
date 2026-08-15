@@ -24,7 +24,9 @@ PHP_VERSION="${PHP_VERSION:-8.5}"
 MERIDIAN_ROOT="${MERIDIAN_ROOT:-/var/www/meridian}"
 SERVER_DIR="${MERIDIAN_ROOT}/apps/server"
 PHP="/usr/bin/php${PHP_VERSION}"
+BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKIP_BUILD="${SKIP_BUILD:-no}"
+SKIP_PREFLIGHT="${SKIP_PREFLIGHT:-no}"
 
 log() { echo "meridian: $1"; }
 as_app() { sudo -u www-data --preserve-env=PATH,COMPOSER_HOME "$@"; }
@@ -34,7 +36,19 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-if [ ! -f "${SERVER_DIR}/.env" ]; then
+# ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+# Before anything is built or migrated, because the configuration problems it
+# finds otherwise surface as a Composer error with no line number, or sixty
+# seconds of waiting for a database that was never going to answer, or a failed
+# `meridian:event-mode` at the very end of a release. It reads only, changes
+# nothing, and reports every problem at once. Run as root so it can compare the
+# server's environment file against the proxy's.
+if [ "${SKIP_PREFLIGHT}" != "yes" ]; then
+    log "checking this node's configuration"
+    MERIDIAN_ROOT="${MERIDIAN_ROOT}" "${PHP}" "${BUNDLE_DIR}/preflight.php"
+elif [ ! -f "${SERVER_DIR}/.env" ]; then
     log "${SERVER_DIR}/.env is missing; write it before releasing"
     exit 1
 fi

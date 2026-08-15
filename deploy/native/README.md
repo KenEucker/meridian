@@ -50,18 +50,52 @@ sudo chmod 0640 /var/www/meridian/apps/server/.env
 sudo -u www-data editor /var/www/meridian/apps/server/.env
 
 # 3. The node's own application key. Paste the output into APP_KEY.
+#    `artisan` needs the server's dependencies, and the host provisioning does
+#    not install them — the release build does, and that is step 5. So install
+#    them once here; step 5 re-runs the same install against the same lockfile
+#    and finishes in seconds.
+sudo -u www-data composer install --working-dir=/var/www/meridian/apps/server \
+    --no-dev --prefer-dist --no-progress --no-interaction \
+    --optimize-autoloader --classmap-authoritative
 cd /var/www/meridian/apps/server && sudo -u www-data php8.5 artisan key:generate --show
 
 # 4. Proxy configuration: MERIDIAN_SITE_ADDRESS, and the TLS choice below.
 sudo editor /etc/meridian-proxy.env
 
-# 5. Build and release.
+# 5. Check the node's configuration before releasing it. Reads only.
+sudo php8.5 preflight.php
+
+# 6. Build and release.
 sudo ./deploy-release.sh
 ```
 
-Upgrades are steps 5 alone, after a `git pull` in `/var/www/meridian` — plus a
+Upgrades are step 6 alone, after a `git pull` in `/var/www/meridian` — plus a
 database backup first, which the script warns about before it migrates rather
 than after.
+
+## Preflight
+
+`preflight.php` is step 5 on its own, and `deploy-release.sh` runs it before it
+builds or migrates anything, so a release cannot start against a configuration
+that was never going to work. `SKIP_PREFLIGHT=yes` turns that off for an
+operator who knows better than it does.
+
+It exists because this class of mistake is cheap to make and expensive to find.
+An unquoted value with a space in it does not produce a bad value — it makes
+the file unparseable, so the first thing that fails is Composer's
+`package:discover` with a dotenv error and no line number. A wrong database
+password spends sixty seconds in the release's wait loop before reporting only
+that the database was unreachable. An `APP_URL` still on `meridian.example.org`
+gets all the way to `meridian:event-mode` at the end of a release. Each one
+costs an install to find, so preflight names the file, the line, and the fix,
+and reports every problem it can see at once rather than stopping at the first.
+
+It reads and changes nothing, needs no dependencies — it is deliberately
+dependency-free so it works before `composer install` has ever run, which is
+when the environment file is most likely to be wrong — and borrows phpdotenv
+itself as the authority once `vendor/` exists. Run it as root: the server's
+environment file is `0640 www-data:www-data`, the proxy's is `0640 root:caddy`,
+and it checks that `APP_URL` and `MERIDIAN_SITE_ADDRESS` name the same host.
 
 ## TLS is not optional
 
