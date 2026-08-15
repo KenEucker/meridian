@@ -73,6 +73,7 @@ const ENTRYPOINT = 'deploy/docker/entrypoint.sh';
 const NATIVE_DIRECTORY = 'deploy/native';
 const NATIVE_INSTALL = 'deploy/native/install-host.sh';
 const NATIVE_RELEASE = 'deploy/native/deploy-release.sh';
+const NATIVE_PREFLIGHT = 'deploy/native/preflight.php';
 const NATIVE_SERVER_ENV_EXAMPLE = 'deploy/native/.env.server.example';
 const NATIVE_PROXY_ENV_EXAMPLE = 'deploy/native/.env.proxy.example';
 const NATIVE_CADDY_DROP_IN = 'deploy/native/systemd/caddy-meridian.conf';
@@ -975,6 +976,58 @@ function checkNativeEnvExamples() {
     fail(
       `${NATIVE_PROXY_ENV_EXAMPLE} points MERIDIAN_SERVER_UPSTREAM at '${upstream}', which does not name PHP ${installPhp} — the version ${NATIVE_INSTALL} provisions the pool with.`,
     );
+  }
+
+  // REQUIRED_FILES is the release manifest itself, so it cannot catch a file
+  // being dropped from it — the check and the list move together. What it can
+  // be held to is the scripts: anything they run out of their own directory has
+  // to be in the manifest, or a node installed from a release tarball unpacks a
+  // script that calls a file the tarball does not contain.
+  for (const script of [NATIVE_INSTALL, NATIVE_RELEASE]) {
+    // The capture has to swallow any `${...}` in the path rather than stop at
+    // it, or an interpolated reference matches as its literal prefix and is
+    // reported as a missing directory.
+    const references = read(script).matchAll(/\$\{BUNDLE_DIR\}\/((?:[A-Za-z0-9._\/-]|\$\{[^}]+\})+)/g);
+
+    for (const [, referenced] of references) {
+      // `${BUNDLE_DIR}/systemd/${unit}.service` and friends are resolved at run
+      // time; the literal references are the ones a manifest can be checked against.
+      if (referenced.includes('$')) {
+        continue;
+      }
+
+      const bundled = `${NATIVE_DIRECTORY}/${referenced}`;
+
+      if (!REQUIRED_FILES.includes(bundled)) {
+        fail(
+          `${script} uses ${bundled}, which is not in the release bundle manifest (scripts/deploy/deployment-bundle-manifest.mjs). A node installed from a release tarball would not have it.`,
+        );
+      }
+    }
+  }
+
+  // The preflight is only worth having if it cannot be skipped by accident, so
+  // the release has to run it, and it has to run it before it builds or
+  // migrates anything — a check that reports a bad database password after the
+  // migration has already run is not a preflight.
+  const release = read(NATIVE_RELEASE);
+  const preflightAt = release.indexOf('preflight.php');
+
+  if (preflightAt === -1) {
+    fail(
+      `${NATIVE_RELEASE} does not run ${NATIVE_PREFLIGHT}. A release that starts against a configuration that cannot work fails late and obscurely, which is what the preflight exists to prevent.`,
+    );
+  } else {
+    for (const [what, marker] of [
+      ['installs dependencies', 'composer install'],
+      ['migrates', 'artisan migrate'],
+    ]) {
+      const markerAt = release.indexOf(marker);
+
+      if (markerAt !== -1 && markerAt < preflightAt) {
+        fail(`${NATIVE_RELEASE} ${what} before it runs the preflight. The preflight has to come first to be worth running.`);
+      }
+    }
   }
 
   // README step 2 copies this file to become the server's own `.env`, so

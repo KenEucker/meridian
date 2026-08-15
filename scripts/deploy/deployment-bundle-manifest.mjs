@@ -37,6 +37,7 @@ export const DEPLOYMENT_BUNDLE_FILES = [
   'deploy/native/README.md',
   'deploy/native/install-host.sh',
   'deploy/native/deploy-release.sh',
+  'deploy/native/preflight.php',
   'deploy/native/.env.server.example',
   'deploy/native/.env.proxy.example',
   'deploy/native/systemd/meridian-worker.service',
