@@ -24,6 +24,22 @@ log() {
     echo "meridian: $1"
 }
 
+# A one-click platform install (Runtipi; deploy/runtipi/README.md) has no step
+# to run `key:generate` and edit a file, and SecretGenerator deliberately
+# refuses to write a key it cannot persist. So when the deployment supplies a
+# high-entropy seed instead of a key, derive the key from it: SHA-256 gives
+# exactly the 32 bytes Laravel requires for any seed length, and the same seed
+# always yields the same key, which is what makes it survive a container
+# recreate, an app update, and a restore from the platform's own backup.
+# Every container role needs this — the worker and scheduler decrypt what the
+# web container encrypted — and a node with neither APP_KEY nor a seed still
+# stops at `meridian:secrets` and says so (technical spec 7.4, 26.2).
+if [ -z "${APP_KEY:-}" ] && [ -n "${MERIDIAN_APP_KEY_SEED:-}" ]; then
+    APP_KEY="base64:$(php -r 'echo base64_encode(hash("sha256", getenv("MERIDIAN_APP_KEY_SEED"), true));')"
+    export APP_KEY
+    log "APP_KEY derived from MERIDIAN_APP_KEY_SEED"
+fi
+
 # The storage tree is usually a volume, and a volume mounted over the image's own
 # directory arrives empty. Laravel treats a missing framework subdirectory as an
 # unwritable one, so the node has to be able to rebuild the tree on any boot.

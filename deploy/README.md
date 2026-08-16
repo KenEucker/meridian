@@ -26,6 +26,7 @@ service in [`docker/compose.yaml`](docker/compose.yaml).
 | [`caddy/Caddyfile`](caddy/Caddyfile) | Proxy for an internet-reachable node; Caddy obtains the certificate over ACME. |
 | [`caddy/Caddyfile.onsite`](caddy/Caddyfile.onsite) | Proxy for an event node; serves a certificate provisioned before the event. |
 | [`caddy/Caddyfile.wildcard`](caddy/Caddyfile.wildcard) | Proxy for an internet-reachable node also serving organization subdomains at `*.<deployment-domain>` (technical spec 8.7). |
+| [`caddy/Caddyfile.proxied`](caddy/Caddyfile.proxied) | Proxy for a node behind a TLS-terminating reverse proxy the deployment does not own (a Runtipi host's Traefik; `runtipi/README.md`): plain HTTP on `:80`, TLS one hop out. |
 | [`caddy/meridian.snippet`](caddy/meridian.snippet) | The site body every Caddyfile imports, so none can drift. |
 | [`dns/onsite-dnsmasq.conf`](dns/onsite-dnsmasq.conf) | Event network DNS for the Meridian-controlled router or AP. |
 | [`dns/onsite-hosts.example`](dns/onsite-hosts.example) | Per-machine fallback where Meridian does not control DNS. |

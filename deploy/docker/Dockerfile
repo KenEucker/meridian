@@ -210,9 +210,10 @@ FROM caddy:2-alpine AS web
 COPY --from=vendor /var/www/meridian/apps/server/public /var/www/meridian/apps/server/public
 
 # Every configuration, and the snippet they import. `MERIDIAN_CADDYFILE`
-# chooses which one runs: an event node runs Caddyfile.onsite, and a node
-# serving organization subdomains runs Caddyfile.wildcard.
-COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/Caddyfile.wildcard deploy/caddy/meridian.snippet /etc/caddy/
+# chooses which one runs: an event node runs Caddyfile.onsite, a node serving
+# organization subdomains runs Caddyfile.wildcard, and a node behind a
+# TLS-terminating platform proxy runs Caddyfile.proxied.
+COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/Caddyfile.wildcard deploy/caddy/Caddyfile.proxied deploy/caddy/meridian.snippet /etc/caddy/
 
 # Ask Caddy whether its own configuration parses, at build time, so a malformed
 # Caddyfile is a failed build rather than a container that will not start on an
@@ -226,7 +227,7 @@ COPY deploy/caddy/Caddyfile deploy/caddy/Caddyfile.onsite deploy/caddy/Caddyfile
 # exists only on an event node. The values below exist only to satisfy
 # substitution during the parse; nothing is kept.
 RUN set -eux; \
-    for config in /etc/caddy/Caddyfile /etc/caddy/Caddyfile.onsite /etc/caddy/Caddyfile.wildcard; do \
+    for config in /etc/caddy/Caddyfile /etc/caddy/Caddyfile.onsite /etc/caddy/Caddyfile.wildcard /etc/caddy/Caddyfile.proxied; do \
         MERIDIAN_SITE_ADDRESS=meridian.example.org \
         MERIDIAN_SERVER_UPSTREAM=server:9000 \
         MERIDIAN_ACME_EMAIL=meridian@example.org \
