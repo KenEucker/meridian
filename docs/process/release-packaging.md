@@ -28,7 +28,11 @@ A release is the tag `v<version>`, where `<version>` is the root
 `package.json` version at the tagged commit. Pushing the tag runs
 `.github/workflows/release-artifacts.yml`, which builds everything it can from
 that one commit, verifies every artifact carries the root version, and attaches
-the set to the GitHub release. See "Cutting a release" in
+the set to the GitHub release. On a tag the workflow also publishes the two
+deployment images to GHCR as `ghcr.io/keneucker/meridian-server:<version>` and
+`ghcr.io/keneucker/meridian-server-web:<version>` (amd64 only), so a node that
+pulls rather than builds sets `MERIDIAN_IMAGE` to the registry prefix; the
+attached tarballs are unchanged. See "Cutting a release" in
 `docs/process/versioning-strategy.md` for the tag rules and the dry run.
 
 | Artifact | Built by |

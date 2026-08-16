@@ -20,7 +20,14 @@
  *     is attached, and attachment happens only on a tag;
  *   - the iOS archive's runbook is stated rather than silently omitted;
  *   - no release artifact is committed to the repository, and the staging
- *     directory cannot become committable.
+ *     directory cannot become committable;
+ *   - the registry publication (M19.26, deploy/runtipi/README.md): both
+ *     deployment images are pushed to GHCR tagged with the same $VERSION the
+ *     version job resolves from the root package.json, the push is gated on a
+ *     tag so the dry run publishes nothing, the docker save tarballs M19.23
+ *     attaches are staged and uploaded before and independently of the push,
+ *     only the pushing job holds packages: write, and nothing sets up QEMU or
+ *     buildx multi-arch — the images are amd64 only, by decision.
  *
  * The verifier the workflow relies on is exercised for real: a staged fixture
  * set with every artifact passes, and a missing artifact, a wrongly versioned
@@ -141,6 +148,83 @@ function checkWorkflowShape(workflow) {
     fail(
       `${WORKFLOW} does not state that the iOS archive is produced through the docs/process/release-packaging.md runbook (M19.24).`,
     );
+  }
+}
+
+function checkRegistryPublish(workflow) {
+  // The two Dockerfile targets are published to GHCR from the tagged release
+  // workflow (M19.26), tagged with the root package.json version — $VERSION is
+  // the version job's output, which the version job already refuses to let
+  // disagree with the root manifest, so pushing `:$VERSION` is what "the
+  // pushed tag equals the root version" means in workflow terms.
+  const pushBlockStart = workflow.indexOf('Push the images to GHCR');
+
+  if (pushBlockStart === -1) {
+    fail(`${WORKFLOW} has no GHCR publication step (M19.26, deploy/runtipi/README.md).`);
+
+    return;
+  }
+
+  // The push step closes the server-image job, so the block under test runs
+  // to the next job.
+  const nextJobStart = workflow.indexOf('\n  desktop-installers:', pushBlockStart);
+  const pushBlock = workflow.slice(pushBlockStart, nextJobStart === -1 ? workflow.length : nextJobStart);
+
+  const requiredPushReferences = [
+    ['docker tag "meridian/server:$VERSION" "ghcr.io/keneucker/meridian-server:$VERSION"', 'retagging the server image for GHCR'],
+    ['docker tag "meridian/server-web:$VERSION" "ghcr.io/keneucker/meridian-server-web:$VERSION"', 'retagging the web image for GHCR'],
+    ['docker push "ghcr.io/keneucker/meridian-server:$VERSION"', 'pushing the server image'],
+    ['docker push "ghcr.io/keneucker/meridian-server-web:$VERSION"', 'pushing the web image'],
+    ['VERSION: ${{ needs.version.outputs.version }}', 'wiring $VERSION to the version job output the root package.json decides'],
+  ];
+
+  for (const [reference, description] of requiredPushReferences) {
+    if (!pushBlock.includes(reference)) {
+      fail(`${WORKFLOW}'s GHCR publication step never contains ${reference} (${description}).`);
+    }
+  }
+
+  // A workflow_dispatch dry run publishes nothing, exactly as it attaches
+  // nothing: the push step itself carries the tag gate.
+  if (!pushBlock.includes("if: github.ref_type == 'tag'")) {
+    fail(`${WORKFLOW} does not gate the GHCR push on a tag, so a workflow_dispatch dry run would publish images.`);
+  }
+
+  // The tarball artifacts M19.23 produces are unchanged: both docker save
+  // lines still stage them, and staging and the artifact upload both precede
+  // the push, so the attached set does not depend on the push at all.
+  const saveIndexes = [
+    workflow.indexOf('docker save "meridian/server:$VERSION"'),
+    workflow.indexOf('docker save "meridian/server-web:$VERSION"'),
+    workflow.indexOf('name: server-image-and-bundle'),
+  ];
+
+  for (const index of saveIndexes) {
+    if (index !== -1 && index > pushBlockStart) {
+      fail(
+        `${WORKFLOW} pushes to GHCR before staging and uploading the docker save tarballs; the M19.23 artifacts must not depend on the push.`,
+      );
+      break;
+    }
+  }
+
+  // Only the pushing job may write packages; the workflow default stays
+  // contents: read (checked in checkWorkflowShape).
+  if (!/permissions:\s*\n\s+contents: read\s*\n\s+packages: write/.test(workflow)) {
+    fail(`${WORKFLOW} does not give the image job packages: write beside contents: read, so it cannot push to GHCR.`);
+  }
+
+  // amd64 only, decided in deploy/runtipi/README.md: the Dockerfile compiles
+  // PHP extensions from source, so an arm64 build under QEMU would dominate
+  // release time, and Meridian has no arm64 target to serve. Multi-arch
+  // tooling appearing in the workflow means that decision is being reversed
+  // somewhere other than where it was made.
+  for (const forbidden of ['setup-qemu', 'buildx', 'linux/arm64']) {
+    if (workflow.includes(forbidden)) {
+      fail(
+        `${WORKFLOW} references ${forbidden}. The published images are amd64 only (M19.26, deploy/runtipi/README.md); revisit that decision in the design document, not the workflow.`,
+      );
+    }
   }
 }
 
@@ -304,6 +388,7 @@ function main() {
   const workflow = read(WORKFLOW);
 
   checkWorkflowShape(workflow);
+  checkRegistryPublish(workflow);
   checkAndroidCredentials(workflow);
   checkNoCommittedArtifacts();
   checkVersioningStrategyDocumentsWorkflow();

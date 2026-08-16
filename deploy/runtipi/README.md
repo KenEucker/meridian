@@ -22,10 +22,11 @@ typed into a form, and brings the stack up behind Traefik.
 For Meridian this maps almost one-to-one onto `deploy/docker/compose.deployment.yaml`.
 Three things do not map, and they are what the work below is:
 
-1. **Runtipi pulls images. Meridian does not publish any.** The release workflow
+1. **Runtipi pulls images. Meridian did not publish any.** The release workflow
    attaches `docker save` tarballs to the GitHub release
    (`.github/workflows/release-artifacts.yml`). Runtipi runs `docker pull`. This
-   is a hard prerequisite for every path below.
+   is a hard prerequisite for every path below — closed by M19.26, which makes
+   that workflow also push both images to GHCR on a version tag.
 2. **Runtipi owns TLS and port 80/443.** The stack's `web` service publishes
    `80:80` and `443:443` and terminates TLS itself. Under Runtipi it must publish
    nothing and serve plain HTTP on `:80` behind Traefik.
@@ -37,10 +38,13 @@ Three things do not map, and they are what the work below is:
 
 ## Prerequisite: publish the images
 
-Everything else waits on this.
-
-Add a job to `.github/workflows/release-artifacts.yml` that pushes the two
-existing Dockerfile targets to GHCR alongside the tarballs it already produces:
+Everything else waits on this. **Implemented (M19.26):**
+`.github/workflows/release-artifacts.yml` pushes the two existing Dockerfile
+targets to GHCR on a version tag, alongside the tarballs it already produces;
+`scripts/release/validate-release-workflow.mjs` holds the pushed tag to the
+root `package.json` version, the tarball artifacts unchanged, and the amd64-only
+decision on every pull request. The first pullable version is the first release
+tagged after M19.26 landed:
 
 - `ghcr.io/keneucker/meridian-server:<version>`
 - `ghcr.io/keneucker/meridian-server-web:<version>`

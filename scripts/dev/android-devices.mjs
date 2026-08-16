@@ -18,7 +18,7 @@
  * part is the choice rather than the spawning.
  */
 
-import { join } from "node:path";
+import { posix, win32 } from "node:path";
 
 /**
  * One thing `adb devices` listed.
@@ -44,6 +44,11 @@ import { join } from "node:path";
  */
 export function androidSdkCandidates(platform, env, home) {
   const candidates = [env.ANDROID_HOME, env.ANDROID_SDK_ROOT];
+  // Join with the separator of the platform being asked about, not the host's:
+  // the default locations are claims about that platform's filesystem, and the
+  // host's `path.join` would render a darwin default with backslashes when this
+  // runs on Windows.
+  const { join } = platform === "win32" ? win32 : posix;
 
   if (platform === "darwin") {
     candidates.push(join(home, "Library", "Android", "sdk"));

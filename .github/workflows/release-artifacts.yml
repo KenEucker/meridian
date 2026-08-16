@@ -18,8 +18,16 @@ name: release-artifacts
 # runbook (M19.24), and the release notes composed below say so rather than
 # silently omitting it.
 #
+# On a tag the two deployment images are also pushed to GHCR (M19.26,
+# deploy/runtipi/README.md) as ghcr.io/keneucker/meridian-server and
+# ghcr.io/keneucker/meridian-server-web, tagged with the same root version the
+# tarballs carry. amd64 only: the Dockerfile compiles PHP extensions from
+# source, an arm64 build under QEMU would dominate release time, and Meridian
+# has no arm64 target to serve — so the images are built runner-native, and
+# nothing in this workflow sets up emulation or multi-arch builds.
+#
 # workflow_dispatch is the dry run: every artifact is built and verified
-# exactly as a tag build would, and nothing is attached anywhere.
+# exactly as a tag build would, and nothing is attached or pushed anywhere.
 
 on:
   push:
@@ -59,10 +67,15 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   # The server image, the web (proxy) image, and the deployment configuration
-  # bundle (technical spec 26.4's server-side distributable).
+  # bundle (technical spec 26.4's server-side distributable). On a tag this job
+  # also publishes both images to GHCR, which is why it alone holds
+  # packages: write.
   server-image:
     needs: version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -100,6 +113,26 @@ jobs:
           name: server-image-and-bundle
           path: release-artifacts/*
           if-no-files-found: error
+
+      # Registry publication (M19.26): the same two images the tarballs above
+      # carry, retagged for GHCR and pushed with the same root version. Runtipi
+      # and any pulling node run `docker pull` rather than `docker load`
+      # (deploy/runtipi/README.md); a node that pulls sets MERIDIAN_IMAGE to
+      # the registry prefix and needs nothing else. Gated on the tag so the
+      # workflow_dispatch dry run publishes nothing, exactly as the release
+      # attach step is.
+      - name: Push the images to GHCR
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          docker tag "meridian/server:$VERSION" "ghcr.io/keneucker/meridian-server:$VERSION"
+          docker tag "meridian/server-web:$VERSION" "ghcr.io/keneucker/meridian-server-web:$VERSION"
+          docker push "ghcr.io/keneucker/meridian-server:$VERSION"
+          docker push "ghcr.io/keneucker/meridian-server-web:$VERSION"
 
   # The three desktop installers, one per host platform, all from the one
   # packaging configuration (technical spec 26.6). electron-builder packages
@@ -253,6 +286,13 @@ jobs:
           | Meridian Kiosk, Linux installer | \`meridian-kiosk-$VERSION-linux-<arch>.AppImage\` |
           | Meridian Field, Android app bundle | \`meridian-field-$VERSION.aab\` |
           | Meridian Field, direct-install APK | \`meridian-field-$VERSION.apk\` |
+
+          The two deployment images are also published to GHCR (amd64 only), so
+          a node that pulls rather than builds sets \`MERIDIAN_IMAGE\` to the
+          registry prefix and runs \`docker pull\` instead of \`docker load\`:
+
+          - \`ghcr.io/keneucker/meridian-server:$VERSION\`
+          - \`ghcr.io/keneucker/meridian-server-web:$VERSION\`
 
           **iOS:** the Meridian Field iOS application archive is not attached
           here. Building it requires a macOS signing environment holding the
