@@ -4,7 +4,7 @@
     "email": "keneucker@gmail.com",
     "name": "Ken Eucker"
   },
-  "version": "0.0.160",
+  "version": "0.0.161",
   "private": true,
   "description": "Open-source volunteer operations platform for events.",
   "license": "AGPL-3.0-or-later",
