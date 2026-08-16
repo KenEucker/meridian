@@ -35,6 +35,17 @@ it lands; until then the index records it as blocking a release candidate
 rather than omitting it. `QA-PUBLIC-01` (M20.6) landed and is in the run
 table.
 
+## Alpha 1 Runtipi install script
+
+| ID | Coverage | Owning task |
+|---|---|---|
+| [`QA-RUNTIPI-01-runtipi-app-install.md`](QA-RUNTIPI-01-runtipi-app-install.md) | Installing Meridian on a real Runtipi host from the generated app definition by following `docs/process/runtipi-distribution.md` with no step supplied from memory: the store added by URL, the install form enforcing exposure and required SMTP, the published GHCR images pulled at the release version, the seed-derived key surviving restart and update, full-HTTPS behavior through the platform's proxy, and the two open questions in `deploy/runtipi/README.md` closed with observed behavior and the Runtipi version recorded | M19.29 |
+
+Deliberately outside the release-candidate run table: the plan sequences
+M19.26 through M19.29 after the RC gate because a Runtipi install is a
+distribution convenience no Alpha 1 acceptance target names, and a QA gate
+that said otherwise would hold the release on work nobody is waiting for.
+
 ## Alpha 1 Branding script
 
 | ID | Coverage | Owning task |
