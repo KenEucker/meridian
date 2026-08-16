@@ -55,6 +55,7 @@
     "db:logs": "docker compose --env-file deploy/docker/.env -f deploy/docker/compose.yaml logs -f",
     "db:setup": "corepack pnpm run db:env && corepack pnpm run db:up",
     "deploy:check": "node scripts/deploy/validate-deployment-bundle.mjs",
+    "runtipi:app": "node scripts/deploy/build-runtipi-app.mjs",
     "deploy:check:docker": "node scripts/deploy/validate-deployment-bundle.mjs --require-docker",
     "deploy:tag": "node scripts/deploy/build-images.mjs --print",
     "deploy:build": "node scripts/deploy/build-images.mjs",
