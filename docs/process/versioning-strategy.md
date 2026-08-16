@@ -95,8 +95,8 @@ environments. It must derive all app package versions from the root
 The desktop packaging configuration is M19.20, the committed Capacitor native
 projects are M19.21, mobile release signing is M19.22, the tagged release
 workflow that produces and attaches every artifact is M19.23, the runbook is
-M19.24, and installed-application QA is M19.25. Technical spec 26.4 through
-26.7 govern them.
+M19.24, installed-application QA is M19.25, and registry publication of the
+deployment images is M19.26. Technical spec 26.4 through 26.7 govern them.
 
 ### Cutting a release
 
@@ -113,6 +113,16 @@ produced artifact carries the root version
 (`scripts/release/verify-release-artifact-versions.mjs`); and attaches the
 artifacts to the GitHub release. Artifacts are attached to the release, never
 committed to the repository (technical spec 26.7).
+
+On a tag the workflow also publishes the two deployment images to GHCR
+(M19.26, `deploy/runtipi/README.md`) as
+`ghcr.io/keneucker/meridian-server:<version>` and
+`ghcr.io/keneucker/meridian-server-web:<version>`, tagged with the same root
+version the `docker save` tarballs carry — the tarballs themselves are
+unchanged and still attached. The images are amd64 only, by decision recorded
+in that design document. A node that pulls rather than builds sets
+`MERIDIAN_IMAGE` in its deployment environment to the registry prefix and
+needs no other configuration.
 
 The iOS application archive is not produced by the workflow: it requires a
 macOS signing environment holding the Apple distribution certificate and
