@@ -13,19 +13,30 @@ version instead.
 Versions must be numeric `major.minor.patch` values only. Do not use prerelease
 labels, build metadata, or text suffixes such as `alpha`, `beta`, or `rc`.
 
-## Current Alpha Policy
+## Current Beta Policy
 
-Meridian is currently in alpha and is not deployed as a used production
-platform. While alpha remains below `0.1.0`, every pull request merged into
-`production` increments the root patch version.
+Meridian is in beta as of `0.1.0`. Every pull request merged into `production`
+increments the root version and cuts a true release for the result.
 
-The `.github/workflows/production-version-bump.yml` workflow owns that bump. It
-runs after a pull request into `production` is merged, updates the root
-`package.json` patch number, and commits the bump back to `production`.
+The `.github/workflows/production-version-bump.yml` workflow owns both halves.
+It runs after a pull request into `production` is merged, bumps the root
+`package.json`, commits the bump back to `production`, and then calls the
+release workflow against that bump commit (see Cutting a release below).
+
+The bump is classified from the merged pull request's conventional-commit
+title: a `feat` type or a breaking-change `!` marker is a minor bump, and
+everything else is a patch bump. Before `1.0.0` a breaking change lands as a
+minor bump, which is ordinary semantic versioning for a `0.x` line; at `1.0.0`
+the classification must be revisited so breaking changes bump the major
+version.
 
 If a merged pull request already changed the root `package.json` version, the
-workflow does not apply an additional patch bump. This keeps manual alpha to
-beta and beta to release promotion PRs exact.
+workflow does not apply an additional bump. This keeps manual promotion PRs —
+alpha to beta, beta to release — exact; the release is still cut for the
+version the pull request set, provided its tag does not already exist.
+
+During alpha (`0.0.x`, through `0.0.165`) every merge was a patch bump and
+releases were cut by hand-pushed tags only.
 
 ### Committed artifacts that carry the root version
 
@@ -76,15 +87,14 @@ incompatible server, and Electron warning on an unexpected local server version
 
 Promotion between lifecycle stages is manual:
 
-- Alpha uses `0.0.x`.
-- Beta starts when a maintainer manually bumps the root version to `0.1.0`.
+- Alpha used `0.0.x`.
+- Beta started when a maintainer manually bumped the root version to `0.1.0`.
 - Release starts when a maintainer manually bumps the root version to `1.0.0`.
 
-During beta (`0.1.0` through `0.x.y`), changes may be classified as patch or
-minor updates. The automatic production workflow can remain patch-only until a
-separate change teaches it to honor that classification.
-
-At `1.0.0` and higher, Meridian follows semantic versioning strictly.
+At `1.0.0` and higher, Meridian follows semantic versioning strictly. The
+release promotion PR must also teach the bump workflow's classification that a
+breaking change bumps the major version, which before `1.0.0` it deliberately
+does not.
 
 ## Release Packaging
 
@@ -100,8 +110,20 @@ deployment images is M19.26. Technical spec 26.4 through 26.7 govern them.
 
 ### Cutting a release
 
-A release is cut by pushing the tag `v<version>`, where `<version>` is the root
-`package.json` version at the tagged commit — `v0.0.152` releases `0.0.152`.
+During beta every merge into `production` cuts a release automatically: after
+the version bump commit lands, `production-version-bump.yml` calls
+`release-artifacts.yml` (a `workflow_call` entry point) against that commit.
+The call carries the commit's SHA rather than pushing a tag, because a tag
+pushed with the workflow's own `GITHUB_TOKEN` triggers no other workflow and
+triggering one otherwise would require a stored credential. On this path the
+release job itself creates the `v<version>` tag as part of creating the
+release — after every artifact is built and verified — so the tag exists only
+when its release does. A version whose tag already exists is not released
+again.
+
+A release can also still be cut by hand by pushing the tag `v<version>`, where
+`<version>` is the root `package.json` version at the tagged commit —
+`v0.0.152` releases `0.0.152`.
 `.github/workflows/release-artifacts.yml` refuses a tag that names any other
 version, because the tag is a claim about the artifacts and every artifact
 version derives from the root manifest, not from the tag.

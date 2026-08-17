@@ -7,10 +7,18 @@
  * the release rather than committing them. The workflow itself only runs on a
  * tag, so this is the half that holds it on every pull request:
  *
- *   - the workflow exists, triggers on version tags, and offers the
- *     workflow_dispatch dry run;
+ *   - the workflow exists, triggers on version tags, offers the
+ *     workflow_dispatch dry run, and offers the workflow_call entry point the
+ *     production version bump workflow releases through (versioning strategy,
+ *     beta policy);
  *   - it refuses a tag that names a version other than the root manifest's;
- *   - every job builds the tag's own commit — no checkout overrides its ref;
+ *   - every job builds the one released commit: every checkout carries the
+ *     same `ref: inputs.ref` expression, empty on the tag and dry-run paths
+ *     where the triggering commit is already the right one, and nothing may
+ *     point a checkout anywhere else;
+ *   - the production version bump workflow calls this workflow with the bump
+ *     commit's SHA, inherited secrets, and the permissions the called jobs
+ *     draw from, gated on the version's tag not already existing;
  *   - every release artifact kind is built: the server and web images, the
  *     deployment bundle, the three desktop installers, and the Android app
  *     bundle and APK;
@@ -46,8 +54,16 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const WORKFLOW = '.github/workflows/release-artifacts.yml';
+const BUMP_WORKFLOW = '.github/workflows/production-version-bump.yml';
 const VERIFY_SCRIPT = 'scripts/release/verify-release-artifact-versions.mjs';
 const SIGNING_INVENTORY = 'apps/mobile/src/releaseSigning.ts';
+
+// The two release paths — a pushed tag, or a workflow_call ref from the
+// production version bump workflow. Publication steps are gated on exactly
+// this predicate so the workflow_dispatch dry run stays a dry run.
+const PUBLISH_GATE = "if: github.ref_type == 'tag' || inputs.ref != ''";
+const DRY_RUN_GATE = "if: github.ref_type != 'tag' && inputs.ref == ''";
+const CHECKOUT_REF = 'ref: ${{ inputs.ref }}';
 
 const errors = [];
 
@@ -68,18 +84,33 @@ function checkWorkflowShape(workflow) {
     fail(`${WORKFLOW} offers no workflow_dispatch dry run.`);
   }
 
+  // The credential-free production-merge release path (versioning strategy,
+  // beta policy): the bump workflow calls this workflow with the commit to
+  // release.
+  if (!/workflow_call:\s*\n\s+inputs:\s*\n\s+ref:/.test(workflow)) {
+    fail(`${WORKFLOW} offers no workflow_call entry point with a required ref input.`);
+  }
+
   if (!workflow.includes('does not name the root package.json version')) {
     fail(
       `${WORKFLOW} does not refuse a tag that names a version other than the root package.json version.`,
     );
   }
 
-  // One build of the tagged commit (technical spec 26.7): every job checks
-  // out the commit the run was triggered for, and none may point its checkout
-  // somewhere else.
-  if (/^\s+ref:\s/m.test(workflow)) {
+  // One build of the released commit (technical spec 26.7): every job checks
+  // out the same commit — inputs.ref, empty outside the workflow_call path so
+  // the triggering commit resolves — and no checkout may point anywhere else.
+  const checkoutCount = workflow.match(/uses: actions\/checkout@/g)?.length ?? 0;
+  const sharedRefCount = workflow.match(/^\s+ref: \$\{\{ inputs\.ref \}\}$/gm)?.length ?? 0;
+  // Inline ref values only: the workflow_call input declares a bare `ref:`
+  // key, which is the input's name, not a checkout target.
+  const anyRefCount = workflow.match(/^\s+ref: \S/gm)?.length ?? 0;
+
+  if (checkoutCount === 0) {
+    fail(`${WORKFLOW} has no checkouts at all.`);
+  } else if (sharedRefCount !== checkoutCount || anyRefCount !== checkoutCount) {
     fail(
-      `${WORKFLOW} overrides a checkout ref. Every artifact must be built from the one tagged commit (technical spec 26.7).`,
+      `${WORKFLOW} must give every checkout exactly \`${CHECKOUT_REF}\` and nothing else. Every artifact must be built from the one released commit (technical spec 26.7); found ${checkoutCount} checkouts, ${sharedRefCount} shared refs, ${anyRefCount} ref lines.`,
     );
   }
 
@@ -107,7 +138,8 @@ function checkWorkflowShape(workflow) {
     fail(`${WORKFLOW} does not build the desktop installers on ubuntu, windows, and macos runners.`);
   }
 
-  // Verification precedes attachment, and attachment only happens on a tag.
+  // Verification precedes attachment, and attachment only happens on the two
+  // release paths — a tag, or a workflow_call ref.
   const verifyIndex = workflow.indexOf(VERIFY_SCRIPT);
   const attachIndex = workflow.indexOf('gh release create');
 
@@ -122,11 +154,17 @@ function checkWorkflowShape(workflow) {
       fail(`${WORKFLOW} attaches artifacts before verifying their versions.`);
     }
 
-    const gateIndex = workflow.indexOf("if: github.ref_type == 'tag'");
+    const gateIndex = workflow.lastIndexOf(PUBLISH_GATE, attachIndex);
 
-    if (gateIndex === -1 || gateIndex > attachIndex) {
+    if (gateIndex === -1) {
       fail(
-        `${WORKFLOW} does not gate release creation on a tag, so a workflow_dispatch dry run would publish a release.`,
+        `${WORKFLOW} does not gate release creation on \`${PUBLISH_GATE}\`, so a workflow_dispatch dry run would publish a release.`,
+      );
+    }
+
+    if (!workflow.includes(DRY_RUN_GATE)) {
+      fail(
+        `${WORKFLOW} does not gate the dry-run report on \`${DRY_RUN_GATE}\`, the negation of the release paths.`,
       );
     }
   }
@@ -185,9 +223,9 @@ function checkRegistryPublish(workflow) {
   }
 
   // A workflow_dispatch dry run publishes nothing, exactly as it attaches
-  // nothing: the push step itself carries the tag gate.
-  if (!pushBlock.includes("if: github.ref_type == 'tag'")) {
-    fail(`${WORKFLOW} does not gate the GHCR push on a tag, so a workflow_dispatch dry run would publish images.`);
+  // nothing: the push step itself carries the release-path gate.
+  if (!pushBlock.includes(PUBLISH_GATE)) {
+    fail(`${WORKFLOW} does not gate the GHCR push on \`${PUBLISH_GATE}\`, so a workflow_dispatch dry run would publish images.`);
   }
 
   // The tarball artifacts M19.23 produces are unchanged: both docker save
@@ -300,6 +338,40 @@ function checkNoCommittedArtifacts() {
   }
 }
 
+function checkProductionMergeCallsRelease() {
+  // The beta release path (versioning strategy): after the post-merge version
+  // bump, the bump workflow calls this workflow against the bump commit. The
+  // call must carry the commit's SHA, inherit the Android signing secrets,
+  // grant the permissions the called jobs draw from, and skip versions whose
+  // tag already exists — the manual-promotion and re-run cases.
+  if (!existsSync(join(repositoryRoot, BUMP_WORKFLOW))) {
+    fail(`${BUMP_WORKFLOW} is missing; production merges cannot cut releases without it.`);
+
+    return;
+  }
+
+  const bumpWorkflow = read(BUMP_WORKFLOW);
+  const requiredReferences = [
+    ['uses: ./.github/workflows/release-artifacts.yml', 'calling the release workflow'],
+    ['ref: ${{ needs.bump.outputs.sha }}', "passing the bump commit's SHA as the commit to release"],
+    ['secrets: inherit', 'carrying the Android signing secrets into the called jobs'],
+    ["if: ${{ needs.bump.outputs.release == 'true' }}", 'skipping versions whose tag already exists'],
+    ['git ls-remote --exit-code origin "refs/tags/v$VERSION"', 'asking the remote whether the version is already released'],
+  ];
+
+  for (const [reference, description] of requiredReferences) {
+    if (!bumpWorkflow.includes(reference)) {
+      fail(`${BUMP_WORKFLOW} never contains ${reference} (${description}).`);
+    }
+  }
+
+  if (!/permissions:\s*\n\s+contents: write\s*\n\s+packages: write/.test(bumpWorkflow)) {
+    fail(
+      `${BUMP_WORKFLOW} does not grant the release call contents: write and packages: write, the permissions the called jobs draw from.`,
+    );
+  }
+}
+
 function checkVersioningStrategyDocumentsWorkflow() {
   if (!read('docs/process/versioning-strategy.md').includes('release-artifacts.yml')) {
     fail(
@@ -391,6 +463,7 @@ function main() {
   checkRegistryPublish(workflow);
   checkAndroidCredentials(workflow);
   checkNoCommittedArtifacts();
+  checkProductionMergeCallsRelease();
   checkVersioningStrategyDocumentsWorkflow();
   checkVerifierBehavior();
 

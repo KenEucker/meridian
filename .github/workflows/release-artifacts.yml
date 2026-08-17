@@ -7,9 +7,10 @@ name: release-artifacts
 # verifies each artifact carries it, and attaches the artifacts to the GitHub
 # release. Release artifacts are attached to the release, never committed.
 #
-# Every job checks out the same commit — the one the tag names — with no ref
-# override anywhere, which is what "from one build of the tagged commit" means
-# in workflow terms.
+# Every job checks out the same commit — the one the tag names, or the one
+# `inputs.ref` names on the workflow_call path — through one shared ref
+# expression on every checkout, which is what "from one build of the released
+# commit" means in workflow terms.
 #
 # The iOS application archive is deliberately not built here: it requires a
 # macOS signing environment holding the Apple distribution certificate and
@@ -28,12 +29,29 @@ name: release-artifacts
 #
 # workflow_dispatch is the dry run: every artifact is built and verified
 # exactly as a tag build would, and nothing is attached or pushed anywhere.
+#
+# workflow_call is how a production merge cuts a release without any stored
+# credential (versioning strategy, beta policy): the version bump workflow
+# calls this workflow against the bump commit it just pushed. A tag pushed
+# with a workflow's own GITHUB_TOKEN triggers no other workflow, so the tag
+# cannot be the trigger on that path; instead no tag exists yet when the call
+# arrives, and the release job creates it on the release commit as part of
+# creating the release, which means the tag exists only if the complete
+# artifact set built and verified. Every job checks out `inputs.ref` — empty
+# on the tag and dry-run paths, where the triggering commit is already the
+# right one.
 
 on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to build and release. Every job checks out exactly this ref, and the release job creates the version tag on it.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -49,6 +67,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Resolve the root version and hold the tag to it
         id: version
@@ -79,6 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           # The packaged changelog is generated from first-parent history
           # (GOD-021), so the image build needs the whole timeline, not a
           # shallow tip.
@@ -118,11 +139,11 @@ jobs:
       # carry, retagged for GHCR and pushed with the same root version. Runtipi
       # and any pulling node run `docker pull` rather than `docker load`
       # (deploy/runtipi/README.md); a node that pulls sets MERIDIAN_IMAGE to
-      # the registry prefix and needs nothing else. Gated on the tag so the
-      # workflow_dispatch dry run publishes nothing, exactly as the release
-      # attach step is.
+      # the registry prefix and needs nothing else. Gated on the two release
+      # paths — a tag, or a workflow_call ref — so the workflow_dispatch dry
+      # run publishes nothing, exactly as the release attach step is.
       - name: Push the images to GHCR
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.ref != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -146,6 +167,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -186,6 +209,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -259,6 +284,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -307,20 +334,26 @@ jobs:
           install documentation.
           NOTES
 
+      # On the tag path the tag exists and names $VERSION (the version job
+      # refused it otherwise). On the workflow_call path no tag exists yet:
+      # --target makes `gh release create` create v$VERSION on the release
+      # commit itself, so the tag never exists without the release behind it.
       - name: Create the release and attach the artifacts
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.ref != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
+          TARGET: ${{ inputs.ref }}
         run: |
-          gh release create "${{ github.ref_name }}" \
+          gh release create "v$VERSION" \
+            ${TARGET:+--target "$TARGET"} \
             --title "Meridian $VERSION" \
             --notes-file release-notes.md \
             release-artifacts/*
 
       - name: Report the dry run
-        if: github.ref_type != 'tag'
+        if: github.ref_type != 'tag' && inputs.ref == ''
         shell: bash
         run: |
           {
