@@ -35,6 +35,19 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [ReportCentralReach::class]);
 
+        // Forwarded-header trust for a node behind a TLS-terminating proxy it
+        // does not own (M19.27; technical spec 8.2; deploy/runtipi/README.md).
+        // A subclass reading `meridian.trusted_proxies` per request replaces
+        // the framework middleware, because the list is deployment
+        // configuration: an env() read here would run before the environment
+        // file is loaded and be frozen out entirely under `config:cache`. The
+        // default is empty — no proxy trusted, forwarded headers ignored — so
+        // every deployment that terminates TLS in its own Caddy is unaffected.
+        $middleware->replace(
+            \Illuminate\Http\Middleware\TrustProxies::class,
+            \App\Http\Middleware\TrustMeridianProxies::class,
+        );
+
         // Organization subdomain resolution (M19.8; ORG-022 through ORG-025;
         // technical spec 8.7). Global rather than grouped because the answer is
         // a property of the request host, not of any route: an unknown

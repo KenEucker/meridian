@@ -56,6 +56,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { IMAGE_TARGETS, meridianImageTag } from './build-images.mjs';
+import { caddyfileErrors, PROXIED, TLS_TERMINATING } from './caddyfile-rules.mjs';
 import { DEPLOYMENT_BUNDLE_FILES } from './deployment-bundle-manifest.mjs';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -69,6 +70,7 @@ const CADDY_SNIPPET = 'deploy/caddy/meridian.snippet';
 const CADDYFILE = 'deploy/caddy/Caddyfile';
 const CADDYFILE_ONSITE = 'deploy/caddy/Caddyfile.onsite';
 const CADDYFILE_WILDCARD = 'deploy/caddy/Caddyfile.wildcard';
+const CADDYFILE_PROXIED = 'deploy/caddy/Caddyfile.proxied';
 const ENTRYPOINT = 'deploy/docker/entrypoint.sh';
 const NATIVE_DIRECTORY = 'deploy/native';
 const NATIVE_INSTALL = 'deploy/native/install-host.sh';
@@ -388,6 +390,23 @@ function checkDeploymentEnvExample() {
     );
   }
 
+  // The reverse-proxy deployment mode (M19.27) is inert unless configured, so
+  // the sample documents both settings and leaves both empty: a sample value
+  // for either would change what an unedited deployment does, and the seed is
+  // additionally a secret — whoever can read it can derive the key.
+  for (const key of ['MERIDIAN_TRUSTED_PROXIES', 'MERIDIAN_APP_KEY_SEED']) {
+    if (!values.has(key)) {
+      fail(`${DEPLOYMENT_ENV_EXAMPLE} does not document ${key} (M19.27, reverse-proxy deployment mode).`);
+      continue;
+    }
+
+    if (values.get(key) !== '') {
+      fail(
+        `${DEPLOYMENT_ENV_EXAMPLE} ships a value for ${key}. The reverse-proxy deployment mode must be inert unless a deployment configures it, and an unchanged environment must render the same stack as before.`,
+      );
+    }
+  }
+
   // The wildcard proxy configuration reads these; a sample that does not carry
   // them leaves the operator to discover the names inside a Caddyfile.
   for (const key of ['MERIDIAN_WILDCARD_TLS_CERTIFICATE', 'MERIDIAN_WILDCARD_TLS_KEY']) {
@@ -440,21 +459,22 @@ function checkCaddyConfiguration() {
     fail(`${CADDY_SNIPPET} does not proxy PHP to the server container.`);
   }
 
-  for (const file of [CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD]) {
-    const source = read(file);
+  // Each configuration is held to the rules of the kind it is: the three
+  // TLS-terminating files are still refused the moment one serves plain HTTP,
+  // and the proxied file is held to its own discipline — plain HTTP on :80
+  // only because TLS terminates one hop out (M19.27; technical spec 8.2). The
+  // rules live in caddyfile-rules.mjs so they are testable against synthetic
+  // configurations, not only these four.
+  const caddyfileKinds = [
+    [CADDYFILE, TLS_TERMINATING],
+    [CADDYFILE_ONSITE, TLS_TERMINATING],
+    [CADDYFILE_WILDCARD, TLS_TERMINATING],
+    [CADDYFILE_PROXIED, PROXIED],
+  ];
 
-    if (!source.includes('import /etc/caddy/meridian.snippet')) {
-      fail(`${file} does not import the shared Meridian snippet, so its behavior can drift from the other Caddyfiles.`);
-    }
-
-    if (!source.includes('import meridian-app')) {
-      fail(`${file} does not use the (meridian-app) snippet.`);
-    }
-
-    // A site address written as http:// tells Caddy to serve that site over plain
-    // HTTP and skip TLS entirely.
-    if (/^\s*http:\/\//m.test(source)) {
-      fail(`${file} declares an http:// site address. Meridian never serves plain HTTP in production or event mode (technical spec 8.2).`);
+  for (const [file, kind] of caddyfileKinds) {
+    for (const error of caddyfileErrors(file, read(file), kind)) {
+      fail(error);
     }
   }
 
@@ -523,7 +543,7 @@ function checkCaddyConfiguration() {
     );
   }
 
-  for (const file of [CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD]) {
+  for (const file of [CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD, CADDYFILE_PROXIED]) {
     const name = file.split('/').pop();
 
     if (!dockerfile.includes(`/etc/caddy/${name}`)) {
@@ -945,7 +965,7 @@ function checkNativeEnvExamples() {
   // Every variable the proxy configuration substitutes has to be documented in
   // the file the proxy service actually reads, or the operator is left to find
   // the names inside a Caddyfile.
-  const proxySources = [CADDY_SNIPPET, CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD, NATIVE_CADDY_DROP_IN];
+  const proxySources = [CADDY_SNIPPET, CADDYFILE, CADDYFILE_ONSITE, CADDYFILE_WILDCARD, CADDYFILE_PROXIED, NATIVE_CADDY_DROP_IN];
   const substituted = new Set();
 
   for (const file of proxySources) {
@@ -1059,6 +1079,52 @@ function checkNativeEnvExamples() {
   }
 }
 
+/**
+ * The APP_KEY seed derivation in the container entrypoint (M19.27; technical
+ * spec 7.4, 26.2; deploy/runtipi/README.md). A one-click platform install has
+ * no step to run `key:generate`, so the entrypoint derives the key from a
+ * high-entropy seed — but only when APP_KEY is unset, so a deployment that
+ * sets its own key is untouched, and before the secret safeguards run, so a
+ * seeded node is not refused for the key it was about to have. SHA-256 is the
+ * derivation because it yields exactly the 32 key bytes Laravel requires for
+ * any seed length; `AppKeySeedDerivationTest` on the server side pins the
+ * same expression and proves the derived key is one Laravel accepts.
+ */
+function checkEntrypointKeyDerivation() {
+  const source = read(ENTRYPOINT)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+
+  const guardIndex = source.indexOf('[ -z "${APP_KEY:-}" ] && [ -n "${MERIDIAN_APP_KEY_SEED:-}" ]');
+
+  if (guardIndex === -1) {
+    fail(
+      `${ENTRYPOINT} does not derive APP_KEY from MERIDIAN_APP_KEY_SEED guarded on APP_KEY being unset and the seed being present. Both guards are what keep every existing deployment unaffected (M19.27).`,
+    );
+
+    return;
+  }
+
+  if (!source.includes('base64_encode(hash("sha256"')) {
+    fail(
+      `${ENTRYPOINT} does not derive the key with SHA-256, which is what guarantees exactly the 32 key bytes Laravel requires for any seed length.`,
+    );
+  }
+
+  if (!source.includes('export APP_KEY')) {
+    fail(`${ENTRYPOINT} derives APP_KEY without exporting it, so neither the artisan commands nor the served process would see it.`);
+  }
+
+  const secretsIndex = source.indexOf('meridian:secrets');
+
+  if (secretsIndex !== -1 && secretsIndex < guardIndex) {
+    fail(
+      `${ENTRYPOINT} runs the secret safeguards before the seed derivation, so a seeded node would be refused over the key it was about to have.`,
+    );
+  }
+}
+
 function dockerAvailable() {
   const result = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
     cwd: repositoryRoot,
@@ -1164,6 +1230,7 @@ function main() {
   checkSubdomainDocumentation();
   checkDnsTemplates();
   checkBootSequence(ENTRYPOINT);
+  checkEntrypointKeyDerivation();
   checkNativeBundle();
 
   const requireDocker = args.includes('--require-docker');

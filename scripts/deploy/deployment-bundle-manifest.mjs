@@ -29,6 +29,7 @@ export const DEPLOYMENT_BUNDLE_FILES = [
   'deploy/caddy/Caddyfile',
   'deploy/caddy/Caddyfile.onsite',
   'deploy/caddy/Caddyfile.wildcard',
+  'deploy/caddy/Caddyfile.proxied',
   'deploy/caddy/meridian.snippet',
   'deploy/caddy/README.md',
   'deploy/dns/onsite-dnsmasq.conf',

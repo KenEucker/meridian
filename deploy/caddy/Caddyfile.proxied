@@ -1,0 +1,30 @@
+# Meridian reverse proxy — behind a TLS-terminating proxy this stack does not own.
+#
+# For a node whose host platform already runs a reverse proxy that terminates
+# TLS in front of every app — a Runtipi host's Traefik is the motivating case
+# (deploy/runtipi/README.md) — this configuration serves the shared site body
+# over plain HTTP on :80 and publishes nothing itself. TLS did not become
+# optional (technical spec 8.2): it moved one hop out, and the platform proxy
+# is where the certificate lives.
+#
+# The server still needs to see the real scheme, or Laravel generates http://
+# URLs on an https:// site. That is the MERIDIAN_TRUSTED_PROXIES half of this
+# deployment mode: set it so the forwarded headers the outer proxy sends are
+# believed, and leave it empty everywhere else.
+{
+	# No certificate is obtained or served here; the outer proxy owns both.
+	auto_https off
+
+	# Believe X-Forwarded-* only from private addresses, which is where a
+	# platform proxy on the same Docker network speaks from. A client on the
+	# open internet cannot hand this server a forged forwarded scheme.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+import /etc/caddy/meridian.snippet
+
+:80 {
+	import meridian-app
+}

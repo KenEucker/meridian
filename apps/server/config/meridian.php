@@ -49,6 +49,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Reverse Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Where a TLS-terminating proxy this deployment does not own sits in front
+    | of the stack (deploy/caddy/Caddyfile.proxied; deploy/runtipi/README.md),
+    | Laravel must read the forwarded scheme from it or it generates http://
+    | URLs on an https:// site — mixed-content assets and magic-link login URLs
+    | that are wrong. Empty by default so every existing deployment is
+    | unaffected: with no trusted proxy, forwarded headers are ignored exactly
+    | as before. A comma-separated list of addresses or CIDR ranges, or `*` to
+    | trust the immediate caller, which is what a platform-managed proxy on the
+    | app's own private network warrants.
+    |
+    */
+
+    'trusted_proxies' => env('MERIDIAN_TRUSTED_PROXIES', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Meridian Admin Client
     |--------------------------------------------------------------------------
     |

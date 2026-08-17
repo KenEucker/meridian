@@ -10,6 +10,7 @@ network directly.
 |---|---|
 | `Caddyfile` | An internet-reachable node — central or standalone. Caddy obtains and renews the certificate itself over ACME. |
 | `Caddyfile.onsite` | An event node on a field network. Serves a certificate provisioned before the event, with automatic issuance switched off. |
+| `Caddyfile.proxied` | A node behind a TLS-terminating reverse proxy the deployment does not own — a Runtipi host's Traefik, for example (`deploy/runtipi/README.md`). Plain HTTP on `:80`, nothing published, automatic HTTPS off: TLS moved one hop out, it did not become optional. |
 | `Caddyfile.home-arpa` | A local node on a LAN — a developer's laptop, or a machine answering the on-site convention names. Plain HTTP, deliberately outside the deployment image. |
 | `meridian.snippet` | The site body the deployment files import: root, PHP upstream, compression, body limit, security headers, logging. |
 
@@ -22,6 +23,28 @@ production and event nodes are HTTPS-only (technical spec 8.2).
 The shared snippet exists because the difference between the two deployments is
 how the certificate is obtained, not what the site serves. A header or a limit
 that drifted between them would be a difference nobody chose.
+
+## Behind a proxy the deployment does not own
+
+`Caddyfile.proxied` exists for the one deployment shape where this stack is not
+the thing terminating TLS: a Docker app platform (Runtipi) puts its own reverse
+proxy in front of every app, owns ports 80 and 443, and expects the app to
+serve plain HTTP inside the network. The file serves the shared `(meridian-app)`
+body on `:80` with `auto_https off`, and believes forwarded headers only from
+private addresses (`trusted_proxies static private_ranges`), which is where a
+platform proxy on the app's own network speaks from.
+
+The bundle validator holds the deployment Caddyfiles to HTTPS-only (technical
+spec 8.2) by *kind* rather than by one blanket rule: the three TLS-terminating
+configurations are still refused the moment one declares a plain-HTTP site
+address, and the proxied one is held to its own discipline — `:80` only, no
+hostname site, no TLS of its own (`scripts/deploy/caddyfile-rules.mjs`).
+
+Caddy passing the scheme through is only half the path: Laravel must also
+believe it, or it generates `http://` URLs on an `https://` site. Set
+`MERIDIAN_TRUSTED_PROXIES` in the deployment environment alongside this file —
+it is empty by default, so every deployment that terminates TLS in its own
+Caddy is unaffected.
 
 ## Why two, rather than one with a switch
 

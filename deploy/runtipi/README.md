@@ -4,9 +4,16 @@ Traceability: technical spec 26.1 (environments), 26.2 (production/event
 safeguards), 26.4 (application packaging), 26.7 (release artifacts), 8.2 and 8.6
 (secure connection policy, HTTPS validation).
 
-This directory is a plan, not yet an implementation. It describes how a Meridian
-node is installed on [Runtipi](https://runtipi.io) — first as a custom install a
-person can do today, then as a published app store other people can install from.
+This directory is the agreed design for how a Meridian node is installed on
+[Runtipi](https://runtipi.io) — first as a custom install a person can do
+today, then as a published app store other people can install from. The
+mechanism is implemented: M19.26 published the images, M19.27 added the
+reverse-proxy deployment mode, and M19.28 added the app generator
+(`scripts/deploy/build-runtipi-app.mjs`) and the store-side runbook
+(`docs/process/runtipi-distribution.md`). What remains open is M19.29's real
+install: [`QA-RUNTIPI-01`](../../docs/qa/QA-RUNTIPI-01-runtipi-app-install.md)
+exercises the path on a real Runtipi host and closes the two open questions at
+the bottom of this document with observed behavior.
 Nothing here changes how the `deploy/docker` or `deploy/native` bundles work; the
 Runtipi app is a fourth way to run the same server image, not a fourth way to
 build one.
@@ -108,7 +115,9 @@ hand-maintained.
 
 ## The changes Meridian itself needs
 
-Four, all small, all useful beyond Runtipi.
+Four, all small, all useful beyond Runtipi. **All four are implemented**:
+items 1 through 3 by M19.27, item 4 by M19.28. The sections below are the
+design they implement.
 
 ### 1. A proxied Caddyfile
 
@@ -134,9 +143,11 @@ import /etc/caddy/meridian.snippet
 Add it to the `COPY` line and the `caddy adapt` loop in
 `deploy/docker/Dockerfile` so a malformed version is a failed build, exactly as
 the other three are. Note that `deploy/caddy/README.md` and the bundle validator
-currently hold every *deployment* Caddyfile to HTTPS-only (technical spec 8.2);
-this one is plain HTTP by design because TLS moved one hop out, so the validator
-needs to know the difference rather than being loosened.
+hold every *deployment* Caddyfile to HTTPS-only (technical spec 8.2); this one
+is plain HTTP by design because TLS moved one hop out, so the validator was
+taught the difference (`scripts/deploy/caddyfile-rules.mjs`) rather than being
+loosened: a TLS-terminating configuration is still refused the moment it
+serves plain HTTP.
 
 ### 2. Trusted proxies in Laravel
 
@@ -180,17 +191,23 @@ node's sessions and encrypted configuration.
 
 ### 4. A generator and a validator
 
-`scripts/deploy/build-runtipi-app.mjs`, writing `config.json` and
-`docker-compose.yml` from the root version, plus a check in
-`scripts/deploy/validate-deployment-bundle.mjs` (or a sibling) that asserts the
-generated app declares the version the repository is at. The failure this
-prevents is the one the bundle validator already exists to prevent: a published
-app pinned to an image tag that no longer matches the code.
+`scripts/deploy/build-runtipi-app.mjs`, writing `config.json`,
+`docker-compose.yml`, and the store metadata from the root version, held by
+`scripts/deploy/build-runtipi-app.spec.mjs` to declaring exactly the version
+the repository is at, the amd64 architecture the images are built for, and a
+stack whose worker and scheduler match the deployment stack's. The failure
+this prevents is the one the bundle validator already exists to prevent: a
+published app pinned to an image tag that no longer matches the code.
+`corepack pnpm run runtipi:app` runs it; `docs/process/runtipi-distribution.md`
+is the store-side runbook around it.
 
 ## <a id="the-compose-file"></a>The Compose file
 
-Derived from `compose.deployment.yaml`, with the differences called out. Save as
-`apps/meridian/docker-compose.yml` in the store repo.
+Derived from `compose.deployment.yaml`, with the differences called out. This
+listing and the `config.json` below are the design the generator implements —
+`scripts/deploy/build-runtipi-app.mjs` is what actually writes both, with the
+version lines derived from the root `package.json`, so generate rather than
+copying from here.
 
 ```yaml
 services:
@@ -431,6 +448,11 @@ Post-MVP prerequisites before doing any of this publicly:
 
 ## Open questions
 
+Both are drawn from Runtipi's documentation rather than a running instance,
+and both are closed by observed behavior during the first
+[`QA-RUNTIPI-01`](../../docs/qa/QA-RUNTIPI-01-runtipi-app-install.md) run
+(M19.29), which records the answers and the Runtipi version here.
+
 - Whether Runtipi's `random` field with `encoding: "hex"` and `min: 64` produces
   64 hex characters or 64 bytes rendered as 128. It does not matter for the seed
   derivation above — any length works — which is precisely why the derivation is
@@ -445,11 +467,11 @@ Post-MVP prerequisites before doing any of this publicly:
 
 ## Suggested order
 
-| # | Work | Blocks |
-|---|---|---|
-| 1 | Push images to GHCR from the release workflow | everything |
-| 2 | `Caddyfile.proxied`, trusted proxies, `MERIDIAN_APP_KEY_SEED` | A1 |
-| 3 | Hand-install on a real Runtipi box via "Add custom app" (A1) | A2 |
-| 4 | `meridian-appstore` repo + generator script (A2) | B |
-| 5 | *(post-MVP)* backup/restore and upgrade docs | B |
-| 6 | *(post-MVP)* discovery: Discussions, Discord, aggregator stores | — |
+| # | Work | Blocks | Status |
+|---|---|---|---|
+| 1 | Push images to GHCR from the release workflow | everything | Done (M19.26) |
+| 2 | `Caddyfile.proxied`, trusted proxies, `MERIDIAN_APP_KEY_SEED` | A1 | Done (M19.27) |
+| 3 | Hand-install on a real Runtipi box via "Add custom app" (A1) | A2 | Open — [`QA-RUNTIPI-01`](../../docs/qa/QA-RUNTIPI-01-runtipi-app-install.md) (M19.29) |
+| 4 | `meridian-appstore` repo + generator script (A2) | B | Generator and runbook done (M19.28, M19.29); the repository itself is created by following `docs/process/runtipi-distribution.md` |
+| 5 | *(post-MVP)* backup/restore and upgrade docs | B | Stated in the generated `metadata/description.md`; deepen post-MVP |
+| 6 | *(post-MVP)* discovery: Discussions, Discord, aggregator stores | — | Open, post-Alpha-1 |
