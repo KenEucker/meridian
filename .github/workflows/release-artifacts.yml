@@ -182,6 +182,7 @@ jobs:
   # than emitting an unsigned artifact that looks distributable.
   android:
     needs: version
+    environment: Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
