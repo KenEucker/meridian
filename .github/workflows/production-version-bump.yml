@@ -1,5 +1,19 @@
 name: production-version-bump
 
+# After a pull request merges into production this workflow bumps the root
+# version, then cuts the release for it (versioning strategy, beta policy).
+# The bump is patch by default and minor when the merged pull request's title
+# carries a `feat` conventional-commit type or a breaking-change marker —
+# pre-1.0 semantics, where breaking changes also land as minor bumps.
+#
+# Cutting the release is a workflow_call into release-artifacts.yml rather
+# than a tag push, because a tag pushed with this workflow's GITHUB_TOKEN
+# triggers no other workflow and would need a stored credential to do so. The
+# call carries the bump commit's SHA; the release job creates the v<version>
+# tag on it only after every artifact built and verified, so the tag exists
+# only when the release does. A maintainer pushing a tag by hand still works
+# exactly as before and takes the release workflow's tag path.
+
 on:
   pull_request_target:
     types:
@@ -16,6 +30,10 @@ jobs:
   bump:
     if: ${{ github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production' }}
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+      release: ${{ steps.release.outputs.release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,11 +44,15 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Bump root patch version
+      # The merged pull request's title decides the bump size, read through
+      # the environment rather than interpolated into the script so the title
+      # is data here, never code.
+      - name: Bump root version
         id: version
         shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           node <<'NODE'
           const { execFileSync } = require("node:child_process");
@@ -53,7 +75,17 @@ jobs:
             throw new Error("Root package.json version must use numeric x.y.z format.");
           }
 
-          const nextVersion = `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+          // Beta classification (versioning strategy): a `feat` type or a
+          // breaking-change `!` marker in the conventional-commit PR title is
+          // a minor bump; everything else is a patch. Revisit at 1.0.0, where
+          // breaking changes become major bumps.
+          const title = process.env.PR_TITLE ?? "";
+          const conventional = /^([a-z]+)(\([^)]*\))?(!)?:/.exec(title);
+          const isMinor =
+            conventional !== null && (conventional[1] === "feat" || conventional[3] === "!");
+          const nextVersion = isMinor
+            ? `${match[1]}.${Number(match[2]) + 1}.0`
+            : `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
           packageJson.version = nextVersion;
           fs.writeFileSync(path, `${JSON.stringify(packageJson, null, 2)}\n`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
@@ -86,3 +118,39 @@ jobs:
         if: ${{ steps.version.outputs.bumped == 'true' }}
         shell: bash
         run: node scripts/release/package-technician-docs.mjs --check
+
+      # HEAD is the bump commit when this workflow bumped, and the merge
+      # commit when the pull request set the version itself — the promotion
+      # PRs the bump script steps aside for. Either way it is the commit whose
+      # root manifest carries the version, so it is the commit to release. An
+      # already-existing tag means the version was already released; releasing
+      # it again would fail on the tag, so it is skipped as already done.
+      - name: Resolve the release commit
+        id: release
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The release itself: release-artifacts.yml builds every artifact from the
+  # bump commit, verifies each carries the root version, and creates the
+  # v<version> tag and release with the artifacts attached. `secrets: inherit`
+  # carries the Android signing secrets through; the permissions here are the
+  # ceiling the called jobs draw from (contents to create the release,
+  # packages to push the GHCR images).
+  release:
+    needs: bump
+    if: ${{ needs.bump.outputs.release == 'true' }}
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      ref: ${{ needs.bump.outputs.sha }}
+    secrets: inherit
