@@ -1,4 +1,4 @@
-![Meridian logo](meridian.png)
+![Meridian logo](meridian-signal-camp-wordmark.webp)
 
 # Meridian
 

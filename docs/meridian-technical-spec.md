@@ -675,7 +675,7 @@ Department leads should additionally cache:
 
 IC roles may cache:
 
-- Last viewed limited incident data.
+- Every incident entry the user has viewed, per the section 19.2 viewed-incident cache.
 - Related field reports where permitted.
 - Derived Name Reference tokens from cached Incident notes and related Field Reports, where permitted.
 
@@ -763,6 +763,22 @@ The node observes this rather than probing for it. Node sync runs on a schedule 
 The client composes both tiers into the seven states of UI implementation contract 11.13, and the composition is what makes `online` honest: it means "central or expected sync target reachable" and is reported only where that has been established. A reachable node reporting `unreachable` is `central_unreachable`; a reachable node reporting `unknown` is `local_node_reachable`; an unreachable node is `offline_usable` whatever it last said about central.
 
 Connected-only work (9.4) gates on the first tier alone. A write is refused because no node is reachable, never because central is unreachable — an incident created at an on-site node during an internet outage is the case this architecture exists for, and refusing it would remove the capability the on-site node was deployed to provide.
+
+## 9.7 Download status
+
+A device knows what it should hold, because everything it should hold is named by a node response it already has: the session document names the branding assets and the modules in play, the read set's `readiness` block names the sections composed for this caller and any the node deferred, and the read set names the map package a permitted device should fetch.
+
+The client tracks, per artifact it should hold — the offline read set, the event map package where permitted, branding assets, and any other server-named downloadable — whether that artifact is downloaded and current, and when it last downloaded successfully, and composes them into one status a person can read: `3 of 5 downloaded`, with each artifact named.
+
+The denominator always comes from what the node has told this device it should hold, never from a client-side list of what Meridian ships. Section 14 already refuses a checklist of sections for `local cache complete`, and the same reasoning holds here: a staff member entitled to no map package is at `2 of 2`, not stuck forever at `2 of 3`.
+
+The viewed-incident cache (section 19.2) is bounded by the user's own viewing rather than by anything the node names, so it reports what it holds — `4 viewed incidents cached` — and never enters the fraction.
+
+The status is read where the rest of the device's standing is read: the Settings/Readiness surface (section 14; UI implementation contract 19A.2). It is not a shell banner and it does not nag.
+
+When the last outstanding artifact lands — the device goes from holding less than the node named to holding all of it — the client says so once, with a transient notice (UI implementation contract 11.14 Toast): all available event data is downloaded. The notice dismisses itself, is never a persistent banner, and does not repeat for refresh checks that download nothing. It reappears only when the device has been incomplete again and completes again: a context switch, a newly published map package, a refresh that actually re-downloaded something.
+
+Download status is not readiness — readiness (section 14) is the checklist, this is the progress meter behind one line of it — and it is not connectivity (9.6): connectivity says whether the node answers, download status says how much of what the node composed this device holds.
 
 ---
 
@@ -1009,7 +1025,9 @@ Switching re-resolves permissions, navigation, branding, modules, and cached con
 
 A client caches the most recent session response durably and uses it to establish navigation and permissions when the node is unreachable.
 
-The cached response remains usable for the duration of the event the node is locked to. Once that event window has ended, or when the client holds no event context, the client requires a successful refresh before granting access. Tying staleness to the event window rather than to a fixed number of hours means a device does not lose its permissions partway through a multi-day event that has no connectivity.
+The cached response remains usable until the later of two bounds: the end of the event window the node is locked to, and 6 weeks from the last successful refresh — the same window device trust itself is valid for (section 12.2). Only past both bounds, or when the device's trust has expired, does the client require a successful refresh before granting access.
+
+Tying staleness to the event window rather than to a fixed number of hours means a device does not lose its permissions partway through a multi-day event that has no connectivity. The 6-week fallback is the other half of the same intent: a device holding no event context — a phone pointed at central between events, a kiosk waiting for its node — does not lose its navigation and cached data the moment the node stops answering. An unreachable node is the situation this cache exists for, never by itself a reason to withdraw what the device holds.
 
 A client operating from cache indicates that its permissions are cached and records when they were last refreshed.
 
@@ -1431,7 +1449,7 @@ Every item has a signal behind it. Six are answered by probes and by the session
 
 The remaining two are answered by the offline machinery:
 
-- `local cache complete` is the offline read set (section 9.3): the device holds the set the node composed **for that caller**, and it is still inside the window it may be served in (11A.4). It is deliberately not a list of sections — the set is composed per request from the caller's own effective roles and the organization's active modules (9.5), so a staff member holding no Logistics index is holding a complete cache, and a checklist that looked for sections would report their correct device as incomplete forever.
+- `local cache complete` is the offline read set (section 9.3): the device holds the set the node composed **for that caller**, and it is still inside the window it may be served in (11A.4). It is deliberately not a list of sections — the set is composed per request from the caller's own effective roles and the organization's active modules (9.5), so a staff member holding no Logistics index is holding a complete cache, and a checklist that looked for sections would report their correct device as incomplete forever. The download status of section 9.7 is the progress meter behind this item — per-artifact, with the denominator named by the node, read on the same Settings/Readiness surface.
 - `last sync completed` covers both directions: the read set coming down and the command outbox going up (11A.5). A device whose set refreshed a minute ago and whose outbox holds three unsent check-ins has not completed a sync in any sense its owner cares about. A refusal outranks unsent work, because a refusal will not clear on its own.
 
 Readiness reports what it is told and never infers. A device-bound token is not read as device trust, an unreachable node is not read as a failure, and a signal that has not answered yet reads as pending rather than as a check that failed.
@@ -2052,15 +2070,19 @@ Incidents should not be greedily synced to devices.
 
 Elevated users may read limited cached incidents offline.
 
-Alpha 1 incident cache rule:
+Incident cache rule:
 
 ```text
-last 5 viewed incidents
+every incident the user has viewed
 ```
+
+Viewing an incident while connected stores it in the device's incident cache, so an IC user can re-read in the field anything they have already read at a desk. The cache is populated by the user's own views, never by bulk sync: a device holds the incidents its user chose to open, not the event's incident log.
+
+An earlier Alpha 1 rule capped this cache at the last 5 viewed incidents. The cap is removed: a field device that silently dropped the sixth incident its user had read was a device losing data its user believed they held, which is the opposite of what the cache is for.
 
 Cached incidents flush on logout.
 
-Cached incidents flush after 6 weeks.
+A cached incident flushes 6 weeks after it was last viewed, matching the device trust window (section 12.2).
 
 Cached incidents are excluded from normal emergency exports.
 

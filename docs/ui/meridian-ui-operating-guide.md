@@ -898,7 +898,7 @@ For default staff, the page should simply indicate that access is restricted.
 
 ### 18.2A Cached permissions
 
-A client that cannot reach its node works from the permissions it last received, for the duration of the event the node is locked to.
+A client that cannot reach its node works from the permissions it last received: for the duration of the event the node is locked to, and outside an event window for up to six weeks from the last successful refresh (the device trust window).
 
 Settings says which permissions this device is working from, when they were last refreshed, and offers to refresh them. It says so in every state, including the ordinary one where the node has just answered — a page somebody opened to ask the question should answer it rather than going quiet when the news is good.
 
@@ -908,7 +908,7 @@ Permission state is not in the application shell. It was, on every screen, and d
 
 Cached-permission state is separate from connectivity state. A device can be online with stale permissions, or offline with fresh ones. The two must not be merged, and connectivity keeps its shell banner: it changes what the next action will do, which is news.
 
-Once the event window has ended, or when the client holds no event context, access requires a successful refresh.
+Once the event window has ended and the six-week window since the last successful refresh has passed — or when device trust has expired — access requires a successful refresh. An unreachable node alone never removes access.
 
 On reconnect, a permission that has been taken away disappears immediately. It does not wait for the next login.
 

@@ -1937,6 +1937,19 @@ Rules:
 - queued commands survive a shared-workstation session ending, per section 18;
 - the queue is shared across surfaces. Field Reports and attendance are callers of it, not owners of their own queues.
 
+### 16.4 Offline Download Status
+
+The device reports how much of what the node has named for it is downloaded (technical spec 9.7; CLIENT-025 through CLIENT-027).
+
+Rules:
+
+- the denominator is what the node has named for this device — the offline read set, the map package where permitted, branding assets — never a hardcoded artifact list;
+- present a progress summary ("3 of 5 downloaded") with each artifact named, its state, and its last successful download;
+- the status lives on the Settings/Readiness surface (19A.2), not in the shell;
+- completion is announced once with a Toast (11.14): transient, self-dismissing, never requiring dismissal, and not repeated for refresh checks that download nothing;
+- an artifact that fails to download shows a repair path, not silent incompleteness;
+- the viewed-incident cache reports what it holds ("4 viewed incidents cached"), never a fraction — its whole is the user's own viewing, not something the node names.
+
 ---
 
 ## 17. Policy, Procedure, and Fragment Contract
@@ -2095,8 +2108,9 @@ A client caches its session response and boots from it when the node is unreacha
 Rules:
 
 - the cached response stays usable for the duration of the event the node is locked to;
-- once that window has ended, or when the client holds no event context, the client requires a successful refresh before granting access;
+- once that window has ended, or when the client holds no event context, the cached response stays usable for up to six weeks from the last successful refresh — the device trust window (CLIENT-008A). Only beyond both bounds, or when device trust has expired, does the client require a successful refresh before granting access. An unreachable node alone never empties the navigation;
 - permission state is reported on the Settings surface and not in the application shell. Settings names the state, shows when permissions were last refreshed, and offers the refresh;
+- Settings also carries the offline download status of section 16.4: how much of what the node named for this device is downloaded;
 - Settings reports the current state as well as the stale ones. A surface somebody opened to ask this question answers it, including when the answer is that nothing is wrong;
 - staleness is presented as information, not as an error. A device working normally offline inside its event window is not in a failure state;
 - on reconnect the client refreshes and applies any reduction in permissions immediately. A revoked capability disappears on refresh, not on next login.
