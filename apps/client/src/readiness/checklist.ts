@@ -727,11 +727,11 @@ export function resolveReadinessSessionSignal(): ReadinessSessionSignal {
 function describeRefusedSession(): string {
   switch (clientSessionState.refreshReason) {
     case "event_window_ended":
-      return "The event this device cached its permissions for has ended. Reconnect to the node to continue.";
+      return "The event this device cached its permissions for has ended, and the cached copy is past the six weeks it may be used after its last refresh. Reconnect to the node to continue.";
     case "no_event_context":
-      return "This device holds no event context. Reconnect to the node to continue.";
+      return "This device holds no event context, and its cached permissions are past the six weeks they may be used after their last refresh. Reconnect to the node to continue.";
     default:
-      return "This device cannot confirm the event its permissions were cached for. Reconnect to the node to continue.";
+      return "This device cannot confirm the event its permissions were cached for, and the cached copy is past the six weeks it may be used after its last refresh. Reconnect to the node to continue.";
   }
 }
 

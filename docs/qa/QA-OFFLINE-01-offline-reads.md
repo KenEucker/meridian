@@ -49,15 +49,18 @@ outcome that M18.54's addition made reachable.
 - `CLIENT-007` through `CLIENT-010`
 - `CLIENT-015`, `CLIENT-016`, `CLIENT-017`, `CLIENT-017A`, `CLIENT-018`
 - `CLIENT-021`, `CLIENT-022`
+- `CLIENT-025`, `CLIENT-026`, `CLIENT-027`
+- `INC-017`, `INC-018`
 - `MOD-016`, `MOD-017`
 - `SYS-033`
 - `TEAM-009`
 - `UI-020`
 - Requirements section 2.4 (attribution)
-- Technical spec sections 8.6, 9.1 through 9.5, 10, 11A.4, 11A.5, 11A.7, 15A.8,
-  22A.8, 26.2
+- Technical spec sections 8.6, 9.1 through 9.5, 9.7, 10, 11A.4, 11A.5, 11A.7,
+  15A.8, 19.2, 22A.8, 26.2
 - Data/API spec sections 5.3, 5.6, 5.10, 7.1, 7.2, 7.3, 7.5, 7.6
-- UI Implementation Contract sections 11.13, 16, 16.1, 16.1A, 16.2, 16.3
+- UI Implementation Contract sections 11.13, 11.14, 16, 16.1, 16.1A, 16.2,
+  16.3, 16.4, 19A.2
 - ADR-0003 (PowerSync retirement)
 - Meridian Alpha 1 tasks M18.46 through M18.53, M18.55, and M19.17
 
@@ -382,6 +385,81 @@ Sign in as **Sam Shiftlead** on the Logistics Desk.
    docker compose -f deploy/docker/docker-compose.yml config > /dev/null && echo ok
    ```
 
+### J. Download status on Settings and the completion notice
+
+The per-artifact download status (`CLIENT-025` through `CLIENT-027`; technical
+spec 9.7; UI contract 16.4). The denominator has to come from what the node
+named for this device, the readout has to live on Settings rather than in the
+shell, and the completion notice has to be a transient toast that fires on the
+transition to holding everything and never again for a refresh that downloads
+nothing.
+
+1. Clear site data and open the client signed out. Open **Settings** and read
+   the **Offline downloads** section. Confirm it says the node has named
+   nothing for a device holding no session — not "0 of N" against a built-in
+   list.
+2. Sign in as **Vera Staff** and watch the shell as the sign-in resolves.
+   Confirm that when the last named artifact lands, one toast appears —
+   "All available event data is downloaded." — and dismisses itself within a
+   few seconds without being clicked. Confirm nothing persistent joins the
+   shell.
+3. Open **Settings** and read the Offline downloads section beside the
+   Permissions section. Confirm a progress summary in the form
+   "N of N downloaded", with each artifact named (the offline read set; the
+   branding assets where the context has an organization), its state, and its
+   last successful download.
+4. Reload the page twice with the network available. The refresh answers `304`
+   and downloads nothing: confirm the toast does **not** reappear on either
+   reload.
+5. Navigate two or three surfaces and confirm the download status appears
+   nowhere in the shell — no banner, no badge. The readout is Settings' and the
+   toast is transient (contract 16.4: not in the shell; no nagging).
+6. Stop the Laravel server and reload. Confirm the read set's row reads as
+   **pending** — an unreachable node is the situation the cache exists for,
+   never dressed as a failure — and that restarting Laravel and reloading
+   returns it to downloaded. The failed state (the node answered and refused,
+   with a **Retry download** control beside the node's own words) is
+   impractical to stage by hand; take it from the automated evidence:
+   ```bash
+   corepack pnpm --filter @meridian/client run test -- \
+     src/offline/downloadStatus.spec.ts \
+     src/views/SettingsDownloadStatus.spec.ts
+   ```
+7. Switch context (as a persona holding two events, per `QA-CLIENT-01` section
+   F) or clear site data and sign in again. The device is incomplete again and
+   then completes: confirm the toast fires once more — the only condition under
+   which it repeats.
+
+### K. The viewed-incident cache
+
+The device incident cache (`INC-017`, `INC-018`; technical spec 19.2, 9.3).
+Populated only by the user's own views, no last-five cap, readable offline,
+flushed at logout, and reported on Settings as a count rather than a fraction.
+
+1. Sign in as an IC persona (`ingrid.iclead@northwood-collective.test`) and
+   open six different incidents from the incident list, one after another.
+2. Set the Network panel to Offline. Re-open each of the six from the list you
+   still have in history or by URL. Confirm **all six** render from the cache —
+   the sixth did not push out the first (the last-five cap is gone).
+3. Still offline, open an incident you never viewed. Confirm it fails plainly
+   as needing a connection rather than rendering empty — the cache holds the
+   user's own views, never the event's incident log.
+4. Restore the network. Open **Settings** and confirm the Offline downloads
+   section reports "6 viewed incidents cached" as a count, and that the
+   "N of N downloaded" summary above it did not change — viewed incidents never
+   enter the fraction.
+5. Sign out and sign back in as the same persona. Confirm Settings reports no
+   viewed incidents and an incident is no longer readable offline until viewed
+   again: the cache flushes at logout.
+6. Sign in as **Vera Staff** and confirm Settings shows no viewed-incident line
+   at all. Regular staff see no incident UI, and their device holds no
+   incident.
+7. The six-week expiry and the per-user boundary are automated evidence:
+   ```bash
+   corepack pnpm --filter @meridian/client run test -- \
+     src/ims/viewedIncidentCache.spec.ts
+   ```
+
 ## Expected results
 
 - One `/api/offline-read-set` request per sign-in, reconnect, and context switch,
@@ -412,6 +490,20 @@ Sign in as **Sam Shiftlead** on the Logistics Desk.
   reviewer named, and creates no record when it closes.
 - No PowerSync configuration or application code remains, and event mode gates on
   the read set check.
+- The Settings Offline downloads section reports "N of N downloaded" with every
+  named artifact's state and last successful download, where N is what the
+  node's responses named for this caller — a device with no session reads as
+  nothing named, never "0 of N" against a built-in list.
+- The completion toast fires once on the transition to holding every named
+  artifact, dismisses itself, never persists, and does not reappear for `304`
+  refreshes; it fires again only after the device has been incomplete again.
+- No download-status readout anywhere in the shell.
+- Every incident an IC user viewed renders offline — all six, no last-five cap —
+  while an unviewed incident is a plain connection failure.
+- Settings reports viewed incidents as a count ("6 viewed incidents cached"),
+  never inside the downloaded fraction; the count is absent for a user whose
+  views cached nothing, regular staff included.
+- The incident cache flushes at logout.
 
 ## Evidence to capture
 
@@ -433,6 +525,14 @@ Sign in as **Sam Shiftlead** on the Logistics Desk.
 - The conflict review screen before resolution, showing no Accept on-site
   control, and the audit entry after.
 - Output of the PowerSync reference grep and the `docker compose config` check.
+- The Settings Offline downloads section signed out (nothing named), incomplete
+  ("0 of 2 downloaded"), and complete ("2 of 2 downloaded"), plus a capture of
+  the completion toast.
+- The incident list offline with a cached incident rendering beside the refusal
+  for one never viewed, and the Settings viewed-incident count before and after
+  sign-out.
+- Output of the download-status and viewed-incident-cache suites from steps J.6
+  and K.7.
 
 ## Failure notes
 
@@ -457,3 +557,17 @@ For an override failure, capture whether the client offered a control it should
 not have (a poor experience, since the node refuses it) or the node applied one
 it should not have (a blocking authority defect). An override applied for
 `do_not_staff`, or one that waived more than the reason it named, is blocking.
+
+For a download-status failure, capture the Settings section and which node
+response should have named the artifact in question. A denominator that counts
+an artifact no node response named for this caller — a staff member stuck at
+"2 of 3" against a map package they are not entitled to — is the defect
+`CLIENT-025` exists to prevent. A completion toast that persists, requires
+dismissal, or repeats on a refresh that downloaded nothing is a `CLIENT-027`
+defect.
+
+For an incident-cache failure, record which incident was viewed, by whom, and
+when. A cached incident served to a different user, one surviving logout, or
+one populated by anything other than the user's own view is a blocking
+`INC-018` defect; a viewed incident that fell out of the cache while others
+remained (a resurrected cap) is an `INC-017` defect.

@@ -33,6 +33,15 @@ import {
   setPageInMenu,
 } from "@/session/menuPages";
 import {
+  viewedIncidentCacheRevision,
+  viewedIncidentCount,
+} from "@/ims/viewedIncidentCache";
+import {
+  downloadStatus,
+  retryArtifactDownload,
+  type DownloadArtifact,
+} from "@/offline/downloadStatus";
+import {
   resolveReadinessChecklist,
   summarizeReadiness,
 } from "@/readiness/checklist";
@@ -101,6 +110,55 @@ const readiness = computed(() =>
 const sessionEstablished = computed(
   () => clientSessionState.document !== null,
 );
+/*
+ * The offline download status (CLIENT-025, CLIENT-026; technical spec 9.7; UI
+ * contract 16.4). Beside the cached-permission state, because "which
+ * permissions am I working from" and "how much of what the node named do I
+ * hold" are both this device's standing, read where the rest of it is read
+ * (contract 19A.2).
+ */
+const downloads = downloadStatus;
+
+/*
+ * The viewed-incident cache reports what it holds — a count, never a fraction
+ * (technical spec 9.7): its whole is this user's own viewing, not something
+ * the node names. Zero renders nothing at all, which is also what keeps every
+ * trace of incident UI away from regular staff (technical spec 19.2) — their
+ * views never populate an entry.
+ */
+const cachedIncidentCount = computed(() => {
+  void viewedIncidentCacheRevision.value;
+
+  return viewedIncidentCount(clientSessionState.document?.user.id ?? null);
+});
+
+const retryingArtifact = ref<string | null>(null);
+
+/** The repair path for a failed artifact (contract 16.4). */
+async function retryDownload(key: string): Promise<void> {
+  if (retryingArtifact.value !== null) {
+    return;
+  }
+
+  retryingArtifact.value = key;
+
+  try {
+    await retryArtifactDownload(key);
+  } finally {
+    retryingArtifact.value = null;
+  }
+}
+
+function artifactStateLabel(artifact: DownloadArtifact): string {
+  if (artifact.state === "downloaded") {
+    return artifact.lastDownloadedAt === null
+      ? "Downloaded."
+      : `Downloaded. Last downloaded ${artifact.lastDownloadedAt}.`;
+  }
+
+  return artifact.state === "failed" ? "Failed." : "Pending.";
+}
+
 const fieldSession = computed(() => resolveFieldSession());
 const fieldSessionText = computed(() => {
   const session = fieldSession.value;
@@ -762,6 +820,79 @@ watch(
       </p>
     </section>
 
+    <!--
+      Offline download status (CLIENT-025 through CLIENT-027; technical spec
+      9.7; contract 16.4). Beside the cached-permission state, on the surface
+      where this device's standing is read — never in the shell, and never a
+      nag. The denominator is what the node named for this device: an artifact
+      this caller is not entitled to is absent, not stuck pending.
+    -->
+    <section class="about__downloads" aria-labelledby="about-downloads-heading">
+      <h2 id="about-downloads-heading" class="about__subheading">
+        Offline downloads
+      </h2>
+      <p class="about__section-note">
+        What the node has named for this device to hold offline, and how much
+        of it is downloaded. The list comes from the node's own answers.
+      </p>
+
+      <template v-if="downloads.named > 0">
+        <p
+          class="about__downloads-count"
+          :data-complete="downloads.complete"
+          role="status"
+        >
+          {{ downloads.downloaded }} of {{ downloads.named }} downloaded
+        </p>
+
+        <ul class="about__downloads-list">
+          <li
+            v-for="artifact in downloads.artifacts"
+            :key="artifact.key"
+            :data-artifact-state="artifact.state"
+          >
+            <span class="about__downloads-body">
+              <strong>{{ artifact.name }}</strong>
+              <span>{{ artifactStateLabel(artifact) }}</span>
+              <span v-if="artifact.detail" class="about__downloads-detail">
+                {{ artifact.detail }}
+              </span>
+            </span>
+            <!--
+              The repair path (contract 16.4): a failed artifact offers a
+              retry rather than sitting as silent incompleteness. Pending is
+              not failure — it downloads itself when the node is reachable —
+              so only failure grows a control.
+            -->
+            <button
+              v-if="artifact.state === 'failed'"
+              type="button"
+              class="about__downloads-retry"
+              :disabled="retryingArtifact !== null"
+              @click="retryDownload(artifact.key)"
+            >
+              {{ retryingArtifact === artifact.key ? "Retrying" : "Retry download" }}
+            </button>
+          </li>
+        </ul>
+
+        <!--
+          A count, never a fraction (technical spec 9.7): the incident cache's
+          whole is this user's own viewing. Absent entirely at zero, which is
+          every non-IC user (technical spec 19.2).
+        -->
+        <p v-if="cachedIncidentCount > 0" class="about__downloads-incidents">
+          {{ cachedIncidentCount }} viewed
+          incident{{ cachedIncidentCount === 1 ? "" : "s" }} cached
+        </p>
+      </template>
+
+      <p v-else class="about__downloads-empty">
+        This device holds no session, so the node has named nothing for it to
+        download.
+      </p>
+    </section>
+
     <section class="about__health" aria-labelledby="about-health-heading">
       <header class="about__section-header">
         <h2 id="about-health-heading" class="about__subheading">
@@ -921,8 +1052,113 @@ watch(
 .about__pages,
 .about__menus,
 .about__permissions,
+.about__downloads,
 .about__about {
   margin-top: var(--m-space-6);
+}
+
+.about__downloads-count {
+  display: inline-block;
+  margin: var(--m-space-3) 0 0;
+  padding: 0.15rem var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: var(--m-radius-pill);
+  background: var(--m-surface-base);
+  color: var(--m-text-secondary);
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.about__downloads-count[data-complete="true"] {
+  border-color: color-mix(
+    in srgb,
+    var(--m-status-success) 55%,
+    var(--m-border-default)
+  );
+  background: color-mix(
+    in srgb,
+    var(--m-status-success) 16%,
+    var(--m-surface-base)
+  );
+  color: color-mix(in srgb, var(--m-status-success) 78%, var(--m-text-primary));
+}
+
+.about__downloads-list {
+  display: grid;
+  gap: var(--m-space-2);
+  margin: var(--m-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about__downloads-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--m-space-3);
+  padding: var(--m-space-3);
+  border: 1px solid var(--m-border-subtle);
+  border-left-width: 4px;
+  border-radius: var(--m-radius-sm);
+  background: var(--m-surface-raised);
+}
+
+/* Tone on the edge and never on the text alone; every state is carried by its
+   words as well (accessibility checklist). */
+.about__downloads-list li[data-artifact-state="downloaded"] {
+  border-left-color: var(--m-status-success);
+}
+
+.about__downloads-list li[data-artifact-state="pending"] {
+  border-left-color: var(--m-status-neutral);
+}
+
+.about__downloads-list li[data-artifact-state="failed"] {
+  border-left-color: var(--m-status-danger);
+}
+
+.about__downloads-body {
+  display: grid;
+  gap: var(--m-space-1);
+  min-width: 0;
+}
+
+.about__downloads-body span,
+.about__downloads-detail {
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
+}
+
+.about__downloads-retry {
+  min-height: 2.25rem;
+  padding: 0 var(--m-space-3);
+  border: 1px solid var(--m-border-default);
+  border-radius: 6px;
+  background: var(--m-surface-base);
+  color: var(--m-text-secondary);
+  font: inherit;
+  font-size: var(--m-text-sm);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.about__downloads-retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.about__downloads-retry:focus-visible {
+  outline: 2px solid var(--m-focus-ring);
+  outline-offset: 2px;
+}
+
+.about__downloads-incidents,
+.about__downloads-empty {
+  margin: var(--m-space-3) 0 0;
+  color: var(--m-text-muted);
+  font-size: var(--m-text-sm);
 }
 
 .about__section-note {

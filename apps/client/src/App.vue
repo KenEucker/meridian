@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 import { meridianAppConfig } from "@/app/appConfig";
+import DownloadCompleteToast from "@/components/DownloadCompleteToast.vue";
 import AdminAppShell from "@/components/shells/AdminAppShell.vue";
 import FieldAppShell from "@/components/shells/FieldAppShell.vue";
 import KioskAppShell from "@/components/shells/KioskAppShell.vue";
@@ -88,6 +89,12 @@ onBeforeUnmount(() => {
       <RouterView />
     </div>
   </component>
+  <!--
+    Transient by construction (CLIENT-027; contract 11.14): the notice module
+    shows it once on the incomplete-to-complete transition and dismisses it
+    itself. Not the download-status readout — that lives on Settings (16.4).
+  -->
+  <DownloadCompleteToast />
 </template>
 
 <style scoped>

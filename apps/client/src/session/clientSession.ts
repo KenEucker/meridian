@@ -8,10 +8,12 @@
 //     call, so a device that has been here before comes up knowing what its user
 //     may do rather than blank (CLIENT-007). A device that has never been here
 //     comes up holding nothing, which is what login is for.
-//  2. **Staleness.** A cached document grants access only while the event window
-//     it was cached for is open (CLIENT-008). Re-evaluated on every refresh
-//     attempt, not only at boot, so an application left running past the end of
-//     its event loses access where it stands instead of at its next restart.
+//  2. **Staleness.** A cached document grants access while the event window it
+//     was cached for is open, and past that window for up to six weeks from the
+//     last successful refresh, bounded by device trust (CLIENT-008,
+//     CLIENT-008A). Re-evaluated on every refresh attempt, not only at boot, so
+//     an application left running past both bounds loses access where it
+//     stands instead of at its next restart.
 //  3. **Disclosure.** The state says whether permissions are cached and when the
 //     node last answered, which is what the surfaces read (CLIENT-009).
 //  4. **Reduction.** A successful refresh replaces the document outright, in
@@ -69,6 +71,13 @@ interface ClientSessionState {
   windowEndsAt: string | null;
   /** Server time the held document was resolved at (CLIENT-009). */
   refreshedAt: string | null;
+  /**
+   * Device time of the last refresh that reached the node, threaded from the
+   * cached-session record at boot. This is what the six-week fallback bound
+   * counts from (CLIENT-008A; technical spec 11A.4), on the same clock the
+   * verdict's `now` is on.
+   */
+  refreshSucceededAt: string | null;
   /** Device time of the last refresh that did not reach the node. */
   refreshFailedAt: string | null;
   refreshing: boolean;
@@ -80,6 +89,7 @@ const state = reactive<ClientSessionState>({
   refreshReason: null,
   windowEndsAt: null,
   refreshedAt: null,
+  refreshSucceededAt: null,
   refreshFailedAt: null,
   refreshing: false,
 });
@@ -140,11 +150,15 @@ function install(
     state.status = "live";
     state.refreshReason = null;
     state.windowEndsAt = null;
+    // The node just answered, on this device's clock. This is the moment the
+    // durable copy is stamped with, and the moment the six-week fallback
+    // (CLIENT-008A) counts from once the answer becomes the cached copy.
+    state.refreshSucceededAt = now.toISOString();
 
     return;
   }
 
-  const verdict = evaluateSessionDocument(document, now);
+  const verdict = evaluateSessionDocument(document, now, state.refreshSucceededAt);
 
   state.status = verdict.access === "granted" ? "cached" : "expired";
   state.refreshReason = verdict.reason;
@@ -195,6 +209,7 @@ export function clearClientSession(): void {
   state.refreshReason = null;
   state.windowEndsAt = null;
   state.refreshedAt = null;
+  state.refreshSucceededAt = null;
   state.refreshFailedAt = null;
   state.refreshing = false;
 }
@@ -212,6 +227,14 @@ export function bootClientSessionFromCache(now: Date = new Date()): boolean {
     return false;
   }
 
+  /*
+   * The record's own stamp of when this client last heard from the node,
+   * installed before the verdict is decided because the verdict counts six
+   * weeks from it (CLIENT-008A). Threaded from the cached-session record
+   * rather than re-derived: `cachedAt` is written on exactly the refreshes
+   * that reached the node, by the same clock the verdict's `now` is read on.
+   */
+  state.refreshSucceededAt = cached.cachedAt;
   install(cached.document, "cache", now);
 
   return true;

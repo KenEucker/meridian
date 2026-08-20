@@ -39,8 +39,10 @@ clears it.
 - `CLIENT-004` through `CLIENT-006`, `CLIENT-024`: capability-derived
   navigation, nothing rendered without a permitting code, and the server as the
   enforcement boundary.
-- `CLIENT-007` through `CLIENT-010`: the durable session cache, event-window
-  staleness, cached-permission disclosure, and permission reduction on refresh.
+- `CLIENT-007` through `CLIENT-010`, including `CLIENT-008A`: the durable
+  session cache, event-window staleness widened by the six-week fallback from
+  the last successful refresh, cached-permission disclosure, and permission
+  reduction on refresh.
 - `CLIENT-011` through `CLIENT-014`: node-lock-first context resolution,
   association-bounded switching, the offline lock, and what a switch replaces.
 - `CLIENT-015` through `CLIENT-018`: the one command outbox, client-generated
@@ -229,7 +231,13 @@ capabilities rather than from authentication.
     ```
 
 24. Take the browser offline, reload, and record what the client does with the
-    cached document now that the window it was cached for has closed.
+    cached document now that the window it was cached for has closed. The
+    session was refreshed minutes ago, so the six-week fallback (`CLIENT-008A`)
+    still covers it.
+24a. Age the cached copy past the fallback: in Application → Local Storage,
+    edit `meridian.session.v1` and set its `cachedAt` to a moment more than six
+    weeks ago (for example, fifty days before today). Still offline, reload,
+    and record what the client does now that both bounds have lapsed.
 25. Put the window back (`active_event_window_ends_at` to `now()->addDays(7)`),
     come back online, and reload.
 
@@ -422,10 +430,17 @@ capabilities rather than from authentication.
   immediately after the refresh (`CLIENT-010`).
 - Step 22: they stay gone. A capability the node withdrew must not be
   resurrected by a restart, which is what a merged cache would do.
-- Step 24: the client refuses to act on the cached document — it renders no
-  navigation and says the event window has ended, naming the event and offering
-  a refresh, rather than presenting the same blank state as a device that has
-  never signed in (`CLIENT-008`).
+- Step 24: the client keeps working from the cached document — navigation
+  renders and the Settings Permissions section reports cached permissions — even
+  though the event window has ended, because the last successful refresh is
+  inside the six-week fallback and an unreachable node alone never empties the
+  navigation (`CLIENT-008A`).
+- Step 24a: only now, with the event window ended *and* six weeks past the last
+  successful refresh, does the client refuse to act on the cached document — it
+  renders no navigation and says the window has ended and the cached copy is
+  past the six weeks it may be used, naming the event and offering a refresh,
+  rather than presenting the same blank state as a device that has never signed
+  in (`CLIENT-008`, `CLIENT-008A`).
 - Step 28: navigation renders immediately, from the durable copy, before any
   network call resolves and while the node is unreachable (`CLIENT-007`). A
   client that renders nothing until the node answers is the failure this cache
@@ -501,8 +516,9 @@ capabilities rather than from authentication.
   `Authorization` header, with the token value redacted.
 - The `403` from step 16.
 - Screenshot of the Settings Permissions section in its current state (step 17),
-  its cached state (step 19), and its expired state (step 24), plus one of an
-  ordinary surface while offline showing no permissions notice on it.
+  its cached state (step 19), its cached-past-the-window state (step 24), and
+  its expired state (step 24a), plus one of an ordinary surface while offline
+  showing no permissions notice on it.
 - Screen recording or timed screenshot of step 28, showing navigation rendered
   with the node stopped.
 - Screenshots of the context surfaces from steps 32, 35, and 36 — the switcher
@@ -530,7 +546,11 @@ capabilities rather than from authentication.
 - Record any client that renders nothing until the node answers, or that sends a
   user to a sign-in screen they cannot complete while holding a usable cached
   session.
-- Record any cached session that grants access after its event window has ended.
+- Record any cached session that grants access after both its event window and
+  the six-week fallback from its last successful refresh have lapsed, or after
+  device trust has expired — and record any cached session that *loses*
+  navigation inside those bounds because the node was merely unreachable
+  (`CLIENT-008A`).
 - Record any switcher offered to an offline client, any organization or event
   offered that the user holds no association with, and any data from a previous
   context left visible after a switch.

@@ -49,7 +49,11 @@
 
 import { computed, ref } from "vue";
 
-import { meridianCachedJson } from "@/api/meridianApi";
+import { meridianCachedJson, MeridianApiError } from "@/api/meridianApi";
+import {
+  readViewedIncident,
+  recordIncidentView,
+} from "@/ims/viewedIncidentCache";
 import {
   unionPendingByDeviceId,
   type OfflineReadProjection,
@@ -65,6 +69,7 @@ import {
   CAPABILITY_INCIDENTS_UPDATE,
   CAPABILITY_INCIDENTS_VIEW,
 } from "@/session/permissionCodes";
+import { clientSessionState } from "@/session/clientSession";
 import {
   departmentHasCapability,
   selectedSessionDepartment,
@@ -499,21 +504,72 @@ export async function getEventIncidents(
 }
 
 /**
+ * The user whose views populate the device incident cache, or null when there
+ * is nobody the cache may serve.
+ *
+ * Both halves of the gate live here so no call site can forget one: a caller
+ * holding no `incidents.view` capability in the department they are working
+ * never touches the cache in either direction (technical spec 19.2 — regular
+ * staff see no incident UI, and their device holds no incident), and a client
+ * holding no session has nobody to attribute a view to.
+ */
+function incidentCacheUserId(): string | null {
+  if (!incidentAccess.value.canView) {
+    return null;
+  }
+
+  return clientSessionState.document?.user.id ?? null;
+}
+
+/**
  * Read one incident.
  *
  * An incident outside the caller's visibility, or one that does not belong to
  * this event, is the node's refusal rather than a row missing from a list, so
  * the screen can say what happened instead of rendering empty.
+ *
+ * This read is also what populates the device incident cache (INC-017;
+ * technical spec 19.2): a view answered by the node is stored, so an IC user
+ * can re-read in the field anything they have already read at a desk. When the
+ * node cannot be reached at all, the cached copy of a previously viewed
+ * incident answers instead. A refusal is not an unreachable node: the node
+ * spoke, and serving a stored copy over its answer would be the client
+ * re-granting access the node had just withheld (CLIENT-006).
  */
 export async function getEventIncident(
   eventId: string,
   incidentId: string,
 ): Promise<ImsIncident> {
-  const payload = (await meridianCachedJson<{ incident: IncidentPayload }>(
-    `/api/events/${encodeURIComponent(eventId)}/incidents/${encodeURIComponent(incidentId)}`,
-  )).data;
+  let payload: { incident: IncidentPayload };
 
-  return toIncident(payload.incident);
+  try {
+    payload = (await meridianCachedJson<{ incident: IncidentPayload }>(
+      `/api/events/${encodeURIComponent(eventId)}/incidents/${encodeURIComponent(incidentId)}`,
+    )).data;
+  } catch (error) {
+    if (error instanceof MeridianApiError) {
+      throw error;
+    }
+
+    const userId = incidentCacheUserId();
+    const cached =
+      userId === null ? null : readViewedIncident(eventId, incidentId, userId);
+
+    if (cached === null) {
+      throw error;
+    }
+
+    return cached.incident;
+  }
+
+  const incident = toIncident(payload.incident);
+  const userId = incidentCacheUserId();
+
+  if (userId !== null) {
+    recordIncidentView(incident, userId);
+  }
+
+  return incident;
 }
 
 /** One Field Report as the offline read set carries it (technical spec 9.3). */
