@@ -106,7 +106,7 @@ export function sessionWindowEnd(event: SessionEvent): string | null {
 }
 
 /**
- * Whether the six-week fallback (CLIENT-008A) still covers this document.
+ * Whether the six-week fallback (CLIENT-008A) still covers this device.
  *
  * Three things have to hold, and each failure closes the fallback rather than
  * the whole cache — the original event-window rule still applies without it:
@@ -119,9 +119,15 @@ export function sessionWindowEnd(event: SessionEvent): string | null {
  *    document naming no device at all is a shared-workstation session or an
  *    older build's copy — nothing was asked, which is not a refusal;
  *  - `now` is inside six weeks of that refresh.
+ *
+ * Exported because CLIENT-008A widens "the cached response" as a whole —
+ * navigation, permissions, *and cached data* — so the offline read set's
+ * staleness gate applies exactly this rule, counted from its own last
+ * successful refresh, rather than a second derivation of it. The parameter is
+ * the device block alone because that is all the rule reads of the document.
  */
-function withinRefreshFallback(
-  document: SessionDocument,
+export function withinRefreshFallback(
+  document: Pick<SessionDocument, "device">,
   lastRefreshedAt: string | null,
   now: Date,
 ): boolean {

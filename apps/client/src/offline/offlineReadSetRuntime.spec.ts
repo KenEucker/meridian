@@ -22,8 +22,10 @@ import {
 } from "@/offline/offlineReadSetFixture";
 import {
   clearOfflineReadSet,
+  hydrateOfflineReadSet,
   offlineReadSetRevision,
   offlineReadSetStore,
+  offlineReadSetVerdict,
   pullOfflineReadSet,
   resetOfflineReadSet,
 } from "@/offline/offlineReadSetRuntime";
@@ -262,6 +264,83 @@ describe("pulling the set", () => {
 
     expect((await pullOfflineReadSet(CONTEXT)).outcome).toBe("unusable");
     expect(offlineReadSetStore.version()).toBe("version-1");
+  });
+});
+
+describe("serving the set past the event window (CLIENT-008A)", () => {
+  const INSIDE_WINDOW = new Date("2027-06-04T12:00:00Z");
+  const AFTER_WINDOW = new Date("2027-06-09T12:00:00Z");
+  const BEYOND_SIX_WEEKS = new Date("2027-07-20T12:00:00Z");
+
+  it("serves the set for six weeks after the window ends, then stops", async () => {
+    /*
+     * The failure this covers was observed on a real device: the session kept
+     * its menu past the window (CLIENT-008A), but every page answered "unable
+     * to load" because the read set behind them was refused on the original
+     * window rule alone. The requirement widens the cached response as a whole
+     * — navigation, permissions, and cached data.
+     */
+    installClientSession(localFieldSessionDocument(), "network");
+    vi.stubGlobal("fetch", respondWithSet(offlineReadSetPayload()));
+    await pullOfflineReadSet(CONTEXT, { now: INSIDE_WINDOW });
+
+    expect(offlineReadSetVerdict(AFTER_WINDOW).access).toBe("granted");
+    expect(offlineReadSetVerdict(BEYOND_SIX_WEEKS)).toEqual({
+      access: "refresh_required",
+      reason: "event_window_ended",
+      windowEndsAt: "2027-06-08T12:00:00+00:00",
+    });
+  });
+
+  it("does not widen the window for a client holding no session", async () => {
+    // The fallback is bounded by the session the set was composed under; a
+    // device that holds no document has nothing to bound it by.
+    vi.stubGlobal("fetch", respondWithSet(offlineReadSetPayload()));
+    await pullOfflineReadSet(CONTEXT, { now: INSIDE_WINDOW });
+
+    expect(offlineReadSetVerdict(AFTER_WINDOW).access).toBe(
+      "refresh_required",
+    );
+  });
+
+  it("treats a 304 as the node's answer, and counts the six weeks from it", async () => {
+    /*
+     * A set with no event context is refused off disk because nothing says how
+     * old it is (11A.4) — but a 304 is the node saying it is current *now*. A
+     * device whose set never changes must not age out of its own data while
+     * checking in daily, so the confirmation re-stamps the copy and restores
+     * it as the node's own answer.
+     */
+    installClientSession(localFieldSessionDocument(), "network");
+    vi.stubGlobal(
+      "fetch",
+      respondWithSet(
+        offlineReadSetPayload({
+          readiness: { context_event_id: null, usable_until: null },
+        }),
+      ),
+    );
+    await pullOfflineReadSet(CONTEXT, { now: INSIDE_WINDOW });
+
+    // A restart turns the node's answer into an unbounded stored copy…
+    await hydrateOfflineReadSet();
+    clearClientSession();
+    expect(offlineReadSetVerdict(INSIDE_WINDOW)).toEqual({
+      access: "refresh_required",
+      reason: "no_event_context",
+      windowEndsAt: null,
+    });
+
+    // …and the node confirming it current makes it the node's answer again.
+    vi.stubGlobal("fetch", respondWith(304));
+    expect(
+      (await pullOfflineReadSet(CONTEXT, { now: AFTER_WINDOW })).outcome,
+    ).toBe("unchanged");
+
+    expect(offlineReadSetVerdict(AFTER_WINDOW).access).toBe("granted");
+    expect(offlineReadSetStore.held()?.storedAt).toBe(
+      AFTER_WINDOW.toISOString(),
+    );
   });
 });
 

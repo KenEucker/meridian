@@ -1,5 +1,5 @@
 // The 11A.4 staleness rule applied to the offline read set (M18.49;
-// CLIENT-001; technical spec 9.3, 11A.4).
+// CLIENT-001, CLIENT-008A; technical spec 9.3, 11A.4).
 
 import { describe, expect, it } from "vitest";
 
@@ -115,6 +115,68 @@ describe("evaluating a held set", () => {
 
   it("refuses when the device holds nothing at all", () => {
     expect(evaluateOfflineReadSet(null, "storage", INSIDE_WINDOW)).toEqual({
+      access: "refresh_required",
+      reason: "nothing_held",
+      windowEndsAt: null,
+    });
+  });
+});
+
+describe("the six-week fallback (CLIENT-008A)", () => {
+  it("serves a set past its event window while the fallback covers the device", () => {
+    /*
+     * CLIENT-008A widens the cached response as a whole — navigation,
+     * permissions, *and cached data*. A crew packing down the week after an
+     * event still holds its documents and its roster; the window ending is
+     * what starts the six weeks, not what empties the device.
+     */
+    expect(
+      evaluateOfflineReadSet(
+        offlineReadSetReadiness(),
+        "storage",
+        AFTER_WINDOW,
+        true,
+      ),
+    ).toEqual({
+      access: "granted",
+      reason: null,
+      windowEndsAt: "2027-06-08T12:00:00+00:00",
+    });
+  });
+
+  it("serves a stored set that names no event while the fallback covers the device", () => {
+    // The field-observed failure: a device with no event context lost every
+    // page the moment its node stopped answering, while its session — under
+    // the same requirement — kept the menu. Both now read the same rule.
+    expect(
+      evaluateOfflineReadSet(
+        offlineReadSetReadiness({ context_event_id: null, usable_until: null }),
+        "storage",
+        INSIDE_WINDOW,
+        true,
+      ).access,
+    ).toBe("granted");
+  });
+
+  it("serves a window end it cannot read under the fallback", () => {
+    // The same reading the session gives it: the fallback is decided from
+    // timestamps this client *can* read.
+    expect(
+      evaluateOfflineReadSet(
+        offlineReadSetReadiness({ usable_until: "whenever" }),
+        "storage",
+        INSIDE_WINDOW,
+        true,
+      ).access,
+    ).toBe("granted");
+  });
+
+  it("never resurrects a device holding nothing", () => {
+    // Six weeks of grace on an absent set would be a grant composed from
+    // nothing.
+    expect(
+      evaluateOfflineReadSet(null, "storage", INSIDE_WINDOW, true),
+    ).toEqual({
       access: "refresh_required",
       reason: "nothing_held",
       windowEndsAt: null,

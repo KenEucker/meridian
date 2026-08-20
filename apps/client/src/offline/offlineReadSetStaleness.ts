@@ -32,6 +32,17 @@
 // moment ago with no event to bound it is the node's current answer, and there
 // is nothing stale about it. The same set read off disk tomorrow has nothing to
 // say how old it is, which is precisely the condition 11A.4 refuses.
+//
+// **The six-week fallback widens both refusals** (CLIENT-008A). The requirement
+// widens "the cached response" as a whole — navigation, permissions, *and
+// cached data* — so once the event window has ended, or where a stored set
+// names no event to bound it by, the set stays servable for up to six weeks
+// from the last successful refresh, bounded by the device session's trust.
+// Whether that fallback covers this device right now is the session's question
+// (`withinRefreshFallback` in `session/sessionStaleness.ts`); the caller
+// answers it and passes the verdict in, so the two caches cannot disagree
+// about the rule. What the fallback never covers is a device holding nothing:
+// six weeks of grace on an absent set would be a grant composed from nothing.
 
 import type { OfflineReadSetReadiness } from "@/offline/offlineReadSet";
 
@@ -88,6 +99,14 @@ function refuse(
   });
 }
 
+function grant(windowEndsAt: string | null): OfflineReadSetVerdict {
+  return Object.freeze({
+    access: "granted",
+    reason: null,
+    windowEndsAt,
+  });
+}
+
 /**
  * Whether the set a device holds may still be served.
  *
@@ -96,12 +115,19 @@ function refuse(
  * has passed, and there is nothing for it to have passed. An end this client
  * cannot parse is treated as ended, because the alternative is serving rows on
  * the strength of a timestamp nobody could read — the one way a malformed value
- * could extend a set's life rather than shorten it.
+ * could extend a set's life rather than shorten it. The six-week fallback still
+ * applies to it, as it does for the session: the fallback is decided from
+ * timestamps this client *can* read.
+ *
+ * `withinRefreshFallback` is whether CLIENT-008A's six-week bound covers this
+ * device right now, decided by the caller from the session's own rule and the
+ * moment this set was last successfully refreshed.
  */
 export function evaluateOfflineReadSet(
   readiness: OfflineReadSetReadiness | null,
   source: OfflineReadSetSource,
   now: Date = new Date(),
+  withinRefreshFallback = false,
 ): OfflineReadSetVerdict {
   if (readiness === null) {
     return NOTHING_HELD;
@@ -114,10 +140,15 @@ export function evaluateOfflineReadSet(
      * Nothing bounds this set's age. The node's own answer is allowed to say so
      * — a staff member with no event resolved still holds their own record and
      * their own documents, and refusing that the moment it arrives would leave
-     * them with nothing while online. The copy read off disk is refused,
-     * because "how old is this" has no answer for it (11A.4).
+     * them with nothing while online. The copy read off disk has no window to
+     * answer "how old is this", so it is served only while the six-week
+     * fallback covers it (CLIENT-008A) and refused beyond that (11A.4).
      */
-    return source === "network" ? GRANTED : refuse("no_event_context", null);
+    if (source === "network" || withinRefreshFallback) {
+      return GRANTED;
+    }
+
+    return refuse("no_event_context", null);
   }
 
   if (endsAt === null) {
@@ -127,12 +158,10 @@ export function evaluateOfflineReadSet(
   const end = Date.parse(endsAt);
 
   if (Number.isNaN(end) || now.getTime() > end) {
-    return refuse("event_window_ended", endsAt);
+    return withinRefreshFallback
+      ? grant(endsAt)
+      : refuse("event_window_ended", endsAt);
   }
 
-  return Object.freeze({
-    access: "granted",
-    reason: null,
-    windowEndsAt: endsAt,
-  });
+  return grant(endsAt);
 }

@@ -391,18 +391,27 @@ describe("refusing a set past its event window", () => {
     expect(searchOfflineReadSet("staff", "dana", ["handle"])).toHaveLength(1);
   });
 
-  it("refuses one past its window rather than serving it stale", async () => {
+  it("serves one past its window for six weeks from the refresh, then refuses it", async () => {
     /*
-     * Held and not served, which is the distinction. The device keeps the record
-     * — throwing it away would leave a reconnecting device re-transferring a set
-     * it may still be told is current — and every read of it comes back empty
-     * until a refresh replaces it (technical spec 11A.4).
+     * The window ending starts the six-week fallback rather than emptying the
+     * device (CLIENT-008A): the set was refreshed a moment ago, so a crew
+     * packing down after an event keeps its data. Beyond the six weeks the set
+     * is held and not served, which is the original distinction — the device
+     * keeps the record, because throwing it away would leave a reconnecting
+     * device re-transferring a set it may still be told is current, and every
+     * read comes back empty until a refresh replaces it (technical spec 11A.4).
      */
     await holdASetUsableUntil("2000-01-01T00:00:00+00:00");
 
+    expect(readOfflineReadSetSection("staff")).toHaveLength(1);
+
+    const beyondFallback = new Date(Date.now() + 7 * 7 * 24 * 60 * 60 * 1000);
+
     expect(offlineReadSetStore.section("staff")).toHaveLength(1);
-    expect(readOfflineReadSetSection("staff")).toEqual([]);
-    expect(searchOfflineReadSet("staff", "dana", ["handle"])).toEqual([]);
+    expect(readOfflineReadSetSection("staff", beyondFallback)).toEqual([]);
+    expect(
+      searchOfflineReadSet("staff", "dana", ["handle"], beyondFallback),
+    ).toEqual([]);
   });
 
   it("serves the node's own answer for a caller with no event resolved", async () => {
@@ -490,15 +499,31 @@ describe("what the banner says about a refresh", () => {
   });
 
   it("says queued for a device holding a set past its event window", async () => {
-    // It holds rows it will not serve and it cannot reach anybody to replace
-    // them, which is a device waiting on connectivity rather than one working.
+    /*
+     * It holds rows it will not serve and it cannot reach anybody to replace
+     * them, which is a device waiting on connectivity rather than one working.
+     * The device's trust has expired, which is what closes the six-week
+     * fallback (CLIENT-008A) — a trusted device refreshed this recently would
+     * still be serving the set, and the banner would rightly stay quiet.
+     */
     stubNode({
       readSet: () =>
         jsonResponse(
           fixtureSet({ readiness: { usable_until: "2000-01-01T00:00:00+00:00" } }),
         ),
     });
-    installClientSession(localFieldSessionDocument(), "network");
+    installClientSession(
+      localFieldSessionDocument({
+        device: {
+          id: "device-under-test",
+          label: null,
+          trusted: false,
+          trust_state: "expired",
+          trusted_until: "2000-02-01T00:00:00+00:00",
+        },
+      }),
+      "network",
+    );
     await refreshOfflineReadSet("requested");
 
     stubNode({

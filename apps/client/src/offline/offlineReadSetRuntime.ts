@@ -41,6 +41,8 @@ import {
   createOfflineReadSetStorage,
   type OfflineReadSetContext,
 } from "@/offline/offlineReadSetStorage";
+import { clientSessionState } from "@/session/clientSession";
+import { withinRefreshFallback } from "@/session/sessionStaleness";
 
 export const offlineReadSetStore = createOfflineReadSetStore(
   createOfflineReadSetStorage(),
@@ -135,6 +137,21 @@ export async function pullOfflineReadSet(
   }
 
   if (response.status === 304) {
+    /*
+     * The node answered: the copy this device holds is its current answer, as
+     * surely as a fresh transfer would have been. Both facts that hang off that
+     * are recorded — the set is re-stamped with this moment, because a 304 is a
+     * successful refresh and the six-week fallback (CLIENT-008A) counts from
+     * the last one; and the source becomes the wire, because a stored set with
+     * no event context is refused as unbounded (11A.4) when the one thing that
+     * would bound it is exactly the confirmation that just arrived.
+     */
+    await offlineReadSetStore.confirm(
+      (options.now ?? new Date()).toISOString(),
+    );
+    heldSource = "network";
+    offlineReadSetRevision.value += 1;
+
     return { outcome: "unchanged", detail: null };
   }
 
@@ -242,6 +259,13 @@ export function resetOfflineReadSet(): void {
  * because the thing that changes is the clock: an application left open through
  * the end of an event window has to stop serving where it stands, not at its
  * next restart.
+ *
+ * The six-week fallback (CLIENT-008A) is decided here because it takes both
+ * halves of what the two stores hold: the session document, whose device trust
+ * bounds the fallback, and this set's own `storedAt`, which is the last
+ * successful refresh the six weeks count from. The rule itself is the
+ * session's, imported rather than restated, so the permission cache and the
+ * read set cannot drift apart about what the fallback is.
  */
 export function offlineReadSetVerdict(
   now: Date = new Date(),
@@ -256,7 +280,14 @@ export function offlineReadSetVerdict(
     return evaluateOfflineReadSet(null, "storage", now);
   }
 
-  return evaluateOfflineReadSet(held.set.readiness, heldSource, now);
+  const document = clientSessionState.document;
+
+  return evaluateOfflineReadSet(
+    held.set.readiness,
+    heldSource,
+    now,
+    document !== null && withinRefreshFallback(document, held.storedAt, now),
+  );
 }
 
 /** Whether a surface may render from what this device holds. */
@@ -270,7 +301,9 @@ export function offlineReadSetUsable(now: Date = new Date()): boolean {
  *
  * Delivery rather than composition, because that is what a stale-read notice is
  * claiming: "the copy this device stored" is dated by the moment the device
- * stored it (M18.50; UI implementation contract 16.2).
+ * stored it (M18.50; UI implementation contract 16.2). A 304 re-stamps it — a
+ * confirmation that the copy is current is the node re-answering with it, and
+ * the moment the six-week fallback counts from (CLIENT-008A).
  */
 export function offlineReadSetStoredAt(): string | null {
   void offlineReadSetRevision.value;
