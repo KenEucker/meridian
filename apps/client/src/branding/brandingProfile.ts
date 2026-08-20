@@ -96,6 +96,7 @@ export interface BrandingProfilePayload {
 }
 
 const CACHE_PREFIX = "meridian.branding.";
+const DOWNLOADED_AT_PREFIX = "meridian.branding-downloaded-at.";
 
 export const MERIDIAN_PROFILE: BrandingProfilePayload = {
   organization_id: null,
@@ -168,6 +169,57 @@ export function readCachedProfile(
     // network copy replaces it on the next successful fetch.
     return null;
   }
+}
+
+/*
+ * When this device last downloaded an organization's branding assets, for the
+ * offline download status (CLIENT-025; technical spec 9.7).
+ *
+ * A stamp beside the cached profile rather than a field inside it, so an entry
+ * written by an earlier build stays readable: the profile cache's shape is the
+ * node's payload, and the moment this device stored it is this device's own
+ * fact.
+ */
+
+function writeBrandingDownloadedAt(organizationId: string, at: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(`${DOWNLOADED_AT_PREFIX}${organizationId}`, at);
+  } catch {
+    // Best effort, like the profile cache itself: losing the stamp costs the
+    // download-status row its timestamp, not the device its branding.
+  }
+}
+
+/** Device time of the last successful branding download, or null. */
+export function brandingAssetsDownloadedAt(
+  organizationId: string,
+): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(
+      `${DOWNLOADED_AT_PREFIX}${organizationId}`,
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether this device holds the organization's branding assets — applied this
+ * session or waiting in the cache from an earlier one (BRAND-022).
+ */
+export function brandingAssetsHeld(organizationId: string): boolean {
+  return (
+    state.profile.organization_id === organizationId ||
+    readCachedProfile(organizationId) !== null
+  );
 }
 
 function writeCachedProfile(profile: BrandingProfilePayload): void {
@@ -286,6 +338,14 @@ export async function loadBrandingProfile(
     state.loaded = true;
     state.fromCache = false;
     writeCachedProfile(profile);
+
+    if (profile.organization_id !== null) {
+      writeBrandingDownloadedAt(
+        profile.organization_id,
+        new Date().toISOString(),
+      );
+    }
+
     applyBrandingProfile(profile);
 
     return profile;
