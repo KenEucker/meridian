@@ -5,6 +5,8 @@ import { discoverNodeUrl } from "@/app/nodeConnection";
 import { followSessionBranding } from "@/branding/brandingContext";
 import { resetDirectoryPresence } from "@/directory/directoryModel";
 import { resetEventHorizonPresence } from "@/event-horizon/eventHorizonModel";
+import { clearViewedIncidentCache } from "@/ims/viewedIncidentCache";
+import { installDownloadStatusObserver } from "@/offline/downloadStatus";
 import { installOfflineReadSetRefreshTriggers } from "@/offline/offlineReadSetRefresh";
 import { clearOfflineReadSet } from "@/offline/offlineReadSetRuntime";
 import { discardFieldReportsOutsideEvent } from "@/field-reports/fieldReportRuntime";
@@ -67,6 +69,14 @@ registerSessionContextReset((context) => {
    */
   clearOfflineReadSet();
   /*
+   * The viewed-incident cache goes too (INC-018; technical spec 19.2). It is
+   * one user's own reading of one context's incidents: at sign-out it is the
+   * "removed at logout" the requirement states, and on a switch or a
+   * shared-workstation session end the person entering this context is not the
+   * person whose views populated it.
+   */
+  clearViewedIncidentCache();
+  /*
    * The Event Horizon's menu summary goes with it (M18.43; HORIZON-014). It
    * summarizes one person's answer for one event; carried across a switch it
    * would offer — or withhold — the entry on the strength of somebody else's
@@ -94,6 +104,15 @@ registerSessionContextReset((context) => {
  * to be showing for the set to arrive.
  */
 installOfflineReadSetRefreshTriggers();
+
+/*
+ * Watch what of it the device holds (CLIENT-027; technical spec 9.7).
+ *
+ * The observer fires the one transient completion notice when the last
+ * outstanding node-named artifact lands. Application behavior, not a screen's:
+ * the transition happens wherever the device is standing.
+ */
+installDownloadStatusObserver();
 
 /*
  * A client that loses its session goes to sign in, wherever it was standing
