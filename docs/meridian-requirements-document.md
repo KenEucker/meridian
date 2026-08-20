@@ -20,6 +20,7 @@
 **Additive Update:** Event Horizon requirements (HORIZON-001–HORIZON-018, sections 3.46 and 7.28) added for the event-scoped personal readiness surface that lists what a staff member still has outstanding in preparation for one event, links each item to the surface that resolves it, and can be hidden from a member's workflow menu once nothing is outstanding.
 **Additive Update:** Organization addressing requirements (ORG-022–ORG-025) added for organization subdomain resolution beside the existing root-path form, and platform landing page requirements (PUBLIC-007–PUBLIC-009) added for the feature tour with example-organization screenshots and the description of the platform offerings. Dedicated per-organization infrastructure recorded as deferred scope.
 **Additive Update:** Directory requirements (DIR-001–DIR-037, sections 3.47 and 7.29) added for the read-only organization chart and handle search surface: an organization-configurable page, enabled by default, whose population follows event participation in event context and persistent membership outside one, whose staff visibility is derived from organizer status and leadership assignments rather than from a new permission, and whose only person-identifying field is the handle.
+**Additive Update:** Offline caching intent requirements added. CLIENT-008A widens CLIENT-008: outside an event window a cached session remains usable for up to six weeks from the last successful refresh (the device trust window), so an unreachable node alone no longer removes navigation or cached data. CLIENT-025–CLIENT-027 add per-artifact offline download status tracking, a progress readout on the Settings/Readiness surface, and a transient all-data-downloaded notification. INC-017 and INC-018 retain every incident a user has viewed for offline re-reading, replacing the last-five-viewed cap.
 
 ---
 
@@ -3700,6 +3701,14 @@ IC department leads may print incidents to PDF.
 
 Incidents shall not be included in general spreadsheet exports for MVP.
 
+### INC-017
+
+Every incident an authorized Incident Command user views while connected shall be stored in that device's incident cache and shall remain readable offline by that user.
+
+### INC-018
+
+The incident cache shall be populated only by the user's own views, never by bulk synchronization. A cached incident shall be removed at logout, and shall expire six weeks after it was last viewed. Cached incidents shall remain excluded from normal emergency exports.
+
 ---
 
 ## 7.12A Name Reference Requirements
@@ -5118,6 +5127,10 @@ A client shall cache the most recent response from CLIENT-002 durably, and shall
 
 The cached response shall remain usable for the duration of the event the node is locked to. Once that event window has ended, or when the client holds no event context, the client shall require a successful refresh before granting access.
 
+### CLIENT-008A
+
+CLIENT-008A widens CLIENT-008: once the event window has ended, or when the client holds no event context, the cached response shall remain usable for up to six weeks from the last successful refresh, bounded by the validity of the device session's trust. The client shall require a successful refresh before granting access only beyond those bounds. Loss of node reachability alone shall not remove navigation, permissions, or cached data from a device operating within them.
+
 ### CLIENT-009
 
 A client operating from a cached response shall indicate that its permissions are cached and shall record when they were last refreshed.
@@ -5185,6 +5198,18 @@ Client surfaces for organization administration, departments and teams, training
 ### CLIENT-024
 
 Removal of fixture-driven behavior shall not remove the ability to run the client's automated tests without a live server.
+
+### CLIENT-025
+
+A client shall track, for each offline artifact the node has named for the device — the offline read set, the event map package where permitted, branding assets, and any other server-named downloadable — whether that artifact is downloaded and current, and when it was last successfully downloaded. The set of artifacts measured shall come from the node's own responses, not from a client-side list of what Meridian ships.
+
+### CLIENT-026
+
+The client shall present the CLIENT-025 download status as a progress summary on the Settings/Readiness surface, stating how many of the named artifacts are downloaded (for example, "3 of 5 downloaded"), and naming each artifact with its state and last successful download.
+
+### CLIENT-027
+
+When the device transitions to holding every artifact the node has named for it, the client shall show a transient, self-dismissing notification that all available event data has been downloaded. The notification shall not persist, shall not require dismissal, and shall not repeat for refresh checks that download nothing.
 
 ---
 

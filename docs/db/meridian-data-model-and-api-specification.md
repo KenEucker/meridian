@@ -1320,6 +1320,8 @@ A login with no staff profile receives an empty set rather than a refusal: it is
 
 A section technical spec 9.3 names that this build cannot compose yet is reported in `readiness.deferred_sections` with the reason and the work that owns it, rather than being omitted. An absent key would leave a client unable to distinguish "you have none of these" from "this Meridian has none of these", which are different things to tell somebody with no signal.
 
+The readiness block is also the device's download-status denominator (technical spec 9.7; CLIENT-025). What it names — together with the map package and branding assets other responses name for this caller — is the complete list of what this device should hold, so a client reports "3 of 5 downloaded" against what the node composed for it rather than against a client-side list of what Meridian ships.
+
 The endpoint writes nothing and records no audit event. What a device may hold is derived from what its user may read, and reading it is not an event.
 
 ### 5.11 Node connectivity reporting
@@ -1604,7 +1606,7 @@ Department leads may additionally cache:
 
 IC roles may cache:
 
-- last viewed limited incident data
+- every incident entry the user has viewed (technical spec 19.2), populated by the user's own views and never by bulk sync
 - related Field Reports where permitted
 - derived Name Reference tokens from cached Incident notes and related Field Reports where permitted
 
