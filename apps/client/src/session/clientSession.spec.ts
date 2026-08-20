@@ -96,8 +96,11 @@ describe("client session", () => {
     expect(sessionAccessGranted.value).toBe(false);
   });
 
-  it("refuses access once the cached event window has ended", async () => {
-    writeCachedSession(fixtureSessionDocument());
+  it("refuses access once the event window and the six-week fallback have both lapsed", async () => {
+    // Cached long enough ago that six weeks from the last successful refresh
+    // (CLIENT-008A) have passed by `afterWindow` too — the window alone no
+    // longer expires a recently refreshed copy.
+    writeCachedSession(fixtureSessionDocument(), "2026-08-01T00:00:00+00:00");
     vi.stubGlobal("fetch", unreachable());
 
     await loadClientSession({ now: afterWindow });
@@ -112,19 +115,97 @@ describe("client session", () => {
     expect(sessionHasCapability("department.manage")).toBe(false);
   });
 
-  it("loses access where it stands when the window ends under a running client", async () => {
-    writeCachedSession(fixtureSessionDocument());
+  it("keeps granting past the event window while the last refresh is recent", async () => {
+    // The window ended the day before `afterWindow`, and the node answered two
+    // weeks ago: inside the six-week fallback, so an unreachable node alone
+    // does not empty the navigation (CLIENT-008A).
+    writeCachedSession(fixtureSessionDocument(), "2026-09-02T00:00:00+00:00");
+    vi.stubGlobal("fetch", unreachable());
+
+    await loadClientSession({ now: afterWindow });
+
+    expect(clientSessionState.status).toBe("cached");
+    expect(sessionAccessGranted.value).toBe(true);
+    expect(sessionHasCapability("department.manage")).toBe(true);
+  });
+
+  it("boots a device with no event context from a refresh five weeks old", async () => {
+    // The field-observed failure this rule closes: a device pointed at central
+    // between events lost its whole menu the moment the node stopped
+    // answering. Five weeks since the last refresh is inside the fallback.
+    const noContext = fixtureSessionDocument({
+      context: {
+        organization_id: null,
+        event_id: null,
+        department_id: null,
+        node_locked: false,
+        node_locked_event_id: null,
+        switching_available: true,
+      },
+    });
+
+    writeCachedSession(noContext, "2026-08-07T18:35:00+00:00");
+    vi.stubGlobal("fetch", unreachable());
+
+    await loadClientSession({ now: insideWindow });
+
+    expect(clientSessionState.status).toBe("cached");
+    expect(sessionAccessGranted.value).toBe(true);
+  });
+
+  it("refuses a device with no event context once seven weeks have passed", async () => {
+    const noContext = fixtureSessionDocument({
+      context: {
+        organization_id: null,
+        event_id: null,
+        department_id: null,
+        node_locked: false,
+        node_locked_event_id: null,
+        switching_available: true,
+      },
+    });
+
+    writeCachedSession(noContext, "2026-07-24T18:35:00+00:00");
+    vi.stubGlobal("fetch", unreachable());
+
+    await loadClientSession({ now: insideWindow });
+
+    expect(clientSessionState.status).toBe("expired");
+    expect(clientSessionState.refreshReason).toBe("no_event_context");
+    expect(sessionAccessGranted.value).toBe(false);
+  });
+
+  it("loses access where it stands when both bounds end under a running client", async () => {
+    writeCachedSession(fixtureSessionDocument(), "2026-08-01T00:00:00+00:00");
     vi.stubGlobal("fetch", unreachable());
 
     await loadClientSession({ now: insideWindow });
 
     expect(clientSessionState.status).toBe("cached");
 
-    // The device is still offline hours later, and the event has closed since.
+    // The device is still offline weeks later; the event has closed and the
+    // six weeks since the last successful refresh have run out too.
     await refreshClientSession({ now: afterWindow });
 
     expect(clientSessionState.status).toBe("expired");
     expect(sessionAccessGranted.value).toBe(false);
+  });
+
+  it("counts the fallback from its own successful refresh, not from the cache it booted with", async () => {
+    // An old durable copy is replaced by a live answer; a restart after the
+    // window ends then boots from that answer's moment, not the old copy's.
+    writeCachedSession(fixtureSessionDocument(), "2026-08-01T00:00:00+00:00");
+
+    vi.stubGlobal("fetch", respondWith(fixtureSessionDocument()));
+    await loadClientSession({ now: insideWindow });
+    expect(clientSessionState.status).toBe("live");
+    expect(readCachedSession()?.cachedAt).toBe(insideWindow.toISOString());
+
+    // The window has ended by the restart, but the refresh at `insideWindow`
+    // is five days old: well inside the fallback.
+    expect(bootClientSessionFromCache(afterWindow)).toBe(true);
+    expect(clientSessionState.status).toBe("cached");
+    expect(sessionAccessGranted.value).toBe(true);
   });
 
   it("drops a permission the node has taken away, on the refresh rather than the next login", async () => {

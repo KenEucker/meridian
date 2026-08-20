@@ -116,7 +116,10 @@ describe("session permissions notice", () => {
     );
   });
 
-  it("warns and offers a refresh once the event window has ended", () => {
+  it("warns and offers a refresh once the event window and the fallback have ended", () => {
+    // Installed with no recorded last refresh, which is the fail-closed case:
+    // the six-week fallback (CLIENT-008A) cannot be counted from a record that
+    // does not say when the node last answered, so only the window rule stands.
     installClientSession(
       fixtureSessionDocument(),
       "cache",
@@ -130,7 +133,7 @@ describe("session permissions notice", () => {
     expect(notice.classes()).toContain("session-permissions--warning");
     expect(notice.text()).toContain("Permissions need a refresh");
     expect(notice.text()).toContain(
-      "The event this device cached its permissions for has ended.",
+      "The event this device cached its permissions for has ended, and the cached copy is past the six weeks",
     );
     expect(wrapper.get("button").text()).toBe("Refresh permissions");
   });
@@ -154,7 +157,7 @@ describe("session permissions notice", () => {
     const wrapper = mount(SessionPermissionsNotice);
 
     expect(wrapper.get(".session-permissions").text()).toContain(
-      "This device holds no event context.",
+      "This device holds no event context, and its cached permissions are past the six weeks",
     );
   });
 });

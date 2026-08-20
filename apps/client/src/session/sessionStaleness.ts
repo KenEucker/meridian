@@ -1,5 +1,5 @@
-// How long a cached session stays usable (M16.5; CLIENT-008; technical spec
-// 11A.4; UI implementation contract 19A.2).
+// How long a cached session stays usable (M16.5; CLIENT-008, CLIENT-008A;
+// technical spec 11A.4, 12.2; UI implementation contract 19A.2).
 //
 // Staleness is bounded by the event window rather than by a fixed number of
 // hours, and that is the whole point of the rule. A multi-day event with no
@@ -20,12 +20,31 @@
 // verbatim ("a window with no end stays active until an end is recorded") and it
 // is the honest reading: the client is being asked whether the window has
 // passed, and there is nothing for it to have passed.
+//
+// CLIENT-008A widens the rule with a second bound: the cached response stays
+// usable until the *later* of the event window end and six weeks from the last
+// successful refresh — the same window device trust itself is valid for
+// (technical spec 12.2). The fallback is what keeps a device holding no event
+// context — a phone pointed at central between events, a kiosk waiting for its
+// node — from losing its navigation the moment the node stops answering. An
+// unreachable node is the situation this cache exists for, never by itself a
+// reason to withdraw what the device holds. The fallback is bounded by the
+// device session's trust: a document naming a device whose trust has expired or
+// been revoked gets no widening, only the original event-window rule.
 
 import {
   sessionContextEvent,
   type SessionDocument,
   type SessionEvent,
 } from "@/session/sessionDocument";
+
+/**
+ * The six-week device trust window (technical spec 12.2), which is also the
+ * cached-session fallback bound (CLIENT-008A) and the viewed-incident cache
+ * expiry (INC-018). One constant, because the specs tie all three to the same
+ * duration on purpose.
+ */
+export const DEVICE_TRUST_WINDOW_MS = 6 * 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Whether a session document may establish navigation and permissions.
@@ -36,8 +55,10 @@ import {
 export type SessionAccess = "granted" | "refresh_required";
 
 /**
- * Why a refresh is required. Reported so a surface can say which of the two
- * CLIENT-008 conditions applies rather than "something is stale".
+ * Why a refresh is required. Reported so a surface can say which of the
+ * CLIENT-008 conditions applies rather than "something is stale". Under
+ * CLIENT-008A each of these is reported only once the six-week fallback has
+ * also lapsed (or was never available because trust expired).
  */
 export type SessionRefreshReason =
   /** The client holds no event context to bound staleness by. */
@@ -59,11 +80,16 @@ export interface SessionVerdict {
   readonly windowEndsAt: string | null;
 }
 
-const GRANTED: SessionVerdict = Object.freeze({
-  access: "granted",
-  reason: null,
-  windowEndsAt: null,
-});
+function grant(windowEndsAt: string | null = null): SessionVerdict {
+  return Object.freeze({ access: "granted", reason: null, windowEndsAt });
+}
+
+function refuse(
+  reason: SessionRefreshReason,
+  windowEndsAt: string | null = null,
+): SessionVerdict {
+  return Object.freeze({ access: "refresh_required", reason, windowEndsAt });
+}
 
 /**
  * The instant the cached session stops being usable, or null when the event
@@ -80,67 +106,105 @@ export function sessionWindowEnd(event: SessionEvent): string | null {
 }
 
 /**
+ * Whether the six-week fallback (CLIENT-008A) still covers this document.
+ *
+ * Three things have to hold, and each failure closes the fallback rather than
+ * the whole cache — the original event-window rule still applies without it:
+ *
+ *  - a last successful refresh is known and readable. A device that cannot say
+ *    when the node last answered has nothing to count six weeks from;
+ *  - the device session's trust has not expired or been revoked. The fallback
+ *    is "the same window device trust itself is valid for" (technical spec
+ *    12.2), so a document naming an untrusted device gets no widening. A
+ *    document naming no device at all is a shared-workstation session or an
+ *    older build's copy — nothing was asked, which is not a refusal;
+ *  - `now` is inside six weeks of that refresh.
+ */
+function withinRefreshFallback(
+  document: SessionDocument,
+  lastRefreshedAt: string | null,
+  now: Date,
+): boolean {
+  if (lastRefreshedAt === null) {
+    return false;
+  }
+
+  const refreshed = Date.parse(lastRefreshedAt);
+
+  if (Number.isNaN(refreshed)) {
+    return false;
+  }
+
+  const device = document.device ?? null;
+
+  if (device !== null) {
+    if (!device.trusted) {
+      return false;
+    }
+
+    if (device.trusted_until !== null) {
+      const trustedUntil = Date.parse(device.trusted_until);
+
+      // An unreadable trust end closes the fallback rather than extending it,
+      // for the same reason an unreadable window end reads as ended below.
+      if (Number.isNaN(trustedUntil) || now.getTime() > trustedUntil) {
+        return false;
+      }
+    }
+  }
+
+  return now.getTime() <= refreshed + DEVICE_TRUST_WINDOW_MS;
+}
+
+/**
  * Whether a session document may still be worked from.
  *
  * A document that came straight from the node is always usable — it *is* the
- * node's current answer — so this is asked of cached documents. It is written
- * against the document rather than against the cache entry because the answer
- * depends on the event, not on when the copy was written to disk: a session
- * cached one minute before an event closed is stale, and one cached four days
- * before it closes is not.
+ * node's current answer — so this is asked of cached documents. The verdict is
+ * the later of two bounds (technical spec 11A.4): the event window the document
+ * resolved at, and six weeks from `lastRefreshedAt` — the device-clock moment
+ * of the last refresh that reached the node, threaded from the cached-session
+ * record rather than re-derived here. A caller passing no `lastRefreshedAt`
+ * gets the original CLIENT-008 rule alone, which is the fail-closed reading of
+ * a record that cannot say when the node last answered.
  */
 export function evaluateSessionDocument(
   document: SessionDocument,
   now: Date = new Date(),
+  lastRefreshedAt: string | null = null,
 ): SessionVerdict {
+  const fallback = withinRefreshFallback(document, lastRefreshedAt, now);
+
   if (document.context.event_id === null) {
-    return Object.freeze({
-      access: "refresh_required",
-      reason: "no_event_context",
-      windowEndsAt: null,
-    });
+    // No event context bounds this copy, which under CLIENT-008 alone required
+    // a refresh outright. The six-week fallback is precisely for this device —
+    // the field-observed failure was an Android Field app losing its whole menu
+    // because its node stopped answering between events.
+    return fallback ? grant() : refuse("no_event_context");
   }
 
   const event = sessionContextEvent(document);
 
   if (event === null) {
-    return Object.freeze({
-      access: "refresh_required",
-      reason: "event_window_unknown",
-      windowEndsAt: null,
-    });
+    return fallback ? grant() : refuse("event_window_unknown");
   }
 
   const endsAt = sessionWindowEnd(event);
 
   if (endsAt === null) {
-    return GRANTED;
+    return grant();
   }
 
   const end = Date.parse(endsAt);
 
   // An unparseable end is treated as ended. The alternative is granting access
   // from a timestamp this client could not read, which is the one way a
-  // malformed value could extend a session rather than shorten it.
-  if (Number.isNaN(end)) {
-    return Object.freeze({
-      access: "refresh_required",
-      reason: "event_window_ended",
-      windowEndsAt: endsAt,
-    });
+  // malformed value could extend a session rather than shorten it. The
+  // six-week fallback still applies: it is decided from timestamps this client
+  // *can* read.
+  if (Number.isNaN(end) || now.getTime() > end) {
+    return fallback ? grant(endsAt) : refuse("event_window_ended", endsAt);
   }
 
-  if (now.getTime() > end) {
-    return Object.freeze({
-      access: "refresh_required",
-      reason: "event_window_ended",
-      windowEndsAt: endsAt,
-    });
-  }
-
-  return Object.freeze({
-    access: "granted",
-    reason: null,
-    windowEndsAt: endsAt,
-  });
+  return grant(endsAt);
 }
