@@ -14,7 +14,10 @@ Three things are being checked, and they are separable failures:
    the technical spec 9.3 cache set for the caller, bounded by their effective
    roles and the organization's active modules. The client stores it whole,
    refreshes it on sign-in, on regaining connectivity, and on a context switch,
-   and refuses to serve one past its event window. PowerSync — the replicating
+   and refuses to serve one past its event window once the six-week fallback
+   from the last successful refresh (`CLIENT-008A`) has also lapsed — the same
+   widening the cached session already has, applied to the cached data it
+   covers. PowerSync — the replicating
    service the design originally called for — is gone, and event mode now gates
    on the thing offline readiness actually needs.
 2. **The two connectivity tiers** (M18.52). A device working against a reachable
@@ -46,7 +49,8 @@ outcome that M18.54's addition made reachable.
 ## Requirements covered
 
 - `CLIENT-001`
-- `CLIENT-007` through `CLIENT-010`
+- `CLIENT-007` through `CLIENT-010`, including `CLIENT-008A` as it applies to
+  the offline read set
 - `CLIENT-015`, `CLIENT-016`, `CLIENT-017`, `CLIENT-017A`, `CLIENT-018`
 - `CLIENT-021`, `CLIENT-022`
 - `CLIENT-025`, `CLIENT-026`, `CLIENT-027`
