@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import DeptOpsShell from "@/components/department-ops/DeptOpsShell.vue";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import {
   deploymentLabel,
@@ -370,6 +371,13 @@ void loadOperations();
       {{ loadError }}
       <button type="button" @click="loadOperations">Try again</button>
     </p>
+
+    <StaleReadNotice
+      v-if="center"
+      :freshness="center.freshness"
+      :time-zone="center.context.timeZone"
+      label="This picture"
+    />
 
     <section
       v-if="availableModules.some((module) => module.id === 'deployments')"

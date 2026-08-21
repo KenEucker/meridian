@@ -113,6 +113,13 @@ final class DepartmentOperationsSections implements OfflineReadSetContributor
     }
 
     /**
+     * The assignment rows the Operations Center renders, carrying the person's
+     * display name and the shift's title and window. The names travel because
+     * the online payload's rows carry them (SLB-009's list is who is on shift,
+     * which is naming people), and the window travels because the screen shows
+     * only shifts active *now* — a fact the device re-derives against its own
+     * clock from the same two timestamps the node reads.
+     *
      * @param  list<string>  $shiftIds
      * @return list<array<string, mixed>>
      */
@@ -124,6 +131,7 @@ final class DepartmentOperationsSections implements OfflineReadSetContributor
 
         return $this->rows(
             ShiftAssignment::query()
+                ->with(['staff', 'shift'])
                 ->whereIn('shift_id', $shiftIds)
                 ->whereNull('removed_at')
                 ->orderBy('id'),
@@ -132,6 +140,12 @@ final class DepartmentOperationsSections implements OfflineReadSetContributor
                 'shift_id' => (string) $assignment->shift_id,
                 'staff_id' => (string) $assignment->staff_id,
                 'assignment_status' => $assignment->assignment_status,
+                // Handle first (VOL-010), the same rule the online payload's
+                // rows apply through `staffName`.
+                'display_name' => $assignment->staff?->displayName() ?? 'Staff member',
+                'shift_title' => $assignment->shift?->title ?? 'Shift',
+                'shift_starts_at' => $this->moment($assignment->shift?->starts_at),
+                'shift_ends_at' => $this->moment($assignment->shift?->ends_at),
             ],
         );
     }

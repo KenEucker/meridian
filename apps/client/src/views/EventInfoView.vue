@@ -9,6 +9,7 @@ import SegmentedOctagon, {
 import StaffPageShell from "@/components/StaffPageShell.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import { participationLink } from "@/applications/participationModel";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import { formatTimestamp } from "@/department-ops/labels";
 import { getEventInfo, type EventInfoView } from "@/event-info/eventInfoModel";
 import { clientSessionState } from "@/session/clientSession";
@@ -274,6 +275,13 @@ void loadEventInfo();
     eyebrow="Event info"
     :title="eventLabel"
   >
+    <StaleReadNotice
+      v-if="eventInfo"
+      :freshness="eventInfo.freshness"
+      :time-zone="eventInfo.event.timezone ?? 'UTC'"
+      label="This page"
+    />
+
     <!--
       A refusal is the node's own sentence, and an unreachable node is stated
       rather than shown as an event with no guidance at all (data/API 7.2).

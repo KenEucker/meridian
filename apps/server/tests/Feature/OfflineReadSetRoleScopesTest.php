@@ -674,7 +674,13 @@ class OfflineReadSetRoleScopesTest extends TestCase
      * composes from IC standing through its own surface rather than from this
      * set.
      */
-    public function test_no_role_scoped_section_carries_an_incident(): void
+    /**
+     * The bounded IC preload (technical spec 9.3 as amended 2026-08-20) is the
+     * one route an incident travels, and it hangs on IC standing alone: every
+     * department role together composes no incident section. The preload's own
+     * composition is proven in `OfflineReadSetTest`.
+     */
+    public function test_no_department_role_carries_an_incident(): void
     {
         foreach ([
             PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS,

@@ -409,9 +409,15 @@ nothing.
    shell.
 3. Open **Settings** and read the Offline downloads section beside the
    Permissions section. Confirm a progress summary in the form
-   "N of N downloaded", with each artifact named (the offline read set; the
-   branding assets where the context has an organization), its state, and its
-   last successful download.
+   "N of N downloaded", with the held set split into the named groups its
+   readiness counts produce — "Initial page load data", "Staff directory",
+   "Policies & procedures", the role desks the caller holds, "IMS entries" for
+   an IC persona, and the branding assets where the context has an organization
+   — each with its state, its last successful download, and its stored record
+   count. Each row is a test path: the surface it names should render offline
+   from exactly the records it counts. Before the first set has arrived, the
+   read-set rows are one pending "Event data" row instead, because what the
+   composed set will contain is the node's to say.
 4. Reload the page twice with the network available. The refresh answers `304`
    and downloads nothing: confirm the toast does **not** reappear on either
    reload.
@@ -434,24 +440,33 @@ nothing.
    then completes: confirm the toast fires once more — the only condition under
    which it repeats.
 
-### K. The viewed-incident cache
+### K. The IC preload and the viewed-incident cache
 
-The device incident cache (`INC-017`, `INC-018`; technical spec 19.2, 9.3).
-Populated only by the user's own views, no last-five cap, readable offline,
+Two stores serve incidents offline and they answer different questions. The
+read set's bounded IC preload (technical spec 9.3 as amended 2026-08-20) is
+what an IC device holds before anyone has viewed anything: the event's open
+incidents and its most recent entries, capped, refreshed with the rest of the
+set. The device incident cache (`INC-017`, `INC-018`; technical spec 19.2) is
+the user's own views — unbounded by the preload caps, no last-five cap,
 flushed at logout, and reported on Settings as a count rather than a fraction.
 
-1. Sign in as an IC persona (`ingrid.iclead@northwood-collective.test`) and
-   open six different incidents from the incident list, one after another.
-2. Set the Network panel to Offline. Re-open each of the six from the list you
-   still have in history or by URL. Confirm **all six** render from the cache —
-   the sixth did not push out the first (the last-five cap is gone).
-3. Still offline, open an incident you never viewed. Confirm it fails plainly
-   as needing a connection rather than rendering empty — the cache holds the
-   user's own views, never the event's incident log.
+1. Sign in as an IC persona (`ingrid.iclead@northwood-collective.test`). With
+   the Network panel Offline **before opening any incident**, open the
+   incident list. Confirm the seeded incidents render from the stored preload
+   with the stale-copy disclosure, and that opening one you never viewed
+   renders it — timeline included — from the same preload.
+2. Restore the network, open six different incidents from the list one after
+   another, then set the Network panel to Offline again. Re-open each of the
+   six. Confirm **all six** render — the sixth did not push out the first (the
+   last-five cap is gone).
+3. Still offline, confirm creating or editing an incident is refused as
+   needing a server connection while the record itself stays readable —
+   incident writes remain connected-only (technical spec 19.2).
 4. Restore the network. Open **Settings** and confirm the Offline downloads
-   section reports "6 viewed incidents cached" as a count, and that the
-   "N of N downloaded" summary above it did not change — viewed incidents never
-   enter the fraction.
+   section reports "6 viewed incidents cached" as a count, that the "IMS
+   entries" row above it counts the preload separately, and that the
+   "N of N downloaded" summary did not change with the views — viewed
+   incidents never enter the fraction.
 5. Sign out and sign back in as the same persona. Confirm Settings reports no
    viewed incidents and an incident is no longer readable offline until viewed
    again: the cache flushes at logout.
@@ -502,8 +517,12 @@ flushed at logout, and reported on Settings as a count rather than a fraction.
   artifact, dismisses itself, never persists, and does not reappear for `304`
   refreshes; it fires again only after the device has been incomplete again.
 - No download-status readout anywhere in the shell.
-- Every incident an IC user viewed renders offline — all six, no last-five cap —
-  while an unviewed incident is a plain connection failure.
+- An IC device holds the event's open and most recent incidents before anyone
+  has viewed anything, and the list and any preloaded incident — timeline
+  included — render offline with the stale-copy disclosure; incident creation
+  and editing stay refused as needing a server connection.
+- Every incident an IC user viewed renders offline — all six, no last-five cap
+  — whether or not the preload's caps still cover it.
 - Settings reports viewed incidents as a count ("6 viewed incidents cached"),
   never inside the downloaded fraction; the count is absent for a user whose
   views cached nothing, regular staff included.
@@ -530,8 +549,8 @@ flushed at logout, and reported on Settings as a count rather than a fraction.
   control, and the audit entry after.
 - Output of the PowerSync reference grep and the `docker compose config` check.
 - The Settings Offline downloads section signed out (nothing named), incomplete
-  ("0 of 2 downloaded"), and complete ("2 of 2 downloaded"), plus a capture of
-  the completion toast.
+  (a pending "Event data" row), and complete (the named group rows with their
+  record counts), plus a capture of the completion toast.
 - The incident list offline with a cached incident rendering beside the refusal
   for one never viewed, and the Settings viewed-incident count before and after
   sign-out.

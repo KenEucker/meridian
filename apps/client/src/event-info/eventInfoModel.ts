@@ -23,11 +23,19 @@
 //     the read rather than from a planning fixture, so a page that answers "how
 //     do I get there" is not describing a different event than the one it names.
 //
-// This is a connected-only read. Event Info is not in the closed set of
-// offline-writable work (data/API 7.2), and a request made with no node
-// reachable fails and says so rather than showing an event with no guidance.
+// Served offline since 2026-08-20 from the read set's `event_info` section,
+// and the three choices above survive the trip: the section's rows are
+// `EventInfoService::sectionsFor`'s answer verbatim — the node's assembly, the
+// node's render, the node's empty descriptions — composed for this caller at
+// refresh time and stored whole (technical spec 9.3; POL-022). A device with
+// no node in reach shows the published guidance it was handed, disclosed as
+// the stored copy it is; a device that was never handed this event's info
+// still fails and says so. Writing stays out of scope: there is nothing to
+// write here.
 
 import { meridianCachedJson } from "@/api/meridianApi";
+import type { OfflineReadProjection } from "@/offline/offlineReadProjection";
+import type { ReadFreshness } from "@/offline/readFreshness";
 
 export interface EventInfoDocument {
   readonly id: string;
@@ -67,6 +75,8 @@ export interface EventInfoView {
   readonly event: EventInfoEvent;
   readonly sections: readonly EventInfoSectionView[];
   readonly documentCount: number;
+  /** Whether this page came from the node or from the stored set. */
+  readonly freshness: ReadFreshness;
 }
 
 interface EventInfoDocumentPayload {
@@ -118,6 +128,69 @@ function toDocument(payload: EventInfoDocumentPayload): EventInfoDocument {
   };
 }
 
+/** `event_info`, as `EventInfoSections` writes it: the endpoint's own sections. */
+interface StoredEventInfoRow {
+  readonly id: string;
+  readonly event_id: string;
+  readonly sections: EventInfoSectionPayload[];
+}
+
+/** `events`, as `RegularStaffSections` writes it — the fields this page names. */
+interface StoredEventRow {
+  readonly id: string;
+  readonly organization_id: string | null;
+  readonly name: string | null;
+  readonly slug: string | null;
+  readonly status: string | null;
+  readonly timezone: string | null;
+  readonly starts_at: string | null;
+  readonly ends_at: string | null;
+}
+
+/**
+ * Event Info from what this device holds: the node's own assembly and render,
+ * carried whole in the `event_info` section, with the event block read from
+ * the core `events` section the same set carries. Null for an event this
+ * caller's set does not cover — the seam then reports the unreachable node
+ * rather than a page of empty sections.
+ */
+function storedEventInfo(
+  eventId: string,
+): OfflineReadProjection<EventInfoPayload> {
+  return (source) => {
+    const row = source
+      .section<StoredEventInfoRow>("event_info")
+      .find((entry) => entry.event_id === eventId);
+
+    if (row === undefined) {
+      return null;
+    }
+
+    const event = source
+      .section<StoredEventRow>("events")
+      .find((entry) => entry.id === eventId);
+
+    return {
+      data: {
+        event:
+          event === undefined
+            ? { id: eventId }
+            : {
+                id: event.id,
+                organization_id: event.organization_id,
+                slug: event.slug,
+                name: event.name ?? "",
+                timezone: event.timezone,
+                starts_at: event.starts_at,
+                ends_at: event.ends_at,
+                status: event.status,
+              },
+        sections: row.sections,
+      },
+    };
+  };
+}
+
 /**
  * Read Event Info for one event.
  *
@@ -126,11 +199,11 @@ function toDocument(payload: EventInfoDocumentPayload): EventInfoDocument {
  * client a second chance to disagree with the order it was handed (11.4A).
  */
 export async function getEventInfo(eventId: string): Promise<EventInfoView> {
-  const result = (
+  const { data: result, freshness } =
     await meridianCachedJson<EventInfoPayload>(
       `/api/events/${encodeURIComponent(eventId)}/info`,
-    )
-  ).data;
+      { offline: storedEventInfo(eventId) },
+    );
 
   const sections = (result.sections ?? []).map<EventInfoSectionView>(
     (section) => ({
@@ -157,5 +230,6 @@ export async function getEventInfo(eventId: string): Promise<EventInfoView> {
       (total, section) => total + section.documents.length,
       0,
     ),
+    freshness,
   };
 }

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domain\Documents\EventInfoSection;
 use App\Domain\Modules\ModuleKey;
 use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Incident;
 use App\Models\AuditEvent;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
@@ -324,12 +326,116 @@ class OfflineReadSetTest extends TestCase
         }
     }
 
-    public function test_incidents_are_not_carried(): void
+    /**
+     * A caller without IC standing holds no incident, whatever tables exist.
+     * The bounded IC preload below is the only way an incident travels, and it
+     * is scoped by resolved IC grants (technical spec 19.2).
+     */
+    public function test_incidents_are_not_carried_without_ic_standing(): void
     {
+        Incident::factory()->forEvent($this->event)->create();
+
         $sections = $this->sectionsFor($this->veraUser);
 
         $this->assertArrayNotHasKey('incidents', $sections);
         $this->assertArrayNotHasKey('incident_timeline_entries', $sections);
+        $this->assertArrayNotHasKey('ims_incidents', $sections);
+    }
+
+    /**
+     * An IC-scoped caller's set preloads the event's open incidents and its
+     * most recent entries, bounded (technical spec 9.3 as amended 2026-08-20),
+     * serialized in the same shape the incident read endpoints answer with —
+     * so a device holds workable incidents before anyone has viewed anything.
+     */
+    public function test_ic_standing_carries_a_bounded_incident_preload(): void
+    {
+        // IC grants resolve only inside the event's designated IC department
+        // (technical spec 16; `EffectiveRoleResolver`).
+        $this->event->forceFill(['ic_department_id' => $this->rangers->id])->save();
+
+        $icTeam = Team::factory()->for($this->rangers)->create(['name' => 'IC Command']);
+        $this->alsoBelongsTo($this->sam, $icTeam);
+        $this->grant(PermissionCatalog::ROLE_IC_VIEWER, $icTeam, $this->event);
+
+        $open = Incident::factory()->forEvent($this->event)->create(['title' => 'Gate medical']);
+        $closedRecent = Incident::factory()->forEvent($this->event)->closed()->create();
+        $elsewhere = Incident::factory()->create();
+
+        $sections = $this->sectionsFor($this->samUser);
+        $carried = $this->ids($sections, 'ims_incidents');
+
+        $this->assertContains($open->id, $carried);
+        // A closed incident travels while it is among the most recent; the
+        // event's history beyond the caps does not.
+        $this->assertContains($closedRecent->id, $carried);
+        $this->assertNotContains($elsewhere->id, $carried);
+
+        $row = collect($sections['ims_incidents'])->firstWhere('id', $open->id);
+
+        $this->assertSame($open->incident_number, $row['incident_number']);
+        $this->assertSame('open', $row['status']);
+        $this->assertSame('Gate medical', $row['title']);
+        $this->assertArrayHasKey('timeline_entries', $row);
+    }
+
+    /**
+     * Event Info travels as the node's own assembly and render (11.4A;
+     * POL-022): the same sections, order, and `rendered_html` the online
+     * surface reads, composed for this caller's visibility.
+     */
+    public function test_event_info_travels_as_the_nodes_own_render(): void
+    {
+        PolicyDocument::factory()->published()->create([
+            'organization_id' => $this->organization->id,
+            'scope_type' => PolicyDocument::SCOPE_ORGANIZATION,
+            'scope_id' => $this->organization->id,
+            'title' => 'Getting There',
+            'event_info_section' => EventInfoSection::DIRECTIONS,
+            'markdown_source' => 'Take the north road.',
+        ]);
+
+        $sections = $this->sectionsFor($this->veraUser);
+        $row = collect($sections['event_info'])->firstWhere('event_id', $this->event->id);
+
+        $this->assertNotNull($row);
+
+        $directions = collect($row['sections'])->firstWhere('section', EventInfoSection::DIRECTIONS);
+        $document = collect($directions['documents'])->firstWhere('title', 'Getting There');
+
+        $this->assertNotNull($document);
+        $this->assertStringContainsString('north road', (string) $document['rendered_html']);
+
+        // Every 11.4A section is present, the empty ones as stated gaps rather
+        // than absences, exactly as the endpoint answers.
+        $this->assertSame(
+            EventInfoSection::keys(),
+            array_column($row['sections'], 'section'),
+        );
+    }
+
+    /**
+     * The Operations Center's stored rows carry what its screen renders: who
+     * is assigned by display name, and the shift's title and window, so the
+     * device can re-derive "active now" against its own clock (SLB-009,
+     * SLB-010).
+     */
+    public function test_operations_assignment_rows_name_the_person_and_the_shift_window(): void
+    {
+        $this->grant(PermissionCatalog::ROLE_DEPARTMENT_OPERATIONS, $this->dirt);
+        $this->shift->forceFill([
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHours(3),
+        ])->save();
+
+        $sections = $this->sectionsFor($this->samUser);
+        $row = collect($sections['operations_shift_assignments'] ?? [])->first();
+
+        $this->assertNotNull($row);
+        $this->assertSame($this->vera->displayName(), $row['display_name']);
+        $this->assertSame($this->shift->title, $row['shift_title']);
+        $this->assertNotNull($row['shift_starts_at']);
+        $this->assertNotNull($row['shift_ends_at']);
     }
 
     /*
@@ -745,10 +851,14 @@ class OfflineReadSetTest extends TestCase
             'status' => 'active',
         ]);
 
-        $departmentMembership = DepartmentMembership::factory()
-            ->for($team->department)
-            ->for($staff)
-            ->create();
+        $departmentMembership = DepartmentMembership::query()
+            ->where('department_id', $team->department->id)
+            ->where('staff_id', $staff->id)
+            ->first()
+            ?? DepartmentMembership::factory()
+                ->for($team->department)
+                ->for($staff)
+                ->create();
 
         TeamMembership::factory()->create([
             'team_id' => $team->id,

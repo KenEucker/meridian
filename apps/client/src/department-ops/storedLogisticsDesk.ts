@@ -188,6 +188,27 @@ interface StoredNamedRow {
 }
 
 /**
+ * The event and department labels a stored envelope names, from the core
+ * sections every set carries. Exported for the same reason {@link storedAccess}
+ * is: one derivation, three projections.
+ */
+export function storedContextLabels(
+  source: OfflineReadSource,
+  eventId: string,
+  departmentId: string,
+): { readonly eventLabel: string; readonly departmentLabel: string } {
+  return {
+    eventLabel:
+      source.section<StoredNamedRow>("events").find((row) => row.id === eventId)
+        ?.name ?? "",
+    departmentLabel:
+      source
+        .section<StoredNamedRow>("departments")
+        .find((row) => row.id === departmentId)?.name ?? "",
+  };
+}
+
+/**
  * Where a shift is in its own life, as of a moment.
  *
  * `ShiftLifecycle::of` in TypeScript, kept to four answers with no fifth for the
@@ -261,8 +282,12 @@ function groupBy<T>(
  * The node's answer, cached with the session (CLIENT-004), rather than anything
  * assembled here. `is_department_lead` follows `department.administer` the same
  * way the node's own envelope does.
+ *
+ * Exported for the other department-ops projections (Planning Table,
+ * Operations Center): the rule is the session document's and stating it once
+ * keeps three stored envelopes from disagreeing about what a caller may do.
  */
-function storedAccess(departmentId: string) {
+export function storedAccess(departmentId: string) {
   const department =
     sessionDepartmentAccesses.value.find(
       (entry) => entry.departmentId === departmentId,
@@ -421,14 +446,11 @@ export function storedLogisticsDesk<T>(
       staff.map((row): [string, string] => [row.staff_id, displayName(row)]),
     );
 
-    const eventLabel =
-      source
-        .section<StoredNamedRow>("events")
-        .find((row) => row.id === eventId)?.name ?? "";
-    const departmentLabel =
-      source
-        .section<StoredNamedRow>("departments")
-        .find((row) => row.id === departmentId)?.name ?? "";
+    const { eventLabel, departmentLabel } = storedContextLabels(
+      source,
+      eventId,
+      departmentId,
+    );
 
     const workspaces: Record<string, unknown> = {};
 

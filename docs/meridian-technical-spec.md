@@ -675,11 +675,12 @@ Department leads should additionally cache:
 
 IC roles may cache:
 
-- Every incident entry the user has viewed, per the section 19.2 viewed-incident cache.
+- A bounded preload of the event's incidents in the offline read set: open incidents and the most recently created entries, capped (25 open, 10 recent), serialized with their timelines by the same serializer the incident read endpoints use. This is what an IC device holds before anyone has viewed anything.
+- Every incident entry the user has viewed, per the section 19.2 viewed-incident cache — unbounded by the preload caps, because it is the user's own viewing.
 - Related field reports where permitted.
 - Derived Name Reference tokens from cached Incident notes and related Field Reports, where permitted.
 
-Incidents should not be greedily synced.
+Incidents should not be greedily synced: the preload caps above are the bound, and the whole incident history never travels.
 
 Any cached Name Reference tokens are derived from authorized source text and must be rebuildable from that text. The offline read set must not become the business-rule engine for Name Reference visibility or search authorization.
 
@@ -691,7 +692,7 @@ There is no third outcome. A surface that cannot work offline is not a defect �
 
 A surface joining or leaving the offline-capable list is a change to what Meridian promises somebody standing where there is no signal, and it changes in that file first.
 
-Two surfaces compile on the device rather than rendering a stored response, and each is bounded by what it can honestly answer. The Event Horizon compiles the document acknowledgment kind and names the other four as unevaluated (HORIZON-016): the set holds nothing for waivers, trainings, or coverage gaps, and carries only the shifts a member already holds, so a compiled signup list could never show one with a place left. The Logistics Desk composes from the section 9.3 Logistics indexes and derives each card's check-in, check-out, and no-show verdicts by the same rule the node applies, from the same four facts — an assignment, presence, attendance state, and the shift's window. Authority is never derived in either: what a caller may do is read from the session document, which is the node's own answer.
+A few surfaces compile on the device rather than rendering a stored response, and each is bounded by what it can honestly answer. The Event Horizon compiles the document acknowledgment kind and names the other four as unevaluated (HORIZON-016): the set holds nothing for waivers, trainings, or coverage gaps, and carries only the shifts a member already holds, so a compiled signup list could never show one with a place left. The Logistics Desk composes from the section 9.3 Logistics indexes and derives each card's check-in, check-out, and no-show verdicts by the same rule the node applies, from the same four facts — an assignment, presence, attendance state, and the shift's window. The Operations Center re-derives only "active now" from the shift windows its stored rows carry, against the device's own clock — the same question the node's read asks of its own. The Planning Table derives nothing: its aggregate rows are computed by the node's own `PlanVersusActual` at composition, and the device only filters them. Authority is never derived in any of them: what a caller may do is read from the session document, which is the node's own answer.
 
 This is the one place a client re-reads a rule the node owns, and it is bounded deliberately. A derived verdict must use the node's own derivation over rows the device holds; anything resting on a fact the device does not hold — the hours correction grace period, what equipment is available to hand over — is refused offline rather than guessed at.
 
