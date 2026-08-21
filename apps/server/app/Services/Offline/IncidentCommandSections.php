@@ -45,15 +45,18 @@ final class IncidentCommandSections implements OfflineReadSetContributor
     use ShapesOfflineRows;
 
     /**
-     * Every incident still being worked travels; a closed one travels while it
-     * is among the most recent. The caps are the "not greedily synced" bound:
-     * an event running more than {@see self::OPEN_CAP} simultaneous open
-     * incidents is past what a device-local list is for, and the newest are the
-     * ones a responder is standing in.
+     * Every incident still being worked travels, up to the cap; a closed one
+     * travels while it is among the most recent. The caps are the "not
+     * greedily synced" bound, and they are deliberately small: each row
+     * carries its whole timeline, an event running more than
+     * {@see self::OPEN_CAP} simultaneous open incidents is past what a
+     * device-local list is for, and the newest are the ones a responder is
+     * standing in. (Lowered from 100/30 on 2026-08-20 at the product owner's
+     * direction — the wider caps were more data than the preload needs.)
      */
-    public const OPEN_CAP = 100;
+    public const OPEN_CAP = 25;
 
-    public const RECENT_CAP = 30;
+    public const RECENT_CAP = 10;
 
     public function __construct(private readonly IncidentPayloadSerializer $serializer) {}
 

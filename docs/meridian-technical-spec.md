@@ -675,7 +675,7 @@ Department leads should additionally cache:
 
 IC roles may cache:
 
-- A bounded preload of the event's incidents in the offline read set: every open incident and the most recently created entries, capped (100 open, 30 recent), serialized with their timelines by the same serializer the incident read endpoints use. This is what an IC device holds before anyone has viewed anything.
+- A bounded preload of the event's incidents in the offline read set: open incidents and the most recently created entries, capped (25 open, 10 recent), serialized with their timelines by the same serializer the incident read endpoints use. This is what an IC device holds before anyone has viewed anything.
 - Every incident entry the user has viewed, per the section 19.2 viewed-incident cache — unbounded by the preload caps, because it is the user's own viewing.
 - Related field reports where permitted.
 - Derived Name Reference tokens from cached Incident notes and related Field Reports, where permitted.
