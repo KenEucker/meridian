@@ -164,10 +164,10 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     },
     {
       route: "events.info",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "event information is rendered by the node with its document fragments resolved (POL-022), and the rendered text does not travel in the read set",
-      offlineText: "Check the connection to this node",
+        "the read set's event_info section: the node's own assembly and render of the published guidance (POL-022), carried whole at refresh so fragments arrive resolved rather than re-rendered on the device",
+      offlineText: "the copy this device stored",
     },
     {
       route: "events.departments.logistics",
@@ -178,17 +178,17 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     },
     {
       route: "events.departments.operations",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "the operational picture is composed at read time from assignments, deployments, and counts",
-      offlineText: "Check the connection to this node",
+        "the 9.3 Operations cache list: stored deployment options and current assignments, with 'active now' re-derived from stored shift windows by the node's own rule. Reassigning a deployment stays a connected write and refuses where it stands",
+      offlineText: "This node could not be reached",
     },
     {
       route: "events.departments.planning",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "plan-versus-actual aggregates are computed by the node and carry their own freshness (SLB-019), and a device recomputing them would be a second answer",
-      offlineText: "Check the connection to this node",
+        "the 9.3 planning aggregates — identity-free plan-versus-actual rows the node's own PlanVersusActual computed at composition (SLB-019) — with team and date narrowing applied as filtering, never as recomputed arithmetic",
+      offlineText: "This node could not be reached",
     },
     {
       route: "events.departments.teams.index",
@@ -439,10 +439,10 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     },
     {
       route: "ims.incidents.index",
-      outcome: "connection-required",
+      outcome: "renders-offline",
       basis:
-        "incidents are deliberately absent from the read set (M18.47): they are not greedily replicated to devices",
-      offlineText: "Check the connection to this node",
+        "the bounded IC preload (technical spec 9.3 as amended 2026-08-20): the event's open incidents and its most recent entries, in the list endpoint's own shape. Search, filters, presets, and paging stay the node's machinery; the stored answer states it is the whole device copy",
+      offlineText: "This node could not be reached",
     },
     {
       route: "ims.field-reports.index",
@@ -475,14 +475,16 @@ export const OFFLINE_SURFACE_INVENTORY: readonly OfflineSurfaceEntry[] =
     {
       route: "ims.incidents.edit",
       outcome: "connection-required",
-      basis: "the same rule, over one incident's record",
-      offlineText: "Check the connection to this node",
+      basis:
+        "the same rule over one incident's record — though since the 2026-08-20 IC preload the form fills from the stored copy, so what needs the connection is the edit itself, and the surface says so while showing the record",
+      offlineText: "requires server connection",
     },
     {
       route: "ims.incidents.show",
-      outcome: "connection-required",
-      basis: "the same rule, reading one incident",
-      offlineText: "Check the connection to this node",
+      outcome: "renders-offline",
+      basis:
+        "the stored IC preload and the viewed-incident cache (INC-017), whichever holds the newer copy of this incident; editing stays connected-only and every command refuses where it stands",
+      offlineText: "Stored incident",
     },
     {
       route: "ims.restricted",

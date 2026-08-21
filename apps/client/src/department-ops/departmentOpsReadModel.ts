@@ -40,7 +40,8 @@
 //     site, and every planning aggregate arrive computed. What is left in this
 //     module is presentation: search over what the node sent, grouping cards
 //     into active/upcoming/outgoing, and formatting.
-//  5. **The Logistics Desk composes offline; the other three do not yet**
+//  5. **The desk, the Operations Center, and the Planning Table compose
+//     offline; Department Overview does not**
 //     (M18.50, M18.53; SLB-021; technical spec 9.3). Until M18.50 each of the
 //     four fell back to a stored copy of its own response, and M18.50 deleted
 //     the cache that held those, leaving all four connected-only.
@@ -56,16 +57,19 @@
 //     the offer is the node's own four-part rule and the device now holds all
 //     four facts — leaving hours correction and equipment handoff refused.
 //
-//     Department Overview, the Operations Center, and the Planning Table stay
-//     connected-only and say so. Their payloads are compiled rather than
-//     composed: exception lists, deployment counts, and every plan-versus-actual
-//     aggregate are the node's answers against the moment it was asked, and the
+//     The Operations Center and the Planning Table joined on 2026-08-20:
+//     `storedOperationsCenter` re-derives only "active now" from stored shift
+//     windows, and `storedPlanningTable` recomputes nothing — the aggregate
+//     rows are `PlanVersusActual`'s own, computed by the node at composition
+//     (SLB-019). Department Overview alone stays connected-only: its selected-
+//     shift exceptions are compiled against the moment it is asked, and the
 //     read set carries no section for them. Each read carries the freshness of
-//     what it returned, so the disclosure is in place for the day a projection
-//     supplies one.
+//     what it returned, so every surface discloses which copy it is showing.
 
 import { meridianCachedJson } from "@/api/meridianApi";
 import { storedLogisticsDesk } from "@/department-ops/storedLogisticsDesk";
+import { storedOperationsCenter } from "@/department-ops/storedOperationsCenter";
+import { storedPlanningTable } from "@/department-ops/storedPlanningTable";
 import { takeShiftAdditionWarnings } from "@/department-ops/shiftAdditionWarnings";
 import type { ReadFreshness } from "@/offline/readFreshness";
 import { commandOutbox } from "@/outbox/commandOutboxRuntime";
@@ -845,7 +849,9 @@ export async function getOperationsCenter(
       }[];
       readonly equipment_out_count?: number;
     }
-  >(base("operations", eventId, departmentId));
+  >(base("operations", eventId, departmentId), {
+    offline: storedOperationsCenter(eventId, departmentId),
+  });
   const payload = read.data;
 
   return {
@@ -891,13 +897,11 @@ export async function getPlanningTable(
   const endpoint = base("planning", eventId, departmentId);
   const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
   /*
-   * Connected-only since M18.50. The Planning Table is plan-versus-actual
-   * arithmetic the node computes, not records a device holds, and technical spec
-   * 9.3 asks a planner's device for "identity-free aggregate rows" which the
-   * offline read set carries with their own freshness rather than as this
-   * payload. Until a projection composes this surface from those, a lead with no
-   * node in reach is told so rather than shown a table whose counts nothing
-   * recomputed.
+   * Served offline from `planning_aggregates` — the identity-free rows the
+   * node's own `PlanVersusActual` computed at composition time (SLB-019;
+   * technical spec 9.3). Nothing is recomputed on the device: the projection
+   * hands back the stored table whole and `narrowPlanningRows` below applies
+   * the team and date selection, which is filtering rather than arithmetic.
    */
   const read = await meridianCachedJson<
     EnvelopePayload & {
@@ -925,7 +929,9 @@ export async function getPlanningTable(
         readonly status_label: string;
       }[];
     }
-  >(endpoint + suffix);
+  >(endpoint + suffix, {
+    offline: storedPlanningTable(eventId, departmentId, filters),
+  });
   const payload = read.data;
 
   return {

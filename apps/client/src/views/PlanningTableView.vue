@@ -9,6 +9,7 @@ import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
 import ShiftListSection from "@/components/sections/ShiftListSection.vue";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import TrainingListSection from "@/components/sections/TrainingListSection.vue";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import { formatTimestamp, lifecycleLabel } from "@/department-ops/labels";
@@ -311,6 +312,13 @@ function formatTimelineMarker(timestamp: number): string {
       {{ loadError }}
       <button type="button" @click="loadPlanning">Try again</button>
     </p>
+
+    <StaleReadNotice
+      v-if="table"
+      :freshness="table.freshness"
+      :time-zone="timeZone"
+      label="This table"
+    />
 
     <!--
       Every row on this surface is a shift, so an organization that does not run

@@ -287,6 +287,132 @@ function storedSections(): Record<string, readonly Record<string, unknown>[]> {
     logistics_equipment_index: [],
     logistics_equipment_checkouts: [],
     logistics_future_signups: [],
+
+    /*
+     * Event Info as `EventInfoSections` carries it (POL-022): the node's own
+     * assembled sections with `rendered_html`, one row per event.
+     */
+    event_info: [
+      {
+        id: EVENT_ID,
+        event_id: EVENT_ID,
+        sections: [
+          {
+            section: "directions",
+            label: "Directions",
+            documents: [
+              {
+                id: "doc-info-1",
+                document_type: "policy",
+                title: "Getting There",
+                slug: "getting-there",
+                scope_type: "organization",
+                scope_label: "Organization: Northwood Collective",
+                version: "1.00",
+                rendered_html: "<p>Take the north road.</p>",
+                published_at: "2027-06-01T12:00:00+00:00",
+                updated_at: null,
+              },
+            ],
+            empty_description: null,
+          },
+          {
+            section: "arrival",
+            label: "Arrival",
+            documents: [],
+            empty_description: "Arrival guidance has not been published.",
+          },
+        ],
+      },
+    ],
+
+    /*
+     * The Planning Table's rows (SLB-019): the node's aggregates, and the team
+     * filter vocabulary beside them.
+     */
+    planning_teams: [
+      {
+        id: LOCAL_FIELD_TEAM_IDS.rangersDirt,
+        department_id: DEPARTMENT_ID,
+        name: "Dirt",
+      },
+    ],
+    planning_aggregates: [
+      {
+        id: ROUTE_PARAMS.shiftId,
+        event_id: EVENT_ID,
+        department_id: DEPARTMENT_ID,
+        shift_id: ROUTE_PARAMS.shiftId,
+        title: "Gate A — Day",
+        team_id: LOCAL_FIELD_TEAM_IDS.rangersDirt,
+        team_label: "Dirt",
+        starts_at: "2027-07-04T18:00:00+00:00",
+        ends_at: "2027-07-04T22:00:00+00:00",
+        lifecycle: "upcoming",
+        capacity: 4,
+        signed_up_or_assigned_count: 1,
+        checked_in_count: 0,
+        no_show_count: 0,
+        unscheduled_count: 0,
+        planned_hours: 16,
+        actual_hours: 0,
+        variance_hours: -16,
+        status_label: "Scheduled",
+      },
+    ],
+
+    /* The Operations Center's rows (SLB-009, SLB-010). */
+    operations_deployment_options: [
+      {
+        id: "deployment-1",
+        event_id: EVENT_ID,
+        department_id: DEPARTMENT_ID,
+        name: "Gate A",
+        description: null,
+        location_details: null,
+        map_location_id: null,
+      },
+    ],
+    operations_shift_assignments: [
+      {
+        id: "ops-assignment-1",
+        shift_id: ROUTE_PARAMS.shiftId,
+        staff_id: LOCAL_FIELD_FIXTURE.staffId,
+        assignment_status: "confirmed",
+        display_name: "Robin",
+        shift_title: "Gate A — Day",
+        shift_starts_at: "2027-07-04T18:00:00+00:00",
+        shift_ends_at: "2027-07-04T22:00:00+00:00",
+      },
+    ],
+    operations_current_deployments: [],
+
+    /*
+     * The bounded IC preload (technical spec 9.3 as amended 2026-08-20), in
+     * the incident read endpoints' own shape. The row's id is the audit's
+     * incident route parameter, so `ims.incidents.show` is asked about an
+     * incident this device actually holds.
+     */
+    ims_incidents: [
+      {
+        id: ROUTE_PARAMS.incidentId,
+        event_id: EVENT_ID,
+        incident_number: "INC-2027-000021",
+        status: "open",
+        priority_label: "Routine",
+        title: "Stored incident",
+        started_at: "2027-07-04T16:00:00+00:00",
+        created_at: "2027-07-04T16:00:00+00:00",
+        updated_at: "2027-07-04T16:30:00+00:00",
+        incident_type_names: [],
+        responders: [],
+        linked_incidents: [],
+        attached_field_reports: [],
+        attachments: [],
+        name_reference_chips: [],
+        timeline_entries: [],
+      },
+    ],
   };
 }
 
@@ -531,7 +657,13 @@ describe("the recorded offline surface inventory", () => {
       "auth.code.entry",
       "readiness",
       "settings.about",
+      // 2026-08-20: Event Info travels as the node's own render (POL-022).
+      "events.info",
       "events.departments.logistics",
+      // 2026-08-20: the Operations Center and the Planning Table serve the
+      // 9.3 sections composed for exactly these two screens.
+      "events.departments.operations",
+      "events.departments.planning",
       "events.departments.documents.index",
       "events.departments.branding",
       "events.departments.teams.create",
@@ -547,9 +679,13 @@ describe("the recorded offline surface inventory", () => {
       "staff.field-reports.index",
       "staff.field-reports.create",
       "staff.field-reports.show",
+      // 2026-08-20: the bounded IC preload puts open and recent incidents on
+      // an IC device before anyone has viewed anything.
+      "ims.incidents.index",
       "ims.field-reports.index",
       "ims.field-reports.create",
       "ims.field-reports.show",
+      "ims.incidents.show",
       "ims.restricted",
       "organizer.departments.create",
       "organizer.branding",

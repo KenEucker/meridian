@@ -147,15 +147,18 @@ describe("the download readout on Settings", () => {
 
     const rows = wrapper.findAll(".about__downloads-list li");
 
+    // Before the first set arrives, what it will contain is the node's to
+    // say, so the read-set row is one honest "Event data" rather than a
+    // client-invented breakdown.
     expect(rows.map((row) => row.text())).toEqual([
-      expect.stringContaining("Offline read set"),
+      expect.stringContaining("Event data"),
       expect.stringContaining("Branding assets"),
     ]);
     expect(rows[0]?.attributes("data-artifact-state")).toBe("pending");
     expect(rows[0]?.text()).toContain("Pending.");
   });
 
-  it("reads complete once every named artifact is held", async () => {
+  it("reads complete once every named artifact is held, split into named groups", async () => {
     installFixtureSession();
     await installOfflineReadSet(usableReadSetPayload());
     installFixtureBranding();
@@ -163,13 +166,24 @@ describe("the download readout on Settings", () => {
     const wrapper = await mountSettings();
     const count = wrapper.get(".about__downloads-count");
 
-    expect(count.text()).toBe("2 of 2 downloaded");
+    // The held set's counts name two groups (staff, shifts), plus branding.
+    expect(count.text()).toBe("3 of 3 downloaded");
     expect(count.attributes("data-complete")).toBe("true");
 
-    const readSetRow = wrapper.findAll(".about__downloads-list li")[0];
+    const rows = wrapper.findAll(".about__downloads-list li");
+
+    expect(rows.map((row) => row.text())).toEqual([
+      expect.stringContaining("Initial page load data"),
+      expect.stringContaining("Shift board"),
+      expect.stringContaining("Branding assets"),
+    ]);
+
+    const readSetRow = rows[0];
 
     expect(readSetRow?.attributes("data-artifact-state")).toBe("downloaded");
     expect(readSetRow?.text()).toContain("Last downloaded");
+    // Each group row states what it holds, which is what makes it checkable.
+    expect(readSetRow?.text()).toContain("1 record stored.");
   });
 
   it("offers a retry on a failed artifact rather than silent incompleteness", async () => {

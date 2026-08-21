@@ -46,12 +46,14 @@ class OfflineReadSetComposer
         private readonly OfflineReadSetScopeResolver $scopes,
         private readonly ActiveModuleResolver $modules,
         RegularStaffSections $regularStaff,
+        EventInfoSections $eventInfo,
         DepartmentLogisticsSections $logistics,
         DepartmentOperationsSections $operations,
         DepartmentPlanningSections $planning,
         ShiftLeadSections $shiftLead,
         DepartmentLeadSections $departmentLead,
         DirectorySections $directory,
+        IncidentCommandSections $incidentCommand,
     ) {
         /*
          * The lists of technical spec 9.3: the regular-staff one every staff
@@ -66,14 +68,22 @@ class OfflineReadSetComposer
          * that a department has no staff, and a caller who holds no Logistics
          * role is not entitled to make it.
          *
-         * Two lists of section 9.3 are deliberately not here. The event map
+         * One list of section 9.3 is deliberately not here: the event map
          * package has its own permission rules and its own sensitive-layer
-         * boundary, and the IC list is guarded by "incidents should not be
-         * greedily synced" — both are their own work rather than a section
-         * appended to this one.
+         * boundary, and is its own work rather than a section appended to this
+         * one. The IC list joined on 2026-08-20 as a *bounded* preload — open
+         * incidents and the most recent entries, capped — with "incidents
+         * should not be greedily synced" surviving as the bound rather than as
+         * an absence ({@see IncidentCommandSections}).
          */
         $this->contributors = [
             $regularStaff,
+            /*
+             * Event Info as the node assembles and renders it (11.4A;
+             * POL-022), so a device with no signal reads the published
+             * guidance rather than a refusal.
+             */
+            $eventInfo,
             $logistics,
             $operations,
             $planning,
@@ -86,6 +96,7 @@ class OfflineReadSetComposer
              * retrieved from the API.
              */
             $directory,
+            $incidentCommand,
         ];
     }
 

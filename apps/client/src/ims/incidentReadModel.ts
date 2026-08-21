@@ -55,6 +55,7 @@ import {
   recordIncidentView,
 } from "@/ims/viewedIncidentCache";
 import {
+  offlineReadSource,
   unionPendingByDeviceId,
   type OfflineReadProjection,
 } from "@/offline/offlineReadProjection";
@@ -310,6 +311,8 @@ export interface IncidentList {
   readonly pagination: IncidentListPagination;
   readonly presets: readonly IncidentListPreset[];
   readonly incidents: readonly ImsIncident[];
+  /** Whether this list came from the node or from the stored preload. */
+  readonly freshness: ReadFreshness;
 }
 
 const STATUS_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -440,6 +443,53 @@ function readIncidentListOpenMode(): IncidentListOpenMode {
 }
 
 /**
+ * The stored IC preload (technical spec 9.3 as amended 2026-08-20): the
+ * event's open incidents and its most recent entries, carried in the set for
+ * an IC-scoped caller, serialized by the node in the list endpoint's own
+ * shape.
+ *
+ * The whole stored list answers, whatever was asked. Search, filters, and
+ * paging are the node's selection machinery over the event's full history, and
+ * a device holding a bounded preload cannot honestly claim to have applied
+ * them — so the answer names `state: "all"` as its selection, carries no
+ * filter vocabulary or presets, and is disclosed as narrowed. "Everything this
+ * device holds" is the one selection the copy can truthfully serve.
+ */
+function storedIncidentList(
+  eventId: string,
+): OfflineReadProjection<IncidentListPayload> {
+  return (source) => {
+    if (!source.carries("ims_incidents")) {
+      return null;
+    }
+
+    const incidents = source
+      .section<IncidentPayload>("ims_incidents")
+      .filter((incident) => incident.event_id === eventId);
+
+    return {
+      data: {
+        event_id: eventId,
+        filters: { state: "all" },
+        pagination: {
+          page: 1,
+          per_page: Math.max(incidents.length, DEFAULT_INCIDENT_LIST_PAGE_SIZE),
+          total: incidents.length,
+          total_pages: 1,
+          has_more: false,
+        },
+        incidents: [...incidents].sort(
+          (left, right) =>
+            (right.created_at ?? "").localeCompare(left.created_at ?? "") ||
+            right.incident_number.localeCompare(left.incident_number),
+        ),
+      },
+      narrowed: true,
+    };
+  };
+}
+
+/**
  * Read one page of an event's incidents.
  *
  * The selection goes to the node as query parameters and comes back on
@@ -462,11 +512,14 @@ export async function getEventIncidents(
   }
 
   const suffix = search.toString();
-  const payload = (await meridianCachedJson<IncidentListPayload>(
-    `/api/events/${encodeURIComponent(eventId)}/incidents${suffix === "" ? "" : `?${suffix}`}`,
-  )).data;
+  const { data: payload, freshness } =
+    await meridianCachedJson<IncidentListPayload>(
+      `/api/events/${encodeURIComponent(eventId)}/incidents${suffix === "" ? "" : `?${suffix}`}`,
+      { offline: storedIncidentList(eventId) },
+    );
 
   return {
+    freshness,
     eventId: payload.event_id ?? eventId,
     filters: toFilterSelection(payload.filters ?? {}),
     filterOptions: {
@@ -554,6 +607,34 @@ export async function getEventIncident(
     const userId = incidentCacheUserId();
     const cached =
       userId === null ? null : readViewedIncident(eventId, incidentId, userId);
+
+    /*
+     * The stored IC preload can answer too (technical spec 9.3 as amended
+     * 2026-08-20), and for an incident nobody on this device has opened it is
+     * the only thing that can. Where both copies exist, the newer `updated_at`
+     * wins: the viewed cache is refreshed by every online view and the preload
+     * by every set refresh, and neither is guaranteed the later of the two.
+     */
+    const stored =
+      userId === null
+        ? undefined
+        : offlineReadSource()
+            ?.section<IncidentPayload>("ims_incidents")
+            .find(
+              (incident) =>
+                incident.id === incidentId && incident.event_id === eventId,
+            );
+
+    if (stored !== undefined) {
+      const storedIncident = toIncident(stored);
+
+      if (
+        cached === null ||
+        storedIncident.updatedAt.localeCompare(cached.incident.updatedAt) >= 0
+      ) {
+        return storedIncident;
+      }
+    }
 
     if (cached === null) {
       throw error;

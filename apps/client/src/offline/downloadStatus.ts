@@ -45,6 +45,7 @@ import {
 } from "@/offline/offlineReadSetRefresh";
 import {
   offlineReadSetRevision,
+  offlineReadSetStore,
   offlineReadSetStoredAt,
   offlineReadSetVerdict,
 } from "@/offline/offlineReadSetRuntime";
@@ -53,6 +54,150 @@ import { clientSessionState } from "@/session/clientSession";
 /** The artifacts node responses can name today. */
 export const READ_SET_ARTIFACT_KEY = "offline-read-set";
 export const BRANDING_ARTIFACT_KEY = "branding-assets";
+
+/**
+ * The granular read-set artifacts, keyed under this prefix.
+ *
+ * One row per named group rather than one "Offline read set" catch-all,
+ * because the readout is a test surface as much as a status: "Staff directory
+ * — 24 records stored" names the thing to go open with the node stopped, where
+ * a single opaque row named nothing checkable. The grouping is presentation
+ * over the readiness `counts` the node sent — the denominator is still
+ * entirely the node's naming.
+ */
+export const READ_SET_GROUP_KEY_PREFIX = "read-set:";
+
+interface ReadSetArtifactGroup {
+  readonly key: string;
+  /** The name a person reads, which is also the surface to test it on. */
+  readonly name: string;
+  /** Exact section names belonging to this group. */
+  readonly sections: readonly string[];
+  /** Section-name prefixes, so a section a role adds later lands with its kin. */
+  readonly prefixes: readonly string[];
+}
+
+/**
+ * In the order a person would test them: the shell first, then their own
+ * pages, then the role desks.
+ */
+export const READ_SET_ARTIFACT_GROUPS: readonly ReadSetArtifactGroup[] =
+  Object.freeze([
+    {
+      key: "initial-page-load",
+      name: "Initial page load data",
+      sections: [
+        "staff",
+        "staff_organization_statuses",
+        "organizations",
+        "departments",
+        "teams",
+        "department_memberships",
+        "team_memberships",
+        "events",
+        "event_department_assignments",
+      ],
+      prefixes: [],
+    },
+    {
+      key: "event-info",
+      name: "Event info",
+      sections: ["event_info"],
+      prefixes: [],
+    },
+    {
+      key: "staff-directory",
+      name: "Staff directory",
+      sections: [],
+      prefixes: ["directory_"],
+    },
+    {
+      key: "documents",
+      name: "Policies & procedures",
+      sections: [
+        "policy_documents",
+        "procedure_documents",
+        "document_fragment_references",
+        "document_fragments",
+        "document_acknowledgment_requirements",
+        "document_acknowledgments",
+      ],
+      prefixes: [],
+    },
+    {
+      key: "schedule",
+      name: "Shift board",
+      sections: ["shifts", "shift_assignments"],
+      prefixes: [],
+    },
+    {
+      key: "field-reports",
+      name: "Field reports",
+      sections: ["field_report_form", "field_reports", "field_report_appends"],
+      prefixes: [],
+    },
+    {
+      key: "ims",
+      name: "IMS entries",
+      sections: ["ims_incidents"],
+      prefixes: [],
+    },
+    {
+      key: "logistics",
+      name: "Logistics desk",
+      sections: [],
+      prefixes: ["logistics_"],
+    },
+    {
+      key: "operations",
+      name: "Operations center",
+      sections: [],
+      prefixes: ["operations_"],
+    },
+    {
+      key: "planning",
+      name: "Planning table",
+      sections: [],
+      prefixes: ["planning_"],
+    },
+    {
+      key: "shift-lead",
+      name: "Shift lead roster",
+      sections: [],
+      prefixes: ["shift_lead_"],
+    },
+    {
+      key: "department-lead",
+      name: "Department lead pack",
+      sections: [],
+      prefixes: ["department_lead_"],
+    },
+  ]);
+
+/**
+ * The row for sections no group claims — a section a newer node composes that
+ * this build has no name for yet. Present so the composed set is accounted for
+ * whole: a device must never hold data its own readout does not admit to.
+ */
+const OTHER_GROUP: ReadSetArtifactGroup = Object.freeze({
+  key: "other",
+  name: "Other event data",
+  sections: [],
+  prefixes: [],
+});
+
+function groupFor(section: string): ReadSetArtifactGroup {
+  for (const group of READ_SET_ARTIFACT_GROUPS) {
+    if (
+      group.sections.includes(section) ||
+      group.prefixes.some((prefix) => section.startsWith(prefix))
+    ) {
+      return group;
+    }
+  }
+
+  return OTHER_GROUP;
+}
 
 export type DownloadArtifactState = "downloaded" | "pending" | "failed";
 
@@ -77,20 +222,28 @@ export interface DownloadStatus {
 }
 
 /**
- * The offline read set's row.
+ * The read-set rows: one per group the composed set names.
  *
- * Named the moment a session document is held: `GET /api/offline-read-set`
- * composes an answer for every signed-in caller (data/API 5.10), so the naming
- * is the session itself. Downloaded means held *and* still servable under the
- * 11A.4 window rule — a set every surface already refuses is not one this
- * readout may count. Failed is the node having answered and the answer being
- * unusable — a refusal or a payload that is not a read set — which is the case
- * that needs a repair path rather than patience.
+ * Named by the node twice over. Before a set has ever arrived, the session
+ * document is the naming — `GET /api/offline-read-set` composes an answer for
+ * every signed-in caller (data/API 5.10) — and the device honestly shows one
+ * pending "Event data" row, because what the answer will contain is the
+ * node's to say. Once a set is held, its readiness `counts` are the naming,
+ * and the row splits into the groups above, each carrying how many records
+ * this device is holding for it.
+ *
+ * Downloaded means held *and* still servable under the 11A.4 window rule — a
+ * set every surface already refuses is not one this readout may count. Failed
+ * is the node having answered and the answer being unusable — a refusal or a
+ * payload that is not a read set — which is the case that needs a repair path
+ * rather than patience. The state is shared by every group row, because the
+ * set arrives, expires, and refreshes whole.
  */
-function readSetArtifact(now: Date): DownloadArtifact {
+function readSetArtifacts(now: Date): DownloadArtifact[] {
   const verdict = offlineReadSetVerdict(now);
   const storedAt = offlineReadSetStoredAt();
   const refresh = offlineReadSetRefreshStatus.value;
+  const counts = offlineReadSetStore.held()?.set.readiness.counts ?? null;
 
   let state: DownloadArtifactState;
   let detail: string | null = null;
@@ -110,13 +263,42 @@ function readSetArtifact(now: Date): DownloadArtifact {
         : "The stored copy can no longer be served. It refreshes when the node is reachable.";
   }
 
-  return {
-    key: READ_SET_ARTIFACT_KEY,
-    name: "Offline read set",
-    state,
-    lastDownloadedAt: storedAt,
-    detail,
-  };
+  if (counts === null) {
+    return [
+      {
+        key: READ_SET_ARTIFACT_KEY,
+        name: "Event data",
+        state,
+        lastDownloadedAt: storedAt,
+        detail,
+      },
+    ];
+  }
+
+  const records = new Map<string, number>();
+
+  for (const [section, rows] of Object.entries(counts)) {
+    const group = groupFor(section);
+
+    records.set(group.key, (records.get(group.key) ?? 0) + rows);
+  }
+
+  return [...READ_SET_ARTIFACT_GROUPS, OTHER_GROUP]
+    .filter((group) => records.has(group.key))
+    .map((group) => {
+      const stored = records.get(group.key) ?? 0;
+
+      return {
+        key: `${READ_SET_GROUP_KEY_PREFIX}${group.key}`,
+        name: group.name,
+        state,
+        lastDownloadedAt: storedAt,
+        detail:
+          state === "downloaded"
+            ? `${stored} ${stored === 1 ? "record" : "records"} stored.`
+            : detail,
+      };
+    });
 }
 
 /**
@@ -163,7 +345,7 @@ export function resolveDownloadStatus(now: Date = new Date()): DownloadStatus {
     return { named: 0, downloaded: 0, complete: false, artifacts: [] };
   }
 
-  const artifacts: DownloadArtifact[] = [readSetArtifact(now)];
+  const artifacts: DownloadArtifact[] = readSetArtifacts(now);
   const organizationId = document.context.organization_id;
 
   if (organizationId !== null) {
@@ -197,7 +379,11 @@ export const downloadStatus = computed<DownloadStatus>(() =>
  * incompleteness is the defect this control exists to prevent.
  */
 export async function retryArtifactDownload(key: string): Promise<void> {
-  if (key === READ_SET_ARTIFACT_KEY) {
+  if (
+    key === READ_SET_ARTIFACT_KEY ||
+    key.startsWith(READ_SET_GROUP_KEY_PREFIX)
+  ) {
+    // Every group row is the one set, so retrying any of them is one refresh.
     await refreshOfflineReadSet("requested");
 
     return;

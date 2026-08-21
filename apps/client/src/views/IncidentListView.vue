@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import { meridianErrorMessage } from "@/api/meridianApi";
 import ControlBar from "@/components/ControlBar.vue";
 import ControlField from "@/components/ControlField.vue";
+import StaleReadNotice from "@/components/StaleReadNotice.vue";
 import WorkflowActionButton from "@/components/WorkflowActionButton.vue";
 import WorkflowHeadingCard from "@/components/WorkflowHeadingCard.vue";
 import WorkflowHeadingCardGrid from "@/components/WorkflowHeadingCardGrid.vue";
@@ -606,6 +607,12 @@ async function onSearchSubmit(): Promise<void> {
       <p v-if="loadError" class="ims-list__load-error" role="alert">
         {{ loadError }}
       </p>
+
+      <StaleReadNotice
+        v-if="list"
+        :freshness="list.freshness"
+        label="This list"
+      />
 
       <!--
         Filters collapse by default. Six selects above a list is more chrome

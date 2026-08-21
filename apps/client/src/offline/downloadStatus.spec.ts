@@ -4,10 +4,13 @@
 // Two things are under test and they are the two the spec section leads with.
 // The denominator: it comes only from node responses, so a device with no
 // session is at 0 of 0 and a caller whose context names no organization is at
-// 1 of 1 — never stuck at 1 of 2 against a client-side list. The completion
-// notice: it fires exactly on the incomplete-to-complete transition, never on
-// a refresh check that downloads nothing, and again only after the device has
-// been incomplete in between.
+// 1 of 1 — never stuck at 1 of 2 against a client-side list. Once a set is
+// held, its readiness counts split the one pending "Event data" row into the
+// named groups — Initial page load data, Staff directory, IMS entries — each a
+// testable claim about what this device holds. The completion notice: it
+// fires exactly on the incomplete-to-complete transition, never on a refresh
+// check that downloads nothing, and again only after the device has been
+// incomplete in between.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
@@ -152,16 +155,62 @@ describe("the denominator", () => {
 
     const resolved = resolveDownloadStatus();
 
-    expect(resolved.downloaded).toBe(2);
+    // The held set's counts name two groups — staff lands in "Initial page
+    // load data" and shifts in "Shift board" — and branding makes three rows.
+    expect(resolved.named).toBe(3);
+    expect(resolved.downloaded).toBe(3);
     expect(resolved.complete).toBe(true);
 
-    const readSet = resolved.artifacts.find(
-      (artifact) => artifact.key === READ_SET_ARTIFACT_KEY,
+    const initial = resolved.artifacts.find(
+      (artifact) => artifact.key === "read-set:initial-page-load",
     );
 
-    expect(readSet?.state).toBe("downloaded");
+    expect(initial?.state).toBe("downloaded");
+    expect(initial?.name).toBe("Initial page load data");
+    // The record count is the checkable claim: what this device holds for the
+    // surfaces the row names.
+    expect(initial?.detail).toBe("1 record stored.");
     // Delivery moment, which is what the row's "last downloaded" claims.
-    expect(readSet?.lastDownloadedAt).not.toBeNull();
+    expect(initial?.lastDownloadedAt).not.toBeNull();
+  });
+
+  it("splits the held set into the groups its counts name, and nothing more", async () => {
+    installFixtureSession();
+    await installOfflineReadSet(
+      offlineReadSetPayload({
+        readiness: { usable_until: "2099-01-01T00:00:00+00:00" },
+        sections: {
+          staff: [{ id: "staff-self" }],
+          directory_people: [{ id: "person-1" }, { id: "person-2" }],
+          ims_incidents: [{ id: "incident-1" }],
+          // A section this build has no name for must still be accounted for:
+          // a device never holds data its own readout does not admit to.
+          some_future_section: [{ id: "row-1" }],
+        },
+      }),
+    );
+
+    const resolved = resolveDownloadStatus();
+
+    expect(resolved.artifacts.map((artifact) => artifact.key)).toEqual([
+      "read-set:initial-page-load",
+      "read-set:staff-directory",
+      "read-set:ims",
+      "read-set:other",
+      BRANDING_ARTIFACT_KEY,
+    ]);
+
+    const ims = resolved.artifacts.find(
+      (artifact) => artifact.key === "read-set:ims",
+    );
+    const directory = resolved.artifacts.find(
+      (artifact) => artifact.key === "read-set:staff-directory",
+    );
+
+    expect(ims?.name).toBe("IMS entries");
+    expect(ims?.detail).toBe("1 record stored.");
+    expect(directory?.name).toBe("Staff directory");
+    expect(directory?.detail).toBe("2 records stored.");
   });
 
   it("reports a refused refresh as failed, with the node's words", async () => {
