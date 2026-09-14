@@ -6,11 +6,15 @@ namespace Tests\Feature;
 
 use App\Domain\Modules\ModuleKey;
 use App\Domain\Permissions\PermissionCatalog;
+use App\Models\Attachment;
 use App\Models\Department;
 use App\Models\DepartmentMembership;
+use App\Models\Device;
+use App\Models\DeviceTrust;
 use App\Models\Event;
 use App\Models\EventDepartmentAssignment;
 use App\Models\FieldReport;
+use App\Models\Node;
 use App\Models\Organization;
 use App\Models\OrganizationModule;
 use App\Models\PermissionRole;
@@ -26,6 +30,7 @@ use App\Services\Node\SyncConflictResolutionException;
 use App\Services\Node\SyncConflictResolver;
 use App\Services\Offline\OfflineWriteCommand;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -64,6 +69,10 @@ class ModuleInactiveOfflineWriteTest extends TestCase
 
     private User $operator;
 
+    private Device $device;
+
+    private Node $node;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -80,8 +89,23 @@ class ModuleInactiveOfflineWriteTest extends TestCase
             'starts_at' => now()->subHour(),
             'ends_at' => now()->addHours(4),
         ]);
+        EventDepartmentAssignment::factory()->create([
+            'event_id' => $this->event->id,
+            'department_id' => $this->department->id,
+        ]);
 
         [$this->staff, $this->operator] = $this->member(PermissionCatalog::ROLE_LEAD_ORGANIZER);
+
+        $this->device = Device::factory()->create();
+        DeviceTrust::factory()->create([
+            'user_id' => $this->operator->id,
+            'device_id' => $this->device->id,
+        ]);
+        $this->node = Node::factory()->create([
+            'organization_id' => $this->organization->id,
+            'event_id' => $this->event->id,
+            'is_local' => true,
+        ]);
     }
 
     /*
@@ -240,11 +264,11 @@ class ModuleInactiveOfflineWriteTest extends TestCase
     }
 
     /**
-     * The Field Report path, which is the other module-owned offline write and
-     * the one with the most work behind it: a report composed at a dead camp is
-     * the case data/API 7.2 exists for.
+     * Field Reports are not IMS-gated authoring. They become IMS records for
+     * review/linking, but the device capture path itself is core: a report
+     * composed at a dead camp must still be accepted when the node is reached.
      */
-    public function test_a_queued_field_report_against_an_inactive_module_becomes_a_sync_conflict(): void
+    public function test_a_queued_field_report_is_accepted_even_when_ims_is_inactive(): void
     {
         $this->deactivate(ModuleKey::IncidentManagement);
 
@@ -259,31 +283,23 @@ class ModuleInactiveOfflineWriteTest extends TestCase
                 'title' => 'Lost radio at Gate 3',
                 'body' => 'Handed a radio back at the gate with no tag on it.',
                 'device_submitted_at' => now()->subHours(3)->toIso8601String(),
-                'origin_device_id' => (string) Str::uuid(),
+                'origin_device_id' => $this->device->id,
+                'origin_node_id' => $this->node->id,
             ])
-            ->assertNotFound()
-            ->assertJsonPath('error.module', ModuleKey::IncidentManagement->value);
+            ->assertCreated()
+            ->assertJsonPath('id', $reportId);
 
-        $this->assertSame(0, FieldReport::query()->count());
-
-        $conflict = SyncConflict::query()->sole();
-
-        $this->assertSame($reportId, $conflict->origin_operation_uuid);
-        $this->assertSame('field_report', $conflict->entity_type);
-        $this->assertSame($reportId, $conflict->entity_id);
-        $this->assertSame(
-            'Lost radio at Gate 3',
-            $conflict->local_value_json['fields']['title'],
-        );
+        $this->assertSame(1, FieldReport::query()->count());
+        $this->assertSame(0, SyncConflict::query()->count());
     }
 
     /**
-     * A photo is megabytes and the queue is not a blob store. Everything that
-     * identifies the refused upload survives; the bytes stay on the device that
-     * is still holding the queue entry.
+     * Photos follow the same rule as their text report. IMS can be off without
+     * turning the Field Report upload path into rejected work.
      */
-    public function test_a_refused_photo_upload_keeps_its_identity_and_not_its_bytes(): void
+    public function test_a_field_report_photo_is_accepted_even_when_ims_is_inactive(): void
     {
+        Storage::fake('attachments');
         $this->deactivate(ModuleKey::IncidentManagement);
 
         $report = FieldReport::factory()->create([
@@ -291,25 +307,28 @@ class ModuleInactiveOfflineWriteTest extends TestCase
             'department_id' => $this->department->id,
             'staff_id' => $this->staff->id,
             'submitted_by_user_id' => $this->operator->id,
+            'origin_device_id' => $this->device->id,
+            'origin_node_id' => $this->node->id,
         ]);
 
         $attachmentId = (string) Str::uuid();
+        $bytes = $this->jpegBytes();
 
         $this->actingAsClient($this->operator)
             ->postJson(route('api.commands.upload-field-report-photo'), [
                 'id' => $attachmentId,
                 'field_report_id' => $report->id,
-                'origin_device_id' => (string) Str::uuid(),
-                'checksum_sha256' => str_repeat('a', 64),
-                'bytes_base64' => base64_encode(str_repeat('x', 4096)),
+                'origin_device_id' => $this->device->id,
+                'origin_node_id' => $this->node->id,
+                'checksum_sha256' => hash('sha256', $bytes),
+                'declared_mime_type' => 'image/jpeg',
+                'bytes_base64' => base64_encode($bytes),
             ])
-            ->assertNotFound();
+            ->assertCreated()
+            ->assertJsonPath('id', $attachmentId);
 
-        $local = SyncConflict::query()->sole()->local_value_json;
-
-        $this->assertSame($attachmentId, $local['operation_uuid']);
-        $this->assertSame((string) $report->id, $local['fields']['field_report_id']);
-        $this->assertArrayNotHasKey('bytes_base64', $local['fields']);
+        $this->assertSame(1, Attachment::query()->count());
+        $this->assertSame(0, SyncConflict::query()->count());
     }
 
     /**
@@ -319,10 +338,6 @@ class ModuleInactiveOfflineWriteTest extends TestCase
      */
     public function test_a_queued_core_write_is_unaffected_by_an_inactive_module(): void
     {
-        EventDepartmentAssignment::factory()->create([
-            'event_id' => $this->event->id,
-            'department_id' => $this->department->id,
-        ]);
         $this->grant(PermissionCatalog::ROLE_DEPARTMENT_LOGISTICS);
 
         $this->deactivate(ModuleKey::Scheduling);
@@ -535,5 +550,18 @@ class ModuleInactiveOfflineWriteTest extends TestCase
             'team_id' => $this->team->id,
             'permission_role_id' => PermissionRole::query()->where('code', $roleCode)->firstOrFail()->id,
         ]);
+    }
+
+    private function jpegBytes(): string
+    {
+        $image = imagecreatetruecolor(48, 36);
+        $this->assertNotFalse($image);
+        $color = imagecolorallocate($image, 40, 120, 200);
+        imagefilledrectangle($image, 0, 0, 48, 36, $color);
+        ob_start();
+        imagejpeg($image, null, 90);
+        imagedestroy($image);
+
+        return (string) ob_get_clean();
     }
 }

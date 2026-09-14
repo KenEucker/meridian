@@ -37,7 +37,9 @@ use Illuminate\Support\Str;
  * the specification — 5.8A added the Event Horizon's two preference commands.
  * `OfflineWriteConflictCoverageTest` reads 7.2 and 5.8A out of the document and
  * asserts this enum still says what they say, and asserts that every one of them
- * whose route carries a module gate can describe the write it refused.
+ * whose route carries a module gate can describe the write it refused. Field
+ * Reports still declare their table for diagnostics and conflict shape, but the
+ * table itself is core because authoring is always available.
  */
 enum OfflineWriteCommand: string
 {

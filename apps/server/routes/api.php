@@ -647,11 +647,9 @@ Route::middleware('auth:sanctum,workstation')->group(function (): void {
         ->name('api.commands.import-equipment-inventory');
 
     Route::post('/commands/submit-field-report', [FieldReportCommandController::class, 'submit'])
-        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.submit-field-report');
 
     Route::post('/commands/upload-field-report-photo', [FieldReportPhotoController::class, 'upload'])
-        ->middleware(EnforceActiveModule::for(ModuleKey::IncidentManagement))
         ->name('api.commands.upload-field-report-photo');
 
     Route::post('/commands/create-incident', [IncidentCommandController::class, 'create'])

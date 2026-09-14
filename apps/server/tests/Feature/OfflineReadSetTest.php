@@ -497,7 +497,11 @@ class OfflineReadSetTest extends TestCase
      */
     public function test_an_inactive_modules_records_are_absent(): void
     {
-        $this->withoutModules(ModuleKey::Scheduling, ModuleKey::Documents);
+        $this->withoutModules(
+            ModuleKey::Scheduling,
+            ModuleKey::Documents,
+            ModuleKey::IncidentManagement,
+        );
 
         PolicyDocument::factory()->published()->create([
             'organization_id' => $this->organization->id,
@@ -524,8 +528,10 @@ class OfflineReadSetTest extends TestCase
             $this->assertArrayHasKey($core, $sections);
         }
 
-        // Incident Management is still active, so its sections stay.
+        // Field Report authoring/readback is core even when IMS review is off.
         $this->assertArrayHasKey('field_report_form', $sections);
+        $this->assertArrayHasKey('field_reports', $sections);
+        $this->assertArrayHasKey('field_report_appends', $sections);
     }
 
     /**
